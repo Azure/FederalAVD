@@ -33,17 +33,203 @@ Describe 'Session Host Replacer App Service Plan resource-group selection' {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 
-Describe 'Session Host Replacer shutdown retention form behavior' {
+Describe 'Session Host Replacer maintenance request contract' {
     BeforeAll {
-        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
-        $configStep = $form.view.properties.steps | Where-Object { $_.name -eq 'replacerConfig' }
-        $replacementMode = $configStep.elements | Where-Object { $_.name -eq 'replacementMode' }
-        $shutdownRetentionHeader = $configStep.elements | Where-Object { $_.name -eq 'shutdownRetentionHeader' }
-        $shutdownRetentionInfoBox = $configStep.elements | Where-Object { $_.name -eq 'shutdownRetentionInfoBox' }
-        $enableShutdownRetention = $configStep.elements | Where-Object { $_.name -eq 'enableShutdownRetention' }
-        $shutdownRetentionDays = $configStep.elements | Where-Object { $_.name -eq 'shutdownRetentionDays' }
-        $tagShutdownTimestamp = $configStep.elements | Where-Object { $_.name -eq 'tagShutdownTimestamp' }
-        $outputs = $form.view.outputs.parameters
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
+    }
+
+    It 'parses a guarded one-time request and computes its UTC window' {
+            $request = ConvertFrom-MaintenanceRequest -RequestJson (@{
+                requestId = '11111111-1111-1111-1111-111111111111'
+                approvedImageVersion = '2.0.0'
+                scheduledDateTimeUtc = '2026-09-20T01:00:00Z'
+                windowDurationMinutes = 240
+                maxVmsRemoved = 2
+                logOffDelayMinutes = 15
+                logOffMessage = 'Save your work.'
+                forceSignOut = $true
+                allowFullPoolOutage = $false
+            } | ConvertTo-Json -Compress)
+
+            $request.RequestId | Should Be '11111111-1111-1111-1111-111111111111'
+            $request.WindowEndUtc.ToUniversalTime().ToString('o') | Should Be '2026-09-20T05:00:00.0000000Z'
+            $request.ForceSignOut | Should Be $true
+        }
+
+    It 'rejects requests without explicit forced sign-out authorization' {
+            $json = @{
+                requestId = '11111111-1111-1111-1111-111111111111'
+                approvedImageVersion = '2.0.0'
+                scheduledDateTimeUtc = '2026-09-20T01:00:00Z'
+                windowDurationMinutes = 240
+                maxVmsRemoved = 2
+                logOffDelayMinutes = 15
+                logOffMessage = 'Save your work.'
+                forceSignOut = $false
+                allowFullPoolOutage = $false
+            } | ConvertTo-Json -Compress
+
+            { ConvertFrom-MaintenanceRequest -RequestJson $json } |
+                Should Throw 'MaintenanceRequest forceSignOut must be true.'
+        }
+
+    It 'does not replay a completed request' {
+            $request = [PSCustomObject]@{
+                RequestId = '11111111-1111-1111-1111-111111111111'
+                ScheduledDateTimeUtc = [datetime]'2026-09-20T01:00:00Z'
+                WindowEndUtc = [datetime]'2026-09-20T05:00:00Z'
+                ApprovedImageVersion = '2.0.0'
+            }
+            $state = [PSCustomObject]@{
+                ActiveMaintenanceRequestId = ''
+                CompletedMaintenanceRequestId = $request.RequestId
+            }
+
+            $decision = Get-MaintenanceExecutionDecision `
+                -Request $request `
+                -DeploymentState $state `
+                -CurrentDateTime ([datetime]'2026-09-20T02:00:00Z')
+
+            $decision.Status | Should Be 'Completed'
+            $decision.CanStartNewBatch | Should Be $false
+        }
+
+    It 'continues recovery after the window but starts no new batch' {
+            $request = [PSCustomObject]@{
+                RequestId = '11111111-1111-1111-1111-111111111111'
+                ScheduledDateTimeUtc = [datetime]'2026-09-20T01:00:00Z'
+                WindowEndUtc = [datetime]'2026-09-20T05:00:00Z'
+                ApprovedImageVersion = '2.0.0'
+            }
+            $state = [PSCustomObject]@{
+                ActiveMaintenanceRequestId = $request.RequestId
+                CompletedMaintenanceRequestId = ''
+            }
+
+            $decision = Get-MaintenanceExecutionDecision `
+                -Request $request `
+                -DeploymentState $state `
+                -CurrentDateTime ([datetime]'2026-09-20T05:30:00Z') `
+                -LatestImageVersion '2.0.0'
+
+            $decision.Status | Should Be 'RecoveryOnly'
+            $decision.CanStartNewBatch | Should Be $false
+            $decision.MustContinueRecovery | Should Be $true
+        }
+
+    It 'pins gallery and marketplace image references to the approved version' {
+            $gallery = Set-MaintenanceApprovedImageVersion `
+                -SessionHostParameters @{ ImageReference = @{ id = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd' } } `
+                -ApprovedImageVersion '2.0.0'
+            $marketplace = Set-MaintenanceApprovedImageVersion `
+                -SessionHostParameters @{ ImageReference = @{ publisher = 'publisher'; offer = 'offer'; sku = 'sku'; version = 'latest' } } `
+                -ApprovedImageVersion '3.0.0'
+
+            $gallery.ImageReference.id | Should BeLike '*/versions/2.0.0'
+            $marketplace.ImageReference.version | Should Be '3.0.0'
+    }
+
+    It 'requires explicit outage authorization before a one-host maintenance deletion' {
+            Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Planning { @{} }
+            Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+            $sessionHost = [PSCustomObject]@{
+                SessionHostName = 'avd-01'
+                ResourceId = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-01'
+                Status = 'Available'
+                AllowNewSession = $true
+                IsUnavailable = $false
+                SessionHostHealthCheckResults = @(
+                    [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+                )
+            }
+
+            $blocked = Get-SessionHostDeletionSafety `
+                -ARMToken 'test-token' `
+                -SessionHosts @($sessionHost) `
+                -DeletionCandidates @($sessionHost) `
+                -TargetSessionHostCount 1 `
+                -MinimumCapacityPercentage 80 `
+                -ReplacementMode MaintenanceWindow
+            $authorized = Get-SessionHostDeletionSafety `
+                -ARMToken 'test-token' `
+                -SessionHosts @($sessionHost) `
+                -DeletionCandidates @($sessionHost) `
+                -TargetSessionHostCount 1 `
+                -MinimumCapacityPercentage 80 `
+                -ReplacementMode MaintenanceWindow `
+                -MaintenanceAllowFullPoolOutage $true
+
+            $blocked.SafeCandidates.Count | Should Be 0
+            $authorized.SafeCandidates.Count | Should Be 1
+    }
+
+    It 'calls the AVD logoff operation and verifies sessions are gone' {
+            $script:sessionQueryCount = 0
+            Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle {
+                param ($Method, $Uri)
+                if ($Method -eq 'Get') {
+                    $script:sessionQueryCount++
+                    if ($script:sessionQueryCount -eq 1) {
+                        return @(
+                            [PSCustomObject]@{
+                                name = 'hostPools/hp/sessionHosts/avd-01/userSessions/7'
+                            }
+                        )
+                    }
+                    return @()
+                }
+
+            }
+
+            $result = Remove-SessionHostUserSessions `
+                -ARMToken 'test-token' `
+                -SessionHostName 'avd-01.contoso.test' `
+                -HostPoolSubscriptionId 'test' `
+                -HostPoolName 'hp-test' `
+                -ResourceGroupName 'hosts' `
+                -ResourceManagerUri 'https://management.azure.com'
+
+            $result.RequestedLogoffCount | Should Be 1
+            $result.RemainingSessionCount | Should Be 0
+            Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 1 -ParameterFilter {
+                $Method -eq 'Post' -and $Uri -like '*/userSessions/7/logoff?api-version=2024-04-03'
+            }
+    }
+
+    It 'provides a guarded scheduling command that preserves unrelated app settings' {
+        $scriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Start-SessionHostMaintenanceReplacement.ps1'
+        $tokens = $null
+        $errors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile(
+            $scriptPath,
+            [ref]$tokens,
+            [ref]$errors
+        ) | Out-Null
+        $script = Get-Content -LiteralPath $scriptPath -Raw
+
+        $errors.Count | Should Be 0
+        $script | Should Match 'SupportsShouldProcess'
+        $script | Should Match 'if \(-not \$ForceSignOut\)'
+        $script | Should Match "ReplacementMode must be DeleteFirst"
+        $script | Should Match 'temporarily overrides its configured DeleteFirst behavior'
+        $script | Should Match 'shutdown-retention VMs exist'
+        $script | Should Match 'properties = \$settings'
+        $script | Should Match 'ReplaceExistingRequest'
+    }
+}
+
+Describe 'Session Host Replacer shutdown retention form behavior' {
+        BeforeAll {
+            $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+            $configStep = $form.view.properties.steps | Where-Object { $_.name -eq 'replacerConfig' }
+            $replacementMode = $configStep.elements | Where-Object { $_.name -eq 'replacementMode' }
+            $shutdownRetentionHeader = $configStep.elements | Where-Object { $_.name -eq 'shutdownRetentionHeader' }
+            $shutdownRetentionInfoBox = $configStep.elements | Where-Object { $_.name -eq 'shutdownRetentionInfoBox' }
+            $enableShutdownRetention = $configStep.elements | Where-Object { $_.name -eq 'enableShutdownRetention' }
+            $shutdownRetentionDays = $configStep.elements | Where-Object { $_.name -eq 'shutdownRetentionDays' }
+            $tagShutdownTimestamp = $configStep.elements | Where-Object { $_.name -eq 'tagShutdownTimestamp' }
+            $outputs = $form.view.outputs.parameters
     }
 
     It 'uses the Side-by-Side display label as the dropdown default' {
@@ -67,6 +253,137 @@ Describe 'Session Host Replacer shutdown retention form behavior' {
     }
 }
 
+Describe 'Session Host Maintenance portal operation' {
+    BeforeAll {
+        $operationRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostMaintenance'
+        $operationBicep = Get-Content -LiteralPath (Join-Path $operationRoot 'main.bicep') -Raw
+        $operationModule = Get-Content -LiteralPath (Join-Path $operationRoot 'modules\updateMaintenanceRequest.bicep') -Raw
+        $operationForm = Get-Content -LiteralPath (Join-Path $operationRoot 'uiFormDefinition.json') -Raw | ConvertFrom-Json
+        $publisher = Get-Content -LiteralPath (Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1') -Raw
+        $workbook = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json') -Raw | ConvertFrom-Json
+    }
+
+    It 'targets an existing Function App without redeploying the replacer' {
+        $operationBicep | Should Match "targetScope = 'subscription'"
+        $operationBicep | Should Match "scope: resourceGroup\(functionAppSubscriptionId, functionAppResourceGroupName\)"
+        $operationModule | Should Match "resource functionApp 'Microsoft.Web/sites@.*' existing"
+        $operationModule | Should Match "resource appSettings 'Microsoft.Web/sites/config@.*'"
+        $operationModule | Should Not Match "resource functionApp 'Microsoft.Web/sites@.*' ="
+    }
+
+    It 'preserves unrelated app settings and changes only the maintenance request' {
+        $operationModule | Should Match "list\('\$\{functionApp.id\}/config/appsettings'"
+        $operationModule | Should Match 'properties: union\(existingAppSettings, \{'
+        $operationModule | Should Match 'MaintenanceRequest: validationPassed \? string\(maintenanceRequest\)'
+    }
+
+    It 'fails closed for unsafe configuration and replacement attempts' {
+        $operationModule | Should Match "replacementMode != 'DeleteFirst'"
+        $operationModule | Should Match '!empty\(existingMaintenanceRequest\) && !replaceExistingRequest'
+        $operationModule | Should Match '!forceSignOut'
+        $operationModule | Should Match '!allowFullPoolOutage'
+        $operationModule | Should Match '!confirmNoShutdownRetention'
+        $operationModule | Should Match 'isEntraJoined && !removeEntraDevice'
+        $operationModule | Should Match 'configuredImageDefinitionResourceId'
+        $operationModule | Should Match 'approvedImageDefinitionResourceId'
+        $operationModule | Should Match 'does not match the replacer configuration'
+    }
+
+    It 'emits the runtime maintenance request contract' {
+        $requestBlock = [regex]::Match(
+            $operationModule,
+            '(?s)var maintenanceRequest = \{(?<Body>.*?)\r?\n\}'
+        ).Groups['Body'].Value
+        @(
+            [regex]::Matches($requestBlock, '(?m)^\s{2}([A-Za-z][A-Za-z0-9]+):') |
+                ForEach-Object { $_.Groups[1].Value }
+        ) | Should Be @(
+            'requestId'
+            'approvedImageVersion'
+            'scheduledDateTimeUtc'
+            'windowDurationMinutes'
+            'maxVmsRemoved'
+            'logOffDelayMinutes'
+            'logOffMessage'
+            'forceSignOut'
+            'allowFullPoolOutage'
+        )
+    }
+
+    It 'keeps Form View outputs aligned with operation parameters' {
+        $formParameterNames = @($operationForm.view.outputs.parameters.PSObject.Properties.Name)
+        $templateParameterNames = @(
+            [regex]::Matches($operationBicep, '(?m)^param\s+([A-Za-z0-9_]+)\s+') |
+                ForEach-Object { $_.Groups[1].Value }
+        )
+
+        foreach ($parameterName in $formParameterNames) {
+            @($templateParameterNames -contains $parameterName) | Should Be $true
+        }
+        foreach ($requiredParameterName in @(
+            'functionAppResourceId'
+            'approvedImageDefinitionResourceId'
+            'approvedImageVersion'
+            'scheduledDateTimeUtc'
+            'forceSignOut'
+            'allowFullPoolOutage'
+            'confirmNoShutdownRetention'
+        )) {
+            @($formParameterNames -contains $requiredParameterName) | Should Be $true
+        }
+        $operationForm.view.outputs.kind | Should Be 'Subscription'
+    }
+
+    It 'reads the configured image definition and lists approved gallery versions' {
+        $targetStep = $operationForm.view.properties.steps | Where-Object { $_.name -eq 'target' }
+        $scheduleStep = $operationForm.view.properties.steps | Where-Object { $_.name -eq 'schedule' }
+        $settingsApi = $targetStep.elements | Where-Object { $_.name -eq 'functionAppSettingsApi' }
+        $versionsApi = $scheduleStep.elements | Where-Object { $_.name -eq 'imageVersionsApi' }
+        $galleryVersion = $scheduleStep.elements | Where-Object { $_.name -eq 'approvedGalleryImageVersion' }
+
+        $settingsApi.request.method | Should Be 'POST'
+        $settingsApi.request.path | Should Match '/config/appsettings/list\?api-version='
+        $versionsApi.request.method | Should Be 'GET'
+        $versionsApi.request.path | Should Match '/versions\?api-version=2024-03-03'
+        $versionsApi.request.path | Should Match 'SessionHostParameters'
+        $versionsApi.request.transforms.list | Should Match 'excludeFromLatest'
+        $galleryVersion.type | Should Be 'Microsoft.Common.DropDown'
+        $galleryVersion.constraints.allowedValues | Should Be "[steps('schedule').imageVersionsApi.transformed.list]"
+        $operationForm.view.outputs.parameters.approvedImageDefinitionResourceId |
+            Should Match 'SessionHostParameters'
+    }
+
+    It 'requires destructive authorizations in the form and template' {
+        $allElements = @($operationForm.view.properties.steps.elements)
+        foreach ($controlName in @('forceSignOut', 'allowFullPoolOutage', 'confirmNoShutdownRetention')) {
+            $control = $allElements | Where-Object { $_.name -eq $controlName }
+            $control.type | Should Be 'Microsoft.Common.CheckBox'
+            $control.constraints.required | Should Be $true
+        }
+    }
+
+    It 'publishes and links the separate maintenance operation' {
+        $publisher | Should Match "Purpose = 'session-host-maintenance'"
+        $publisher | Should Match "FolderName = 'sessionHostMaintenance'"
+
+        $configurationPage = $workbook.items | Where-Object { $_.name -eq 'configuration-page' }
+        $parameters = $configurationPage.content.items |
+            Where-Object { $_.name -eq 'maintenance-scheduler-parameters' } |
+            Select-Object -ExpandProperty content |
+            Select-Object -ExpandProperty parameters
+        ($parameters | Where-Object { $_.name -eq 'MaintenanceTemplateSpec' }).query |
+            Should Match 'Schedule AVD Session Host Maintenance'
+
+        $link = $configurationPage.content.items |
+            Where-Object { $_.name -eq 'maintenance-scheduler-link' }
+        $link.content.version | Should Be 'LinkItem/1.0'
+        $link.content.style | Should Be 'toolbar'
+        $link.content.links[0].cellValue | Should Be '{MaintenanceTemplateSpec}'
+        $link.content.links[0].linkTarget | Should Be 'ResourceOverview'
+        $link.content.links[0].style | Should Be 'primary'
+    }
+}
+
 Describe 'Session Host Replacer device cleanup requirements' {
     BeforeAll {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
@@ -84,11 +401,11 @@ Describe 'Session Host Replacer device cleanup requirements' {
         Import-Module $modulePath -Force
     }
 
-    It 'requires Entra cleanup in the form for DeleteFirst Entra-joined hosts' {
-        $requiredExpression = "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]"
-        $removeEntraDevice.constraints.required | Should Be $requiredExpression
-        $entraCleanupInfo.visible | Should Be $requiredExpression
-        $outputs.removeEntraDevice | Should Be "[or(steps('replacerConfig').removeEntraDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]"
+    It 'requires Entra cleanup in the form for configured DeleteFirst replacement' {
+        $removeEntraDevice.constraints.required | Should Match "DeleteFirst"
+        $removeEntraDevice.constraints.required | Should Not Match "MaintenanceWindow"
+        $entraCleanupInfo.visible | Should Match "DeleteFirst"
+        $outputs.removeEntraDevice | Should Not Match "MaintenanceWindow"
     }
 
     It 'shows recommendation-only Intune warnings for Entra and hybrid join' {
@@ -98,8 +415,8 @@ Describe 'Session Host Replacer device cleanup requirements' {
         $hybridIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
     }
 
-    It 'forces the effective Entra cleanup setting in Bicep only for DeleteFirst Entra join' {
-        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| \(replacementMode == 'DeleteFirst' && isEntraJoined\)"
+    It 'forces the effective Entra cleanup setting in Bicep for exact-name Entra join' {
+        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| replacementMode == 'DeleteFirst' && isEntraJoined"
         $bicep | Should Match "name: 'RemoveEntraDevice'\s+value: string\(effectiveRemoveEntraDevice\)"
         $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(removeIntuneDevice\)"
     }
@@ -149,6 +466,8 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
         $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
         $runPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\run.ps1'
         $lifecyclePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.Lifecycle.psm1'
+        $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+        Import-Module $modulePath -Force
         $bicep = Get-Content -LiteralPath $bicepPath -Raw
         $runScript = Get-Content -LiteralPath $runPath -Raw
         $lifecycleScript = Get-Content -LiteralPath $lifecyclePath -Raw
@@ -159,6 +478,13 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
         $bicep | Should Match "name: 'EnableShutdownRetention'\s+value: string\(effectiveEnableShutdownRetention\)"
         $runScript | Should Match ([regex]::Escape('$enableShutdownRetention = $replacementMode -eq ''SideBySide'' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)'))
         $lifecycleScript | Should Match ([regex]::Escape('$EnableShutdownRetention = $ReplacementMode -eq ''SideBySide'' -and $EnableShutdownRetention'))
+    }
+
+    It 'accepts an empty retention VM list without querying Azure' {
+        $powerStates = Get-VMPowerStates -ARMToken 'test-token' -VMResourceIds @()
+
+        $powerStates.GetType().Name | Should Be 'Hashtable'
+        $powerStates.Count | Should Be 0
     }
 
     It 'excludes only retention-tagged hosts confirmed stopped or deallocated' {
@@ -271,6 +597,8 @@ Describe 'Session Host Replacer scaling-aware readiness' {
 
         $result.SafeToProceed | Should Be $false
         $result.TotalNewHosts | Should Be 0
+        $result.AvailablePercentage | Should Be 0
+        $result.Message | Should Be 'No latest-image hosts are available to verify'
     }
 
     It 'counts validated stopped hosts as scalable standby for the shared mode-independent check' {
@@ -295,6 +623,26 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.ScalableStandbyCount | Should Be 6
         $result.ReadyCount | Should Be 10
         $result.RequiredOnlineCount | Should Be 4
+    }
+
+    It 'counts a validated powered-off host as scalable standby when AVD reports Unavailable' {
+        $onlineHost = New-ReadinessHost -Index 1
+        $standbyHost = New-ReadinessHost -Index 2 -Status 'Unavailable' -Tags @{
+            AutoReplaceValidatedImage = $validatedImageToken
+        }
+        $global:sessionHostReplacerTestPowerStates[$standbyHost.ResourceId] = $true
+
+        $result = Invoke-ReadinessCheck -SessionHosts @($onlineHost, $standbyHost) -ScalingPlanTarget ([PSCustomObject]@{
+            Source = 'ScalingPlan'
+            CapacityPercentage = 10
+            Phase = 'RampDown'
+        })
+
+        $result.SafeToProceed | Should Be $true
+        $result.AvailableCount | Should Be 1
+        $result.ScalableStandbyCount | Should Be 1
+        $result.ReadyCount | Should Be 2
+        $result.UnavailableHosts.Count | Should Be 0
     }
 
     It 'requires all latest-image hosts online during a 100-percent Peak target' {
@@ -503,8 +851,8 @@ Describe 'Session Host Replacer scaling-aware readiness contracts' {
         $validatedImageControl = $configStep.elements | Where-Object { $_.name -eq 'tagValidatedImage' }
     }
 
-    It 'queries a scaling plan and applies readiness in both replacement modes' {
-        $runScript | Should Match ([regex]::Escape('$replacementMode -in @(''DeleteFirst'', ''SideBySide'')'))
+    It 'queries a scaling plan and applies readiness in every replacement mode' {
+        $runScript | Should Match ([regex]::Escape('$replacementMode -in @(''DeleteFirst'', ''SideBySide'', ''MaintenanceWindow'')'))
         $runScript | Should Match 'Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
     }
 
@@ -517,6 +865,11 @@ Describe 'Session Host Replacer scaling-aware readiness contracts' {
         $scalingPlanQueryPosition | Should BeLessThan $upToDatePlanPosition
         $upToDateValidationPosition | Should BeGreaterThan $earlyExitPosition
         $runScript | Should Match '\$upToDateHostReadiness = Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
+    }
+
+    It 'bypasses the lightweight image-only exit when an explicit target differs from the managed host count' {
+        $runScript | Should Match '\$targetSessionHostCount -gt 0 -and \$sessionHostsFiltered\.Count -ne \$targetSessionHostCount'
+        $runScript | Should Match 'differs from explicit target \$targetSessionHostCount - proceeding with full processing'
     }
 
     It 'wires the exact-image validation tag through Bicep and Form View' {
@@ -617,6 +970,49 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.PossibleDeploymentsCount | Should Be 10
         $plan.PossibleSessionHostDeleteCount | Should Be 0
         $plan.TotalSessionHostsToReplace | Should Be 10
+    }
+
+    It 'SideBySide grows an up-to-date pool to an explicit target without an image update' {
+        $currentHosts = 1..3 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "avd-$($_.ToString('00'))"
+                VMName = "avd-$($_.ToString('00'))"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$($_.ToString('00'))"
+                ImageDefinition = $latestImage.Definition
+                ImageVersion = $latestImage.Version
+                Status = 'Available'
+                AllowNewSession = $true
+                Sessions = 0
+                ShutdownTimestamp = $null
+                PendingDrainTimeStamp = $null
+                IsUnavailable = $false
+            }
+        }
+
+        $plan = Get-SessionHostReplacementPlan `
+            -ARMToken 'test-token' `
+            -SessionHosts $currentHosts `
+            -RunningDeployments @() `
+            -HostPoolName 'hp-test' `
+            -TargetSessionHostCount 5 `
+            -LatestImageVersion $latestImage `
+            -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
+            -ReplacementMode SideBySide `
+            -DrainGracePeriodHours 24 `
+            -MinimumCapacityPercentage 80 `
+            -MaxDeletionsPerCycle 50 `
+            -EnableProgressiveScaleUp $false `
+            -ScalingPlanTarget $null `
+            -RemoveEntraDevice $false `
+            -RemoveIntuneDevice $false `
+            -HostPoolSubscriptionId 'test' `
+            -HostPoolResourceGroupName 'hosts' `
+            -ResourceManagerUri 'https://management.azure.com'
+
+        $plan.TargetSessionHostCount | Should Be 5
+        $plan.PossibleDeploymentsCount | Should Be 2
+        $plan.PossibleSessionHostDeleteCount | Should Be 0
+        $plan.TotalSessionHostsToReplace | Should Be 0
     }
 
     It 'SideBySide retires stale hosts when validated replacements are scaled to zero' {
@@ -1119,11 +1515,26 @@ Describe 'Session Host Replacer currently deploying metric' {
         $workbookPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
         $runScript = Get-Content -LiteralPath $runPath -Raw
         $workbook = Get-Content -LiteralPath $workbookPath -Raw | ConvertFrom-Json
-        $currentStatusQuery = ($workbook.items | Where-Object { $_.name -eq 'kpi-tiles' }).content.query
+        $operationsPage = $workbook.items | Where-Object { $_.name -eq 'operations-page' }
+        $currentStatusQuery = ($operationsPage.content.items |
+            Where-Object { $_.name -eq 'kpi-tiles' }).content.query
     }
 
-    It 'counts session hosts in running ARM deployments instead of deployment records' {
-        $runScript | Should Match '\$currentlyDeploying = \[int\]\(\(\$runningDeployments \| ForEach-Object \{ @\(\$_.SessionHostNames\)\.Count \} \| Measure-Object -Sum\)\.Sum\)'
+    It 'counts session hosts in running ARM deployments without treating null as a deployment' {
+        $runScript | Should Match '\$currentlyDeploying = if \(\$runningDeployments\)'
+        $runScript | Should Match '\[int\]\(\(\$runningDeployments \| ForEach-Object \{ @\(\$_.SessionHostNames\)\.Count \} \| Measure-Object -Sum\)\.Sum\)'
+        $runScript | Should Match 'else \{\s+0\s+\}'
+
+        $runningDeployments = $null
+        $currentlyDeploying = if ($runningDeployments) {
+            [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
+        }
+        else {
+            0
+        }
+        $currentlyDeploying += 2
+
+        $currentlyDeploying | Should Be 2
     }
 
     It 'uses RunningDeployments from the latest metrics event' {
@@ -1154,8 +1565,8 @@ Describe 'Session Host Replacer DeleteFirst recovery contracts' {
     }
 
     It 'fails closed when recovery state cannot be read' {
-        $runScript | Should Match ([regex]::Escape("if (`$replacementMode -eq 'DeleteFirst' -and `$deploymentState.LastStatus -eq 'Error')"))
-        $runScript | Should Match 'Delete-First mode cannot continue because deployment recovery state could not be read'
+        $runScript | Should Match ([regex]::Escape("if (`$replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and `$deploymentState.LastStatus -eq 'Error')"))
+        $runScript | Should Match 'Delete-before-deploy mode cannot continue because deployment recovery state could not be read'
     }
 
     It 'requires the pending-host checkpoint to persist before deletion' {
@@ -1286,6 +1697,43 @@ Describe 'Session Host Replacer configuration management experience' {
         $workbookText | Should Match 'Set-SessionHostReplacerConfiguration.ps1'
     }
 
+    It 'separates configuration from operations and uses compact primary visualizations' {
+        $pageNavigation = $workbookTemplate.items | Where-Object { $_.name -eq 'page-navigation' }
+        $pageParameter = $pageNavigation.content.parameters |
+            Where-Object { $_.name -eq 'DashboardPage' }
+        $pageParameter.query | Should Match '"operations", "Operations", true'
+        $pageParameter.query | Should Match '"configuration", "Configuration", false'
+        $pageParameter.value | Should Be 'operations'
+
+        $configurationPage = $workbookTemplate.items |
+            Where-Object { $_.name -eq 'configuration-page' }
+        $operationsPage = $workbookTemplate.items |
+            Where-Object { $_.name -eq 'operations-page' }
+        $configurationPage.conditionalVisibility.value | Should Be 'configuration'
+        $operationsPage.conditionalVisibility.value | Should Be 'operations'
+        (@($configurationPage.content.items.name) -contains 'config-table') | Should Be $true
+        (@($configurationPage.content.items.name) -contains 'maintenance-scheduler-parameters') |
+            Should Be $true
+        (@($operationsPage.content.items.name) -contains 'kpi-tiles') | Should Be $true
+
+        ($configurationPage.content.items |
+            Where-Object { $_.name -eq 'config-table' }).content.size | Should Be 1
+        ($operationsPage.content.items |
+            Where-Object { $_.name -eq 'kpi-tiles' }).content.size | Should Be 1
+    }
+
+    It 'populates the host-pool dropdown from actual AVD host-pool resources' {
+        $globalParameters = $workbookTemplate.items |
+            Where-Object { $_.name -eq 'parameters' }
+        $hostPoolParameter = $globalParameters.content.parameters |
+            Where-Object { $_.name -eq 'HostPool' }
+
+        $hostPoolParameter.queryType | Should Be 1
+        $hostPoolParameter.resourceType | Should Be 'microsoft.resourcegraph/resources'
+        $hostPoolParameter.query | Should Match "type =~ 'microsoft\.desktopvirtualization/hostpools'"
+        $hostPoolParameter.query | Should Not Match 'traces|extract'
+    }
+
     It 'logs the Function App resource ID used by the workbook link' {
         $runScript | Should Match 'WEBSITE_OWNER_NAME'
         $runScript | Should Match 'WEBSITE_RESOURCE_GROUP'
@@ -1298,6 +1746,8 @@ Describe 'Session Host Replacer configuration management experience' {
         $configurationScript | Should Match '/config/appsettings/list\?api-version='
         $configurationScript | Should Match '/config/appsettings\?api-version='
         $configurationScript | Should Match 'A future Template Spec redeployment can overwrite these values'
+        $configurationScript | Should Match "'DeleteFirst', 'SideBySide'"
+        $configurationScript | Should Match 'MaintenanceRequest'
     }
 
     It 'does not allow infrastructure or replacement mode changes through the update script' {

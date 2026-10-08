@@ -167,7 +167,7 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Optional. Replacement mode strategy. SideBySide: Adds new hosts before deleting old ones (higher capacity during updates, zero downtime). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction). Default is SideBySide.')
+@description('Optional. Replacement mode strategy. SideBySide adds new hosts before deleting old ones. DeleteFirst continuously replaces idle hosts with a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured DeleteFirst replacer without redeployment. Default is SideBySide.')
 @allowed([
   'SideBySide'
   'DeleteFirst'
@@ -508,7 +508,7 @@ var isEntraJoined = contains([
   'EntraKerberos-Hybrid'
   'EntraKerberos-CloudOnly'
 ], identitySolution)
-var effectiveRemoveEntraDevice = removeEntraDevice || (replacementMode == 'DeleteFirst' && isEntraJoined)
+var effectiveRemoveEntraDevice = removeEntraDevice || replacementMode == 'DeleteFirst' && isEntraJoined
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
@@ -860,6 +860,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           value: replacementMode
         }
         {
+          name: 'MaintenanceRequest'
+          value: ''
+        }
+        {
           name: 'MinimumCapacityPercentage'
           value: string(minimumCapacityPercentage)
         }
@@ -1054,6 +1058,7 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
       '../requirements.psd1': loadTextContent('functions/requirements.psd1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Maintenance.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Maintenance.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1')

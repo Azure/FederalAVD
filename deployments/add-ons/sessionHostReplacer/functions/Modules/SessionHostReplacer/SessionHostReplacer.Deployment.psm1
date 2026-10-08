@@ -89,6 +89,9 @@ function Get-DeploymentState {
                 LastImageVersion         = $entity.LastImageVersion
                 LastTotalToReplace       = [int]$entity.LastTotalToReplace
                 PendingHostMappings      = if ($entity.PendingHostMappings) { $entity.PendingHostMappings } else { '{}' }
+                ActiveMaintenanceRequestId = if ($entity.ActiveMaintenanceRequestId) { $entity.ActiveMaintenanceRequestId } else { '' }
+                CompletedMaintenanceRequestId = if ($entity.CompletedMaintenanceRequestId) { $entity.CompletedMaintenanceRequestId } else { '' }
+                MaintenanceWindowEndUtc = if ($entity.MaintenanceWindowEndUtc) { $entity.MaintenanceWindowEndUtc } else { '' }
             }
         }
         catch {
@@ -107,6 +110,9 @@ function Get-DeploymentState {
                     LastImageVersion         = ''
                     LastTotalToReplace       = 0
                     PendingHostMappings      = '{}'
+                    ActiveMaintenanceRequestId = ''
+                    CompletedMaintenanceRequestId = ''
+                    MaintenanceWindowEndUtc = ''
                 }
             }
             else {
@@ -130,6 +136,9 @@ function Get-DeploymentState {
             LastImageVersion         = ''
             LastTotalToReplace       = 0
             PendingHostMappings      = '{}'
+            ActiveMaintenanceRequestId = ''
+            CompletedMaintenanceRequestId = ''
+            MaintenanceWindowEndUtc = ''
         }
     }
 }
@@ -307,6 +316,9 @@ function Save-DeploymentState {
             LastImageVersion         = if ($DeploymentState.LastImageVersion) { $DeploymentState.LastImageVersion } else { '' }
             LastTotalToReplace       = $DeploymentState.LastTotalToReplace
             PendingHostMappings      = if ($DeploymentState.PendingHostMappings) { $DeploymentState.PendingHostMappings } else { '{}' }
+            ActiveMaintenanceRequestId = if ($DeploymentState.ActiveMaintenanceRequestId) { $DeploymentState.ActiveMaintenanceRequestId } else { '' }
+            CompletedMaintenanceRequestId = if ($DeploymentState.CompletedMaintenanceRequestId) { $DeploymentState.CompletedMaintenanceRequestId } else { '' }
+            MaintenanceWindowEndUtc = if ($DeploymentState.MaintenanceWindowEndUtc) { $DeploymentState.MaintenanceWindowEndUtc } else { '' }
         }
         
         # Check if entity exists

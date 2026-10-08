@@ -47,6 +47,11 @@
         'Get-Deployments'
         'Get-TemplateSpecVersionResourceId'
         'Remove-FailedDeploymentArtifacts'
+
+        # Maintenance functions (from SessionHostReplacer.Maintenance.psm1)
+        'ConvertFrom-MaintenanceRequest'
+        'Get-MaintenanceExecutionDecision'
+        'Set-MaintenanceApprovedImageVersion'
         
         # Image Management functions (from SessionHostReplacer.ImageManagement.psm1)
         'Compare-ImageVersion'
@@ -63,6 +68,7 @@
         'Remove-VirtualMachine'
         'Remove-ExpiredShutdownVMs'
         'Send-DrainNotification'
+        'Remove-SessionHostUserSessions'
         'Test-NewSessionHostsAvailable'
         
         # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)

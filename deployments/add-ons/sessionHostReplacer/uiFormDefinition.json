@@ -183,7 +183,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "text": "Best Practices\n\nSchedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.",
-                "style": "Success"
+                "style": "Info"
               }
             },
             {
@@ -376,7 +376,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "text": "Best Practices\n\nIf managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
-                "style": "Success"
+                "style": "Info"
               }
             },
             {
@@ -433,7 +433,7 @@
               "name": "replacementMode",
               "type": "Microsoft.Common.DropDown",
               "label": "Replacement Mode",
-              "toolTip": "Select the Replacement Mode Option. Side-by-Side (Add then Delete): Adds new session hosts before deleting old ones resulting in zero downtime during updates, but higher cost during update cycles (can temporarily double host pool size). This mode does NOT support dedicated hosts. Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously. Delete-First (Delete then Add): Deletes idle session hosts before adding replacements resulting in lower cost (maintains approximately target capacity throughout), but temporary capacity reduction during replacements. Supports dedicated hosts - preserves dedicated host assignments and zones. Reuses hostnames for seamless transitions",
+              "toolTip": "Side-by-Side continuously adds capacity before removal. Delete-First continuously replaces idle hosts while preserving a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured Delete-First replacer without redeploying it.",
               "defaultValue": "Side-by-Side (Add then Delete)",
               "constraints": {
                 "required": true,
@@ -772,11 +772,11 @@
               "name": "removeEntraDevice",
               "type": "Microsoft.Common.CheckBox",
               "label": "Remove Entra ID Device Records",
-              "toolTip": "Remove Entra ID device records when deleting session hosts. Required for Delete-First replacement of Microsoft Entra joined hosts.",
+              "toolTip": "Remove Entra ID device records when deleting session hosts. Required for exact-name Delete-First and Maintenance Window replacement of Microsoft Entra joined hosts.",
               "defaultValue": true,
               "constraints": {
                 "required": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
-                "validationMessage": "Entra device cleanup is required when Delete-First reuses names for Microsoft Entra joined session hosts."
+                "validationMessage": "Entra device cleanup is required when an exact-name mode reuses names for Microsoft Entra joined session hosts."
               }
             },
             {
@@ -792,7 +792,7 @@
               "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
               "options": {
                 "style": "Warning",
-                "text": "Delete-First reuses session host names. Entra device cleanup is required for Microsoft Entra joined hosts and cannot be disabled for this combination."
+                "text": "Delete-First and Maintenance Window reuse session host names. Entra device cleanup is required for Microsoft Entra joined hosts and cannot be disabled for these combinations."
               }
             },
             {

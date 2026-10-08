@@ -935,16 +935,6 @@ var personalScalingHibernateIsValid = !deployScalingPlan || !contains(hostPoolTy
 
 var scalingPlanConfigurationIsValid = pooledScalingSchedulesAreValid && pooledScalingRampDownSettingsAreValid && personalScalingSchedulesAreValid && personalScalingWaitValuesAreValid && personalScalingHibernateIsValid
 
-var exclusionTag = !empty(scalingPlanExclusionTag) && deployScalingPlan
-  ? {
-      'Microsoft.Compute/virtualMachines': {
-        '${scalingPlanExclusionTag}': ''
-      }
-    }
-  : {}
-
-var hostTags = !empty(exclusionTag) ? union(tags, exclusionTag) : tags
-
 //  BATCH SESSION HOSTS
 // The batching calculation is performed in the sessionHosts module to encapsulate deployment logic
 //  BATCH AVAILABILITY SETS
@@ -1764,7 +1754,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     sessionHostIndex: sessionHostIndex
     vmNameIndexLength: vmNameIndexLength
     subnetResourceId: virtualMachineSubnetResourceId
-    tags: hostTags
+    tags: tags
     timeZone: virtualMachinesTimeZone
     #disable-next-line BCP422
     virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)

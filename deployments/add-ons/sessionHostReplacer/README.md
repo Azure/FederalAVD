@@ -84,7 +84,7 @@ The Session Host Replacer includes several optimizations to minimize Azure API c
 
 ## Replacement Modes
 
-The Session Host Replacer supports two distinct replacement strategies to accommodate different operational priorities:
+The Session Host Replacer supports three distinct replacement strategies to accommodate different operational priorities:
 
 ### SideBySide Mode (Default)
 
@@ -163,23 +163,74 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - Smaller host pools where temporary capacity reduction is acceptable
 - Environments using dedicated hosts where reuse is required
 
-### Mode Comparison Matrix
+### One-Time Maintenance Override
 
-| Feature | SideBySide | DeleteFirst |
-| --- | --- | --- |
-| **Downtime** | None | Temporary capacity reduction |
-| **Cost during replacement** | 2x (temporary) | 1x (no doubling) |
-| **Hostname reuse** | No (generates new names) | Yes (reuses deleted names) |
-| **Dedicated host support** | No (new hosts on different hosts) | Yes (preserves assignments) |
-| **Shutdown retention** | Yes (optional) | No |
-| **Auto-detect target count** | Yes | Yes |
-| **Device cleanup required** | Optional | Optional; recommended for hostname reuse |
-| **Progressive scale-up** | Yes | Yes |
-| **Subnet IP requirements** | 2x during replacement | 1x (no spike) |
-| **Rollback capability** | Yes (with shutdown retention) | No |
-| **Deployment velocity** | Fast (batch size up to 1000) | Controlled (max deletions per cycle) |
-| **Minimum drain time** | Yes | Yes |
-| **Best for** | Production, zero-downtime | Cost optimization, resource constraints |
+**Best for**: Administrator-approved change windows, forced user sign-out, and intentional
+whole-pool replacement, including a one-host pool.
+
+The maintenance request temporarily expedites an existing `DeleteFirst` configuration; changing
+`replacementMode` or redeploying the replacer is not required. SideBySide replacers are not
+eligible. Disable any scaling plan assigned to the host pool, confirm that no replacement
+deployment, pending recovery, replacer-owned drain, or shutdown-retention VM exists, and then
+schedule the request:
+
+For a portal experience, publish and deploy the separate
+[Schedule Session Host Maintenance](../sessionHostMaintenance/README.md) operation Template Spec.
+It selects an existing replacer and writes the same guarded request without redeploying the
+replacer. Use the PowerShell command below for automation and air-gapped workflows:
+
+```powershell
+.\Start-SessionHostMaintenanceReplacement.ps1 `
+  -FunctionAppName func-shr-prod-use2 `
+  -ResourceGroupName rg-avd-operations-use2 `
+  -ApprovedImageVersion 2.0.0 `
+  -ScheduledDateTime '2026-04-18 22:00' `
+  -TimeZoneId 'Eastern Standard Time' `
+  -WindowDurationMinutes 240 `
+  -MaxVmsRemoved 5 `
+  -LogOffDelayMinutes 15 `
+  -ForceSignOut `
+  -Confirm:$false
+```
+
+For a one-host pool or any batch allowed to reduce available capacity to zero, also specify
+`-AllowFullPoolOutage`. Use `-WhatIf` first. The script preserves unrelated Function App settings
+and writes a non-secret JSON request; the app-setting update restarts the Function App before the
+scheduled time. Normal replacement activity is suspended while the request is waiting to start.
+Deployment monitoring, failed-deployment cleanup, and pending exact-name recovery continue so
+scheduling a future request cannot strand work that was already in flight.
+
+During the window, the function drains a batch, notifies AVD sessions, waits for the requested delay,
+explicitly calls the AVD user-session logoff operation, verifies zero sessions, deletes the hosts,
+and deploys the approved image with the same names and placement. Delay is checked on timer
+invocations, so the default 30-minute schedule can begin forced sign-out up to approximately
+30 minutes after the delay elapses.
+
+The durable request ID prevents replay. After the window closes, no new destructive batch starts,
+but already draining or deleted hosts continue through recovery. After completion or expiry, the
+Function App automatically resumes continuous DeleteFirst behavior. Do not redeploy the template
+while a request is active because deployment initializes the `MaintenanceRequest` setting.
+Scheduling and runtime both fail closed if shutdown-retention VMs are present; restore or remove
+them through the approved process first.
+
+To schedule a later request, first confirm in the workbook that the prior request completed or
+expired and that no recovery or pending host mapping remains. Then run the command with
+`-ReplaceExistingRequest`. This explicit switch prevents an accidental overwrite of an active
+request.
+
+### Behavior Comparison Matrix
+
+| Feature | SideBySide | DeleteFirst | Maintenance override |
+| --- | --- | --- | --- |
+| **Operation** | Continuous | Continuous | Temporarily expedites configured DeleteFirst |
+| **Downtime** | None | Temporary capacity reduction | Authorized outage possible |
+| **User sign-out** | Grace-period removal | Grace-period removal | Notify, explicit AVD logoff, verify zero sessions |
+| **Hostname reuse** | No | Yes | Yes |
+| **Dedicated host support** | No | Yes | Yes |
+| **Shutdown retention** | Yes (optional) | No | No |
+| **Scaling plan** | Supported | Supported | Must be disabled |
+| **One-host pool** | Supported | Blocked | Requires full-outage authorization |
+| **Best for** | Production availability | Cost optimization | Controlled maintenance outage |
 
 ### Choosing the Right Mode
 
@@ -198,6 +249,13 @@ The Session Host Replacer supports two distinct replacement strategies to accomm
 - You're using dedicated hosts and need to preserve assignments
 - Temporary capacity reduction is acceptable
 - You can enable Graph API permissions for device cleanup
+
+**Schedule a maintenance override on a DeleteFirst replacer if**:
+
+- Users may be notified and forcibly signed out during an approved window
+- A one-host or full-pool outage is explicitly authorized
+- Autoscale can be disabled for the operation
+- No shutdown-retention VMs remain from a prior SideBySide configuration
 
 ## Prerequisites
 
@@ -238,6 +296,10 @@ The Session Host Replacer Function App supports two identity options:
 > **DeleteFirst mode:** Entra device cleanup is required for Microsoft Entra joined session hosts because their exact names are reused. It remains optional for domain-joined and Microsoft Entra hybrid joined hosts. Intune cleanup is optional but highly recommended for Intune-enrolled Entra-joined or hybrid-joined hosts to prevent stale or duplicate managed-device records.
 >
 > Configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
+>
+> **Maintenance override:** Exact-name cleanup has the same requirement and is available only when
+> the configured mode is DeleteFirst. Grant and propagate the required Graph permission before
+> scheduling.
 >
 > Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
 > Leave Intune cleanup disabled unless your environment support team confirms availability. Grant
@@ -912,7 +974,7 @@ default while existing apps continue running their configured version until a pl
 
 | Setting | Default | Applies To | Description |
 | --- | --- | --- | --- |
-| `replacementMode` | `SideBySide` | All | Replacement strategy: `SideBySide` (zero-downtime) or `DeleteFirst` (cost-optimized) |
+| `replacementMode` | `SideBySide` | All | Continuous base behavior: `SideBySide` or `DeleteFirst`. A one-time maintenance request can temporarily expedite a configured `DeleteFirst` replacer. |
 | `targetSessionHostCount` | `0` | All | Target host pool size. Set to 0 for auto-detect mode in either replacement mode, or use a specific number for explicit count |
 | `drainGracePeriodHours` | `24` | All | Grace period in hours for session hosts **with active sessions** before forced deletion (1-168 hours) |
 | `minimumDrainMinutes` | `15` | All | Minimum drain time in minutes for session hosts **with zero sessions** before eligible for deletion (0-120 minutes). Acts as safety buffer for API lag and race conditions |
@@ -932,6 +994,24 @@ default while existing apps continue running their configured version until a pl
 | --- | --- | --- |
 | `maxDeletionsPerCycle` | `50` | Absolute ceiling for hosts deleted and replaced per cycle (1-100). Progressive scale-up can select a smaller batch, and the capacity floor can reduce it further |
 | `minimumCapacityPercentage` | `80` | Static online healthy floor when no enabled scaling-plan schedule can be evaluated. With a scaling plan, RampDown and OffPeak use its target but retain at least one online healthy host; new destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak |
+
+### Maintenance Override Request Fields
+
+These fields are supplied by `Start-SessionHostMaintenanceReplacement.ps1` or the separate
+[Schedule Session Host Maintenance](../sessionHostMaintenance/README.md) operation Template Spec,
+not by a Session Host Replacer redeployment:
+
+| Field | Constraint | Description |
+| --- | --- | --- |
+| `requestId` | Non-empty GUID | Durable replay-protection identity |
+| `approvedImageVersion` | Exact version | Image version pinned for this operation |
+| `scheduledDateTimeUtc` | Future ISO 8601 UTC | Window start |
+| `windowDurationMinutes` | 30-1440 | Window length |
+| `maxVmsRemoved` | 1-1000 | Maximum hosts in one destructive batch |
+| `logOffDelayMinutes` | 0-60 | Notification interval, evaluated by the timer |
+| `logOffMessage` | 1-260 characters | Message sent to active sessions |
+| `forceSignOut` | Must be `true` | Explicit forced-sign-out authorization |
+| `allowFullPoolOutage` | Boolean | Authorization to reduce available capacity to zero |
 
 #### Dynamic Capacity from Scaling Plans
 

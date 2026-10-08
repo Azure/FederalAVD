@@ -49,6 +49,32 @@ DeleteFirst removes a capacity-safe batch before deploying replacements with the
 - Starts no new delete/deploy batch during the 60-minute pre-RampUp window, RampUp, or Peak.
 - Exact-name replacement is blocked for a one-host target because it cannot preserve availability.
 
+### One-Time Maintenance Override
+
+An optional one-time maintenance request temporarily expedites an existing DeleteFirst
+configuration for an administrator-approved outage window. No replacement-mode redeployment is
+required. SideBySide replacers are not eligible. Schedule the operation from the separately
+published [Schedule Session Host Maintenance](../deployments/add-ons/sessionHostMaintenance/README.md)
+Template Spec Form View, or use
+[Start-SessionHostMaintenanceReplacement.ps1](../deployments/add-ons/sessionHostReplacer/Start-SessionHostMaintenanceReplacement.ps1)
+for PowerShell automation and air-gapped workflows. Both paths arm an exact image version and UTC
+window.
+
+- Requires explicit forced-sign-out authorization.
+- Requires separate full-pool-outage authorization for a one-host pool or zero-capacity batch.
+- Sends AVD session notifications, waits 0-60 minutes, calls the AVD logoff operation, and verifies
+  zero sessions before deletion.
+- Requires autoscale to be disabled.
+- Starts no new destructive batch after the window closes, but completes recovery already in flight.
+- Reuses exact hostnames and dedicated-host placement.
+- Suspends normal replacement while scheduled or active, then automatically resumes continuous
+  DeleteFirst behavior after completion or expiry.
+- Does not use shutdown retention.
+- Fails closed if any shutdown-retention VM remains from a prior configuration.
+
+Notification delay is timer-driven. With the default 30-minute schedule, forced sign-out can begin
+up to approximately 30 minutes after the configured delay elapses.
+
 See the [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
 for complete sequencing and failure behavior.
 
@@ -60,9 +86,9 @@ for complete sequencing and failure behavior.
 - Scaling-aware readiness with exact-image validation evidence.
 - Replacer-owned scaling exclusions that do not overwrite administrator-owned exclusions.
 - Configurable drain notification, minimum drain time, and active-session grace period.
-- Entra device cleanup required for DeleteFirst replacement of Microsoft Entra joined hosts and
-  optional for domain-joined or hybrid-joined hosts.
-- Optional Intune cleanup, highly recommended before DeleteFirst hostname reuse for Intune-enrolled
+- Entra device cleanup required for exact-name DeleteFirst and maintenance-override replacement of
+  Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts.
+- Optional Intune cleanup, highly recommended before exact-name reuse for Intune-enrolled
   Entra-joined or hybrid-joined hosts.
 - Centralized Azure Monitor Workbook and alerting guidance.
 - Validated operational-setting updates through
@@ -94,6 +120,12 @@ supported operational settings without displaying secrets:
 Replacement mode, timer schedule, identity, networking, permissions, and infrastructure remain
 Template Spec or Bicep deployment concerns. A later Template Spec redeployment can overwrite direct
 operational-setting changes unless its authoritative parameters are updated to match.
+
+Schedule maintenance directly against an existing DeleteFirst Function App with the guarded
+command. Confirm that no replacement, recovery, or retained shutdown VM exists first. Do not
+redeploy while a request is active because deployment initializes the request app setting. Before
+scheduling a later request with `-ReplaceExistingRequest`, confirm that the prior request is
+complete and no pending recovery remains.
 
 ### Shutdown-retention rollback
 

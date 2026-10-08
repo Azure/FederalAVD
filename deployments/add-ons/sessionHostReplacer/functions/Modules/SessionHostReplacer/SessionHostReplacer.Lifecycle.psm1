@@ -195,7 +195,13 @@ function Remove-SessionHosts {
         [Parameter()]
         [bool] $EnableShutdownRetention = (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean),
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+        [Parameter()]
+        [ValidateRange(0, 60)]
+        [int] $MaintenanceLogOffDelayMinutes = 0,
+        [Parameter()]
+        [ValidateLength(1, 260)]
+        [string] $MaintenanceLogOffMessage = 'Scheduled maintenance is replacing this session host. Save your work and sign out before the maintenance countdown ends.'
     )
 
     $EnableShutdownRetention = $ReplacementMode -eq 'SideBySide' -and $EnableShutdownRetention
@@ -265,14 +271,38 @@ function Remove-SessionHosts {
                 Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode."
                 if ($sessionHost.PendingDrainTimeStamp) {
                     Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)"
-                    $maxDrainGracePeriodDate = $sessionHost.PendingDrainTimeStamp.AddHours($DrainGracePeriodHours)
-                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) can stay in grace period until $($maxDrainGracePeriodDate.ToUniversalTime().ToString('o'))" -Level Trace 
-                    if ($maxDrainGracePeriodDate -lt (Get-Date).ToUniversalTime()) {
-                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has exceeded the drain grace period."
-                        $deleteSessionHost = $true
+                    if ($ReplacementMode -eq 'MaintenanceWindow') {
+                        $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
+                        if ($elapsedMinutes -ge $MaintenanceLogOffDelayMinutes) {
+                            $logoffResult = Remove-SessionHostUserSessions `
+                                -ARMToken $ARMToken `
+                                -SessionHostName $sessionHost.FQDN `
+                                -HostPoolSubscriptionId $HostPoolSubscriptionId `
+                                -HostPoolName $HostPoolName `
+                                -ResourceGroupName $ResourceGroupName `
+                                -ResourceManagerUri $ResourceManagerUri
+                            if ($logoffResult.RemainingSessionCount -eq 0) {
+                                Write-LogEntry -Message "All sessions are signed out from $($sessionHost.FQDN); marking the host for deletion."
+                                $deleteSessionHost = $true
+                            }
+                            else {
+                                Write-LogEntry -Message "Session host $($sessionHost.FQDN) still has $($logoffResult.RemainingSessionCount) session(s) after logoff requests; deletion remains blocked." -Level Warning
+                            }
+                        }
+                        else {
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes; forced sign-out starts after $MaintenanceLogOffDelayMinutes minutes." -Level Trace
+                        }
                     }
                     else {
-                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has not exceeded the drain grace period." -Level Trace
+                        $maxDrainGracePeriodDate = $sessionHost.PendingDrainTimeStamp.AddHours($DrainGracePeriodHours)
+                        Write-LogEntry -Message "Session Host $($sessionHost.FQDN) can stay in grace period until $($maxDrainGracePeriodDate.ToUniversalTime().ToString('o'))" -Level Trace
+                        if ($maxDrainGracePeriodDate -lt (Get-Date).ToUniversalTime()) {
+                            Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has exceeded the drain grace period."
+                            $deleteSessionHost = $true
+                        }
+                        else {
+                            Write-LogEntry -Message "Session Host $($sessionHost.FQDN) has not exceeded the drain grace period." -Level Trace
+                        }
                     }
                 }
                 else {
@@ -352,7 +382,18 @@ function Remove-SessionHosts {
                 }
 
                 Write-LogEntry -Message 'Notifying Users' -Level Trace
-                Send-DrainNotification -ARMToken $ARMToken -SessionHostName ($sessionHost.FQDN)
+                if ($ReplacementMode -eq 'MaintenanceWindow') {
+                    Send-DrainNotification `
+                        -ARMToken $ARMToken `
+                        -SessionHostName $sessionHost.FQDN `
+                        -DrainGracePeriodHours 0 `
+                        -MessageTitle 'Scheduled Session Host Maintenance' `
+                        -MessageBody $MaintenanceLogOffMessage `
+                        -RequireSuccess
+                }
+                else {
+                    Send-DrainNotification -ARMToken $ARMToken -SessionHostName ($sessionHost.FQDN)
+                }
             }
             catch {
                 Write-LogEntry -Message "Error enabling drain mode for $($sessionHost.SessionHostName): $($_.Exception.Message)" -Level Error
@@ -572,7 +613,10 @@ function Send-DrainNotification {
         [string] $MessageTitle = "Automatic Session Host Maintenance",
 
         [Parameter()]
-        [string] $MessageBody = "Your session host {0} is being replaced. Please save your work and log off. You will be disconnected in {1} hours."
+        [string] $MessageBody = "Your session host {0} is being replaced. Please save your work and log off. You will be disconnected in {1} hours.",
+
+        [Parameter()]
+        [switch] $RequireSuccess
     )
     
     try {       
@@ -620,11 +664,62 @@ function Send-DrainNotification {
             }
             catch {
                 Write-LogEntry -Message "Failed to send message to user $userPrincipalName : $_" -Level Warning
+                if ($RequireSuccess) {
+                    throw
+                }
             }
         }
     }
     catch {
         Write-LogEntry -Message "Error in Send-DrainNotification: $_" -Level Error
+        if ($RequireSuccess) {
+            throw
+        }
+    }
+}
+
+function Remove-SessionHostUserSessions {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ARMToken,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SessionHostName,
+
+        [Parameter()]
+        [string]$HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+
+        [Parameter()]
+        [string]$HostPoolName = (Read-FunctionAppSetting HostPoolName),
+
+        [Parameter()]
+        [string]$ResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+
+        [Parameter()]
+        [string]$ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+
+    $sessionsUri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$SessionHostName/userSessions?api-version=2024-04-03"
+    $sessions = @(Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $sessionsUri) |
+        Where-Object { $_ -and $_.name }
+
+    foreach ($session in $sessions) {
+        $sessionId = $session.name -replace '.+\/.+\/(.+)', '$1'
+        if ([string]::IsNullOrWhiteSpace($sessionId)) {
+            throw "Cannot sign out a session with invalid resource name '$($session.name)'."
+        }
+
+        $logoffUri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$SessionHostName/userSessions/$sessionId/logoff?api-version=2024-04-03"
+        Invoke-AzureRestMethod -ARMToken $ARMToken -Method Post -Uri $logoffUri | Out-Null
+    }
+
+    $remainingSessions = @(Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $sessionsUri) |
+        Where-Object { $_ -and $_.name }
+
+    return [PSCustomObject]@{
+        RequestedLogoffCount = $sessions.Count
+        RemainingSessionCount = $remainingSessions.Count
     }
 }
 
@@ -683,7 +778,7 @@ function Test-NewSessionHostsAvailable {
         [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
-    Write-LogEntry -Message "Verifying new session hosts are available before proceeding with old host removal"
+    Write-LogEntry -Message "Verifying latest-image session host readiness before proceeding with old host removal"
     
     # Identify new hosts (hosts on the latest image version)
     $newHosts = $SessionHosts | Where-Object { 
@@ -692,18 +787,19 @@ function Test-NewSessionHostsAvailable {
     }
     
     if (-not $newHosts -or $newHosts.Count -eq 0) {
-        Write-LogEntry -Message "No new session hosts found on latest image version - replacement readiness is not established" -Level Warning
+        Write-LogEntry -Message "No session hosts are on the latest image version yet - replacement hosts must be deployed before old hosts can be removed"
         return [PSCustomObject]@{
-            AllAvailable      = $false
-            AvailableCount    = 0
-            TotalNewHosts     = 0
-            UnavailableHosts  = @()
-            SafeToProceed     = $false
-            Message           = "No new hosts to verify"
+            AllAvailable       = $false
+            AvailableCount     = 0
+            AvailablePercentage = 0
+            TotalNewHosts      = 0
+            UnavailableHosts   = @()
+            SafeToProceed      = $false
+            Message            = "No latest-image hosts are available to verify"
         }
     }
     
-    Write-LogEntry -Message "Found {0} new session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
+    Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
 
     $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
     $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
@@ -810,7 +906,6 @@ function Test-NewSessionHostsAvailable {
             $isValidatedForImage = $TagValidatedImage -and
                 $newHost.Tags[$TagValidatedImage] -eq $validatedImageToken
             $isScalableStandby = $newHostPowerStates[$newHost.ResourceId] -and
-                $newHost.Status -eq 'Shutdown' -and
                 -not $hasScalingExclusion -and
                 $isValidatedForImage
 
@@ -828,7 +923,7 @@ function Test-NewSessionHostsAvailable {
                     ValidatedForImage = [bool]$isValidatedForImage
                 }
                 $unreadyHosts += $unreadyHost
-                Write-LogEntry -Message "New host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
+                Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
             }
         }
 
@@ -892,7 +987,7 @@ function Test-NewSessionHostsAvailable {
                 FailedHealthCheckCount = $failedHealthChecks.Count
             }
             $unavailableHosts += $unavailableHost
-            Write-LogEntry -Message "New host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
+            Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
         }
     }
     
@@ -940,4 +1035,4 @@ function Test-NewSessionHostsAvailable {
 #EndRegion Session Host Lifecycle
 
 # Export functions
-Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Test-NewSessionHostsAvailable
+Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable

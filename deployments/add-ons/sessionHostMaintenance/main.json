@@ -1,0 +1,274 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.47.16.16243",
+      "templateHash": "5181353540998158229"
+    }
+  },
+  "parameters": {
+    "functionAppResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the existing Session Host Replacer Function App."
+      }
+    },
+    "approvedImageDefinitionResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Configured Compute Gallery image definition resource ID. Empty for Marketplace images."
+      }
+    },
+    "approvedImageVersion": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Exact Compute Gallery image version approved for this maintenance operation."
+      }
+    },
+    "scheduledDateTimeUtc": {
+      "type": "string",
+      "metadata": {
+        "description": "Maintenance start time in UTC using ISO 8601 format, for example 2026-04-18T22:00:00Z."
+      }
+    },
+    "windowDurationMinutes": {
+      "type": "int",
+      "defaultValue": 240,
+      "minValue": 30,
+      "maxValue": 1440,
+      "metadata": {
+        "description": "Maximum maintenance window duration in minutes."
+      }
+    },
+    "maxVmsRemoved": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "maxValue": 1000,
+      "metadata": {
+        "description": "Maximum number of session-host VMs removed in one maintenance batch."
+      }
+    },
+    "logOffDelayMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "minValue": 0,
+      "maxValue": 60,
+      "metadata": {
+        "description": "Minutes between notifying connected users and forcing sign-out."
+      }
+    },
+    "logOffMessage": {
+      "type": "string",
+      "defaultValue": "Scheduled maintenance is replacing this session host. Save your work and sign out before the maintenance countdown ends.",
+      "minLength": 1,
+      "maxLength": 260,
+      "metadata": {
+        "description": "Message sent to connected users before forced sign-out."
+      }
+    },
+    "forceSignOut": {
+      "type": "bool",
+      "metadata": {
+        "description": "Authorization to forcibly sign out remaining users after the notification delay."
+      }
+    },
+    "allowFullPoolOutage": {
+      "type": "bool",
+      "metadata": {
+        "description": "Authorization to reduce the host pool to zero available session hosts during maintenance."
+      }
+    },
+    "confirmNoShutdownRetention": {
+      "type": "bool",
+      "metadata": {
+        "description": "Confirmation that no shutdown-retained rollback VMs exist for this replacer."
+      }
+    },
+    "replaceExistingRequest": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Replace a populated maintenance request. Use only after reviewing its status."
+      }
+    },
+    "requestId": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "Unique maintenance request identifier."
+      }
+    },
+    "deploymentTimeUtc": {
+      "type": "string",
+      "defaultValue": "[utcNow()]",
+      "metadata": {
+        "description": "Deployment time used to reject maintenance schedules that are already in the past."
+      }
+    }
+  },
+  "variables": {
+    "functionAppResourceIdParts": "[split(parameters('functionAppResourceId'), '/')]",
+    "functionAppSubscriptionId": "[variables('functionAppResourceIdParts')[2]]",
+    "functionAppResourceGroupName": "[variables('functionAppResourceIdParts')[4]]",
+    "functionAppName": "[last(variables('functionAppResourceIdParts'))]",
+    "validatedScheduledDateTimeUtc": "[if(greater(dateTimeToEpoch(parameters('scheduledDateTimeUtc')), dateTimeToEpoch(parameters('deploymentTimeUtc'))), parameters('scheduledDateTimeUtc'), fail('scheduledDateTimeUtc must be later than the deployment time.'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('schedule-{0}', take(uniqueString(parameters('requestId')), 8))]",
+      "subscriptionId": "[variables('functionAppSubscriptionId')]",
+      "resourceGroup": "[variables('functionAppResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "functionAppName": {
+            "value": "[variables('functionAppName')]"
+          },
+          "requestId": {
+            "value": "[parameters('requestId')]"
+          },
+          "approvedImageDefinitionResourceId": {
+            "value": "[parameters('approvedImageDefinitionResourceId')]"
+          },
+          "approvedImageVersion": {
+            "value": "[parameters('approvedImageVersion')]"
+          },
+          "scheduledDateTimeUtc": {
+            "value": "[variables('validatedScheduledDateTimeUtc')]"
+          },
+          "windowDurationMinutes": {
+            "value": "[parameters('windowDurationMinutes')]"
+          },
+          "maxVmsRemoved": {
+            "value": "[parameters('maxVmsRemoved')]"
+          },
+          "logOffDelayMinutes": {
+            "value": "[parameters('logOffDelayMinutes')]"
+          },
+          "logOffMessage": {
+            "value": "[parameters('logOffMessage')]"
+          },
+          "forceSignOut": {
+            "value": "[parameters('forceSignOut')]"
+          },
+          "allowFullPoolOutage": {
+            "value": "[parameters('allowFullPoolOutage')]"
+          },
+          "confirmNoShutdownRetention": {
+            "value": "[parameters('confirmNoShutdownRetention')]"
+          },
+          "replaceExistingRequest": {
+            "value": "[parameters('replaceExistingRequest')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "2143062106019083394"
+            }
+          },
+          "parameters": {
+            "functionAppName": {
+              "type": "string"
+            },
+            "requestId": {
+              "type": "string"
+            },
+            "approvedImageDefinitionResourceId": {
+              "type": "string"
+            },
+            "approvedImageVersion": {
+              "type": "string"
+            },
+            "scheduledDateTimeUtc": {
+              "type": "string"
+            },
+            "windowDurationMinutes": {
+              "type": "int"
+            },
+            "maxVmsRemoved": {
+              "type": "int"
+            },
+            "logOffDelayMinutes": {
+              "type": "int"
+            },
+            "logOffMessage": {
+              "type": "string"
+            },
+            "forceSignOut": {
+              "type": "bool"
+            },
+            "allowFullPoolOutage": {
+              "type": "bool"
+            },
+            "confirmNoShutdownRetention": {
+              "type": "bool"
+            },
+            "replaceExistingRequest": {
+              "type": "bool"
+            }
+          },
+          "variables": {
+            "maintenanceRequest": {
+              "requestId": "[parameters('requestId')]",
+              "approvedImageVersion": "[parameters('approvedImageVersion')]",
+              "scheduledDateTimeUtc": "[parameters('scheduledDateTimeUtc')]",
+              "windowDurationMinutes": "[parameters('windowDurationMinutes')]",
+              "maxVmsRemoved": "[parameters('maxVmsRemoved')]",
+              "logOffDelayMinutes": "[parameters('logOffDelayMinutes')]",
+              "logOffMessage": "[parameters('logOffMessage')]",
+              "forceSignOut": "[parameters('forceSignOut')]",
+              "allowFullPoolOutage": "[parameters('allowFullPoolOutage')]"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/sites/config",
+              "apiVersion": "2024-04-01",
+              "name": "[format('{0}/{1}', parameters('functionAppName'), 'appsettings')]",
+              "properties": "[union(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, createObject('MaintenanceRequest', if(if(or(empty(if(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'HostPoolName'), string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.HostPoolName), '')), not(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'))), fail('The selected Function App is not a recognized Session Host Replacer.'), if(not(equals(if(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'ReplacementMode'), string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.ReplacementMode), ''), 'DeleteFirst')), fail('Maintenance replacement can be scheduled only for a replacer configured in DeleteFirst mode.'), if(and(not(empty(if(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'MaintenanceRequest'), string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.MaintenanceRequest), ''))), not(parameters('replaceExistingRequest'))), fail('A maintenance request is already populated. Review it before authorizing replacement.'), if(not(parameters('forceSignOut')), fail('forceSignOut must be authorized for maintenance replacement.'), if(not(parameters('allowFullPoolOutage')), fail('allowFullPoolOutage must be authorized for maintenance replacement.'), if(not(parameters('confirmNoShutdownRetention')), fail('Confirm that no shutdown-retained rollback VMs exist before scheduling maintenance.'), if(and(contains(createArray('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly'), if(contains(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'identitySolution'), string(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()).identitySolution), '')), not(if(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'RemoveEntraDevice'), equals(toLower(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.RemoveEntraDevice)), 'true'), false()))), fail('Entra device cleanup must be enabled before scheduling maintenance for Entra-joined session hosts.'), if(and(not(empty(if(contains(toLower(if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), '')), '/versions/'), join(take(split(if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), ''), '/'), 11), '/'), if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), '')))), not(equals(toLower(if(contains(toLower(if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), '')), '/versions/'), join(take(split(if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), ''), '/'), 11), '/'), if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), ''))), toLower(parameters('approvedImageDefinitionResourceId'))))), fail('The approved Compute Gallery image definition does not match the replacer configuration.'), if(and(empty(if(contains(toLower(if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), '')), '/versions/'), join(take(split(if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), ''), '/'), 11), '/'), if(contains(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()), 'id'), string(coalesce(tryGet(if(and(contains(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties, 'SessionHostParameters'), not(empty(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)))), json(string(list(format('{0}/config/appsettings', resourceId('Microsoft.Web/sites', parameters('functionAppName'))), '2024-04-01').properties.SessionHostParameters)), createObject()), 'imageReference'), createObject()).id), ''))), not(empty(parameters('approvedImageDefinitionResourceId')))), fail('The replacer uses a Marketplace image, but a Compute Gallery image definition was supplied.'), true()))))))))), string(variables('maintenanceRequest')), '')))]"
+            }
+          ],
+          "outputs": {
+            "requestStatus": {
+              "type": "string",
+              "value": "Scheduled"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "requestId": {
+      "type": "string",
+      "value": "[parameters('requestId')]"
+    },
+    "functionAppResourceId": {
+      "type": "string",
+      "value": "[parameters('functionAppResourceId')]"
+    },
+    "scheduledDateTimeUtc": {
+      "type": "string",
+      "value": "[parameters('scheduledDateTimeUtc')]"
+    },
+    "requestStatus": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('functionAppSubscriptionId'), variables('functionAppResourceGroupName')), 'Microsoft.Resources/deployments', format('schedule-{0}', take(uniqueString(parameters('requestId')), 8))), '2025-04-01').outputs.requestStatus.value]"
+    }
+  }
+}

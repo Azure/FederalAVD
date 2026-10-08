@@ -249,6 +249,14 @@ function Get-InterpretedConfiguration {
         }
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
+        MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(
+            (Get-SettingValue -Settings $Settings -Name 'MaintenanceRequest')
+        )) {
+            'Not scheduled'
+        }
+        else {
+            'Scheduled, active, completed, or expired; inspect the workbook before replacing it'
+        }
     }
 }
 

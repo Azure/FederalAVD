@@ -10,12 +10,15 @@ These diagrams describe one timer invocation. A replacement cycle can span multi
 
 ## Shared Evaluation
 
-Both replacement modes begin with the same inventory, image, planning, and validation steps.
+Normal replacement and the one-time maintenance override use the same inventory, image, planning,
+and validation steps.
 
 ```mermaid
 flowchart TD
-    A[Timer invocation] --> B["Load settings and<br/>deployment state"]
-    B --> C["Get latest<br/>image version"]
+    A[Timer invocation] --> B["Load configured mode,<br/>request, and durable state"]
+    B --> R{"Active maintenance<br/>request?"}
+    R -- Yes --> MW[Maintenance override flow]
+    R -- No --> C["Get latest<br/>image version"]
     C --> D["Inventory session hosts<br/>and active deployments"]
     D --> E["Evaluate enabled scaling plan<br/>and active schedule"]
     E --> F["Build replacement<br/>plan"]
@@ -24,7 +27,7 @@ flowchart TD
     H --> I["Write exact-image<br/>validation tag"]
     I --> J["Update status<br/>and finish"]
     G -- Yes --> K["Evaluate latest-image<br/>host readiness"]
-    K --> L{Replacement mode}
+    K --> L{Configured replacement mode}
     L -- SideBySide --> SBS[SideBySide flow]
     L -- DeleteFirst --> DF[DeleteFirst flow]
 ```
@@ -148,6 +151,60 @@ DeleteFirst-specific behavior:
 - Accepted deployments require a durable tracking-state write; VM presence remains the duplicate-deployment gate if that write fails.
 - Shutdown retention is always disabled.
 - Exact-name DeleteFirst replacement is blocked for a single-host target because it cannot preserve one available host.
+
+## One-Time Maintenance Override
+
+The override is a one-time, administrator-armed maintenance operation on an existing DeleteFirst
+replacer. `Start-SessionHostMaintenanceReplacement.ps1` writes a request containing a unique
+request ID, exact approved image version, UTC start time, window duration, batch limit, notification
+delay, forced-sign-out authorization, and optional full-pool-outage authorization. Continuous
+DeleteFirst work is suspended while the request is scheduled or active and resumes after the
+request completes or expires. While the request is scheduled, deployment monitoring and pending
+recovery continue, but no new normal replacement batch starts.
+
+```mermaid
+flowchart TD
+    A["Load request and durable state"] --> B{"Request already completed?"}
+    B -- Yes --> Z[Finish without replay]
+    B -- No --> C{"Window started?"}
+    C -- No --> Z
+    C -- Yes --> D{"Enabled scaling plan?"}
+    D -- Yes --> E["Fail closed; disable autoscale"]
+    D -- No --> F{"Approved image available?"}
+    F -- No --> E
+    F -- Yes --> G["Persist active request ID"]
+    G --> H["Select approved batch"]
+    H --> I["Drain and notify sessions"]
+    I --> J{"Notification delay elapsed?"}
+    J -- No --> Z
+    J -- Yes --> K["Call AVD session logoff"]
+    K --> L{"Zero sessions verified?"}
+    L -- No --> Z
+    L -- Yes --> M["Save exact-name mapping and delete"]
+    M --> N["Verify cleanup and redeploy"]
+    N --> O{"Window still open?"}
+    O -- Yes --> H
+    O -- No --> P["Start no new batch; finish recovery"]
+```
+
+Maintenance-override behavior:
+
+- Durable request IDs prevent replay.
+- The exact approved image version is pinned into replacement deployment parameters.
+- Autoscale must be disabled. Failure to query scaling-plan state also fails closed.
+- The function explicitly calls the AVD user-session logoff operation and re-queries sessions;
+  deleting a VM does not substitute for logoff.
+- Notification delay is evaluated on timer invocations. With the default 30-minute timer, forced
+  sign-out can begin up to approximately 30 minutes after the requested delay elapses.
+- A full-pool outage, including one-host replacement, requires explicit authorization.
+- The configured replacement mode must be DeleteFirst.
+- Any shutdown-retention VM blocks scheduling and execution; maintenance does not purge retained
+  rollback capacity implicitly.
+- When the window closes, no new destructive batch starts. Already draining or deleted hosts
+  continue through exact-name recovery.
+- A new override cannot activate while normal replacement has pending deletion recovery or a
+  replacer-owned draining host.
+- Shutdown retention is unavailable; use SideBySide when retained-host rollback is required.
 
 ## Cross-Cutting Batch Progression
 
