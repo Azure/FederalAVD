@@ -1,6 +1,4 @@
-targetScope = 'subscription'
-
-@description('Resource ID of the existing Session Host Replacer Function App.')
+@description('Resource ID of the existing Session Host Replacer Function App in the deployment resource group.')
 param functionAppResourceId string
 
 @description('Configured Compute Gallery image definition resource ID. Empty for Marketplace images.')
@@ -52,16 +50,16 @@ param requestId string = newGuid()
 param deploymentTimeUtc string = utcNow()
 
 var functionAppResourceIdParts = split(functionAppResourceId, '/')
-var functionAppSubscriptionId = functionAppResourceIdParts[2]
-var functionAppResourceGroupName = functionAppResourceIdParts[4]
-var functionAppName = last(functionAppResourceIdParts)
+var functionAppResourceGroupId = join(take(functionAppResourceIdParts, 5), '/')
+var functionAppName = toLower(functionAppResourceGroupId) == toLower(resourceGroup().id)
+  ? last(functionAppResourceIdParts)
+  : fail('functionAppResourceId must identify a Function App in the deployment resource group.')
 var validatedScheduledDateTimeUtc = dateTimeToEpoch(scheduledDateTimeUtc) > dateTimeToEpoch(deploymentTimeUtc)
   ? scheduledDateTimeUtc
   : fail('scheduledDateTimeUtc must be later than the deployment time.')
 
 module updateMaintenanceRequest 'modules/updateMaintenanceRequest.bicep' = {
   name: 'schedule-${take(uniqueString(requestId), 8)}'
-  scope: resourceGroup(functionAppSubscriptionId, functionAppResourceGroupName)
   params: {
     functionAppName: functionAppName
     requestId: requestId

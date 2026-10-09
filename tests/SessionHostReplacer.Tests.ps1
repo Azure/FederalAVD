@@ -264,8 +264,9 @@ Describe 'Session Host Maintenance portal operation' {
     }
 
     It 'targets an existing Function App without redeploying the replacer' {
-        $operationBicep | Should Match "targetScope = 'subscription'"
-        $operationBicep | Should Match "scope: resourceGroup\(functionAppSubscriptionId, functionAppResourceGroupName\)"
+        $operationBicep | Should Not Match "targetScope = 'subscription'"
+        $operationBicep | Should Match "toLower\(functionAppResourceGroupId\) == toLower\(resourceGroup\(\)\.id\)"
+        $operationBicep | Should Match 'functionAppResourceId must identify a Function App in the deployment resource group'
         $operationModule | Should Match "resource functionApp 'Microsoft.Web/sites@.*' existing"
         $operationModule | Should Match "resource appSettings 'Microsoft.Web/sites/config@.*'"
         $operationModule | Should Not Match "resource functionApp 'Microsoft.Web/sites@.*' ="
@@ -331,7 +332,29 @@ Describe 'Session Host Maintenance portal operation' {
         )) {
             @($formParameterNames -contains $requiredParameterName) | Should Be $true
         }
-        $operationForm.view.outputs.kind | Should Be 'Subscription'
+        $operationForm.view.outputs.kind | Should Be 'ResourceGroup'
+    }
+
+    It 'queries tagged replacer Function Apps and derives resource-group deployment scope' {
+        $targetStep = $operationForm.view.properties.steps |
+            Where-Object { $_.name -eq 'target' }
+        $subscriptionsApi = $targetStep.elements |
+            Where-Object { $_.name -eq 'subscriptionsApi' }
+        $functionAppsApi = $targetStep.elements |
+            Where-Object { $_.name -eq 'functionAppsApi' }
+        $functionApp = $targetStep.elements |
+            Where-Object { $_.name -eq 'functionApp' }
+
+        $subscriptionsApi.request.path | Should Match '^/subscriptions\?api-version='
+        $functionAppsApi.request.path | Should Match '/providers/Microsoft.Web/sites\?api-version='
+        $functionApp.type | Should Be 'Microsoft.Common.DropDown'
+        $functionApp.constraints.allowedValues | Should Match 'cm-resource-parent'
+        $functionApp.constraints.allowedValues | Should Match 'microsoft\.desktopvirtualization/hostpools'
+        $functionApp.constraints.allowedValues | Should Match 'resourceGroupId'
+        $operationForm.view.outputs.resourceGroupId |
+            Should Be "[steps('target').functionApp.resourceGroupId]"
+        $operationForm.view.outputs.location |
+            Should Be "[steps('target').functionApp.location]"
     }
 
     It 'reads the configured image definition and lists approved gallery versions' {

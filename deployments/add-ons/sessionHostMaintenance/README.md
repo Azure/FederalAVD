@@ -28,10 +28,12 @@ Publish the add-on Template Specs with:
 
 Open **Schedule AVD Session Host Maintenance** in the Azure portal, select the existing Session Host
 Replacer Function App, and provide the approved exact image version and UTC maintenance window. The
-form reads the replacer application settings through ARM. For Compute Gallery configurations, it
-derives the configured image definition and lists its non-excluded published versions in a dropdown.
-Marketplace configurations retain an exact-version text entry. The deployment verifies that a
-gallery definition supplied through a direct template call matches the replacer configuration.
+form lists Function Apps whose `cm-resource-parent` tag identifies an AVD host pool, derives the
+resource-group deployment scope and location from the selected app, and reads its application
+settings through ARM. For Compute Gallery configurations, it derives the configured image definition
+and lists its non-excluded published versions in a dropdown. Marketplace configurations retain an
+exact-version text entry. The deployment verifies that a gallery definition supplied through a
+direct template call matches the replacer configuration.
 
 The form requires explicit acknowledgements for forced sign-out, a possible full-pool outage, and
 the absence of shutdown-retained rollback VMs.

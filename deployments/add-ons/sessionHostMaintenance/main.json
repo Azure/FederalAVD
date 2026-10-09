@@ -1,18 +1,18 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "5181353540998158229"
+      "templateHash": "593499330246334420"
     }
   },
   "parameters": {
     "functionAppResourceId": {
       "type": "string",
       "metadata": {
-        "description": "Resource ID of the existing Session Host Replacer Function App."
+        "description": "Resource ID of the existing Session Host Replacer Function App in the deployment resource group."
       }
     },
     "approvedImageDefinitionResourceId": {
@@ -113,9 +113,8 @@
   },
   "variables": {
     "functionAppResourceIdParts": "[split(parameters('functionAppResourceId'), '/')]",
-    "functionAppSubscriptionId": "[variables('functionAppResourceIdParts')[2]]",
-    "functionAppResourceGroupName": "[variables('functionAppResourceIdParts')[4]]",
-    "functionAppName": "[last(variables('functionAppResourceIdParts'))]",
+    "functionAppResourceGroupId": "[join(take(variables('functionAppResourceIdParts'), 5), '/')]",
+    "functionAppName": "[if(equals(toLower(variables('functionAppResourceGroupId')), toLower(resourceGroup().id)), last(variables('functionAppResourceIdParts')), fail('functionAppResourceId must identify a Function App in the deployment resource group.'))]",
     "validatedScheduledDateTimeUtc": "[if(greater(dateTimeToEpoch(parameters('scheduledDateTimeUtc')), dateTimeToEpoch(parameters('deploymentTimeUtc'))), parameters('scheduledDateTimeUtc'), fail('scheduledDateTimeUtc must be later than the deployment time.'))]"
   },
   "resources": [
@@ -123,8 +122,6 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('schedule-{0}', take(uniqueString(parameters('requestId')), 8))]",
-      "subscriptionId": "[variables('functionAppSubscriptionId')]",
-      "resourceGroup": "[variables('functionAppResourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -268,7 +265,7 @@
     },
     "requestStatus": {
       "type": "string",
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', variables('functionAppSubscriptionId'), variables('functionAppResourceGroupName')), 'Microsoft.Resources/deployments', format('schedule-{0}', take(uniqueString(parameters('requestId')), 8))), '2025-04-01').outputs.requestStatus.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('schedule-{0}', take(uniqueString(parameters('requestId')), 8))), '2025-04-01').outputs.requestStatus.value]"
     }
   }
 }

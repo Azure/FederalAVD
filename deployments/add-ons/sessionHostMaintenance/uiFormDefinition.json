@@ -10,19 +10,45 @@
           "label": "Target Replacer",
           "elements": [
             {
-              "name": "resourceScope",
-              "type": "Microsoft.Common.ResourceScope",
-              "subscription": {
-                "resourceProviders": [
-                  "Microsoft.Web/sites"
-                ]
-              },
-              "location": {
-                "label": "Deployment Region",
-                "toolTip": "Region used to record this subscription-level operation deployment.",
-                "resourceTypes": [
-                  "Microsoft.Resources/deployments"
-                ]
+              "name": "subscriptionsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "request": {
+                "method": "GET",
+                "path": "/subscriptions?api-version=2022-12-01",
+                "transforms": {
+                  "list": "value|[*].{label:displayName, value:id}"
+                }
+              }
+            },
+            {
+              "name": "subscription",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Subscription",
+              "constraints": {
+                "allowedValues": "[steps('target').subscriptionsApi.transformed.list]",
+                "required": true
+              }
+            },
+            {
+              "name": "functionAppsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('target').subscription))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('target').subscription, '/providers/Microsoft.Web/sites?api-version=2024-04-01')]"
+              }
+            },
+            {
+              "name": "functionApp",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Session Host Replacer Function App",
+              "placeholder": "Select a Session Host Replacer",
+              "toolTip": "Lists Function Apps tagged with a parent Azure Virtual Desktop host pool. The operation validates the selected app's replacer settings before making any change.",
+              "filter": true,
+              "multiLine": true,
+              "constraints": {
+                "required": true,
+                "allowedValues": "[map(filter(steps('target').functionAppsApi.value, (app) => and(contains(toLower(coalesce(app.kind, '')), 'functionapp'), contains(toLower(coalesce(tryGet(app.tags, 'cm-resource-parent'), '')), '/providers/microsoft.desktopvirtualization/hostpools/'))), (app) => parse(concat('{\"label\":\"', app.name, '\",\"description\":\"Resource group: ', last(take(split(app.id, '/'), 5)), ' | Location: ', app.location, '\",\"value\":{\"id\":\"', app.id, '\",\"location\":\"', app.location, '\",\"resourceGroupId\":\"', join(take(split(app.id, '/'), 5), '/'), '\"}}')))]"
               }
             },
             {
@@ -31,19 +57,6 @@
               "options": {
                 "style": "Info",
                 "text": "This is an operational request, not a Session Host Replacer redeployment. It schedules a one-time accelerated replacement on an existing replacer and leaves its configured continuous mode unchanged."
-              }
-            },
-            {
-              "name": "functionApp",
-              "type": "Microsoft.Solutions.ResourceSelector",
-              "label": "Session Host Replacer Function App",
-              "resourceType": "Microsoft.Web/sites",
-              "toolTip": "Select the Function App deployed by the Session Host Replacer. The operation validates that it is configured for DeleteFirst replacement.",
-              "scope": {
-                "subscriptionId": "[steps('target').resourceScope.subscription.id]"
-              },
-              "constraints": {
-                "required": true
               }
             },
             {
@@ -285,9 +298,9 @@
       ]
     },
     "outputs": {
-      "kind": "Subscription",
-      "location": "[steps('target').resourceScope.location.name]",
-      "subscriptionId": "[steps('target').resourceScope.subscription.id]",
+      "kind": "ResourceGroup",
+      "location": "[steps('target').functionApp.location]",
+      "resourceGroupId": "[steps('target').functionApp.resourceGroupId]",
       "parameters": {
         "functionAppResourceId": "[steps('target').functionApp.id]",
         "approvedImageDefinitionResourceId": "[if(empty(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), '')), '', join(take(split(coalesce(tryGet(tryGet(parse(coalesce(tryGet(steps('target').functionAppSettingsApi.properties, 'SessionHostParameters'), '{}')), 'imageReference'), 'id'), ''), '/'), 11), '/'))]",
