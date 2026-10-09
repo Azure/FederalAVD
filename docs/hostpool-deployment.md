@@ -247,6 +247,21 @@ that enables CMK, diagnostics, or Azure Files backup.
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
 
+For a standalone proof of concept, leave `existingFeedWorkspaceResourceId` empty. The deployment
+creates a dedicated control-plane resource group and workspace whose names include the host-pool
+identifier, and may manage that workspace's feed and global-feed Private Link configuration. This
+is an intentional naming change: older parameter files that left
+`existingFeedWorkspaceResourceId` empty will calculate different control-plane resource-group and
+workspace names after upgrading. Set `existingFeedWorkspaceResourceId` to the current workspace ID
+before redeploying when that workspace must be retained.
+
+For the normal shared-workspace model, deploy or adopt the workspace through AVD Shared Services
+and pass its `avdWorkspaceResourceId` output as `existingFeedWorkspaceResourceId`. A host-pool
+deployment that consumes an existing workspace only preserves and appends application-group
+references. It does not change workspace public access or create workspace-feed or global-feed
+private endpoints. With an existing workspace, AVD Private Link is therefore limited to `None` or
+`HostPool`; update shared feed and global-feed networking through AVD Shared Services.
+
 The deployment returns the effective resource IDs whether it created the resource or reused an
 existing one. Use `credentialsKeyVaultResourceId`, `encryptionKeyVaultResourceId`,
 `logAnalyticsWorkspaceResourceId`, `avdInsightsDataCollectionRuleResourceId`,

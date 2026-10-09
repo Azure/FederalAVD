@@ -98,7 +98,8 @@ flowchart TD
 **Script/template:** `deployments/sharedServices/sharedServices.json`
 **When required:** For every automated host pool, including a marketplace-image PoC; when using
 Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault, a shared Log Analytics
-Workspace, or a centrally managed FSLogix Azure Files backup vault and policy.
+Workspace, a shared AVD workspace and feed/global Private Link, or a centrally managed FSLogix
+Azure Files backup vault and policy.
 The deployment uses the `sharedServices` path and parameter-file name.
 
 ### Key outputs
@@ -112,6 +113,10 @@ The deployment uses the `sharedServices` path and parameter-file name.
 | `avdInsightsDataCollectionRuleResourceId` | Host Pool — `existingAVDInsightsDataCollectionRuleResourceId`. Only present when `deployMonitoring` was `true`. |
 | `dataCollectionEndpointResourceId` | Host Pool — `existingDataCollectionEndpointResourceId`. Only present when `deployMonitoring` was `true`. |
 | `azureMonitorPrivateLinkScopeResourceId` | Host Pool — `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring/DNS automation. Empty when AMPLS integration is disabled. |
+| `avdWorkspaceResourceId` | Standard and automated Host Pool — `existingFeedWorkspaceResourceId`. Consuming host pools append application groups but do not manage workspace feed/global networking. |
+| `workspaceFeedPrivateEndpointResourceId` | Operational evidence for the Shared Services-owned workspace feed endpoint. |
+| `globalFeedWorkspaceResourceId` | Operational evidence for the Shared Services-owned or adopted global-feed workspace. |
+| `globalFeedPrivateEndpointResourceId` | Operational evidence for the Shared Services-owned global-feed endpoint. |
 | `fslogixBackupVaultResourceId` | Pooled Host Pool — `existingFilesBackupVaultResourceId`; FSLogix Storage add-on — `recoveryServicesVaultResourceId`. Only present when `deployFSLogixBackupVault` was `true`. |
 | `fslogixBackupPolicyName` | Pooled Host Pool — `existingFilesBackupPolicyName`; FSLogix Storage add-on — `fileSharePolicyName`. Only present when `deployFSLogixBackupVault` was `true`. |
 | `fslogixBackupPolicyResourceId` | Available for validation and automation that needs the complete policy resource ID. |
@@ -119,8 +124,9 @@ The deployment uses the `sharedServices` path and parameter-file name.
 ### Notes
 
 - The deploying identity needs **Key Vault Crypto Officer** on the encryption key vault before running any downstream step that creates CMK keys.
-- Key Vaults, monitoring resources, and the FSLogix backup vault and policy are intentionally
-  deployed separately so they can be shared across multiple host pools and storage deployments.
+- Key Vaults, the AVD workspace and feed/global networking, monitoring resources, and the FSLogix
+  backup vault and policy are intentionally deployed separately so they can be shared across
+  multiple host pools and storage deployments.
 - Shared Services owns the FSLogix vault and policy settings. Each host pool or FSLogix Storage
   add-on owns registration of its storage accounts and shares as protected items.
 - The AVD Insights DCR and DCE are region/workspace-scoped, not host-pool-specific — deploying them once here lets every host pool that reuses this workspace share the same DCR/DCE instead of the first host pool deployment creating its own.

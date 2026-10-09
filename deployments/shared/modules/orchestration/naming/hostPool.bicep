@@ -154,10 +154,10 @@ var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.wor
 
 // ── Control Plane Shared Resources ───────────────────────────────────────────
 var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}${cnv_delimiter}control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : split(existingFeedWorkspaceResourceId, '/')[4]
 var workspaceName = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : last(split(existingFeedWorkspaceResourceId, '/'))
 
 // ── Control Plane HostPool Resources ──────────────────────────────────────────

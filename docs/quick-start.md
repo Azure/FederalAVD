@@ -504,8 +504,9 @@ resources instead and later Step 4 deployments can select them as existing resou
 ### First Deployment: Template Spec UI
 
 1. In the Azure portal, open **Template Specs** and deploy **AVD Shared Services**.
-2. Use the form to choose credential and encryption Key Vaults, centralized monitoring, FSLogix
-    backup, and private connectivity. Fields that do not apply remain hidden.
+2. Use the form to choose credential and encryption Key Vaults, a shared AVD workspace and its
+    feed/global Private Link configuration, centralized monitoring, FSLogix backup, and private
+    connectivity. Fields that do not apply remain hidden.
 3. At **Review + create**, select **Create**. After submission, select **Download template and
     parameters** and save them as
     `customer\parameters\sharedServices\<environment>.sharedServices.parameters.json`.
@@ -530,6 +531,8 @@ resource, parameter, prerequisite, networking, deployment, and output reference.
 | **Log Analytics Workspace** *(optional)* | `law-avd-{loc}` | Central workspace for Key Vault and Image Management storage account diagnostic settings, and host pool monitoring |
 | **AVD Insights Data Collection Rule** *(optional)* | `microsoft-avdi-{loc}` | Shared DCR that every host pool referencing this workspace can reuse via `existingAVDInsightsDataCollectionRuleResourceId`, instead of the first host pool creating its own |
 | **Data Collection Endpoint** *(optional)* | `dce-avd-{loc}` | Shared DCE that every host pool referencing this workspace can reuse via `existingDataCollectionEndpointResourceId` |
+| **Shared AVD Workspace** *(optional)* | `vdws-avd-{loc}` | Shared workspace created or adopted by Shared Services; pass `avdWorkspaceResourceId` to each host pool as `existingFeedWorkspaceResourceId` |
+| **AVD control-plane resource group** *(optional)* | `rg-avd-control-plane-{loc}` | Dedicated owner for a newly created shared workspace and its optional feed private endpoint |
 | **FSLogix Recovery Services Vault** *(optional)* | `rsv-avd-files-{loc}` | Shared regional vault and Azure Files snapshot backup policy for pooled host pools and standalone FSLogix storage deployments |
 
 **Custom naming:** These patterns reflect the CAF default. To use a consistent naming convention across all solutions, see the **[Naming Convention guide](naming-convention.md)**.
@@ -591,6 +594,8 @@ After deployment, note the resource IDs from the deployment outputs:
 | `avdInsightsDataCollectionRuleResourceId` | Host pool deployment (`existingAVDInsightsDataCollectionRuleResourceId`) — only present when `deployMonitoring` was `true` |
 | `dataCollectionEndpointResourceId` | Host pool deployment (`existingDataCollectionEndpointResourceId`) — only present when `deployMonitoring` was `true` |
 | `azureMonitorPrivateLinkScopeResourceId` | Host pool deployment (`azureMonitorPrivateLinkScopeResourceId`) and centralized monitoring/DNS automation — empty when AMPLS integration is disabled |
+| `avdWorkspaceResourceId` | Standard or automated host pool (`existingFeedWorkspaceResourceId`) |
+| `globalFeedWorkspaceResourceId` | Existing global-feed workspace reference for automation that needs it; host pools consuming `avdWorkspaceResourceId` leave feed/global networking under Shared Services ownership |
 | `fslogixBackupVaultResourceId` | Pooled host pool (`existingFilesBackupVaultResourceId`) or FSLogix Storage add-on (`recoveryServicesVaultResourceId`) |
 | `fslogixBackupPolicyName` | Pooled host pool (`existingFilesBackupPolicyName`) or FSLogix Storage add-on (`fileSharePolicyName`) |
 

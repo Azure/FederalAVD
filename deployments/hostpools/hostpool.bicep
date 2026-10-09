@@ -727,6 +727,9 @@ var globalFeedRegion = !empty(globalFeedPrivateEndpointSubnetResourceId)
   : ''
 var virtualMachinesRegion = vmVirtualNetwork.location
 var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
+var existingWorkspacePrivateLinkConfigurationIsValid = empty(existingFeedWorkspaceResourceId) || (contains(['None', 'HostPool'], avdPrivateLinkPrivateRoutes) && empty(workspaceFeedPrivateEndpointSubnetResourceId) && empty(globalFeedPrivateEndpointSubnetResourceId))
+  ? true
+  : fail('When existingFeedWorkspaceResourceId is supplied, this deployment can only manage the host-pool connection private endpoint. Manage workspace feed and global-feed Private Link through AVD Shared Services.')
 
 var createDeploymentVm = deployFSLogixStorage || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
 var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups)
@@ -1472,7 +1475,7 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
   params: {
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
-    avdPrivateLinkPrivateRoutes: avdPrivateLinkPrivateRoutes
+    avdPrivateLinkPrivateRoutes: existingWorkspacePrivateLinkConfigurationIsValid ? avdPrivateLinkPrivateRoutes : avdPrivateLinkPrivateRoutes
     controlPlaneRegion: effectiveControlPlaneRegion
     deployScalingPlan: deployScalingPlan
     deploymentUserAssignedIdentityClientId: createDeploymentVm
@@ -1486,7 +1489,6 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     existingGlobalWorkspaceResourceId: existingGlobalFeedResourceId
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
-    globalFeedRegion: globalFeedRegion!
     globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
     hostPoolCustomTags: union(hostsResourceGroupIdTag, storageResourceGroupIdTag, {
       hpIdentifier: hpBaseName

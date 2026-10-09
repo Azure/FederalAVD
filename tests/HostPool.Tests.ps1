@@ -65,6 +65,47 @@ $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.
 $standardBicepPath = Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep'
 $automatedFormPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $automatedBicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$hostPoolNamingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\hostPool.bicep'
+$standardControlPlanePath = Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
+$automatedControlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
+
+Describe 'AVD workspace ownership contract' {
+    BeforeAll {
+        $standardFormJson = Get-Content -LiteralPath $standardFormPath -Raw
+        $automatedFormJson = Get-Content -LiteralPath $automatedFormPath -Raw
+        $standardBicep = Get-Content -LiteralPath $standardBicepPath -Raw
+        $automatedBicep = Get-Content -LiteralPath $automatedBicepPath -Raw
+        $namingModule = Get-Content -LiteralPath $hostPoolNamingPath -Raw
+        $standardControlPlane = Get-Content -LiteralPath $standardControlPlanePath -Raw
+        $automatedControlPlane = Get-Content -LiteralPath $automatedControlPlanePath -Raw
+    }
+
+    It 'uses the host-pool identifier for newly created inline workspaces' {
+        $namingModule | Should Match "cnv\(cnv_components, cnv_delimiter, cnv_rtCodes\.workspaces, identifier, cnv_cploc"
+        $namingModule | Should Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
+    }
+
+    It 'rejects feed and global Private Link management for existing workspaces' {
+        $standardBicep | Should Match 'existingWorkspacePrivateLinkConfigurationIsValid'
+        $automatedBicep | Should Match 'existingWorkspacePrivateLinkConfigurationIsValid'
+        $standardBicep | Should Match "contains\(\['None', 'HostPool'\], avdPrivateLinkPrivateRoutes\)"
+        $automatedBicep | Should Match "contains\(\['None', 'HostPool'\], avdPrivateLinkPrivateRoutes\)"
+    }
+
+    It 'deploys workspace feed and global endpoints only for inline-owned workspaces' {
+        $standardControlPlane | Should Match "var deployWorkspaceFeedPrivateEndpoint = empty\(existingFeedWorkspaceResourceId\)"
+        $automatedControlPlane | Should Match "var deployWorkspaceFeedPrivateEndpoint = empty\(existingFeedWorkspaceResourceId\)"
+        $automatedControlPlane | Should Match "var deployGlobalWorkspace = empty\(existingFeedWorkspaceResourceId\)"
+    }
+
+    It 'limits existing-workspace portal deployments to host-pool connection Private Link' {
+        $standardFormJson | Should Match 'Manage those settings through AVD Shared Services'
+        $automatedFormJson | Should Match 'Manage those settings through AVD Shared Services'
+        $standardFormJson | Should Match '\\"value\\":\\"HostPool\\"'
+        ($standardFormJson -cmatch '\\"value\\":\\"Hostpool\\"') | Should Be $false
+        $automatedFormJson | Should Match "equals\(steps\('controlPlane'\)\.workspace\.createOption, 'update'\).*Remote session connections only"
+    }
+}
 
 Describe 'Common host-pool UI form behavior' {
     BeforeAll {

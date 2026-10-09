@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "8931775066194234605"
+      "version": "0.47.16.16243",
+      "templateHash": "1829237819207797753"
     }
   },
   "functions": [
@@ -266,6 +266,113 @@
         "description": "Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when \"deployMonitoring\" is false."
       }
     },
+    "manageAvdWorkspace": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Create or adopt and manage a shared AVD workspace in the AVD control-plane resource group."
+      }
+    },
+    "avdWorkspaceMode": {
+      "type": "string",
+      "defaultValue": "Create",
+      "allowedValues": [
+        "Adopt",
+        "Create"
+      ],
+      "metadata": {
+        "description": "Optional. Create a shared AVD workspace, or adopt an existing workspace while preserving all application group references."
+      }
+    },
+    "existingAvdWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Adopt."
+      }
+    },
+    "avdWorkspaceFriendlyName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Friendly name for a newly created shared AVD workspace."
+      }
+    },
+    "avdWorkspacePublicNetworkAccess": {
+      "type": "string",
+      "allowedValues": [
+        "Disabled",
+        "Enabled"
+      ],
+      "defaultValue": "Enabled",
+      "metadata": {
+        "description": "Optional. Public network access mode managed on the shared AVD workspace."
+      }
+    },
+    "workspaceFeedPrivateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Subnet resource ID for the deterministically named workspace feed private endpoint. Empty disables feed endpoint management."
+      }
+    },
+    "avdPrivateDnsZoneResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. AVD feed Private DNS zone resource ID for the workspace feed private endpoint."
+      }
+    },
+    "manageGlobalAvdWorkspace": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Create or adopt and manage the global-feed workspace and its deterministically named private endpoint."
+      }
+    },
+    "globalAvdWorkspaceMode": {
+      "type": "string",
+      "defaultValue": "Create",
+      "allowedValues": [
+        "Adopt",
+        "Create"
+      ],
+      "metadata": {
+        "description": "Optional. Create a global-feed workspace, or adopt an existing global-feed workspace while preserving all application group references."
+      }
+    },
+    "existingGlobalAvdWorkspaceResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Adopt."
+      }
+    },
+    "globalAvdWorkspacePublicNetworkAccess": {
+      "type": "string",
+      "allowedValues": [
+        "Disabled",
+        "Enabled"
+      ],
+      "defaultValue": "Enabled",
+      "metadata": {
+        "description": "Optional. Public network access mode managed on the global-feed workspace."
+      }
+    },
+    "globalFeedPrivateEndpointSubnetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Conditional. Subnet resource ID for the deterministically named global-feed private endpoint. Required when manageGlobalAvdWorkspace is true."
+      }
+    },
+    "globalFeedPrivateDnsZoneResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. AVD global-feed Private DNS zone resource ID."
+      }
+    },
     "deployFSLogixBackupVault": {
       "type": "bool",
       "defaultValue": false,
@@ -337,7 +444,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
+        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, workspaces, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
       }
     },
     "secretsKeyVaultNameOverride": {
@@ -906,7 +1013,7 @@
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
     "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
     "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
-    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'recoveryServicesVaults', variables('resourceAbbreviations').recoveryServicesVaults, 'logAnalyticsWorkspaces', variables('resourceAbbreviations').logAnalyticsWorkspaces, 'dataCollectionEndpoints', variables('resourceAbbreviations').dataCollectionEndpoints, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
+    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'recoveryServicesVaults', variables('resourceAbbreviations').recoveryServicesVaults, 'logAnalyticsWorkspaces', variables('resourceAbbreviations').logAnalyticsWorkspaces, 'dataCollectionEndpoints', variables('resourceAbbreviations').dataCollectionEndpoints, 'workspaces', variables('resourceAbbreviations').workspaces, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
     "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
     "cnv_rtFirst": "[if(not(empty(variables('cnv_components'))), not(equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
     "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
@@ -916,13 +1023,19 @@
     "monitoringResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "logAnalyticsWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'logAnalyticsWorkspaces'), variables('resourceAbbreviations').logAnalyticsWorkspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "dataCollectionEndpointName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'dataCollectionEndpoints'), variables('resourceAbbreviations').dataCollectionEndpoints), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "controlPlaneResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "avdWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "globalFeedResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "globalFeedWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
     "effectiveSecretsKeyVaultNameOverride": "[if(not(empty(parameters('secretsKeyVaultNameOverride'))), parameters('secretsKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'secretsKeyVaultNameOverride'), ''))]",
     "effectiveEncryptionKeyVaultNameOverride": "[if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'encryptionKeyVaultNameOverride'), ''))]",
     "secretsKeyVaultName": "[if(not(empty(variables('effectiveSecretsKeyVaultNameOverride'))), variables('effectiveSecretsKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
     "encryptionKeyVaultName": "[if(not(empty(variables('effectiveEncryptionKeyVaultNameOverride'))), variables('effectiveEncryptionKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
     "fslogixBackupVaultName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'recoveryServicesVaults'), variables('resourceAbbreviations').recoveryServicesVaults), 'files', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]"
+    "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]",
+    "avdWorkspaceConfigurationIsValid": "[if(or(or(not(parameters('manageAvdWorkspace')), and(equals(parameters('avdWorkspaceMode'), 'Create'), empty(parameters('existingAvdWorkspaceResourceId')))), and(equals(parameters('avdWorkspaceMode'), 'Adopt'), not(empty(parameters('existingAvdWorkspaceResourceId'))))), true(), fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.'))]",
+    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Adopt'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.'))]"
   },
   "resources": {
     "operationsResourceGroup": {
@@ -952,8 +1065,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "9672734252890707801"
+              "version": "0.47.16.16243",
+              "templateHash": "5557394259284581899"
             }
           },
           "parameters": {
@@ -1019,8 +1132,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "9672734252890707801"
+              "version": "0.47.16.16243",
+              "templateHash": "5557394259284581899"
             }
           },
           "parameters": {
@@ -1102,8 +1215,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "6812981609405490166"
+              "version": "0.47.16.16243",
+              "templateHash": "13930610981237051109"
             }
           },
           "parameters": {
@@ -1169,8 +1282,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3962095343118907667"
+                      "version": "0.47.16.16243",
+                      "templateHash": "14418717325984708668"
                     }
                   },
                   "definitions": {
@@ -1390,8 +1503,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "9359631614617751401"
+                      "version": "0.47.16.16243",
+                      "templateHash": "406741284963019257"
                     }
                   },
                   "parameters": {
@@ -1472,8 +1585,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "7647843259591025734"
+                      "version": "0.47.16.16243",
+                      "templateHash": "13889222341710872473"
                     }
                   },
                   "parameters": {
@@ -1624,8 +1737,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "920014938514405928"
+                      "version": "0.47.16.16243",
+                      "templateHash": "5289901409299231154"
                     }
                   },
                   "parameters": {
@@ -1668,8 +1781,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "14912754638864567597"
+                              "version": "0.47.16.16243",
+                              "templateHash": "7824965815862759114"
                             }
                           },
                           "parameters": {
@@ -1729,6 +1842,1193 @@
       "dependsOn": [
         "monitoringResourceGroup"
       ]
+    },
+    "avdWorkspace": {
+      "condition": "[and(and(or(parameters('manageAvdWorkspace'), parameters('manageGlobalAvdWorkspace')), variables('avdWorkspaceConfigurationIsValid')), variables('globalAvdWorkspaceConfigurationIsValid'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('avdWorkspace-{0}', uniqueString('avdWorkspace', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "workspaceMode": {
+            "value": "[parameters('avdWorkspaceMode')]"
+          },
+          "manageWorkspace": {
+            "value": "[parameters('manageAvdWorkspace')]"
+          },
+          "workspaceName": {
+            "value": "[variables('avdWorkspaceName')]"
+          },
+          "workspaceResourceId": {
+            "value": "[parameters('existingAvdWorkspaceResourceId')]"
+          },
+          "workspaceResourceGroupName": {
+            "value": "[variables('controlPlaneResourceGroupName')]"
+          },
+          "workspaceLocation": {
+            "value": "[parameters('location')]"
+          },
+          "workspaceFriendlyName": {
+            "value": "[parameters('avdWorkspaceFriendlyName')]"
+          },
+          "workspacePublicNetworkAccess": {
+            "value": "[parameters('avdWorkspacePublicNetworkAccess')]"
+          },
+          "workspaceFeedPrivateEndpointSubnetResourceId": {
+            "value": "[parameters('workspaceFeedPrivateEndpointSubnetResourceId')]"
+          },
+          "avdPrivateDnsZoneResourceId": {
+            "value": "[parameters('avdPrivateDnsZoneResourceId')]"
+          },
+          "manageGlobalWorkspace": {
+            "value": "[parameters('manageGlobalAvdWorkspace')]"
+          },
+          "globalWorkspaceMode": {
+            "value": "[parameters('globalAvdWorkspaceMode')]"
+          },
+          "globalWorkspaceName": {
+            "value": "[variables('globalFeedWorkspaceName')]"
+          },
+          "globalWorkspaceResourceId": {
+            "value": "[parameters('existingGlobalAvdWorkspaceResourceId')]"
+          },
+          "globalWorkspaceResourceGroupName": {
+            "value": "[variables('globalFeedResourceGroupName')]"
+          },
+          "globalWorkspacePublicNetworkAccess": {
+            "value": "[parameters('globalAvdWorkspacePublicNetworkAccess')]"
+          },
+          "globalFeedPrivateEndpointSubnetResourceId": {
+            "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
+          },
+          "globalFeedPrivateDnsZoneResourceId": {
+            "value": "[parameters('globalFeedPrivateDnsZoneResourceId')]"
+          },
+          "privateEndpointNameConv": {
+            "value": "[variables('privateEndpointNameConv')]"
+          },
+          "privateEndpointNICNameConv": {
+            "value": "[variables('privateEndpointNICNameConv')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "3832812845592344964"
+            }
+          },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "virtualNetworkResourceIdFromSubnet": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "subnetResourceId"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[if(not(empty(parameters('subnetResourceId'))), join(take(split(parameters('subnetResourceId'), '/'), 9), '/'), '')]"
+                  }
+                }
+              }
+            }
+          ],
+          "parameters": {
+            "workspaceMode": {
+              "type": "string",
+              "allowedValues": [
+                "Adopt",
+                "Create"
+              ]
+            },
+            "manageWorkspace": {
+              "type": "bool"
+            },
+            "workspaceName": {
+              "type": "string"
+            },
+            "workspaceResourceId": {
+              "type": "string"
+            },
+            "workspaceResourceGroupName": {
+              "type": "string"
+            },
+            "workspaceLocation": {
+              "type": "string"
+            },
+            "workspaceFriendlyName": {
+              "type": "string"
+            },
+            "workspacePublicNetworkAccess": {
+              "type": "string",
+              "allowedValues": [
+                "Disabled",
+                "Enabled"
+              ]
+            },
+            "workspaceFeedPrivateEndpointSubnetResourceId": {
+              "type": "string"
+            },
+            "avdPrivateDnsZoneResourceId": {
+              "type": "string"
+            },
+            "manageGlobalWorkspace": {
+              "type": "bool"
+            },
+            "globalWorkspaceMode": {
+              "type": "string",
+              "allowedValues": [
+                "Adopt",
+                "Create"
+              ]
+            },
+            "globalWorkspaceName": {
+              "type": "string"
+            },
+            "globalWorkspaceResourceId": {
+              "type": "string"
+            },
+            "globalWorkspaceResourceGroupName": {
+              "type": "string"
+            },
+            "globalWorkspacePublicNetworkAccess": {
+              "type": "string",
+              "allowedValues": [
+                "Disabled",
+                "Enabled"
+              ]
+            },
+            "globalFeedPrivateEndpointSubnetResourceId": {
+              "type": "string"
+            },
+            "globalFeedPrivateDnsZoneResourceId": {
+              "type": "string"
+            },
+            "privateEndpointNameConv": {
+              "type": "string"
+            },
+            "privateEndpointNICNameConv": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            }
+          },
+          "variables": {
+            "adoptWorkspace": "[and(parameters('manageWorkspace'), equals(parameters('workspaceMode'), 'Adopt'))]",
+            "adoptGlobalWorkspace": "[and(parameters('manageGlobalWorkspace'), equals(parameters('globalWorkspaceMode'), 'Adopt'))]",
+            "workspaceFeedVirtualNetworkResourceId": "[__bicep.virtualNetworkResourceIdFromSubnet(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))]",
+            "globalFeedVirtualNetworkResourceId": "[__bicep.virtualNetworkResourceIdFromSubnet(parameters('globalFeedPrivateEndpointSubnetResourceId'))]",
+            "privateEndpointVirtualNetworkResourceIds": "[union(if(not(empty(variables('workspaceFeedVirtualNetworkResourceId'))), createArray(variables('workspaceFeedVirtualNetworkResourceId')), createArray()), if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), createArray(variables('globalFeedVirtualNetworkResourceId')), createArray()))]",
+            "effectiveWorkspaceName": "[if(variables('adoptWorkspace'), last(split(parameters('workspaceResourceId'), '/')), parameters('workspaceName'))]",
+            "effectiveWorkspaceSubscriptionId": "[if(variables('adoptWorkspace'), split(parameters('workspaceResourceId'), '/')[2], subscription().subscriptionId)]",
+            "effectiveWorkspaceResourceGroupName": "[if(variables('adoptWorkspace'), split(parameters('workspaceResourceId'), '/')[4], parameters('workspaceResourceGroupName'))]",
+            "workspaceFeedVnetName": "[if(not(empty(variables('workspaceFeedVirtualNetworkResourceId'))), last(split(variables('workspaceFeedVirtualNetworkResourceId'), '/')), '')]",
+            "workspaceFeedVnetId": "[if(less(length(variables('workspaceFeedVnetName')), 37), variables('workspaceFeedVnetName'), uniqueString(variables('workspaceFeedVnetName')))]",
+            "workspaceFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
+            "workspaceFeedPrivateEndpointNICName": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
+            "effectiveGlobalWorkspaceName": "[if(variables('adoptGlobalWorkspace'), last(split(parameters('globalWorkspaceResourceId'), '/')), parameters('globalWorkspaceName'))]",
+            "effectiveGlobalWorkspaceSubscriptionId": "[if(variables('adoptGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
+            "effectiveGlobalWorkspaceResourceGroupName": "[if(variables('adoptGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[4], parameters('globalWorkspaceResourceGroupName'))]",
+            "globalFeedVnetName": "[if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), last(split(variables('globalFeedVirtualNetworkResourceId'), '/')), '')]",
+            "globalFeedVnetId": "[if(less(length(variables('globalFeedVnetName')), 37), variables('globalFeedVnetName'), uniqueString(variables('globalFeedVnetName')))]",
+            "globalFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'global'), 'RESOURCE', variables('effectiveGlobalWorkspaceName')), 'VNETID', variables('globalFeedVnetId'))]",
+            "globalFeedPrivateEndpointNICName": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'global'), 'RESOURCE', variables('effectiveGlobalWorkspaceName')), 'VNETID', variables('globalFeedVnetId'))]"
+          },
+          "resources": {
+            "existingWorkspace": {
+              "condition": "[variables('adoptWorkspace')]",
+              "existing": true,
+              "type": "Microsoft.DesktopVirtualization/workspaces",
+              "apiVersion": "2023-09-05",
+              "subscriptionId": "[split(parameters('workspaceResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('workspaceResourceId'), '/')[4]]",
+              "name": "[last(split(parameters('workspaceResourceId'), '/'))]"
+            },
+            "existingGlobalWorkspace": {
+              "condition": "[variables('adoptGlobalWorkspace')]",
+              "existing": true,
+              "type": "Microsoft.DesktopVirtualization/workspaces",
+              "apiVersion": "2023-09-05",
+              "subscriptionId": "[split(parameters('globalWorkspaceResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('globalWorkspaceResourceId'), '/')[4]]",
+              "name": "[last(split(parameters('globalWorkspaceResourceId'), '/'))]"
+            },
+            "privateEndpointVirtualNetworks": {
+              "copy": {
+                "name": "privateEndpointVirtualNetworks",
+                "count": "[length(variables('privateEndpointVirtualNetworkResourceIds'))]"
+              },
+              "existing": true,
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2024-05-01",
+              "subscriptionId": "[split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/')[2]]",
+              "resourceGroup": "[split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/')[4]]",
+              "name": "[last(split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/'))]"
+            },
+            "workspaceResourceGroup": {
+              "condition": "[and(parameters('manageWorkspace'), not(variables('adoptWorkspace')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('workspaceResourceGroup-{0}', uniqueString('workspaceResourceGroup', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": {
+                    "value": "[parameters('workspaceLocation')]"
+                  },
+                  "name": {
+                    "value": "[parameters('workspaceResourceGroupName')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "5557394259284581899"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Resources/resourceGroups",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              }
+            },
+            "workspace": {
+              "condition": "[parameters('manageWorkspace')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('workspace-{0}', uniqueString('workspace', deployment().name))]",
+              "subscriptionId": "[variables('effectiveWorkspaceSubscriptionId')]",
+              "resourceGroup": "[variables('effectiveWorkspaceResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[variables('effectiveWorkspaceName')]"
+                  },
+                  "location": "[if(variables('adoptWorkspace'), createObject('value', reference('existingWorkspace', '2023-09-05', 'full').location), createObject('value', parameters('workspaceLocation')))]",
+                  "tags": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
+                  "friendlyName": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').friendlyName, '')), createObject('value', parameters('workspaceFriendlyName')))]",
+                  "description": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').description, '')), createObject('value', ''))]",
+                  "publicNetworkAccess": {
+                    "value": "[parameters('workspacePublicNetworkAccess')]"
+                  },
+                  "applicationGroupResourceIds": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "16072017364830952152"
+                    }
+                  },
+                  "definitions": {
+                    "_1.logCategoryType": {
+                      "type": "object",
+                      "properties": {
+                        "categoryGroup": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Individual log category name. Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "enabled": {
+                          "type": "bool"
+                        },
+                        "retentionPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "int"
+                            },
+                            "enabled": {
+                              "type": "bool"
+                            }
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    },
+                    "diagnosticSettingsType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                          }
+                        },
+                        "workspaceId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Log Analytics workspace to send logs to."
+                          }
+                        },
+                        "storageAccountId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the storage account to archive logs to."
+                          }
+                        },
+                        "eventHubAuthorizationRuleId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Event Hub authorization rule."
+                          }
+                        },
+                        "eventHubName": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                          }
+                        },
+                        "logCategories": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/_1.logCategoryType"
+                          },
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Log categories to stream. Defaults to allLogs when omitted."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "friendlyName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Friendly name shown in the client."
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Description of the workspace."
+                      }
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "allowedValues": [
+                        "Disabled",
+                        "Enabled"
+                      ],
+                      "defaultValue": "Enabled"
+                    },
+                    "applicationGroupResourceIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Application group resource IDs to link to this workspace."
+                      }
+                    },
+                    "diagnosticSettings": {
+                      "$ref": "#/definitions/diagnosticSettingsType",
+                      "nullable": true
+                    }
+                  },
+                  "variables": {
+                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+                  },
+                  "resources": {
+                    "workspace": {
+                      "type": "Microsoft.DesktopVirtualization/workspaces",
+                      "apiVersion": "2023-09-05",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "friendlyName": "[if(not(empty(parameters('friendlyName'))), parameters('friendlyName'), null())]",
+                        "description": "[if(not(empty(parameters('description'))), parameters('description'), null())]",
+                        "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
+                        "applicationGroupReferences": "[parameters('applicationGroupResourceIds')]"
+                      }
+                    },
+                    "diagnosticSetting": {
+                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('name'))]",
+                      "name": "[variables('diagnosticSettingName')]",
+                      "properties": {
+                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]"
+                      },
+                      "dependsOn": [
+                        "workspace"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "existingWorkspace",
+                "workspaceResourceGroup"
+              ]
+            },
+            "workspaceFeedPrivateEndpoint": {
+              "condition": "[and(parameters('manageWorkspace'), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('workspaceFeedPrivateEndpoint-{0}', uniqueString('workspaceFeedPrivateEndpoint', deployment().name))]",
+              "subscriptionId": "[variables('effectiveWorkspaceSubscriptionId')]",
+              "resourceGroup": "[variables('effectiveWorkspaceResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[variables('workspaceFeedPrivateEndpointName')]"
+                  },
+                  "location": {
+                    "value": "[reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('workspaceFeedVirtualNetworkResourceId'))), '2024-05-01', 'full').location]"
+                  },
+                  "tags": {
+                    "value": "[union(createObject('cm-resource-parent', reference('workspace').outputs.resourceId.value), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('workspaceFeedPrivateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference('workspace').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "feed"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[variables('workspaceFeedPrivateEndpointNICName')]"
+                  },
+                  "privateDNSZoneIds": "[if(not(empty(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "2225160377183640704"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('workspaceFeedVirtualNetworkResourceId')))]",
+                "workspace"
+              ]
+            },
+            "globalWorkspaceResourceGroup": {
+              "condition": "[and(parameters('manageGlobalWorkspace'), not(variables('adoptGlobalWorkspace')))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('globalWorkspaceResourceGroup-{0}', uniqueString('globalWorkspaceResourceGroup', deployment().name))]",
+              "location": "[deployment().location]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "location": "[if(variables('adoptGlobalWorkspace'), createObject('value', reference('existingGlobalWorkspace', '2023-09-05', 'full').location), createObject('value', reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedVirtualNetworkResourceId'))), '2024-05-01', 'full').location))]",
+                  "name": {
+                    "value": "[parameters('globalWorkspaceResourceGroupName')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "5557394259284581899"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Resources/resourceGroups",
+                      "apiVersion": "2023-07-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "existingGlobalWorkspace",
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedVirtualNetworkResourceId')))]"
+              ]
+            },
+            "globalWorkspace": {
+              "condition": "[parameters('manageGlobalWorkspace')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('globalWorkspace-{0}', uniqueString('globalWorkspace', deployment().name))]",
+              "subscriptionId": "[variables('effectiveGlobalWorkspaceSubscriptionId')]",
+              "resourceGroup": "[variables('effectiveGlobalWorkspaceResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[variables('effectiveGlobalWorkspaceName')]"
+                  },
+                  "location": "[if(variables('adoptGlobalWorkspace'), createObject('value', reference('existingGlobalWorkspace', '2023-09-05', 'full').location), createObject('value', reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedVirtualNetworkResourceId'))), '2024-05-01', 'full').location))]",
+                  "tags": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
+                  "friendlyName": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').friendlyName, '')), createObject('value', ''))]",
+                  "description": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').description, '')), createObject('value', ''))]",
+                  "publicNetworkAccess": {
+                    "value": "[parameters('globalWorkspacePublicNetworkAccess')]"
+                  },
+                  "applicationGroupResourceIds": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "16072017364830952152"
+                    }
+                  },
+                  "definitions": {
+                    "_1.logCategoryType": {
+                      "type": "object",
+                      "properties": {
+                        "categoryGroup": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Individual log category name. Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "enabled": {
+                          "type": "bool"
+                        },
+                        "retentionPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "int"
+                            },
+                            "enabled": {
+                              "type": "bool"
+                            }
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    },
+                    "diagnosticSettingsType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                          }
+                        },
+                        "workspaceId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Log Analytics workspace to send logs to."
+                          }
+                        },
+                        "storageAccountId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the storage account to archive logs to."
+                          }
+                        },
+                        "eventHubAuthorizationRuleId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Event Hub authorization rule."
+                          }
+                        },
+                        "eventHubName": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                          }
+                        },
+                        "logCategories": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/_1.logCategoryType"
+                          },
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Log categories to stream. Defaults to allLogs when omitted."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "friendlyName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Friendly name shown in the client."
+                      }
+                    },
+                    "description": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Description of the workspace."
+                      }
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "allowedValues": [
+                        "Disabled",
+                        "Enabled"
+                      ],
+                      "defaultValue": "Enabled"
+                    },
+                    "applicationGroupResourceIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Application group resource IDs to link to this workspace."
+                      }
+                    },
+                    "diagnosticSettings": {
+                      "$ref": "#/definitions/diagnosticSettingsType",
+                      "nullable": true
+                    }
+                  },
+                  "variables": {
+                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+                  },
+                  "resources": {
+                    "workspace": {
+                      "type": "Microsoft.DesktopVirtualization/workspaces",
+                      "apiVersion": "2023-09-05",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "friendlyName": "[if(not(empty(parameters('friendlyName'))), parameters('friendlyName'), null())]",
+                        "description": "[if(not(empty(parameters('description'))), parameters('description'), null())]",
+                        "publicNetworkAccess": "[parameters('publicNetworkAccess')]",
+                        "applicationGroupReferences": "[parameters('applicationGroupResourceIds')]"
+                      }
+                    },
+                    "diagnosticSetting": {
+                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('name'))]",
+                      "name": "[variables('diagnosticSettingName')]",
+                      "properties": {
+                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]"
+                      },
+                      "dependsOn": [
+                        "workspace"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "existingGlobalWorkspace",
+                "globalWorkspaceResourceGroup",
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedVirtualNetworkResourceId')))]"
+              ]
+            },
+            "globalFeedPrivateEndpoint": {
+              "condition": "[parameters('manageGlobalWorkspace')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('globalFeedPrivateEndpoint-{0}', uniqueString('globalFeedPrivateEndpoint', deployment().name))]",
+              "subscriptionId": "[variables('effectiveGlobalWorkspaceSubscriptionId')]",
+              "resourceGroup": "[variables('effectiveGlobalWorkspaceResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[variables('globalFeedPrivateEndpointName')]"
+                  },
+                  "location": {
+                    "value": "[reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedVirtualNetworkResourceId'))), '2024-05-01', 'full').location]"
+                  },
+                  "tags": {
+                    "value": "[union(createObject('cm-resource-parent', reference('globalWorkspace').outputs.resourceId.value), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference('globalWorkspace').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "global"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[variables('globalFeedPrivateEndpointNICName')]"
+                  },
+                  "privateDNSZoneIds": "[if(not(empty(parameters('globalFeedPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('globalFeedPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.47.16.16243",
+                      "templateHash": "2225160377183640704"
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "globalWorkspace",
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedVirtualNetworkResourceId')))]"
+              ]
+            }
+          },
+          "outputs": {
+            "workspaceResourceId": {
+              "type": "string",
+              "value": "[if(parameters('manageWorkspace'), reference('workspace').outputs.resourceId.value, '')]"
+            },
+            "workspaceFeedPrivateEndpointResourceId": {
+              "type": "string",
+              "value": "[if(and(parameters('manageWorkspace'), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId')))), reference('workspaceFeedPrivateEndpoint').outputs.resourceId.value, '')]"
+            },
+            "globalWorkspaceResourceId": {
+              "type": "string",
+              "value": "[if(parameters('manageGlobalWorkspace'), reference('globalWorkspace').outputs.resourceId.value, '')]"
+            },
+            "globalFeedPrivateEndpointResourceId": {
+              "type": "string",
+              "value": "[if(parameters('manageGlobalWorkspace'), reference('globalFeedPrivateEndpoint').outputs.resourceId.value, '')]"
+            },
+            "controlPlaneResourceGroupName": {
+              "type": "string",
+              "value": "[if(parameters('manageWorkspace'), variables('effectiveWorkspaceResourceGroupName'), '')]"
+            },
+            "controlPlaneResourceGroupResourceId": {
+              "type": "string",
+              "value": "[if(parameters('manageWorkspace'), format('/subscriptions/{0}/resourceGroups/{1}', variables('effectiveWorkspaceSubscriptionId'), variables('effectiveWorkspaceResourceGroupName')), '')]"
+            }
+          }
+        }
+      }
     },
     "keyVaults": {
       "type": "Microsoft.Resources/deployments",
@@ -1810,8 +3110,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "12106560424088397430"
+              "version": "0.47.16.16243",
+              "templateHash": "14163817764054620884"
             }
           },
           "parameters": {
@@ -1987,8 +3287,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "6550368044514526912"
+                      "version": "0.47.16.16243",
+                      "templateHash": "10015858177495759134"
                     }
                   },
                   "definitions": {
@@ -2275,8 +3575,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "17519891137637288802"
+                      "version": "0.47.16.16243",
+                      "templateHash": "2225160377183640704"
                     }
                   },
                   "parameters": {
@@ -2424,8 +3724,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "13656703662318782126"
+                      "version": "0.47.16.16243",
+                      "templateHash": "4514172869163926461"
                     }
                   },
                   "parameters": {
@@ -2526,8 +3826,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "6550368044514526912"
+                      "version": "0.47.16.16243",
+                      "templateHash": "10015858177495759134"
                     }
                   },
                   "definitions": {
@@ -2814,8 +4114,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "17519891137637288802"
+                      "version": "0.47.16.16243",
+                      "templateHash": "2225160377183640704"
                     }
                   },
                   "parameters": {
@@ -3022,8 +4322,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "4424147620843077713"
+              "version": "0.47.16.16243",
+              "templateHash": "13683479322978747973"
             }
           },
           "parameters": {
@@ -3197,8 +4497,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "6107118818399515654"
+                      "version": "0.47.16.16243",
+                      "templateHash": "13810464875425339214"
                     }
                   },
                   "definitions": {
@@ -3501,8 +4801,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "18154461344287906983"
+                      "version": "0.47.16.16243",
+                      "templateHash": "17657843453382812503"
                     }
                   },
                   "parameters": {
@@ -3586,8 +4886,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "17519891137637288802"
+                      "version": "0.47.16.16243",
+                      "templateHash": "2225160377183640704"
                     }
                   },
                   "parameters": {
@@ -3810,6 +5110,48 @@
         "description": "The resource ID of the existing Azure Monitor Private Link Scope associated with the monitoring resources. Empty when monitoring or AMPLS integration is disabled."
       },
       "value": "[variables('effectiveAzureMonitorPrivateLinkScopeResourceId')]"
+    },
+    "avdWorkspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the created or adopted shared AVD workspace. Empty when workspace management is disabled."
+      },
+      "value": "[if(parameters('manageAvdWorkspace'), reference('avdWorkspace').outputs.workspaceResourceId.value, '')]"
+    },
+    "workspaceFeedPrivateEndpointResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the deterministically named shared workspace feed private endpoint. Empty when feed endpoint management is disabled."
+      },
+      "value": "[if(parameters('manageAvdWorkspace'), reference('avdWorkspace').outputs.workspaceFeedPrivateEndpointResourceId.value, '')]"
+    },
+    "globalFeedWorkspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the created or adopted global-feed workspace. Empty when global-feed management is disabled."
+      },
+      "value": "[if(parameters('manageGlobalAvdWorkspace'), reference('avdWorkspace').outputs.globalWorkspaceResourceId.value, '')]"
+    },
+    "globalFeedPrivateEndpointResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the deterministically named global-feed private endpoint. Empty when global-feed management is disabled."
+      },
+      "value": "[if(parameters('manageGlobalAvdWorkspace'), reference('avdWorkspace').outputs.globalFeedPrivateEndpointResourceId.value, '')]"
+    },
+    "avdControlPlaneResourceGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "The AVD control-plane resource group name. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled."
+      },
+      "value": "[if(parameters('manageAvdWorkspace'), reference('avdWorkspace').outputs.controlPlaneResourceGroupName.value, '')]"
+    },
+    "avdControlPlaneResourceGroupResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the AVD control-plane resource group. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled."
+      },
+      "value": "[if(parameters('manageAvdWorkspace'), reference('avdWorkspace').outputs.controlPlaneResourceGroupResourceId.value, '')]"
     },
     "fslogixBackupVaultResourceId": {
       "type": "string",

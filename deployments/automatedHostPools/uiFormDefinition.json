@@ -2804,27 +2804,23 @@
 									"defaultValue": false
 								},
 								{
+									"name": "existingWorkspaceOwnership",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('controlPlane').workspace.createOption, 'update'))]",
+									"options": {
+										"style": "Info",
+										"text": "The selected workspace is shared infrastructure. This deployment will register the new desktop application group but will not create or modify the workspace feed endpoint, workspace public access, global-feed endpoint, or related DNS associations. Manage those settings through AVD Shared Services."
+									}
+								},
+								{
 									"name": "privateRoutes",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Private Traffic Routes",
-									"defaultValue": "Feed download and remote session connections",
+									"defaultValue": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), 'Remote session connections only', 'Feed download and remote session connections')]",
 									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
 									"constraints": {
 										"required": true,
-										"allowedValues": [
-											{
-												"label": "Remote session connections only",
-												"value": "HostPool"
-											},
-											{
-												"label": "Feed download and remote session connections",
-												"value": "FeedAndHostPool"
-											},
-											{
-												"label": "Initial discovery, feed download, and remote session connections",
-												"value": "All"
-											}
-										]
+										"allowedValues": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), parse('[{\"label\":\"Remote session connections only\",\"value\":\"HostPool\"}]'), parse('[{\"label\":\"Remote session connections only\",\"value\":\"HostPool\"},{\"label\":\"Feed download and remote session connections\",\"value\":\"FeedAndHostPool\"},{\"label\":\"Initial discovery, feed download, and remote session connections\",\"value\":\"All\"}]'))]"
 									}
 								},
 								{
@@ -3961,11 +3957,11 @@
 				"hostPoolPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostPoolSubnet.id, '')]",
 				"avdPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration), steps('zeroTrust').avdPrivateLink.avdPrivateDnsZone, '')]",
 				"hostPoolPublicNetworkAccess": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostPoolPublicNetworkAccess, 'Enabled')]",
-				"workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool'))), steps('zeroTrust').avdPrivateLink.workspaceFeedSubnet.id, '')]",
-				"workspaceFeedPublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool'))), steps('zeroTrust').avdPrivateLink.workspacePublicNetworkAccess, 'Enabled')]",
+				"workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('controlPlane').workspace.createOption, 'update')), not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool'))), steps('zeroTrust').avdPrivateLink.workspaceFeedSubnet.id, '')]",
+				"workspaceFeedPublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('controlPlane').workspace.createOption, 'update')), not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool'))), steps('zeroTrust').avdPrivateLink.workspacePublicNetworkAccess, 'Enabled')]",
 				"existingGlobalFeedResourceId": "[if(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))), '', first(map(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')), (workspace) => workspace.id)))]",
-				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')))), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
-				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')))), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
+				"globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('controlPlane').workspace.createOption, 'update')), equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')))), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
+				"globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('controlPlane').workspace.createOption, 'update')), steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')))), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
 				"desktopFriendlyName": "[steps('controlPlane').workspace.desktopFriendlyName]",
 				"hostPoolMaxSessionLimit": "[steps('controlPlane').hostPool.maxSessionLimit]",
 				"loadBalancerType": "[steps('controlPlane').hostPool.loadBalancerType]",

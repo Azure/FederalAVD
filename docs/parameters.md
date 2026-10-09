@@ -60,6 +60,7 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 | **sharedServices** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
 | **sharedServices** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
 | **sharedServices** | `azureMonitorPrivateLinkScopeResourceId` | **hostpool** | `azureMonitorPrivateLinkScopeResourceId` |
+| **sharedServices** | `avdWorkspaceResourceId` | **hostpool / automatedHostPool** | `existingFeedWorkspaceResourceId` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **hostpool** | `existingFilesBackupVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **fslogixStorage** | `recoveryServicesVaultResourceId` |

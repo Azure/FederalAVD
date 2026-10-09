@@ -106,6 +106,55 @@ param existingLogAnalyticsWorkspaceResourceId string = ''
 @description('Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when "deployMonitoring" is false.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
 
+// ── Shared AVD Workspace ──────────────────────────────────────────────────────
+
+@description('Optional. Create or adopt and manage a shared AVD workspace in the AVD control-plane resource group.')
+param manageAvdWorkspace bool = false
+
+@allowed([
+  'Adopt'
+  'Create'
+])
+@description('Optional. Create a shared AVD workspace, or adopt an existing workspace while preserving all application group references.')
+param avdWorkspaceMode string = 'Create'
+
+@description('Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Adopt.')
+param existingAvdWorkspaceResourceId string = ''
+
+@description('Optional. Friendly name for a newly created shared AVD workspace.')
+param avdWorkspaceFriendlyName string = ''
+
+@description('Optional. Public network access mode managed on the shared AVD workspace.')
+param avdWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = 'Enabled'
+
+@description('Optional. Subnet resource ID for the deterministically named workspace feed private endpoint. Empty disables feed endpoint management.')
+param workspaceFeedPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. AVD feed Private DNS zone resource ID for the workspace feed private endpoint.')
+param avdPrivateDnsZoneResourceId string = ''
+
+@description('Optional. Create or adopt and manage the global-feed workspace and its deterministically named private endpoint.')
+param manageGlobalAvdWorkspace bool = false
+
+@allowed([
+  'Adopt'
+  'Create'
+])
+@description('Optional. Create a global-feed workspace, or adopt an existing global-feed workspace while preserving all application group references.')
+param globalAvdWorkspaceMode string = 'Create'
+
+@description('Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Adopt.')
+param existingGlobalAvdWorkspaceResourceId string = ''
+
+@description('Optional. Public network access mode managed on the global-feed workspace.')
+param globalAvdWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = 'Enabled'
+
+@description('Conditional. Subnet resource ID for the deterministically named global-feed private endpoint. Required when manageGlobalAvdWorkspace is true.')
+param globalFeedPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. AVD global-feed Private DNS zone resource ID.')
+param globalFeedPrivateDnsZoneResourceId string = ''
+
 // FSLogix Backup
 
 @description('Optional. Deploy a shared Recovery Services vault and Azure Files snapshot backup policy for FSLogix storage. The vault is shared by pooled host pools and standalone FSLogix storage deployments in this subscription and region.')
@@ -156,7 +205,7 @@ Key properties:
   freeform1, environment, freeform2 — optional static/context tokens
   locationAbbreviation — override for the region abbreviation
   resourceTypeCodes   — object with per-resource-type abbreviation overrides
-    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }
+    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, workspaces, privateEndpoints, networkInterfaces }
 This object is produced automatically when deploying via the Azure Portal UI.
 When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
 param namingConvention object = {
@@ -207,6 +256,7 @@ var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
   recoveryServicesVaults: resourceAbbreviations.recoveryServicesVaults
   logAnalyticsWorkspaces: resourceAbbreviations.logAnalyticsWorkspaces
   dataCollectionEndpoints: resourceAbbreviations.dataCollectionEndpoints
+  workspaces: resourceAbbreviations.workspaces
   privateEndpoints: resourceAbbreviations.privateEndpoints
   networkInterfaces: resourceAbbreviations.networkInterfaces
 }
@@ -302,6 +352,54 @@ var dataCollectionEndpointName = buildCustomName(
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
 
+var controlPlaneResourceGroupName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'control${cnv_delimiter}plane',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var avdWorkspaceName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?workspaces ?? resourceAbbreviations.workspaces,
+  '',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var globalFeedResourceGroupName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'global${cnv_delimiter}feed',
+  '',
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var globalFeedWorkspaceName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?workspaces ?? resourceAbbreviations.workspaces,
+  'global${cnv_delimiter}feed',
+  '',
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
 // Stable 6-char unique string seeded on subscription + resource group name.
 // Add location to the seed when the convention has no location component,
 // so deployments to different regions don't produce identical Key Vault names.
@@ -382,6 +480,40 @@ module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' 
     tags: tags
   }
   dependsOn: [monitoringResourceGroup]
+}
+
+var avdWorkspaceConfigurationIsValid = !manageAvdWorkspace || avdWorkspaceMode == 'Create' && empty(existingAvdWorkspaceResourceId) || avdWorkspaceMode == 'Adopt' && !empty(existingAvdWorkspaceResourceId)
+  ? true
+  : fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.')
+var globalAvdWorkspaceConfigurationIsValid = !manageGlobalAvdWorkspace || !empty(globalFeedPrivateEndpointSubnetResourceId) && (globalAvdWorkspaceMode == 'Create' && empty(existingGlobalAvdWorkspaceResourceId) || globalAvdWorkspaceMode == 'Adopt' && !empty(existingGlobalAvdWorkspaceResourceId))
+  ? true
+  : fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.')
+
+module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if ((manageAvdWorkspace || manageGlobalAvdWorkspace) && avdWorkspaceConfigurationIsValid && globalAvdWorkspaceConfigurationIsValid) {
+  scope: subscription()
+  params: {
+    workspaceMode: avdWorkspaceMode
+    manageWorkspace: manageAvdWorkspace
+    workspaceName: avdWorkspaceName
+    workspaceResourceId: existingAvdWorkspaceResourceId
+    workspaceResourceGroupName: controlPlaneResourceGroupName
+    workspaceLocation: location
+    workspaceFriendlyName: avdWorkspaceFriendlyName
+    workspacePublicNetworkAccess: avdWorkspacePublicNetworkAccess
+    workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
+    avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
+    manageGlobalWorkspace: manageGlobalAvdWorkspace
+    globalWorkspaceMode: globalAvdWorkspaceMode
+    globalWorkspaceName: globalFeedWorkspaceName
+    globalWorkspaceResourceId: existingGlobalAvdWorkspaceResourceId
+    globalWorkspaceResourceGroupName: globalFeedResourceGroupName
+    globalWorkspacePublicNetworkAccess: globalAvdWorkspacePublicNetworkAccess
+    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
+    globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
+    privateEndpointNameConv: privateEndpointNameConv
+    privateEndpointNICNameConv: privateEndpointNICNameConv
+    tags: tags
+  }
 }
 
 // Resolves to the newly deployed workspace when requested, otherwise falls back to whatever
@@ -482,6 +614,24 @@ output dataCollectionEndpointResourceId string = deployMonitoring ? monitoring!.
 
 @description('The resource ID of the existing Azure Monitor Private Link Scope associated with the monitoring resources. Empty when monitoring or AMPLS integration is disabled.')
 output azureMonitorPrivateLinkScopeResourceId string = effectiveAzureMonitorPrivateLinkScopeResourceId
+
+@description('The resource ID of the created or adopted shared AVD workspace. Empty when workspace management is disabled.')
+output avdWorkspaceResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.workspaceResourceId : ''
+
+@description('The resource ID of the deterministically named shared workspace feed private endpoint. Empty when feed endpoint management is disabled.')
+output workspaceFeedPrivateEndpointResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.workspaceFeedPrivateEndpointResourceId : ''
+
+@description('The resource ID of the created or adopted global-feed workspace. Empty when global-feed management is disabled.')
+output globalFeedWorkspaceResourceId string = manageGlobalAvdWorkspace ? avdWorkspace!.outputs.globalWorkspaceResourceId : ''
+
+@description('The resource ID of the deterministically named global-feed private endpoint. Empty when global-feed management is disabled.')
+output globalFeedPrivateEndpointResourceId string = manageGlobalAvdWorkspace ? avdWorkspace!.outputs.globalFeedPrivateEndpointResourceId : ''
+
+@description('The AVD control-plane resource group name. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled.')
+output avdControlPlaneResourceGroupName string = manageAvdWorkspace ? avdWorkspace!.outputs.controlPlaneResourceGroupName : ''
+
+@description('The resource ID of the AVD control-plane resource group. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled.')
+output avdControlPlaneResourceGroupResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.controlPlaneResourceGroupResourceId : ''
 
 @description('The resource ID of the shared FSLogix Recovery Services vault. Pass as "existingFilesBackupVaultResourceId" to standard or automated pooled host pool deployments, or "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.')
 output fslogixBackupVaultResourceId string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.recoveryServicesVaultResourceId : ''

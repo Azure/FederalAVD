@@ -19,6 +19,13 @@ can't be changed later. See the [management decision guide](../../docs/host-pool
 
 This comprehensive Azure Bicep template deploys a complete Azure Virtual Desktop (AVD) environment including host pools, session hosts, storage, monitoring, security, and operational automation. It supports multiple identity scenarios, Zero Trust architecture, and air-gapped cloud environments.
 
+For a standalone proof of concept, leave `existingFeedWorkspaceResourceId` empty to create a
+dedicated control-plane resource group and workspace whose names include the host-pool identifier.
+For shared production workspaces, deploy or adopt the workspace through AVD Shared Services and
+pass its resource ID as `existingFeedWorkspaceResourceId`. Existing workspaces are
+association-only in this deployment: the application group is appended, while workspace public
+access and feed/global Private Link remain owned by AVD Shared Services.
+
 ## Purpose
 
 Deploy production-ready AVD environments with:

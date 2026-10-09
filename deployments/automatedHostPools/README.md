@@ -458,6 +458,19 @@ supports the same route choices as the standard host pool:
 - `All`: adds or reuses the single global-feed workspace and its `global` endpoint for private
   initial feed discovery.
 
+When `existingFeedWorkspaceResourceId` is empty, the deployment creates a dedicated workspace whose
+name and control-plane resource group include the host-pool identifier. This preserves the
+standalone proof-of-concept path and allows that deployment to own workspace feed and global-feed
+Private Link. This is an intentional naming change: before redeploying an older environment that
+must retain its inline-created workspace, set `existingFeedWorkspaceResourceId` to that workspace's
+resource ID.
+
+When `existingFeedWorkspaceResourceId` is supplied, the workspace is treated as shared
+infrastructure. The deployment preserves and appends its application-group references but does not
+change workspace public access or create workspace-feed or global-feed endpoints. Private Link is
+limited to `None` or `HostPool`; manage shared feed and global-feed networking through AVD Shared
+Services.
+
 Host-pool and workspace public network access remain explicit controls. Private DNS-zone groups are
 created when DNS integration is enabled; otherwise DNS records must be managed separately.
 

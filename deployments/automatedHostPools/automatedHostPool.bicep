@@ -565,7 +565,10 @@ var availabilityConfigurationIsValid = availability == 'AvailabilityZones'
 var hostPoolPrivateEndpointConfigurationIsValid = avdPrivateLinkPrivateRoutes == 'None' || !empty(hostPoolPrivateEndpointSubnetResourceId)
 var workspaceFeedPrivateEndpointConfigurationIsValid = !contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes) || !empty(workspaceFeedPrivateEndpointSubnetResourceId)
 var globalFeedPrivateEndpointConfigurationIsValid = avdPrivateLinkPrivateRoutes != 'All' || !empty(existingGlobalFeedResourceId) || !empty(globalFeedPrivateEndpointSubnetResourceId)
-var avdPrivateLinkConfigurationIsValid = hostPoolPrivateEndpointConfigurationIsValid && workspaceFeedPrivateEndpointConfigurationIsValid && globalFeedPrivateEndpointConfigurationIsValid
+var existingWorkspacePrivateLinkConfigurationIsValid = empty(existingFeedWorkspaceResourceId) || (contains(['None', 'HostPool'], avdPrivateLinkPrivateRoutes) && empty(workspaceFeedPrivateEndpointSubnetResourceId) && empty(globalFeedPrivateEndpointSubnetResourceId))
+  ? true
+  : fail('When existingFeedWorkspaceResourceId is supplied, this deployment can only manage the host-pool connection private endpoint. Manage workspace feed and global-feed Private Link through AVD Shared Services.')
+var avdPrivateLinkConfigurationIsValid = hostPoolPrivateEndpointConfigurationIsValid && workspaceFeedPrivateEndpointConfigurationIsValid && globalFeedPrivateEndpointConfigurationIsValid && existingWorkspacePrivateLinkConfigurationIsValid
   ? true
   : fail('AVD Private Link requires a host-pool endpoint subnet, a workspace feed endpoint subnet for FeedAndHostPool or All, and an existing global feed or global endpoint subnet for All.')
 var deployGlobalFeed = avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalFeedResourceId)
