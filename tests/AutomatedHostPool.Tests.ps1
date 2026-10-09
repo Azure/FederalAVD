@@ -6,7 +6,29 @@ $armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool
 $policyAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
 $availabilitySetAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\availabilitySet.bicep'
 $availabilitySetPolicyPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\virtualMachine-availabilitySet.policyDefinition.bicep'
+$controlPlaneModulePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
 $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
+
+Describe 'Automated host-pool AVD Private Link virtual networks' {
+    BeforeAll {
+        $controlPlaneModule = Get-Content -LiteralPath $controlPlaneModulePath -Raw
+        $standardControlPlaneModule = Get-Content -LiteralPath (
+            Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
+        ) -Raw
+    }
+
+    It 'deduplicates shared virtual networks across private endpoint routes' {
+        $controlPlaneModule | Should Match 'var privateEndpointVirtualNetworkResourceIds = union\('
+        $controlPlaneModule | Should Match "resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = \["
+        $controlPlaneModule | Should Not Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
+        $controlPlaneModule | Should Not Match "resource workspaceFeedPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
+        $controlPlaneModule | Should Not Match "resource globalFeedPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
+    }
+
+    It 'keeps the standard host-pool implementation free of duplicate VNet declarations' {
+        $standardControlPlaneModule | Should Not Match "resource .*PrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
+    }
+}
 
 Describe 'Automated host-pool Availability Set placement' {
     BeforeAll {

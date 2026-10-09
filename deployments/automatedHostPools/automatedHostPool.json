@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "1888899299499928547"
+      "templateHash": "6472043119760621841"
     }
   },
   "definitions": {
@@ -5168,7 +5168,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.47.16.16243",
-              "templateHash": "17595304748067729901"
+              "templateHash": "4865391090882153636"
             }
           },
           "definitions": {
@@ -5207,6 +5207,18 @@
             {
               "namespace": "__bicep",
               "members": {
+                "virtualNetworkResourceId": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "subnetResourceId"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[join(take(split(parameters('subnetResourceId'), '/'), 9), '/')]"
+                  }
+                },
                 "privateEndpointName": {
                   "parameters": [
                     {
@@ -5595,7 +5607,11 @@
             "diagnostics": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "deployHostPoolPrivateEndpoint": "[and(not(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None')), not(empty(parameters('hostPoolPrivateEndpointSubnetResourceId'))))]",
             "deployWorkspaceFeedPrivateEndpoint": "[and(contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))))]",
-            "deployGlobalWorkspace": "[and(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), empty(parameters('existingGlobalWorkspaceResourceId'))), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))))]"
+            "deployGlobalWorkspace": "[and(and(equals(parameters('avdPrivateLinkPrivateRoutes'), 'All'), empty(parameters('existingGlobalWorkspaceResourceId'))), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))))]",
+            "hostPoolPrivateEndpointVirtualNetworkResourceId": "[if(variables('deployHostPoolPrivateEndpoint'), __bicep.virtualNetworkResourceId(parameters('hostPoolPrivateEndpointSubnetResourceId')), '')]",
+            "workspaceFeedPrivateEndpointVirtualNetworkResourceId": "[if(variables('deployWorkspaceFeedPrivateEndpoint'), __bicep.virtualNetworkResourceId(parameters('workspaceFeedPrivateEndpointSubnetResourceId')), '')]",
+            "globalFeedPrivateEndpointVirtualNetworkResourceId": "[if(variables('deployGlobalWorkspace'), __bicep.virtualNetworkResourceId(parameters('globalFeedPrivateEndpointSubnetResourceId')), '')]",
+            "privateEndpointVirtualNetworkResourceIds": "[union(if(not(empty(variables('hostPoolPrivateEndpointVirtualNetworkResourceId'))), createArray(variables('hostPoolPrivateEndpointVirtualNetworkResourceId')), createArray()), if(not(empty(variables('workspaceFeedPrivateEndpointVirtualNetworkResourceId'))), createArray(variables('workspaceFeedPrivateEndpointVirtualNetworkResourceId')), createArray()), if(not(empty(variables('globalFeedPrivateEndpointVirtualNetworkResourceId'))), createArray(variables('globalFeedPrivateEndpointVirtualNetworkResourceId')), createArray()))]"
           },
           "resources": {
             "existingWorkspace": {
@@ -5607,32 +5623,17 @@
               "resourceGroup": "[split(parameters('existingFeedWorkspaceResourceId'), '/')[4]]",
               "name": "[last(split(parameters('existingFeedWorkspaceResourceId'), '/'))]"
             },
-            "hostPoolPrivateEndpointVirtualNetwork": {
-              "condition": "[variables('deployHostPoolPrivateEndpoint')]",
+            "privateEndpointVirtualNetworks": {
+              "copy": {
+                "name": "privateEndpointVirtualNetworks",
+                "count": "[length(variables('privateEndpointVirtualNetworkResourceIds'))]"
+              },
               "existing": true,
               "type": "Microsoft.Network/virtualNetworks",
               "apiVersion": "2024-05-01",
-              "subscriptionId": "[split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[4]]",
-              "name": "[split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8]]"
-            },
-            "workspaceFeedPrivateEndpointVirtualNetwork": {
-              "condition": "[variables('deployWorkspaceFeedPrivateEndpoint')]",
-              "existing": true,
-              "type": "Microsoft.Network/virtualNetworks",
-              "apiVersion": "2024-05-01",
-              "subscriptionId": "[split(parameters('workspaceFeedPrivateEndpointSubnetResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('workspaceFeedPrivateEndpointSubnetResourceId'), '/')[4]]",
-              "name": "[split(parameters('workspaceFeedPrivateEndpointSubnetResourceId'), '/')[8]]"
-            },
-            "globalFeedPrivateEndpointVirtualNetwork": {
-              "condition": "[variables('deployGlobalWorkspace')]",
-              "existing": true,
-              "type": "Microsoft.Network/virtualNetworks",
-              "apiVersion": "2024-05-01",
-              "subscriptionId": "[split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[2]]",
-              "resourceGroup": "[split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[4]]",
-              "name": "[split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8]]"
+              "subscriptionId": "[split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/')[2]]",
+              "resourceGroup": "[split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/')[4]]",
+              "name": "[last(split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/'))]"
             },
             "hostPool": {
               "type": "Microsoft.Resources/deployments",
@@ -7881,10 +7882,10 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('hostPoolName'), 'connection', split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8])]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('hostPoolName'), 'connection', last(split(variables('hostPoolPrivateEndpointVirtualNetworkResourceId'), '/')))]"
                   },
                   "location": {
-                    "value": "[reference('hostPoolPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                    "value": "[reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('hostPoolPrivateEndpointVirtualNetworkResourceId'))), '2024-05-01', 'full').location]"
                   },
                   "tags": {
                     "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()), createObject('cm-resource-parent', reference('hostPool').outputs.resourceId.value))]"
@@ -7899,7 +7900,7 @@
                     "value": "connection"
                   },
                   "customNetworkInterfaceName": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('hostPoolName'), 'connection', split(parameters('hostPoolPrivateEndpointSubnetResourceId'), '/')[8])]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('hostPoolName'), 'connection', last(split(variables('hostPoolPrivateEndpointVirtualNetworkResourceId'), '/')))]"
                   },
                   "privateDNSZoneIds": "[if(not(empty(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
                 },
@@ -8024,7 +8025,7 @@
               },
               "dependsOn": [
                 "hostPool",
-                "hostPoolPrivateEndpointVirtualNetwork"
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('hostPoolPrivateEndpointVirtualNetworkResourceId')))]"
               ]
             },
             "applicationGroup": {
@@ -8735,10 +8736,10 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), variables('effectiveWorkspaceName'), 'feed', split(parameters('workspaceFeedPrivateEndpointSubnetResourceId'), '/')[8])]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), variables('effectiveWorkspaceName'), 'feed', last(split(variables('workspaceFeedPrivateEndpointVirtualNetworkResourceId'), '/')))]"
                   },
                   "location": {
-                    "value": "[reference('workspaceFeedPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                    "value": "[reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('workspaceFeedPrivateEndpointVirtualNetworkResourceId'))), '2024-05-01', 'full').location]"
                   },
                   "tags": {
                     "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()), createObject('cm-resource-parent', reference('workspace').outputs.resourceId.value))]"
@@ -8753,7 +8754,7 @@
                     "value": "feed"
                   },
                   "customNetworkInterfaceName": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), variables('effectiveWorkspaceName'), 'feed', split(parameters('workspaceFeedPrivateEndpointSubnetResourceId'), '/')[8])]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), variables('effectiveWorkspaceName'), 'feed', last(split(variables('workspaceFeedPrivateEndpointVirtualNetworkResourceId'), '/')))]"
                   },
                   "privateDNSZoneIds": "[if(not(empty(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('avdPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
                 },
@@ -8877,8 +8878,8 @@
                 }
               },
               "dependsOn": [
-                "workspace",
-                "workspaceFeedPrivateEndpointVirtualNetwork"
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('workspaceFeedPrivateEndpointVirtualNetworkResourceId')))]",
+                "workspace"
               ]
             },
             "globalWorkspace": {
@@ -8897,7 +8898,7 @@
                     "value": "[parameters('globalWorkspaceName')]"
                   },
                   "location": {
-                    "value": "[reference('globalFeedPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                    "value": "[reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedPrivateEndpointVirtualNetworkResourceId'))), '2024-05-01', 'full').location]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())]"
@@ -9114,7 +9115,7 @@
                 }
               },
               "dependsOn": [
-                "globalFeedPrivateEndpointVirtualNetwork",
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedPrivateEndpointVirtualNetworkResourceId')))]",
                 "workspace"
               ]
             },
@@ -9131,10 +9132,10 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('globalWorkspaceName'), 'global', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8])]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('globalWorkspaceName'), 'global', last(split(variables('globalFeedPrivateEndpointVirtualNetworkResourceId'), '/')))]"
                   },
                   "location": {
-                    "value": "[reference('globalFeedPrivateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                    "value": "[reference(format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedPrivateEndpointVirtualNetworkResourceId'))), '2024-05-01', 'full').location]"
                   },
                   "tags": {
                     "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()), createObject('cm-resource-parent', reference('globalWorkspace').outputs.resourceId.value))]"
@@ -9149,7 +9150,7 @@
                     "value": "global"
                   },
                   "customNetworkInterfaceName": {
-                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('globalWorkspaceName'), 'global', split(parameters('globalFeedPrivateEndpointSubnetResourceId'), '/')[8])]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('globalWorkspaceName'), 'global', last(split(variables('globalFeedPrivateEndpointVirtualNetworkResourceId'), '/')))]"
                   },
                   "privateDNSZoneIds": "[if(not(empty(parameters('globalFeedPrivateDnsZoneResourceId'))), createObject('value', createArray(parameters('globalFeedPrivateDnsZoneResourceId'))), createObject('value', createArray()))]"
                 },
@@ -9273,8 +9274,8 @@
                 }
               },
               "dependsOn": [
-                "globalFeedPrivateEndpointVirtualNetwork",
-                "globalWorkspace"
+                "globalWorkspace",
+                "[format('privateEndpointVirtualNetworks[{0}]', indexOf(variables('privateEndpointVirtualNetworkResourceIds'), variables('globalFeedPrivateEndpointVirtualNetworkResourceId')))]"
               ]
             },
             "applicationGroupRoleAssignments": {
