@@ -55,9 +55,11 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
 
 `automatedHostPool.bicep` follows the standard host-pool orchestration model:
 
-1. Calls Shared Services to create or adopt the AVD workspace, feed/global Private Link,
-  monitoring, Key Vaults, and shared FSLogix backup resources. New workspaces use shared naming by
-  default; PoC deployments explicitly request host-pool-specific naming.
+1. Calls Shared Services to create the AVD workspace or explicitly manage feed/global Private Link
+  on an existing workspace, plus monitoring, Key Vaults, and shared FSLogix backup resources. An
+  existing workspace selected with `None` or `HostPool` private routes bypasses this workspace PUT
+  and is updated only by the later application-group association. New workspaces use shared naming
+  by default; PoC deployments explicitly request host-pool-specific naming.
 2. Resolves the effective Shared Services resource IDs before deploying pool-specific resources.
 3. Resolves names and creates the pool-specific control-plane, session-host, storage, and
   deployment-helper resource groups.

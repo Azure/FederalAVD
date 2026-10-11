@@ -87,8 +87,8 @@ Describe 'AVD workspace ownership contract' {
         $namingModule | Should Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
         $standardBicep | Should Match "param workspaceCreationScope string = 'Shared'"
         $automatedBicep | Should Match "param workspaceCreationScope string = 'Shared'"
-        $standardBicep | Should Match "var createHostPoolSpecificWorkspace = empty\(existingFeedWorkspaceResourceId\) && workspaceCreationScope == 'HostPoolSpecific'"
-        $automatedBicep | Should Match "var createHostPoolSpecificWorkspace = empty\(existingFeedWorkspaceResourceId\) && workspaceCreationScope == 'HostPoolSpecific'"
+        $standardBicep | Should Match "var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'"
+        $automatedBicep | Should Match "var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'"
         $standardBicep | Should Match 'var sharedWorkspaceResourceGroupName = consolidatePersistentResourceGroups'
         $standardBicep | Should Match 'createHostPoolSpecificWorkspace\s+\? naming\.outputs\.resourceGroupControlPlane'
         $automatedBicep | Should Match 'var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace'
@@ -133,7 +133,18 @@ Describe 'AVD workspace ownership contract' {
         $automatedControlPlane | Should Not Match 'module workspaceFeedPrivateEndpoint'
         $automatedControlPlane | Should Not Match 'module globalWorkspace'
         (Get-Content -LiteralPath $standardCorePath -Raw) | Should Match 'existingFeedWorkspaceResourceId: sharedWorkspaceResourceId'
-        (Get-Content -LiteralPath $automatedCorePath -Raw) | Should Match 'var effectiveFeedWorkspaceResourceId = sharedAvdWorkspace.outputs.workspaceResourceId'
+        (Get-Content -LiteralPath $automatedCorePath -Raw) | Should Match 'existingFeedWorkspaceResourceId: effectiveFeedWorkspaceResourceId'
+    }
+
+    It 'does not redeploy adopted workspaces unless feed networking is explicitly managed' {
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator | Should Match "var createFeedWorkspace = empty\(existingFeedWorkspaceResourceId\)"
+            $orchestrator |
+                Should Match "var manageFeedWorkspace = createFeedWorkspace \|\| contains\(\['FeedAndHostPool', 'All'\], avdPrivateLinkPrivateRoutes\)"
+            $orchestrator | Should Match 'manageWorkspace: manageFeedWorkspace'
+            $orchestrator |
+                Should Match '(sharedWorkspaceResourceId|effectiveFeedWorkspaceResourceId) = manageFeedWorkspace\s+\? sharedAvdWorkspace\.outputs\.workspaceResourceId\s+: existingFeedWorkspaceResourceId'
+        }
     }
 
     It 'allows the orchestrators to manage feed and global Private Link explicitly' {

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "13980042429467094080"
+      "templateHash": "10335012488669518639"
     }
   },
   "definitions": {
@@ -1305,7 +1305,9 @@
     "deploySharedEncryptionKeyVault": "[and(variables('encryptionKeyVaultIsRequired'), empty(variables('existingSharedEncryptionKeyVaultResourceId')))]",
     "fslogixBackupIsRequested": "[or(parameters('enableFSLogixBackup'), not(empty(parameters('existingFilesBackupVaultResourceId'))))]",
     "deploySharedFilesBackup": "[and(and(and(variables('fslogixBackupIsRequested'), parameters('deployFSLogixStorage')), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), empty(parameters('existingFilesBackupVaultResourceId')))]",
-    "createHostPoolSpecificWorkspace": "[and(empty(parameters('existingFeedWorkspaceResourceId')), equals(parameters('workspaceCreationScope'), 'HostPoolSpecific'))]",
+    "createFeedWorkspace": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
+    "manageFeedWorkspace": "[or(variables('createFeedWorkspace'), contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')))]",
+    "createHostPoolSpecificWorkspace": "[and(variables('createFeedWorkspace'), equals(parameters('workspaceCreationScope'), 'HostPoolSpecific'))]",
     "effectiveNamingConvention": "[union(parameters('namingConvention'), if(not(empty(parameters('secretsKeyVaultNameOverride'))), createObject('secretsKeyVaultNameOverride', parameters('secretsKeyVaultNameOverride')), createObject()), if(not(empty(parameters('encryptionKeyVaultNameOverride'))), createObject('encryptionKeyVaultNameOverride', parameters('encryptionKeyVaultNameOverride')), createObject()))]",
     "deploySharedMonitoring": "[and(parameters('enableMonitoring'), empty(parameters('logAnalyticsWorkspaceResourceId')))]",
     "deploySharedOperationsResourceGroup": "[or(or(variables('deploySharedSecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup'))]",
@@ -4150,9 +4152,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "workspaceMode": "[if(empty(parameters('existingFeedWorkspaceResourceId')), createObject('value', 'Create'), createObject('value', 'Adopt'))]",
+          "workspaceMode": "[if(variables('createFeedWorkspace'), createObject('value', 'Create'), createObject('value', 'Adopt'))]",
           "manageWorkspace": {
-            "value": true
+            "value": "[variables('manageFeedWorkspace')]"
           },
           "workspaceName": "[if(variables('createHostPoolSpecificWorkspace'), createObject('value', reference('naming').outputs.workspaceName.value), createObject('value', reference('naming').outputs.sharedWorkspaceName.value))]",
           "workspaceResourceId": {
@@ -8360,9 +8362,7 @@
           "applicationGroupName": {
             "value": "[reference('naming').outputs.desktopApplicationGroupName.value]"
           },
-          "existingFeedWorkspaceResourceId": {
-            "value": "[reference('sharedAvdWorkspace').outputs.workspaceResourceId.value]"
-          },
+          "existingFeedWorkspaceResourceId": "[if(variables('manageFeedWorkspace'), createObject('value', reference('sharedAvdWorkspace').outputs.workspaceResourceId.value), createObject('value', parameters('existingFeedWorkspaceResourceId')))]",
           "desktopFriendlyName": {
             "value": "[parameters('desktopFriendlyName')]"
           },
@@ -8473,7 +8473,7 @@
           "hostPoolCustomTags": {
             "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference('naming').outputs.resourceGroupHosts.value), 'hostPoolManagementType', 'Automated', 'hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', reference('naming').outputs.vmLocationAbbreviation.value))), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference('naming').outputs.resourceGroupStorage.value)), createObject()))]"
           },
-          "avdPrivateLinkPrivateRoutes": "[if(if(and(if(not(empty(reference('sharedAvdWorkspace').outputs.workspaceResourceId.value)), true(), fail('effectiveFeedWorkspaceResourceId is required. Create or adopt the workspace through the host-pool orchestrator or AVD Shared Services.')), variables('hostPoolPrivateEndpointConfigurationIsValid')), true(), fail('AVD Private Link requires a host-pool endpoint subnet, a workspace feed endpoint subnet for FeedAndHostPool or All, and an existing global feed or global endpoint subnet for All.')), createObject('value', variables('hostPoolPrivateLinkPrivateRoutes')), createObject('value', variables('hostPoolPrivateLinkPrivateRoutes')))]",
+          "avdPrivateLinkPrivateRoutes": "[if(if(and(if(not(empty(if(variables('manageFeedWorkspace'), reference('sharedAvdWorkspace').outputs.workspaceResourceId.value, parameters('existingFeedWorkspaceResourceId')))), true(), fail('effectiveFeedWorkspaceResourceId is required. Create or adopt the workspace through the host-pool orchestrator or AVD Shared Services.')), variables('hostPoolPrivateEndpointConfigurationIsValid')), true(), fail('AVD Private Link requires a host-pool endpoint subnet, a workspace feed endpoint subnet for FeedAndHostPool or All, and an existing global feed or global endpoint subnet for All.')), createObject('value', variables('hostPoolPrivateLinkPrivateRoutes')), createObject('value', variables('hostPoolPrivateLinkPrivateRoutes')))]",
           "hostPoolPrivateEndpointSubnetResourceId": {
             "value": "[parameters('hostPoolPrivateEndpointSubnetResourceId')]"
           },

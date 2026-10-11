@@ -549,7 +549,9 @@ var deploySharedFilesBackup = fslogixBackupIsRequested && deployFSLogixStorage &
   fslogixStorageService,
   'AzureFiles'
 ) && empty(existingFilesBackupVaultResourceId)
-var createHostPoolSpecificWorkspace = empty(existingFeedWorkspaceResourceId) && workspaceCreationScope == 'HostPoolSpecific'
+var createFeedWorkspace = empty(existingFeedWorkspaceResourceId)
+var manageFeedWorkspace = createFeedWorkspace || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
+var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'
 var effectiveNamingConvention = union(
   namingConvention,
   !empty(secretsKeyVaultNameOverride) ? { secretsKeyVaultNameOverride: secretsKeyVaultNameOverride } : {},
@@ -641,8 +643,8 @@ var effectiveFSLogixEncryptionKeyVaultResourceId = contains(fslogixKeyManagement
 
 module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = {
   params: {
-    workspaceMode: empty(existingFeedWorkspaceResourceId) ? 'Create' : 'Adopt'
-    manageWorkspace: true
+    workspaceMode: createFeedWorkspace ? 'Create' : 'Adopt'
+    manageWorkspace: manageFeedWorkspace
     workspaceName: sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
     workspaceResourceGroupName: sharedWorkspaceResourceGroupName
@@ -670,7 +672,9 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
   dependsOn: [controlPlaneResourceGroup]
 }
 
-var effectiveFeedWorkspaceResourceId = sharedAvdWorkspace.outputs.workspaceResourceId
+var effectiveFeedWorkspaceResourceId = manageFeedWorkspace
+  ? sharedAvdWorkspace.outputs.workspaceResourceId
+  : existingFeedWorkspaceResourceId
 var hostPoolPrivateLinkPrivateRoutes = avdPrivateLinkPrivateRoutes == 'None' ? 'None' : 'HostPool'
 
 module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deploySharedFilesBackup) {

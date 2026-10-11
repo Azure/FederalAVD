@@ -271,10 +271,10 @@ workspace must be retained.
 
 For the normal shared-workspace model, deploy or adopt the workspace through AVD Shared Services
 and pass its `avdWorkspaceResourceId` output as `existingFeedWorkspaceResourceId`. A host-pool
-deployment that consumes an existing workspace only preserves and appends application-group
-references. It does not change workspace public access or create workspace-feed or global-feed
-private endpoints. With an existing workspace, AVD Private Link is therefore limited to `None` or
-`HostPool`; update shared feed and global-feed networking through AVD Shared Services.
+deployment with `None` or `HostPool` private routes updates the workspace only to preserve and
+append application-group references. Selecting `FeedAndHostPool` or `All` explicitly authorizes
+the deployment to update that existing workspace's public access and workspace-feed Private Link
+configuration; the portal warns that this can affect every host pool registered to the workspace.
 
 The deployment returns the effective resource IDs whether it created the resource or reused an
 existing one. Use `credentialsKeyVaultResourceId`, `encryptionKeyVaultResourceId`,

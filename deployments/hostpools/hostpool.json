@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "8918178457512686230"
+      "templateHash": "12314161332946643418"
     }
   },
   "definitions": {
@@ -1503,7 +1503,9 @@
     "cmkIsRequested": "[or(or(or(contains(parameters('keyManagementStorage'), 'CustomerManaged'), contains(parameters('keyManagementRecoveryServicesVault'), 'CustomerManaged')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption'))]",
     "deploySharedEncryptionKeyVault": "[and(variables('cmkIsRequested'), empty(parameters('existingEncryptionKeyVaultResourceId')))]",
     "deploySharedFilesBackup": "[and(and(and(and(parameters('recoveryServices'), not(contains(parameters('hostPoolType'), 'Personal'))), parameters('deployFSLogixStorage')), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), empty(parameters('existingFilesBackupVaultResourceId')))]",
-    "createHostPoolSpecificWorkspace": "[and(empty(parameters('existingFeedWorkspaceResourceId')), equals(parameters('workspaceCreationScope'), 'HostPoolSpecific'))]",
+    "createFeedWorkspace": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
+    "manageFeedWorkspace": "[or(variables('createFeedWorkspace'), contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')))]",
+    "createHostPoolSpecificWorkspace": "[and(variables('createFeedWorkspace'), equals(parameters('workspaceCreationScope'), 'HostPoolSpecific'))]",
     "consolidatePersistentResourceGroups": "[equals(parameters('resourceGroupOrganization'), 'Consolidated')]",
     "deploySharedMonitoring": "[and(parameters('enableMonitoring'), empty(parameters('existingLogAnalyticsWorkspaceResourceId')))]",
     "deploySharedOperationsResourceGroup": "[or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup'))]",
@@ -3546,9 +3548,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "workspaceMode": "[if(empty(parameters('existingFeedWorkspaceResourceId')), createObject('value', 'Create'), createObject('value', 'Adopt'))]",
+          "workspaceMode": "[if(variables('createFeedWorkspace'), createObject('value', 'Create'), createObject('value', 'Adopt'))]",
           "manageWorkspace": {
-            "value": true
+            "value": "[variables('manageFeedWorkspace')]"
           },
           "workspaceName": "[if(variables('createHostPoolSpecificWorkspace'), createObject('value', reference('naming').outputs.workspaceName.value), createObject('value', reference('naming').outputs.sharedWorkspaceName.value))]",
           "workspaceResourceId": {
@@ -9848,9 +9850,7 @@
           "enableMonitoring": {
             "value": "[parameters('enableMonitoring')]"
           },
-          "existingFeedWorkspaceResourceId": {
-            "value": "[reference('sharedAvdWorkspace').outputs.workspaceResourceId.value]"
-          },
+          "existingFeedWorkspaceResourceId": "[if(variables('manageFeedWorkspace'), createObject('value', reference('sharedAvdWorkspace').outputs.workspaceResourceId.value), createObject('value', parameters('existingFeedWorkspaceResourceId')))]",
           "hostPoolCustomTags": {
             "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupHosts.value))), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupStorage.value))), createObject()), createObject('hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', reference('naming').outputs.vmLocationAbbreviation.value))))]"
           },
@@ -21868,7 +21868,7 @@
     },
     "workspaceResourceId": {
       "type": "string",
-      "value": "[if(empty(reference('sharedAvdWorkspace').outputs.workspaceResourceId.value), reference('controlPlane').outputs.workspaceResourceId.value, reference('sharedAvdWorkspace').outputs.workspaceResourceId.value)]"
+      "value": "[if(empty(if(variables('manageFeedWorkspace'), reference('sharedAvdWorkspace').outputs.workspaceResourceId.value, parameters('existingFeedWorkspaceResourceId'))), reference('controlPlane').outputs.workspaceResourceId.value, if(variables('manageFeedWorkspace'), reference('sharedAvdWorkspace').outputs.workspaceResourceId.value, parameters('existingFeedWorkspaceResourceId')))]"
     },
     "credentialsKeyVaultResourceId": {
       "type": "string",
