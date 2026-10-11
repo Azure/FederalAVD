@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "11746375546859798816"
+      "templateHash": "14326092011538387882"
     }
   },
   "definitions": {
@@ -1019,7 +1019,7 @@
             "value": "[reference('naming').outputs.resourceGroupConsolidated.value]"
           },
           "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('vmIdentityType', 'EntraId', 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', 3, 'vmOSDiskType', 'Premium_LRS', 'vmDiskSizeGB', 0, 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', 'No infrastructure redundancy required', 'vmEncryptionAtHost', false(), 'vmAcceleratedNetworking', true(), 'vmIPv6', false(), 'vmHibernate', false(), 'vmSecurityType', 'TrustedLaunch', 'vmSecureBoot', true(), 'vmVirtualTPM', true(), 'vmIntegrityMonitoring', true(), 'vmSubnetId', resourceId(reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks/subnets', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value), format('snet-avd-{0}-hosts-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value)), 'virtualMachineNameConv', reference('naming').outputs.virtualMachineNameConv.value, 'virtualMachineDiskNameConv', reference('naming').outputs.virtualMachineDiskNameConv.value, 'virtualMachineNicNameConv', reference('naming').outputs.virtualMachineNicNameConv.value, 'availabilitySetNameConv', reference('naming').outputs.availabilitySetNameConv.value, 'vmIntuneEnrollment', false(), 'vmImagePublisher', 'MicrosoftWindowsDesktop', 'vmImageOffer', 'office-365', 'vmImageSku', parameters('imageSku')), if(parameters('deployFSLogixStorage'), createObject('fslContainerType', 'ProfileContainer', 'fslContainerSizeInMBs', 30000, 'fslStorageService', 'AzureFiles', 'fslFileShareNames', string(variables('fslogixFileShareNames')), 'fslSharding', 'None', 'fslLocalStorageAccountNames', string(createArray(format('{0}01', reference('naming').outputs.fslogixStorageAccountNamePrefix.value)))), createObject()), createObject('cm-resource-parent', resourceId(reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.DesktopVirtualization/hostPools', reference('naming').outputs.hostPoolName.value)))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('vmIdentityType', 'EntraId', 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', 3, 'vmOSDiskType', 'Premium_LRS', 'vmDiskSizeGB', 0, 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', 'No infrastructure redundancy required', 'vmEncryptionAtHost', false(), 'vmAcceleratedNetworking', true(), 'vmIPv6', false(), 'vmHibernate', false(), 'vmSecurityType', 'TrustedLaunch', 'vmSecureBoot', true(), 'vmVirtualTPM', true(), 'vmIntegrityMonitoring', true(), 'vmSubnetId', resourceId(subscription().subscriptionId, reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks/subnets', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value), format('snet-avd-{0}-hosts-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value)), 'virtualMachineNameConv', reference('naming').outputs.virtualMachineNameConv.value, 'virtualMachineDiskNameConv', reference('naming').outputs.virtualMachineDiskNameConv.value, 'virtualMachineNicNameConv', reference('naming').outputs.virtualMachineNicNameConv.value, 'availabilitySetNameConv', reference('naming').outputs.availabilitySetNameConv.value, 'vmIntuneEnrollment', false(), 'vmImagePublisher', 'MicrosoftWindowsDesktop', 'vmImageOffer', 'office-365', 'vmImageSku', parameters('imageSku')), if(parameters('deployFSLogixStorage'), createObject('fslContainerType', 'ProfileContainer', 'fslContainerSizeInMBs', 30000, 'fslStorageService', 'AzureFiles', 'fslFileShareNames', string(variables('fslogixFileShareNames')), 'fslSharding', 'None', 'fslLocalStorageAccountNames', string(createArray(format('{0}01', reference('naming').outputs.fslogixStorageAccountNamePrefix.value)))), createObject()), createObject('cm-resource-parent', resourceId(subscription().subscriptionId, reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.DesktopVirtualization/hostPools', reference('naming').outputs.hostPoolName.value)))]"
           }
         },
         "template": {
@@ -10393,7 +10393,7 @@
             "value": 3
           },
           "subnetResourceId": {
-            "value": "[resourceId(reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks/subnets', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value), format('snet-avd-{0}-hosts-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value))]"
+            "value": "[resourceId(subscription().subscriptionId, reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks/subnets', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value), format('snet-avd-{0}-hosts-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value))]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -14884,11 +14884,11 @@
     },
     "virtualNetworkResourceId": {
       "type": "string",
-      "value": "[resourceId(reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value))]"
+      "value": "[resourceId(subscription().subscriptionId, reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value))]"
     },
     "sessionHostSubnetResourceId": {
       "type": "string",
-      "value": "[resourceId(reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks/subnets', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value), format('snet-avd-{0}-hosts-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value))]"
+      "value": "[resourceId(subscription().subscriptionId, reference('naming').outputs.resourceGroupConsolidated.value, 'Microsoft.Network/virtualNetworks/subnets', format('vnet-avd-{0}-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value), format('snet-avd-{0}-hosts-{1}', variables('hpBaseName'), reference('naming').outputs.vmLocationAbbreviation.value))]"
     }
   }
 }

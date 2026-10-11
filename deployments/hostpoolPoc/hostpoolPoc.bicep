@@ -62,17 +62,20 @@ var resourceGroupName = naming.outputs.resourceGroupConsolidated
 var virtualNetworkName = 'vnet-avd-${hpBaseName}-${naming.outputs.vmLocationAbbreviation}'
 var sessionHostSubnetName = 'snet-avd-${hpBaseName}-hosts-${naming.outputs.vmLocationAbbreviation}'
 var virtualNetworkResourceId = resourceId(
+  subscription().subscriptionId,
   resourceGroupName,
   'Microsoft.Network/virtualNetworks',
   virtualNetworkName
 )
 var sessionHostSubnetResourceId = resourceId(
+  subscription().subscriptionId,
   resourceGroupName,
   'Microsoft.Network/virtualNetworks/subnets',
   virtualNetworkName,
   sessionHostSubnetName
 )
 var hostPoolResourceId = resourceId(
+  subscription().subscriptionId,
   resourceGroupName,
   'Microsoft.DesktopVirtualization/hostPools',
   naming.outputs.hostPoolName

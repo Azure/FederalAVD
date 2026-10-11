@@ -606,6 +606,10 @@ Describe 'Standard host-pool PoC form' {
         $hostPoolBicep | Should Not Match 'deployStandaloneNetwork'
         $hostPoolBicep | Should Not Match 'standaloneNetwork'
         $pocBicep | Should Match "module standaloneNetwork '../networking/modules/vnet-sub-module\.bicep'"
+        ([regex]::Matches(
+            $pocBicep,
+            "resourceId\(\s*subscription\(\)\.subscriptionId,\s*resourceGroupName,"
+        )).Count | Should Be 3
         $pocBicep | Should Match "defaultRouting: 'nat'"
         $pocBicep | Should Match 'defaultOutboundAccess: false'
         $pocBicep | Should Match 'vnetResourceGroupName: resourceGroupName'
