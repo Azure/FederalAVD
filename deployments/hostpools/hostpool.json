@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "12314161332946643418"
+      "templateHash": "17339427414546022048"
     }
   },
   "definitions": {
@@ -479,17 +479,6 @@
       ],
       "metadata": {
         "description": "Optional. Controls naming when a new AVD workspace is created. Shared preserves the production-compatible region-level name. HostPoolSpecific includes the host-pool identifier for an isolated PoC. Ignored when existingFeedWorkspaceResourceId is supplied."
-      }
-    },
-    "resourceGroupOrganization": {
-      "type": "string",
-      "defaultValue": "Separate",
-      "allowedValues": [
-        "Separate",
-        "Consolidated"
-      ],
-      "metadata": {
-        "description": "Optional. Controls persistent resource-group organization. Separate preserves the production resource groups. Consolidated places host-pool-specific persistent resources in one resource group and keeps the temporary deployment-helper resource group separate."
       }
     },
     "workspaceFriendlyName": {
@@ -1506,14 +1495,12 @@
     "createFeedWorkspace": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
     "manageFeedWorkspace": "[or(variables('createFeedWorkspace'), contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')))]",
     "createHostPoolSpecificWorkspace": "[and(variables('createFeedWorkspace'), equals(parameters('workspaceCreationScope'), 'HostPoolSpecific'))]",
-    "consolidatePersistentResourceGroups": "[equals(parameters('resourceGroupOrganization'), 'Consolidated')]",
     "deploySharedMonitoring": "[and(parameters('enableMonitoring'), empty(parameters('existingLogAnalyticsWorkspaceResourceId')))]",
     "deploySharedOperationsResourceGroup": "[or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup'))]",
     "sharedPrivateEndpoint": "[and(parameters('deployPrivateEndpoints'), or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup')))]",
     "hostPoolPrivateLinkPrivateRoutes": "[if(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None'), 'None', 'HostPool')]",
     "effectiveControlPlaneSubscription": "[if(empty(parameters('controlPlaneSubscriptionId')), subscription().subscriptionId, parameters('controlPlaneSubscriptionId'))]",
     "effectiveMonitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
-    "consolidatedResourceGroupConfigurationIsValid": "[if(or(not(variables('consolidatePersistentResourceGroups')), and(equals(variables('effectiveControlPlaneSubscription'), subscription().subscriptionId), or(empty(parameters('monitoringSubscriptionId')), equals(parameters('monitoringSubscriptionId'), subscription().subscriptionId)))), true(), fail('Consolidated resource groups require the control plane, monitoring resources, session hosts, and storage to use the deployment subscription.'))]",
     "rbacSubs": "[union(createArray(variables('effectiveControlPlaneSubscription')), createArray(subscription().subscriptionId))]",
     "createDeploymentVm": "[or(or(and(parameters('deployFSLogixStorage'), not(equals(parameters('identitySolution'), 'EntraId'))), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName'))))]",
     "hybridDomainCredentialsRequired": "[and(and(parameters('deployFSLogixStorage'), equals(parameters('identitySolution'), 'EntraKerberos-Hybrid')), not(empty(parameters('fslogixUserGroups'))))]",
@@ -1651,7 +1638,9 @@
           "logAnalyticsWorkspaceName": {
             "value": "[reference('naming').outputs.sharedLogAnalyticsWorkspaceName.value]"
           },
-          "resourceGroupMonitoring": "[if(variables('consolidatePersistentResourceGroups'), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', '')), createObject('value', reference('naming').outputs.sharedResourceGroupMonitoring.value))]",
+          "resourceGroupMonitoring": {
+            "value": "[reference('naming').outputs.sharedResourceGroupMonitoring.value]"
+          },
           "tags": {
             "value": "[parameters('tags')]"
           }
@@ -2288,7 +2277,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "naming",
         "sharedMonitoringResourceGroup",
         "vmVirtualNetwork"
@@ -2306,7 +2294,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupName": "[if(variables('consolidatePersistentResourceGroups'), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', '')), createObject('value', reference('naming').outputs.sharedResourceGroupOperations.value))]",
+          "resourceGroupName": {
+            "value": "[reference('naming').outputs.sharedResourceGroupOperations.value]"
+          },
           "deploySecretsKeyVault": {
             "value": "[parameters('deploySecretsKeyVault')]"
           },
@@ -3530,7 +3520,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "naming",
         "sharedMonitoring",
         "sharedOperationsResourceGroup"
@@ -3556,9 +3545,9 @@
           "workspaceResourceId": {
             "value": "[parameters('existingFeedWorkspaceResourceId')]"
           },
-          "workspaceResourceGroupName": "[if(variables('consolidatePersistentResourceGroups'), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', '')), if(variables('createHostPoolSpecificWorkspace'), createObject('value', reference('naming').outputs.resourceGroupControlPlane.value), createObject('value', reference('naming').outputs.sharedResourceGroupControlPlane.value)))]",
+          "workspaceResourceGroupName": "[if(variables('createHostPoolSpecificWorkspace'), createObject('value', reference('naming').outputs.resourceGroupControlPlane.value), createObject('value', reference('naming').outputs.sharedResourceGroupControlPlane.value))]",
           "createWorkspaceResourceGroup": {
-            "value": "[and(not(variables('consolidatePersistentResourceGroups')), not(variables('createHostPoolSpecificWorkspace')))]"
+            "value": "[not(variables('createHostPoolSpecificWorkspace'))]"
           },
           "workspaceLocation": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference('vmVirtualNetwork', '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
           "workspaceFriendlyName": {
@@ -4738,7 +4727,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "controlPlaneResourceGroup",
         "naming",
         "sharedMonitoring",
@@ -4767,7 +4755,9 @@
           "vaultName": {
             "value": "[reference('naming').outputs.sharedRecoveryServicesVaultNameFSLogix.value]"
           },
-          "resourceGroupOperations": "[if(variables('consolidatePersistentResourceGroups'), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', '')), createObject('value', reference('naming').outputs.sharedResourceGroupOperations.value))]",
+          "resourceGroupOperations": {
+            "value": "[reference('naming').outputs.sharedResourceGroupOperations.value]"
+          },
           "location": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference('vmVirtualNetwork', '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
           "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(variables('deploySharedMonitoring'), createObject('value', reference('sharedMonitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpoint": {
@@ -5522,7 +5512,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "naming",
         "sharedMonitoring",
         "sharedOperationsResourceGroup",
@@ -6398,78 +6387,8 @@
         "vmVirtualNetwork"
       ]
     },
-    "consolidatedResourceGroup": {
-      "condition": "[and(variables('consolidatePersistentResourceGroups'), variables('consolidatedResourceGroupConfigurationIsValid'))]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('consolidatedResourceGroup-{0}', uniqueString('consolidatedResourceGroup', deployment().name))]",
-      "location": "[deployment().location]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "location": {
-            "value": "[reference('vmVirtualNetwork', '2023-04-01', 'full').location]"
-          },
-          "name": {
-            "value": "[reference('naming').outputs.resourceGroupConsolidated.value]"
-          },
-          "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmIPv6', parameters('enableIPv6'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmIntegrityMonitoring', parameters('integrityMonitoring'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId'), 'virtualMachineNameConv', reference('naming').outputs.virtualMachineNameConv.value, 'virtualMachineDiskNameConv', reference('naming').outputs.virtualMachineDiskNameConv.value, 'virtualMachineNicNameConv', reference('naming').outputs.virtualMachineNicNameConv.value, 'availabilitySetNameConv', reference('naming').outputs.availabilitySetNameConv.value), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImagePublisher'), variables('vmImageOffer'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference('naming').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference('naming').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference('naming').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference('naming').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference('naming').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference('naming').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))))), if(variables('hasAssociatedFslStorage'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), ' ')[0]), createObject('fslFileShareNames', string(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(range(0, variables('fslogixStorageCount')), lambda('i', format('{0}{1}', reference('naming').outputs.fslogixStorageAccountNamePrefix.value, padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))))), if(not(empty(variables('effectiveFslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(variables('effectiveFslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(map(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')], lambda('share', format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.NetApp/netAppAccounts/{2}/capacityPools/{3}/volumes/{4}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupStorage.value), reference('naming').outputs.netAppAccountName.value, reference('naming').outputs.netAppCapacityPoolName.value, lambdaVariables('share')))))), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.hostPoolName.value)))]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "16945675830389891545"
-            }
-          },
-          "parameters": {
-            "name": {
-              "type": "string"
-            },
-            "location": {
-              "type": "string"
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {}
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Resources/resourceGroups",
-              "apiVersion": "2023-07-01",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]"
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "naming",
-        "vmVirtualNetwork"
-      ]
-    },
     "sharedOperationsResourceGroup": {
-      "condition": "[and(variables('deploySharedOperationsResourceGroup'), not(variables('consolidatePersistentResourceGroups')))]",
+      "condition": "[variables('deploySharedOperationsResourceGroup')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('sharedOperationsResourceGroup-{0}', uniqueString('sharedOperationsResourceGroup', deployment().name))]",
@@ -6482,7 +6401,9 @@
         "mode": "Incremental",
         "parameters": {
           "location": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference('vmVirtualNetwork', '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
-          "name": "[if(variables('consolidatePersistentResourceGroups'), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', '')), createObject('value', reference('naming').outputs.sharedResourceGroupOperations.value))]",
+          "name": {
+            "value": "[reference('naming').outputs.sharedResourceGroupOperations.value]"
+          },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
           }
@@ -6536,7 +6457,7 @@
       ]
     },
     "sharedMonitoringResourceGroup": {
-      "condition": "[and(variables('deploySharedMonitoring'), not(variables('consolidatePersistentResourceGroups')))]",
+      "condition": "[variables('deploySharedMonitoring')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('sharedMonitoringResourceGroup-{0}', uniqueString('sharedMonitoringResourceGroup', deployment().name))]",
@@ -6549,7 +6470,9 @@
         "mode": "Incremental",
         "parameters": {
           "location": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference('vmVirtualNetwork', '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
-          "name": "[if(variables('consolidatePersistentResourceGroups'), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', '')), createObject('value', reference('naming').outputs.sharedResourceGroupMonitoring.value))]",
+          "name": {
+            "value": "[reference('naming').outputs.sharedResourceGroupMonitoring.value]"
+          },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
           }
@@ -6621,7 +6544,7 @@
             "value": "[reference('naming').outputs.resourceGroupDeployment.value]"
           },
           "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupControlPlane.value), reference('naming').outputs.hostPoolName.value)))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)))]"
           }
         },
         "template": {
@@ -6673,7 +6596,6 @@
       ]
     },
     "controlPlaneResourceGroup": {
-      "condition": "[not(variables('consolidatePersistentResourceGroups'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('controlPlaneResourceGroup-{0}', uniqueString('controlPlaneResourceGroup', deployment().name))]",
@@ -6686,7 +6608,9 @@
         "mode": "Incremental",
         "parameters": {
           "location": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference('vmVirtualNetwork', '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
-          "name": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupControlPlane.value))]",
+          "name": {
+            "value": "[reference('naming').outputs.resourceGroupControlPlane.value]"
+          },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
           }
@@ -6740,7 +6664,6 @@
       ]
     },
     "hostsResourceGroup": {
-      "condition": "[not(variables('consolidatePersistentResourceGroups'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('hostsResourceGroup-{0}', uniqueString('hostsResourceGroup', deployment().name))]",
@@ -6754,9 +6677,11 @@
           "location": {
             "value": "[reference('vmVirtualNetwork', '2023-04-01', 'full').location]"
           },
-          "name": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "name": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmIPv6', parameters('enableIPv6'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmIntegrityMonitoring', parameters('integrityMonitoring'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId'), 'virtualMachineNameConv', reference('naming').outputs.virtualMachineNameConv.value, 'virtualMachineDiskNameConv', reference('naming').outputs.virtualMachineDiskNameConv.value, 'virtualMachineNicNameConv', reference('naming').outputs.virtualMachineNicNameConv.value, 'availabilitySetNameConv', reference('naming').outputs.availabilitySetNameConv.value), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImagePublisher'), variables('vmImageOffer'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference('naming').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference('naming').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference('naming').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference('naming').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference('naming').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference('naming').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))))), if(variables('hasAssociatedFslStorage'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), ' ')[0]), createObject('fslFileShareNames', string(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(range(0, variables('fslogixStorageCount')), lambda('i', format('{0}{1}', reference('naming').outputs.fslogixStorageAccountNamePrefix.value, padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))))), if(not(empty(variables('effectiveFslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(variables('effectiveFslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(map(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')], lambda('share', format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.NetApp/netAppAccounts/{2}/capacityPools/{3}/volumes/{4}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupStorage.value), reference('naming').outputs.netAppAccountName.value, reference('naming').outputs.netAppCapacityPoolName.value, lambdaVariables('share')))))), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupControlPlane.value), reference('naming').outputs.hostPoolName.value)))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), union(createObject('vmIdentityType', parameters('identitySolution'), 'vmNamePrefix', parameters('virtualMachineNamePrefix'), 'vmIndexPadding', parameters('vmNameIndexLength'), 'vmOSDiskType', parameters('diskSku'), 'vmDiskSizeGB', parameters('diskSizeGB'), 'vmSize', parameters('virtualMachineSize'), 'vmAvailability', if(equals(parameters('availability'), 'AvailabilityZones'), 'Availability Zones', if(equals(parameters('availability'), 'AvailabilitySets'), 'Availability Sets', 'No infrastructure redundancy required')), 'vmEncryptionAtHost', parameters('encryptionAtHost'), 'vmAcceleratedNetworking', parameters('enableAcceleratedNetworking'), 'vmIPv6', parameters('enableIPv6'), 'vmHibernate', parameters('hibernationEnabled'), 'vmSecurityType', parameters('securityType'), 'vmSecureBoot', parameters('secureBootEnabled'), 'vmVirtualTPM', parameters('vTpmEnabled'), 'vmIntegrityMonitoring', parameters('integrityMonitoring'), 'vmSubnetId', parameters('virtualMachineSubnetResourceId'), 'virtualMachineNameConv', reference('naming').outputs.virtualMachineNameConv.value, 'virtualMachineDiskNameConv', reference('naming').outputs.virtualMachineDiskNameConv.value, 'virtualMachineNicNameConv', reference('naming').outputs.virtualMachineNicNameConv.value, 'availabilitySetNameConv', reference('naming').outputs.availabilitySetNameConv.value), variables('vmDomain'), variables('vmOU'), variables('vmCustomImageId'), variables('vmImagePublisher'), variables('vmImageOffer'), variables('vmImageSku'), variables('vmIntuneEnrollment'), if(empty(if(parameters('confidentialVMOSDiskEncryption'), reference('naming').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference('naming').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference('naming').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))), createObject(), createObject('vmDiskEncryptionSetName', if(parameters('confidentialVMOSDiskEncryption'), reference('naming').outputs.diskEncryptionSetNameConfidentialVMs.value, if(startsWith(parameters('keyManagementDisks'), 'CustomerManaged'), reference('naming').outputs.diskEncryptionSetNameCustomerManaged.value, if(contains(parameters('keyManagementDisks'), 'PlatformManagedAndCustomerManaged'), reference('naming').outputs.diskEncryptionSetNamePlatformAndCustomerManaged.value, null())))))), if(variables('hasAssociatedFslStorage'), union(createObject('fslContainerType', parameters('fslogixContainerType')), createObject('fslContainerSizeInMBs', parameters('fslogixSizeInMBs')), createObject('fslStorageService', split(parameters('fslogixStorageService'), ' ')[0]), createObject('fslFileShareNames', string(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')])), createObject('fslSharding', parameters('fslogixShardOptions')), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), createObject('fslLocalStorageAccountNames', string(map(range(0, variables('fslogixStorageCount')), lambda('i', format('{0}{1}', reference('naming').outputs.fslogixStorageAccountNamePrefix.value, padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))))), if(not(empty(variables('effectiveFslogixExistingLocalStorageAccountResourceIds'))), createObject('fslLocalStorageAccountNames', string(map(variables('effectiveFslogixExistingLocalStorageAccountResourceIds'), lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())), variables('fslRemoteStorageAccountNames'), if(and(parameters('deployFSLogixStorage'), startsWith(parameters('fslogixStorageService'), 'AzureNetAppFiles')), createObject('fslLocalNetAppVolumeResourceIds', string(map(variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')], lambda('share', format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.NetApp/netAppAccounts/{2}/capacityPools/{3}/volumes/{4}', subscription().subscriptionId, reference('naming').outputs.resourceGroupStorage.value, reference('naming').outputs.netAppAccountName.value, reference('naming').outputs.netAppCapacityPoolName.value, lambdaVariables('share')))))), if(not(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject('fslLocalNetAppVolumeResourceIds', string(parameters('fslogixExistingLocalNetAppVolumeResourceIds'))), createObject())), variables('fslRemoteNetAppVolumeResourceIds')), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)))]"
           }
         },
         "template": {
@@ -6808,7 +6733,7 @@
       ]
     },
     "storageResourceGroup": {
-      "condition": "[and(parameters('deployFSLogixStorage'), not(variables('consolidatePersistentResourceGroups')))]",
+      "condition": "[parameters('deployFSLogixStorage')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('storageResourceGroup-{0}', uniqueString('storageResourceGroup', deployment().name))]",
@@ -6822,9 +6747,11 @@
           "location": {
             "value": "[reference('vmVirtualNetwork', '2023-04-01', 'full').location]"
           },
-          "name": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "name": {
+            "value": "[reference('naming').outputs.resourceGroupStorage.value]"
+          },
           "tags": {
-            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupControlPlane.value), reference('naming').outputs.hostPoolName.value)))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)))]"
           }
         },
         "template": {
@@ -6983,7 +6910,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupHosts": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "resourceGroupHosts": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "appGroupSecurityGroups": {
             "value": "[map(parameters('appGroupSecurityGroups'), lambda('group', lambdaVariables('group').id))]"
           }
@@ -7111,7 +7040,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "hostsResourceGroup",
         "naming"
       ]
@@ -7173,13 +7101,19 @@
           "ouPath": {
             "value": "[parameters('vmOUPath')]"
           },
-          "resourceGroupControlPlane": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupControlPlane.value))]",
+          "resourceGroupControlPlane": {
+            "value": "[reference('naming').outputs.resourceGroupControlPlane.value]"
+          },
           "resourceGroupDeployment": {
             "value": "[reference('naming').outputs.resourceGroupDeployment.value]"
           },
-          "resourceGroupHosts": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
-          "resourceGroupSecurity": "[if(not(empty(if(variables('deploySharedEncryptionKeyVault'), reference('sharedKeyVaults').outputs.encryptionKeyVaultResourceId.value, parameters('existingEncryptionKeyVaultResourceId')))), createObject('value', split(if(variables('deploySharedEncryptionKeyVault'), reference('sharedKeyVaults').outputs.encryptionKeyVaultResourceId.value, parameters('existingEncryptionKeyVaultResourceId')), '/')[4]), if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupOperations.value)))]",
-          "resourceGroupStorage": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "resourceGroupHosts": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
+          "resourceGroupSecurity": "[if(not(empty(if(variables('deploySharedEncryptionKeyVault'), reference('sharedKeyVaults').outputs.encryptionKeyVaultResourceId.value, parameters('existingEncryptionKeyVaultResourceId')))), createObject('value', split(if(variables('deploySharedEncryptionKeyVault'), reference('sharedKeyVaults').outputs.encryptionKeyVaultResourceId.value, parameters('existingEncryptionKeyVaultResourceId')), '/')[4]), createObject('value', reference('naming').outputs.resourceGroupOperations.value))]",
+          "resourceGroupStorage": {
+            "value": "[reference('naming').outputs.resourceGroupStorage.value]"
+          },
           "tags": {
             "value": "[parameters('tags')]"
           },
@@ -8050,7 +7984,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupName": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "resourceGroupName": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "keyVaultResourceId": "[if(variables('deploySharedEncryptionKeyVault'), createObject('value', reference('sharedKeyVaults').outputs.encryptionKeyVaultResourceId.value), createObject('value', parameters('existingEncryptionKeyVaultResourceId')))]",
           "keyManagementType": "[if(contains(parameters('keyManagementDisks'), 'HSM'), if(contains(parameters('keyManagementDisks'), 'Platform'), createObject('value', 'PlatformManagedAndCustomerManagedHSM'), createObject('value', 'CustomerManagedHSM')), if(contains(parameters('keyManagementDisks'), 'Platform'), createObject('value', 'PlatformManagedAndCustomerManaged'), createObject('value', 'CustomerManaged')))]",
           "keyExpirationInDays": {
@@ -8063,7 +7999,7 @@
             "value": "[parameters('tags')]"
           },
           "parentResourceId": {
-            "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupControlPlane.value), reference('naming').outputs.hostPoolName.value)]"
+            "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)]"
           },
           "keyName": {
             "value": "[reference('naming').outputs.encryptionKeyNameVMs.value]"
@@ -8618,7 +8554,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "hostsResourceGroup",
         "naming",
         "sharedKeyVaults",
@@ -8637,7 +8572,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupHosts": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "resourceGroupHosts": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "resourceGroupDeployment": {
             "value": "[reference('naming').outputs.resourceGroupDeployment.value]"
           },
@@ -8665,7 +8602,7 @@
             "value": "[parameters('tags')]"
           },
           "hostPoolResourceId": {
-            "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupControlPlane.value), reference('naming').outputs.hostPoolName.value)]"
+            "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)]"
           }
         },
         "template": {
@@ -9273,7 +9210,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "deploymentHelper",
         "hostsResourceGroup",
         "kvEncryption",
@@ -9294,7 +9230,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupName": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "resourceGroupName": {
+            "value": "[reference('naming').outputs.resourceGroupStorage.value]"
+          },
           "keyVaultResourceId": "[if(variables('deploySharedEncryptionKeyVault'), createObject('value', reference('sharedKeyVaults').outputs.encryptionKeyVaultResourceId.value), createObject('value', parameters('existingEncryptionKeyVaultResourceId')))]",
           "keyManagementType": "[if(contains(parameters('keyManagementStorage'), 'HSM'), createObject('value', 'CustomerManagedHSM'), createObject('value', 'CustomerManaged'))]",
           "keyExpirationInDays": {
@@ -9307,7 +9245,7 @@
             "value": "[parameters('tags')]"
           },
           "parentResourceId": {
-            "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupControlPlane.value), reference('naming').outputs.hostPoolName.value)]"
+            "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostPools/{2}', subscription().subscriptionId, reference('naming').outputs.resourceGroupControlPlane.value, reference('naming').outputs.hostPoolName.value)]"
           },
           "storageKeyNames": {
             "copy": [
@@ -9807,7 +9745,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "naming",
         "sharedKeyVaults",
         "storageResourceGroup",
@@ -9852,7 +9789,7 @@
           },
           "existingFeedWorkspaceResourceId": "[if(variables('manageFeedWorkspace'), createObject('value', reference('sharedAvdWorkspace').outputs.workspaceResourceId.value), createObject('value', parameters('existingFeedWorkspaceResourceId')))]",
           "hostPoolCustomTags": {
-            "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupHosts.value))), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupStorage.value))), createObject()), createObject('hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', reference('naming').outputs.vmLocationAbbreviation.value))))]"
+            "value": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference('naming').outputs.resourceGroupHosts.value)), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, reference('naming').outputs.resourceGroupStorage.value)), createObject()), createObject('hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', reference('naming').outputs.vmLocationAbbreviation.value))))]"
           },
           "hostPoolMaxSessionLimit": {
             "value": "[parameters('hostPoolMaxSessionLimit')]"
@@ -9888,7 +9825,9 @@
           "privateEndpointNICNameConv": {
             "value": "[reference('naming').outputs.privateEndpointNICNameConv.value]"
           },
-          "resourceGroupControlPlane": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupControlPlane.value))]",
+          "resourceGroupControlPlane": {
+            "value": "[reference('naming').outputs.resourceGroupControlPlane.value]"
+          },
           "resourceGroupDeployment": {
             "value": "[reference('naming').outputs.resourceGroupDeployment.value]"
           },
@@ -12293,7 +12232,6 @@
       },
       "dependsOn": [
         "avdServicePrincipalRbac",
-        "consolidatedResourceGroup",
         "controlPlaneResourceGroup",
         "deploymentHelper",
         "naming",
@@ -12387,7 +12325,9 @@
           "resourceGroupDeployment": {
             "value": "[reference('naming').outputs.resourceGroupDeployment.value]"
           },
-          "resourceGroupStorage": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupStorage.value))]",
+          "resourceGroupStorage": {
+            "value": "[reference('naming').outputs.resourceGroupStorage.value]"
+          },
           "shareSizeInGB": {
             "value": "[parameters('fslogixShareSizeInGB')]"
           },
@@ -16155,7 +16095,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "controlPlane",
         "deploymentHelper",
         "kvEncryption",
@@ -16180,7 +16119,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupHosts": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "resourceGroupHosts": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "diskAccessName": {
             "value": "[reference('naming').outputs.diskAccessName.value]"
           },
@@ -16506,7 +16447,9 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "resourceGroupHosts": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "resourceGroupHosts": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "agentBootLoaderDownloadUrl": {
             "value": "[parameters('agentBootLoaderDownloadUrl')]"
           },
@@ -21094,7 +21037,6 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "controlPlane",
         "cvmDiskCmk",
         "diskAccess",
@@ -21126,7 +21068,9 @@
           "resourceGroupDeployment": {
             "value": "[reference('naming').outputs.resourceGroupDeployment.value]"
           },
-          "resourceGroupHosts": "[if(variables('consolidatePersistentResourceGroups'), createObject('value', reference('naming').outputs.resourceGroupConsolidated.value), createObject('value', reference('naming').outputs.resourceGroupHosts.value))]",
+          "resourceGroupHosts": {
+            "value": "[reference('naming').outputs.resourceGroupHosts.value]"
+          },
           "userAssignedIdentityClientId": "[if(variables('createDeploymentVm'), createObject('value', reference('deploymentHelper').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', ''))]",
           "deploymentVirtualMachineName": "[if(variables('createDeploymentVm'), createObject('value', reference('deploymentHelper').outputs.virtualMachineName.value), createObject('value', ''))]",
           "roleAssignmentIds": "[if(variables('createDeploymentVm'), createObject('value', reference('deploymentHelper').outputs.deploymentUserAssignedIdentityRoleAssignmentIds.value), createObject('value', createArray()))]",
@@ -21908,7 +21852,7 @@
     },
     "hostResouceGroupId": {
       "type": "string",
-      "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', if(variables('consolidatePersistentResourceGroups'), reference('naming').outputs.resourceGroupConsolidated.value, reference('naming').outputs.resourceGroupHosts.value))]"
+      "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', reference('naming').outputs.resourceGroupHosts.value)]"
     },
     "virtualMachineNames": {
       "type": "array",

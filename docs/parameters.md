@@ -53,14 +53,10 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 The standard and automated host-pool entry templates are orchestrators that call Shared Services
 and then directly compose their pool-specific modules. New workspaces use shared, region-level
 naming by default.
-A PoC sets `workspaceCreationScope` to `HostPoolSpecific` to include the host-pool identifier in the
-workspace and control-plane resource-group names. Production deployments leave the scope at
-`Shared` and create or adopt shared resources.
-The standard PoC also sets `resourceGroupOrganization` to `Consolidated`, which places newly
-created persistent host-pool, workspace, session-host, FSLogix, and optional monitoring resources
-in one host-pool-specific resource group. The existing network remains in its current resource
-group, and a temporary deployment-helper resource group remains separate so it can be safely
-deleted during cleanup. The default `Separate` value preserves the production layout.
+A PoC uses host-pool-specific workspace naming and places its persistent host-pool, workspace,
+session-host, FSLogix, monitoring, and standalone network resources in one resource group.
+Production host-pool deployments retain the separate resource-group layout and create or adopt
+shared resources.
 
 When multiple host pools use one AVD workspace, serialize their deployments. Each orchestrator appends its
 application-group reference while preserving the other workspace properties, and concurrent

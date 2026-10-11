@@ -35,13 +35,12 @@ only its application-group reference and preserves the workspace's other referen
 properties. Shared Services manages an existing workspace's public access and feed/global Private
 Link only when those options are explicitly selected; otherwise those settings are preserved.
 
-The `resourceGroupOrganization` parameter supports consolidated resource ownership for production
-callers that need it. The separate PoC orchestrator always creates its VNet, private subnet, NSG,
-NAT Gateway, Standard public IP, and persistent AVD resources in one consolidated resource group.
-When the deployment-helper VM is required, its temporary resource group remains separate because
-the deployment removes that entire resource group during cleanup. Entra ID cloud-only Azure Files
-deployments that use storage-account-key authentication skip the helper and NTFS ACL step. The
-production template's default `Separate` value preserves the normal multi-resource-group model.
+The dedicated PoC orchestrator creates its VNet, private subnet, NSG, NAT Gateway, Standard public
+IP, and persistent AVD resources in one consolidated resource group. The production host-pool
+template retains its normal separate resource-group model. When the deployment-helper VM is
+required, its temporary resource group remains separate because the deployment removes that entire
+resource group during cleanup. Entra ID cloud-only Azure Files deployments that use
+storage-account-key authentication skip the helper and NTFS ACL step.
 
 The Standard PoC is a disposable demonstration environment and intentionally omits production
 capacity, availability, scaling, backup, private connectivity, encryption, and operational design

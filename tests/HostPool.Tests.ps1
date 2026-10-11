@@ -89,7 +89,7 @@ Describe 'AVD workspace ownership contract' {
         $automatedBicep | Should Match "param workspaceCreationScope string = 'Shared'"
         $standardBicep | Should Match "var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'"
         $automatedBicep | Should Match "var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'"
-        $standardBicep | Should Match 'var sharedWorkspaceResourceGroupName = consolidatePersistentResourceGroups'
+        $standardBicep | Should Match 'var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace'
         $standardBicep | Should Match 'createHostPoolSpecificWorkspace\s+\? naming\.outputs\.resourceGroupControlPlane'
         $automatedBicep | Should Match 'var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace'
         $automatedBicep | Should Match '\? naming\.outputs\.resourceGroupControlPlane'
@@ -650,6 +650,8 @@ Describe 'Standard host-pool PoC form' {
             Should Be $true
         ($pocParameters.parameters.PSObject.Properties.Name -notcontains 'virtualMachineSubnetResourceId') |
             Should Be $true
+        $hostPoolBicep | Should Not Match 'resourceGroupOrganization'
+        $hostPoolBicep | Should Not Match 'consolidatedResourceGroup'
     }
 
     It 'does not emit invalid private-endpoint virtual network collection references' {

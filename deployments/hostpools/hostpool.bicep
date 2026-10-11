@@ -177,13 +177,6 @@ param existingFeedWorkspaceResourceId string = ''
 @description('Optional. Controls naming when a new AVD workspace is created. Shared preserves the production-compatible region-level name. HostPoolSpecific includes the host-pool identifier for an isolated PoC. Ignored when existingFeedWorkspaceResourceId is supplied.')
 param workspaceCreationScope string = 'Shared'
 
-@allowed([
-  'Separate'
-  'Consolidated'
-])
-@description('Optional. Controls persistent resource-group organization. Separate preserves the production resource groups. Consolidated places host-pool-specific persistent resources in one resource group and keeps the temporary deployment-helper resource group separate.')
-param resourceGroupOrganization string = 'Separate'
-
 @description('Optional. The friendly name for the AVD workspace that is displayed in the client.')
 param workspaceFriendlyName string = ''
 
@@ -737,23 +730,13 @@ var deploySharedFilesBackup = recoveryServices && !contains(hostPoolType, 'Perso
 var createFeedWorkspace = empty(existingFeedWorkspaceResourceId)
 var manageFeedWorkspace = createFeedWorkspace || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
 var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'
-var consolidatePersistentResourceGroups = resourceGroupOrganization == 'Consolidated'
-var effectivePersistentResourceGroupName = consolidatePersistentResourceGroups
-  ? naming.outputs.resourceGroupConsolidated
-  : ''
 var deploySharedMonitoring = enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)
 var deploySharedOperationsResourceGroup = deploySecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup
-var sharedOperationsResourceGroupName = consolidatePersistentResourceGroups
-  ? effectivePersistentResourceGroupName
-  : naming.outputs.sharedResourceGroupOperations
-var sharedMonitoringResourceGroupName = consolidatePersistentResourceGroups
-  ? effectivePersistentResourceGroupName
-  : naming.outputs.sharedResourceGroupMonitoring
-var sharedWorkspaceResourceGroupName = consolidatePersistentResourceGroups
-  ? effectivePersistentResourceGroupName
-  : createHostPoolSpecificWorkspace
-      ? naming.outputs.resourceGroupControlPlane
-      : naming.outputs.sharedResourceGroupControlPlane
+var sharedOperationsResourceGroupName = naming.outputs.sharedResourceGroupOperations
+var sharedMonitoringResourceGroupName = naming.outputs.sharedResourceGroupMonitoring
+var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace
+  ? naming.outputs.resourceGroupControlPlane
+  : naming.outputs.sharedResourceGroupControlPlane
 var sharedWorkspaceName = createHostPoolSpecificWorkspace
   ? naming.outputs.workspaceName
   : naming.outputs.sharedWorkspaceName
@@ -771,7 +754,6 @@ module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.b
   }
   dependsOn: [
     sharedMonitoringResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -816,7 +798,6 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
   }
   dependsOn: [
     sharedOperationsResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -835,7 +816,7 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
     workspaceName: sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
     workspaceResourceGroupName: sharedWorkspaceResourceGroupName
-    createWorkspaceResourceGroup: !consolidatePersistentResourceGroups && !createHostPoolSpecificWorkspace
+    createWorkspaceResourceGroup: !createHostPoolSpecificWorkspace
     workspaceLocation: effectiveControlPlaneRegion
     workspaceFriendlyName: workspaceFriendlyName
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
@@ -858,7 +839,6 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
   }
   dependsOn: [
     controlPlaneResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -889,7 +869,6 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
   }
   dependsOn: [
     sharedOperationsResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -906,9 +885,6 @@ var effectiveControlPlaneSubscription = empty(controlPlaneSubscriptionId)
 var effectiveMonitoringSubscription = empty(monitoringSubscriptionId)
   ? subscription().subscriptionId
   : monitoringSubscriptionId
-var consolidatedResourceGroupConfigurationIsValid = !consolidatePersistentResourceGroups || effectiveControlPlaneSubscription == subscription().subscriptionId && (empty(monitoringSubscriptionId) || monitoringSubscriptionId == subscription().subscriptionId)
-  ? true
-  : fail('Consolidated resource groups require the control plane, monitoring resources, session hosts, and storage to use the deployment subscription.')
 var rbacSubs = union([effectiveControlPlaneSubscription], [subscription().subscriptionId])
 
 var virtualMachinesRegion = vmVirtualNetwork.location
@@ -1165,18 +1141,10 @@ module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
   }
 }
 
-var effectiveControlPlaneResourceGroup = consolidatePersistentResourceGroups
-  ? naming.outputs.resourceGroupConsolidated
-  : naming.outputs.resourceGroupControlPlane
-var effectiveHostsResourceGroup = consolidatePersistentResourceGroups
-  ? naming.outputs.resourceGroupConsolidated
-  : naming.outputs.resourceGroupHosts
-var effectiveStorageResourceGroup = consolidatePersistentResourceGroups
-  ? naming.outputs.resourceGroupConsolidated
-  : naming.outputs.resourceGroupStorage
-var effectiveOperationsResourceGroup = consolidatePersistentResourceGroups
-  ? naming.outputs.resourceGroupConsolidated
-  : naming.outputs.resourceGroupOperations
+var effectiveControlPlaneResourceGroup = naming.outputs.resourceGroupControlPlane
+var effectiveHostsResourceGroup = naming.outputs.resourceGroupHosts
+var effectiveStorageResourceGroup = naming.outputs.resourceGroupStorage
+var effectiveOperationsResourceGroup = naming.outputs.resourceGroupOperations
 
 var fslogixShareNamesLookup = {
   CloudCacheProfileContainer: [
@@ -1350,17 +1318,7 @@ var vmConfigurationTags = union(
 )
 
 // Resource Groups
-module consolidatedResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (consolidatePersistentResourceGroups && consolidatedResourceGroupConfigurationIsValid) {
-  params: {
-    location: virtualMachinesRegion
-    name: naming.outputs.resourceGroupConsolidated
-    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, vmConfigurationTags, fslogixConfigurationTags, {
-      'cm-resource-parent': '${subscription().id}/resourceGroups/${naming.outputs.resourceGroupConsolidated}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.outputs.hostPoolName}'
-    })
-  }
-}
-
-module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup && !consolidatePersistentResourceGroups) {
+module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     location: effectiveControlPlaneRegion
@@ -1369,7 +1327,7 @@ module sharedOperationsResourceGroup '../shared/modules/resourceModules/resource
   }
 }
 
-module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring && !consolidatePersistentResourceGroups) {
+module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
     location: effectiveControlPlaneRegion
@@ -1388,7 +1346,7 @@ module deploymentResourceGroup '../shared/modules/resourceModules/resources/reso
   }
 }
 
-module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (!consolidatePersistentResourceGroups) {
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     location: effectiveControlPlaneRegion
@@ -1397,7 +1355,7 @@ module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/re
   }
 }
 
-module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (!consolidatePersistentResourceGroups) {
+module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
     location: virtualMachinesRegion
     name: effectiveHostsResourceGroup
@@ -1407,7 +1365,7 @@ module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceG
   }
 }
 
-module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage && !consolidatePersistentResourceGroups) {
+module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   params: {
     location: virtualMachinesRegion
     name: effectiveStorageResourceGroup
@@ -1437,7 +1395,6 @@ module roleAssignment_VirtualMachineUserLogin 'modules/rbac/vmUserLoginAssignmen
   }
   dependsOn: [
     hostsResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -1519,7 +1476,6 @@ module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKe
   }
   dependsOn: [
     hostsResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -1544,7 +1500,6 @@ module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
   }
   dependsOn: [
     hostsResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -1571,7 +1526,6 @@ module storageCmk '../shared/modules/orchestration/customerManagedKeys/storageCm
   }
   dependsOn: [
     storageResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -1630,7 +1584,6 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
   dependsOn: [
     avdServicePrincipalRbac
     controlPlaneResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -1707,7 +1660,6 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
   }
   dependsOn: [
     storageResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
@@ -1839,7 +1791,6 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
   }
   dependsOn: [
     hostsResourceGroup
-    consolidatedResourceGroup
   ]
 }
 
