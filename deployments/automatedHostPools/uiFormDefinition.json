@@ -3026,15 +3026,6 @@
 									"defaultValue": false
 								},
 								{
-									"name": "existingWorkspaceOwnership",
-									"type": "Microsoft.Common.InfoBox",
-									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('controlPlane').workspace.createOption, 'update'), not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]",
-									"options": {
-										"style": "Warning",
-										"text": "Carefully review changes to this existing workspace. It may be shared by other host pools, so changing its public network access or feed private endpoint can affect feed download and client connectivity for every host pool registered to it. This selection explicitly authorizes the deployment to apply those workspace-level changes in the selected subnet. Confirm ownership and coordinate the change before continuing. Existing application group references are preserved."
-									}
-								},
-								{
 									"name": "privateRoutes",
 									"type": "Microsoft.Common.DropDown",
 									"label": "Private Traffic Routes",
@@ -3056,6 +3047,22 @@
 												"value": "All"
 											}
 										]
+									}
+								},
+								{
+									"name": "hostPoolHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
+									"options": {
+										"text": "Remote Session Connections"
+									}
+								},
+								{
+									"name": "hostPoolDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
+									"options": {
+										"text": "Select the virtual network and subnet for the remote session connection private endpoint."
 									}
 								},
 								{
@@ -3110,6 +3117,31 @@
 												"value": "EnabledForClientsOnly"
 											}
 										]
+									}
+								},
+								{
+									"name": "workspaceFeedHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]",
+									"options": {
+										"text": "Workspace Feed"
+									}
+								},
+								{
+									"name": "existingWorkspaceOwnership",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('controlPlane').workspace.createOption, 'update'), not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]",
+									"options": {
+										"style": "Warning",
+										"text": "Carefully review changes to this existing workspace. It may be shared by other host pools, so changing its public network access or feed private endpoint can affect feed download and client connectivity for every host pool registered to it. This selection explicitly authorizes the deployment to apply those workspace-level changes in the selected subnet. Confirm ownership and coordinate the change before continuing. Existing application group references are preserved."
+									}
+								},
+								{
+									"name": "workspaceFeedDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]",
+									"options": {
+										"text": "Select the virtual network and subnet for the workspace feed private endpoint. The same private DNS zone as the remote session connection is used."
 									}
 								},
 								{
@@ -3172,12 +3204,28 @@
 									}
 								},
 								{
+									"name": "globalFeedHeader",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
+									"options": {
+										"text": "Global Feed"
+									}
+								},
+								{
 									"name": "globalFeedCreationWarning",
 									"type": "Microsoft.Common.InfoBox",
 									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
 									"options": {
 										"style": "Warning",
 										"text": "Azure Virtual Desktop permits only one global private endpoint. Automatic detection recognizes workspaces that follow the FederalAVD global-feed naming convention; it cannot prove that a custom-named workspace does not already own the global endpoint. Verify that no global private endpoint exists elsewhere before continuing."
+									}
+								},
+								{
+									"name": "globalFeedDescription",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
+									"options": {
+										"text": "Select the subscription, virtual network, and subnet where you wish to create the global feed private endpoint."
 									}
 								},
 								{

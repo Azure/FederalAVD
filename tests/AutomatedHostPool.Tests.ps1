@@ -12,6 +12,7 @@ $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
 
 Describe 'Automated host-pool AVD Private Link virtual networks' {
     BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
         $controlPlaneModule = Get-Content -LiteralPath $controlPlaneModulePath -Raw
         $standardControlPlaneModule = Get-Content -LiteralPath (
             Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
@@ -41,6 +42,22 @@ Describe 'Automated host-pool AVD Private Link virtual networks' {
         $sharedWorkspaceModule | Should Match "resource workspaceFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
         $sharedWorkspaceModule | Should Match "resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
         $sharedWorkspaceModule | Should Not Match 'indexOf\('
+    }
+
+    It 'matches the standard form Private Link subsection headers' {
+        $zeroTrustStep = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+        $privateLink = $zeroTrustStep.elements | Where-Object { $_.name -eq 'avdPrivateLink' }
+        $textBlocks = @($privateLink.elements | Where-Object { $_.type -eq 'Microsoft.Common.TextBlock' })
+
+        ($textBlocks.options.text -contains 'Remote Session Connections') | Should Be $true
+        ($textBlocks.options.text -contains 'Workspace Feed') | Should Be $true
+        ($textBlocks.options.text -contains 'Global Feed') | Should Be $true
+        ($textBlocks | Where-Object { $_.name -eq 'hostPoolHeader' }).visible |
+            Should Be "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
+        ($textBlocks | Where-Object { $_.name -eq 'workspaceFeedHeader' }).visible |
+            Should Be "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]"
+        ($textBlocks | Where-Object { $_.name -eq 'globalFeedHeader' }).visible |
+            Should Match "equals\(steps\('zeroTrust'\)\.avdPrivateLink\.privateRoutes, 'All'\)"
     }
 }
 
