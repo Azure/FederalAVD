@@ -72,13 +72,7 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 | Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `existingEncryptionKeyVaultResourceId` to host pool |
 | Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `existingCredentialsKeyVaultResourceId` to host pool |
 | Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
-| Simple PoC / dev | ✅ **Skip standalone Step 1** — the host-pool orchestrator can create host-pool-specific Shared Services resources |
-
-**Orchestrated PoC path:** Set `workspaceCreationScope` to `HostPoolSpecific` and leave the existing
-workspace ID empty. The host-pool entry template then asks its Shared Services phase to create the
-workspace and control-plane resource group using host-pool-specific naming. Production deployments
-use the default `Shared` scope and either create shared resources or select independently deployed
-Shared Services outputs.
+| Disposable Standard PoC | ✅ **Use the dedicated AVD Standard PoC** — it creates its own fixed evaluation resources and ends in teardown |
 
 > **⚠️ Common mistake — Storage 403 when uploading artifacts:** `Owner` and `Contributor` grant control-plane access only and do not cover blob read/write when shared key access is disabled (the default in this solution). Add **Storage Blob Data Contributor** on the artifacts storage account to the identity running `Update-ImageArtifacts.ps1` or `Deploy-ImageManagement.ps1`. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
 
@@ -246,12 +240,10 @@ adopts Shared Services resources based on the options you select. New workspaces
 production naming. Use individual **Use Existing** toggles (portal) or pre-populated resource ID
 parameters (automation) to adopt existing shared infrastructure:
 
-For a PoC, set `workspaceCreationScope` to `HostPoolSpecific`; the orchestrator then passes
-host-pool-specific naming overrides to its Shared Services phase. For production reuse, leave the
-scope at `Shared`, deploy AVD Shared Services independently when needed, and pass its outputs to the
-parameters below. Standalone Shared Services is also required when the resources must exist before
-the first host pool, such as for Image Management CMK or an FSLogix Storage add-on that enables
-CMK, diagnostics, or Azure Files backup.
+For production reuse, deploy AVD Shared Services independently when needed and pass its outputs to
+the parameters below. Standalone Shared Services is also required when the resources must exist
+before the first host pool, such as for Image Management CMK or an FSLogix Storage add-on that
+enables CMK, diagnostics, or Azure Files backup.
 
 | Shared resource | "Use Existing" control | Parameter to supply |
 | --- | --- | --- |
@@ -261,12 +253,9 @@ CMK, diagnostics, or Azure Files backup.
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
 
-For a standalone proof of concept, set `workspaceCreationScope` to `HostPoolSpecific` and leave
-`existingFeedWorkspaceResourceId` empty. The deployment creates a dedicated control-plane resource
-group and workspace whose names include the host-pool identifier, and may manage that workspace's
-feed and global-feed Private Link configuration. The default `Shared` scope preserves the
-production-compatible region-level names for older parameter files that omit the new parameter.
-Set `existingFeedWorkspaceResourceId` to the current workspace ID before redeploying when that
+For a disposable proof of concept, use the dedicated **AVD Standard PoC** deployment surface. Do
+not configure the full production host-pool orchestrator as a PoC. Set
+`existingFeedWorkspaceResourceId` to the current workspace ID before redeploying when that
 workspace must be retained.
 
 For the normal shared-workspace model, deploy or adopt the workspace through AVD Shared Services

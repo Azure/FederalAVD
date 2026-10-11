@@ -26,6 +26,14 @@
               }
             },
             {
+              "name": "policyCompatibilityWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Policy compatibility warning - this streamlined PoC intentionally omits many enterprise and Zero Trust controls. Common Azure Policy guardrails in federal, regulated, or centrally governed subscriptions may deny this deployment, including requirements for Private Endpoints, customer-managed keys, approved hub networking, restricted public access, centralized diagnostics, backup, tags, or approved SKUs. Deploy only in an approved evaluation subscription or with a documented policy exception. Do not weaken production guardrails to make this PoC deploy."
+              }
+            },
+            {
               "name": "scope",
               "type": "Microsoft.Common.ResourceScope",
               "location": {

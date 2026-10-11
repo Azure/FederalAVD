@@ -238,13 +238,6 @@ param dynamicScalingSchedules dynamicScalingScheduleInputType[] = []
 param existingFeedWorkspaceResourceId string = ''
 
 @allowed([
-  'Shared'
-  'HostPoolSpecific'
-])
-@description('Optional. Controls naming when a new AVD workspace is created. Shared preserves the production-compatible region-level name. HostPoolSpecific includes the host-pool identifier for an isolated PoC. Ignored when existingFeedWorkspaceResourceId is supplied.')
-param workspaceCreationScope string = 'Shared'
-
-@allowed([
   'None'
   'HostPool'
   'FeedAndHostPool'
@@ -551,7 +544,6 @@ var deploySharedFilesBackup = fslogixBackupIsRequested && deployFSLogixStorage &
 ) && empty(existingFilesBackupVaultResourceId)
 var createFeedWorkspace = empty(existingFeedWorkspaceResourceId)
 var manageFeedWorkspace = createFeedWorkspace || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
-var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'
 var effectiveNamingConvention = union(
   namingConvention,
   !empty(secretsKeyVaultNameOverride) ? { secretsKeyVaultNameOverride: secretsKeyVaultNameOverride } : {},
@@ -572,12 +564,6 @@ module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
 var deploySharedMonitoring = enableMonitoring && empty(logAnalyticsWorkspaceResourceId)
 var deploySharedOperationsResourceGroup = deploySharedSecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup
 var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedSecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup)
-var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace
-  ? naming.outputs.resourceGroupControlPlane
-  : naming.outputs.sharedResourceGroupControlPlane
-var sharedWorkspaceName = createHostPoolSpecificWorkspace
-  ? naming.outputs.workspaceName
-  : naming.outputs.sharedWorkspaceName
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
   params: {
@@ -641,14 +627,14 @@ var effectiveFSLogixEncryptionKeyVaultResourceId = contains(fslogixKeyManagement
   ? (!empty(fslogixEncryptionKeyVaultResourceId) ? fslogixEncryptionKeyVaultResourceId : effectiveEncryptionKeyVaultResourceId)
   : ''
 
-module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = {
+module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if (manageFeedWorkspace) {
   params: {
     workspaceMode: createFeedWorkspace ? 'Create' : 'Adopt'
     manageWorkspace: manageFeedWorkspace
-    workspaceName: sharedWorkspaceName
+    workspaceName: naming.outputs.sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
-    workspaceResourceGroupName: sharedWorkspaceResourceGroupName
-    createWorkspaceResourceGroup: !createHostPoolSpecificWorkspace
+    workspaceResourceGroupName: naming.outputs.sharedResourceGroupControlPlane
+    createWorkspaceResourceGroup: true
     workspaceLocation: controlPlaneLocation
     workspaceFriendlyName: workspaceFriendlyName
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
@@ -673,7 +659,7 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
 }
 
 var effectiveFeedWorkspaceResourceId = manageFeedWorkspace
-  ? sharedAvdWorkspace.outputs.workspaceResourceId
+  ? sharedAvdWorkspace!.outputs.workspaceResourceId
   : existingFeedWorkspaceResourceId
 var hostPoolPrivateLinkPrivateRoutes = avdPrivateLinkPrivateRoutes == 'None' ? 'None' : 'HostPool'
 
@@ -1356,6 +1342,12 @@ output fslogixStorageAccountResourceIds array = deployFSLogixStorage ? fslogixSt
 output policyIdentityResourceId string = sessionHostPolicy.outputs.policyIdentityResourceId
 output scalingPlanResourceId string = controlPlane.outputs.scalingPlanResourceId
 output hostPoolPrivateEndpointResourceId string = controlPlane.outputs.hostPoolPrivateEndpointResourceId
-output workspaceFeedPrivateEndpointResourceId string = sharedAvdWorkspace.outputs.workspaceFeedPrivateEndpointResourceId
-output globalFeedWorkspaceResourceId string = sharedAvdWorkspace.outputs.globalWorkspaceResourceId
-output globalFeedPrivateEndpointResourceId string = sharedAvdWorkspace.outputs.globalFeedPrivateEndpointResourceId
+output workspaceFeedPrivateEndpointResourceId string = manageFeedWorkspace
+  ? sharedAvdWorkspace!.outputs.workspaceFeedPrivateEndpointResourceId
+  : ''
+output globalFeedWorkspaceResourceId string = manageFeedWorkspace
+  ? sharedAvdWorkspace!.outputs.globalWorkspaceResourceId
+  : existingGlobalFeedResourceId
+output globalFeedPrivateEndpointResourceId string = manageFeedWorkspace
+  ? sharedAvdWorkspace!.outputs.globalFeedPrivateEndpointResourceId
+  : ''

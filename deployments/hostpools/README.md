@@ -29,11 +29,11 @@ identity scenarios, Zero Trust architecture, and air-gapped cloud environments.
 New workspaces use shared, region-level naming by default. The dedicated
 [AVD Standard PoC](../hostpoolPoc/README.md) entry template separately composes the same lower-level
 workspace, control-plane, storage, and session-host modules with host-pool-specific naming and a
-fixed evaluation posture. For production, leave `workspaceCreationScope` at `Shared` and either create the
-shared workspace or select it with `existingFeedWorkspaceResourceId`. The orchestrator appends
-only its application-group reference and preserves the workspace's other references and
-properties. Shared Services manages an existing workspace's public access and feed/global Private
-Link only when those options are explicitly selected; otherwise those settings are preserved.
+fixed evaluation posture. The production orchestrator creates a shared workspace or selects one
+with `existingFeedWorkspaceResourceId`. It appends only its application-group reference and
+preserves the workspace's other references and properties. Shared Services manages an existing
+workspace's public access and feed/global Private Link only when those options are explicitly
+selected; otherwise those settings are preserved.
 
 The dedicated PoC orchestrator creates its VNet, private subnet, NSG, NAT Gateway, Standard public
 IP, and persistent AVD resources in one consolidated resource group. The production host-pool
@@ -462,7 +462,7 @@ Subscription
 
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of the shared Recovery Services vault for pooled FSLogix Azure Files backup. Use the `fslogixBackupVaultResourceId` output from AVD Shared Services. When empty and backup is selected, the entry orchestrator asks its Shared Services phase to create the vault and policy with host-pool-specific naming.
+- **Description:** Resource ID of the shared Recovery Services vault for pooled FSLogix Azure Files backup. Use the `fslogixBackupVaultResourceId` output from AVD Shared Services. When empty and backup is selected, the entry orchestrator asks its Shared Services phase to create the shared vault and policy.
 
 #### `existingFilesBackupPolicyName`
 
@@ -613,10 +613,10 @@ are references and a fallback when the Template Spec UI is unavailable.
     "contentVersion": "1.0.0.0",
     "parameters": {
         "identitySolution": { "value": "EntraId" },
-        "identifier": { "value": "poc" },
+        "identifier": { "value": "dept1" },
         "virtualMachineAdminUserName": { "value": "avdAdmin" },
         "virtualMachineAdminPassword": { "value": "<REDACTED>" },
-        "virtualMachineNamePrefix": { "value": "avd-poc" },
+        "virtualMachineNamePrefix": { "value": "avd-dept1" },
         "virtualMachineSize": { "value": "Standard_D4ads_v5" },
         "virtualMachineCount": { "value": 2 },
         "virtualMachineSubnetResourceId": {

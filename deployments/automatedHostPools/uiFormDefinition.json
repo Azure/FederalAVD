@@ -4282,7 +4282,6 @@
 				"location": "[steps('hosts').location.name]",
 				"controlPlaneLocation": "[steps('controlPlane').controlPlaneLocation.name]",
 				"existingFeedWorkspaceResourceId": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), steps('controlPlane').workspace.existingWorkspace, '')]",
-				"workspaceCreationScope": "Shared",
 				"workspaceFriendlyName": "[if(or(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))), equals(steps('controlPlane').workspace.createOption, 'new')), steps('controlPlane').workspace.workspaceFriendlyName, '')]",
 				"avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.privateRoutes, 'None')]",
 				"hostPoolPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostPoolSubnet.id, '')]",

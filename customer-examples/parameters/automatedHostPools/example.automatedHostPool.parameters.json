@@ -10,9 +10,6 @@
         "identifier": {
             "value": "autodev"
         },
-        "workspaceCreationScope": {
-            "value": "Shared"
-        },
         "location": {
             "value": "eastus"
         },

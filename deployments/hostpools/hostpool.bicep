@@ -170,13 +170,6 @@ param controlPlaneSubscriptionId string = ''
 @description('Optional. The resource Id of an existing AVD workspace to which the desktop application group will be registered.')
 param existingFeedWorkspaceResourceId string = ''
 
-@allowed([
-  'Shared'
-  'HostPoolSpecific'
-])
-@description('Optional. Controls naming when a new AVD workspace is created. Shared preserves the production-compatible region-level name. HostPoolSpecific includes the host-pool identifier for an isolated PoC. Ignored when existingFeedWorkspaceResourceId is supplied.')
-param workspaceCreationScope string = 'Shared'
-
 @description('Optional. The friendly name for the AVD workspace that is displayed in the client.')
 param workspaceFriendlyName string = ''
 
@@ -729,17 +722,10 @@ var deploySharedFilesBackup = recoveryServices && !contains(hostPoolType, 'Perso
 ) && empty(existingFilesBackupVaultResourceId)
 var createFeedWorkspace = empty(existingFeedWorkspaceResourceId)
 var manageFeedWorkspace = createFeedWorkspace || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
-var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'
 var deploySharedMonitoring = enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)
 var deploySharedOperationsResourceGroup = deploySecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup
 var sharedOperationsResourceGroupName = naming.outputs.sharedResourceGroupOperations
 var sharedMonitoringResourceGroupName = naming.outputs.sharedResourceGroupMonitoring
-var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace
-  ? naming.outputs.resourceGroupControlPlane
-  : naming.outputs.sharedResourceGroupControlPlane
-var sharedWorkspaceName = createHostPoolSpecificWorkspace
-  ? naming.outputs.workspaceName
-  : naming.outputs.sharedWorkspaceName
 var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup)
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
@@ -808,15 +794,15 @@ var sharedEncryptionKeyVaultResourceId = deploySharedEncryptionKeyVault
   ? sharedKeyVaults.outputs.encryptionKeyVaultResourceId
   : existingEncryptionKeyVaultResourceId
 
-module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = {
+module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if (manageFeedWorkspace) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     workspaceMode: createFeedWorkspace ? 'Create' : 'Adopt'
     manageWorkspace: manageFeedWorkspace
-    workspaceName: sharedWorkspaceName
+    workspaceName: naming.outputs.sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
-    workspaceResourceGroupName: sharedWorkspaceResourceGroupName
-    createWorkspaceResourceGroup: !createHostPoolSpecificWorkspace
+    workspaceResourceGroupName: naming.outputs.sharedResourceGroupControlPlane
+    createWorkspaceResourceGroup: true
     workspaceLocation: effectiveControlPlaneRegion
     workspaceFriendlyName: workspaceFriendlyName
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
@@ -843,7 +829,7 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
 }
 
 var sharedWorkspaceResourceId = manageFeedWorkspace
-  ? sharedAvdWorkspace.outputs.workspaceResourceId
+  ? sharedAvdWorkspace!.outputs.workspaceResourceId
   : existingFeedWorkspaceResourceId
 
 module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deploySharedFilesBackup) {
@@ -1829,6 +1815,12 @@ output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
   : effectiveFslogixExistingLocalStorageAccountResourceIds
 output hostResouceGroupId string = subscriptionResourceId('Microsoft.Resources/resourceGroups', effectiveHostsResourceGroup)
 output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames
-output workspaceFeedPrivateEndpointResourceId string = sharedAvdWorkspace.outputs.workspaceFeedPrivateEndpointResourceId
-output globalFeedWorkspaceResourceId string = sharedAvdWorkspace.outputs.globalWorkspaceResourceId
-output globalFeedPrivateEndpointResourceId string = sharedAvdWorkspace.outputs.globalFeedPrivateEndpointResourceId
+output workspaceFeedPrivateEndpointResourceId string = manageFeedWorkspace
+  ? sharedAvdWorkspace!.outputs.workspaceFeedPrivateEndpointResourceId
+  : ''
+output globalFeedWorkspaceResourceId string = manageFeedWorkspace
+  ? sharedAvdWorkspace!.outputs.globalWorkspaceResourceId
+  : existingGlobalFeedResourceId
+output globalFeedPrivateEndpointResourceId string = manageFeedWorkspace
+  ? sharedAvdWorkspace!.outputs.globalFeedPrivateEndpointResourceId
+  : ''

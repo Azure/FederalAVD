@@ -27,6 +27,14 @@ First decide whether you are performing a bounded evaluation or designing produc
 > customer-managed encryption, and other security and operational choices. Start a new pilot or
 > production design with the full **AVD Host Pool** form.
 
+> **Azure Policy compatibility:** The Standard PoC intentionally omits many enterprise and Zero
+> Trust controls.
+> Common Azure Policy guardrails may deny the deployment in federal, regulated, or centrally
+> governed subscriptions, including requirements for Private Endpoints, customer-managed keys,
+> approved hub networking, restricted public access, centralized diagnostics, backup, tags, or
+> approved SKUs. Deploy it only in an approved evaluation subscription or with a documented policy
+> exception. Do not weaken production guardrails to make this PoC deploy.
+
 Both full host-pool entry templates are peer orchestrators that directly compose the same workspace,
 Key Vault, monitoring, and backup capability modules used by the standalone Shared Services
 deployment before calling their pool-specific modules. A separate Step 1 deployment is therefore
@@ -132,7 +140,7 @@ with the full **AVD Host Pool** form.
 > creates the Disk Encryption Set that Step 3 uses for build VM disks and published gallery image
 > versions. Step 3 remains optional when Image Management is used only to host runtime artifacts.
 > This sequencing requirement does not apply to a self-contained Step 4 deployment, whose
-> orchestrator can create host-pool-specific Shared Services resources. A policy-required or
+> orchestrator can create required Shared Services resources inline. A policy-required or
 > centralized Log Analytics Workspace is another reason to deploy Step 1 first. For IL6 and IL7,
 > Step 1 is the recommended
 > baseline even when an individual template could deploy without it; omit it only when approved

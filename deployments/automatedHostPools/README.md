@@ -38,9 +38,8 @@ The recommended first-deployment workflow is:
 1. Publish the **AVD Automated Host Pool** Template Spec with `tools\New-TemplateSpecs.ps1`.
    For enterprise shared resources, also publish and deploy **AVD Shared Services** first.
 2. Open **AVD Automated Host Pool** under **Template Specs** in the Azure portal and select the
-  credentials Key Vault, subnet, image, availability model, storage, monitoring, and other optional
-  capabilities. A PoC sets `workspaceCreationScope` to `HostPoolSpecific`; a production deployment
-  uses the default `Shared` scope and creates or selects shared resources.
+  credentials Key Vault, workspace, subnet, image, availability model, storage, monitoring, and
+  other optional capabilities.
 3. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
   template and parameters** and store the generated parameter file under
   `customer\parameters\automatedHostPools\`, which is intentionally excluded from git.
@@ -59,7 +58,7 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
   on an existing workspace, plus monitoring, Key Vaults, and shared FSLogix backup resources. An
   existing workspace selected with `None` or `HostPool` private routes bypasses this workspace PUT
   and is updated only by the later application-group association. New workspaces use shared naming
-  by default; PoC deployments explicitly request host-pool-specific naming.
+  so they can be reused across host pools.
 2. Resolves the effective Shared Services resource IDs before deploying pool-specific resources.
 3. Resolves names and creates the pool-specific control-plane, session-host, storage, and
   deployment-helper resource groups.
@@ -147,8 +146,8 @@ controlled automated-host-pool test before being used for production scale-out r
 The portal form does not ask for resource group names. Like the standard host-pool deployment in
 this repository, the automated deployment derives them from the selected naming convention:
 
-- For a PoC, set `workspaceCreationScope` to `HostPoolSpecific`; the orchestrator then passes
-  host-pool-specific naming overrides to Shared Services.
+- A new workspace uses shared, region-level production naming. Select an existing workspace when
+  multiple host pools share it.
 - For production reuse, set `existingFeedWorkspaceResourceId` to the Shared Services-owned
   workspace. The host pool and application group remain pool-specific resources rather than
   becoming owners of the workspace resource group.
@@ -241,11 +240,11 @@ which includes AVD Agent installation and registration.
 ## Detailed Deployment Instructions
 
 An automated host pool requires a credentials Key Vault, but the entry orchestrator can create a
-host-pool-specific vault through Shared Services for a PoC or adopt an enterprise Shared Services
-vault. The preferred path for every first deployment is the Template Spec portal UI. Its resource
-pickers, conditional fields, and validation guide the administrator to a working deployment and
-produce the parameter file used for subsequent PowerShell or CI/CD deployments. Do not start a
-first deployment by hand-authoring a parameter file unless the Template Spec UI is unavailable.
+shared vault through Shared Services or adopt an existing enterprise vault. The preferred path for
+every first deployment is the Template Spec portal UI. Its resource pickers, conditional fields,
+and validation guide the administrator to a working deployment and produce the parameter file used
+for subsequent PowerShell or CI/CD deployments. Do not start a first deployment by hand-authoring
+a parameter file unless the Template Spec UI is unavailable.
 
 > **Application delivery:** Prefer Compute Gallery VM Applications for software that has meaningful
 > install and remove behavior. Use Session Host Customizations for provisioning-time configuration,
@@ -443,7 +442,7 @@ Some differences are deployment-workflow boundaries rather than missing session-
 | Standard deployment workflow | Automated deployment workflow |
 | --- | --- |
 | Create or select credentials and encryption Key Vaults | The orchestrator uses Shared Services to create shared resources or adopt existing production vaults. |
-| Create or select the monitoring stack | The orchestrator uses Shared Services to create host-pool-specific monitoring or adopt an existing AVD Insights DCR, Log Analytics workspace, and DCE. |
+| Create or select the monitoring stack | The orchestrator uses Shared Services to create shared monitoring or adopt an existing AVD Insights DCR, Log Analytics workspace, and DCE. |
 | Create or select a Recovery Services vault and configure backup | The orchestrator uses Shared Services to create or adopt the shared FSLogix vault and policy, then the core registers newly deployed shares. Service-managed pooled VMs are replaceable and are not individually backed up by this deployment. |
 
 See the policy module's [capability matrix](policy/README.md#capability-matrix) and
@@ -485,10 +484,8 @@ supports the same route choices as the standard host pool:
 - `All`: adds or reuses the single global-feed workspace and its `global` endpoint for private
   initial feed discovery.
 
-When `existingFeedWorkspaceResourceId` is empty, `workspaceCreationScope` controls the names passed
-to Shared Services. The default `Shared` value creates the production-compatible region-level
-workspace and control-plane resource group. Set it to `HostPoolSpecific` for an isolated PoC whose
-workspace and control-plane resource group include the host-pool identifier. Before redeploying an
+When `existingFeedWorkspaceResourceId` is empty, the orchestrator creates a workspace and
+control-plane resource group with shared, region-level production names. Before redeploying an
 older environment that must retain its existing workspace, set `existingFeedWorkspaceResourceId`
 to that workspace's resource ID.
 

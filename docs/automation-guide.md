@@ -303,9 +303,9 @@ These values are typically pre-populated in the image build parameter files afte
 
 Both entry templates remain the published Template Spec paths. Each calls Shared Services and then
 its pool-specific control-plane, storage, host-management, and policy modules. New workspaces use
-shared production names by default. For PoC
-deployments, set `workspaceCreationScope` to `HostPoolSpecific`. For production deployments, create
-shared resources or supply existing Shared Services output IDs so the orchestrator adopts them.
+shared production names. For production deployments, create shared resources or supply existing
+Shared Services output IDs so the orchestrator adopts them. Use the separate **AVD Standard PoC**
+entry template only for a disposable evaluation that ends in teardown.
 
 ```text
 Inputs from Step 4:

@@ -82,25 +82,26 @@ Describe 'AVD workspace ownership contract' {
         $automatedControlPlane = Get-Content -LiteralPath $automatedControlPlanePath -Raw
     }
 
-    It 'uses the host-pool identifier when host-pool-specific workspace naming is selected' {
+    It 'keeps host-pool-specific workspace naming exclusive to the dedicated PoC' {
         $namingModule | Should Match "cnv\(cnv_components, cnv_delimiter, cnv_rtCodes\.workspaces, identifier, cnv_cploc"
         $namingModule | Should Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
-        $standardBicep | Should Match "param workspaceCreationScope string = 'Shared'"
-        $automatedBicep | Should Match "param workspaceCreationScope string = 'Shared'"
-        $standardBicep | Should Match "var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'"
-        $automatedBicep | Should Match "var createHostPoolSpecificWorkspace = createFeedWorkspace && workspaceCreationScope == 'HostPoolSpecific'"
-        $standardBicep | Should Match 'var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace'
-        $standardBicep | Should Match 'createHostPoolSpecificWorkspace\s+\? naming\.outputs\.resourceGroupControlPlane'
-        $automatedBicep | Should Match 'var sharedWorkspaceResourceGroupName = createHostPoolSpecificWorkspace'
-        $automatedBicep | Should Match '\? naming\.outputs\.resourceGroupControlPlane'
-        $standardBicep | Should Match 'var sharedWorkspaceName = createHostPoolSpecificWorkspace'
-        $automatedBicep | Should Match 'var sharedWorkspaceName = createHostPoolSpecificWorkspace'
-        (Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.workspaceCreationScope | Should Be 'Shared'
-        (Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.workspaceCreationScope | Should Be 'Shared'
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator | Should Not Match 'workspaceCreationScope'
+            $orchestrator | Should Not Match 'createHostPoolSpecificWorkspace'
+            $orchestrator | Should Match 'workspaceName: naming\.outputs\.sharedWorkspaceName'
+            $orchestrator | Should Match 'workspaceResourceGroupName: naming\.outputs\.sharedResourceGroupControlPlane'
+            $orchestrator | Should Match 'createWorkspaceResourceGroup: true'
+        }
+        ((Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.PSObject.Properties.Name -join ',') |
+            Should Not Match 'workspaceCreationScope'
+        ((Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.PSObject.Properties.Name -join ',') |
+            Should Not Match 'workspaceCreationScope'
         $pocBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.bicep') -Raw
         $pocBicep | Should Match 'workspaceName: naming\.outputs\.workspaceName'
         $pocBicep | Should Match 'workspaceResourceGroupName: resourceGroupName'
-        (Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json') -Raw | ConvertFrom-Json).parameters.workspaceCreationScope.value | Should Be 'Shared'
+        $automatedParameters = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json') -Raw |
+            ConvertFrom-Json
+        ($automatedParameters.parameters.PSObject.Properties.Name -join ',') | Should Not Match 'workspaceCreationScope'
     }
 
     It 'composes shared capabilities directly without nesting the Shared Services entry template' {
@@ -141,9 +142,17 @@ Describe 'AVD workspace ownership contract' {
             $orchestrator | Should Match "var createFeedWorkspace = empty\(existingFeedWorkspaceResourceId\)"
             $orchestrator |
                 Should Match "var manageFeedWorkspace = createFeedWorkspace \|\| contains\(\['FeedAndHostPool', 'All'\], avdPrivateLinkPrivateRoutes\)"
+            $orchestrator |
+                Should Match "module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace\.bicep' = if \(manageFeedWorkspace\)"
             $orchestrator | Should Match 'manageWorkspace: manageFeedWorkspace'
             $orchestrator |
-                Should Match '(sharedWorkspaceResourceId|effectiveFeedWorkspaceResourceId) = manageFeedWorkspace\s+\? sharedAvdWorkspace\.outputs\.workspaceResourceId\s+: existingFeedWorkspaceResourceId'
+                Should Match '(sharedWorkspaceResourceId|effectiveFeedWorkspaceResourceId) = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.workspaceResourceId\s+: existingFeedWorkspaceResourceId'
+            $orchestrator |
+                Should Match 'output workspaceFeedPrivateEndpointResourceId string = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.workspaceFeedPrivateEndpointResourceId\s+:'
+            $orchestrator |
+                Should Match 'output globalFeedWorkspaceResourceId string = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.globalWorkspaceResourceId\s+: existingGlobalFeedResourceId'
+            $orchestrator |
+                Should Match 'output globalFeedPrivateEndpointResourceId string = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.globalFeedPrivateEndpointResourceId\s+:'
         }
     }
 
@@ -493,6 +502,27 @@ Describe 'Standard host-pool PoC form' {
         $flowContent | Should Match '(?i)\bpilot\b'
         $flowContent | Should Match '(?i)start a new'
         $flowContent | Should Match '(?i)full AVD Host Pool'
+    }
+
+    It 'warns that common Azure Policy guardrails may deny the PoC' {
+        $basicsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $policyWarning = $basicsStep.elements |
+            Where-Object { $_.name -eq 'policyCompatibilityWarning' }
+        $documentation = @(
+            Get-Content -LiteralPath $quickStartPath -Raw
+            Get-Content -LiteralPath $hostPoolReadmePath -Raw
+        )
+
+        $policyWarning.type | Should Be 'Microsoft.Common.InfoBox'
+        $policyWarning.options.style | Should Be 'Warning'
+        $policyWarning.options.text | Should Match '(?i)Azure Policy guardrails'
+        $policyWarning.options.text | Should Match '(?i)may deny this deployment'
+        $policyWarning.options.text | Should Match '(?i)Do not weaken production guardrails'
+        foreach ($content in $documentation) {
+            $content | Should Match '(?i)Azure Policy guardrails'
+            $content | Should Match '(?i)may deny the deployment'
+            $content | Should Match '(?i)Do not weaken production guardrails'
+        }
     }
 
     It 'fixes the isolated PoC ownership and security posture' {

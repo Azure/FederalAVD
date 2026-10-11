@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "17339427414546022048"
+      "templateHash": "16692145372486751921"
     }
   },
   "definitions": {
@@ -468,17 +468,6 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. The resource Id of an existing AVD workspace to which the desktop application group will be registered."
-      }
-    },
-    "workspaceCreationScope": {
-      "type": "string",
-      "defaultValue": "Shared",
-      "allowedValues": [
-        "Shared",
-        "HostPoolSpecific"
-      ],
-      "metadata": {
-        "description": "Optional. Controls naming when a new AVD workspace is created. Shared preserves the production-compatible region-level name. HostPoolSpecific includes the host-pool identifier for an isolated PoC. Ignored when existingFeedWorkspaceResourceId is supplied."
       }
     },
     "workspaceFriendlyName": {
@@ -1494,7 +1483,6 @@
     "deploySharedFilesBackup": "[and(and(and(and(parameters('recoveryServices'), not(contains(parameters('hostPoolType'), 'Personal'))), parameters('deployFSLogixStorage')), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), empty(parameters('existingFilesBackupVaultResourceId')))]",
     "createFeedWorkspace": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
     "manageFeedWorkspace": "[or(variables('createFeedWorkspace'), contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')))]",
-    "createHostPoolSpecificWorkspace": "[and(variables('createFeedWorkspace'), equals(parameters('workspaceCreationScope'), 'HostPoolSpecific'))]",
     "deploySharedMonitoring": "[and(parameters('enableMonitoring'), empty(parameters('existingLogAnalyticsWorkspaceResourceId')))]",
     "deploySharedOperationsResourceGroup": "[or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup'))]",
     "sharedPrivateEndpoint": "[and(parameters('deployPrivateEndpoints'), or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup')))]",
@@ -3526,6 +3514,7 @@
       ]
     },
     "sharedAvdWorkspace": {
+      "condition": "[variables('manageFeedWorkspace')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('sharedAvdWorkspace-{0}', uniqueString('sharedAvdWorkspace', deployment().name))]",
@@ -3541,13 +3530,17 @@
           "manageWorkspace": {
             "value": "[variables('manageFeedWorkspace')]"
           },
-          "workspaceName": "[if(variables('createHostPoolSpecificWorkspace'), createObject('value', reference('naming').outputs.workspaceName.value), createObject('value', reference('naming').outputs.sharedWorkspaceName.value))]",
+          "workspaceName": {
+            "value": "[reference('naming').outputs.sharedWorkspaceName.value]"
+          },
           "workspaceResourceId": {
             "value": "[parameters('existingFeedWorkspaceResourceId')]"
           },
-          "workspaceResourceGroupName": "[if(variables('createHostPoolSpecificWorkspace'), createObject('value', reference('naming').outputs.resourceGroupControlPlane.value), createObject('value', reference('naming').outputs.sharedResourceGroupControlPlane.value))]",
+          "workspaceResourceGroupName": {
+            "value": "[reference('naming').outputs.sharedResourceGroupControlPlane.value]"
+          },
           "createWorkspaceResourceGroup": {
-            "value": "[not(variables('createHostPoolSpecificWorkspace'))]"
+            "value": true
           },
           "workspaceLocation": "[if(empty(parameters('controlPlaneLocation')), createObject('value', reference('vmVirtualNetwork', '2023-04-01', 'full').location), createObject('value', parameters('controlPlaneLocation')))]",
           "workspaceFriendlyName": {
@@ -21860,15 +21853,15 @@
     },
     "workspaceFeedPrivateEndpointResourceId": {
       "type": "string",
-      "value": "[reference('sharedAvdWorkspace').outputs.workspaceFeedPrivateEndpointResourceId.value]"
+      "value": "[if(variables('manageFeedWorkspace'), reference('sharedAvdWorkspace').outputs.workspaceFeedPrivateEndpointResourceId.value, '')]"
     },
     "globalFeedWorkspaceResourceId": {
       "type": "string",
-      "value": "[reference('sharedAvdWorkspace').outputs.globalWorkspaceResourceId.value]"
+      "value": "[if(variables('manageFeedWorkspace'), reference('sharedAvdWorkspace').outputs.globalWorkspaceResourceId.value, parameters('existingGlobalFeedResourceId'))]"
     },
     "globalFeedPrivateEndpointResourceId": {
       "type": "string",
-      "value": "[reference('sharedAvdWorkspace').outputs.globalFeedPrivateEndpointResourceId.value]"
+      "value": "[if(variables('manageFeedWorkspace'), reference('sharedAvdWorkspace').outputs.globalFeedPrivateEndpointResourceId.value, '')]"
     }
   }
 }

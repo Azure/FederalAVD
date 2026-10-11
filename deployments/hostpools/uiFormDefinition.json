@@ -5512,7 +5512,6 @@
         "controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
         "controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
         "existingFeedWorkspaceResourceId": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), steps('controlPlane').workspace.existingWorkspace, '')]",
-        "workspaceCreationScope": "Shared",
         "workspaceFriendlyName": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), '', steps('controlPlane').naming.workspaceFriendlyName)]",
         "desktopFriendlyName": "[steps('controlPlane').naming.desktopFriendlyName]",
         "hostPoolType": "[if(equals(steps('controlPlane').hostPool.type, 'Pooled'), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.loadBalancerAlgorithm), concat(steps('controlPlane').hostPool.type, ' ', steps('controlPlane').hostPool.assignmentType))]",

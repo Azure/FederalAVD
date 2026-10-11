@@ -3,6 +3,14 @@
 The AVD Standard PoC is a purpose-built, disposable Azure Virtual Desktop deployment for
 demonstrations and first-step validation. It is not a pilot or production starting point.
 
+> [!WARNING]
+> This streamlined PoC intentionally omits many enterprise and Zero Trust controls.
+> Common Azure Policy guardrails may deny the deployment in federal, regulated, or centrally
+> governed subscriptions, including requirements for Private Endpoints, customer-managed keys,
+> approved hub networking, restricted public access, centralized diagnostics, backup, tags, or
+> approved SKUs. Deploy it only in an approved evaluation subscription or with a documented policy
+> exception. Do not weaken production guardrails to make this PoC deploy.
+
 The purpose-built [uiFormDefinition.json](./uiFormDefinition.json) uses the dedicated
 [hostpoolPoc.bicep](./hostpoolPoc.bicep) entry orchestrator:
 
