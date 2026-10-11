@@ -454,6 +454,20 @@ Describe 'Standard host-pool PoC form' {
         ($pocForm.view.properties.steps.name -join ',') | Should Be 'basics,sessionHosts,options'
     }
 
+    It 'requires desktop access groups on the first page' {
+        $basicsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $groupPicker = $basicsStep.elements | Where-Object { $_.name -eq 'groupPickerBlade' }
+        $groupSelector = $basicsStep.elements | Where-Object { $_.name -eq 'groupSelector' }
+
+        $groupPicker.type | Should Be 'Microsoft.Solutions.BladeInvokeControl'
+        $groupPicker.bladeReference.parameters.selectionMinimum | Should Be 1
+        $groupSelector.type | Should Be 'Microsoft.Common.Selector'
+        $groupSelector.constraints.required | Should Be $true
+        $groupSelector.value | Should Be "[steps('basics').groupPickerBlade.transformed.groups]"
+        $pocOutputs.appGroupSecurityGroups |
+            Should Be "[steps('basics').groupPickerBlade.transformed.groups]"
+    }
+
     It 'describes the PoC as a disposable demo that ends before pilot or production' {
         $flowContent = @(
             $pocFormJson

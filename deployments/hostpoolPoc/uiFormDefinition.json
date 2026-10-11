@@ -108,8 +108,12 @@
               "type": "Microsoft.Common.Selector",
               "label": "Desktop User Groups",
               "keyPath": "name",
-              "defaultValue": {},
+              "descriptionKeyPath": "id",
               "value": "[steps('basics').groupPickerBlade.transformed.groups]",
+              "barColor": "[if(empty(steps('basics').groupPickerBlade.transformed.groups), '#FF0000', '#7FBA00')]",
+              "constraints": {
+                "required": true
+              },
               "link": "[if(empty(steps('basics').groupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
             }
           ]
