@@ -54,17 +54,16 @@ func virtualNetworkResourceIdFromSubnet(subnetResourceId string) string =>
 
 var workspaceFeedVirtualNetworkResourceId = virtualNetworkResourceIdFromSubnet(workspaceFeedPrivateEndpointSubnetResourceId)
 var globalFeedVirtualNetworkResourceId = virtualNetworkResourceIdFromSubnet(globalFeedPrivateEndpointSubnetResourceId)
-var privateEndpointVirtualNetworkResourceIds = union(
-  !empty(workspaceFeedVirtualNetworkResourceId) ? [workspaceFeedVirtualNetworkResourceId] : [],
-  !empty(globalFeedVirtualNetworkResourceId) ? [globalFeedVirtualNetworkResourceId] : []
-)
 
-resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = [
-  for virtualNetworkResourceId in privateEndpointVirtualNetworkResourceIds: {
-    name: last(split(virtualNetworkResourceId, '/'))
-    scope: resourceGroup(split(virtualNetworkResourceId, '/')[2], split(virtualNetworkResourceId, '/')[4])
-  }
-]
+resource workspaceFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (!empty(workspaceFeedVirtualNetworkResourceId)) {
+  name: last(split(workspaceFeedVirtualNetworkResourceId, '/'))
+  scope: resourceGroup(split(workspaceFeedVirtualNetworkResourceId, '/')[2], split(workspaceFeedVirtualNetworkResourceId, '/')[4])
+}
+
+resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (!empty(globalFeedVirtualNetworkResourceId)) {
+  name: last(split(globalFeedVirtualNetworkResourceId, '/'))
+  scope: resourceGroup(split(globalFeedVirtualNetworkResourceId, '/')[2], split(globalFeedVirtualNetworkResourceId, '/')[4])
+}
 
 var effectiveWorkspaceName = adoptWorkspace ? existingWorkspace!.name : workspaceName
 var effectiveWorkspaceSubscriptionId = adoptWorkspace ? split(workspaceResourceId, '/')[2] : subscription().subscriptionId
@@ -133,7 +132,7 @@ module workspaceFeedPrivateEndpoint '../../resourceModules/network/privateEndpoi
   scope: resourceGroup(effectiveWorkspaceSubscriptionId, effectiveWorkspaceResourceGroupName)
   params: {
     name: workspaceFeedPrivateEndpointName
-    location: privateEndpointVirtualNetworks[indexOf(privateEndpointVirtualNetworkResourceIds, workspaceFeedVirtualNetworkResourceId)].location
+    location: workspaceFeedVirtualNetwork!.location
     tags: union(
       { 'cm-resource-parent': workspace!.outputs.resourceId },
       tags[?'Microsoft.Network/privateEndpoints'] ?? {}
@@ -155,7 +154,7 @@ var effectiveGlobalWorkspaceResourceGroupName = adoptGlobalWorkspace
   : globalWorkspaceResourceGroupName
 var effectiveGlobalWorkspaceLocation = adoptGlobalWorkspace
   ? existingGlobalWorkspace!.location
-  : privateEndpointVirtualNetworks[indexOf(privateEndpointVirtualNetworkResourceIds, globalFeedVirtualNetworkResourceId)].location
+  : !empty(globalFeedVirtualNetworkResourceId) ? globalFeedVirtualNetwork!.location : workspaceLocation
 var effectiveGlobalWorkspaceTags = adoptGlobalWorkspace
   ? existingGlobalWorkspace!.tags ?? {}
   : tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
@@ -220,7 +219,7 @@ module globalFeedPrivateEndpoint '../../resourceModules/network/privateEndpoints
   scope: resourceGroup(effectiveGlobalWorkspaceSubscriptionId, effectiveGlobalWorkspaceResourceGroupName)
   params: {
     name: globalFeedPrivateEndpointName
-    location: privateEndpointVirtualNetworks[indexOf(privateEndpointVirtualNetworkResourceIds, globalFeedVirtualNetworkResourceId)].location
+    location: globalFeedVirtualNetwork!.location
     tags: union(
       { 'cm-resource-parent': globalWorkspace!.outputs.resourceId },
       tags[?'Microsoft.Network/privateEndpoints'] ?? {}

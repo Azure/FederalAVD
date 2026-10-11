@@ -22,22 +22,25 @@ Describe 'Automated host-pool AVD Private Link virtual networks' {
     }
 
     It 'keeps only the host-pool connection virtual network in the automated core' {
-        $controlPlaneModule | Should Match 'var privateEndpointVirtualNetworkResourceIds = !empty\(hostPoolPrivateEndpointVirtualNetworkResourceId\)'
-        $controlPlaneModule | Should Match "resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = \["
+        $controlPlaneModule | Should Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $controlPlaneModule | Should Match 'location: hostPoolPrivateEndpointVirtualNetwork!\.location'
+        $controlPlaneModule | Should Not Match 'indexOf\('
         $controlPlaneModule | Should Not Match 'workspaceFeedPrivateEndpoint'
         $controlPlaneModule | Should Not Match 'globalFeedPrivateEndpoint'
     }
 
     It 'keeps only the host-pool connection virtual network in the standard core' {
-        $standardControlPlaneModule | Should Match 'var privateEndpointVirtualNetworkResourceIds = !empty\(hostPoolPrivateEndpointVirtualNetworkResourceId\)'
-        $standardControlPlaneModule | Should Match "resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = \["
+        $standardControlPlaneModule | Should Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $standardControlPlaneModule | Should Match 'location: hostPoolPrivateEndpointVirtualNetwork!\.location'
+        $standardControlPlaneModule | Should Not Match 'indexOf\('
         $standardControlPlaneModule | Should Not Match 'workspaceFeedPrivateEndpoint'
         $standardControlPlaneModule | Should Not Match 'globalFeedPrivateEndpoint'
     }
 
-    It 'deduplicates workspace feed and global-feed virtual networks in Shared Services' {
-        $sharedWorkspaceModule | Should Match 'var privateEndpointVirtualNetworkResourceIds = union\('
-        $sharedWorkspaceModule | Should Match "resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = \["
+    It 'uses independent conditional workspace feed and global-feed virtual networks in Shared Services' {
+        $sharedWorkspaceModule | Should Match "resource workspaceFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $sharedWorkspaceModule | Should Match "resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $sharedWorkspaceModule | Should Not Match 'indexOf\('
     }
 }
 

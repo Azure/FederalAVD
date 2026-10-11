@@ -433,7 +433,8 @@ Describe 'Standard host-pool PoC form' {
         $azureFilesBicepPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep'
         $pocFormJson = Get-Content -LiteralPath $pocFormPath -Raw
         $pocForm = Get-Content -LiteralPath $pocFormPath -Raw | ConvertFrom-Json
-        $hostPoolTemplate = Get-Content -LiteralPath $hostPoolTemplatePath -Raw | ConvertFrom-Json
+        $hostPoolTemplateJson = Get-Content -LiteralPath $hostPoolTemplatePath -Raw
+        $hostPoolTemplate = $hostPoolTemplateJson | ConvertFrom-Json
         $pocBicep = Get-Content -LiteralPath $pocBicepPath -Raw
         $azureFilesBicep = Get-Content -LiteralPath $azureFilesBicepPath -Raw
         $pocOutputs = $pocForm.view.outputs.parameters
@@ -638,5 +639,11 @@ Describe 'Standard host-pool PoC form' {
             Should Be $true
         ($pocParameters.parameters.PSObject.Properties.Name -notcontains 'virtualMachineSubnetResourceId') |
             Should Be $true
+    }
+
+    It 'does not emit invalid private-endpoint virtual network collection references' {
+        $hostPoolTemplateJson | Should Not Match 'privateEndpointVirtualNetworks'
+        $hostPoolTemplateJson |
+            Should Not Match "indexOf\(variables\('privateEndpointVirtualNetworkResourceIds'\)"
     }
 }

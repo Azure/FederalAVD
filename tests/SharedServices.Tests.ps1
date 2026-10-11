@@ -90,10 +90,12 @@ Describe 'Shared Services AVD workspace ownership' {
         $workspaceModule | Should Match 'scope: resourceGroup\(effectiveGlobalWorkspaceSubscriptionId, effectiveGlobalWorkspaceResourceGroupName\)'
     }
 
-    It 'deduplicates endpoint virtual networks and uses their actual locations' {
-        $workspaceModule | Should Match 'var privateEndpointVirtualNetworkResourceIds = union\('
-        $workspaceModule | Should Match "resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = \["
-        $workspaceModule | Should Match 'privateEndpointVirtualNetworks\[indexOf\('
+    It 'uses conditional endpoint virtual networks and their actual locations' {
+        $workspaceModule | Should Match "resource workspaceFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $workspaceModule | Should Match "resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $workspaceModule | Should Match 'location: workspaceFeedVirtualNetwork!\.location'
+        $workspaceModule | Should Match 'location: globalFeedVirtualNetwork!\.location'
+        $workspaceModule | Should Not Match 'indexOf\('
     }
 
     It 'uses each selected subnet parent virtual network location for PaaS private endpoints' {

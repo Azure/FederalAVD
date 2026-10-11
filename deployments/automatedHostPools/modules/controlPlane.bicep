@@ -148,16 +148,11 @@ func virtualNetworkResourceId(subnetResourceId string) string => join(take(split
 var hostPoolPrivateEndpointVirtualNetworkResourceId = deployHostPoolPrivateEndpoint
   ? virtualNetworkResourceId(hostPoolPrivateEndpointSubnetResourceId)
   : ''
-var privateEndpointVirtualNetworkResourceIds = !empty(hostPoolPrivateEndpointVirtualNetworkResourceId)
-  ? [hostPoolPrivateEndpointVirtualNetworkResourceId]
-  : []
 
-resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = [
-  for virtualNetworkId in privateEndpointVirtualNetworkResourceIds: {
-    name: last(split(virtualNetworkId, '/'))
-    scope: resourceGroup(split(virtualNetworkId, '/')[2], split(virtualNetworkId, '/')[4])
-  }
-]
+resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (deployHostPoolPrivateEndpoint) {
+  name: last(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/'))
+  scope: resourceGroup(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[2], split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[4])
+}
 
 func privateEndpointName(pattern string, resourceName string, subresource string, vnetName string) string => replace(
   replace(replace(pattern, 'SUBRESOURCE', subresource), 'RESOURCE', resourceName),
@@ -255,7 +250,7 @@ module hostPoolPrivateEndpoint '../../shared/modules/resourceModules/network/pri
   scope: resourceGroup(resourceGroupName)
   params: {
     name: privateEndpointName(privateEndpointNameConv, hostPoolName, 'connection', last(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')))
-    location: privateEndpointVirtualNetworks[indexOf(privateEndpointVirtualNetworkResourceIds, hostPoolPrivateEndpointVirtualNetworkResourceId)].location
+    location: hostPoolPrivateEndpointVirtualNetwork!.location
     tags: union(
       tags[?'Microsoft.Network/privateEndpoints'] ?? {},
       { 'cm-resource-parent': hostPool.outputs.resourceId }
