@@ -4155,15 +4155,6 @@
                   }
                 },
                 {
-                  "name": "existingWorkspaceOwnership",
-                  "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('controlPlane').workspace.createOption, 'update'), not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]",
-                  "options": {
-                    "style": "Warning",
-                    "text": "Carefully review changes to this existing workspace. It may be shared by other host pools, so changing its public network access or feed private endpoint can affect feed download and client connectivity for every host pool registered to it. This selection explicitly authorizes the deployment to apply those workspace-level changes in the selected subnet. Confirm ownership and coordinate the change before continuing. Existing application group references are preserved."
-                  }
-                },
-                {
                   "name": "avdPrivateLinkConfig",
                   "type": "Microsoft.Common.DropDown",
                   "label": "AVD Private Link Configuration",
@@ -4278,6 +4269,15 @@
                   "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]",
                   "options": {
                     "text": "Workspace Feed"
+                  }
+                },
+                {
+                  "name": "existingWorkspaceOwnership",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('controlPlane').workspace.createOption, 'update'), not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Carefully review changes to this existing workspace. It may be shared by other host pools, so changing its public network access or feed private endpoint can affect feed download and client connectivity for every host pool registered to it. This selection explicitly authorizes the deployment to apply those workspace-level changes in the selected subnet. Confirm ownership and coordinate the change before continuing. Existing application group references are preserved."
                   }
                 },
                 {
