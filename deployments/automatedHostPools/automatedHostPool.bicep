@@ -537,6 +537,7 @@ var existingSharedEncryptionKeyVaultResourceId = !empty(encryptionKeyVaultResour
   ? encryptionKeyVaultResourceId
   : fslogixEncryptionKeyVaultResourceId
 var deploySharedEncryptionKeyVault = encryptionKeyVaultIsRequired && empty(existingSharedEncryptionKeyVaultResourceId)
+var deploySharedKeyVaults = deploySharedSecretsKeyVault || deploySharedEncryptionKeyVault
 var fslogixBackupIsRequested = enableFSLogixBackup || !empty(existingFilesBackupVaultResourceId)
 var deploySharedFilesBackup = fslogixBackupIsRequested && deployFSLogixStorage && startsWith(
   fslogixStorageService,
@@ -562,8 +563,8 @@ module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
 }
 
 var deploySharedMonitoring = enableMonitoring && empty(logAnalyticsWorkspaceResourceId)
-var deploySharedOperationsResourceGroup = deploySharedSecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup
-var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedSecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup)
+var deploySharedOperationsResourceGroup = deploySharedKeyVaults || deploySharedFilesBackup
+var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedKeyVaults || deploySharedFilesBackup)
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
   params: {
@@ -587,7 +588,7 @@ var effectiveDataCollectionEndpointResourceId = enableMonitoring
   ? (deploySharedMonitoring ? sharedMonitoring!.outputs.dataCollectionEndpointResourceId : dataCollectionEndpointResourceId)
   : ''
 
-module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
+module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = if (deploySharedKeyVaults) {
   params: {
     resourceGroupName: naming.outputs.sharedResourceGroupOperations
     deploySecretsKeyVault: deploySharedSecretsKeyVault
@@ -615,10 +616,10 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
 }
 
 var effectiveCredentialsKeyVaultResourceId = deploySharedSecretsKeyVault
-  ? sharedKeyVaults.outputs.secretsKeyVaultResourceId
+  ? sharedKeyVaults!.outputs.secretsKeyVaultResourceId
   : credentialsKeyVaultResourceId
 var effectiveEncryptionKeyVaultResourceId = deploySharedEncryptionKeyVault
-  ? sharedKeyVaults.outputs.encryptionKeyVaultResourceId
+  ? sharedKeyVaults!.outputs.encryptionKeyVaultResourceId
   : existingSharedEncryptionKeyVaultResourceId
 var effectiveDiskEncryptionKeyVaultResourceId = deployDiskEncryptionSet
   ? (!empty(encryptionKeyVaultResourceId) ? encryptionKeyVaultResourceId : effectiveEncryptionKeyVaultResourceId)

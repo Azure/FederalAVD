@@ -122,10 +122,25 @@ Describe 'AVD workspace ownership contract' {
     }
 
     It 'enables Shared Services private endpoints for new Key Vaults or backup vaults' {
-        $standardBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySecretsKeyVault \|\| deploySharedEncryptionKeyVault \|\| deploySharedFilesBackup\)'
-        $automatedBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedSecretsKeyVault \|\| deploySharedEncryptionKeyVault \|\| deploySharedFilesBackup\)'
+        $standardBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
+        $automatedBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
         $standardBicep | Should Match 'privateEndpoint: sharedPrivateEndpoint'
         $automatedBicep | Should Match 'privateEndpoint: sharedPrivateEndpoint'
+    }
+
+    It 'skips the shared Key Vault orchestration when both vaults are existing or unnecessary' {
+        $standardBicep |
+            Should Match 'var deploySharedKeyVaults = deploySecretsKeyVault \|\| deploySharedEncryptionKeyVault'
+        $automatedBicep |
+            Should Match 'var deploySharedKeyVaults = deploySharedSecretsKeyVault \|\| deploySharedEncryptionKeyVault'
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator |
+                Should Match "module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults\.bicep' = if \(deploySharedKeyVaults\)"
+            $orchestrator |
+                Should Match 'sharedKeyVaults!\.outputs\.secretsKeyVaultResourceId'
+            $orchestrator |
+                Should Match 'sharedKeyVaults!\.outputs\.encryptionKeyVaultResourceId'
+        }
     }
 
     It 'keeps shared workspace and feed endpoint deployment out of both cores' {

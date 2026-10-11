@@ -716,6 +716,7 @@ var cmkIsRequested = contains(keyManagementStorage, 'CustomerManaged') || contai
   'CustomerManaged'
 ) || contains(keyManagementDisks, 'CustomerManaged') || confidentialVMOSDiskEncryption
 var deploySharedEncryptionKeyVault = cmkIsRequested && empty(existingEncryptionKeyVaultResourceId)
+var deploySharedKeyVaults = deploySecretsKeyVault || deploySharedEncryptionKeyVault
 var deploySharedFilesBackup = recoveryServices && !contains(hostPoolType, 'Personal') && deployFSLogixStorage && startsWith(
   fslogixStorageService,
   'AzureFiles'
@@ -723,10 +724,10 @@ var deploySharedFilesBackup = recoveryServices && !contains(hostPoolType, 'Perso
 var createFeedWorkspace = empty(existingFeedWorkspaceResourceId)
 var manageFeedWorkspace = createFeedWorkspace || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
 var deploySharedMonitoring = enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)
-var deploySharedOperationsResourceGroup = deploySecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup
+var deploySharedOperationsResourceGroup = deploySharedKeyVaults || deploySharedFilesBackup
 var sharedOperationsResourceGroupName = naming.outputs.sharedResourceGroupOperations
 var sharedMonitoringResourceGroupName = naming.outputs.sharedResourceGroupMonitoring
-var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySecretsKeyVault || deploySharedEncryptionKeyVault || deploySharedFilesBackup)
+var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedKeyVaults || deploySharedFilesBackup)
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
@@ -757,7 +758,7 @@ var sharedDataCollectionEndpointResourceId = enableMonitoring
       : existingDataCollectionEndpointResourceId)
   : ''
 
-module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
+module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = if (deploySharedKeyVaults) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     resourceGroupName: sharedOperationsResourceGroupName
@@ -788,10 +789,10 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
 }
 
 var sharedCredentialsKeyVaultResourceId = deploySecretsKeyVault
-  ? sharedKeyVaults.outputs.secretsKeyVaultResourceId
+  ? sharedKeyVaults!.outputs.secretsKeyVaultResourceId
   : existingCredentialsKeyVaultResourceId
 var sharedEncryptionKeyVaultResourceId = deploySharedEncryptionKeyVault
-  ? sharedKeyVaults.outputs.encryptionKeyVaultResourceId
+  ? sharedKeyVaults!.outputs.encryptionKeyVaultResourceId
   : existingEncryptionKeyVaultResourceId
 
 module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if (manageFeedWorkspace) {

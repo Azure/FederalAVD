@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "16692145372486751921"
+      "templateHash": "1026626293879718057"
     }
   },
   "definitions": {
@@ -1480,12 +1480,13 @@
     ],
     "cmkIsRequested": "[or(or(or(contains(parameters('keyManagementStorage'), 'CustomerManaged'), contains(parameters('keyManagementRecoveryServicesVault'), 'CustomerManaged')), contains(parameters('keyManagementDisks'), 'CustomerManaged')), parameters('confidentialVMOSDiskEncryption'))]",
     "deploySharedEncryptionKeyVault": "[and(variables('cmkIsRequested'), empty(parameters('existingEncryptionKeyVaultResourceId')))]",
+    "deploySharedKeyVaults": "[or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault'))]",
     "deploySharedFilesBackup": "[and(and(and(and(parameters('recoveryServices'), not(contains(parameters('hostPoolType'), 'Personal'))), parameters('deployFSLogixStorage')), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), empty(parameters('existingFilesBackupVaultResourceId')))]",
     "createFeedWorkspace": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
     "manageFeedWorkspace": "[or(variables('createFeedWorkspace'), contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')))]",
     "deploySharedMonitoring": "[and(parameters('enableMonitoring'), empty(parameters('existingLogAnalyticsWorkspaceResourceId')))]",
-    "deploySharedOperationsResourceGroup": "[or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup'))]",
-    "sharedPrivateEndpoint": "[and(parameters('deployPrivateEndpoints'), or(or(parameters('deploySecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup')))]",
+    "deploySharedOperationsResourceGroup": "[or(variables('deploySharedKeyVaults'), variables('deploySharedFilesBackup'))]",
+    "sharedPrivateEndpoint": "[and(parameters('deployPrivateEndpoints'), or(variables('deploySharedKeyVaults'), variables('deploySharedFilesBackup')))]",
     "hostPoolPrivateLinkPrivateRoutes": "[if(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None'), 'None', 'HostPool')]",
     "effectiveControlPlaneSubscription": "[if(empty(parameters('controlPlaneSubscriptionId')), subscription().subscriptionId, parameters('controlPlaneSubscriptionId'))]",
     "effectiveMonitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
@@ -2271,6 +2272,7 @@
       ]
     },
     "sharedKeyVaults": {
+      "condition": "[variables('deploySharedKeyVaults')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('sharedKeyVaults-{0}', uniqueString('sharedKeyVaults', deployment().name))]",

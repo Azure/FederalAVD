@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "15715533006762233196"
+      "templateHash": "16432867415905055312"
     }
   },
   "definitions": {
@@ -1292,14 +1292,15 @@
     "encryptionKeyVaultIsRequired": "[or(and(parameters('deployDiskEncryptionSet'), empty(parameters('diskEncryptionSetResourceId'))), contains(parameters('fslogixKeyManagementStorage'), 'CustomerManaged'))]",
     "existingSharedEncryptionKeyVaultResourceId": "[if(not(empty(parameters('encryptionKeyVaultResourceId'))), parameters('encryptionKeyVaultResourceId'), parameters('fslogixEncryptionKeyVaultResourceId'))]",
     "deploySharedEncryptionKeyVault": "[and(variables('encryptionKeyVaultIsRequired'), empty(variables('existingSharedEncryptionKeyVaultResourceId')))]",
+    "deploySharedKeyVaults": "[or(variables('deploySharedSecretsKeyVault'), variables('deploySharedEncryptionKeyVault'))]",
     "fslogixBackupIsRequested": "[or(parameters('enableFSLogixBackup'), not(empty(parameters('existingFilesBackupVaultResourceId'))))]",
     "deploySharedFilesBackup": "[and(and(and(variables('fslogixBackupIsRequested'), parameters('deployFSLogixStorage')), startsWith(parameters('fslogixStorageService'), 'AzureFiles')), empty(parameters('existingFilesBackupVaultResourceId')))]",
     "createFeedWorkspace": "[empty(parameters('existingFeedWorkspaceResourceId'))]",
     "manageFeedWorkspace": "[or(variables('createFeedWorkspace'), contains(createArray('FeedAndHostPool', 'All'), parameters('avdPrivateLinkPrivateRoutes')))]",
     "effectiveNamingConvention": "[union(parameters('namingConvention'), if(not(empty(parameters('secretsKeyVaultNameOverride'))), createObject('secretsKeyVaultNameOverride', parameters('secretsKeyVaultNameOverride')), createObject()), if(not(empty(parameters('encryptionKeyVaultNameOverride'))), createObject('encryptionKeyVaultNameOverride', parameters('encryptionKeyVaultNameOverride')), createObject()))]",
     "deploySharedMonitoring": "[and(parameters('enableMonitoring'), empty(parameters('logAnalyticsWorkspaceResourceId')))]",
-    "deploySharedOperationsResourceGroup": "[or(or(variables('deploySharedSecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup'))]",
-    "sharedPrivateEndpoint": "[and(parameters('deployPrivateEndpoints'), or(or(variables('deploySharedSecretsKeyVault'), variables('deploySharedEncryptionKeyVault')), variables('deploySharedFilesBackup')))]",
+    "deploySharedOperationsResourceGroup": "[or(variables('deploySharedKeyVaults'), variables('deploySharedFilesBackup'))]",
+    "sharedPrivateEndpoint": "[and(parameters('deployPrivateEndpoints'), or(variables('deploySharedKeyVaults'), variables('deploySharedFilesBackup')))]",
     "hostPoolPrivateLinkPrivateRoutes": "[if(equals(parameters('avdPrivateLinkPrivateRoutes'), 'None'), 'None', 'HostPool')]",
     "commercialCloudIsValid": "[if(equals(environment().name, 'AzureCloud'), true(), fail('Automated host pools are currently supported only in Azure Commercial.'))]",
     "hpBaseName": "[toLower(parameters('identifier'))]",
@@ -2888,6 +2889,7 @@
       ]
     },
     "sharedKeyVaults": {
+      "condition": "[variables('deploySharedKeyVaults')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('sharedKeyVaults-{0}', uniqueString('sharedKeyVaults', deployment().name))]",
