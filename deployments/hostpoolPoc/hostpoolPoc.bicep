@@ -122,7 +122,7 @@ var parentTag = {
   'cm-resource-parent': hostPoolResourceId
 }
 
-module consolidatedResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
+module resourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
     location: location
     name: resourceGroupName
@@ -135,7 +135,7 @@ module consolidatedResourceGroup '../shared/modules/resourceModules/resources/re
   }
 }
 
-module standaloneNetwork '../networking/modules/vnet-sub-module.bicep' = {
+module network '../networking/modules/vnet-sub-module.bicep' = {
   params: {
     deployVnetResourceGroup: false
     vnetName: virtualNetworkName
@@ -171,7 +171,7 @@ module standaloneNetwork '../networking/modules/vnet-sub-module.bicep' = {
     tags: tags
   }
   dependsOn: [
-    consolidatedResourceGroup
+    resourceGroup
   ]
 }
 
@@ -185,7 +185,7 @@ module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' 
     tags: tags
   }
   dependsOn: [
-    consolidatedResourceGroup
+    resourceGroup
   ]
 }
 
@@ -226,7 +226,7 @@ module workspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bice
     tags: tags
   }
   dependsOn: [
-    consolidatedResourceGroup
+    resourceGroup
   ]
 }
 
@@ -236,7 +236,7 @@ module roleAssignmentVirtualMachineUserLogin '../hostpools/modules/rbac/vmUserLo
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
   }
   dependsOn: [
-    consolidatedResourceGroup
+    resourceGroup
   ]
 }
 
@@ -316,7 +316,7 @@ module controlPlane '../hostpools/modules/control-plane/controlPlane.bicep' = {
     virtualMachinesTimeZone: 'Eastern Standard Time'
   }
   dependsOn: [
-    consolidatedResourceGroup
+    resourceGroup
   ]
 }
 
@@ -368,7 +368,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     fileSharePolicyName: ''
   }
   dependsOn: [
-    consolidatedResourceGroup
+    resourceGroup
   ]
 }
 
@@ -461,8 +461,8 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
   }
   dependsOn: [
-    consolidatedResourceGroup
-    standaloneNetwork
+    resourceGroup
+    network
     roleAssignmentVirtualMachineUserLogin
   ]
 }

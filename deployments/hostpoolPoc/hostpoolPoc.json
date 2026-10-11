@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "4203939337293673274"
+      "templateHash": "1726322214319085053"
     }
   },
   "definitions": {
@@ -1001,10 +1001,10 @@
         }
       }
     },
-    "consolidatedResourceGroup": {
+    "resourceGroup": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('consolidatedResourceGroup-{0}', uniqueString('consolidatedResourceGroup', deployment().name))]",
+      "name": "[format('resourceGroup-{0}', uniqueString('resourceGroup', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1069,10 +1069,10 @@
         "naming"
       ]
     },
-    "standaloneNetwork": {
+    "network": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[format('standaloneNetwork-{0}', uniqueString('standaloneNetwork', deployment().name))]",
+      "name": "[format('network-{0}', uniqueString('network', deployment().name))]",
       "location": "[deployment().location]",
       "properties": {
         "expressionEvaluationOptions": {
@@ -1808,8 +1808,8 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
-        "naming"
+        "naming",
+        "resourceGroup"
       ]
     },
     "monitoring": {
@@ -2475,8 +2475,8 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
-        "naming"
+        "naming",
+        "resourceGroup"
       ]
     },
     "workspace": {
@@ -3692,9 +3692,9 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "monitoring",
-        "naming"
+        "naming",
+        "resourceGroup"
       ]
     },
     "roleAssignmentVirtualMachineUserLogin": {
@@ -3838,8 +3838,8 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
-        "naming"
+        "naming",
+        "resourceGroup"
       ]
     },
     "controlPlane": {
@@ -6331,9 +6331,9 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "monitoring",
         "naming",
+        "resourceGroup",
         "workspace"
       ]
     },
@@ -10214,10 +10214,10 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "controlPlane",
         "monitoring",
-        "naming"
+        "naming",
+        "resourceGroup"
       ]
     },
     "sessionHosts": {
@@ -14840,13 +14840,13 @@
         }
       },
       "dependsOn": [
-        "consolidatedResourceGroup",
         "controlPlane",
         "fslogix",
         "monitoring",
         "naming",
-        "roleAssignmentVirtualMachineUserLogin",
-        "standaloneNetwork"
+        "network",
+        "resourceGroup",
+        "roleAssignmentVirtualMachineUserLogin"
       ]
     }
   },

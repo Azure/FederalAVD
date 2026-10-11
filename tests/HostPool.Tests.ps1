@@ -631,7 +631,8 @@ Describe 'Standard host-pool PoC form' {
 
         $hostPoolBicep | Should Not Match 'deployStandaloneNetwork'
         $hostPoolBicep | Should Not Match 'standaloneNetwork'
-        $pocBicep | Should Match "module standaloneNetwork '../networking/modules/vnet-sub-module\.bicep'"
+        $pocBicep | Should Match "module resourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy\.bicep'"
+        $pocBicep | Should Match "module network '../networking/modules/vnet-sub-module\.bicep'"
         ([regex]::Matches(
             $pocBicep,
             "resourceId\(\s*subscription\(\)\.subscriptionId,\s*resourceGroupName,"
