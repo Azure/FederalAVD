@@ -719,7 +719,7 @@ var commercialCloudIsValid = environment().name == 'AzureCloud'
   : fail('Automated host pools are currently supported only in Azure Commercial.')
 var hpBaseName = toLower(identifier)
 var domainJoinRequired = contains(identitySolution, 'DomainServices')
-var credentialsKeyVaultSecretBaseUri = 'https://${last(split(effectiveCredentialsKeyVaultResourceId, '/'))}.${environment().suffixes.keyvaultDns}/secrets'
+var credentialsKeyVaultSecretBaseUri = 'https://${last(split(effectiveCredentialsKeyVaultResourceId, '/'))}${environment().suffixes.keyvaultDns}/secrets'
 var effectiveVmAdministratorUsernameSecretUri = !empty(vmAdministratorUsernameSecretUri) ? vmAdministratorUsernameSecretUri : '${credentialsKeyVaultSecretBaseUri}/VirtualMachineAdminUserName'
 var effectiveVmAdministratorPasswordSecretUri = !empty(vmAdministratorPasswordSecretUri) ? vmAdministratorPasswordSecretUri : '${credentialsKeyVaultSecretBaseUri}/VirtualMachineAdminPassword'
 var effectiveDomainJoinUsernameSecretUri = !empty(domainJoinUsernameSecretUri) ? domainJoinUsernameSecretUri : '${credentialsKeyVaultSecretBaseUri}/DomainJoinUserPrincipalName'
@@ -1171,7 +1171,7 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
       : ''
     domainName: domainName
     encryptionKeyVaultUri: deployFslogixStorageCmk
-      ? 'https://${last(split(effectiveFSLogixEncryptionKeyVaultResourceId, '/'))}.${environment().suffixes.keyvaultDns}/'
+      ? 'https://${last(split(effectiveFSLogixEncryptionKeyVaultResourceId, '/'))}${environment().suffixes.keyvaultDns}/'
       : ''
     encryptionUserAssignedIdentityResourceId: deployFslogixStorageCmk
       ? fslogixStorageCmk!.outputs.storageEncryptionIdentityResourceId

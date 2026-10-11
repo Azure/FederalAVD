@@ -108,6 +108,9 @@ Describe 'Automated host-pool Shared Services create-or-adopt controls' {
         $orchestrator | Should Match 'deployEncryptionKeyVault: deploySharedEncryptionKeyVault'
         $orchestrator | Should Match 'keyVaultResourceId: effectiveFSLogixEncryptionKeyVaultResourceId'
         $orchestrator | Should Match 'keyVaultResourceId: diskEncryptionSetConfigurationIsValid \? effectiveDiskEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match "credentialsKeyVaultSecretBaseUri = 'https://\$\{last\(.+\)\}\$\{environment\(\)\.suffixes\.keyvaultDns\}/secrets'"
+        $orchestrator | Should Match "encryptionKeyVaultUri: deployFslogixStorageCmk[\s\S]+?\$\{environment\(\)\.suffixes\.keyvaultDns\}/'"
+        $orchestrator | Should Not Match "\}\.\$\{environment\(\)\.suffixes\.keyvaultDns\}"
     }
 
     It 'configures Shared Services and FSLogix private endpoints from one portal choice' {
