@@ -10,14 +10,6 @@
           "label": "PoC Basics",
           "elements": [
             {
-              "name": "subscriptionsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "request": {
-                "method": "GET",
-                "path": "/subscriptions?api-version=2022-12-01"
-              }
-            },
-            {
               "name": "scopeInfo",
               "type": "Microsoft.Common.InfoBox",
               "options": {
@@ -34,25 +26,16 @@
               }
             },
             {
-              "name": "subscription",
-              "type": "Microsoft.Common.DropDown",
-              "label": "Subscription",
-              "constraints": {
-                "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\",\"subscriptionId\":\"', sub.subscriptionId, '\"}}')))]",
-                "required": true
-              }
-            },
-            {
-              "name": "location",
-              "type": "Microsoft.Common.LocationSelector",
-              "label": "Region",
-              "resourceTypes": [
-                "Microsoft.Compute/virtualMachines",
-                "Microsoft.DesktopVirtualization/hostPools",
-                "Microsoft.DesktopVirtualization/workspaces"
-              ],
-              "scope": {
-                "subscriptionId": "[steps('basics').subscription.subscriptionId]"
+              "name": "scope",
+              "type": "Microsoft.Common.ResourceScope",
+              "location": {
+                "label": "PoC Region",
+                "toolTip": "Select the subscription and region where the disposable PoC will be deployed.",
+                "resourceTypes": [
+                  "Microsoft.Compute/virtualMachines",
+                  "Microsoft.DesktopVirtualization/hostPools",
+                  "Microsoft.DesktopVirtualization/workspaces"
+                ]
               }
             },
             {
@@ -147,10 +130,10 @@
             {
               "name": "office365SkusApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location.name)))]",
+              "condition": "[and(not(empty(steps('basics').scope.subscription.id)), not(empty(steps('basics').scope.location.name)))]",
               "request": {
                 "method": "GET",
-                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/locations/', steps('basics').location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/office-365/skus?api-version=2022-08-01')]",
+                "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('basics').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/office-365/skus?api-version=2022-08-01')]",
                 "transforms": {
                   "latest": "sort_by([?starts_with(name, `win11`) && contains(name, `avd`) && contains(name, `m365`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].name, &@)|reverse(@)|[0]"
                 }
@@ -187,10 +170,10 @@
             {
               "name": "vmSizesApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location.name)))]",
+              "condition": "[and(not(empty(steps('basics').scope.subscription.id)), not(empty(steps('basics').scope.location.name)))]",
               "request": {
                 "method": "GET",
-                "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('basics').location.name, decodeUriComponent('%27'))]",
+                "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('basics').scope.location.name, decodeUriComponent('%27'))]",
                 "transforms": {
                   "sizes": "sort_by(value[?resourceType == 'virtualMachines'] | [?starts_with(name, 'Standard_D4s_') || starts_with(name, 'Standard_D4as_')] | [?capabilities[?name == 'vCPUs'].value | [0] == '4'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}, &label)"
                 }
@@ -326,8 +309,8 @@
     },
     "outputs": {
       "kind": "Subscription",
-      "subscriptionId": "[steps('basics').subscription.subscriptionId]",
-      "location": "[steps('basics').location.name]",
+      "subscriptionId": "[steps('basics').scope.subscription.id]",
+      "location": "[steps('basics').scope.location.name]",
       "parameters": {
         "identifier": "[steps('basics').identifier]",
         "virtualMachineAdminUserName": "[steps('sessionHosts').localAdminUsername]",

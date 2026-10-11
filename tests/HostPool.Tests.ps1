@@ -440,9 +440,13 @@ Describe 'Standard host-pool PoC form' {
     }
 
     It 'uses the complete subscription deployment output contract' {
+        $basicsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $scope = $basicsStep.elements | Where-Object { $_.name -eq 'scope' }
+
+        $scope.type | Should Be 'Microsoft.Common.ResourceScope'
         $pocForm.view.outputs.kind | Should Be 'Subscription'
-        $pocForm.view.outputs.subscriptionId | Should Match "steps\('basics'\)\.subscription\.subscriptionId"
-        $pocForm.view.outputs.location | Should Match "steps\('basics'\)\.location\.name"
+        $pocForm.view.outputs.subscriptionId | Should Be "[steps('basics').scope.subscription.id]"
+        $pocForm.view.outputs.location | Should Be "[steps('basics').scope.location.name]"
     }
 
     It 'uses the streamlined three-step experience' {
@@ -557,8 +561,8 @@ Describe 'Standard host-pool PoC form' {
         $skuApi = $sessionHostsStep.elements | Where-Object { $_.name -eq 'office365SkusApi' }
 
         $skuApi.type | Should Be 'Microsoft.Solutions.ArmApiControl'
-        $skuApi.condition | Should Match "steps\('basics'\)\.subscription\.id"
-        $skuApi.condition | Should Match "steps\('basics'\)\.location\.name"
+        $skuApi.condition | Should Match "steps\('basics'\)\.scope\.subscription\.id"
+        $skuApi.condition | Should Match "steps\('basics'\)\.scope\.location\.name"
         $skuApi.request.path | Should Match '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/office-365/skus'
         $skuApi.request.transforms.latest | Should Match 'starts_with\(name, `win11`\)'
         $skuApi.request.transforms.latest | Should Match 'contains\(name, `avd`\)'
