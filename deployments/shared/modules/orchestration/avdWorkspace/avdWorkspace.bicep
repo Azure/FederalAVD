@@ -9,11 +9,13 @@ param manageWorkspace bool
 param workspaceName string
 param workspaceResourceId string
 param workspaceResourceGroupName string
+param createWorkspaceResourceGroup bool = true
 param workspaceLocation string
 param workspaceFriendlyName string
 param workspacePublicNetworkAccess 'Disabled' | 'Enabled'
 param workspaceFeedPrivateEndpointSubnetResourceId string
 param avdPrivateDnsZoneResourceId string
+param logAnalyticsWorkspaceResourceId string = ''
 
 param manageGlobalWorkspace bool
 
@@ -25,6 +27,7 @@ param globalWorkspaceMode string
 param globalWorkspaceName string
 param globalWorkspaceResourceId string
 param globalWorkspaceResourceGroupName string
+param createGlobalWorkspaceResourceGroup bool = true
 param globalWorkspacePublicNetworkAccess 'Disabled' | 'Enabled'
 param globalFeedPrivateEndpointSubnetResourceId string
 param globalFeedPrivateDnsZoneResourceId string
@@ -73,8 +76,19 @@ var effectiveWorkspaceDescription = adoptWorkspace ? existingWorkspace!.properti
 var effectiveWorkspaceApplicationGroupReferences = adoptWorkspace
   ? existingWorkspace!.properties.applicationGroupReferences ?? []
   : []
+var workspaceDiagnosticSettings = !adoptWorkspace && !empty(logAnalyticsWorkspaceResourceId)
+  ? {
+      name: 'WVDInsights'
+      workspaceId: logAnalyticsWorkspaceResourceId
+    }
+  : null
+var effectiveWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = adoptWorkspace && empty(
+  workspaceFeedPrivateEndpointSubnetResourceId
+)
+  ? (existingWorkspace!.properties.publicNetworkAccess == 'Disabled' ? 'Disabled' : 'Enabled')
+  : workspacePublicNetworkAccess
 
-module workspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageWorkspace && !adoptWorkspace) {
+module workspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageWorkspace && !adoptWorkspace && createWorkspaceResourceGroup) {
   scope: subscription()
   params: {
     location: workspaceLocation
@@ -91,8 +105,9 @@ module workspace '../../resourceModules/desktopVirtualization/workspaces/deploy.
     tags: effectiveWorkspaceTags
     friendlyName: effectiveWorkspaceFriendlyName
     description: effectiveWorkspaceDescription
-    publicNetworkAccess: workspacePublicNetworkAccess
+    publicNetworkAccess: effectiveWorkspacePublicNetworkAccess
     applicationGroupResourceIds: effectiveWorkspaceApplicationGroupReferences
+    diagnosticSettings: workspaceDiagnosticSettings
   }
   dependsOn: [workspaceResourceGroup]
 }
@@ -153,8 +168,14 @@ var effectiveGlobalWorkspaceDescription = adoptGlobalWorkspace
 var effectiveGlobalWorkspaceApplicationGroupReferences = adoptGlobalWorkspace
   ? existingGlobalWorkspace!.properties.applicationGroupReferences ?? []
   : []
+var globalWorkspaceDiagnosticSettings = !adoptGlobalWorkspace && !empty(logAnalyticsWorkspaceResourceId)
+  ? {
+      name: 'WVDInsights'
+      workspaceId: logAnalyticsWorkspaceResourceId
+    }
+  : null
 
-module globalWorkspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageGlobalWorkspace && !adoptGlobalWorkspace) {
+module globalWorkspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageGlobalWorkspace && !adoptGlobalWorkspace && createGlobalWorkspaceResourceGroup) {
   scope: subscription()
   params: {
     location: effectiveGlobalWorkspaceLocation
@@ -173,6 +194,7 @@ module globalWorkspace '../../resourceModules/desktopVirtualization/workspaces/d
     description: effectiveGlobalWorkspaceDescription
     publicNetworkAccess: globalWorkspacePublicNetworkAccess
     applicationGroupResourceIds: effectiveGlobalWorkspaceApplicationGroupReferences
+    diagnosticSettings: globalWorkspaceDiagnosticSettings
   }
   dependsOn: [globalWorkspaceResourceGroup]
 }
@@ -194,7 +216,7 @@ var globalFeedPrivateEndpointNICName = replace(
   globalFeedVnetId
 )
 
-module globalFeedPrivateEndpoint '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (manageGlobalWorkspace) {
+module globalFeedPrivateEndpoint '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (manageGlobalWorkspace && !empty(globalFeedPrivateEndpointSubnetResourceId)) {
   scope: resourceGroup(effectiveGlobalWorkspaceSubscriptionId, effectiveGlobalWorkspaceResourceGroupName)
   params: {
     name: globalFeedPrivateEndpointName
@@ -215,8 +237,10 @@ output workspaceResourceId string = manageWorkspace ? workspace!.outputs.resourc
 output workspaceFeedPrivateEndpointResourceId string = manageWorkspace && !empty(workspaceFeedPrivateEndpointSubnetResourceId)
   ? workspaceFeedPrivateEndpoint!.outputs.resourceId
   : ''
-output globalWorkspaceResourceId string = manageGlobalWorkspace ? globalWorkspace!.outputs.resourceId : ''
-output globalFeedPrivateEndpointResourceId string = manageGlobalWorkspace
+output globalWorkspaceResourceId string = manageGlobalWorkspace
+  ? globalWorkspace!.outputs.resourceId
+  : globalWorkspaceResourceId
+output globalFeedPrivateEndpointResourceId string = manageGlobalWorkspace && !empty(globalFeedPrivateEndpointSubnetResourceId)
   ? globalFeedPrivateEndpoint!.outputs.resourceId
   : ''
 output controlPlaneResourceGroupName string = manageWorkspace ? effectiveWorkspaceResourceGroupName : ''

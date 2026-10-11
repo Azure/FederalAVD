@@ -6,6 +6,17 @@ This guide describes how to chain the FederalAVD deployment steps together in an
 
 Each step maps to an existing script or ARM/Bicep deployment. You can wire them together in whatever automation tool you use (Azure DevOps, GitHub Actions, a shell script, a runbook, etc.).
 
+The standard and automated host-pool entry templates are orchestrators. They compose Shared
+Services directly with their pool-specific modules while preserving the existing published entry
+paths.
+
+Standalone Step 1 is conditional, not an unconditional prerequisite for a production host pool.
+Deploy it independently when Image Management, policy, an add-on, or another consumer needs its
+outputs before the host pool, or when workspace, Key Vault, monitoring, and backup resources have a
+separate enterprise ownership lifecycle. Otherwise, the full standard or automated host-pool entry
+orchestrator can create or adopt those same Shared Services resources during the host-pool
+deployment. Arrows from Step 1 below apply only when Step 1 is deployed independently.
+
 This workflow implements the build, deploy, observe, and replace phases of the
 [Secure Endpoint Architecture](secure-endpoint-architecture.md#secure-endpoint-lifecycle).
 Organizational validation and release approval remain explicit lifecycle steps.
@@ -18,7 +29,7 @@ Each subgraph shows a deployment step and its outputs (rounded nodes). Arrows be
 
 ```mermaid
 flowchart TD
-    subgraph KV["🔒 Step 1 · AVD Shared Services  (required for automated host pools; otherwise conditional)"]
+    subgraph KV["🔒 Step 1 · AVD Shared Services  (enterprise sharing or upstream prerequisites)"]
         KV_RUN["sharedServices.json"]
         KV_O1(["secretsKeyVaultResourceId"])
         KV_O2(["encryptionKeyVaultResourceId"])
@@ -26,7 +37,8 @@ flowchart TD
         KV_O4(["fslogixBackupVaultResourceId"])
         KV_O5(["fslogixBackupPolicyName"])
         KV_O6(["azureMonitorPrivateLinkScopeResourceId"])
-        KV_RUN --> KV_O1 & KV_O2 & KV_O3 & KV_O4 & KV_O5 & KV_O6
+        KV_O7(["avdWorkspaceResourceId"])
+        KV_RUN --> KV_O1 & KV_O2 & KV_O3 & KV_O4 & KV_O5 & KV_O6 & KV_O7
     end
 
     subgraph IM["📦 Step 2 · Image Management"]
@@ -71,6 +83,7 @@ flowchart TD
     KV_O3 -->|"→ existingLogAnalyticsWorkspaceResourceId"| HP_RUN
     KV_O4 -->|"→ existingFilesBackupVaultResourceId"| HP_RUN
     KV_O5 -->|"→ existingFilesBackupPolicyName"| HP_RUN
+    KV_O7 -->|"→ existingFeedWorkspaceResourceId"| HP_RUN
 
     %% Image Management → Upload Artifacts
     IM_O2 -->|"→ StorageAccountResourceId"| UA_RUN
@@ -96,8 +109,8 @@ flowchart TD
 ## Step 1: Deploy AVD Shared Services
 
 **Script/template:** `deployments/sharedServices/sharedServices.json`
-**When required:** For every automated host pool, including a marketplace-image PoC; when using
-Customer Managed Keys (CMK), a pre-provisioned credentials Key Vault, a shared Log Analytics
+**When required:** When using Customer Managed Keys (CMK) before Image Management, a
+pre-provisioned credentials Key Vault, a shared Log Analytics
 Workspace, a shared AVD workspace and feed/global Private Link, or a centrally managed FSLogix
 Azure Files backup vault and policy.
 The deployment uses the `sharedServices` path and parameter-file name.
@@ -125,8 +138,13 @@ The deployment uses the `sharedServices` path and parameter-file name.
 
 - The deploying identity needs **Key Vault Crypto Officer** on the encryption key vault before running any downstream step that creates CMK keys.
 - Key Vaults, the AVD workspace and feed/global networking, monitoring resources, and the FSLogix
-  backup vault and policy are intentionally deployed separately so they can be shared across
-  multiple host pools and storage deployments.
+  backup vault and policy are owned by Shared Services so they can be shared across multiple host
+  pools and storage deployments.
+- A separate Step 1 deployment is unnecessary when no resource must preexist and no independent
+  ownership boundary is required. The full Step 4 entry orchestrators compose Shared Services. The
+  dedicated Standard PoC entry instead composes only the shared modules needed for its constrained,
+  host-pool-specific, NAT-backed evaluation environment; full production forms use shared naming
+  by default.
 - Shared Services owns the FSLogix vault and policy settings. Each host pool or FSLogix Storage
   add-on owns registration of its storage accounts and shares as protected items.
 - The AVD Insights DCR and DCE are region/workspace-scoped, not host-pool-specific — deploying them once here lets every host pool that reuses this workspace share the same DCR/DCE instead of the first host pool deployment creating its own.
@@ -134,7 +152,7 @@ The deployment uses the `sharedServices` path and parameter-file name.
   DCR, and DCE use that subscription; set `logAnalyticsWorkspaceSubscriptionId` to place them in
   a centralized monitoring subscription.
 - `azureMonitorPrivateLinkScopeResourceId` associates the shared Log Analytics Workspace and DCE
-  with an existing AMPLS, matching the host pool inline monitoring behavior. The networking platform
+  with an existing AMPLS, matching the host-pool orchestrator's monitoring behavior. The networking platform
   must own the AMPLS, private endpoints, access modes, and cloud-specific private DNS configuration.
   The deploying identity must be able to add scoped resources to the selected AMPLS.
 - The AVD Alerts add-on requires an existing same-subscription Action Group in the `global`
@@ -283,6 +301,12 @@ These values are typically pre-populated in the image build parameter files afte
 **Templates:** `deployments/hostpools/hostpool.json` for standard management, or
 `deployments/automatedHostPools/automatedHostPool.json` for automated management.
 
+Both entry templates remain the published Template Spec paths. Each calls Shared Services and then
+its pool-specific control-plane, storage, host-management, and policy modules. New workspaces use
+shared production names by default. For PoC
+deployments, set `workspaceCreationScope` to `HostPoolSpecific`. For production deployments, create
+shared resources or supply existing Shared Services output IDs so the orchestrator adopts them.
+
 ```text
 Inputs from Step 4:
   imageDefinitionId + /versions/latest  →  hostpool parameter: customImageResourceId
@@ -322,7 +346,9 @@ Example PowerShell invocation:
 ### Notes
 
 - If `customImageResourceId` is empty, the host pool uses the marketplace image defined by `imagePublisher` / `imageOffer` / `imageSku`.
-- The host pool deployment always creates all resources. Use `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` in the parameter file to reuse shared monitoring infrastructure instead of creating new resources. Use `existingVmBackupVaultResourceId` (personal host pools) or `existingFilesBackupVaultResourceId` (pooled host pools) to reuse existing backup vaults, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
+- Use `existingFeedWorkspaceResourceId`, `existingLogAnalyticsWorkspaceResourceId`, `existingAVDInsightsDataCollectionRuleResourceId`, and `existingDataCollectionEndpointResourceId` to adopt enterprise Shared Services resources. Use `existingVmBackupVaultResourceId` (personal host pools) or `existingFilesBackupVaultResourceId` (pooled host pools) to reuse existing backup vaults, and `existingEncryptionKeyVaultResourceId` to reference a pre-deployed encryption Key Vault.
+- Existing workspace public access and feed/global Private Link are managed only when explicitly selected through the orchestrator's Shared Services inputs. Otherwise those properties are preserved.
+- Serialize host-pool deployments that register application groups to the same workspace. Each orchestrator appends to the current reference list with a read-modify-write update, so parallel deployments can overwrite one another.
 - For repeatable redeployments (e.g., after a new image build), keep your parameter file stable and just update `customImageResourceId` to the new image version.
 
 ---

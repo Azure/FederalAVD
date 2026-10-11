@@ -98,7 +98,7 @@ count only after storage, policy, and role assignments complete.
 | Entra Kerberos Cloud Only | Yes | No |
 | Entra ID with storage keys | Yes | No |
 | Share permissions | Default SMB share permission and admin Azure RBAC | Volume configuration |
-| NTFS permissions | Deployment VM Run Command | Deployment VM Run Command |
+| NTFS permissions | Deployment VM Run Command for identity-based authentication; skipped for Entra ID storage keys | Deployment VM Run Command |
 | Private networking | Private endpoint | Delegated subnet |
 | Customer-managed keys | Existing Key Vault; keys and identity created automatically | Managed by the NetApp account path |
 | Diagnostics | Existing Log Analytics workspace | Not configured by the shared module |
@@ -112,10 +112,12 @@ storage accounts and shares as protected items; it does not modify the shared va
 ## NTFS and Entra Kerberos Automation
 
 The add-on calls the same shared FSLogix storage module and scripts as the host-pool deployment.
-For Azure Files, that path creates shares, configures the selected identity provider, applies share
-RBAC, and runs `Set-NtfsPermissionsAzureFiles.ps1` from the temporary deployment VM. AD DS, Entra
-Domain Services, and Entra Kerberos Hybrid use domain group names; Entra Kerberos Cloud Only uses
-Microsoft Entra group object IDs.
+For Azure Files, that path creates shares and configures the selected authentication method.
+Identity-based authentication applies share RBAC and runs `Set-NtfsPermissionsAzureFiles.ps1` from
+the temporary deployment VM. AD DS, Entra Domain Services, and Entra Kerberos Hybrid use domain
+group names; Entra Kerberos Cloud Only uses Microsoft Entra group object IDs. Entra ID
+storage-account-key authentication bypasses share-level and NTFS authorization, so it skips the
+ACL step and does not create a deployment-helper VM.
 
 Entra Kerberos automation follows the host-pool identity model. The temporary deployment identity
 performs Azure Resource Manager and storage operations. A separate existing application-update
@@ -197,10 +199,12 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
 - **Azure Files backup:** The selected Recovery Services vault and file-share backup policy must
    already exist and be usable by the storage accounts being protected.
 
-The temporary deployment VM uses Run Command to register domain-backed storage, update Entra
-Kerberos applications, grant consent, and initialize NTFS permissions. Its identity receives only
-the deployment-resource-group and storage-resource-group roles needed for that work and cleanup.
-Cleanup removes storage role assignments before deleting the temporary resource group.
+When identity-based authentication requires it, the temporary deployment VM uses Run Command to
+register domain-backed storage, update Entra Kerberos applications, grant consent, and initialize
+NTFS permissions. Its identity receives only the deployment-resource-group and
+storage-resource-group roles needed for that work and cleanup. Cleanup removes storage role
+assignments before deleting the temporary resource group. Entra ID storage-account-key
+authentication skips the temporary VM.
 
 For Azure Files, the temporary VM remains in a workgroup. The scripts install the Active Directory
 RSAT tools, use DNS-based DC Locator to discover an ADWS-capable domain controller, and pass the

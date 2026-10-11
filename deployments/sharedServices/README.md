@@ -7,8 +7,11 @@
 
 ## Overview
 
-This subscription-scoped Bicep deployment creates regional services that can be shared by Image
-Management, host pools, and add-ons:
+This subscription-scoped Bicep deployment owns regional services that can be shared by Image
+Management, host pools, and add-ons. It can be deployed as the standalone **AVD Shared Services**
+Template Spec for enterprise reuse. The standard and automated host-pool entry orchestrators call
+the same lower-level capability modules directly when a separate Shared Services deployment is not
+required; they do not embed this standalone entry template:
 
 - Separate Secrets and Encryption Key Vaults
 - Optional centralized Log Analytics workspace, AVD Insights Data Collection Rule (DCR), and Data
@@ -19,20 +22,27 @@ Management, host pools, and add-ons:
 - Optional Recovery Services vault and Azure Files snapshot backup policy for FSLogix storage
 - Optional private endpoints for the deployed Key Vaults and Recovery Services vault
 
-Shared Services is not required for every standard host pool. A standard host-pool deployment can
-create equivalent resources inline for itself and later standard pools. Deploy Shared Services
-first when a consumer needs these resources before the first standard host pool, including:
+Shared Services is not a separate prerequisite for every host pool. The standard and automated
+entry orchestrators call the same Shared Services template. The Standard PoC uses host-pool-specific
+naming overrides; the full production forms use shared naming by default. Deploy the standalone
+Shared Services Template Spec first when
+enterprise resources must exist independently and be adopted by one or more consumers, including:
 
-- An automated host pool, which requires an existing credentials Key Vault
 - Image Management using customer-managed keys (CMK)
 - Central monitoring required before diagnostic-enabled resources are created
 - Shared FSLogix storage that needs a pre-existing backup vault and policy
-- Multiple deployments that should reuse regional security and monitoring resources
+- Multiple deployments that should reuse an AVD workspace, regional security, monitoring, or
+  backup resources
 
 When Shared Services manages an AVD workspace, pass its `avdWorkspaceResourceId` output to
 `existingFeedWorkspaceResourceId` on every standard or automated host-pool deployment that shares
-the workspace. Those consumers preserve and append application-group references but do not manage
-workspace public access or feed/global Private Link.
+the workspace. Those consumers preserve and append application-group references. Workspace public
+access and feed/global Private Link are managed only when explicitly selected through Shared
+Services. Otherwise, adoption preserves the existing workspace settings.
+
+> **Shared workspace deployment concurrency:** Serialize host-pool deployments that register to
+> one workspace. Each host-pool orchestrator performs a read-modify-write update to append its application
+> group, and concurrent deployments can overwrite one another's references.
 
 ## Deployment Scope and Resources
 
@@ -40,7 +50,7 @@ The entry point is `sharedServices.bicep` and its target scope is the subscripti
 
 ```text
 Operations subscription
-├── Operations resource group (always created)
+├── Operations resource group (when an operations resource is deployed)
 │   ├── Secrets Key Vault (optional, enabled by default)
 │   │   ├── VM administrator secrets (when supplied)
 │   │   ├── Domain join secrets (when supplied)
@@ -73,7 +83,7 @@ All resources from one Shared Services deployment use the same Azure region.
 
 | Resource | Condition | Notes |
 | --- | --- | --- |
-| Operations resource group | Always | Contains Key Vaults and the optional FSLogix backup vault |
+| Operations resource group | When an operations resource is deployed | Contains Key Vaults and the optional FSLogix backup vault |
 | Secrets Key Vault | `deploySecretsKeyVault = true` | Standard SKU; RBAC authorization; ARM template deployment enabled |
 | Encryption Key Vault | `deployEncryptionKeyVault = true` | Premium SKU; soft delete and purge protection enabled |
 | Key Vault private endpoints | `privateEndpoint = true` and the applicable vault is deployed | Uses the supplied subnet; DNS integration is optional in Bicep but normally required operationally |
@@ -100,8 +110,9 @@ Important dependencies:
 
 - Deploy the Encryption Key Vault before Image Management when Image Management storage or gallery
   image versions use CMK.
-- Deploy the Secrets Key Vault before an automated host pool. The automated deployment requires its
-  resource ID.
+- Deploy the standalone Secrets Key Vault before an automated host pool only when the vault must be
+  enterprise-owned and shared. Otherwise, the full automated host-pool orchestrator can create it
+  through its Shared Services phase.
 - Deploy monitoring before resources subject to `DeployIfNotExists` diagnostic-settings policies
   when those policies require an existing Log Analytics workspace.
 - Deploy the FSLogix backup vault and policy before a host pool or standalone FSLogix Storage
@@ -158,13 +169,17 @@ private DNS zones, AMPLS private endpoints, or DNS links.
 | `globalFeedPrivateEndpointSubnetResourceId` | Empty | Required subnet for the global endpoint |
 | `globalFeedPrivateDnsZoneResourceId` | Empty | Optional private DNS zone associated with the global endpoint |
 
-Adoption is an in-place workspace update. Shared Services preserves all existing
-`applicationGroupReferences`, as well as the workspace name, location, resource group, tags,
-friendly name, and description. It manages the selected public-network setting and deterministic
-Private Link endpoint. Shared Services intentionally does not accept an arbitrary existing private
-endpoint resource ID: if another endpoint uses a different name, it remains separately owned.
-Re-running Shared Services creates or updates only the endpoint derived from the established
-workspace/VNet naming convention.
+Adoption updates an existing workspace only when management is explicitly requested. Shared
+Services preserves all existing `applicationGroupReferences`, as well as the workspace name,
+location, resource group, tags, friendly name, and description. When a feed endpoint or other
+workspace management option is selected, Shared Services manages the selected public-network
+setting and deterministic Private Link endpoint. When those options are not selected, it preserves
+the existing public-network setting and feed/global configuration.
+
+Shared Services intentionally does not accept an arbitrary existing private endpoint resource ID:
+if another endpoint uses a different name, it remains separately owned. Re-running Shared Services
+creates or updates only the endpoint derived from the established workspace/VNet naming
+convention.
 
 The feed and global endpoint subnets can be in different subscriptions, resource groups, regions,
 or in the same VNet. The deployment reads each selected VNet to obtain its actual location and
@@ -288,14 +303,14 @@ or PowerShell/CLI in Azure Government Secret and Top Secret.
 For repeatable deployment, start with the parameter file exported from the Template Spec form. The
 repository also includes a minimal automated-host-pool prerequisite example:
 
-- `customer-examples/parameters/sharedServices/poc.automatedHostPoolPrerequisites.sharedServices.parameters.json`
+- `customer-examples/parameters/sharedServices/automatedHostPoolPrerequisites.sharedServices.parameters.json`
 
 Copy examples into the git-ignored customer area before editing them:
 
 ```powershell
 Copy-Item `
-  '.\customer-examples\parameters\sharedServices\poc.automatedHostPoolPrerequisites.sharedServices.parameters.json' `
-  '.\customer\parameters\sharedServices\poc.sharedServices.parameters.json'
+  '.\customer-examples\parameters\sharedServices\automatedHostPoolPrerequisites.sharedServices.parameters.json' `
+  '.\customer\parameters\sharedServices\automated-host-pool-prerequisites.sharedServices.parameters.json'
 
 $vmAdminUserName = Read-Host 'VM administrator username' -AsSecureString
 $vmAdminPassword = Read-Host 'VM administrator password' -AsSecureString
@@ -304,7 +319,7 @@ $deployment = New-AzDeployment `
   -Name "shared-services-$(Get-Date -Format 'yyyyMMddHHmmss')" `
   -Location '<region>' `
   -TemplateFile '.\deployments\sharedServices\sharedServices.bicep' `
-  -TemplateParameterFile '.\customer\parameters\sharedServices\poc.sharedServices.parameters.json' `
+  -TemplateParameterFile '.\customer\parameters\sharedServices\automated-host-pool-prerequisites.sharedServices.parameters.json' `
   -virtualMachineAdminUserName $vmAdminUserName `
   -virtualMachineAdminPassword $vmAdminPassword
 ```
@@ -367,6 +382,9 @@ resource-group name, and FSLogix backup policy resource ID.
   Host-pool deployments own host pools, application groups, and connection endpoints. When a host
   pool attaches an application group to an adopted workspace, retain Shared Services ownership so
   later public-network or endpoint updates continue preserving the complete reference list.
+- Serialize host-pool deployments that attach application groups to the same workspace. The core
+  must read the current reference list before writing the appended list, so parallel registrations
+  can race.
 - Validate service and regional availability in the target cloud before deployment. Blue Button
   links are not available in air-gapped clouds, and any required templates or dependencies must be
   transferred through the approved process.

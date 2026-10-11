@@ -17,20 +17,50 @@ can't be changed later. See the [management decision guide](../../docs/host-pool
 
 ## Overview
 
-This comprehensive Azure Bicep template deploys a complete Azure Virtual Desktop (AVD) environment including host pools, session hosts, storage, monitoring, security, and operational automation. It supports multiple identity scenarios, Zero Trust architecture, and air-gapped cloud environments.
+`hostpool.bicep` is the standard host-pool entry orchestrator. It calls AVD Shared Services and
+then directly composes the pool-specific control plane, FSLogix, session-host, security, backup,
+and monitoring modules. The published `deployments/hostpools/hostpool.json` entry path remains
+unchanged.
 
-For a standalone proof of concept, leave `existingFeedWorkspaceResourceId` empty to create a
-dedicated control-plane resource group and workspace whose names include the host-pool identifier.
-For shared production workspaces, deploy or adopt the workspace through AVD Shared Services and
-pass its resource ID as `existingFeedWorkspaceResourceId`. Existing workspaces are
-association-only in this deployment: the application group is appended, while workspace public
-access and feed/global Private Link remain owned by AVD Shared Services.
+The orchestrator deploys a complete Azure Virtual Desktop (AVD) environment including host pools,
+session hosts, storage, monitoring, security, and operational automation. It supports multiple
+identity scenarios, Zero Trust architecture, and air-gapped cloud environments.
+
+New workspaces use shared, region-level naming by default. The dedicated
+[AVD Standard PoC](../hostpoolPoc/README.md) entry template separately composes the same lower-level
+workspace, control-plane, storage, and session-host modules with host-pool-specific naming and a
+fixed evaluation posture. For production, leave `workspaceCreationScope` at `Shared` and either create the
+shared workspace or select it with `existingFeedWorkspaceResourceId`. The orchestrator appends
+only its application-group reference and preserves the workspace's other references and
+properties. Shared Services manages an existing workspace's public access and feed/global Private
+Link only when those options are explicitly selected; otherwise those settings are preserved.
+
+The `resourceGroupOrganization` parameter supports consolidated resource ownership for production
+callers that need it. The separate PoC orchestrator always creates its VNet, private subnet, NSG,
+NAT Gateway, Standard public IP, and persistent AVD resources in one consolidated resource group.
+When the deployment-helper VM is required, its temporary resource group remains separate because
+the deployment removes that entire resource group during cleanup. Entra ID cloud-only Azure Files
+deployments that use storage-account-key authentication skip the helper and NTFS ACL step. The
+production template's default `Separate` value preserves the normal multi-resource-group model.
+
+The Standard PoC is a disposable demonstration environment and intentionally omits production
+capacity, availability, scaling, backup, private connectivity, encryption, and operational design
+choices. Tear it down after the demonstration or first-step validation. Do not expand, harden,
+reuse, or promote it into a pilot or production environment. Start a new pilot or production
+deployment with the complete form and production parameters.
+
+> **Shared workspace deployment concurrency:** Deploy host pools that register application groups
+> to the same workspace serially. Registration is a read-modify-write update of the workspace
+> application-group reference list, so concurrent deployments can overwrite one another.
 
 ## Purpose
 
 Deploy production-ready AVD environments with:
 
-- **Control Plane** - Host pools, application groups, workspaces
+- **Shared Services** - Workspace, feed/global Private Link, monitoring, Key Vaults, and shared
+  FSLogix backup resources
+- **Host-Pool Core** - Host pool, application group, pool connection endpoint, scaling, storage,
+  encryption consumers, and session hosts
 - **Session Hosts** - Virtual machines with AVD agents and customizations
 - **Storage** - FSLogix profile storage with RBAC or Kerberos authentication
 - **Monitoring** - Log Analytics, Azure Monitor, AVD Insights, diagnostic settings
@@ -42,16 +72,22 @@ Deploy production-ready AVD environments with:
 
 ### Resource Deployments
 
-The template deploys resources across multiple resource groups:
+The entry orchestrator deploys resources across multiple resource groups. Shared Services owns the
+shared-resource groups and the host-pool-specific modules own the pool-specific groups:
 
 ```text
 Subscription
 ├── Control Plane Resource Group
 │   ├── Host Pool
 │   ├── Desktop Application Group
-│   ├── Workspace
 │   ├── Scaling Plan (optional)
-│   └── Private Endpoint (Workspace and/or Host Pool, optional)
+│   └── Private Endpoint (Host Pool connection, optional)
+├── Shared AVD Control Plane Resource Group
+│   ├── Workspace
+│   └── Private Endpoint (Workspace feed, optional)
+├── Global Feed Resource Group (optional)
+│   ├── Global-feed Workspace
+│   └── Private Endpoint (Global feed)
 ├── Session Hosts Resource Group
 │   ├── Virtual Machines
 │   ├── Network Interface Cards
@@ -66,8 +102,8 @@ Subscription
 ├── Operations Resource Group
 │   ├── Key Vaults (secrets, encryption)
 │   ├── Private Endpoints (Key Vaults, optional)
-│   ├── Recovery Services Vault (optional, Pooled host pool Azure Files backup)
-│   ├── File Share Backup Policy (optional, Pooled host pool Azure Files backup)
+│   ├── Recovery Services Vault (optional, Shared Services-owned pooled FSLogix backup)
+│   ├── File Share Backup Policy (optional, Shared Services-owned pooled FSLogix backup)
 │   ├── Backup Protection Items (Storage Accounts / File Shares, optional)
 │   └── Private Endpoint (Recovery Services Vault, optional)
 ├── Storage Resource Group
@@ -309,7 +345,7 @@ Subscription
 
 - **Type:** String
 - **Required:** Yes
-- **Description:** Subnet resource ID for session hosts
+- **Description:** Existing subnet resource ID for session hosts
 
 #### `customImageLicenseType`
 
@@ -427,7 +463,7 @@ Subscription
 
 - **Type:** String
 - **Optional**
-- **Description:** Resource ID of the shared Recovery Services vault for pooled FSLogix Azure Files backup. Use the `fslogixBackupVaultResourceId` output from AVD Shared Services. When empty, the host-pool deployment retains the compatibility behavior of creating the shared vault inline.
+- **Description:** Resource ID of the shared Recovery Services vault for pooled FSLogix Azure Files backup. Use the `fslogixBackupVaultResourceId` output from AVD Shared Services. When empty and backup is selected, the entry orchestrator asks its Shared Services phase to create the vault and policy with host-pool-specific naming.
 
 #### `existingFilesBackupPolicyName`
 
@@ -440,7 +476,7 @@ Subscription
 - **Type:** Integer
 - **Default:** `30`
 - **Allowed:** `1` through `365`
-- **Description:** Retention used when this host-pool deployment creates a VM backup policy or uses the inline FSLogix vault fallback. Ignored for an existing shared FSLogix vault because AVD Shared Services owns that policy.
+- **Description:** Retention used when this host-pool deployment creates a VM backup policy or asks its Shared Services phase to create the FSLogix vault and policy. Ignored for an existing shared FSLogix vault because AVD Shared Services owns that policy.
 
 ### Networking
 
@@ -460,31 +496,31 @@ Subscription
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Deploy an inline Secrets Key Vault (Standard SKU) to store VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from a pre-deployed AVD Shared Services deployment.
+- **Description:** Ask the entry orchestrator's shared-capability phase to deploy a Secrets Key Vault (Standard SKU) for VM admin and domain-join credentials. Configured in the **Identity → Credentials** portal step when credentials source is set to Manual Entry. Leave `false` to provide `existingCredentialsKeyVaultResourceId` from an enterprise Shared Services deployment.
 
 #### `secretsKeyVaultEnableSoftDelete`
 
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Enable soft delete on the inline Secrets Key Vault. Allows recovery of deleted objects within the retention period.
+- **Description:** Enable soft delete on the Secrets Key Vault created by the orchestrator's Shared Services phase. Allows recovery of deleted objects within the retention period.
 
 #### `secretsKeyVaultEnablePurgeProtection`
 
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Enable purge protection on the inline Secrets Key Vault. Prevents permanent deletion during the retention period.
+- **Description:** Enable purge protection on the Secrets Key Vault created by the orchestrator's Shared Services phase. Prevents permanent deletion during the retention period.
 
 #### `secretsKeyVaultRetentionInDays`
 
 - **Type:** Integer (7–90)
 - **Default:** `90`
-- **Description:** Soft-delete retention period in days for the inline Secrets Key Vault.
+- **Description:** Soft-delete retention period in days for the Secrets Key Vault created by the orchestrator's Shared Services phase.
 
 #### `encryptionKeyVaultRetentionInDays`
 
 - **Type:** Integer (7–90)
 - **Default:** `90`
-- **Description:** Soft-delete retention period in days for the inline Encryption Key Vault. Configured in **Zero Trust → Encryption Key Management** when CMK is enabled and no existing KV is provided.
+- **Description:** Soft-delete retention period in days for the Encryption Key Vault created by the orchestrator's Shared Services phase. Configured in **Zero Trust → Encryption Key Management** when CMK is enabled and no existing KV is provided.
 
 #### `encryptionAtHost`
 

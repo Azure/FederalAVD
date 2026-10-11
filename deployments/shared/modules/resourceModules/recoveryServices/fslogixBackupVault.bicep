@@ -72,12 +72,20 @@ var effectiveVaultName = createVault
   ? vaultName
   : last(split(existingRecoveryServicesVaultResourceId, '/'))!
 
+resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (createVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
+  name: split(privateEndpointSubnetResourceId, '/')[8]
+  scope: resourceGroup(
+    split(privateEndpointSubnetResourceId, '/')[2],
+    split(privateEndpointSubnetResourceId, '/')[4]
+  )
+}
+
 // Azure Files snapshots remain in the storage account, so the vault stores backup metadata only.
 module recoveryServicesVault 'vaults/deploy.bicep' = if (createVault) {
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: vaultName
-    location: location
+    location: privateEndpointVirtualNetwork!.location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: 'LocallyRedundant'

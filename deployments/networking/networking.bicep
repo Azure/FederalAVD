@@ -31,6 +31,9 @@ param subnets array = []
 ])
 param defaultRouting string = 'nat'
 
+@description('Optional. Controls Azure default outbound access for host subnets. Set to false when explicit outbound connectivity is provided. Null preserves the platform default.')
+param defaultOutboundAccess bool?
+
 @description('Optional. When using NVA routing, determines if AVD service bypass routes should be added to the route table. These routes allow AVD service traffic to bypass the NVA.')
 param includeAvdBypassRoutes bool = false
 
@@ -217,6 +220,7 @@ module vnetResources 'modules/vnet-sub-module.bicep' = if (deployVnet) {
     customDNSServers: customDNSServers
     deployVnetResourceGroup: deployVnetResourceGroup
     defaultRouting: defaultRouting
+    defaultOutboundAccess: defaultOutboundAccess
     includeAvdBypassRoutes: includeAvdBypassRoutes
     rdpShortpathManagedNetworks: rdpShortpathManagedNetworks
     rdpShortpathPublicNetworks: rdpShortpathPublicNetworks

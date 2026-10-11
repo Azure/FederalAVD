@@ -192,6 +192,14 @@ Subscription
   - `nat` - NAT gateway for outbound connectivity
   - `nva` - Route through Network Virtual Appliance (firewall)
 
+#### `defaultOutboundAccess`
+
+- **Type:** Nullable Boolean
+- **Default:** `null` (preserve the Azure platform behavior for the selected API)
+- **Description:** Controls implicit Azure default outbound access on host subnets. Set to `false`
+  when the subnet has an explicit outbound method such as the NAT Gateway deployed by this
+  template. The Standard PoC sets this to `false`.
+
 #### `includeAvdBypassRoutes`
 
 - **Type:** Boolean

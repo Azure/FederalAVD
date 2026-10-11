@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.47.16.16243",
-      "templateHash": "1829237819207797753"
+      "version": "0.48.1.52935",
+      "templateHash": "6316841967818641924"
     }
   },
   "functions": [
@@ -120,11 +120,25 @@
         "description": "Required. The Azure region for all foundation resources."
       }
     },
+    "consolidatedResourceGroupName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing resource group used for operations, monitoring, and a newly created AVD workspace. The caller must create it before this deployment. Global-feed resources remain separately scoped."
+      }
+    },
     "deploySecretsKeyVault": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials)."
+      }
+    },
+    "existingSecretsKeyVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing Shared Services secrets Key Vault resource ID. When supplied, no secrets Key Vault is created and this ID is returned to consumers."
       }
     },
     "secretsKeyVaultEnableSoftDelete": {
@@ -183,6 +197,13 @@
       "defaultValue": true,
       "metadata": {
         "description": "Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution."
+      }
+    },
+    "existingEncryptionKeyVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing Shared Services encryption Key Vault resource ID. When supplied, no encryption Key Vault is created and this ID is returned to consumers."
       }
     },
     "encryptionKeyVaultRetentionInDays": {
@@ -259,6 +280,20 @@
         "description": "Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs. Ignored when \"deployMonitoring\" is true - the newly deployed workspace is used instead."
       }
     },
+    "existingAVDInsightsDataCollectionRuleResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing AVD Insights Data Collection Rule resource ID returned to consuming host-pool deployments when monitoring is adopted."
+      }
+    },
+    "existingDataCollectionEndpointResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing Data Collection Endpoint resource ID returned to consuming host-pool deployments when monitoring is adopted."
+      }
+    },
     "azureMonitorPrivateLinkScopeResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -296,6 +331,20 @@
       "defaultValue": "",
       "metadata": {
         "description": "Optional. Friendly name for a newly created shared AVD workspace."
+      }
+    },
+    "avdControlPlaneResourceGroupNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Complete resource-group name override for a newly created AVD workspace. Use this to give a PoC workspace a host-pool-specific lifecycle boundary."
+      }
+    },
+    "avdWorkspaceNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Complete name override for a newly created AVD workspace."
       }
     },
     "avdWorkspacePublicNetworkAccess": {
@@ -359,6 +408,20 @@
         "description": "Optional. Public network access mode managed on the global-feed workspace."
       }
     },
+    "globalFeedResourceGroupNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Complete resource-group name override for a newly created global-feed workspace."
+      }
+    },
+    "globalFeedWorkspaceNameOverride": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Complete name override for a newly created global-feed workspace."
+      }
+    },
     "globalFeedPrivateEndpointSubnetResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -378,6 +441,20 @@
       "defaultValue": false,
       "metadata": {
         "description": "Optional. Deploy a shared Recovery Services vault and Azure Files snapshot backup policy for FSLogix storage. The vault is shared by pooled host pools and standalone FSLogix storage deployments in this subscription and region."
+      }
+    },
+    "existingFSLogixBackupVaultResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing shared FSLogix Recovery Services vault resource ID. When supplied, no backup vault or policy is created."
+      }
+    },
+    "existingFSLogixBackupPolicyName": {
+      "type": "string",
+      "defaultValue": "filesharepolicy",
+      "metadata": {
+        "description": "Optional. Existing Azure Files backup policy name in existingFSLogixBackupVaultResourceId."
       }
     },
     "fslogixBackupPolicyName": {
@@ -1010,6 +1087,10 @@
     "resourceAbbreviations": "[variables('$fxv#2')]",
     "identifier": "operations",
     "effectiveLogAnalyticsWorkspaceSubscription": "[if(empty(parameters('logAnalyticsWorkspaceSubscriptionId')), subscription().subscriptionId, parameters('logAnalyticsWorkspaceSubscriptionId'))]",
+    "createSecretsKeyVault": "[and(parameters('deploySecretsKeyVault'), empty(parameters('existingSecretsKeyVaultResourceId')))]",
+    "createEncryptionKeyVault": "[and(parameters('deployEncryptionKeyVault'), empty(parameters('existingEncryptionKeyVaultResourceId')))]",
+    "createFSLogixBackupVault": "[and(parameters('deployFSLogixBackupVault'), empty(parameters('existingFSLogixBackupVaultResourceId')))]",
+    "deployOperationsResourceGroup": "[or(or(variables('createSecretsKeyVault'), variables('createEncryptionKeyVault')), variables('createFSLogixBackupVault'))]",
     "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
     "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
     "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
@@ -1019,14 +1100,19 @@
     "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
     "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
-    "operationsResourceGroupName": "[variables('customRgName')]",
-    "monitoringResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "operationsResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), variables('customRgName'))]",
+    "generatedMonitoringResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "monitoringResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), variables('generatedMonitoringResourceGroupName'))]",
     "logAnalyticsWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'logAnalyticsWorkspaces'), variables('resourceAbbreviations').logAnalyticsWorkspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "dataCollectionEndpointName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'dataCollectionEndpoints'), variables('resourceAbbreviations').dataCollectionEndpoints), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "controlPlaneResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "avdWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "globalFeedResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "globalFeedWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "generatedControlPlaneResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "generatedAvdWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "generatedGlobalFeedResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "generatedGlobalFeedWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
+    "controlPlaneResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), if(not(empty(parameters('avdControlPlaneResourceGroupNameOverride'))), parameters('avdControlPlaneResourceGroupNameOverride'), variables('generatedControlPlaneResourceGroupName')))]",
+    "avdWorkspaceName": "[if(not(empty(parameters('avdWorkspaceNameOverride'))), parameters('avdWorkspaceNameOverride'), variables('generatedAvdWorkspaceName'))]",
+    "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedResourceGroupNameOverride'))), parameters('globalFeedResourceGroupNameOverride'), variables('generatedGlobalFeedResourceGroupName'))]",
+    "globalFeedWorkspaceName": "[if(not(empty(parameters('globalFeedWorkspaceNameOverride'))), parameters('globalFeedWorkspaceNameOverride'), variables('generatedGlobalFeedWorkspaceName'))]",
     "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
     "effectiveSecretsKeyVaultNameOverride": "[if(not(empty(parameters('secretsKeyVaultNameOverride'))), parameters('secretsKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'secretsKeyVaultNameOverride'), ''))]",
     "effectiveEncryptionKeyVaultNameOverride": "[if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'encryptionKeyVaultNameOverride'), ''))]",
@@ -1039,6 +1125,7 @@
   },
   "resources": {
     "operationsResourceGroup": {
+      "condition": "[and(variables('deployOperationsResourceGroup'), empty(parameters('consolidatedResourceGroupName')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('operationsResourceGroup-{0}', uniqueString('operationsResourceGroup', deployment().name))]",
@@ -1065,8 +1152,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "5557394259284581899"
+              "version": "0.48.1.52935",
+              "templateHash": "16945675830389891545"
             }
           },
           "parameters": {
@@ -1104,7 +1191,7 @@
       }
     },
     "monitoringResourceGroup": {
-      "condition": "[parameters('deployMonitoring')]",
+      "condition": "[and(parameters('deployMonitoring'), empty(parameters('consolidatedResourceGroupName')))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('monitoringResourceGroup-{0}', uniqueString('monitoringResourceGroup', deployment().name))]",
@@ -1132,8 +1219,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "5557394259284581899"
+              "version": "0.48.1.52935",
+              "templateHash": "16945675830389891545"
             }
           },
           "parameters": {
@@ -1215,8 +1302,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "13930610981237051109"
+              "version": "0.48.1.52935",
+              "templateHash": "1779669540845006654"
             }
           },
           "parameters": {
@@ -1282,8 +1369,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "14418717325984708668"
+                      "version": "0.48.1.52935",
+                      "templateHash": "10042733705466422881"
                     }
                   },
                   "definitions": {
@@ -1503,8 +1590,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "406741284963019257"
+                      "version": "0.48.1.52935",
+                      "templateHash": "5778756712734420436"
                     }
                   },
                   "parameters": {
@@ -1585,8 +1672,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "13889222341710872473"
+                      "version": "0.48.1.52935",
+                      "templateHash": "12065735911828433448"
                     }
                   },
                   "parameters": {
@@ -1737,8 +1824,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "5289901409299231154"
+                      "version": "0.48.1.52935",
+                      "templateHash": "8989651191107758389"
                     }
                   },
                   "parameters": {
@@ -1781,8 +1868,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.47.16.16243",
-                              "templateHash": "7824965815862759114"
+                              "version": "0.48.1.52935",
+                              "templateHash": "4735036545154031964"
                             }
                           },
                           "parameters": {
@@ -1870,6 +1957,9 @@
           "workspaceResourceGroupName": {
             "value": "[variables('controlPlaneResourceGroupName')]"
           },
+          "createWorkspaceResourceGroup": {
+            "value": "[empty(parameters('consolidatedResourceGroupName'))]"
+          },
           "workspaceLocation": {
             "value": "[parameters('location')]"
           },
@@ -1885,6 +1975,7 @@
           "avdPrivateDnsZoneResourceId": {
             "value": "[parameters('avdPrivateDnsZoneResourceId')]"
           },
+          "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "manageGlobalWorkspace": {
             "value": "[parameters('manageGlobalAvdWorkspace')]"
           },
@@ -1926,8 +2017,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "3832812845592344964"
+              "version": "0.48.1.52935",
+              "templateHash": "1652035796905990410"
             }
           },
           "functions": [
@@ -1969,6 +2060,10 @@
             "workspaceResourceGroupName": {
               "type": "string"
             },
+            "createWorkspaceResourceGroup": {
+              "type": "bool",
+              "defaultValue": true
+            },
             "workspaceLocation": {
               "type": "string"
             },
@@ -1988,6 +2083,10 @@
             "avdPrivateDnsZoneResourceId": {
               "type": "string"
             },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
             "manageGlobalWorkspace": {
               "type": "bool"
             },
@@ -2006,6 +2105,10 @@
             },
             "globalWorkspaceResourceGroupName": {
               "type": "string"
+            },
+            "createGlobalWorkspaceResourceGroup": {
+              "type": "bool",
+              "defaultValue": true
             },
             "globalWorkspacePublicNetworkAccess": {
               "type": "string",
@@ -2040,6 +2143,7 @@
             "effectiveWorkspaceName": "[if(variables('adoptWorkspace'), last(split(parameters('workspaceResourceId'), '/')), parameters('workspaceName'))]",
             "effectiveWorkspaceSubscriptionId": "[if(variables('adoptWorkspace'), split(parameters('workspaceResourceId'), '/')[2], subscription().subscriptionId)]",
             "effectiveWorkspaceResourceGroupName": "[if(variables('adoptWorkspace'), split(parameters('workspaceResourceId'), '/')[4], parameters('workspaceResourceGroupName'))]",
+            "workspaceDiagnosticSettings": "[if(and(not(variables('adoptWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "workspaceFeedVnetName": "[if(not(empty(variables('workspaceFeedVirtualNetworkResourceId'))), last(split(variables('workspaceFeedVirtualNetworkResourceId'), '/')), '')]",
             "workspaceFeedVnetId": "[if(less(length(variables('workspaceFeedVnetName')), 37), variables('workspaceFeedVnetName'), uniqueString(variables('workspaceFeedVnetName')))]",
             "workspaceFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
@@ -2047,6 +2151,7 @@
             "effectiveGlobalWorkspaceName": "[if(variables('adoptGlobalWorkspace'), last(split(parameters('globalWorkspaceResourceId'), '/')), parameters('globalWorkspaceName'))]",
             "effectiveGlobalWorkspaceSubscriptionId": "[if(variables('adoptGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
             "effectiveGlobalWorkspaceResourceGroupName": "[if(variables('adoptGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[4], parameters('globalWorkspaceResourceGroupName'))]",
+            "globalWorkspaceDiagnosticSettings": "[if(and(not(variables('adoptGlobalWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "globalFeedVnetName": "[if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), last(split(variables('globalFeedVirtualNetworkResourceId'), '/')), '')]",
             "globalFeedVnetId": "[if(less(length(variables('globalFeedVnetName')), 37), variables('globalFeedVnetName'), uniqueString(variables('globalFeedVnetName')))]",
             "globalFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'global'), 'RESOURCE', variables('effectiveGlobalWorkspaceName')), 'VNETID', variables('globalFeedVnetId'))]",
@@ -2084,7 +2189,7 @@
               "name": "[last(split(variables('privateEndpointVirtualNetworkResourceIds')[copyIndex()], '/'))]"
             },
             "workspaceResourceGroup": {
-              "condition": "[and(parameters('manageWorkspace'), not(variables('adoptWorkspace')))]",
+              "condition": "[and(and(parameters('manageWorkspace'), not(variables('adoptWorkspace'))), parameters('createWorkspaceResourceGroup'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('workspaceResourceGroup-{0}', uniqueString('workspaceResourceGroup', deployment().name))]",
@@ -2111,8 +2216,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "5557394259284581899"
+                      "version": "0.48.1.52935",
+                      "templateHash": "16945675830389891545"
                     }
                   },
                   "parameters": {
@@ -2169,10 +2274,11 @@
                   "tags": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
                   "friendlyName": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').friendlyName, '')), createObject('value', parameters('workspaceFriendlyName')))]",
                   "description": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').description, '')), createObject('value', ''))]",
-                  "publicNetworkAccess": {
-                    "value": "[parameters('workspacePublicNetworkAccess')]"
-                  },
-                  "applicationGroupResourceIds": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]"
+                  "publicNetworkAccess": "[if(and(variables('adoptWorkspace'), empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))), if(equals(reference('existingWorkspace').publicNetworkAccess, 'Disabled'), createObject('value', 'Disabled'), createObject('value', 'Enabled')), createObject('value', parameters('workspacePublicNetworkAccess')))]",
+                  "applicationGroupResourceIds": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]",
+                  "diagnosticSettings": {
+                    "value": "[variables('workspaceDiagnosticSettings')]"
+                  }
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -2181,8 +2287,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "16072017364830952152"
+                      "version": "0.48.1.52935",
+                      "templateHash": "6557095143766166062"
                     }
                   },
                   "definitions": {
@@ -2422,8 +2528,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "2225160377183640704"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17011394048991037578"
                     }
                   },
                   "parameters": {
@@ -2541,7 +2647,7 @@
               ]
             },
             "globalWorkspaceResourceGroup": {
-              "condition": "[and(parameters('manageGlobalWorkspace'), not(variables('adoptGlobalWorkspace')))]",
+              "condition": "[and(and(parameters('manageGlobalWorkspace'), not(variables('adoptGlobalWorkspace'))), parameters('createGlobalWorkspaceResourceGroup'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('globalWorkspaceResourceGroup-{0}', uniqueString('globalWorkspaceResourceGroup', deployment().name))]",
@@ -2566,8 +2672,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "5557394259284581899"
+                      "version": "0.48.1.52935",
+                      "templateHash": "16945675830389891545"
                     }
                   },
                   "parameters": {
@@ -2631,7 +2737,10 @@
                   "publicNetworkAccess": {
                     "value": "[parameters('globalWorkspacePublicNetworkAccess')]"
                   },
-                  "applicationGroupResourceIds": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]"
+                  "applicationGroupResourceIds": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]",
+                  "diagnosticSettings": {
+                    "value": "[variables('globalWorkspaceDiagnosticSettings')]"
+                  }
                 },
                 "template": {
                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -2640,8 +2749,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "16072017364830952152"
+                      "version": "0.48.1.52935",
+                      "templateHash": "6557095143766166062"
                     }
                   },
                   "definitions": {
@@ -2841,7 +2950,7 @@
               ]
             },
             "globalFeedPrivateEndpoint": {
-              "condition": "[parameters('manageGlobalWorkspace')]",
+              "condition": "[and(parameters('manageGlobalWorkspace'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('globalFeedPrivateEndpoint-{0}', uniqueString('globalFeedPrivateEndpoint', deployment().name))]",
@@ -2882,8 +2991,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "2225160377183640704"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17011394048991037578"
                     }
                   },
                   "parameters": {
@@ -3012,11 +3121,11 @@
             },
             "globalWorkspaceResourceId": {
               "type": "string",
-              "value": "[if(parameters('manageGlobalWorkspace'), reference('globalWorkspace').outputs.resourceId.value, '')]"
+              "value": "[if(parameters('manageGlobalWorkspace'), reference('globalWorkspace').outputs.resourceId.value, parameters('globalWorkspaceResourceId'))]"
             },
             "globalFeedPrivateEndpointResourceId": {
               "type": "string",
-              "value": "[if(parameters('manageGlobalWorkspace'), reference('globalFeedPrivateEndpoint').outputs.resourceId.value, '')]"
+              "value": "[if(and(parameters('manageGlobalWorkspace'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), reference('globalFeedPrivateEndpoint').outputs.resourceId.value, '')]"
             },
             "controlPlaneResourceGroupName": {
               "type": "string",
@@ -3028,7 +3137,10 @@
             }
           }
         }
-      }
+      },
+      "dependsOn": [
+        "monitoring"
+      ]
     },
     "keyVaults": {
       "type": "Microsoft.Resources/deployments",
@@ -3045,7 +3157,7 @@
             "value": "[variables('operationsResourceGroupName')]"
           },
           "deploySecretsKeyVault": {
-            "value": "[parameters('deploySecretsKeyVault')]"
+            "value": "[variables('createSecretsKeyVault')]"
           },
           "secretsKeyVaultName": {
             "value": "[variables('secretsKeyVaultName')]"
@@ -3072,7 +3184,7 @@
             "value": "[parameters('virtualMachineAdminUserName')]"
           },
           "deployEncryptionKeyVault": {
-            "value": "[parameters('deployEncryptionKeyVault')]"
+            "value": "[variables('createEncryptionKeyVault')]"
           },
           "encryptionKeyVaultName": {
             "value": "[variables('encryptionKeyVaultName')]"
@@ -3110,8 +3222,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "14163817764054620884"
+              "version": "0.48.1.52935",
+              "templateHash": "17901447820396344200"
             }
           },
           "parameters": {
@@ -3222,6 +3334,7 @@
             "deploySecretsKv": "[parameters('deploySecretsKeyVault')]",
             "deploySecretsKvPe": "[and(and(variables('deploySecretsKv'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
             "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+            "deployKeyVaultPrivateEndpoint": "[or(variables('deploySecretsKvPe'), variables('deployEncryptionKvPe'))]",
             "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
             "kvPublicAccessDisabled": "[and(parameters('privateEndpoint'), empty(variables('effectivePermittedIPs')))]",
             "secretsKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
@@ -3239,6 +3352,15 @@
             }
           },
           "resources": {
+            "privateEndpointVirtualNetwork": {
+              "condition": "[variables('deployKeyVaultPrivateEndpoint')]",
+              "existing": true,
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2024-05-01",
+              "subscriptionId": "[split(parameters('privateEndpointSubnetResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('privateEndpointSubnetResourceId'), '/')[4]]",
+              "name": "[split(parameters('privateEndpointSubnetResourceId'), '/')[8]]"
+            },
             "secretsKeyVault": {
               "condition": "[variables('deploySecretsKv')]",
               "type": "Microsoft.Resources/deployments",
@@ -3287,8 +3409,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "10015858177495759134"
+                      "version": "0.48.1.52935",
+                      "templateHash": "6342770678444412859"
                     }
                   },
                   "definitions": {
@@ -3558,6 +3680,9 @@
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
                   },
+                  "location": {
+                    "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                  },
                   "subnetResourceId": {
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
                   },
@@ -3575,8 +3700,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "2225160377183640704"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17011394048991037578"
                     }
                   },
                   "parameters": {
@@ -3689,6 +3814,7 @@
                 }
               },
               "dependsOn": [
+                "privateEndpointVirtualNetwork",
                 "secretsKeyVault"
               ]
             },
@@ -3724,8 +3850,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "4514172869163926461"
+                      "version": "0.48.1.52935",
+                      "templateHash": "4145429113786806653"
                     }
                   },
                   "parameters": {
@@ -3826,8 +3952,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "10015858177495759134"
+                      "version": "0.48.1.52935",
+                      "templateHash": "6342770678444412859"
                     }
                   },
                   "definitions": {
@@ -4097,6 +4223,9 @@
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
                   },
+                  "location": {
+                    "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                  },
                   "subnetResourceId": {
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
                   },
@@ -4114,8 +4243,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "2225160377183640704"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17011394048991037578"
                     }
                   },
                   "parameters": {
@@ -4228,7 +4357,8 @@
                 }
               },
               "dependsOn": [
-                "encryptionKeyVault"
+                "encryptionKeyVault",
+                "privateEndpointVirtualNetwork"
               ]
             }
           },
@@ -4254,7 +4384,7 @@
       ]
     },
     "fslogixBackupVault": {
-      "condition": "[parameters('deployFSLogixBackupVault')]",
+      "condition": "[variables('createFSLogixBackupVault')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('fslogixBackupVault-{0}', uniqueString('fslogixBackupVault', deployment().name))]",
@@ -4322,8 +4452,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "13683479322978747973"
+              "version": "0.48.1.52935",
+              "templateHash": "14193367234030921962"
             }
           },
           "parameters": {
@@ -4454,6 +4584,15 @@
             "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]"
           },
           "resources": {
+            "privateEndpointVirtualNetwork": {
+              "condition": "[and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+              "existing": true,
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2024-05-01",
+              "subscriptionId": "[split(parameters('privateEndpointSubnetResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('privateEndpointSubnetResourceId'), '/')[4]]",
+              "name": "[split(parameters('privateEndpointSubnetResourceId'), '/')[8]]"
+            },
             "recoveryServicesVault": {
               "condition": "[parameters('createVault')]",
               "type": "Microsoft.Resources/deployments",
@@ -4470,7 +4609,7 @@
                     "value": "[parameters('vaultName')]"
                   },
                   "location": {
-                    "value": "[parameters('location')]"
+                    "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
                   "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
@@ -4497,8 +4636,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "13810464875425339214"
+                      "version": "0.48.1.52935",
+                      "templateHash": "1935415979737951843"
                     }
                   },
                   "definitions": {
@@ -4747,7 +4886,10 @@
                     }
                   }
                 }
-              }
+              },
+              "dependsOn": [
+                "privateEndpointVirtualNetwork"
+              ]
             },
             "fileShareBackupPolicy": {
               "condition": "[parameters('manageBackupPolicy')]",
@@ -4801,8 +4943,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "17657843453382812503"
+                      "version": "0.48.1.52935",
+                      "templateHash": "3558080141387992526"
                     }
                   },
                   "parameters": {
@@ -4886,8 +5028,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.47.16.16243",
-                      "templateHash": "2225160377183640704"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17011394048991037578"
                     }
                   },
                   "parameters": {
@@ -5032,42 +5174,42 @@
       "metadata": {
         "description": "The name of the security resource group."
       },
-      "value": "[variables('operationsResourceGroupName')]"
+      "value": "[if(variables('deployOperationsResourceGroup'), variables('operationsResourceGroupName'), '')]"
     },
     "secretsKeyVaultName": {
       "type": "string",
       "metadata": {
         "description": "The name of the Secrets Key Vault. Empty if not deployed."
       },
-      "value": "[if(parameters('deploySecretsKeyVault'), variables('secretsKeyVaultName'), '')]"
+      "value": "[if(variables('createSecretsKeyVault'), variables('secretsKeyVaultName'), if(not(empty(parameters('existingSecretsKeyVaultResourceId'))), last(split(parameters('existingSecretsKeyVaultResourceId'), '/')), ''))]"
     },
     "secretsKeyVaultResourceId": {
       "type": "string",
       "metadata": {
         "description": "The resource ID of the Secrets Key Vault. Pass as \"existingCredentialsKeyVaultResourceId\" to the standard host pool, or \"credentialsKeyVaultResourceId\" to the automated host pool, Session Host Replacer, and Session Hosts add-on deployments."
       },
-      "value": "[if(parameters('deploySecretsKeyVault'), reference('keyVaults').outputs.secretsKeyVaultResourceId.value, '')]"
+      "value": "[if(variables('createSecretsKeyVault'), reference('keyVaults').outputs.secretsKeyVaultResourceId.value, parameters('existingSecretsKeyVaultResourceId'))]"
     },
     "encryptionKeyVaultName": {
       "type": "string",
       "metadata": {
         "description": "The name of the Encryption Key Vault. Empty if not deployed."
       },
-      "value": "[if(parameters('deployEncryptionKeyVault'), variables('encryptionKeyVaultName'), '')]"
+      "value": "[if(variables('createEncryptionKeyVault'), variables('encryptionKeyVaultName'), if(not(empty(parameters('existingEncryptionKeyVaultResourceId'))), last(split(parameters('existingEncryptionKeyVaultResourceId'), '/')), ''))]"
     },
     "encryptionKeyVaultResourceId": {
       "type": "string",
       "metadata": {
         "description": "The resource ID of the Encryption Key Vault. Pass as \"encryptionKeyVaultResourceId\" to any AVD solution using Customer-Managed Keys."
       },
-      "value": "[if(parameters('deployEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultResourceId.value, '')]"
+      "value": "[if(variables('createEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultResourceId.value, parameters('existingEncryptionKeyVaultResourceId'))]"
     },
     "encryptionKeyVaultUri": {
       "type": "string",
       "metadata": {
         "description": "The URI of the Encryption Key Vault."
       },
-      "value": "[if(parameters('deployEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultUri.value, '')]"
+      "value": "[if(variables('createEncryptionKeyVault'), reference('keyVaults').outputs.encryptionKeyVaultUri.value, '')]"
     },
     "monitoringResourceGroupName": {
       "type": "string",
@@ -5088,21 +5230,21 @@
       "metadata": {
         "description": "The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as \"existingLogAnalyticsWorkspaceResourceId\" to the host pool deployment and \"logAnalyticsWorkspaceResourceId\" to the Image Management deployment."
       },
-      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value, '')]"
+      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value, parameters('existingLogAnalyticsWorkspaceResourceId'))]"
     },
     "avdInsightsDataCollectionRuleResourceId": {
       "type": "string",
       "metadata": {
         "description": "The resource ID of the AVD Insights Data Collection Rule. Empty if the Log Analytics Workspace is not deployed. Pass as \"existingAVDInsightsDataCollectionRuleResourceId\" to the host pool deployment."
       },
-      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.avdInsightsDataCollectionRuleResourceId.value, '')]"
+      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.avdInsightsDataCollectionRuleResourceId.value, parameters('existingAVDInsightsDataCollectionRuleResourceId'))]"
     },
     "dataCollectionEndpointResourceId": {
       "type": "string",
       "metadata": {
         "description": "The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as \"existingDataCollectionEndpointResourceId\" to the host pool deployment."
       },
-      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.dataCollectionEndpointResourceId.value, '')]"
+      "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.dataCollectionEndpointResourceId.value, parameters('existingDataCollectionEndpointResourceId'))]"
     },
     "azureMonitorPrivateLinkScopeResourceId": {
       "type": "string",
@@ -5158,21 +5300,21 @@
       "metadata": {
         "description": "The resource ID of the shared FSLogix Recovery Services vault. Pass as \"existingFilesBackupVaultResourceId\" to standard or automated pooled host pool deployments, or \"recoveryServicesVaultResourceId\" to the FSLogix Storage add-on."
       },
-      "value": "[if(parameters('deployFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, '')]"
+      "value": "[if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('existingFSLogixBackupVaultResourceId'))]"
     },
     "fslogixBackupPolicyName": {
       "type": "string",
       "metadata": {
         "description": "The name of the shared Azure Files snapshot backup policy. Pass as \"existingFilesBackupPolicyName\" to standard or automated pooled host pool deployments, or \"fileSharePolicyName\" to the FSLogix Storage add-on."
       },
-      "value": "[if(parameters('deployFSLogixBackupVault'), reference('fslogixBackupVault').outputs.fileShareBackupPolicyName.value, '')]"
+      "value": "[if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.fileShareBackupPolicyName.value, if(not(empty(parameters('existingFSLogixBackupVaultResourceId'))), parameters('existingFSLogixBackupPolicyName'), ''))]"
     },
     "fslogixBackupPolicyResourceId": {
       "type": "string",
       "metadata": {
         "description": "The resource ID of the shared Azure Files snapshot backup policy."
       },
-      "value": "[if(parameters('deployFSLogixBackupVault'), reference('fslogixBackupVault').outputs.fileShareBackupPolicyResourceId.value, '')]"
+      "value": "[if(not(empty(if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('existingFSLogixBackupVaultResourceId')))), format('{0}/backupPolicies/{1}', if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('existingFSLogixBackupVaultResourceId')), if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.fileShareBackupPolicyName.value, if(not(empty(parameters('existingFSLogixBackupVaultResourceId'))), parameters('existingFSLogixBackupPolicyName'), ''))), '')]"
     }
   }
 }

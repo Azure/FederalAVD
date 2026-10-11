@@ -1,13 +1,17 @@
 {
     // FederalAVD automated pooled host-pool starter configuration.
     // Azure Commercial only. Copy this file to customer/parameters/automatedHostPools before use.
-    // Deploy customer-examples/parameters/sharedServices/poc.automatedHostPoolPrerequisites.sharedServices.parameters.json first,
+    // Review every value for the intended environment; this starter is not a production baseline.
+    // Deploy customer-examples/parameters/sharedServices/automatedHostPoolPrerequisites.sharedServices.parameters.json first,
     // then replace credentialsKeyVaultResourceId below with its secretsKeyVaultResourceId output.
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
         "identifier": {
             "value": "autodev"
+        },
+        "workspaceCreationScope": {
+            "value": "Shared"
         },
         "location": {
             "value": "eastus"
