@@ -367,7 +367,10 @@ Subscription
 - **Type:** String (Azure Files only)
 - **Allowed:** `LocallyRedundant`, `ZoneRedundant`
 - **Default:** `LocallyRedundant`
-- **Description:** Redundancy for newly created Azure Files storage accounts used by FSLogix. This is configured independently from session host availability zone settings.
+- **Description:** Redundancy for newly created Azure Files storage accounts used by FSLogix. The
+  Portal form defaults this to `ZoneRedundant` when session hosts use Availability Zones and warns
+  if the operator overrides it to `LocallyRedundant`. Direct Bicep and parameter-file deployments
+  retain the `LocallyRedundant` parameter default.
 
 #### `keyManagementStorage`
 

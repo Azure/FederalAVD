@@ -63,6 +63,7 @@ Describe 'Host-pool availability-zone controls' {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
 $standardBicepPath = Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep'
+$standardTemplatePath = Join-Path $repoRoot 'deployments\hostpools\hostpool.json'
 $automatedFormPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $automatedBicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $standardCorePath = $standardBicepPath
@@ -76,6 +77,7 @@ Describe 'AVD workspace ownership contract' {
         $standardFormJson = Get-Content -LiteralPath $standardFormPath -Raw
         $automatedFormJson = Get-Content -LiteralPath $automatedFormPath -Raw
         $standardBicep = Get-Content -LiteralPath $standardBicepPath -Raw
+        $standardTemplate = Get-Content -LiteralPath $standardTemplatePath -Raw | ConvertFrom-Json
         $automatedBicep = Get-Content -LiteralPath $automatedBicepPath -Raw
         $namingModule = Get-Content -LiteralPath $hostPoolNamingPath -Raw
         $standardControlPlane = Get-Content -LiteralPath $standardControlPlanePath -Raw
@@ -140,6 +142,21 @@ Describe 'AVD workspace ownership contract' {
                 Should Match 'sharedKeyVaults!\.outputs\.secretsKeyVaultResourceId'
             $orchestrator |
                 Should Match 'sharedKeyVaults!\.outputs\.encryptionKeyVaultResourceId'
+        }
+    }
+
+    It 'keeps module outputs out of existing Key Vault resource identities' {
+        $standardBicep |
+            Should Match "resource kvCredentials '.+' existing = if \(!empty\(existingCredentialsKeyVaultResourceId\)\)"
+        $standardBicep |
+            Should Match "resource kvEncryption '.+' existing = if \(!empty\(existingEncryptionKeyVaultResourceId\)\)"
+
+        foreach ($resourceName in @('kvCredentials', 'kvEncryption')) {
+            $resource = $standardTemplate.resources.$resourceName
+            ($resource.condition | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+            ($resource.subscriptionId | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+            ($resource.resourceGroup | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+            ($resource.name | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
         }
     }
 
@@ -260,6 +277,11 @@ Describe 'Common host-pool UI form behavior' {
         $standardScalingPlan = $standardControlPlane.elements | Where-Object { $_.name -eq 'scalingPlan' }
         $standardPooledSchedules = $standardScalingPlan.elements | Where-Object { $_.name -eq 'pooledSchedules' }
         $standardOutputs = $standardForm.view.outputs.parameters
+        $standardProfiles = $standardForm.view.properties.steps | Where-Object { $_.name -eq 'userProfiles' }
+        $standardAzureFiles = $standardProfiles.elements | Where-Object { $_.name -eq 'azureFiles' }
+        $standardStorageRedundancy = $standardAzureFiles.elements | Where-Object { $_.name -eq 'storageRedundancy' }
+        $standardStorageRedundancyWarning = $standardAzureFiles.elements |
+            Where-Object { $_.name -eq 'storageRedundancyWarning' }
 
         $automatedControlPlane = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'controlPlane' }
         $automatedWorkspaceSection = $automatedControlPlane.elements | Where-Object { $_.name -eq 'workspace' }
@@ -268,6 +290,9 @@ Describe 'Common host-pool UI form behavior' {
         $automatedProfiles = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'profiles' }
         $automatedStorage = $automatedProfiles.elements | Where-Object { $_.name -eq 'storage' }
         $automatedStorageService = $automatedStorage.elements | Where-Object { $_.name -eq 'service' }
+        $automatedStorageRedundancy = $automatedStorage.elements | Where-Object { $_.name -eq 'storageRedundancy' }
+        $automatedStorageRedundancyWarning = $automatedStorage.elements |
+            Where-Object { $_.name -eq 'storageRedundancyWarning' }
 
         $automatedOperations = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'operationsAndMonitoring' }
         $automatedMonitoring = $automatedOperations.elements | Where-Object { $_.name -eq 'monitoring' }
@@ -283,6 +308,18 @@ Describe 'Common host-pool UI form behavior' {
         $standardBicep | Should Not Match "var exclusionTag ="
         $standardBicep | Should Not Match "var hostTags ="
         $standardBicep | Should Not Match 'tags: hostTags'
+    }
+
+    It 'aligns new Azure Files redundancy defaults with session-host zone availability' {
+        $standardStorageRedundancy.defaultValue |
+            Should Be "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]"
+        $automatedStorageRedundancy.defaultValue |
+            Should Be "[if(equals(steps('hosts').availability.option, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]"
+
+        $standardStorageRedundancyWarning.visible | Should Match "availability\.availability, 'AvailabilityZones'"
+        $standardStorageRedundancyWarning.visible | Should Match "storageRedundancy, 'LocallyRedundant'"
+        $automatedStorageRedundancyWarning.visible | Should Match "availability\.option, 'AvailabilityZones'"
+        $automatedStorageRedundancyWarning.visible | Should Match "storageRedundancy, 'LocallyRedundant'"
     }
 
     It 'outputs a selected standard workspace without rechecking API results' {

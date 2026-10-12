@@ -2821,8 +2821,8 @@
                   "type": "Microsoft.Common.DropDown",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]",
                   "label": "Azure Files Redundancy",
-                  "defaultValue": "Locally Redundant",
-                  "toolTip": "Select Azure Files storage redundancy independently from session host availability settings.",
+                  "defaultValue": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]",
+                  "toolTip": "Defaults to Zone Redundant when session hosts use Availability Zones. You can override the default when the target region or deployment requirements call for Locally Redundant storage.",
                   "constraints": {
                     "allowedValues": [
                       {
@@ -2835,6 +2835,15 @@
                       }
                     ],
                     "required": true
+                  }
+                },
+                {
+                  "name": "storageRedundancyWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('hosts').availability.availability, 'AvailabilityZones'), equals(steps('userProfiles').azureFiles.storageRedundancy, 'LocallyRedundant'))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Session hosts are distributed across Availability Zones, but FSLogix storage is locally redundant. A zone-level storage outage could make user profiles unavailable even while session hosts remain available."
                   }
                 },
                 {

@@ -767,7 +767,11 @@ availability = 'None'                      // No infrastructure redundancy
 
 Azure Files storage accounts for FSLogix can be configured with Zone-Redundant Storage (ZRS) using the `fslogixStorageRedundancy` parameter. ZRS replicates data synchronously across three availability zones within a region, protecting user profile data against a datacenter-level failure without any operator action or failover.
 
-**`fslogixStorageRedundancy` is an independent parameter** — it is not automatically derived from the session host `availability` setting. The default is `LocallyRedundant`. For production deployments where session hosts are deployed across availability zones, explicitly set `fslogixStorageRedundancy = 'ZoneRedundant'` to align storage resilience with compute resilience.
+**`fslogixStorageRedundancy` remains an independently configurable parameter.** In the standard and
+automated host-pool Portal forms, it defaults to `ZoneRedundant` when session hosts use Availability
+Zones and warns if `LocallyRedundant` is selected instead. Direct Bicep and parameter-file
+deployments retain the `LocallyRedundant` parameter default; set it to `ZoneRedundant` to align
+storage resilience with zonal compute resilience.
 
 > **Azure Files Premium and GRS:** Azure Files Premium does not support Geo-Redundant Storage (GRS). ZRS is the highest redundancy tier available for production-grade (Premium) FSLogix storage. This is a platform constraint — cross-region profile redundancy requires FSLogix Cloud Cache or an accepted per-region profile strategy. See [BCDR — Profile Strategy](bcdr.md#profile-strategy-for-cross-region-deployments).
 

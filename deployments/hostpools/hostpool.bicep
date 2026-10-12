@@ -1087,16 +1087,15 @@ resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existin
 }
 
 // Existing Key Vaults for secrets (only used for UI deployments since you can specify references in Parameter files.)
-resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(sharedCredentialsKeyVaultResourceId)) {
-  name: last(split(sharedCredentialsKeyVaultResourceId, '/'))
-  scope: resourceGroup(split(sharedCredentialsKeyVaultResourceId, '/')[2], split(sharedCredentialsKeyVaultResourceId, '/')[4])
+resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(existingCredentialsKeyVaultResourceId)) {
+  name: last(split(existingCredentialsKeyVaultResourceId, '/'))
+  scope: resourceGroup(split(existingCredentialsKeyVaultResourceId, '/')[2], split(existingCredentialsKeyVaultResourceId, '/')[4])
 }
 
-// Existing Encryption Key Vault — provided from Foundation deployment or pre-existing KV.
-// Only referenced when encryptionKeyVaultResourceId is non-empty (not when inline creation is used).
-resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(sharedEncryptionKeyVaultResourceId)) {
-  name: last(split(sharedEncryptionKeyVaultResourceId, '/'))
-  scope: resourceGroup(split(sharedEncryptionKeyVaultResourceId, '/')[2], split(sharedEncryptionKeyVaultResourceId, '/')[4])
+// Existing Encryption Key Vault - referenced only when supplied by the caller.
+resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(existingEncryptionKeyVaultResourceId)) {
+  name: last(split(existingEncryptionKeyVaultResourceId, '/'))
+  scope: resourceGroup(split(existingEncryptionKeyVaultResourceId, '/')[2], split(existingEncryptionKeyVaultResourceId, '/')[4])
 }
 
 // Deployments
@@ -1395,13 +1394,13 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(sharedCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(sharedCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     domainJoinDeploymentVirtualMachine: split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
@@ -1439,7 +1438,9 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
 var effectiveEncryptionKeyVaultResourceId = sharedEncryptionKeyVaultResourceId
 var effectiveCredentialsKeyVaultResourceId = sharedCredentialsKeyVaultResourceId
 #disable-next-line BCP318
-var effectiveEncryptionKeyVaultUri = !empty(sharedEncryptionKeyVaultResourceId) ? kvEncryption!.properties.vaultUri : ''
+var effectiveEncryptionKeyVaultUri = deploySharedEncryptionKeyVault
+  ? sharedKeyVaults!.outputs.encryptionKeyVaultUri
+  : !empty(existingEncryptionKeyVaultResourceId) ? kvEncryption!.properties.vaultUri : ''
 
 // Disk CMK: DES + key + role assignment — runs in parallel with monitoring/controlPlane,
 // giving sufficient RBAC propagation buffer before sessionHosts needs the DES.
@@ -1598,13 +1599,13 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     domainJoinUserPassword: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(sharedCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices') || hybridDomainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(sharedCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
@@ -1691,13 +1692,13 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     domainJoinUserPassword: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPassword)
           ? domainJoinUserPassword
-          : !empty(sharedCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: contains(identitySolution, 'DomainServices')
       ? !empty(domainJoinUserPrincipalName)
           ? domainJoinUserPrincipalName
-          : !empty(sharedCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
+          : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     enableAcceleratedNetworking: enableAcceleratedNetworking
@@ -1743,11 +1744,11 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     tags: tags
     timeZone: virtualMachinesTimeZone
     #disable-next-line BCP422
-    virtualMachineAdminPassword: !empty(sharedCredentialsKeyVaultResourceId)
+    virtualMachineAdminPassword: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminPassword')
       : virtualMachineAdminPassword
     #disable-next-line BCP422
-    virtualMachineAdminUserName: !empty(sharedCredentialsKeyVaultResourceId)
+    virtualMachineAdminUserName: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
       : virtualMachineAdminUserName
     virtualMachineNameConv: naming.outputs.virtualMachineNameConv
