@@ -10,6 +10,7 @@
 | AVD Shared Services (`sharedServices`) | `avdInsightsDataCollectionRuleResourceId` | Host Pool `existingAVDInsightsDataCollectionRuleResourceId` |
 | AVD Shared Services (`sharedServices`) | `dataCollectionEndpointResourceId` | Host Pool `existingDataCollectionEndpointResourceId` |
 | AVD Shared Services (`sharedServices`) | `azureMonitorPrivateLinkScopeResourceId` | Host Pool `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring and DNS automation |
+| AVD Shared Services (`sharedServices`) | `avdWorkspaceResourceId` | Standard and Automated Host Pool `existingFeedWorkspaceResourceId`; Shared Services remains the owner of workspace feed/global Private Link |
 | AVD Shared Services (`sharedServices`) | `fslogixBackupVaultResourceId` | Host Pool `existingFilesBackupVaultResourceId`; FSLogix Storage add-on `recoveryServicesVaultResourceId` |
 | AVD Shared Services (`sharedServices`) | `fslogixBackupPolicyName` | Host Pool `existingFilesBackupPolicyName`; FSLogix Storage add-on `fileSharePolicyName` |
 | First standard Host Pool (`hostpool`) | `credentialsKeyVaultResourceId` | Later standard Host Pool `existingCredentialsKeyVaultResourceId` |

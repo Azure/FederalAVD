@@ -63,16 +63,212 @@ Describe 'Host-pool availability-zone controls' {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
 $standardBicepPath = Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep'
+$standardTemplatePath = Join-Path $repoRoot 'deployments\hostpools\hostpool.json'
 $automatedFormPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $automatedBicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$standardCorePath = $standardBicepPath
+$automatedCorePath = $automatedBicepPath
+$hostPoolNamingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\hostPool.bicep'
+$standardControlPlanePath = Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
+$automatedControlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
+
+Describe 'AVD workspace ownership contract' {
+    BeforeAll {
+        $standardFormJson = Get-Content -LiteralPath $standardFormPath -Raw
+        $automatedFormJson = Get-Content -LiteralPath $automatedFormPath -Raw
+        $standardBicep = Get-Content -LiteralPath $standardBicepPath -Raw
+        $standardTemplate = Get-Content -LiteralPath $standardTemplatePath -Raw | ConvertFrom-Json
+        $automatedBicep = Get-Content -LiteralPath $automatedBicepPath -Raw
+        $namingModule = Get-Content -LiteralPath $hostPoolNamingPath -Raw
+        $standardControlPlane = Get-Content -LiteralPath $standardControlPlanePath -Raw
+        $automatedControlPlane = Get-Content -LiteralPath $automatedControlPlanePath -Raw
+    }
+
+    It 'keeps host-pool-specific workspace naming exclusive to the dedicated PoC' {
+        $namingModule | Should Match "cnv\(cnv_components, cnv_delimiter, cnv_rtCodes\.workspaces, identifier, cnv_cploc"
+        $namingModule | Should Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator | Should Not Match 'workspaceCreationScope'
+            $orchestrator | Should Not Match 'createHostPoolSpecificWorkspace'
+            $orchestrator | Should Match 'workspaceName: naming\.outputs\.sharedWorkspaceName'
+            $orchestrator | Should Match 'workspaceResourceGroupName: naming\.outputs\.sharedResourceGroupControlPlane'
+            $orchestrator | Should Match 'createWorkspaceResourceGroup: true'
+        }
+        ((Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.PSObject.Properties.Name -join ',') |
+            Should Not Match 'workspaceCreationScope'
+        ((Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.PSObject.Properties.Name -join ',') |
+            Should Not Match 'workspaceCreationScope'
+        $pocBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.bicep') -Raw
+        $pocBicep | Should Match 'workspaceName: naming\.outputs\.workspaceName'
+        $pocBicep | Should Match 'workspaceResourceGroupName: resourceGroupName'
+        $automatedParameters = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json') -Raw |
+            ConvertFrom-Json
+        ($automatedParameters.parameters.PSObject.Properties.Name -join ',') | Should Not Match 'workspaceCreationScope'
+    }
+
+    It 'composes shared capabilities directly without nesting the Shared Services entry template' {
+        $standardBicep | Should Not Match "module sharedServices '../sharedServices/sharedServices.bicep'"
+        $standardBicep | Should Not Match 'hostPoolCore\.bicep'
+        $standardBicep | Should Match "module controlPlane 'modules/control-plane/controlPlane.bicep'"
+        $standardBicep | Should Match "module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep'"
+        $standardBicep | Should Match "module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep'"
+        $standardBicep | Should Match "module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep'"
+        $standardBicep | Should Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
+        $automatedBicep | Should Not Match "module sharedServices '../sharedServices/sharedServices.bicep'"
+        $automatedBicep | Should Not Match 'automatedHostPoolCore\.bicep'
+        $automatedBicep | Should Match "module controlPlane 'modules/controlPlane.bicep'"
+        $automatedBicep | Should Match "module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep'"
+        $automatedBicep | Should Match "module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep'"
+        $automatedBicep | Should Match "module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep'"
+        $automatedBicep | Should Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
+    }
+
+    It 'enables Shared Services private endpoints for new Key Vaults or backup vaults' {
+        $standardBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
+        $automatedBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
+        $standardBicep | Should Match 'privateEndpoint: sharedPrivateEndpoint'
+        $automatedBicep | Should Match 'privateEndpoint: sharedPrivateEndpoint'
+    }
+
+    It 'skips the shared Key Vault orchestration when both vaults are existing or unnecessary' {
+        $standardBicep |
+            Should Match 'var deploySharedKeyVaults = deploySecretsKeyVault \|\| deploySharedEncryptionKeyVault'
+        $automatedBicep |
+            Should Match 'var deploySharedKeyVaults = deploySharedSecretsKeyVault \|\| deploySharedEncryptionKeyVault'
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator |
+                Should Match "module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults\.bicep' = if \(deploySharedKeyVaults\)"
+            $orchestrator |
+                Should Match 'sharedKeyVaults!\.outputs\.secretsKeyVaultResourceId'
+            $orchestrator |
+                Should Match 'sharedKeyVaults!\.outputs\.encryptionKeyVaultResourceId'
+        }
+    }
+
+    It 'keeps module outputs out of existing Key Vault resource identities' {
+        $standardBicep |
+            Should Match "resource kvCredentials '.+' existing = if \(!empty\(existingCredentialsKeyVaultResourceId\)\)"
+        $standardBicep |
+            Should Match "resource kvEncryption '.+' existing = if \(!empty\(existingEncryptionKeyVaultResourceId\)\)"
+
+        foreach ($resourceName in @('kvCredentials', 'kvEncryption')) {
+            $resource = $standardTemplate.resources.$resourceName
+            ($resource.condition | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+            ($resource.subscriptionId | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+            ($resource.resourceGroup | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+            ($resource.name | Out-String) | Should Not Match "reference\('sharedKeyVaults'\)"
+        }
+    }
+
+    It 'keeps shared workspace and feed endpoint deployment out of both cores' {
+        $standardControlPlane | Should Not Match 'module feedWorkspace_pe'
+        $standardControlPlane | Should Not Match 'module globalWorkspace'
+        $automatedControlPlane | Should Not Match 'module workspaceFeedPrivateEndpoint'
+        $automatedControlPlane | Should Not Match 'module globalWorkspace'
+        (Get-Content -LiteralPath $standardCorePath -Raw) | Should Match 'existingFeedWorkspaceResourceId: sharedWorkspaceResourceId'
+        (Get-Content -LiteralPath $automatedCorePath -Raw) | Should Match 'existingFeedWorkspaceResourceId: effectiveFeedWorkspaceResourceId'
+    }
+
+    It 'does not redeploy existing workspaces unless feed networking is explicitly managed' {
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator | Should Match "var createFeedWorkspace = empty\(existingFeedWorkspaceResourceId\)"
+            $orchestrator |
+                Should Match "var manageFeedWorkspace = createFeedWorkspace \|\| contains\(\['FeedAndHostPool', 'All'\], avdPrivateLinkPrivateRoutes\)"
+            $orchestrator |
+                Should Match "module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace\.bicep' = if \(manageFeedWorkspace\)"
+            $orchestrator | Should Match 'manageWorkspace: manageFeedWorkspace'
+            $orchestrator |
+                Should Match '(sharedWorkspaceResourceId|effectiveFeedWorkspaceResourceId) = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.workspaceResourceId\s+: existingFeedWorkspaceResourceId'
+            $orchestrator |
+                Should Match 'output workspaceFeedPrivateEndpointResourceId string = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.workspaceFeedPrivateEndpointResourceId\s+:'
+            $orchestrator |
+                Should Match 'output globalFeedWorkspaceResourceId string = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.globalWorkspaceResourceId\s+: existingGlobalFeedResourceId'
+            $orchestrator |
+                Should Match 'output globalFeedPrivateEndpointResourceId string = manageFeedWorkspace\s+\? sharedAvdWorkspace!\.outputs\.globalFeedPrivateEndpointResourceId\s+:'
+        }
+    }
+
+    It 'allows the orchestrators to manage feed and global Private Link explicitly' {
+        $standardFormJson | Should Match 'explicitly authorizes the deployment'
+        $automatedFormJson | Should Match 'explicitly authorizes the deployment'
+        $standardFormJson | Should Match '"value": "FeedAndHostPool"'
+        $standardFormJson | Should Match '"value": "All"'
+        $automatedFormJson | Should Match '"value": "FeedAndHostPool"'
+        $automatedFormJson | Should Match '"value": "All"'
+    }
+
+    It 'warns before managing feed Private Link on an existing workspace' {
+        $standardFormJson | Should Match '"name": "existingWorkspaceOwnership"'
+        $automatedFormJson | Should Match '"name": "existingWorkspaceOwnership"'
+        $standardFormJson | Should Match '"style": "Warning"'
+        $automatedFormJson | Should Match '"style": "Warning"'
+        $standardFormJson | Should Match 'Carefully review changes to this existing workspace'
+        $automatedFormJson | Should Match 'Carefully review changes to this existing workspace'
+        $standardFormJson | Should Match "existingWorkspaceOwnership[\s\S]{0,500}avdPrivateLinkConfig, 'HostPool'"
+        $automatedFormJson | Should Match "existingWorkspaceOwnership[\s\S]{0,500}privateRoutes, 'HostPool'"
+        $standardFormJson | Should Match 'can affect feed download and client connectivity for every host pool registered to it'
+        $automatedFormJson | Should Match 'can affect feed download and client connectivity for every host pool registered to it'
+        $standardFormJson | Should Match 'Confirm ownership and coordinate the change before continuing'
+        $automatedFormJson | Should Match 'Confirm ownership and coordinate the change before continuing'
+    }
+
+    It 'surfaces global-feed detection and its naming limitation' {
+        $standardFormJson | Should Match '"name": "infoBox1"'
+        $automatedFormJson | Should Match '"name": "existingGlobalFeedInfo"'
+        $standardFormJson | Should Match 'reuses its resource ID instead of creating another global-feed workspace'
+        $automatedFormJson | Should Match 'reuses its resource ID instead of creating another global-feed workspace'
+        $standardFormJson | Should Match '"name": "globalFeedCreationWarning"'
+        $automatedFormJson | Should Match '"name": "globalFeedCreationWarning"'
+        $standardFormJson | Should Match 'Automatic detection recognizes workspaces that follow the FederalAVD global-feed naming convention'
+        $automatedFormJson | Should Match 'Automatic detection recognizes workspaces that follow the FederalAVD global-feed naming convention'
+        $standardFormJson | Should Match 'Verify that no global private endpoint exists elsewhere before continuing'
+        $automatedFormJson | Should Match 'Verify that no global private endpoint exists elsewhere before continuing'
+    }
+
+    It 'does not manage a global-feed workspace that was supplied as existing' {
+        $standardBicep | Should Match "manageGlobalWorkspace: avdPrivateLinkPrivateRoutes == 'All' && empty\(existingGlobalFeedResourceId\)"
+        $automatedBicep | Should Match "manageGlobalWorkspace: avdPrivateLinkPrivateRoutes == 'All' && empty\(existingGlobalFeedResourceId\)"
+    }
+
+    It 'passes monitoring to shared workspace orchestration' {
+        $standardBicep | Should Match 'logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId'
+        $automatedBicep | Should Match 'logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId'
+    }
+
+    It 'passes global endpoint networking whenever a new global workspace is required' {
+        $standardOutputs = (Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+        $automatedOutputs = (Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+
+        foreach ($outputs in @($standardOutputs, $automatedOutputs)) {
+            $outputs.existingGlobalFeedResourceId | Should Match "empty\(filter\(.+contains\(.+global-feed"
+            $outputs.globalFeedPrivateEndpointSubnetResourceId | Should Match "empty\(filter\(.+contains\(.+global-feed"
+            $outputs.globalFeedPrivateEndpointSubnetResourceId | Should Not Match 'createOption'
+            $outputs.globalFeedPrivateEndpointSubnetResourceId | Should Not Match 'enablePrivateDNSIntegration'
+            $outputs.globalFeedPrivateDnsZoneResourceId | Should Match 'enablePrivateDNSIntegration'
+            $outputs.globalFeedPrivateDnsZoneResourceId | Should Not Match 'createOption'
+        }
+    }
+
+    It 'passes feed endpoint settings for new and existing workspaces' {
+        $standardOutputs = (Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+        $automatedOutputs = (Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters
+
+        foreach ($outputs in @($standardOutputs, $automatedOutputs)) {
+            $outputs.workspaceFeedPrivateEndpointSubnetResourceId | Should Match 'HostPool'
+            $outputs.workspaceFeedPrivateEndpointSubnetResourceId | Should Not Match 'createOption'
+            $outputs.workspaceFeedPublicNetworkAccess | Should Match 'HostPool'
+            $outputs.workspaceFeedPublicNetworkAccess | Should Not Match 'createOption'
+        }
+    }
+}
 
 Describe 'Common host-pool UI form behavior' {
     BeforeAll {
         $standardForm = Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json
         $automatedForm = Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json
-        $automatedBicep = Get-Content -LiteralPath $automatedBicepPath -Raw
+        $automatedBicep = Get-Content -LiteralPath $automatedCorePath -Raw
         $standardFormJson = Get-Content -LiteralPath $standardFormPath -Raw
-        $standardBicep = Get-Content -LiteralPath $standardBicepPath -Raw
+        $standardBicep = Get-Content -LiteralPath $standardCorePath -Raw
 
         $standardControlPlane = $standardForm.view.properties.steps | Where-Object { $_.name -eq 'controlPlane' }
         $standardWorkspaceApi = $standardControlPlane.elements | Where-Object { $_.name -eq 'workspacesApi' }
@@ -81,6 +277,11 @@ Describe 'Common host-pool UI form behavior' {
         $standardScalingPlan = $standardControlPlane.elements | Where-Object { $_.name -eq 'scalingPlan' }
         $standardPooledSchedules = $standardScalingPlan.elements | Where-Object { $_.name -eq 'pooledSchedules' }
         $standardOutputs = $standardForm.view.outputs.parameters
+        $standardProfiles = $standardForm.view.properties.steps | Where-Object { $_.name -eq 'userProfiles' }
+        $standardAzureFiles = $standardProfiles.elements | Where-Object { $_.name -eq 'azureFiles' }
+        $standardStorageRedundancy = $standardAzureFiles.elements | Where-Object { $_.name -eq 'storageRedundancy' }
+        $standardStorageRedundancyWarning = $standardAzureFiles.elements |
+            Where-Object { $_.name -eq 'storageRedundancyWarning' }
 
         $automatedControlPlane = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'controlPlane' }
         $automatedWorkspaceSection = $automatedControlPlane.elements | Where-Object { $_.name -eq 'workspace' }
@@ -89,6 +290,9 @@ Describe 'Common host-pool UI form behavior' {
         $automatedProfiles = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'profiles' }
         $automatedStorage = $automatedProfiles.elements | Where-Object { $_.name -eq 'storage' }
         $automatedStorageService = $automatedStorage.elements | Where-Object { $_.name -eq 'service' }
+        $automatedStorageRedundancy = $automatedStorage.elements | Where-Object { $_.name -eq 'storageRedundancy' }
+        $automatedStorageRedundancyWarning = $automatedStorage.elements |
+            Where-Object { $_.name -eq 'storageRedundancyWarning' }
 
         $automatedOperations = $automatedForm.view.properties.steps | Where-Object { $_.name -eq 'operationsAndMonitoring' }
         $automatedMonitoring = $automatedOperations.elements | Where-Object { $_.name -eq 'monitoring' }
@@ -104,6 +308,18 @@ Describe 'Common host-pool UI form behavior' {
         $standardBicep | Should Not Match "var exclusionTag ="
         $standardBicep | Should Not Match "var hostTags ="
         $standardBicep | Should Not Match 'tags: hostTags'
+    }
+
+    It 'aligns new Azure Files redundancy defaults with session-host zone availability' {
+        $standardStorageRedundancy.defaultValue |
+            Should Be "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]"
+        $automatedStorageRedundancy.defaultValue |
+            Should Be "[if(equals(steps('hosts').availability.option, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]"
+
+        $standardStorageRedundancyWarning.visible | Should Match "availability\.availability, 'AvailabilityZones'"
+        $standardStorageRedundancyWarning.visible | Should Match "storageRedundancy, 'LocallyRedundant'"
+        $automatedStorageRedundancyWarning.visible | Should Match "availability\.option, 'AvailabilityZones'"
+        $automatedStorageRedundancyWarning.visible | Should Match "storageRedundancy, 'LocallyRedundant'"
     }
 
     It 'outputs a selected standard workspace without rechecking API results' {
@@ -171,6 +387,51 @@ Describe 'Common host-pool UI form behavior' {
         $entraKerberosInfoBox.options.uri | Should Match 'EntraKerberos-CloudOnly'
         $entraKerberosInfoBox.options.uri | Should Match 'entra-kerberos-cloud-only\.md'
         $entraKerberosInfoBox.options.uri | Should Match 'entra-kerberos-hybrid\.md'
+    }
+}
+
+Describe 'FSLogix Storage add-on redundancy behavior' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json') -Raw |
+            ConvertFrom-Json
+        $scopeStep = $form.view.properties.steps | Where-Object { $_.name -eq 'scope' }
+        $storageSkusApi = $scopeStep.elements | Where-Object { $_.name -eq 'storageSkusApi' }
+        $storageStep = $form.view.properties.steps | Where-Object { $_.name -eq 'storage' }
+        $storageRedundancy = $storageStep.elements | Where-Object { $_.name -eq 'storageRedundancy' }
+        $storageRedundancyWarning = $storageStep.elements |
+            Where-Object { $_.name -eq 'storageRedundancyWarning' }
+    }
+
+    It 'queries tier-specific Azure Files ZRS SKUs for the selected scope' {
+        $storageSkusApi.condition | Should Match 'resourceScope\.subscription\.id'
+        $storageSkusApi.condition | Should Match 'resourceScope\.location'
+        $storageSkusApi.request.path | Should Match 'Microsoft\.Storage/skus\?api-version=2021-09-01'
+        $storageSkusApi.request.transforms.standardZrs | Should Match "name == 'Standard_ZRS'"
+        $storageSkusApi.request.transforms.standardZrs | Should Match "kind == 'StorageV2'"
+        $storageSkusApi.request.transforms.standardZrs | Should Match "restrictions\[\?type == 'Location'\]"
+        $storageSkusApi.request.transforms.premiumZrs | Should Match "name == 'Premium_ZRS'"
+        $storageSkusApi.request.transforms.premiumZrs | Should Match "kind == 'FileStorage'"
+        $storageSkusApi.request.transforms.premiumZrs | Should Match "restrictions\[\?type == 'Location'\]"
+    }
+
+    It 'defaults to ZRS and offers it only when the selected tier supports it in the region' {
+        $storageRedundancy.defaultValue | Should Match "'Zone Redundant', 'Locally Redundant'"
+        $storageRedundancy.defaultValue | Should Match "storageService, 'AzureFiles Premium'"
+        $storageRedundancy.defaultValue | Should Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
+        $storageRedundancy.defaultValue | Should Match 'sku\.locations'
+        $storageRedundancy.defaultValue | Should Not Match 'tryGet|coalesce'
+        $storageRedundancy.constraints.allowedValues | Should Match 'ZoneRedundant'
+        $storageRedundancy.constraints.allowedValues | Should Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
+        $storageRedundancy.constraints.allowedValues | Should Not Match 'tryGet|coalesce'
+    }
+
+    It 'warns only when ZRS is available and LRS is selected' {
+        $storageRedundancyWarning.options.style | Should Be 'Warning'
+        $storageRedundancyWarning.visible | Should Match "storageRedundancy, 'LocallyRedundant'"
+        $storageRedundancyWarning.visible | Should Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
+        $storageRedundancyWarning.visible | Should Match 'sku\.locations'
+        $storageRedundancyWarning.visible | Should Not Match 'tryGet|coalesce'
+        $form.view.outputs.parameters.fslogixStorageRedundancy | Should Match 'storageRedundancy'
     }
 }
 
@@ -273,5 +534,257 @@ Describe 'Session host resource naming defaults' {
         $vmControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $diskControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $nicControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
+    }
+}
+
+Describe 'Standard host-pool PoC form' {
+    BeforeAll {
+        $repoRoot = Split-Path -Parent $PSScriptRoot
+        $pocFormPath = Join-Path $repoRoot 'deployments\hostpoolPoc\uiFormDefinition.json'
+        $hostPoolTemplatePath = Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.json'
+        $pocBicepPath = Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.bicep'
+        $publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
+        $quickStartPath = Join-Path $repoRoot 'docs\quick-start.md'
+        $hostPoolReadmePath = Join-Path $repoRoot 'deployments\hostpoolPoc\README.md'
+        $pocParametersPath = Join-Path $repoRoot 'customer-examples\parameters\hostpoolPoc\poc.hostpoolPoc.parameters.json'
+        $azureFilesBicepPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep'
+        $pocFormJson = Get-Content -LiteralPath $pocFormPath -Raw
+        $pocForm = Get-Content -LiteralPath $pocFormPath -Raw | ConvertFrom-Json
+        $hostPoolTemplateJson = Get-Content -LiteralPath $hostPoolTemplatePath -Raw
+        $hostPoolTemplate = $hostPoolTemplateJson | ConvertFrom-Json
+        $pocBicep = Get-Content -LiteralPath $pocBicepPath -Raw
+        $azureFilesBicep = Get-Content -LiteralPath $azureFilesBicepPath -Raw
+        $pocOutputs = $pocForm.view.outputs.parameters
+    }
+
+    It 'uses the complete subscription deployment output contract' {
+        $basicsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $scope = $basicsStep.elements | Where-Object { $_.name -eq 'scope' }
+
+        $scope.type | Should Be 'Microsoft.Common.ResourceScope'
+        $pocForm.view.outputs.kind | Should Be 'Subscription'
+        $pocForm.view.outputs.subscriptionId | Should Be "[steps('basics').scope.subscription.id]"
+        $pocForm.view.outputs.location | Should Be "[steps('basics').scope.location.name]"
+    }
+
+    It 'uses the streamlined three-step experience' {
+        @($pocForm.view.properties.steps).Count | Should Be 3
+        ($pocForm.view.properties.steps.name -join ',') | Should Be 'basics,sessionHosts,options'
+    }
+
+    It 'requires desktop access groups on the first page' {
+        $basicsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $groupPicker = $basicsStep.elements | Where-Object { $_.name -eq 'groupPickerBlade' }
+        $groupSelector = $basicsStep.elements | Where-Object { $_.name -eq 'groupSelector' }
+
+        $groupPicker.type | Should Be 'Microsoft.Solutions.BladeInvokeControl'
+        $groupPicker.bladeReference.parameters.selectionMinimum | Should Be 1
+        $groupSelector.type | Should Be 'Microsoft.Common.Selector'
+        $groupSelector.constraints.required | Should Be $true
+        $groupSelector.value | Should Be "[steps('basics').groupPickerBlade.transformed.groups]"
+        $pocOutputs.appGroupSecurityGroups |
+            Should Be "[steps('basics').groupPickerBlade.transformed.groups]"
+    }
+
+    It 'describes the PoC as a disposable demo that ends before pilot or production' {
+        $flowContent = @(
+            $pocFormJson
+            Get-Content -LiteralPath $quickStartPath -Raw
+            Get-Content -LiteralPath $hostPoolReadmePath -Raw
+            Get-Content -LiteralPath $pocParametersPath -Raw
+        ) -join "`n"
+
+        $flowContent | Should Match '(?i)\bdisposable\b'
+        $flowContent | Should Match '(?i)\btear (?:it )?down\b'
+        $flowContent | Should Match '(?i)\bpilot\b'
+        $flowContent | Should Match '(?i)start a new'
+        $flowContent | Should Match '(?i)full AVD Host Pool'
+    }
+
+    It 'warns that common Azure Policy guardrails may deny the PoC' {
+        $basicsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'basics' }
+        $policyWarning = $basicsStep.elements |
+            Where-Object { $_.name -eq 'policyCompatibilityWarning' }
+        $documentation = @(
+            Get-Content -LiteralPath $quickStartPath -Raw
+            Get-Content -LiteralPath $hostPoolReadmePath -Raw
+        )
+
+        $policyWarning.type | Should Be 'Microsoft.Common.InfoBox'
+        $policyWarning.options.style | Should Be 'Warning'
+        $policyWarning.options.text | Should Match '(?i)Azure Policy guardrails'
+        $policyWarning.options.text | Should Match '(?i)may deny this deployment'
+        $policyWarning.options.text | Should Match '(?i)Do not weaken production guardrails'
+        foreach ($content in $documentation) {
+            $content | Should Match '(?i)Azure Policy guardrails'
+            $content | Should Match '(?i)may deny the deployment'
+            $content | Should Match '(?i)Do not weaken production guardrails'
+        }
+    }
+
+    It 'fixes the isolated PoC ownership and security posture' {
+        $pocBicep | Should Match "identitySolution: 'EntraId'"
+        $pocBicep | Should Match "availability: 'None'"
+        $pocBicep | Should Match 'encryptionAtHost: false'
+        $pocBicep | Should Match "hostPoolRDPProperties: 'enablerdsaadauth:i:1;'"
+        $pocBicep | Should Match 'deployScalingPlan: false'
+        $pocBicep | Should Match 'deployRecoveryServices: false'
+        $pocBicep | Should Match 'deployPrivateEndpoints: false'
+        $pocBicep | Should Match "avdPrivateLinkPrivateRoutes: 'None'"
+        $pocBicep | Should Match 'workspaceResourceGroupName: resourceGroupName'
+    }
+
+    It 'defaults optional profiles on and monitoring off' {
+        $optionsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'options' }
+        $fslogix = $optionsStep.elements | Where-Object { $_.name -eq 'deployFSLogixStorage' }
+        $monitoring = $optionsStep.elements | Where-Object { $_.name -eq 'enableMonitoring' }
+
+        $fslogix.type | Should Be 'Microsoft.Common.OptionsGroup'
+        $fslogix.label | Should Be 'FSLogix Profile Containers'
+        $fslogix.defaultValue | Should Be 'Yes - deploy FSLogix profile containers (2 hosts)'
+        $monitoring.type | Should Be 'Microsoft.Common.OptionsGroup'
+        $monitoring.defaultValue | Should Be 'No - skip monitoring resources'
+        $pocBicep | Should Match 'var sessionHostCount = deployFSLogixStorage \? 2 : 1'
+
+        $sessionHostsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'sessionHosts' }
+        @($sessionHostsStep.elements | Where-Object { $_.name -eq 'sessionHostCount' }).Count | Should Be 0
+    }
+
+    It 'skips the deployment helper and NTFS ACL step for storage-account-key authentication' {
+        $standardBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep') -Raw
+        $fslogixStorageAddonBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.bicep') -Raw
+
+        $azureFilesBicep | Should Match "module SetNTFSPermissions .* = if \(identitySolution != 'EntraId'\)"
+        $standardBicep | Should Match "var createDeploymentVm = \(deployFSLogixStorage && identitySolution != 'EntraId'\)"
+        $fslogixStorageAddonBicep | Should Match "var deploymentVirtualMachineRequired = identitySolution != 'EntraId'"
+        $fslogixStorageAddonBicep | Should Match 'module deploymentHelper .* = if \(deployDeploymentVirtualMachine\)'
+        $fslogixStorageAddonBicep | Should Match 'module cleanupDeploymentHelper .* = if \(deployDeploymentVirtualMachine\)'
+        $pocBicep | Should Not Match 'module deploymentResourceGroup'
+        $pocBicep | Should Not Match 'module deploymentHelper'
+        $pocBicep | Should Not Match 'module cleanupDeploymentHelper'
+        $pocBicep | Should Match "deploymentUserAssignedIdentityClientId: ''"
+        $pocBicep | Should Match "deploymentVirtualMachineName: ''"
+    }
+
+    It 'explains the streamlined PoC decisions at each step' {
+        $allElements = @($pocForm.view.properties.steps | ForEach-Object { $_.elements })
+        $infoBoxes = @($allElements | Where-Object { $_.type -eq 'Microsoft.Common.InfoBox' })
+        $infoText = $infoBoxes.options.text -join "`n"
+
+        $infoBoxes.Count | Should BeGreaterThan 5
+        $infoText | Should Match 'Microsoft Entra security groups'
+        $infoText | Should Match 'private session-host subnet'
+        $infoText | Should Match 'NAT Gateway'
+        $infoText | Should Match 'do not receive public IP addresses'
+        $infoText | Should Match 'latest available Windows 11 multi-session SKU'
+        $infoText | Should Match 'FSLogix profile containers'
+        $infoText | Should Match 'two session hosts'
+        $infoText | Should Match 'Windows Credential Manager'
+        $infoText | Should Match 'AVD Insights'
+        $infoText | Should Match 'disposable demonstration environment'
+        $infoText | Should Match 'delete the consolidated PoC resource group'
+        $infoUris = $infoBoxes.options.uri -join "`n"
+        $infoUris | Should Match 'azure/nat-gateway/nat-overview'
+        $infoUris | Should Match 'azure/virtual-desktop/configure-single-sign-on'
+        $infoUris | Should Match 'fslogix/overview-what-is-fslogix'
+        $infoUris | Should Match 'azure/virtual-desktop/insights'
+    }
+
+    It 'limits VM sizes to region-available 4-vCPU D4s and D4as SKUs' {
+        $sessionHostsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'sessionHosts' }
+        $vmSizesApi = $sessionHostsStep.elements | Where-Object { $_.name -eq 'vmSizesApi' }
+        $vmSize = $sessionHostsStep.elements | Where-Object { $_.name -eq 'virtualMachineSize' }
+
+        $vmSizesApi.request.path | Should Match 'Microsoft\.Compute/skus'
+        $vmSizesApi.request.path | Should Match '\$filter=location eq'
+        $vmSizesApi.request.transforms.sizes | Should Match "starts_with\(name, 'Standard_D4s_'\)"
+        $vmSizesApi.request.transforms.sizes | Should Match "starts_with\(name, 'Standard_D4as_'\)"
+        $vmSizesApi.request.transforms.sizes | Should Match "name == 'vCPUs'"
+        $vmSizesApi.request.transforms.sizes | Should Match "== '4'"
+        $vmSizesApi.request.transforms.sizes | Should Match "type == 'Location'"
+        $vmSizesApi.request.transforms.sizes | Should Match "name == 'MemoryGB'"
+        $vmSize.type | Should Be 'Microsoft.Common.DropDown'
+        $vmSize.multiLine | Should Be $true
+        $vmSize.filter | Should Be $true
+        $vmSize.constraints.allowedValues | Should Be "[steps('sessionHosts').vmSizesApi.transformed.sizes]"
+    }
+
+    It 'selects the latest region-available Office 365 marketplace SKU' {
+        $sessionHostsStep = $pocForm.view.properties.steps | Where-Object { $_.name -eq 'sessionHosts' }
+        $skuApi = $sessionHostsStep.elements | Where-Object { $_.name -eq 'office365SkusApi' }
+
+        $skuApi.type | Should Be 'Microsoft.Solutions.ArmApiControl'
+        $skuApi.condition | Should Match "steps\('basics'\)\.scope\.subscription\.id"
+        $skuApi.condition | Should Match "steps\('basics'\)\.scope\.location\.name"
+        $skuApi.request.path | Should Match '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/office-365/skus'
+        $skuApi.request.transforms.latest | Should Match 'starts_with\(name, `win11`\)'
+        $skuApi.request.transforms.latest | Should Match 'contains\(name, `avd`\)'
+        $skuApi.request.transforms.latest | Should Match 'contains\(name, `m365`\)'
+        $skuApi.request.transforms.latest | Should Match 'sort_by'
+        $skuApi.request.transforms.latest | Should Match 'reverse'
+        $skuApi.request.transforms.latest | Should Match '\|\[0\]'
+        $pocBicep | Should Match "imagePublisher: 'MicrosoftWindowsDesktop'"
+        $pocBicep | Should Match "imageOffer: 'office-365'"
+        $pocOutputs.imageSku | Should Be "[steps('sessionHosts').office365SkusApi.transformed.latest]"
+    }
+
+    It 'maps every form output and every required input to the host-pool template' {
+        $templateParameterNames = @($hostPoolTemplate.parameters.PSObject.Properties.Name)
+        $outputNames = @($pocOutputs.PSObject.Properties.Name)
+        $unmappedOutputs = @($outputNames | Where-Object { $_ -notin $templateParameterNames })
+        $requiredParameters = @(
+            $hostPoolTemplate.parameters.PSObject.Properties |
+                Where-Object { -not $_.Value.PSObject.Properties['defaultValue'] } |
+                ForEach-Object { $_.Name }
+        )
+        $missingRequiredParameters = @($requiredParameters | Where-Object { $_ -notin $outputNames })
+
+        $unmappedOutputs | Should BeNullOrEmpty
+        $missingRequiredParameters | Should BeNullOrEmpty
+    }
+
+    It 'publishes the dedicated PoC template with the dedicated PoC form' {
+        $publisher = Get-Content -LiteralPath $publisherPath -Raw
+
+        $publisher | Should Match '\[bool\]\$createHostPoolPoc = \$false'
+        $publisher | Should Match "Purpose = 'hostpool-poc'"
+        $publisher | Should Match "DisplayName = 'AVD Standard PoC'"
+        $publisher | Should Match 'deployments\\hostpoolPoc\\hostpoolPoc\.json'
+        $publisher | Should Match 'deployments\\hostpoolPoc\\uiFormDefinition\.json'
+    }
+
+    It 'creates a private NAT-backed network in the consolidated PoC resource group' {
+        $hostPoolBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep') -Raw
+
+        $hostPoolBicep | Should Not Match 'deployStandaloneNetwork'
+        $hostPoolBicep | Should Not Match 'standaloneNetwork'
+        $pocBicep | Should Match "module resourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy\.bicep'"
+        $pocBicep | Should Match "module network '../networking/modules/vnet-sub-module\.bicep'"
+        ([regex]::Matches(
+            $pocBicep,
+            "resourceId\(\s*subscription\(\)\.subscriptionId,\s*resourceGroupName,"
+        )).Count | Should Be 3
+        $pocBicep | Should Match "defaultRouting: 'nat'"
+        $pocBicep | Should Match 'defaultOutboundAccess: false'
+        $pocBicep | Should Match 'vnetResourceGroupName: resourceGroupName'
+        $pocBicep | Should Match 'subnetResourceId: sessionHostSubnetResourceId'
+        $pocBicep | Should Match 'publicIPName:'
+        $pocBicep | Should Match 'natGatewayName:'
+        $pocFormJson | Should Not Match 'virtualNetworksApi'
+        $pocFormJson | Should Not Match '"name": "subnet"'
+
+        $pocParameters = Get-Content -LiteralPath $pocParametersPath -Raw | ConvertFrom-Json
+        ($pocParameters.parameters.PSObject.Properties.Name -notcontains 'deployStandaloneNetwork') |
+            Should Be $true
+        ($pocParameters.parameters.PSObject.Properties.Name -notcontains 'virtualMachineSubnetResourceId') |
+            Should Be $true
+        $hostPoolBicep | Should Not Match 'resourceGroupOrganization'
+        $hostPoolBicep | Should Not Match 'consolidatedResourceGroup'
+    }
+
+    It 'does not emit invalid private-endpoint virtual network collection references' {
+        $hostPoolTemplateJson | Should Not Match 'privateEndpointVirtualNetworks'
+        $hostPoolTemplateJson |
+            Should Not Match "indexOf\(variables\('privateEndpointVirtualNetworkResourceIds'\)"
     }
 }

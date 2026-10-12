@@ -11,24 +11,74 @@ param parentResourceId string = ''
 param keyName string
 param diskEncryptionSetName string
 
-module cmk 'customerManagedKeys.bicep' = {
+var keyVaultName = last(split(keyVaultResourceId, '/'))
+var keyVaultSubscriptionId = split(keyVaultResourceId, '/')[2]
+var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
+var kty = contains(keyManagementType, 'HSM') ? 'RSA-HSM' : 'RSA'
+var parentTag = !empty(parentResourceId) ? { 'cm-resource-parent': parentResourceId } : {}
+var rotationPolicy = {
+  attributes: {
+    expiryTime: 'P${string(keyExpirationInDays)}D'
+  }
+  lifetimeActions: [
+    {
+      action: { type: 'Notify' }
+      trigger: { timeBeforeExpiry: 'P10D' }
+    }
+    {
+      action: { type: 'Rotate' }
+      trigger: { timeAfterCreate: 'P${string(keyExpirationInDays - 7)}D' }
+    }
+  ]
+}
+
+module diskKey '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = {
+  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  params: {
+    keyVaultName: keyVaultName
+    name: keyName
+    kty: kty
+    keySize: 4096
+    attributesEnabled: true
+    attributesExportable: false
+    rotationPolicy: rotationPolicy
+    tags: parentTag
+  }
+}
+
+module diskEncryptionSet '../../resourceModules/compute/diskEncryptionSets/deploy.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
-    keyVaultResourceId: keyVaultResourceId
-    keyManagementType: keyManagementType
-    keyExpirationInDays: keyExpirationInDays
+    name: diskEncryptionSetName
     location: location
-    tags: tags
-    parentResourceId: parentResourceId
-    diskEncryptionConfigs: [
+    keyVaultResourceId: keyVaultResourceId
+    keyName: keyName
+    encryptionType: !contains(keyManagementType, 'Platform')
+      ? 'EncryptionAtRestWithCustomerKey'
+      : 'EncryptionAtRestWithPlatformAndCustomerKeys'
+    rotationToLatestKeyVersionEnabled: true
+    systemAssignedIdentity: true
+    tags: union(parentTag, tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {})
+  }
+  dependsOn: [
+    diskKey
+  ]
+}
+
+module diskKeyRoleAssignment '../../resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = {
+  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  params: {
+    keyVaultName: keyVaultName
+    keyName: keyName
+    assignments: [
       {
-        keyName: keyName
-        diskEncryptionSetName: diskEncryptionSetName
-        confidentialVMOSDiskEncryption: false
+        principalId: diskEncryptionSet.outputs.principalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
       }
     ]
   }
 }
 
 @description('Resource ID of the created DiskEncryptionSet.')
-output diskEncryptionSetResourceId string = cmk.outputs.diskResults[0].diskEncryptionSetResourceId
+output diskEncryptionSetResourceId string = diskEncryptionSet.outputs.resourceId

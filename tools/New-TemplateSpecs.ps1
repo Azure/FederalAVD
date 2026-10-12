@@ -9,6 +9,7 @@ param (
     [bool]$createCustomImage = $true,
     [bool]$createImageManagement = $false,
     [bool]$createHostPool = $true,
+    [bool]$createHostPoolPoc = $false,
     [bool]$createAutomatedHostPool = $false,
     [bool]$CreateAddOns = $true,
     [ValidateNotNull()]
@@ -182,7 +183,7 @@ if ($createSharedServices) {
     $templateSpecs += @{
         Purpose = 'shared-services'
         DisplayName = 'AVD Shared Services'
-        Description = 'Deploys optional shared AVD services: Key Vaults, monitoring resources, and an FSLogix Recovery Services vault and policy'
+        Description = 'Deploys or adopts shared AVD workspace, feed and global Private Link, Key Vault, monitoring, and FSLogix backup resources'
         TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\sharedServices.json'
         UiFormDefinition = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\uiFormDefinition.json'
     }
@@ -222,9 +223,19 @@ if ($createHostPool) {
     $templateSpecs += @{
         Purpose = 'hostpool'
         DisplayName = 'AVD Host Pool'
-        Description = 'Deploys an Azure Virtual Desktop Host Pool'
+        Description = 'Orchestrates AVD Shared Services and a standard Azure Virtual Desktop host pool'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpools\hostpool.json'
         UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpools\uiFormDefinition.json'
+    }
+}
+
+if ($createHostPoolPoc) {
+    $templateSpecs += @{
+        Purpose = 'hostpool-poc'
+        DisplayName = 'AVD Standard PoC'
+        Description = 'Deploys a disposable standard-management Azure Virtual Desktop demo with a standalone NAT-backed virtual network'
+        TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpoolPoc\hostpoolPoc.json'
+        UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpoolPoc\uiFormDefinition.json'
     }
 }
 
@@ -232,7 +243,7 @@ if ($createAutomatedHostPool) {
     $templateSpecs += @{
         Purpose = 'automated-hostpool'
         DisplayName = 'AVD Automated Host Pool'
-        Description = 'Deploys an Azure Commercial AVD pooled host pool with automated session host management'
+        Description = 'Orchestrates AVD Shared Services and an Azure Commercial pooled host pool with automated session host management'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\automatedHostPools\automatedHostPool.json'
         UiFormDefinition = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\automatedHostPools\uiFormDefinition.json'
     }
@@ -314,7 +325,7 @@ foreach ($templateSpec in $templateSpecs) {
     else {
         Write-Output "Version incrementing disabled. Using version 1.0.0 (will overwrite existing version)"
     }
-    
+
     Write-Output "Creating $($templateSpec.DisplayName) Template Spec: $templateSpecName (v$version)"
     New-AzTemplateSpec `
         -ResourceGroupName $ResourceGroupName `

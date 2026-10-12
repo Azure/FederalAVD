@@ -541,7 +541,7 @@
         },
         {
           "name": "monitoring",
-          "label": "Log Analytics Workspace",
+          "label": "Monitoring",
           "elements": [
             {
               "name": "infoBox",
@@ -672,6 +672,404 @@
                 "required": "[and(not(steps('monitoring').deployMonitoring), steps('monitoring').enableMonitoring)]",
                 "allowedValues": "[map(steps('monitoring').logAnalyticsWorkspacesApi.value, (la) => parse(concat('{\"label\":\"', la.name, '\",\"description\":\"Resource Group: ', first(skip(split(la.id, '/'), 4)), ' | Location: ', la.location, '\",\"value\":\"', la.id, '\"}')))]"
               }
+            }
+          ]
+        },
+        {
+          "name": "avdControlPlane",
+          "label": "AVD Control Plane",
+          "elements": [
+            {
+              "name": "infoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "Optionally manage the shared Azure Virtual Desktop control plane: a workspace for application group feeds, its feed private endpoint, and the environment-wide global feed discovery workspace and endpoint. Each section can be configured independently."
+              }
+            },
+            {
+              "name": "sharedWorkspace",
+              "type": "Microsoft.Common.Section",
+              "label": "Shared Feed Workspace",
+              "elements": [
+                {
+                  "name": "manageWorkspace",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Manage a Shared AVD Workspace",
+                  "defaultValue": false
+                },
+                {
+                  "name": "workspaceMode",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Management Mode",
+                  "defaultValue": "Create a new shared workspace",
+                  "visible": "[steps('avdControlPlane').sharedWorkspace.manageWorkspace]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Create a new shared workspace",
+                        "value": "Create"
+                      },
+                      {
+                        "label": "Update an existing workspace",
+                        "value": "Update"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "existingWorkspaceInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Update'))]",
+                  "options": {
+                    "text": "Updating manages the selected workspace in place. Existing application group references, tags, friendly name, description, location, name, and resource group are preserved. Public network access is changed only when the workspace feed private endpoint is managed below."
+                  }
+                },
+                {
+                  "name": "workspaceSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Update'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "workspacesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Update'), not(empty(steps('avdControlPlane').sharedWorkspace.workspaceSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').sharedWorkspace.workspaceSubscription.id, '/providers/Microsoft.DesktopVirtualization/workspaces?api-version=2024-04-03')]"
+                  }
+                },
+                {
+                  "name": "existingWorkspace",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing AVD Workspace",
+                  "multiLine": true,
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Update'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('avdControlPlane').sharedWorkspace.workspacesApi.value, (workspace) => parse(concat('{\"label\":\"', workspace.name, '\",\"description\":\"Resource Group: ', first(skip(split(workspace.id, '/'), 4)), ' | Location: ', workspace.location, '\",\"value\":{\"id\":\"', workspace.id, '\",\"name\":\"', workspace.name, '\",\"location\":\"', workspace.location, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "workspaceFriendlyName",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Workspace Friendly Name",
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Create'))]",
+                  "constraints": {
+                    "required": false,
+                    "regex": "^.{0,64}$",
+                    "validationMessage": "Use no more than 64 characters."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "workspaceFeedEndpoint",
+              "type": "Microsoft.Common.Section",
+              "label": "Workspace Feed Private Endpoint",
+              "visible": "[steps('avdControlPlane').sharedWorkspace.manageWorkspace]",
+              "elements": [
+                {
+                  "name": "feedEndpointInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "The feed endpoint privately delivers the workspace feed. Shared Services creates or updates the deterministic endpoint name derived from the workspace and virtual network; it does not adopt an arbitrary endpoint by resource ID."
+                  }
+                },
+                {
+                  "name": "manageFeedEndpoint",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Manage the Workspace Feed Private Endpoint",
+                  "defaultValue": false,
+                  "visible": "[steps('avdControlPlane').sharedWorkspace.manageWorkspace]",
+                  "toolTip": "Shared Services creates or updates the endpoint name derived from the workspace and VNet. It does not adopt an arbitrary differently named private endpoint by resource ID."
+                },
+                {
+                  "name": "workspacePublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Public Network Access",
+                  "defaultValue": "Enabled",
+                  "visible": "[steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      },
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      }
+                    ]
+                  },
+                  "toolTip": "Disable public access only after confirming clients can resolve and reach the workspace feed private endpoint."
+                },
+                {
+                  "name": "feedNetworkSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Feed Endpoint Network Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "feedVirtualNetworksApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, not(empty(steps('avdControlPlane').workspaceFeedEndpoint.feedNetworkSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').workspaceFeedEndpoint.feedNetworkSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "feedVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Feed Endpoint Virtual Network",
+                  "multiLine": true,
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('avdControlPlane').workspaceFeedEndpoint.feedVirtualNetworksApi.value, (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), ' | Location: ', vnet.location, '\",\"value\":{\"id\":\"', vnet.id, '\",\"name\":\"', vnet.name, '\",\"location\":\"', vnet.location, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "feedSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('avdControlPlane').workspaceFeedEndpoint.feedVirtualNetwork))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').workspaceFeedEndpoint.feedVirtualNetwork.id, '/subnets?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "feedSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Feed Endpoint Subnet",
+                  "visible": "[and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('avdControlPlane').workspaceFeedEndpoint.feedSubnetsApi.value, (subnet) => empty(subnet.properties.delegations)), (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":{\"id\":\"', subnet.id, '\",\"name\":\"', subnet.name, '\"}}')))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "globalFeed",
+              "type": "Microsoft.Common.Section",
+              "label": "Global Feed Discovery",
+              "elements": [
+                {
+                  "name": "globalInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "The global endpoint provides initial feed discovery and can exist only once for the AVD environment. Use a dedicated workspace with no application groups. Azure always permits public access to this global discovery workspace, so no public-access setting is exposed."
+                  }
+                },
+                {
+                  "name": "manageGlobalWorkspace",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Manage a Global-Feed Workspace and Private Endpoint",
+                  "defaultValue": false
+                },
+                {
+                  "name": "globalWorkspaceMode",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Global-Feed Workspace Management Mode",
+                  "defaultValue": "Create a new global-feed workspace",
+                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Create a new global-feed workspace",
+                        "value": "Create"
+                      },
+                      {
+                        "label": "Update an existing global-feed workspace",
+                        "value": "Update"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "globalWorkspaceSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Global-Feed Workspace Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "visible": "[and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, equals(steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Update'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "globalWorkspacesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, equals(steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Update'), not(empty(steps('avdControlPlane').globalFeed.globalWorkspaceSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').globalFeed.globalWorkspaceSubscription.id, '/providers/Microsoft.DesktopVirtualization/workspaces?api-version=2024-04-03')]"
+                  }
+                },
+                {
+                  "name": "existingGlobalWorkspace",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing Global-Feed Workspace",
+                  "multiLine": true,
+                  "visible": "[and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, equals(steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Update'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('avdControlPlane').globalFeed.globalWorkspacesApi.value, (workspace) => parse(concat('{\"label\":\"', workspace.name, '\",\"description\":\"Resource Group: ', first(skip(split(workspace.id, '/'), 4)), ' | Location: ', workspace.location, '\",\"value\":{\"id\":\"', workspace.id, '\",\"name\":\"', workspace.name, '\",\"location\":\"', workspace.location, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "globalNetworkSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Global-Feed Endpoint Network Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "globalVirtualNetworksApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, not(empty(steps('avdControlPlane').globalFeed.globalNetworkSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').globalFeed.globalNetworkSubscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "globalVirtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Global-Feed Endpoint Virtual Network",
+                  "multiLine": true,
+                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('avdControlPlane').globalFeed.globalVirtualNetworksApi.value, (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), ' | Location: ', vnet.location, '\",\"value\":{\"id\":\"', vnet.id, '\",\"name\":\"', vnet.name, '\",\"location\":\"', vnet.location, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "globalSubnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[not(empty(steps('avdControlPlane').globalFeed.globalVirtualNetwork))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').globalFeed.globalVirtualNetwork.id, '/subnets?api-version=2024-05-01')]"
+                  }
+                },
+                {
+                  "name": "globalSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Global-Feed Endpoint Subnet",
+                  "visible": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('avdControlPlane').globalFeed.globalSubnetsApi.value, (subnet) => empty(subnet.properties.delegations)), (subnet) => parse(concat('{\"label\":\"', subnet.name, '\",\"value\":{\"id\":\"', subnet.id, '\",\"name\":\"', subnet.name, '\"}}')))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "privateDns",
+              "type": "Microsoft.Common.Section",
+              "label": "Private DNS Integration",
+              "visible": "[or(steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, steps('avdControlPlane').globalFeed.manageGlobalWorkspace)]",
+              "elements": [
+                {
+                  "name": "dnsInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Integrate each managed private endpoint with an existing Azure Private DNS zone, or disable integration when DNS records are registered by Azure Policy or another platform deployment.",
+                    "link": {
+                      "label": "Azure Virtual Desktop Private Link",
+                      "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/private-link-setup"
+                    }
+                  }
+                },
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Private DNS Zone Integration",
+                  "defaultValue": true
+                },
+                {
+                  "name": "externalDnsWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[not(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration)]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "The deployment will create private endpoints without private DNS zone groups. Ensure Azure Policy or the networking platform registers the required DNS records before disabling public workspace feed access."
+                  }
+                },
+                {
+                  "name": "dnsSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "AVD Private DNS Zone Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "visible": "[steps('avdControlPlane').privateDns.enablePrivateDNSIntegration]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, not(empty(steps('avdControlPlane').privateDns.dnsSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('avdControlPlane').privateDns.dnsSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2024-06-01')]"
+                  }
+                },
+                {
+                  "name": "feedPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Workspace Feed Private DNS Zone",
+                  "multiLine": true,
+                  "visible": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
+                  "constraints": {
+                    "required": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint)]",
+                    "allowedValues": "[map(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":{\"id\":\"', zone.id, '\",\"name\":\"', zone.name, '\"}}')))]"
+                  },
+                  "toolTip": "Select the private DNS zone used by the workspace feed endpoint."
+                },
+                {
+                  "name": "reuseFeedPrivateDnsZoneForGlobalFeed",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Use the Workspace Feed DNS Zone for Global Feed",
+                  "defaultValue": false,
+                  "visible": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, steps('avdControlPlane').globalFeed.manageGlobalWorkspace)]",
+                  "toolTip": "Enable only when both AVD private endpoint subresources use the same private DNS namespace in the target cloud or managed DNS design."
+                },
+                {
+                  "name": "globalPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Global-Feed Private DNS Zone",
+                  "multiLine": true,
+                  "visible": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace, not(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed))]",
+                  "constraints": {
+                    "required": "[and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace, not(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed))]",
+                    "allowedValues": "[map(steps('avdControlPlane').privateDns.privateDnsZonesApi.value, (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":{\"id\":\"', zone.id, '\",\"name\":\"', zone.name, '\"}}')))]"
+                  },
+                  "toolTip": "Select the private DNS zone used by the global feed discovery endpoint."
+                }
+              ]
             }
           ]
         },
@@ -1267,6 +1665,19 @@
                   }
                 },
                 {
+                  "name": "rtCodeWorkspace",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "AVD Workspaces abbreviation",
+                  "defaultValue": "vdws",
+                  "toolTip": "Abbreviation substituted for the Resource Type component in AVD workspace names.",
+                  "visible": "[and(or(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').globalFeed.manageGlobalWorkspace), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
+                  "constraints": {
+                    "required": true,
+                    "regex": "^[a-z0-9]{1,10}$",
+                    "validationMessage": "Use 1 to 10 lowercase letters or digits."
+                  }
+                },
+                {
                   "name": "rtCodePe",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints abbreviation",
@@ -1356,6 +1767,7 @@
                     "Microsoft.Resources/resourceGroups",
                     "Microsoft.KeyVault/vaults",
                     "Microsoft.RecoveryServices/vaults",
+                    "Microsoft.DesktopVirtualization/Workspaces",
                     "Microsoft.Network/privateEndpoints"
                   ]
                 }
@@ -1391,6 +1803,18 @@
         "logAnalyticsWorkspaceRetentionInDays": "[if(steps('monitoring').deployMonitoring, steps('monitoring').settings.retentionDays, 30)]",
         "azureMonitorPrivateLinkScopeResourceId": "[if(and(steps('monitoring').deployMonitoring, steps('monitoring').attachToAzureMonitorPrivateLinkScope, not(empty(steps('monitoring').azureMonitorPrivateLinkScopeResourceId))), steps('monitoring').azureMonitorPrivateLinkScopeResourceId.id, '')]",
         "existingLogAnalyticsWorkspaceResourceId": "[if(steps('monitoring').deployMonitoring, '', if(steps('monitoring').enableMonitoring, steps('monitoring').logAnalyticsWorkspace, ''))]",
+        "manageAvdWorkspace": "[steps('avdControlPlane').sharedWorkspace.manageWorkspace]",
+        "avdWorkspaceMode": "[if(steps('avdControlPlane').sharedWorkspace.manageWorkspace, steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Create')]",
+        "existingAvdWorkspaceResourceId": "[if(and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Update')), steps('avdControlPlane').sharedWorkspace.existingWorkspace.id, '')]",
+        "avdWorkspaceFriendlyName": "[if(and(steps('avdControlPlane').sharedWorkspace.manageWorkspace, equals(steps('avdControlPlane').sharedWorkspace.workspaceMode, 'Create')), steps('avdControlPlane').sharedWorkspace.workspaceFriendlyName, '')]",
+        "avdWorkspacePublicNetworkAccess": "[if(steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, steps('avdControlPlane').workspaceFeedEndpoint.workspacePublicNetworkAccess, 'Enabled')]",
+        "workspaceFeedPrivateEndpointSubnetResourceId": "[if(steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint, steps('avdControlPlane').workspaceFeedEndpoint.feedSubnet.id, '')]",
+        "avdPrivateDnsZoneResourceId": "[if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').workspaceFeedEndpoint.manageFeedEndpoint), steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, '')]",
+        "manageGlobalAvdWorkspace": "[steps('avdControlPlane').globalFeed.manageGlobalWorkspace]",
+        "globalAvdWorkspaceMode": "[if(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Create')]",
+        "existingGlobalAvdWorkspaceResourceId": "[if(and(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, equals(steps('avdControlPlane').globalFeed.globalWorkspaceMode, 'Update')), steps('avdControlPlane').globalFeed.existingGlobalWorkspace.id, '')]",
+        "globalFeedPrivateEndpointSubnetResourceId": "[if(steps('avdControlPlane').globalFeed.manageGlobalWorkspace, steps('avdControlPlane').globalFeed.globalSubnet.id, '')]",
+        "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('avdControlPlane').privateDns.enablePrivateDNSIntegration, steps('avdControlPlane').globalFeed.manageGlobalWorkspace), if(steps('avdControlPlane').privateDns.reuseFeedPrivateDnsZoneForGlobalFeed, steps('avdControlPlane').privateDns.feedPrivateDnsZone.id, steps('avdControlPlane').privateDns.globalPrivateDnsZone.id), '')]",
         "deployFSLogixBackupVault": "[steps('operations').resources.deployFSLogixBackupVault]",
         "fslogixBackupPolicyName": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.policyName, 'filesharepolicy')]",
         "fslogixBackupRetentionDays": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.retentionDays, 30)]",
@@ -1400,7 +1824,7 @@
         "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
         "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
         "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"workspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeWorkspace),'vdws',steps('tagsAndNaming').naming.rtCodeWorkspace), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }
     }

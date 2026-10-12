@@ -11,11 +11,12 @@ Parameter documentation lives alongside each deployment template. Find the secti
 | Solution | Parameters | Examples |
 | --- | --- | --- |
 | 🌐 **Networking** | [networking/README.md](../deployments/networking/README.md) | [parameter files](../deployments/networking/README.md) |
-| 🔒 **AVD Shared Services (Key Vaults, Monitoring, and FSLogix Backup)** | [sharedServices/README.md — Parameters](../deployments/sharedServices/README.md#parameters) | [automated host-pool prerequisite](../customer-examples/parameters/sharedServices/poc.automatedHostPoolPrerequisites.sharedServices.parameters.json) |
+| 🧪 **Standard PoC** | [hostpoolPoc/README.md](../deployments/hostpoolPoc/README.md) | [example parameters](../customer-examples/parameters/hostpoolPoc/poc.hostpoolPoc.parameters.json) |
+| 🔒 **AVD Shared Services (AVD Workspace, Feed/Global Private Link, Key Vaults, Monitoring, and FSLogix Backup)** | [sharedServices/README.md — Parameters](../deployments/sharedServices/README.md#parameters) | [shared-services examples](../customer-examples/parameters/sharedServices/) |
 | 📦 **Image Management** | [imageManagement/README.md — Parameters](../deployments/imageManagement/README.md#parameters) | [imageManagement/README.md — Examples](../deployments/imageManagement/README.md#examples) |
 | 🎨 **Image Build** | [imageBuild/README.md — Parameters](../deployments/imageBuild/README.md#parameters) | [imageBuild/README.md — Examples](../deployments/imageBuild/README.md#examples) |
 | 🏢 **Host Pool (standard management)** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
-| 🏢 **Automated Host Pool (Session Host Configuration)** | [automatedHostPools/README.md](../deployments/automatedHostPools/README.md) | [PoC parameters](../customer-examples/parameters/automatedHostPools/poc.automatedHostPool.parameters.json) |
+| 🏢 **Automated Host Pool (Session Host Configuration)** | [automatedHostPools/README.md](../deployments/automatedHostPools/README.md) | [starter parameters](../customer-examples/parameters/automatedHostPools/example.automatedHostPool.parameters.json) |
 
 ---
 
@@ -49,6 +50,20 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 When chaining deployments, use this mapping to pass outputs from one step to the next. See the **[End-to-End Automation Guide](automation-guide.md)** for the full pipeline diagram and scripted examples.
 
+The standard and automated host-pool entry templates are orchestrators that call Shared Services
+and then directly compose their pool-specific modules. New workspaces use shared, region-level
+naming by default.
+A PoC uses host-pool-specific workspace naming and places its persistent host-pool, workspace,
+session-host, FSLogix, monitoring, and standalone network resources in one resource group.
+Production host-pool deployments retain the separate resource-group layout and create or adopt
+shared resources.
+
+When multiple host pools use one AVD workspace, serialize their deployments. Each orchestrator appends its
+application-group reference while preserving the other workspace properties, and concurrent
+read-modify-write updates can lose a reference. Workspace public access and feed/global Private
+Link are managed only when explicitly selected; otherwise existing workspace settings are
+preserved.
+
 | Source | Output | Destination | Parameter |
 | --- | --- | --- | --- |
 | **sharedServices** | `secretsKeyVaultResourceId` | **hostpool** | `existingCredentialsKeyVaultResourceId` |
@@ -60,6 +75,7 @@ When chaining deployments, use this mapping to pass outputs from one step to the
 | **sharedServices** | `avdInsightsDataCollectionRuleResourceId` | **hostpool** | `existingAVDInsightsDataCollectionRuleResourceId` |
 | **sharedServices** | `dataCollectionEndpointResourceId` | **hostpool** | `existingDataCollectionEndpointResourceId` |
 | **sharedServices** | `azureMonitorPrivateLinkScopeResourceId` | **hostpool** | `azureMonitorPrivateLinkScopeResourceId` |
+| **sharedServices** | `avdWorkspaceResourceId` | **hostpool / automatedHostPool** | `existingFeedWorkspaceResourceId` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **hostpool** | `existingFilesBackupVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **fslogixStorage** | `recoveryServicesVaultResourceId` |

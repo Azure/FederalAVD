@@ -275,7 +275,9 @@ var storageIdentityConfigurationIsValid = storageSolution != 'AzureNetAppFiles' 
 var netAppResourceGroupConfigurationIsValid = storageSolution != 'AzureNetAppFiles' || netAppDeploymentMode == 'CreateAll' || !createStorageResourceGroup
   ? true
   : fail('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.')
-var resourceGroupNamesAreDistinct = toLower(effectiveStorageResourceGroupName) != toLower(effectiveDeploymentResourceGroupName)
+var deploymentVirtualMachineRequired = identitySolution != 'EntraId'
+var deployDeploymentVirtualMachine = manageDeploymentVirtualMachine && deploymentVirtualMachineRequired
+var resourceGroupNamesAreDistinct = !deployDeploymentVirtualMachine || toLower(effectiveStorageResourceGroupName) != toLower(effectiveDeploymentResourceGroupName)
   ? true
   : fail('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')
 var deployStorageCmk = storageSolution == 'AzureFiles' && contains(keyManagementStorage, 'CustomerManaged')
@@ -283,7 +285,7 @@ var storageCmkConfigurationIsValid = !deployStorageCmk || !empty(existingEncrypt
   ? true
   : fail('existingEncryptionKeyVaultResourceId is required when Azure Files uses customer-managed keys.')
 var domainCredentialsRequired = contains(identitySolution, 'DomainServices') || storageSolution == 'AzureNetAppFiles' || (identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups))
-var externalDeploymentConfigurationIsValid = manageDeploymentVirtualMachine || (!empty(deploymentVirtualMachineName) && !empty(existingDeploymentUserAssignedIdentityClientId))
+var externalDeploymentConfigurationIsValid = !deploymentVirtualMachineRequired || manageDeploymentVirtualMachine || (!empty(deploymentVirtualMachineName) && !empty(existingDeploymentUserAssignedIdentityClientId))
   ? true
   : fail('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.')
 
@@ -316,7 +318,7 @@ module storageResourceGroup '../../shared/modules/resourceModules/resources/reso
   }
 }
 
-module deploymentResourceGroup '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (manageDeploymentVirtualMachine) {
+module deploymentResourceGroup '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployDeploymentVirtualMachine) {
   params: {
     name: resourceGroupNamesAreDistinct ? effectiveDeploymentResourceGroupName : effectiveDeploymentResourceGroupName
     location: location
@@ -327,7 +329,7 @@ module deploymentResourceGroup '../../shared/modules/resourceModules/resources/r
   }
 }
 
-module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (manageDeploymentVirtualMachine) {
+module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/deploy.bicep' = if (deployDeploymentVirtualMachine) {
   params: {
     confidentialVMOSDiskEncryption: false
     desktopFriendlyName: ''
@@ -401,12 +403,18 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     createNetAppCapacityPool: netAppDeploymentMode != 'ExistingAccountAndPool'
     appUpdateUserAssignedIdentityResourceId: appUpdateUserAssignedIdentityResourceId
     azureFilePrivateDnsZoneResourceId: azureFilePrivateDnsZoneResourceId
-    deploymentUserAssignedIdentityClientId: externalDeploymentConfigurationIsValid
-      ? (manageDeploymentVirtualMachine ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId : existingDeploymentUserAssignedIdentityClientId)
-      : existingDeploymentUserAssignedIdentityClientId
-    deploymentVirtualMachineName: externalDeploymentConfigurationIsValid
-      ? (manageDeploymentVirtualMachine ? deploymentHelper!.outputs.virtualMachineName : deploymentVirtualMachineName)
-      : deploymentVirtualMachineName
+    deploymentUserAssignedIdentityClientId: !deploymentVirtualMachineRequired
+      ? ''
+      : externalDeploymentConfigurationIsValid
+          ? (deployDeploymentVirtualMachine
+              ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
+              : existingDeploymentUserAssignedIdentityClientId)
+          : existingDeploymentUserAssignedIdentityClientId
+    deploymentVirtualMachineName: !deploymentVirtualMachineRequired
+      ? ''
+      : externalDeploymentConfigurationIsValid
+          ? (deployDeploymentVirtualMachine ? deploymentHelper!.outputs.virtualMachineName : deploymentVirtualMachineName)
+          : deploymentVirtualMachineName
     #disable-next-line BCP422
     domainJoinUserPassword: domainCredentialsRequired
       ? !empty(domainJoinUserPassword)
@@ -468,7 +476,7 @@ module remoteNetAppVolumeFqdns '../../shared/modules/orchestration/fslogix/modul
   }
 }
 
-module cleanupDeploymentHelper '../../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (manageDeploymentVirtualMachine) {
+module cleanupDeploymentHelper '../../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (deployDeploymentVirtualMachine) {
   params: {
     location: location
     resourceGroupDeployment: effectiveDeploymentResourceGroupName

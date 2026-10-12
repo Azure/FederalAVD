@@ -126,6 +126,15 @@ inventories and parameter details for each step.
    Set `-createImageManagement` and `-createCustomImage` to `$false` when the verified marketplace
    image path meets the workload. Automated host pools are not supported in these clouds.
 
+   Optionally publish `-createHostPoolPoc $true` for a disposable first-step validation. This
+   publishes the **AVD Standard PoC** Template Spec inside the target cloud; it does not use Blue
+   Button or another public portal link. Use this option only when the target region exposes the
+   form's matching Office 365 marketplace image and the required AVD dependencies are available.
+   After validating portal form publication, connectivity, Entra join, profile roaming, or SSO,
+   delete the consolidated PoC resource group and clean up related directory or device records.
+   Do not reuse or promote the PoC into a pilot or production environment. Return to this checklist
+   and deploy a new environment through the full **AVD Host Pool** Template Spec.
+
 4. **Deploy prerequisites through Template Specs.** Deploy Networking only when an existing VNet
    and subnet are unavailable. For IL6 and IL7, deploy AVD Shared Services by default to
    establish centralized audit collection, operational monitoring, secrets protection, and key

@@ -8,14 +8,41 @@ Get your Azure Virtual Desktop environment deployed. Pick your path below.
 
 ## Choose Your Path
 
-**Fastest evaluation:** If you have an existing VNet and subnet, deploy the
-[Standard PoC](#poc-fast-path) with a pooled host pool and marketplace image. This Step 4-only path
-takes about 20 minutes. Step 4 is an all-in-one standard host-pool deployment: it can create or use
-Key Vaults, monitoring, CMK resources, FSLogix backup resources, and host-pool-specific FSLogix
-storage without Steps 1-3. Later standard host pools can reuse the shared resources created by the
-first Step 4 deployment.
+First decide whether you are performing a bounded evaluation or designing production:
 
-Choose a different path only when the workload requires it. Answer these four routing questions:
+- **Disposable standard demo:** Use the purpose-built **AVD Standard PoC** form to demonstrate AVD
+  or validate a first deployment. The form enables the standard orchestrator's focused standalone
+  network option and fixes a nonproduction configuration.
+- **Automated management:** Use the full **AVD Automated Host Pool** form. Automated management has
+  no PoC path; its lifecycle, capacity, security, and availability choices must be designed
+  explicitly.
+- **Production:** Use the full **AVD Host Pool** or **AVD Automated Host Pool** form, then follow the
+  decision matrix below. These are the production configuration surfaces for identity, shared
+  resource ownership, image source, FSLogix, monitoring, backup, networking, encryption, scaling,
+  availability, and lifecycle management.
+
+> **Disposable demo only:** Tear down the Standard PoC after the demonstration or first-step
+> validation. Do not expand, harden, reuse, or promote it into a pilot or production environment.
+> It omits production capacity planning, availability, scaling, backup, private connectivity,
+> customer-managed encryption, and other security and operational choices. Start a new pilot or
+> production design with the full **AVD Host Pool** form.
+
+> **Azure Policy compatibility:** The Standard PoC intentionally omits many enterprise and Zero
+> Trust controls.
+> Common Azure Policy guardrails may deny the deployment in federal, regulated, or centrally
+> governed subscriptions, including requirements for Private Endpoints, customer-managed keys,
+> approved hub networking, restricted public access, centralized diagnostics, backup, tags, or
+> approved SKUs. Deploy it only in an approved evaluation subscription or with a documented policy
+> exception. Do not weaken production guardrails to make this PoC deploy.
+
+Both full host-pool entry templates are peer orchestrators that directly compose the same workspace,
+Key Vault, monitoring, and backup capability modules used by the standalone Shared Services
+deployment before calling their pool-specific modules. A separate Step 1 deployment is therefore
+not automatically required for production. Deploy Step 1 first only when its outputs must exist before
+Step 4, when another component consumes them first, or when the organization requires a separately
+owned shared-resource lifecycle.
+
+Use these four questions to route the deployment:
 
 1. **Standard or automated host management?** Standard is the default, works in every cloud, and
    supports pooled and personal desktops. Automated is a pooled Azure Commercial preview where
@@ -32,36 +59,46 @@ Choose a different path only when the workload requires it. Answer these four ro
     host pools, then select that existing storage in each Step 4 deployment. The add-on can only use
     existing Key Vault, monitoring, and FSLogix backup resources, so deploy Step 1 first or supply
     approved existing resources when those options are required.
-4. **Are separate prerequisites required?** Add Networking (Step 0) when no approved VNet and subnet
-    exist. AVD Shared Services (Step 1) is required for automated host pools and before Image
-    Management when CMK must protect artifact storage or gallery image versions. It is otherwise
-     optional for standard host pools: the first Step 4 deployment can create shared Key Vaults,
-     monitoring, and FSLogix backup resources that later standard host pools reuse. Use Step 1 when
-     those resources must exist before any host pool, Image Management deployment, or FSLogix
-     Storage add-on.
+4. **Must Shared Services exist before the host pool?** Both full Step 4 orchestrators can create or
+    reuse the workspace, Key Vaults, monitoring, and shared FSLogix backup resources selected in
+    their forms. Deploy standalone Step 1 first only when Image Management needs its encryption Key
+    Vault, policy requires monitoring before other resources, an add-on needs the outputs first, or
+    multiple deployments must consume centrally owned resources. Add Networking (Step 0) when no
+    approved VNet and subnet exist.
 
-Select the smallest matching path below. Before promoting a PoC design or deploying production, use
+Use the first row only for a disposable standard demo. For a pilot or production environment,
+select the smallest matching production row, start a fresh design, and use
 [Choose a Host Pool Management Approach](host-pool-management.md) to record the recurring image,
 host-maintenance, capacity, and replacement owners.
 
-| | Path | Steps | Time |
+| | Path and deployment surface | Ordered steps | Why this order |
 | --- | --- | --- | --- |
-| 🧪 | **[Standard PoC / Evaluation](#poc-fast-path)** — existing VNet, marketplace images, no compliance requirements | Step 4 only | ~20 min |
-| 🧪 | **[Automated PoC / Evaluation](../deployments/automatedHostPools/README.md#deploy)** — Azure Commercial, existing VNet, marketplace image | Steps 1 → 4 | ~30 min |
-| 🖼️ | **Existing Azure Compute Gallery image** — custom image already published by Packer, Azure VM Image Builder, or another pipeline | Step 4 only | ~20 min |
-| 📦 | **Runtime host customizations** — marketplace/existing image plus centrally hosted scripts or installers | Steps 2 → 4 | Varies |
-| 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** — pre-install software baked into images | Steps 2 → 3 → 4 | 2–4 hrs |
-| 🏛️ | **[Compliance / Image Management CMK](#step-1-deploy-avd-shared-services)** — protect artifact storage and, when building images, gallery image versions | Steps 1 → 2 → Step 3 if building → 4 | Varies |
-| ✈️ | **[Air-Gapped (Secret / Top Secret)](#-air-gapped-start-here)** — no Blue Button, bring-your-own artifacts, M365/Teams/OneDrive via custom image | Steps 1 → 2 → 3 → 4 | Setup day + deployment |
-| 🌐 | **No existing VNet?** — add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first to any path above | + Step 0 | +30 min |
-| 💾 | **Shared FSLogix storage with no CMK, diagnostics, or backup, or with all prerequisite resource IDs already available** | FSLogix Storage add-on → Step 4 pool(s) | Varies |
-| 🔐 | **Shared FSLogix storage that needs FederalAVD to create its CMK, monitoring, or Azure Files backup prerequisites** | Step 1 → FSLogix Storage add-on → Step 4 pool(s) | Varies |
+| 🧪 | **[Disposable Standard PoC demo](#poc-fast-path)** — use **AVD Standard PoC**, then tear it down | One self-contained PoC deployment | Creates its own NAT-backed VNet and demonstrates AVD; it is not a pilot or production starting point |
+| 🏢 | **Production marketplace image, standard management** — use **AVD Host Pool** | Step 4 only when no earlier consumer or separate ownership boundary exists | The full standard form can create or adopt all selected Shared Services resources |
+| 🏢 | **Production marketplace image, automated management** — use **AVD Automated Host Pool** | Step 4 only when no earlier consumer or separate ownership boundary exists | The full automated form can create or adopt all selected Shared Services resources |
+| 🏛️ | **Production with centrally owned or pre-provisioned shared resources** | Step 1 → Step 4 | Deploy workspace, Key Vault, monitoring, or FSLogix backup once, then select those outputs in one or more full host-pool forms |
+| 🖼️ | **Existing Azure Compute Gallery image** — use the selected full host-pool form | Step 4 only | The image already exists and the host-pool orchestrator handles its selected Shared Services resources |
+| 📦 | **Runtime host customizations with platform-managed keys or approved existing prerequisites** | Step 2 → Step 4 | Image Management hosts artifacts before session hosts consume them |
+| 🖼️ | **[Custom software, no CMK](#step-2-deploy-image-management-resources)** | Step 2 → Step 3 → Step 4 | Upload artifacts, build the image, then deploy the full host-pool form |
+| 🏛️ | **[Compliance / Image Management CMK](#step-1-deploy-avd-shared-services)** | Step 1 → Step 2 → Step 3 if building → Step 4 | Image Management needs the Shared Services encryption Key Vault before applying CMK |
+| ✈️ | **[Air-Gapped (Secret / Top Secret)](#-air-gapped-start-here)** | Step 1 → Step 2 → Step 3 → Step 4 | Pre-stage and separately govern shared, artifact, image, and host-pool resources |
+| 🌐 | **Production with no existing VNet** | Add [Step 0: Networking](#step-0-deploy-networking-infrastructure-greenfield) first | Full host-pool paths require an approved VNet and subnet; the disposable PoC creates its own |
+| 💾 | **Shared FSLogix storage with no new CMK, diagnostics, or backup prerequisites** | FSLogix Storage add-on → Step 4 pool(s) | Provision shared profile storage before the consuming pools |
+| 🔐 | **Shared FSLogix storage requiring new Shared Services prerequisites** | Step 1 → FSLogix Storage add-on → Step 4 pool(s) | The storage add-on consumes existing encryption, monitoring, or backup resource IDs |
 
-### Deployment Decision Diagram
+### Deployment Decision Flow
+
+The Standard PoC branch ends in teardown. A pilot or production environment always starts again
+through a full host-pool form and follows the production dependency path.
 
 ```mermaid
 graph TD
-    A[Start] --> TYPE{Pooled or<br/>personal?}
+    A[Start] --> GOAL{Deployment goal?}
+    GOAL -->|Demo or first-step<br/>validation| POC[Deploy AVD Standard PoC]
+    POC --> DEMO[Demonstrate connectivity,<br/>FSLogix, SSO, and monitoring]
+    DEMO --> DELETE[Delete the consolidated PoC<br/>resource group and clean up<br/>directory or device records]
+    DELETE --> RESTART[Stop. Start a new pilot or<br/>production design with the<br/>full AVD Host Pool form]
+    GOAL -->|Pilot or production| TYPE{Pooled or<br/>personal?}
     TYPE -->|Personal| STD[Standard management]
     TYPE -->|Pooled| OWNER{Who owns the<br/>VM lifecycle?}
     OWNER -->|FederalAVD, manual,<br/>or customer tooling| STD
@@ -71,7 +108,7 @@ graph TD
     B -->|No - Greenfield| C[🌐 Step 0: Deploy<br/>Networking]
     B -->|Yes| SS
     C --> SS
-    SS{Separate Shared Services?<br/>Required for automated or<br/>Image Management storage/<br/>gallery CMK} -->|Yes| KV2[🔒 Step 1: Deploy<br/>AVD Shared Services]
+    SS{Separate Shared Services?<br/>Enterprise sharing or<br/>Image Management storage/<br/>gallery CMK} -->|Yes| KV2[🔒 Step 1: Deploy<br/>AVD Shared Services]
     SS -->|No| SOFTWARE
     KV2 --> SOFTWARE
     SOFTWARE{Software path?} -->|Marketplace or existing<br/>Compute Gallery image| PROFILE
@@ -87,24 +124,36 @@ graph TD
     HP[🏢 Step 4: Deploy<br/>selected Host Pool]
 ```
 
+For a disposable demo in Azure Commercial or Azure Government, use the dedicated portal form:
+
+[![Deploy Standard PoC to Azure](images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FhostpoolPoc%2FhostpoolPoc.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FhostpoolPoc%2FuiFormDefinition.json)
+[![Deploy Standard PoC to Azure Gov](images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FhostpoolPoc%2FhostpoolPoc.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2FhostpoolPoc%2FuiFormDefinition.json)
+
+Blue Button is not available in Secret or Top Secret. After transferring the repository into the
+target environment, publish **AVD Standard PoC** as a Template Spec for optional first-step
+validation. Use it only when the selected region exposes a matching Office 365 marketplace image
+and required AVD dependencies. Tear it down after validation, then return to the production path
+with the full **AVD Host Pool** form.
+
 > **🏛️ Compliance / Image Management CMK path:** Step 1 must precede Step 2 when CMK must protect
 > Image Management artifact or build-log storage. When custom images also require CMK, Step 2
 > creates the Disk Encryption Set that Step 3 uses for build VM disks and published gallery image
 > versions. Step 3 remains optional when Image Management is used only to host runtime artifacts.
-> This sequencing requirement does not apply to an all-in-one standard Step 4 deployment, which can
-> create its own Key Vault and CMK resources. A policy-required or centralized Log Analytics
-> Workspace is another reason to deploy Step 1 first. For IL6 and IL7, Step 1 is the recommended
+> This sequencing requirement does not apply to a self-contained Step 4 deployment, whose
+> orchestrator can create required Shared Services resources inline. A policy-required or
+> centralized Log Analytics Workspace is another reason to deploy Step 1 first. For IL6 and IL7,
+> Step 1 is the recommended
 > baseline even when an individual template could deploy without it; omit it only when approved
 > shared services provide equivalent control coverage.
 >
-> **Automated host pools:** Step 1 is always required, including the PoC path. Deploy the Shared
-> Services secrets Key Vault first and pass its `secretsKeyVaultResourceId` output to the automated
-> host pool's `credentialsKeyVaultResourceId` parameter. Standard host pools retain the Step 4-only
-> path because their all-in-one deployment can collect credentials and create or reuse supporting
-> resources through its own workflow. When deploying multiple standard host pools, the first can
-> create shared Key Vaults, monitoring, and FSLogix backup resources; select those existing
-> resources in later Step 4 forms. For automation, pass the first deployment's effective Key Vault,
-> Log Analytics, DCR, DCE, and FSLogix backup outputs to the corresponding `existing*` parameters.
+> **Host-pool orchestrators:** The full standard and automated entry templates always compose
+> Shared Services before their pool-specific modules. When Step 1 was deployed independently, the
+> full host-pool form selects and reuses its workspace, Key Vault, monitoring, DCR, DCE, and FSLogix
+> backup outputs. When Step 1 was not deployed separately, that same internal Shared Services call
+> creates or reuses the resources selected in the host-pool form. The Standard PoC uses a dedicated
+> entry orchestrator that composes the same lower-level host-pool modules with standalone networking,
+> host-pool-specific naming, and fixed evaluation settings. Automated
+> management intentionally uses only the full automated form.
 >
 > **🔒 Compliance is implemented through parameter choices:** FedRAMP High, DoD IL4/IL5, CMMC,
 > and similar frameworks are enabled by selecting the required controls at each step. Those choices
@@ -118,7 +167,8 @@ graph TD
 **Required for all paths:**
 
 - Azure subscription with **Owner** role (or Contributor + User Access Administrator)
-- Virtual Network with at least one subnet, or include Step 0 in the selected path
+- Virtual Network with at least one subnet, include Step 0 in a production path, or use the
+  Standard PoC deployment that creates its own network
 - Entra security group with AVD users (note the object ID)
 - Az PowerShell module: `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`
 
@@ -140,7 +190,7 @@ Complete this checklist before publishing or deploying any template:
 | 1 | My identity has **Owner** (or Contributor + User Access Administrator) on the target subscription | [Assign role in Azure Portal](https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal) |
 | 2 | `Microsoft.DesktopVirtualization` is registered on the subscription | `Register-AzResourceProvider -ProviderNamespace 'Microsoft.DesktopVirtualization'` |
 | 3 | `EncryptionAtHost` is registered, or I will disable it in the deployment form | `Register-AzProviderFeature -FeatureName EncryptionAtHost -ProviderNamespace Microsoft.Compute` |
-| 4 | I have an existing VNet with a session-host subnet, or selected Step 0 | [Deploy networking](#step-0-deploy-networking-infrastructure-greenfield) |
+| 4 | For a full host-pool deployment, I have an existing VNet with a session-host subnet or selected Step 0; otherwise I selected the self-contained Standard PoC | [Deploy networking](#step-0-deploy-networking-infrastructure-greenfield) |
 | 5 | I have an Entra security group containing AVD users and know its object ID | Create a group in Entra ID and note its object ID |
 | 6 | The Az PowerShell module is installed | `Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force` |
 | 7 | I know the correct Azure environment and region | Use `AzureCloud` for Commercial or `AzureUSGovernment` for Government |
@@ -158,8 +208,10 @@ show only the fields relevant to earlier choices, populate supported values from
 dependencies that are difficult to understand by hand-editing JSON. The parameter files generated
 from these forms then become the repeatable PowerShell or CI/CD inputs for the environment.
 
-For a PoC, publish only the forms required by the selected path. Before a production deployment or
-recurring image rollout, complete the
+For a disposable standard demo, publish the purpose-built Standard PoC form. For any pilot or
+production deployment, publish the corresponding full host-pool form and any prerequisite forms
+identified by the decision matrix. Before a production deployment or recurring image rollout,
+complete the
 [host-pool and lifecycle decision record](host-pool-management.md#record-the-decisions-before-deployment).
 The standard and automated deployments have different, immutable session-host lifecycle ownership,
 so production planning should confirm that choice before the host pool becomes a long-lived
@@ -177,13 +229,15 @@ exact list shown for the row selected under [Choose Your Path](#choose-your-path
 
 | Chosen path | Set `$templatesToPublish` to |
 | --- | --- |
-| Standard PoC / Evaluation | `@('HostPool')` |
-| Automated PoC / Evaluation | `@('SharedServices', 'AutomatedHostPool')` |
+| Disposable Standard PoC demo | `@('HostPoolPoc')` |
+| Production marketplace image, standard management | `@('HostPool')` |
+| Production marketplace image, automated management | `@('AutomatedHostPool')` |
+| Production with centrally owned Shared Services | `@('SharedServices', 'HostPool')` or `@('SharedServices', 'AutomatedHostPool')` |
 | Existing Azure Compute Gallery image | `@('HostPool')` |
 | Runtime host customizations | `@('ImageManagement', 'HostPool')` |
 | Custom software, no CMK | `@('ImageManagement', 'ImageBuild', 'HostPool')` |
 | Compliance / Image Management CMK | `@('SharedServices', 'ImageManagement', 'HostPool')`; add `'ImageBuild'` when building a custom image |
-| No existing VNet | Add `'Networking'` to the selected path |
+| Production with no existing VNet | Add `'Networking'` to the selected path |
 | Shared FSLogix storage with existing prerequisites | `@('AddOns', 'HostPool')` |
 | Shared FSLogix storage requiring new prerequisites | `@('SharedServices', 'AddOns', 'HostPool')` |
 | Air-gapped Secret / Top Secret | Use the path-specific command in the [Air-Gapped First Deployment Checklist](air-gapped-clouds.md#first-deployment-checklist) |
@@ -195,7 +249,7 @@ has defaults that publish Image Build, Host Pool, and add-on forms even when the
 Connect-AzAccount -Environment '<environment>'
 Set-AzContext -Subscription '<subscription-id>'
 
-$templatesToPublish = @('HostPool') # Replace with the exact list from your chosen path above
+$templatesToPublish = @('HostPoolPoc') # Replace with the exact list from your chosen path above
 
 .\tools\New-TemplateSpecs.ps1 `
     -Location '<region>' `
@@ -204,14 +258,33 @@ $templatesToPublish = @('HostPool') # Replace with the exact list from your chos
     -createImageManagement ($templatesToPublish -contains 'ImageManagement') `
     -createCustomImage ($templatesToPublish -contains 'ImageBuild') `
     -createHostPool ($templatesToPublish -contains 'HostPool') `
+    -createHostPoolPoc ($templatesToPublish -contains 'HostPoolPoc') `
     -createAutomatedHostPool ($templatesToPublish -contains 'AutomatedHostPool') `
     -CreateAddOns ($templatesToPublish -contains 'AddOns')
 ```
 
 Publishing a Template Spec does not deploy the workload; it makes the guided form available in the
-Azure portal. Publish only the Step 4 form matching the selected management approach. The automated
-form is available only in Azure Commercial. `AddOns` publishes the complete add-on Template Spec
-collection, including FSLogix Storage; deploy only the add-on selected by the chosen path.
+Azure portal. **AVD Standard PoC** publishes its purpose-built form and dedicated PoC entry
+template; **AVD Host Pool** publishes the full production form and production entry template.
+Both entries reuse the lower-level host-pool modules. The PoC form fixes a low-complexity posture,
+creates one private session-host subnet with explicit NAT Gateway outbound access, deploys two session hosts when the
+default FSLogix profile-container option is enabled or one host when local profiles are selected,
+offers optional monitoring, and places persistent PoC resources in one host-pool-specific
+resource group. Because its cloud-only FSLogix option uses storage-account-key authentication, it
+does not create a deployment-helper VM or run an NTFS ACL configuration step. The standalone VNet,
+subnet, NSG, NAT Gateway, and Standard public IP are created in the consolidated PoC resource group.
+The form enables the host-pool RDP property for Microsoft Entra SSO, but a tenant administrator
+must still complete the Windows Cloud Login and Conditional Access preparation linked from the form.
+The PoC form is a disposable demo. After demonstrating the environment, delete its consolidated
+resource group and clean up related directory or device records. Do not reuse its resources or
+generated parameters for a pilot or production deployment.
+**AVD Host Pool** is the full standard production form. **AVD Automated Host Pool** is the full
+automated-management form and is available only in Azure Commercial; there is no automated PoC
+path. Publish the Step 4 form matching the selected management approach and intended purpose. The
+underlying standard and automated entry templates directly compose Shared Services and their
+pool-specific modules.
+`AddOns` publishes the complete add-on Template Spec collection, including FSLogix Storage; deploy
+only the add-on selected by the chosen path.
 To apply an enterprise naming standard to the publishing resource group and Template Specs, pass a
 `-NamingConvention` hashtable using the schema and example in the
 [Naming Convention guide](naming-convention.md#passing-the-parameter). An explicit
@@ -221,9 +294,12 @@ To apply an enterprise naming standard to the publishing resource group and Temp
 
 In the Azure portal, open **Template Specs**, select the first required component, and choose
 **Deploy**. Follow the order shown in [Choose Your Path](#choose-your-path). Skip optional components
-rather than filling out forms for resources the environment does not need. For an automated host
-pool, deploy AVD Shared Services with the Secrets Key Vault enabled before opening the automated
-host-pool form.
+rather than filling out forms for resources the environment does not need. Deploy AVD Shared
+Services first only when its outputs have an earlier consumer or a separately owned lifecycle.
+Otherwise, the full Step 4 host-pool form can create or reuse the selected workspace, Key Vault,
+monitoring, DCR, DCE, and FSLogix backup resources through its internal Shared Services call. New
+production workspaces use shared naming by default. Evaluation parameters use host-pool-specific
+naming.
 
 ### 3. Save Each Generated Parameter File
 
@@ -238,6 +314,7 @@ save it in the matching customer folder:
 | AVD Image Management | `customer\parameters\imageManagement\<environment>.imageManagement.parameters.json` |
 | AVD Custom Image | `customer\parameters\imageBuild\<image>.imageBuild.parameters.json` |
 | AVD Host Pool (standard) | `customer\parameters\hostpools\<hostpool>.hostpool.parameters.json` |
+| AVD Standard PoC | `customer\parameters\hostpoolPoc\<name>.hostpoolPoc.parameters.json` |
 | AVD Automated Host Pool | `customer\parameters\automatedHostPools\<hostpool>.automatedHostPool.parameters.json` |
 
 Remove `timeStamp` from downloaded Image Build parameter files so each build generates fresh
@@ -292,8 +369,8 @@ replacement and assign the recurring lifecycle owner.
 - 🔒 **Domain Join Account** with permissions ([setup guide](hostpool-deployment.md#domain-permissions))
 - 🔒 **Entra Kerberos** for Azure Files - [Hybrid Guide](entra-kerberos-hybrid.md) | [Cloud-Only Guide](entra-kerberos-cloud-only.md)
 - 🔒 **Key Vaults** (Secrets & Encryption) — needed upfront when Image Management artifact storage
-    or gallery image versions use CMK; the standard host-pool deployment can create its own Key
-    Vaults inline — see [Step 1](#step-1-deploy-avd-shared-services)
+    or gallery image versions use CMK; a host-pool orchestrator can create host-pool-specific Key
+    Vaults through its Shared Services phase — see [Step 1](#step-1-deploy-avd-shared-services)
 
 ### Detailed Setup Guides
 
@@ -474,26 +551,29 @@ New-AzDeployment `
 
 ## Step 1: Deploy AVD Shared Services {#step-1-deploy-avd-shared-services}
 
-**⏭️ Skip this step if:** You are deploying a standard host pool and don't need shared resources
-before another component. The first Step 4 deployment can create Key Vaults, monitoring, CMK
-resources, and FSLogix backup resources that later standard host pools reuse. It can also deploy
-host-pool-specific FSLogix storage or consume existing storage.
+**⏭️ Skip this standalone step if:** No component needs Shared Services outputs before the host pool
+and the organization does not require a separate shared-resource ownership boundary. This applies
+to both evaluation and production. The full standard and automated Step 4 entry orchestrators call
+Shared Services internally and can create or reuse the selected workspace, Key Vault, monitoring,
+DCR, DCE, and FSLogix backup resources. The Standard PoC uses a separate, constrained orchestrator
+that composes only the lower-level modules required for its host-pool-specific deployment.
 
 > **IL6/IL7 recommendation:** Do not skip Step 1 by default in Secret or Top Secret. Its centralized
 > logging, monitoring, secrets, and key-management resources support the expected high-impact
 > compliance posture. Skip it only when approved shared services provide equivalent capabilities
 > and the control owners have documented that coverage.
 
-**Required when:** Deploying an automated host pool, or using Customer Managed Keys for Image
-Management artifact/build-log storage or gallery image versions, because those consumers require
-an existing credentials or encryption Key Vault.
+**Required when:** Using Customer Managed Keys for Image Management artifact/build-log storage or
+gallery image versions, because Image Management requires an existing encryption Key Vault.
 Also deploy Step 1 first whenever assigned policy requires a Log Analytics Workspace before
 diagnostic-enabled resources are created. See
 [Compliance — Log Analytics Workspace prerequisite](compliance.md#always-on-controls-no-configuration-required).
-Use Step 1 by choice when multiple host pools or supporting components should share Key Vaults,
-monitoring, or the FSLogix Azure Files backup vault and policy **before the first host pool is
-deployed**. For standard-host-pool-only designs, the first Step 4 deployment can create those
-resources instead and later Step 4 deployments can select them as existing resources.
+Use Step 1 by choice when multiple host pools or supporting components should share an AVD
+workspace, Key Vaults, monitoring, or the FSLogix Azure Files backup vault and policy under a
+separate lifecycle. Production does not require standalone Step 1 merely because those resources
+are selected: each full Step 4 orchestrator composes the same lower-level Shared Services capability
+modules and can create or reuse them when no earlier dependency exists. The Step 4 templates do not
+embed the standalone Step 1 entry template.
 
 > **⚠️ Common mistake — sequence matters with Image Management CMK:** Deploy AVD Shared Services
 > (this step) **before** Image Management (Step 2). Image Management needs the encryption Key Vault
@@ -504,13 +584,17 @@ resources instead and later Step 4 deployments can select them as existing resou
 ### First Deployment: Template Spec UI
 
 1. In the Azure portal, open **Template Specs** and deploy **AVD Shared Services**.
-2. Use the form to choose credential and encryption Key Vaults, centralized monitoring, FSLogix
-    backup, and private connectivity. Fields that do not apply remain hidden.
+2. Use the form to choose credential and encryption Key Vaults, a shared AVD workspace and its
+    feed/global Private Link configuration, centralized monitoring, FSLogix backup, and private
+    connectivity. Fields that do not apply remain hidden.
 3. At **Review + create**, select **Create**. After submission, select **Download template and
     parameters** and save them as
     `customer\parameters\sharedServices\<environment>.sharedServices.parameters.json`.
 4. Retain the Key Vault, monitoring, FSLogix backup vault, and policy outputs required
     by downstream forms.
+
+When updating an existing workspace, feed/global networking and workspace public access are
+managed only when explicitly selected. Otherwise Shared Services preserves those properties.
 
 <details>
 <summary><b>Resources and alternative deployment methods</b></summary>
@@ -530,6 +614,8 @@ resource, parameter, prerequisite, networking, deployment, and output reference.
 | **Log Analytics Workspace** *(optional)* | `law-avd-{loc}` | Central workspace for Key Vault and Image Management storage account diagnostic settings, and host pool monitoring |
 | **AVD Insights Data Collection Rule** *(optional)* | `microsoft-avdi-{loc}` | Shared DCR that every host pool referencing this workspace can reuse via `existingAVDInsightsDataCollectionRuleResourceId`, instead of the first host pool creating its own |
 | **Data Collection Endpoint** *(optional)* | `dce-avd-{loc}` | Shared DCE that every host pool referencing this workspace can reuse via `existingDataCollectionEndpointResourceId` |
+| **Shared AVD Workspace** *(optional)* | `vdws-avd-{loc}` | Shared workspace created or updated by Shared Services; pass `avdWorkspaceResourceId` to each host pool as `existingFeedWorkspaceResourceId` |
+| **AVD control-plane resource group** *(optional)* | `rg-avd-control-plane-{loc}` | Dedicated owner for a newly created shared workspace and its optional feed private endpoint |
 | **FSLogix Recovery Services Vault** *(optional)* | `rsv-avd-files-{loc}` | Shared regional vault and Azure Files snapshot backup policy for pooled host pools and standalone FSLogix storage deployments |
 
 **Custom naming:** These patterns reflect the CAF default. To use a consistent naming convention across all solutions, see the **[Naming Convention guide](naming-convention.md)**.
@@ -591,10 +677,12 @@ After deployment, note the resource IDs from the deployment outputs:
 | `avdInsightsDataCollectionRuleResourceId` | Host pool deployment (`existingAVDInsightsDataCollectionRuleResourceId`) — only present when `deployMonitoring` was `true` |
 | `dataCollectionEndpointResourceId` | Host pool deployment (`existingDataCollectionEndpointResourceId`) — only present when `deployMonitoring` was `true` |
 | `azureMonitorPrivateLinkScopeResourceId` | Host pool deployment (`azureMonitorPrivateLinkScopeResourceId`) and centralized monitoring/DNS automation — empty when AMPLS integration is disabled |
+| `avdWorkspaceResourceId` | Standard or automated host pool (`existingFeedWorkspaceResourceId`) |
+| `globalFeedWorkspaceResourceId` | Existing global-feed workspace reference for automation that needs it; host pools consuming `avdWorkspaceResourceId` leave feed/global networking under Shared Services ownership |
 | `fslogixBackupVaultResourceId` | Pooled host pool (`existingFilesBackupVaultResourceId`) or FSLogix Storage add-on (`recoveryServicesVaultResourceId`) |
 | `fslogixBackupPolicyName` | Pooled host pool (`existingFilesBackupPolicyName`) or FSLogix Storage add-on (`fileSharePolicyName`) |
 
-> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created inline by the host pool deployment, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpool-deployment.md#security-prerequisites-optional).
+> **Required RBAC on the Encryption KV** for the deploying identity: `Key Vault Crypto Officer` — needed to create encryption keys during host pool deployment. This applies whether the KV was pre-deployed here or created by the host-pool orchestrator's Shared Services phase, because creating a vault does not grant the deploying identity any key operation rights (ARM control plane ≠ Key Vault data plane). This role can be removed after initial deployment once key rotation is handled separately. See the [full explanation and Confidential VM exception](hostpool-deployment.md#security-prerequisites-optional).
 
 ---
 
@@ -781,8 +869,11 @@ Replacer independently handles image-driven replacement.
 
 ### First Deployment: Template Spec UI
 
-1. In the Azure portal, open **Template Specs** and deploy **AVD Host Pool** or
-    **AVD Automated Host Pool**, according to the decision above.
+1. In the Azure portal, open **Template Specs** and deploy **AVD Standard PoC** only for the
+    purpose-built disposable demo, **AVD Host Pool** for a full standard pilot or production
+    design, or
+    **AVD Automated Host Pool** for a full automated production design. Automated management has no
+    PoC path.
 2. Use the form to select identity, image, session hosts, FSLogix, monitoring, backup, security, and
     private connectivity. For an existing custom image, select its Azure Compute Gallery image
     version resource ID; the image can be produced by
@@ -796,17 +887,29 @@ Replacer independently handles image-driven replacement.
     automated management.
 4. Verify that the session hosts report **Available**.
 
+If **AVD Standard PoC** was selected, demonstrate only the intended scenarios, then delete the
+consolidated PoC resource group and clean up related Microsoft Entra device or other directory
+records. Do not continue configuring that deployment as a pilot. Return to
+[Choose Your Path](#choose-your-path) and begin a new design with the full **AVD Host Pool** form.
+
+The selected standard or automated entry Template Spec is an orchestrator that calls Shared
+Services and then its pool-specific modules. The full forms expose whether those resources are
+created by this deployment or reused from standalone Step 1. New pilot and production workspaces
+use shared names by default; disposable PoC parameters use host-pool-specific names. If multiple
+host pools register application groups to one workspace, deploy them serially to avoid a
+read-modify-write race on the workspace reference list.
+
 <a id="poc-fast-path"></a>
 <details>
 <summary><b>Fallback when the Template Spec UI is unavailable</b></summary>
 
 Use this PowerShell-only path only when the Template Spec UI cannot be used. It hand-configures the
 starter parameter file instead of benefiting from the portal form's resource pickers, conditional
-fields, and validation. For a **standard-management** evaluation with an existing VNet,
-marketplace image, no CMK, and no custom software, Steps 0-3 can still be skipped. For an
-automated-pool evaluation, use the fallback commands in the
-[automated host-pool guide](../deployments/automatedHostPools/README.md#deploy), which deploys the
-required Shared Services credentials Key Vault before the host pool.
+fields, and validation. For a disposable **standard-management** demo with its own standalone
+network, marketplace image, no CMK, and no custom software, the purpose-built PoC configuration is
+self-contained. Automated
+management has no corresponding PoC fallback; use the full form or the direct deployment commands
+in the [automated host-pool guide](../deployments/automatedHostPools/README.md#deploy).
 
 > **Before you start:** Run the [60-second preflight](#preflight-checklist) above, and make sure the Az module is installed (`Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force`) and you're connected (`Connect-AzAccount`).
 
@@ -820,25 +923,27 @@ Set-Location FederalAVD
 #### 2 - Copy the PoC Parameter File
 
 ```powershell
-New-Item -ItemType Directory -Force customer\parameters\hostpools | Out-Null
-Copy-Item customer-examples\parameters\hostpools\poc.hostpool.parameters.json `
-          customer\parameters\hostpools\myfirstpool.parameters.json
+New-Item -ItemType Directory -Force customer\parameters\hostpoolPoc | Out-Null
+Copy-Item customer-examples\parameters\hostpoolPoc\poc.hostpoolPoc.parameters.json `
+          customer\parameters\hostpoolPoc\my-poc.parameters.json
 ```
 
 > `customer\parameters\` is git-ignored — your files stay local and won't be overwritten on `git pull`. Never edit `customer-examples\` directly.
 
-#### 3 - Set the Four Required Values
+#### 3 - Set the Three Required Values
 
-Edit `customer\parameters\hostpools\myfirstpool.parameters.json`:
+Edit `customer\parameters\hostpoolPoc\my-poc.parameters.json`:
 
 | Parameter | What to set |
 | --- | --- |
 | `identifier` | Short prefix for this deployment (e.g., `"test"`) |
 | `virtualMachineNamePrefix` | VM name prefix (e.g., `"avddev"`, max 14 chars) |
-| `virtualMachineSubnetResourceId` | Full resource ID of the session host subnet |
 | `appGroupSecurityGroups` | Entra security group object ID and display name |
 
-The file already sets `sessionHostCount: 3`, `deployFSLogixStorage: true`, and `identitySolution: "EntraId"`. Credentials are collected interactively at deploy time — never put them in the JSON file.
+The file already sets `deployFSLogixStorage: true` and `enableMonitoring: false`. The dedicated
+template deploys two session hosts when FSLogix is enabled and one when it is disabled. It also
+fixes Entra ID join and creates the VNet, private subnet, NSG, NAT Gateway, and public IP.
+Credentials are collected interactively at deploy time - never put them in the JSON file.
 
 #### 4 - Check VM Size Availability and Quota
 
@@ -856,9 +961,9 @@ $adminPass = Read-Host 'Session host local admin password' -AsSecureString
 
 New-AzDeployment `
     -Location '<azure-region>' `
-    -Name 'myfirstpool' `
-    -TemplateFile '.\deployments\hostpools\hostpool.json' `
-    -TemplateParameterFile '.\customer\parameters\hostpools\myfirstpool.parameters.json' `
+    -Name 'federalavd-poc' `
+    -TemplateFile '.\deployments\hostpoolPoc\hostpoolPoc.json' `
+    -TemplateParameterFile '.\customer\parameters\hostpoolPoc\my-poc.parameters.json' `
     -virtualMachineAdminUserName $adminUser `
     -virtualMachineAdminPassword $adminPass `
     -Verbose
@@ -869,13 +974,25 @@ Track progress in **Azure Portal → Subscriptions → [your subscription] → D
 #### 6 - Verify Session Hosts
 
 ```powershell
+$deployment = Get-AzSubscriptionDeployment -Name 'myfirstpool'
+$hostPoolResourceId = $deployment.Outputs.hostPoolResourceId.Value
+$hostPoolResourceGroupName = ($hostPoolResourceId -split '/')[4]
+$hostPoolName = ($hostPoolResourceId -split '/')[8]
+
 Get-AzWvdSessionHost `
-    -ResourceGroupName 'rg-avd-hosts-<identifier>-<region>' `
-    -HostPoolName      'vdpool-avd-<identifier>-<region>' |
+    -ResourceGroupName $hostPoolResourceGroupName `
+    -HostPoolName $hostPoolName |
     Select-Object Name, Status
 ```
 
 All session hosts should show `Status: Available`. Then sign in at [https://client.wvd.microsoft.com/arm/webclient](https://client.wvd.microsoft.com/arm/webclient) (Commercial) or [https://client.wvd.azure.us/arm/webclient](https://client.wvd.azure.us/arm/webclient) (Government).
+
+#### 7 - Demonstrate, Then Tear Down
+
+Use the PoC only to demonstrate the selected scenarios, such as connectivity, profile roaming, and
+Microsoft Entra SSO. Then delete the consolidated PoC resource group and clean up related Microsoft
+Entra device or other directory records. Do not keep configuring this deployment as a pilot or
+production environment. Start again with the full **AVD Host Pool** form and a production design.
 
 ---
 

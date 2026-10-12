@@ -4,7 +4,7 @@ targetScope = 'subscription'
 //   Step 1 — Run Command on the deployment VM creates the CVM encryption key with a key
 //             release policy via the Key Vault data plane. ARM key PUT does not support
 //             key release policies — they must be set through the data plane.
-//   Step 2 — Shared customerManagedKeys module creates the DiskEncryptionSet
+//   Step 2 — This focused module creates the DiskEncryptionSet
 //             (ConfidentialVmEncryptedWithCustomerKey type), grants the DES system identity
 //             Key Vault Crypto Service Encryption User on the key, and grants the CVM
 //             Orchestrator service principal Key Vault Crypto Service Release User on the key.
@@ -42,32 +42,49 @@ module setEncryptionKeyRunCommand '../../../shared/modules/resourceModules/compu
   }
 }
 
-// Step 2: Create the DiskEncryptionSet and role assignments.
-// skipKeyCreation: true — the key was already created by the Run Command above.
-module cmk '../../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
+var keyVaultName = last(split(keyVaultResourceId, '/'))
+var keyVaultSubscriptionId = split(keyVaultResourceId, '/')[2]
+var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
+var parentTag = { 'cm-resource-parent': hostPoolResourceId }
+
+// Step 2: Create the Confidential VM DiskEncryptionSet for the pre-created key.
+module diskEncryptionSet '../../../shared/modules/resourceModules/compute/diskEncryptionSets/deploy.bicep' = {
   scope: resourceGroup(resourceGroupHosts)
   params: {
-    keyVaultResourceId: keyVaultResourceId
-    // CVM keys are always RSA-HSM (exportable, with release policy) — HSM tier required.
-    keyManagementType: 'CustomerManagedHSM'
+    name: diskEncryptionSetName
     location: location
-    tags: tags
-    parentResourceId: hostPoolResourceId
-    diskEncryptionConfigs: [
-      {
-        keyName: keyName
-        diskEncryptionSetName: diskEncryptionSetName
-        confidentialVMOSDiskEncryption: true
-        confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
-        // Key was pre-created above — skip ARM key creation to avoid immutability errors on re-deploy.
-        skipKeyCreation: true
-      }
-    ]
+    keyVaultResourceId: keyVaultResourceId
+    keyName: keyName
+    encryptionType: 'ConfidentialVmEncryptedWithCustomerKey'
+    rotationToLatestKeyVersionEnabled: false
+    systemAssignedIdentity: true
+    tags: union(parentTag, tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {})
   }
   dependsOn: [
     setEncryptionKeyRunCommand
   ]
 }
 
+// Step 3: Grant the DES encryption role and CVM Orchestrator release role at key scope.
+module keyRoleAssignments '../../../shared/modules/resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = {
+  scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+  params: {
+    keyVaultName: keyVaultName
+    keyName: keyName
+    assignments: [
+      {
+        principalId: diskEncryptionSet.outputs.principalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
+      }
+      {
+        principalId: confidentialVMOrchestratorObjectId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: '08bbd89e-9f13-488c-ac41-acfcb10c90ab'
+      }
+    ]
+  }
+}
+
 @description('Resource ID of the created Confidential VM DiskEncryptionSet.')
-output diskEncryptionSetResourceId string = cmk.outputs.diskResults[0].diskEncryptionSetResourceId
+output diskEncryptionSetResourceId string = diskEncryptionSet.outputs.resourceId

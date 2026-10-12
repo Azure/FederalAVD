@@ -36,7 +36,7 @@ Steps 0-3 are optional depending on your scenario:
 - **Multiple standard host pools**: The first Step 4 deployment can create shared Key Vaults,
   monitoring, and the FSLogix backup vault/policy; later Step 4 deployments can select those
   existing resources. Step 1 is optional unless another component needs them first.
-- **Automated host-pool PoC**: Steps 1 → 4. Deploy the Shared Services secrets Key Vault first and pass `secretsKeyVaultResourceId` to the automated host pool's required `credentialsKeyVaultResourceId` parameter.
+- **Automated host pool**: Use the full Step 4 deployment; there is no automated PoC path. Its entry orchestrator can create or adopt the required Shared Services credentials Key Vault. Deploy standalone Step 1 first only when the vault must preexist or have a separately owned lifecycle.
 - **Custom software, no CMK**: Steps 2 → (3 optional) → 4
 - **Runtime artifacts + CMK**: Steps 1 → 2 → 4
 - **Custom image + CMK**: Steps 1 → 2 → 3 → 4

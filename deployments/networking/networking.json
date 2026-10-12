@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "14886221605856997464"
+      "version": "0.48.1.52935",
+      "templateHash": "9294199109586845098"
     }
   },
   "parameters": {
@@ -68,6 +68,13 @@
       ],
       "metadata": {
         "description": "Optional. The routing method to use for the virtual network subnets."
+      }
+    },
+    "defaultOutboundAccess": {
+      "type": "bool",
+      "nullable": true,
+      "metadata": {
+        "description": "Optional. Controls Azure default outbound access for host subnets. Set to false when explicit outbound connectivity is provided. Null preserves the platform default."
       }
     },
     "includeAvdBypassRoutes": {
@@ -941,6 +948,9 @@
           "defaultRouting": {
             "value": "[parameters('defaultRouting')]"
           },
+          "defaultOutboundAccess": {
+            "value": "[parameters('defaultOutboundAccess')]"
+          },
           "includeAvdBypassRoutes": {
             "value": "[parameters('includeAvdBypassRoutes')]"
           },
@@ -1001,8 +1011,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "7392235862376390437"
+              "version": "0.48.1.52935",
+              "templateHash": "8049050628863777133"
             }
           },
           "parameters": {
@@ -1020,6 +1030,10 @@
             },
             "defaultRouting": {
               "type": "string"
+            },
+            "defaultOutboundAccess": {
+              "type": "bool",
+              "nullable": true
             },
             "includeAvdBypassRoutes": {
               "type": "bool"
@@ -1108,6 +1122,9 @@
                   "defaultRouting": {
                     "value": "[parameters('defaultRouting')]"
                   },
+                  "defaultOutboundAccess": {
+                    "value": "[parameters('defaultOutboundAccess')]"
+                  },
                   "includeAvdBypassRoutes": {
                     "value": "[parameters('includeAvdBypassRoutes')]"
                   },
@@ -1167,8 +1184,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3095141680741937153"
+                      "version": "0.48.1.52935",
+                      "templateHash": "12683058383206690848"
                     }
                   },
                   "parameters": {
@@ -1183,6 +1200,10 @@
                     },
                     "defaultRouting": {
                       "type": "string"
+                    },
+                    "defaultOutboundAccess": {
+                      "type": "bool",
+                      "nullable": true
                     },
                     "includeAvdBypassRoutes": {
                       "type": "bool"
@@ -1245,6 +1266,7 @@
                           "name": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].name]",
                           "properties": {
                             "addressPrefix": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix]",
+                            "defaultOutboundAccess": "[parameters('defaultOutboundAccess')]",
                             "natGateway": "[if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
                             "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
                             "networkSecurityGroup": {
@@ -1394,7 +1416,7 @@
                         "batchSize": 1
                       },
                       "type": "Microsoft.Network/virtualNetworks/subnets",
-                      "apiVersion": "2022-05-01",
+                      "apiVersion": "2024-05-01",
                       "name": "[format('{0}/{1}', parameters('vnetName'), variables('allSubnets')[copyIndex()].name)]",
                       "properties": "[variables('allSubnets')[copyIndex()].properties]",
                       "dependsOn": [
@@ -1437,8 +1459,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "7410733236420509568"
+                              "version": "0.48.1.52935",
+                              "templateHash": "1456743040429825759"
                             }
                           },
                           "parameters": {
@@ -1531,8 +1553,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "7410733236420509568"
+                              "version": "0.48.1.52935",
+                              "templateHash": "1456743040429825759"
                             }
                           },
                           "parameters": {
@@ -1672,8 +1694,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13295556477426413209"
+              "version": "0.48.1.52935",
+              "templateHash": "618425977677697218"
             }
           },
           "parameters": {
@@ -1736,8 +1758,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "1787709191313946301"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17731635354050486200"
                     }
                   },
                   "parameters": {
@@ -1801,8 +1823,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "1092824874096530174"
+                      "version": "0.48.1.52935",
+                      "templateHash": "6356786979145766174"
                     }
                   },
                   "parameters": {
@@ -1843,8 +1865,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "3294218969377347124"
+                              "version": "0.48.1.52935",
+                              "templateHash": "4320047789187130456"
                             }
                           },
                           "parameters": {

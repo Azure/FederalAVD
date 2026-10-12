@@ -2,6 +2,7 @@ param vnetName string
 param vnetAddressPrefixes array
 param subnets array
 param defaultRouting string
+param defaultOutboundAccess bool?
 param includeAvdBypassRoutes bool
 param rdpShortpathManagedNetworks bool
 param rdpShortpathPublicNetworks bool
@@ -162,6 +163,7 @@ var snetHosts = [for subnet in hostsSubnetsList: {
   name: subnet.name
   properties: {
     addressPrefix: subnet.addressPrefix
+    defaultOutboundAccess: defaultOutboundAccess
     natGateway: deployNatGateway
       ? {
           id: natGateway.id
@@ -336,7 +338,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 }
 
 @batchSize(1)
-resource snets 'Microsoft.Network/virtualNetworks/subnets@2022-05-01' = [
+resource snets 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = [
   for subnet in allSubnets: {
     name: subnet.name
     parent: vnet

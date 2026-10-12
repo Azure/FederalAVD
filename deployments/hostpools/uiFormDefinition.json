@@ -157,7 +157,7 @@
                   "constraints": {
                     "allowedValues": [
                       {
-                        "label": "Create a new Workspace",
+                        "label": "Create a new shared Workspace",
                         "value": "new"
                       },
                       {
@@ -174,7 +174,7 @@
                   "visible": "[equals(steps('controlPlane').workspace.createOption, 'new')]",
                   "options": {
                     "style": "Warning",
-                    "text": "When you choose create to create a new workspace this solution will overwrite any existing application group references (if the workspace already exists). This could cause an outage if existing hostpools and application groups are already registered with this workspace."
+                    "text": "Creating a shared workspace when the generated name already exists can overwrite its application group references. Select the existing workspace instead when it has already been deployed."
                   }
                 },
                 {
@@ -2821,8 +2821,8 @@
                   "type": "Microsoft.Common.DropDown",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]",
                   "label": "Azure Files Redundancy",
-                  "defaultValue": "Locally Redundant",
-                  "toolTip": "Select Azure Files storage redundancy independently from session host availability settings.",
+                  "defaultValue": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]",
+                  "toolTip": "Defaults to Zone Redundant when session hosts use Availability Zones. You can override the default when the target region or deployment requirements call for Locally Redundant storage.",
                   "constraints": {
                     "allowedValues": [
                       {
@@ -2835,6 +2835,15 @@
                       }
                     ],
                     "required": true
+                  }
+                },
+                {
+                  "name": "storageRedundancyWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('hosts').availability.availability, 'AvailabilityZones'), equals(steps('userProfiles').azureFiles.storageRedundancy, 'LocallyRedundant'))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Session hosts are distributed across Availability Zones, but FSLogix storage is locally redundant. A zone-level storage outage could make user profiles unavailable even while session hosts remain available."
                   }
                 },
                 {
@@ -4151,7 +4160,7 @@
                   "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')))))]",
                   "options": {
                     "style": "Info",
-                    "text": "[concat('An existing global feed workspace has been detected: ', first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.name)), '. Therefore, you can only choose either option 2 or 3, because you can only have one global-feed workspace with one private endpoint.')]"
+                    "text": "A workspace whose name contains global-feed was detected. Selecting all private routes reuses its resource ID instead of creating another global-feed workspace or private endpoint."
                   }
                 },
                 {
@@ -4159,10 +4168,26 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "AVD Private Link Configuration",
                   "multiLine": true,
-                  "defaultValue": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), 'Only remote session connections use private routes', 'Feed download and remote session connections use private routes')]",
+                  "defaultValue": "Feed download and remote session connections use private routes",
                   "toolTip": "Chooose the AVD Private Link Configuration.",
                   "constraints": {
-                    "allowedValues": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), parse('[{\"label\":\"Only remote session connections use private routes\",\"description\":\"Only remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), if(empty(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed'))), parse('[{\"label\":\"All parts of the connection use private routes\",\"description\":\"Initial feed discovery, feed download, and remote session connections use private routes.\",\"value\":\"All\"},{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]'), parse('[{\"label\":\"Feed download and remote session connections use private routes\",\"description\":\"Feed download and remote session connections use private routes, but initial feed discovery uses public routes.\",\"value\":\"FeedAndHostpool\"},{\"label\":\"Only remote session connections use private routes\",\"description\":\"Remote session connections use private routes, but initial feed discovery and feed download use public routes.\",\"value\":\"Hostpool\"}]')))]",
+                    "allowedValues": [
+                      {
+                        "label": "All parts of the connection use private routes",
+                        "description": "Initial feed discovery, feed download, and remote session connections use private routes.",
+                        "value": "All"
+                      },
+                      {
+                        "label": "Feed download and remote session connections use private routes",
+                        "description": "Feed download and remote session connections use private routes, but initial feed discovery uses public routes.",
+                        "value": "FeedAndHostPool"
+                      },
+                      {
+                        "label": "Only remote session connections use private routes",
+                        "description": "Remote session connections use private routes, but initial feed discovery and feed download use public routes.",
+                        "value": "HostPool"
+                      }
+                    ],
                     "required": true
                   },
                   "visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
@@ -4250,15 +4275,24 @@
                 {
                   "name": "feedWorkspaceHeader",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]",
                   "options": {
                     "text": "Workspace Feed"
                   }
                 },
                 {
+                  "name": "existingWorkspaceOwnership",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('controlPlane').workspace.createOption, 'update'), not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Carefully review changes to this existing workspace. It may be shared by other host pools, so changing its public network access or feed private endpoint can affect feed download and client connectivity for every host pool registered to it. This selection explicitly authorizes the deployment to apply those workspace-level changes in the selected subnet. Confirm ownership and coordinate the change before continuing. Existing application group references are preserved."
+                  }
+                },
+                {
                   "name": "feedWorkspaceTextBlock1",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]",
                   "options": {
                     "text": "Select the virtual network and subnet for the workspace feed private endpoint. The virtual network is limited to the subscription and location as specified on the 'Control Plane' pane. The same private dns zone as the remote session connection is used."
                   }
@@ -4274,7 +4308,7 @@
                     "allowedValues": "[map(filter(steps('controlPlane').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('controlPlane').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
                     "required": true
                   },
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]"
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]"
                 },
                 {
                   "name": "feedWorkspaceSubnetsApi",
@@ -4295,7 +4329,7 @@
                     "allowedValues": "[map(steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
                     "required": true
                   },
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]"
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]"
                 },
                 {
                   "name": "feedWorkspacePublicNetworkAccess",
@@ -4320,20 +4354,29 @@
                     ],
                     "required": false
                   },
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool')))]"
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool')))]"
                 },
                 {
                   "name": "globalFeedTextBlock0",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
                   "options": {
                     "text": "Global Feed"
                   }
                 },
                 {
+                  "name": "globalFeedCreationWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Azure Virtual Desktop permits only one global private endpoint. Automatic detection recognizes workspaces that follow the FederalAVD global-feed naming convention; it cannot prove that a custom-named workspace does not already own the global endpoint. Verify that no global private endpoint exists elsewhere before continuing."
+                  }
+                },
+                {
                   "name": "globalFeedTextBlock1",
                   "type": "Microsoft.Common.TextBlock",
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
                   "options": {
                     "text": "Select the subscription, virtual network, and subnet where you wish to create the global feed private endpoint."
                   }
@@ -4349,7 +4392,7 @@
                     "allowedValues": "[map(filter(steps('controlPlane').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('controlPlane').scope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]",
                     "required": true
                   },
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]"
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]"
                 },
                 {
                   "name": "globalFeedSubnetsApi",
@@ -4370,7 +4413,7 @@
                     "allowedValues": "[map(steps('zeroTrust').avdPrivateLink.globalFeedSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]",
                     "required": true
                   },
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]"
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]"
                 },
                 {
                   "name": "privateDNSZonesHeader",
@@ -4438,7 +4481,7 @@
                 {
                   "name": "globalFeedPrivateDnsZone",
                   "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'))]",
+                  "visible": "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]",
                   "label": "Global Feed Private DNS Zone",
                   "defaultValue": "[first(map(filter(steps('zeroTrust').avdPrivateLink.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink-global.wvd.')), (zone) => zone.name))]",
                   "multiLine": true,
@@ -5578,13 +5621,13 @@
         "azureMonitorPrivateLinkScopeResourceId": "[if(steps('zeroTrust').azureMonitor.privateLink, steps('zeroTrust').azureMonitor.azureMonitorPrivateLinkScope.id, '')]",
         "avdPrivateLinkPrivateRoutes": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'None')]",
         "hostpoolPrivateEndpointSubnetResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostpoolSubnet.id, '')]",
-        "workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnet.id, '')]",
+        "workspaceFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool'))), steps('zeroTrust').avdPrivateLink.feedWorkspaceSubnet.id, '')]",
         "avdPrivateDnsZoneResourceId": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.wvdPrivateLinkDnsZone, '')]",
         "hostPoolPublicNetworkAccess": "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.hostpoolPublicNetworkAccess, 'Enabled')]",
-        "workspaceFeedPublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'Hostpool'))), steps('zeroTrust').avdPrivateLink.feedWorkspacePublicNetworkAccess, 'Enabled')]",
-        "existingGlobalFeedResourceId": "[first(map(filter(steps('controlPlane').workspacesApi.value, (ws) => contains(ws.name, 'global-feed')), (ws) => ws.id))]",
-        "globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
-        "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All')), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
+        "workspaceFeedPublicNetworkAccess": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'HostPool'))), steps('zeroTrust').avdPrivateLink.feedWorkspacePublicNetworkAccess, 'Enabled')]",
+        "existingGlobalFeedResourceId": "[if(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))), '', first(map(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')), (workspace) => workspace.id)))]",
+        "globalFeedPrivateEndpointSubnetResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')))), steps('zeroTrust').avdPrivateLink.globalFeedSubnet.id, '')]",
+        "globalFeedPrivateDnsZoneResourceId": "[if(and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.avdPrivateLinkConfig, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed')))), steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]",
         "permittedIPs": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').identity.deploySecretsKeyVault, and(or(steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
         "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
         "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",

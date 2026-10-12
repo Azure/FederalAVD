@@ -2,6 +2,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
 $bicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$orchestratorPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json'
 $policyAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
 $availabilitySetAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\availabilitySet.bicep'
@@ -11,22 +12,125 @@ $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
 
 Describe 'Automated host-pool AVD Private Link virtual networks' {
     BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
         $controlPlaneModule = Get-Content -LiteralPath $controlPlaneModulePath -Raw
         $standardControlPlaneModule = Get-Content -LiteralPath (
             Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
         ) -Raw
+        $sharedWorkspaceModule = Get-Content -LiteralPath (
+            Join-Path $repoRoot 'deployments\shared\modules\orchestration\avdWorkspace\avdWorkspace.bicep'
+        ) -Raw
     }
 
-    It 'deduplicates shared virtual networks across private endpoint routes' {
-        $controlPlaneModule | Should Match 'var privateEndpointVirtualNetworkResourceIds = union\('
-        $controlPlaneModule | Should Match "resource privateEndpointVirtualNetworks 'Microsoft.Network/virtualNetworks@2024-05-01' existing = \["
-        $controlPlaneModule | Should Not Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
-        $controlPlaneModule | Should Not Match "resource workspaceFeedPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
-        $controlPlaneModule | Should Not Match "resource globalFeedPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
+    It 'keeps only the host-pool connection virtual network in the automated core' {
+        $controlPlaneModule | Should Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $controlPlaneModule | Should Match 'location: hostPoolPrivateEndpointVirtualNetwork!\.location'
+        $controlPlaneModule | Should Not Match 'indexOf\('
+        $controlPlaneModule | Should Not Match 'workspaceFeedPrivateEndpoint'
+        $controlPlaneModule | Should Not Match 'globalFeedPrivateEndpoint'
     }
 
-    It 'keeps the standard host-pool implementation free of duplicate VNet declarations' {
-        $standardControlPlaneModule | Should Not Match "resource .*PrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks"
+    It 'keeps only the host-pool connection virtual network in the standard core' {
+        $standardControlPlaneModule | Should Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $standardControlPlaneModule | Should Match 'location: hostPoolPrivateEndpointVirtualNetwork!\.location'
+        $standardControlPlaneModule | Should Not Match 'indexOf\('
+        $standardControlPlaneModule | Should Not Match 'workspaceFeedPrivateEndpoint'
+        $standardControlPlaneModule | Should Not Match 'globalFeedPrivateEndpoint'
+    }
+
+    It 'uses independent conditional workspace feed and global-feed virtual networks in Shared Services' {
+        $sharedWorkspaceModule | Should Match "resource workspaceFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $sharedWorkspaceModule | Should Match "resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $sharedWorkspaceModule | Should Not Match 'indexOf\('
+    }
+
+    It 'matches the standard form Private Link subsection headers' {
+        $zeroTrustStep = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+        $privateLink = $zeroTrustStep.elements | Where-Object { $_.name -eq 'avdPrivateLink' }
+        $textBlocks = @($privateLink.elements | Where-Object { $_.type -eq 'Microsoft.Common.TextBlock' })
+
+        ($textBlocks.options.text -contains 'Remote Session Connections') | Should Be $true
+        ($textBlocks.options.text -contains 'Workspace Feed') | Should Be $true
+        ($textBlocks.options.text -contains 'Global Feed') | Should Be $true
+        ($textBlocks | Where-Object { $_.name -eq 'hostPoolHeader' }).visible |
+            Should Be "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
+        ($textBlocks | Where-Object { $_.name -eq 'workspaceFeedHeader' }).visible |
+            Should Be "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]"
+        ($textBlocks | Where-Object { $_.name -eq 'globalFeedHeader' }).visible |
+            Should Match "equals\(steps\('zeroTrust'\)\.avdPrivateLink\.privateRoutes, 'All'\)"
+    }
+}
+
+Describe 'Automated host-pool Shared Services create-or-adopt controls' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $orchestrator = Get-Content -LiteralPath $orchestratorPath -Raw
+        $profilesStep = $form.view.properties.steps | Where-Object { $_.name -eq 'profiles' }
+        $storage = $profilesStep.elements | Where-Object { $_.name -eq 'storage' }
+        $zeroTrustStep = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+        $keyManagement = $zeroTrustStep.elements | Where-Object { $_.name -eq 'keyManagement' }
+        $privateEndpoints = $zeroTrustStep.elements | Where-Object { $_.name -eq 'privateEndpoints' }
+    }
+
+    It 'creates or adopts the shared FSLogix backup vault and policy' {
+        $registerBackup = $storage.elements | Where-Object { $_.name -eq 'registerBackup' }
+        $useExistingVault = $storage.elements | Where-Object { $_.name -eq 'useExistingRecoveryServicesVault' }
+        $backupRetention = $storage.elements | Where-Object { $_.name -eq 'backupRetentionDays' }
+        $vaultSelector = $storage.elements | Where-Object { $_.name -eq 'recoveryServicesVault' }
+
+        $registerBackup.label | Should Be 'Enable FSLogix Azure Files Backup'
+        $useExistingVault.defaultValue | Should Be $false
+        $backupRetention.visible | Should Match 'not\(steps'
+        $vaultSelector.visible | Should Match 'useExistingRecoveryServicesVault'
+        $vaultSelector.constraints.required | Should Match 'useExistingRecoveryServicesVault'
+        $form.view.outputs.parameters.enableFSLogixBackup | Should Match 'registerBackup'
+        $form.view.outputs.parameters.existingFilesBackupVaultResourceId | Should Match 'useExistingRecoveryServicesVault'
+        $orchestrator | Should Match 'param enableFSLogixBackup bool = false'
+        $orchestrator | Should Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
+        $orchestrator | Should Match 'createVault: true'
+        $orchestrator | Should Match 'var effectiveFilesBackupVaultResourceId = fslogixBackupIsRequested'
+        $orchestrator | Should Match 'sharedFilesBackup!\.outputs\.recoveryServicesVaultResourceId'
+        $orchestrator | Should Match 'recoveryServicesVaultResourceId: effectiveFilesBackupVaultResourceId'
+    }
+
+    It 'creates or adopts one encryption Key Vault for disk and FSLogix CMK consumers' {
+        $useExistingKeyVault = $keyManagement.elements | Where-Object { $_.name -eq 'useExistingEncryptionKv' }
+        $keyVaultSelector = $keyManagement.elements | Where-Object { $_.name -eq 'existingEncryptionKeyVault' }
+        $retention = $keyManagement.elements | Where-Object { $_.name -eq 'encKvRetentionInDays' }
+
+        $useExistingKeyVault.defaultValue | Should Be $false
+        $keyVaultSelector.visible | Should Match 'useExistingEncryptionKv'
+        $keyVaultSelector.constraints.required | Should Match 'useExistingEncryptionKv'
+        $retention.visible | Should Match 'not\(steps'
+        $form.view.outputs.parameters.encryptionKeyVaultResourceId | Should Match 'useExistingEncryptionKv'
+        $form.view.outputs.parameters.fslogixEncryptionKeyVaultResourceId | Should Match 'useExistingEncryptionKv'
+        $orchestrator | Should Match 'var existingSharedEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match 'deployEncryptionKeyVault: deploySharedEncryptionKeyVault'
+        $orchestrator | Should Match 'keyVaultResourceId: effectiveFSLogixEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match 'keyVaultResourceId: diskEncryptionSetConfigurationIsValid \? effectiveDiskEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match "credentialsKeyVaultSecretBaseUri = 'https://\$\{last\(.+\)\}\$\{environment\(\)\.suffixes\.keyvaultDns\}/secrets'"
+        $orchestrator | Should Match "encryptionKeyVaultUri: deployFslogixStorageCmk[\s\S]+?\$\{environment\(\)\.suffixes\.keyvaultDns\}/'"
+        $orchestrator | Should Not Match "\}\.\$\{environment\(\)\.suffixes\.keyvaultDns\}"
+    }
+
+    It 'configures Shared Services and FSLogix private endpoints from one portal choice' {
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'operationsVirtualNetwork' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'operationsSubnet' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'virtualNetwork' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'privateEndpointSubnet' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureKeyVaultPrivateDnsZone' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureBackupPrivateDnsZone' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureBlobPrivateDnsZone' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureQueuePrivateDnsZone' }).Count | Should Be 1
+        $form.view.outputs.parameters.deployPrivateEndpoints | Should Match 'deployPrivateEndpoints'
+        $form.view.outputs.parameters.operationsPrivateEndpointSubnetResourceId | Should Match 'operationsSubnet'
+        $form.view.outputs.parameters.azureKeyVaultPrivateDnsZoneResourceId | Should Match 'azureKeyVaultPrivateDnsZone'
+        $form.view.outputs.parameters.azureBackupPrivateDnsZoneResourceId | Should Match 'azureBackupPrivateDnsZone'
+        $orchestrator | Should Match 'param deployPrivateEndpoints bool = false'
+        $orchestrator | Should Match 'param operationsPrivateEndpointSubnetResourceId string'
+        $orchestrator | Should Match 'privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId'
+        $orchestrator | Should Match 'azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId'
+        $orchestrator | Should Match 'azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId'
     }
 }
 
@@ -242,7 +346,7 @@ $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition
 $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
 $bicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json'
-$exampleParametersPath = Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\poc.automatedHostPool.parameters.json'
+$exampleParametersPath = Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json'
 
 Describe 'Automated host-pool ephemeral OS disk guidance' {
     BeforeAll {

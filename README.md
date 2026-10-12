@@ -26,11 +26,11 @@ cloud-specific extensions have narrower support and are called out below.
 | Deployment | What it can create | When to use it | Documentation |
 | --- | --- | --- | --- |
 | 🌐 **Networking** | Resource groups, VNets, purpose-specific subnets, NSGs, NAT Gateway or NVA routing, optional AVD bypass routes, hub peering, DDoS Network Protection, and private DNS zones | Build networking when approved landing-zone networking does not already exist | [Networking](deployments/networking/README.md) |
-| 🔒 **AVD Shared Services** | Separate secrets and encryption Key Vaults, optional Log Analytics workspace, AVD Insights DCR/DCE and Azure Monitor Agent identity, and optional shared FSLogix Recovery Services vault and Azure Files backup policy | Seed regional resources before consumers that require credentials, CMK, centralized monitoring, or shared FSLogix backup | [Shared Services](deployments/sharedServices/README.md) |
+| 🔒 **AVD Shared Services** | New or existing managed AVD workspace, feed/global Private Link, separate secrets and encryption Key Vaults, optional Log Analytics and AVD Insights resources, and optional shared FSLogix backup | Own enterprise shared resources independently, or let a host-pool orchestrator compose them with host-pool-specific PoC naming | [Shared Services](deployments/sharedServices/README.md) |
 | 📦 **Image Management** | Azure Compute Gallery, optional artifact and build-log storage, managed identity and RBAC, private endpoints, CMK resources, and a persistent image-build resource group | Host customizations or create and retain custom gallery images | [Image Management](deployments/imageManagement/README.md) |
 | 🎨 **Image Build** | Temporary orchestration and image VMs; software installation; custom artifacts; Windows Update; AppX removal; profile-aware VDI optimization; Sysprep; gallery image capture and replication | Bake a controlled custom image without depending on the Azure VM Image Builder service | [Image Build](docs/image-build.md) |
-| 🏢 **Standard Host Pool** | Pooled or personal host pool, workspace and application groups, directly managed session-host VMs, power-management scaling, FSLogix storage, monitoring, security, and optional backup | Use in every supported cloud when direct VM lifecycle control is required | [Host Pool Deployment](docs/hostpool-deployment.md) |
-| ⚙️ **Automated Host Pool** | Commercial pooled host pool using Session Host Configuration, native Session Host Update, optional dynamic create/delete scaling, FSLogix storage, monitoring, security, and policy-managed guest capabilities | Use when Azure Virtual Desktop should own the VM lifecycle and the preview dependency is acceptable | [Automated Host Pool](deployments/automatedHostPools/README.md) |
+| 🏢 **Standard Host Pool** | Orchestrates Shared Services, a pooled or personal control plane, directly managed session hosts, scaling, FSLogix storage, security, and optional backup | Use in every supported cloud when direct VM lifecycle control is required | [Host Pool Deployment](docs/hostpool-deployment.md) |
+| ⚙️ **Automated Host Pool** | Orchestrates Shared Services and a Commercial pooled host pool using Session Host Configuration, native Session Host Update, optional dynamic scaling, storage, security, and policy-managed guest capabilities | Use when Azure Virtual Desktop should own the VM lifecycle and the preview dependency is acceptable | [Automated Host Pool](deployments/automatedHostPools/README.md) |
 | 🔧 **Add-Ons** | Nine independent deployments for alerts, standalone FSLogix storage, policies, additional hosts, image-driven replacement, run commands, and route/quota/key automation | Add only the operational capabilities required by the environment | [Add-Ons](docs/add-ons.md) |
 
 ### Cloud and Deployment-Method Boundaries
@@ -50,7 +50,7 @@ cloud-specific extensions have narrower support and are called out below.
 
 Ready to deploy? The **[Quick Start Guide](docs/quick-start.md)** walks you through the complete deployment process with decision trees, prerequisites, and step-by-step instructions.
 
-**New to FederalAVD?** → **[Start with the PoC callout in Step 4](docs/quick-start.md#step-4-deploy-host-pool)** (existing VNet + marketplace images, no CMK) | **[Top 5 first-deployment mistakes](docs/troubleshooting.md#top-5-first-deployment-mistakes)**
+**New to FederalAVD?** → **[Start with the self-contained PoC](docs/quick-start.md#poc-fast-path)** (standalone NAT-backed VNet + marketplace image, no CMK) | **[Top 5 first-deployment mistakes](docs/troubleshooting.md#top-5-first-deployment-mistakes)**
 
 **👉 [Get Started Now →](docs/quick-start.md)** — choose your path (PoC · custom images · enterprise CMK), review prerequisites, and follow step-by-step instructions. The guide identifies which deployment methods are available in each cloud.
 
@@ -212,7 +212,7 @@ Support for multiple identity configurations to meet organizational requirements
 ### Deployment Guides
 
 - 🌐 [Networking](deployments/networking/README.md) - Deploy VNets, subnets, routing, NSGs, and private DNS
-- 🔒 [AVD Shared Services](deployments/sharedServices/README.md) - Deploy shared Key Vault, monitoring, and FSLogix backup resources
+- 🔒 [AVD Shared Services](deployments/sharedServices/README.md) - Own the AVD workspace, feed/global Private Link, Key Vault, monitoring, and shared FSLogix backup resources
 - 📦 [Image Management](deployments/imageManagement/README.md) - Deploy gallery, artifact, logging, identity, and image-build resources
 - 🏢 [Host Pool Deployment](docs/hostpool-deployment.md) - Deploy AVD host pools
 - ⚙️ [Automated Host Pool](deployments/automatedHostPools/README.md) - Deploy Commercial pooled host pools managed by AVD

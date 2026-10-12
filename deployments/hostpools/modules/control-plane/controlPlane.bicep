@@ -11,11 +11,7 @@ param deployScalingPlan bool
 param desktopApplicationGroupName string
 param desktopFriendlyName string
 param enableMonitoring bool
-param existingGlobalWorkspaceResourceId string
 param existingFeedWorkspaceResourceId string
-param globalFeedPrivateDnsZoneResourceId string
-param globalFeedPrivateEndpointSubnetResourceId string
-param globalWorkspaceName string
 param hostPoolCustomTags object
 param hostPoolMaxSessionLimit int
 param hostPoolName string
@@ -26,14 +22,12 @@ param hostPoolType string
 param hostPoolValidationEnvironment bool
 param hostPoolVmTemplate object
 param controlPlaneRegion string
-param globalFeedRegion string
 param virtualMachinesRegion string
 param logAnalyticsWorkspaceResourceId string
 param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param resourceGroupControlPlane string
 param resourceGroupDeployment string
-param resourceGroupGlobalFeed string
 param scalingPlanExclusionTag string
 param scalingPlanName string
 param scalingPlanPooledSchedules pooledScalingScheduleType[]
@@ -41,47 +35,24 @@ param scalingPlanPersonalSchedules personalScalingScheduleType[]
 param startVMOnConnect bool
 param tags object
 param virtualMachinesTimeZone string
-param workspaceFeedPrivateEndpointSubnetResourceId string
-param workspaceFriendlyName string
-param workspaceName string
-param workspacePublicNetworkAccess string
 
 // ─── Private endpoint name construction ───────────────────────────────────────
-var globalFeedVnetName = !empty(globalFeedPrivateEndpointSubnetResourceId)
-  ? split(globalFeedPrivateEndpointSubnetResourceId, '/')[8]
+var deployHostPoolPrivateEndpoint = avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)
+
+func virtualNetworkResourceId(subnetResourceId string) string => join(take(split(subnetResourceId, '/'), 9), '/')
+
+var hostPoolPrivateEndpointVirtualNetworkResourceId = deployHostPoolPrivateEndpoint
+  ? virtualNetworkResourceId(hostPoolPrivateEndpointSubnetResourceId)
   : ''
-var globalFeedVnetId = length(globalFeedVnetName) < 37 ? globalFeedVnetName : uniqueString(globalFeedVnetName)
-var workspaceFeedVnetName = !empty(workspaceFeedPrivateEndpointSubnetResourceId)
-  ? split(workspaceFeedPrivateEndpointSubnetResourceId, '/')[8]
-  : ''
-var workspaceFeedVnetId = length(workspaceFeedVnetName) < 37
-  ? workspaceFeedVnetName
-  : uniqueString(workspaceFeedVnetName)
-var hostPoolVnetName = !empty(hostPoolPrivateEndpointSubnetResourceId)
-  ? split(hostPoolPrivateEndpointSubnetResourceId, '/')[8]
-  : ''
+
+resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (deployHostPoolPrivateEndpoint) {
+  name: last(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/'))
+  scope: resourceGroup(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[2], split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[4])
+}
+
+var hostPoolVnetName = last(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/'))
 var hostPoolVnetId = length(hostPoolVnetName) < 37 ? hostPoolVnetName : uniqueString(hostPoolVnetName)
 
-var feedPrivateEndpointName = replace(
-  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', workspaceName),
-  'VNETID',
-  workspaceFeedVnetId
-)
-var feedPrivateEndpointNICName = replace(
-  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', workspaceName),
-  'VNETID',
-  workspaceFeedVnetId
-)
-var globalFeedPrivateEndpointName = replace(
-  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', workspaceName),
-  'VNETID',
-  globalFeedVnetId
-)
-var globalFeedPrivateEndpointNICName = replace(
-  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', workspaceName),
-  'VNETID',
-  globalFeedVnetId
-)
 var hostPoolPrivateEndpointName = replace(
   replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
   'VNETID',
@@ -102,27 +73,12 @@ var effectivePersonalAssignmentType = contains(hostPoolType, 'Automatic')
   : (contains(hostPoolType, 'Direct') ? 'Direct' : '')
 
 // ─── Existing feed workspace lookup ───────────────────────────────────────────
-resource existingFeedWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (!empty(existingFeedWorkspaceResourceId)) {
+resource existingFeedWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = {
   name: last(split(existingFeedWorkspaceResourceId, '/'))
   scope: resourceGroup(split(existingFeedWorkspaceResourceId, '/')[2], split(existingFeedWorkspaceResourceId, '/')[4])
 }
 
-var feedWorkspaceExistingProps = !empty(existingFeedWorkspaceResourceId)
-  ? {
-      applicationGroupReferences: existingFeedWorkspace!.properties.applicationGroupReferences
-      friendlyName: existingFeedWorkspace!.properties.friendlyName
-      location: existingFeedWorkspace!.location
-      name: existingFeedWorkspace.name
-      publicNetworkAccess: existingFeedWorkspace!.properties.publicNetworkAccess
-      resourceId: existingFeedWorkspaceResourceId
-      tags: existingFeedWorkspace!.tags
-    }
-  : {}
-
-// Merge new app group into any existing workspace app group references
-var feedExistingRefs = !empty(feedWorkspaceExistingProps)
-  ? map(feedWorkspaceExistingProps.applicationGroupReferences, resId => toLower(resId))
-  : []
+var feedExistingRefs = map(existingFeedWorkspace.properties.applicationGroupReferences, resId => toLower(resId))
 
 // ─── Host Pool ─────────────────────────────────────────────────────────────────
 module hostPool '../../../shared/modules/resourceModules/desktopVirtualization/hostPools/deploy.bicep' = {
@@ -149,11 +105,11 @@ module hostPool '../../../shared/modules/resourceModules/desktopVirtualization/h
   }
 }
 
-module hostPool_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (avdPrivateLinkPrivateRoutes != 'None' && !empty(hostPoolPrivateEndpointSubnetResourceId)) {
+module hostPool_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployHostPoolPrivateEndpoint) {
   scope: resourceGroup(resourceGroupControlPlane)
   params: {
     name: hostPoolPrivateEndpointName
-    location: controlPlaneRegion
+    location: hostPoolPrivateEndpointVirtualNetwork!.location
     tags: union(
       { 'cm-resource-parent': hostPool.outputs.resourceId },
       tags[?'Microsoft.Network/privateEndpoints'] ?? {}
@@ -226,45 +182,15 @@ module appGroupRoleAssignments '../../../shared/modules/resourceModules/desktopV
 
 // ─── Feed Workspace ────────────────────────────────────────────────────────────
 module feedWorkspace '../../../shared/modules/resourceModules/desktopVirtualization/workspaces/deploy.bicep' = {
-  scope: resourceGroup(resourceGroupControlPlane)
+  scope: resourceGroup(split(existingFeedWorkspaceResourceId, '/')[2], split(existingFeedWorkspaceResourceId, '/')[4])
   params: {
-    name: empty(feedWorkspaceExistingProps) ? workspaceName : feedWorkspaceExistingProps.name
-    location: empty(feedWorkspaceExistingProps) ? controlPlaneRegion : feedWorkspaceExistingProps.location
-    tags: empty(feedWorkspaceExistingProps)
-      ? tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
-      : feedWorkspaceExistingProps.tags
-    friendlyName: empty(feedWorkspaceExistingProps) ? workspaceFriendlyName : feedWorkspaceExistingProps.friendlyName
-    publicNetworkAccess: empty(feedWorkspaceExistingProps)
-      ? workspacePublicNetworkAccess
-      : feedWorkspaceExistingProps.publicNetworkAccess
-    applicationGroupResourceIds: empty(feedWorkspaceExistingProps)
-      ? [applicationGroup.outputs.resourceId]
-      : union(feedExistingRefs, [toLower(applicationGroup.outputs.resourceId)])
-    diagnosticSettings: (empty(feedWorkspaceExistingProps) && enableMonitoring)
-      ? {
-          name: 'WVDInsights'
-          workspaceId: logAnalyticsWorkspaceResourceId
-        }
-      : null
-  }
-}
-
-// The original condition avdPrivateLinkPrivateRoutes != 'None' || avdPrivateLinkPrivateRoutes != 'HostPool'
-// is always true; the effective gate is whether a subnet was provided.
-module feedWorkspace_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (!empty(workspaceFeedPrivateEndpointSubnetResourceId)) {
-  scope: resourceGroup(resourceGroupControlPlane)
-  params: {
-    name: feedPrivateEndpointName
-    location: controlPlaneRegion
-    tags: union(
-      { 'cm-resource-parent': feedWorkspace.outputs.resourceId },
-      tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-    )
-    subnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
-    privateLinkServiceId: feedWorkspace.outputs.resourceId
-    groupId: 'feed'
-    customNetworkInterfaceName: feedPrivateEndpointNICName
-    privateDNSZoneIds: !empty(avdPrivateDnsZoneResourceId) ? [avdPrivateDnsZoneResourceId] : []
+    name: existingFeedWorkspace.name
+    location: existingFeedWorkspace.location
+    tags: existingFeedWorkspace.tags
+    friendlyName: existingFeedWorkspace.properties.friendlyName
+    description: existingFeedWorkspace.properties.description
+    publicNetworkAccess: existingFeedWorkspace.properties.publicNetworkAccess == 'Disabled' ? 'Disabled' : 'Enabled'
+    applicationGroupResourceIds: union(feedExistingRefs, [toLower(applicationGroup.outputs.resourceId)])
   }
 }
 
@@ -295,46 +221,5 @@ module scalingPlan '../../../shared/modules/resourceModules/desktopVirtualizatio
   }
 }
 
-// ─── Global Feed Workspace ─────────────────────────────────────────────────────
-var deployGlobalWorkspace = empty(existingGlobalWorkspaceResourceId) && avdPrivateLinkPrivateRoutes == 'All' && !empty(globalFeedPrivateDnsZoneResourceId) && !empty(globalFeedPrivateEndpointSubnetResourceId)
-
-module globalWorkspace '../../../shared/modules/resourceModules/desktopVirtualization/workspaces/deploy.bicep' = if (deployGlobalWorkspace) {
-  scope: resourceGroup(resourceGroupGlobalFeed)
-  params: {
-    name: globalWorkspaceName
-    location: globalFeedRegion
-    tags: tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
-    publicNetworkAccess: 'Enabled'
-    applicationGroupResourceIds: []
-    diagnosticSettings: enableMonitoring
-      ? {
-          name: 'WVDInsights'
-          workspaceId: logAnalyticsWorkspaceResourceId
-        }
-      : null
-  }
-  dependsOn: [feedWorkspace]
-}
-
-module globalWorkspace_pe '../../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (deployGlobalWorkspace) {
-  scope: resourceGroup(resourceGroupGlobalFeed)
-  params: {
-    name: globalFeedPrivateEndpointName
-    location: globalFeedRegion
-    tags: union(
-      { 'cm-resource-parent': globalWorkspace!.outputs.resourceId },
-      tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-    )
-    subnetResourceId: globalFeedPrivateEndpointSubnetResourceId
-    privateLinkServiceId: globalWorkspace!.outputs.resourceId
-    groupId: 'global'
-    customNetworkInterfaceName: globalFeedPrivateEndpointNICName
-    privateDNSZoneIds: [globalFeedPrivateDnsZoneResourceId]
-  }
-  dependsOn: [feedWorkspace]
-}
-
 output hostPoolResourceId string = hostPool.outputs.resourceId
-output workspaceResourceId string = empty(existingFeedWorkspaceResourceId)
-  ? feedWorkspace.outputs.resourceId
-  : existingFeedWorkspaceResourceId
+output workspaceResourceId string = feedWorkspace.outputs.resourceId

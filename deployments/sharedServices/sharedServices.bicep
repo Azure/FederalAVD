@@ -9,10 +9,17 @@ targetScope = 'subscription'
 @description('Required. The Azure region for all foundation resources.')
 param location string = deployment().location
 
+@description('Optional. Existing resource group used for operations, monitoring, and a newly created AVD workspace. The caller must create it before this deployment. Global-feed resources remain separately scoped.')
+param consolidatedResourceGroupName string = ''
+
 // ── Secrets Key Vault ──────────────────────────────────────────────────────────
 
 @description('Optional. Deploy the Secrets Key Vault (Standard SKU) for storing AVD credentials (VM admin password, domain join credentials).')
 param deploySecretsKeyVault bool = true
+
+@description('Optional. Existing Shared Services secrets Key Vault resource ID. When supplied, no secrets Key Vault is created and this ID is returned to consumers.')
+#disable-next-line secure-secrets-in-params
+param existingSecretsKeyVaultResourceId string = ''
 
 @description('Optional. Enable soft delete on the Secrets Key Vault.')
 param secretsKeyVaultEnableSoftDelete bool = true
@@ -63,6 +70,9 @@ param domainJoinUserPrincipalName string = ''
 @description('Optional. Deploy the Encryption Key Vault (Premium SKU) for Customer-Managed Keys. Required when using CMK in any AVD solution.')
 param deployEncryptionKeyVault bool = true
 
+@description('Optional. Existing Shared Services encryption Key Vault resource ID. When supplied, no encryption Key Vault is created and this ID is returned to consumers.')
+param existingEncryptionKeyVaultResourceId string = ''
+
 @description('Optional. Soft delete retention days for the Encryption Key Vault. Use 7 in test environments to minimise the wait before a deleted vault name can be reused; keep 90 in production.')
 @minValue(7)
 @maxValue(90)
@@ -103,13 +113,83 @@ param logAnalyticsWorkspaceRetentionInDays int = 30
 @description('Optional. The resource ID of an existing Log Analytics Workspace for Key Vault diagnostic logs. Ignored when "deployMonitoring" is true - the newly deployed workspace is used instead.')
 param existingLogAnalyticsWorkspaceResourceId string = ''
 
+@description('Optional. Existing AVD Insights Data Collection Rule resource ID returned to consuming host-pool deployments when monitoring is adopted.')
+param existingAVDInsightsDataCollectionRuleResourceId string = ''
+
+@description('Optional. Existing Data Collection Endpoint resource ID returned to consuming host-pool deployments when monitoring is adopted.')
+param existingDataCollectionEndpointResourceId string = ''
+
 @description('Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when "deployMonitoring" is false.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
+
+// ── Shared AVD Workspace ──────────────────────────────────────────────────────
+
+@description('Optional. Create or update and manage a shared AVD workspace in the AVD control-plane resource group.')
+param manageAvdWorkspace bool = false
+
+@allowed([
+  'Create'
+  'Update'
+])
+@description('Optional. Create a shared AVD workspace, or update an existing workspace while preserving all application group references.')
+param avdWorkspaceMode string = 'Create'
+
+@description('Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Update.')
+param existingAvdWorkspaceResourceId string = ''
+
+@description('Optional. Friendly name for a newly created shared AVD workspace.')
+param avdWorkspaceFriendlyName string = ''
+
+@description('Optional. Complete resource-group name override for a newly created AVD workspace. Use this to give a PoC workspace a host-pool-specific lifecycle boundary.')
+param avdControlPlaneResourceGroupNameOverride string = ''
+
+@description('Optional. Complete name override for a newly created AVD workspace.')
+param avdWorkspaceNameOverride string = ''
+
+@description('Optional. Public network access mode managed on the shared AVD workspace.')
+param avdWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = 'Enabled'
+
+@description('Optional. Subnet resource ID for the deterministically named workspace feed private endpoint. Empty disables feed endpoint management.')
+param workspaceFeedPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. AVD feed Private DNS zone resource ID for the workspace feed private endpoint.')
+param avdPrivateDnsZoneResourceId string = ''
+
+@description('Optional. Create or update and manage the global-feed workspace and its deterministically named private endpoint.')
+param manageGlobalAvdWorkspace bool = false
+
+@allowed([
+  'Create'
+  'Update'
+])
+@description('Optional. Create a global-feed workspace, or update an existing global-feed workspace while preserving all application group references.')
+param globalAvdWorkspaceMode string = 'Create'
+
+@description('Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Update.')
+param existingGlobalAvdWorkspaceResourceId string = ''
+
+@description('Optional. Complete resource-group name override for a newly created global-feed workspace.')
+param globalFeedResourceGroupNameOverride string = ''
+
+@description('Optional. Complete name override for a newly created global-feed workspace.')
+param globalFeedWorkspaceNameOverride string = ''
+
+@description('Conditional. Subnet resource ID for the deterministically named global-feed private endpoint. Required when manageGlobalAvdWorkspace is true.')
+param globalFeedPrivateEndpointSubnetResourceId string = ''
+
+@description('Optional. AVD global-feed Private DNS zone resource ID.')
+param globalFeedPrivateDnsZoneResourceId string = ''
 
 // FSLogix Backup
 
 @description('Optional. Deploy a shared Recovery Services vault and Azure Files snapshot backup policy for FSLogix storage. The vault is shared by pooled host pools and standalone FSLogix storage deployments in this subscription and region.')
 param deployFSLogixBackupVault bool = false
+
+@description('Optional. Existing shared FSLogix Recovery Services vault resource ID. When supplied, no backup vault or policy is created.')
+param existingFSLogixBackupVaultResourceId string = ''
+
+@description('Optional. Existing Azure Files backup policy name in existingFSLogixBackupVaultResourceId.')
+param existingFSLogixBackupPolicyName string = 'filesharepolicy'
 
 @description('Optional. Name of the shared Azure Files snapshot backup policy.')
 param fslogixBackupPolicyName string = 'filesharepolicy'
@@ -156,7 +236,7 @@ Key properties:
   freeform1, environment, freeform2 — optional static/context tokens
   locationAbbreviation — override for the region abbreviation
   resourceTypeCodes   — object with per-resource-type abbreviation overrides
-    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, privateEndpoints, networkInterfaces }
+    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, workspaces, privateEndpoints, networkInterfaces }
 This object is produced automatically when deploying via the Azure Portal UI.
 When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
 param namingConvention object = {
@@ -189,6 +269,10 @@ var identifier = 'operations'
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
   ? subscription().subscriptionId
   : logAnalyticsWorkspaceSubscriptionId
+var createSecretsKeyVault = deploySecretsKeyVault && empty(existingSecretsKeyVaultResourceId)
+var createEncryptionKeyVault = deployEncryptionKeyVault && empty(existingEncryptionKeyVaultResourceId)
+var createFSLogixBackupVault = deployFSLogixBackupVault && empty(existingFSLogixBackupVaultResourceId)
+var deployOperationsResourceGroup = createSecretsKeyVault || createEncryptionKeyVault || createFSLogixBackupVault
 
 #disable-next-line BCP329
 var locationAbbreviation = locations[varLocation].abbreviation
@@ -207,6 +291,7 @@ var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
   recoveryServicesVaults: resourceAbbreviations.recoveryServicesVaults
   logAnalyticsWorkspaces: resourceAbbreviations.logAnalyticsWorkspaces
   dataCollectionEndpoints: resourceAbbreviations.dataCollectionEndpoints
+  workspaces: resourceAbbreviations.workspaces
   privateEndpoints: resourceAbbreviations.privateEndpoints
   networkInterfaces: resourceAbbreviations.networkInterfaces
 }
@@ -260,10 +345,10 @@ var privateEndpointNICNameConv = cnv_rtFirst
   ? '${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}-${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
   : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}-${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}'
 
-var operationsResourceGroupName = customRgName
+var operationsResourceGroupName = !empty(consolidatedResourceGroupName) ? consolidatedResourceGroupName : customRgName
 
 // Monitoring resource group and Log Analytics Workspace name - only used when deployMonitoring is true.
-var monitoringResourceGroupName = buildCustomName(
+var generatedMonitoringResourceGroupName = buildCustomName(
   filter(cnv_components, s => s != 'none'),
   cnv_delimiter,
   cnv_rtCodes.resourceGroups,
@@ -274,6 +359,9 @@ var monitoringResourceGroupName = buildCustomName(
   namingConvention.?freeform2 ?? '',
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
+var monitoringResourceGroupName = !empty(consolidatedResourceGroupName)
+  ? consolidatedResourceGroupName
+  : generatedMonitoringResourceGroupName
 
 // No purpose component - matches the single-workspace naming the host pool deployment's inline
 // monitoring module produces, so both paths agree on the same Log Analytics Workspace name.
@@ -301,6 +389,67 @@ var dataCollectionEndpointName = buildCustomName(
   namingConvention.?freeform2 ?? '',
   !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
 )
+
+var generatedControlPlaneResourceGroupName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'control${cnv_delimiter}plane',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var generatedAvdWorkspaceName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?workspaces ?? resourceAbbreviations.workspaces,
+  '',
+  cnv_loc,
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var generatedGlobalFeedResourceGroupName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.resourceGroups,
+  'global${cnv_delimiter}feed',
+  '',
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var generatedGlobalFeedWorkspaceName = buildCustomName(
+  filter(cnv_components, s => s != 'none'),
+  cnv_delimiter,
+  cnv_rtCodes.?workspaces ?? resourceAbbreviations.workspaces,
+  'global${cnv_delimiter}feed',
+  '',
+  namingConvention.?freeform1 ?? '',
+  namingConvention.?environment ?? '',
+  namingConvention.?freeform2 ?? '',
+  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+)
+
+var controlPlaneResourceGroupName = !empty(consolidatedResourceGroupName)
+  ? consolidatedResourceGroupName
+  : !empty(avdControlPlaneResourceGroupNameOverride)
+      ? avdControlPlaneResourceGroupNameOverride
+      : generatedControlPlaneResourceGroupName
+var avdWorkspaceName = !empty(avdWorkspaceNameOverride) ? avdWorkspaceNameOverride : generatedAvdWorkspaceName
+var globalFeedResourceGroupName = !empty(globalFeedResourceGroupNameOverride)
+  ? globalFeedResourceGroupNameOverride
+  : generatedGlobalFeedResourceGroupName
+var globalFeedWorkspaceName = !empty(globalFeedWorkspaceNameOverride)
+  ? globalFeedWorkspaceNameOverride
+  : generatedGlobalFeedWorkspaceName
 
 // Stable 6-char unique string seeded on subscription + resource group name.
 // Add location to the seed when the convention has no location component,
@@ -344,7 +493,7 @@ var fslogixBackupVaultName = buildCustomName(
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
-module operationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
+module operationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployOperationsResourceGroup && empty(consolidatedResourceGroupName)) {
   scope: subscription()
   params: {
     location: location
@@ -355,7 +504,7 @@ module operationsResourceGroup '../shared/modules/resourceModules/resources/reso
 
 // ── Log Analytics Workspace ─────────────────────────────────────────────────────
 
-module monitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring) {
+module monitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployMonitoring && empty(consolidatedResourceGroupName)) {
   scope: subscription(effectiveLogAnalyticsWorkspaceSubscription)
   params: {
     location: location
@@ -384,11 +533,52 @@ module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' 
   dependsOn: [monitoringResourceGroup]
 }
 
+var avdWorkspaceConfigurationIsValid = !manageAvdWorkspace || avdWorkspaceMode == 'Create' && empty(existingAvdWorkspaceResourceId) || avdWorkspaceMode == 'Update' && !empty(existingAvdWorkspaceResourceId)
+  ? true
+  : fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
+var globalAvdWorkspaceConfigurationIsValid = !manageGlobalAvdWorkspace || !empty(globalFeedPrivateEndpointSubnetResourceId) && (globalAvdWorkspaceMode == 'Create' && empty(existingGlobalAvdWorkspaceResourceId) || globalAvdWorkspaceMode == 'Update' && !empty(existingGlobalAvdWorkspaceResourceId))
+  ? true
+  : fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
+
+module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if ((manageAvdWorkspace || manageGlobalAvdWorkspace) && avdWorkspaceConfigurationIsValid && globalAvdWorkspaceConfigurationIsValid) {
+  scope: subscription()
+  params: {
+    workspaceMode: avdWorkspaceMode
+    manageWorkspace: manageAvdWorkspace
+    workspaceName: avdWorkspaceName
+    workspaceResourceId: existingAvdWorkspaceResourceId
+    workspaceResourceGroupName: controlPlaneResourceGroupName
+    createWorkspaceResourceGroup: empty(consolidatedResourceGroupName)
+    workspaceLocation: location
+    workspaceFriendlyName: avdWorkspaceFriendlyName
+    workspacePublicNetworkAccess: avdWorkspacePublicNetworkAccess
+    workspaceFeedPrivateEndpointSubnetResourceId: workspaceFeedPrivateEndpointSubnetResourceId
+    avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
+    logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
+    manageGlobalWorkspace: manageGlobalAvdWorkspace
+    globalWorkspaceMode: globalAvdWorkspaceMode
+    globalWorkspaceName: globalFeedWorkspaceName
+    globalWorkspaceResourceId: existingGlobalAvdWorkspaceResourceId
+    globalWorkspaceResourceGroupName: globalFeedResourceGroupName
+    globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
+    globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
+    privateEndpointNameConv: privateEndpointNameConv
+    privateEndpointNICNameConv: privateEndpointNICNameConv
+    tags: tags
+  }
+}
+
 // Resolves to the newly deployed workspace when requested, otherwise falls back to whatever
 // existing workspace resource ID (if any) was passed in for Key Vault diagnostic settings.
 var effectiveLogAnalyticsWorkspaceResourceId = deployMonitoring
   ? monitoring!.outputs.logAnalyticsWorkspaceResourceId
   : existingLogAnalyticsWorkspaceResourceId
+var effectiveAvdInsightsDataCollectionRuleResourceId = deployMonitoring
+  ? monitoring!.outputs.avdInsightsDataCollectionRuleResourceId
+  : existingAVDInsightsDataCollectionRuleResourceId
+var effectiveDataCollectionEndpointResourceId = deployMonitoring
+  ? monitoring!.outputs.dataCollectionEndpointResourceId
+  : existingDataCollectionEndpointResourceId
 
 // ── Key Vaults ─────────────────────────────────────────────────────────────────
 
@@ -396,7 +586,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
   scope: subscription()
   params: {
     resourceGroupName: operationsResourceGroupName
-    deploySecretsKeyVault: deploySecretsKeyVault
+    deploySecretsKeyVault: createSecretsKeyVault
     secretsKeyVaultName: secretsKeyVaultName
     secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     secretsKeyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
@@ -405,7 +595,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
-    deployEncryptionKeyVault: deployEncryptionKeyVault
+    deployEncryptionKeyVault: createEncryptionKeyVault
     encryptionKeyVaultName: encryptionKeyVaultName
     encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
     privateEndpoint: privateEndpoint
@@ -422,7 +612,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
 
 // Shared FSLogix Backup Vault
 
-module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (deployFSLogixBackupVault) {
+module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (createFSLogixBackupVault) {
   params: {
     createVault: true
     manageBackupPolicy: true
@@ -445,25 +635,43 @@ module fslogixBackupVault '../shared/modules/resourceModules/recoveryServices/fs
   dependsOn: [operationsResourceGroup]
 }
 
+var effectiveFSLogixBackupVaultResourceId = createFSLogixBackupVault
+  ? fslogixBackupVault!.outputs.recoveryServicesVaultResourceId
+  : existingFSLogixBackupVaultResourceId
+var effectiveFSLogixBackupPolicyName = createFSLogixBackupVault
+  ? fslogixBackupVault!.outputs.fileShareBackupPolicyName
+  : (!empty(existingFSLogixBackupVaultResourceId) ? existingFSLogixBackupPolicyName : '')
+var effectiveFSLogixBackupPolicyResourceId = !empty(effectiveFSLogixBackupVaultResourceId)
+  ? '${effectiveFSLogixBackupVaultResourceId}/backupPolicies/${effectiveFSLogixBackupPolicyName}'
+  : ''
+
 // ── Outputs ────────────────────────────────────────────────────────────────────
 
 @description('The name of the security resource group.')
-output resourceGroupName string = operationsResourceGroupName
+output resourceGroupName string = deployOperationsResourceGroup ? operationsResourceGroupName : ''
 
 @description('The name of the Secrets Key Vault. Empty if not deployed.')
-output secretsKeyVaultName string = deploySecretsKeyVault ? secretsKeyVaultName : ''
+output secretsKeyVaultName string = createSecretsKeyVault
+  ? secretsKeyVaultName
+  : (!empty(existingSecretsKeyVaultResourceId) ? last(split(existingSecretsKeyVaultResourceId, '/')) : '')
 
 @description('The resource ID of the Secrets Key Vault. Pass as "existingCredentialsKeyVaultResourceId" to the standard host pool, or "credentialsKeyVaultResourceId" to the automated host pool, Session Host Replacer, and Session Hosts add-on deployments.')
-output secretsKeyVaultResourceId string = deploySecretsKeyVault ? keyVaults.outputs.secretsKeyVaultResourceId : ''
+output secretsKeyVaultResourceId string = createSecretsKeyVault
+  ? keyVaults.outputs.secretsKeyVaultResourceId
+  : existingSecretsKeyVaultResourceId
 
 @description('The name of the Encryption Key Vault. Empty if not deployed.')
-output encryptionKeyVaultName string = deployEncryptionKeyVault ? encryptionKeyVaultName : ''
+output encryptionKeyVaultName string = createEncryptionKeyVault
+  ? encryptionKeyVaultName
+  : (!empty(existingEncryptionKeyVaultResourceId) ? last(split(existingEncryptionKeyVaultResourceId, '/')) : '')
 
 @description('The resource ID of the Encryption Key Vault. Pass as "encryptionKeyVaultResourceId" to any AVD solution using Customer-Managed Keys.')
-output encryptionKeyVaultResourceId string = deployEncryptionKeyVault ? keyVaults.outputs.encryptionKeyVaultResourceId : ''
+output encryptionKeyVaultResourceId string = createEncryptionKeyVault
+  ? keyVaults.outputs.encryptionKeyVaultResourceId
+  : existingEncryptionKeyVaultResourceId
 
 @description('The URI of the Encryption Key Vault.')
-output encryptionKeyVaultUri string = deployEncryptionKeyVault ? keyVaults.outputs.encryptionKeyVaultUri : ''
+output encryptionKeyVaultUri string = createEncryptionKeyVault ? keyVaults.outputs.encryptionKeyVaultUri : ''
 
 @description('The name of the monitoring resource group. Empty if the Log Analytics Workspace is not deployed.')
 output monitoringResourceGroupName string = deployMonitoring ? monitoringResourceGroupName : ''
@@ -472,22 +680,40 @@ output monitoringResourceGroupName string = deployMonitoring ? monitoringResourc
 output logAnalyticsWorkspaceName string = deployMonitoring ? logAnalyticsWorkspaceName : ''
 
 @description('The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as "existingLogAnalyticsWorkspaceResourceId" to the host pool deployment and "logAnalyticsWorkspaceResourceId" to the Image Management deployment.')
-output logAnalyticsWorkspaceResourceId string = deployMonitoring ? monitoring!.outputs.logAnalyticsWorkspaceResourceId : ''
+output logAnalyticsWorkspaceResourceId string = effectiveLogAnalyticsWorkspaceResourceId
 
 @description('The resource ID of the AVD Insights Data Collection Rule. Empty if the Log Analytics Workspace is not deployed. Pass as "existingAVDInsightsDataCollectionRuleResourceId" to the host pool deployment.')
-output avdInsightsDataCollectionRuleResourceId string = deployMonitoring ? monitoring!.outputs.avdInsightsDataCollectionRuleResourceId : ''
+output avdInsightsDataCollectionRuleResourceId string = effectiveAvdInsightsDataCollectionRuleResourceId
 
 @description('The resource ID of the Data Collection Endpoint. Empty if the Log Analytics Workspace is not deployed. Pass as "existingDataCollectionEndpointResourceId" to the host pool deployment.')
-output dataCollectionEndpointResourceId string = deployMonitoring ? monitoring!.outputs.dataCollectionEndpointResourceId : ''
+output dataCollectionEndpointResourceId string = effectiveDataCollectionEndpointResourceId
 
 @description('The resource ID of the existing Azure Monitor Private Link Scope associated with the monitoring resources. Empty when monitoring or AMPLS integration is disabled.')
 output azureMonitorPrivateLinkScopeResourceId string = effectiveAzureMonitorPrivateLinkScopeResourceId
 
+@description('The resource ID of the created or adopted shared AVD workspace. Empty when workspace management is disabled.')
+output avdWorkspaceResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.workspaceResourceId : ''
+
+@description('The resource ID of the deterministically named shared workspace feed private endpoint. Empty when feed endpoint management is disabled.')
+output workspaceFeedPrivateEndpointResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.workspaceFeedPrivateEndpointResourceId : ''
+
+@description('The resource ID of the created or adopted global-feed workspace. Empty when global-feed management is disabled.')
+output globalFeedWorkspaceResourceId string = manageGlobalAvdWorkspace ? avdWorkspace!.outputs.globalWorkspaceResourceId : ''
+
+@description('The resource ID of the deterministically named global-feed private endpoint. Empty when global-feed management is disabled.')
+output globalFeedPrivateEndpointResourceId string = manageGlobalAvdWorkspace ? avdWorkspace!.outputs.globalFeedPrivateEndpointResourceId : ''
+
+@description('The AVD control-plane resource group name. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled.')
+output avdControlPlaneResourceGroupName string = manageAvdWorkspace ? avdWorkspace!.outputs.controlPlaneResourceGroupName : ''
+
+@description('The resource ID of the AVD control-plane resource group. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled.')
+output avdControlPlaneResourceGroupResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.controlPlaneResourceGroupResourceId : ''
+
 @description('The resource ID of the shared FSLogix Recovery Services vault. Pass as "existingFilesBackupVaultResourceId" to standard or automated pooled host pool deployments, or "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.')
-output fslogixBackupVaultResourceId string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.recoveryServicesVaultResourceId : ''
+output fslogixBackupVaultResourceId string = effectiveFSLogixBackupVaultResourceId
 
 @description('The name of the shared Azure Files snapshot backup policy. Pass as "existingFilesBackupPolicyName" to standard or automated pooled host pool deployments, or "fileSharePolicyName" to the FSLogix Storage add-on.')
-output fslogixBackupPolicyName string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.fileShareBackupPolicyName : ''
+output fslogixBackupPolicyName string = effectiveFSLogixBackupPolicyName
 
 @description('The resource ID of the shared Azure Files snapshot backup policy.')
-output fslogixBackupPolicyResourceId string = deployFSLogixBackupVault ? fslogixBackupVault!.outputs.fileShareBackupPolicyResourceId : ''
+output fslogixBackupPolicyResourceId string = effectiveFSLogixBackupPolicyResourceId

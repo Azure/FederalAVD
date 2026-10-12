@@ -1,0 +1,68 @@
+{
+    // =========================================================================
+    // FederalAVD - Disposable Standard PoC
+    // =========================================================================
+    //
+    // This purpose-built deployment creates one consolidated resource group
+    // containing a standalone VNet, private session-host subnet, NSG, Standard
+    // public IP, NAT Gateway, AVD workspace, host pool, session hosts, and
+    // optional FSLogix and monitoring resources.
+    //
+    // WARNING: Tear this environment down after the demonstration or first-step
+    // validation. Do not promote or expand it into a pilot or production design.
+    //
+    // 1. Copy this file:
+    //      New-Item -ItemType Directory -Force customer\parameters\hostpoolPoc | Out-Null
+    //      Copy-Item customer-examples\parameters\hostpoolPoc\poc.hostpoolPoc.parameters.json `
+    //                customer\parameters\hostpoolPoc\my-poc.parameters.json
+    //
+    // 2. Replace the TODO values below.
+    //
+    // 3. Deploy. Supply credentials interactively; never store them here:
+    //      $user = Read-Host 'Session host local admin username' -AsSecureString
+    //      $pass = Read-Host 'Session host local admin password' -AsSecureString
+    //      New-AzDeployment -Location '<your-region>' `
+    //          -Name 'federalavd-poc' `
+    //          -TemplateFile '.\deployments\hostpoolPoc\hostpoolPoc.json' `
+    //          -TemplateParameterFile '.\customer\parameters\hostpoolPoc\my-poc.parameters.json' `
+    //          -virtualMachineAdminUserName $user `
+    //          -virtualMachineAdminPassword $pass `
+    //          -Verbose
+    //
+    // Defaults:
+    //   VNet/subnet       : 10.250.0.0/16 and 10.250.0.0/24
+    //   outbound          : private subnet through NAT Gateway
+    //   session hosts     : 2 with FSLogix, 1 without FSLogix
+    //   image             : Windows 11 multi-session with Microsoft 365 Apps
+    //   VM size           : Standard_D4ads_v5
+    //   monitoring        : disabled
+    // =========================================================================
+
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "identifier": {
+            "value": "dev"
+        },
+        "virtualMachineNamePrefix": {
+            "value": "avddev"
+        },
+        "appGroupSecurityGroups": {
+            "value": [
+                {
+                    "id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+                    "name": "sg-avd-users"
+                }
+            ]
+        },
+        "deployFSLogixStorage": {
+            "value": true
+        },
+        "fslogixConfigureSessionHosts": {
+            "value": true
+        },
+        "enableMonitoring": {
+            "value": false
+        }
+    }
+}

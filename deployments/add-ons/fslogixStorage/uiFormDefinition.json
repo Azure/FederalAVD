@@ -89,6 +89,19 @@
               }
             },
             {
+              "name": "storageSkusApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('scope').resourceScope.subscription.id)), not(empty(steps('scope').resourceScope.location)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Storage/skus?api-version=2021-09-01')]",
+                "transforms": {
+                  "standardZrs": "value[?resourceType == 'storageAccounts' && name == 'Standard_ZRS' && kind == 'StorageV2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']",
+                  "premiumZrs": "value[?resourceType == 'storageAccounts' && name == 'Premium_ZRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']"
+                }
+              }
+            },
+            {
               "name": "locationsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('scope').resourceScope.subscription.id))]",
@@ -388,13 +401,21 @@
               "name": "storageRedundancy",
               "type": "Microsoft.Common.DropDown",
               "label": "Azure Files Redundancy",
-              "defaultValue": "Locally Redundant",
+              "defaultValue": "[if(not(empty(filter(if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), 'Zone Redundant', 'Locally Redundant')]",
+              "toolTip": "Defaults to Zone Redundant when the selected Azure Files tier supports ZRS in the deployment region. Only supported redundancy choices are shown.",
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
               "constraints": {
-                "allowedValues": [
-                  { "label": "Locally Redundant", "value": "LocallyRedundant" },
-                  { "label": "Zone Redundant", "value": "ZoneRedundant" }
-                ]
+                "required": true,
+                "allowedValues": "[if(not(empty(filter(if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"}]'))]"
+              }
+            },
+            {
+              "name": "storageRedundancyWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').storageRedundancy, 'LocallyRedundant'), not(empty(filter(if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))))]",
+              "options": {
+                "style": "Warning",
+                "text": "Zone-redundant storage is available for the selected Azure Files tier and region, but locally redundant storage is selected. A zone-level storage outage could make FSLogix profiles unavailable."
               }
             },
             {
