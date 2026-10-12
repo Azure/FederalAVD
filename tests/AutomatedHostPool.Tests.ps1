@@ -181,7 +181,8 @@ Describe 'Automated host-pool Availability Set placement' {
         $availabilitySetAdapter | Should Not Match 'padLeft\('
         $availabilitySetAdapter | Should Match 'output resourceId string'
         $bicep | Should Match 'Availability Zones and an Availability Set are mutually exclusive'
-        $bicep | Should Match "availability == 'AvailabilityZones' \? availabilityZones : null"
+        $bicep | Should Match "availabilityConfigurationIsValid && availability == 'AvailabilityZones'"
+        $bicep | Should Match '\? sort\(availabilityZones, \(a, b\) => a < b\)'
         $readme | Should Match 'create one managed Availability Set'
         $readme | Should Match 'mutually exclusive'
     }
@@ -532,7 +533,8 @@ Describe 'Automated host-pool VM Application assignments' {
     }
 
     It 'excludes subscription-restricted zones from availability choices' {
-        $resourceSkusApi.request.transforms.vmSizes | Should Match 'zones:locationInfo\[0\]\.zones'
+        $resourceSkusApi.request.transforms.vmSizes |
+            Should Match 'zones:sort_by\(locationInfo\[0\]\.zones \|\| `\[\]`, &@\)'
         $resourceSkusApi.request.transforms.vmSizes | Should Match "restrictedZones:restrictions\[\?type == 'Zone'\]\.restrictionInfo\.zones"
         $availabilityOption = $availability.elements | Where-Object { $_.name -eq 'option' }
         $availabilityZones = $availability.elements | Where-Object { $_.name -eq 'availabilityZones' }
