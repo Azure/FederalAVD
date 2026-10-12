@@ -152,7 +152,7 @@ Describe 'AVD workspace ownership contract' {
         (Get-Content -LiteralPath $automatedCorePath -Raw) | Should Match 'existingFeedWorkspaceResourceId: effectiveFeedWorkspaceResourceId'
     }
 
-    It 'does not redeploy adopted workspaces unless feed networking is explicitly managed' {
+    It 'does not redeploy existing workspaces unless feed networking is explicitly managed' {
         foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
             $orchestrator | Should Match "var createFeedWorkspace = empty\(existingFeedWorkspaceResourceId\)"
             $orchestrator |

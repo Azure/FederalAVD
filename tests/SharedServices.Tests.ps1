@@ -20,7 +20,7 @@ Describe 'Shared Services AVD workspace ownership' {
         $readme = Get-Content -LiteralPath $readmePath -Raw
     }
 
-    It 'creates or adopts a shared workspace and exposes downstream outputs' {
+    It 'creates or updates a shared workspace and exposes downstream outputs' {
         $bicep | Should Match 'param manageAvdWorkspace bool = false'
         $bicep | Should Match "param avdWorkspaceMode string = 'Create'"
         $bicep | Should Match 'param existingAvdWorkspaceResourceId string'
@@ -59,7 +59,7 @@ Describe 'Shared Services AVD workspace ownership' {
         $bicep | Should Match "module operationsResourceGroup '.+' = if \(deployOperationsResourceGroup && empty\(consolidatedResourceGroupName\)\)"
     }
 
-    It 'preserves adopted workspace metadata and application-group references' {
+    It 'preserves updated workspace metadata and application-group references' {
         $workspaceModule | Should Match 'existingWorkspace!\.properties\.applicationGroupReferences'
         $workspaceModule | Should Match 'effectiveWorkspaceApplicationGroupReferences'
         $workspaceModule | Should Match 'effectiveWorkspaceTags'
@@ -69,24 +69,32 @@ Describe 'Shared Services AVD workspace ownership' {
 
     It 'adds diagnostics only to newly created workspaces' {
         $workspaceModule | Should Match 'param logAnalyticsWorkspaceResourceId string'
-        $workspaceModule | Should Match 'var workspaceDiagnosticSettings = !adoptWorkspace && !empty\(logAnalyticsWorkspaceResourceId\)'
-        $workspaceModule | Should Match 'var globalWorkspaceDiagnosticSettings = !adoptGlobalWorkspace && !empty\(logAnalyticsWorkspaceResourceId\)'
+        $workspaceModule | Should Match 'var workspaceDiagnosticSettings = !updateWorkspace && !empty\(logAnalyticsWorkspaceResourceId\)'
+        $workspaceModule | Should Match 'var globalWorkspaceDiagnosticSettings = !updateGlobalWorkspace && !empty\(logAnalyticsWorkspaceResourceId\)'
         $workspaceModule | Should Match 'diagnosticSettings: workspaceDiagnosticSettings'
         $workspaceModule | Should Match 'diagnosticSettings: globalWorkspaceDiagnosticSettings'
         $bicep | Should Match 'logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId'
     }
 
-    It 'returns adopted global workspaces without requiring a new private endpoint' {
+    It 'returns updated global workspaces without requiring a new private endpoint' {
         $workspaceModule | Should Match 'output globalWorkspaceResourceId string = manageGlobalWorkspace'
         $workspaceModule | Should Match ': globalWorkspaceResourceId'
         $workspaceModule | Should Match "module globalFeedPrivateEndpoint '.+' = if \(manageGlobalWorkspace && !empty\(globalFeedPrivateEndpointSubnetResourceId\)\)"
         $workspaceModule | Should Match 'output globalFeedPrivateEndpointResourceId string = manageGlobalWorkspace && !empty\(globalFeedPrivateEndpointSubnetResourceId\)'
     }
 
-    It 'honors the subscription in adopted workspace resource IDs' {
-        $workspaceModule | Should Match "effectiveWorkspaceSubscriptionId = adoptWorkspace \? split\(workspaceResourceId, '/'\)\[2\]"
+    It 'does not expose an ineffective global workspace public-access setting' {
+        $workspaceModule | Should Not Match 'param globalWorkspacePublicNetworkAccess'
+        $workspaceModule | Should Match "publicNetworkAccess: 'Enabled'"
+        $bicep | Should Not Match 'param globalAvdWorkspacePublicNetworkAccess'
+        $formJson | Should Not Match 'globalWorkspacePublicNetworkAccess'
+        $formJson | Should Not Match 'globalAvdWorkspacePublicNetworkAccess'
+    }
+
+    It 'honors the subscription in updated workspace resource IDs' {
+        $workspaceModule | Should Match "effectiveWorkspaceSubscriptionId = updateWorkspace \? split\(workspaceResourceId, '/'\)\[2\]"
         $workspaceModule | Should Match 'scope: resourceGroup\(effectiveWorkspaceSubscriptionId, effectiveWorkspaceResourceGroupName\)'
-        $workspaceModule | Should Match "effectiveGlobalWorkspaceSubscriptionId = adoptGlobalWorkspace"
+        $workspaceModule | Should Match "effectiveGlobalWorkspaceSubscriptionId = updateGlobalWorkspace"
         $workspaceModule | Should Match 'scope: resourceGroup\(effectiveGlobalWorkspaceSubscriptionId, effectiveGlobalWorkspaceResourceGroupName\)'
     }
 
@@ -114,10 +122,45 @@ Describe 'Shared Services AVD workspace ownership' {
         }
     }
 
+    It 'separates AVD control-plane ownership, endpoints, and DNS into sections' {
+        $controlPlaneStep = $form.view.properties.steps | Where-Object { $_.name -eq 'avdControlPlane' }
+        $sectionNames = @($controlPlaneStep.elements | Where-Object {
+            $_.type -eq 'Microsoft.Common.Section'
+        } | ForEach-Object { $_.name })
+
+        ($sectionNames -join ',') | Should Be 'sharedWorkspace,workspaceFeedEndpoint,globalFeed,privateDns'
+        $formJson | Should Match "steps\('avdControlPlane'\)\.sharedWorkspace\.manageWorkspace"
+        $formJson | Should Match "steps\('avdControlPlane'\)\.workspaceFeedEndpoint\.manageFeedEndpoint"
+        $formJson | Should Match "steps\('avdControlPlane'\)\.globalFeed\.manageGlobalWorkspace"
+        $formJson | Should Match "steps\('avdControlPlane'\)\.privateDns\.enablePrivateDNSIntegration"
+    }
+
+    It 'limits workspace public access to feed endpoint management and supports shared DNS zones' {
+        $outputs = $form.view.outputs.parameters
+
+        $outputs.avdWorkspacePublicNetworkAccess |
+            Should Match "workspaceFeedEndpoint\.manageFeedEndpoint"
+        $outputs.globalFeedPrivateDnsZoneResourceId |
+            Should Match "reuseFeedPrivateDnsZoneForGlobalFeed"
+        $outputs.globalFeedPrivateDnsZoneResourceId |
+            Should Match "privateDns\.feedPrivateDnsZone\.id"
+        $outputs.globalFeedPrivateDnsZoneResourceId |
+            Should Match "privateDns\.globalPrivateDnsZone\.id"
+    }
+
+    It 'uses update for existing workspace management throughout the deployment contract' {
+        $formJson | Should Match '"label": "Update an existing workspace"'
+        $formJson | Should Match '"label": "Update an existing global-feed workspace"'
+        ([regex]::Matches($formJson, '"value": "Update"').Count) | Should Be 2
+        $formJson | Should Not Match '"value": "Adopt"'
+        $bicep | Should Not Match "'Adopt'"
+        $workspaceModule | Should Not Match "'Adopt'"
+    }
+
     It 'documents the shared owner and host-pool consumer contract' {
         $readme | Should Match 'dedicated AVD'
         $readme | Should Match 'existingFeedWorkspaceResourceId'
         $readme | Should Match 'application group'
-        $formJson | Should Match 'Adoption preserves every existing application group reference'
+        $formJson | Should Match 'Existing application group references'
     }
 }

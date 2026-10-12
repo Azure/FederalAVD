@@ -124,17 +124,17 @@ param azureMonitorPrivateLinkScopeResourceId string = ''
 
 // ── Shared AVD Workspace ──────────────────────────────────────────────────────
 
-@description('Optional. Create or adopt and manage a shared AVD workspace in the AVD control-plane resource group.')
+@description('Optional. Create or update and manage a shared AVD workspace in the AVD control-plane resource group.')
 param manageAvdWorkspace bool = false
 
 @allowed([
-  'Adopt'
   'Create'
+  'Update'
 ])
-@description('Optional. Create a shared AVD workspace, or adopt an existing workspace while preserving all application group references.')
+@description('Optional. Create a shared AVD workspace, or update an existing workspace while preserving all application group references.')
 param avdWorkspaceMode string = 'Create'
 
-@description('Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Adopt.')
+@description('Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Update.')
 param existingAvdWorkspaceResourceId string = ''
 
 @description('Optional. Friendly name for a newly created shared AVD workspace.')
@@ -155,21 +155,18 @@ param workspaceFeedPrivateEndpointSubnetResourceId string = ''
 @description('Optional. AVD feed Private DNS zone resource ID for the workspace feed private endpoint.')
 param avdPrivateDnsZoneResourceId string = ''
 
-@description('Optional. Create or adopt and manage the global-feed workspace and its deterministically named private endpoint.')
+@description('Optional. Create or update and manage the global-feed workspace and its deterministically named private endpoint.')
 param manageGlobalAvdWorkspace bool = false
 
 @allowed([
-  'Adopt'
   'Create'
+  'Update'
 ])
-@description('Optional. Create a global-feed workspace, or adopt an existing global-feed workspace while preserving all application group references.')
+@description('Optional. Create a global-feed workspace, or update an existing global-feed workspace while preserving all application group references.')
 param globalAvdWorkspaceMode string = 'Create'
 
-@description('Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Adopt.')
+@description('Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Update.')
 param existingGlobalAvdWorkspaceResourceId string = ''
-
-@description('Optional. Public network access mode managed on the global-feed workspace.')
-param globalAvdWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = 'Enabled'
 
 @description('Optional. Complete resource-group name override for a newly created global-feed workspace.')
 param globalFeedResourceGroupNameOverride string = ''
@@ -536,12 +533,12 @@ module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' 
   dependsOn: [monitoringResourceGroup]
 }
 
-var avdWorkspaceConfigurationIsValid = !manageAvdWorkspace || avdWorkspaceMode == 'Create' && empty(existingAvdWorkspaceResourceId) || avdWorkspaceMode == 'Adopt' && !empty(existingAvdWorkspaceResourceId)
+var avdWorkspaceConfigurationIsValid = !manageAvdWorkspace || avdWorkspaceMode == 'Create' && empty(existingAvdWorkspaceResourceId) || avdWorkspaceMode == 'Update' && !empty(existingAvdWorkspaceResourceId)
   ? true
-  : fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.')
-var globalAvdWorkspaceConfigurationIsValid = !manageGlobalAvdWorkspace || !empty(globalFeedPrivateEndpointSubnetResourceId) && (globalAvdWorkspaceMode == 'Create' && empty(existingGlobalAvdWorkspaceResourceId) || globalAvdWorkspaceMode == 'Adopt' && !empty(existingGlobalAvdWorkspaceResourceId))
+  : fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
+var globalAvdWorkspaceConfigurationIsValid = !manageGlobalAvdWorkspace || !empty(globalFeedPrivateEndpointSubnetResourceId) && (globalAvdWorkspaceMode == 'Create' && empty(existingGlobalAvdWorkspaceResourceId) || globalAvdWorkspaceMode == 'Update' && !empty(existingGlobalAvdWorkspaceResourceId))
   ? true
-  : fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.')
+  : fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.')
 
 module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if ((manageAvdWorkspace || manageGlobalAvdWorkspace) && avdWorkspaceConfigurationIsValid && globalAvdWorkspaceConfigurationIsValid) {
   scope: subscription()
@@ -563,7 +560,6 @@ module avdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.b
     globalWorkspaceName: globalFeedWorkspaceName
     globalWorkspaceResourceId: existingGlobalAvdWorkspaceResourceId
     globalWorkspaceResourceGroupName: globalFeedResourceGroupName
-    globalWorkspacePublicNetworkAccess: globalAvdWorkspacePublicNetworkAccess
     globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     privateEndpointNameConv: privateEndpointNameConv

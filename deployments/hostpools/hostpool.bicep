@@ -798,7 +798,7 @@ var sharedEncryptionKeyVaultResourceId = deploySharedEncryptionKeyVault
 module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep' = if (manageFeedWorkspace) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
-    workspaceMode: createFeedWorkspace ? 'Create' : 'Adopt'
+    workspaceMode: createFeedWorkspace ? 'Create' : 'Update'
     manageWorkspace: manageFeedWorkspace
     workspaceName: naming.outputs.sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
@@ -813,11 +813,10 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     manageGlobalWorkspace: avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalFeedResourceId)
-    globalWorkspaceMode: empty(existingGlobalFeedResourceId) ? 'Create' : 'Adopt'
+    globalWorkspaceMode: empty(existingGlobalFeedResourceId) ? 'Create' : 'Update'
     globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
     globalWorkspaceResourceId: existingGlobalFeedResourceId
     globalWorkspaceResourceGroupName: naming.outputs.globalFeedResourceGroupName
-    globalWorkspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
     globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
     privateEndpointNameConv: naming.outputs.privateEndpointNameConv

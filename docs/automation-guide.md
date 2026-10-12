@@ -128,7 +128,7 @@ The deployment uses the `sharedServices` path and parameter-file name.
 | `azureMonitorPrivateLinkScopeResourceId` | Host Pool — `azureMonitorPrivateLinkScopeResourceId`; centralized monitoring/DNS automation. Empty when AMPLS integration is disabled. |
 | `avdWorkspaceResourceId` | Standard and automated Host Pool — `existingFeedWorkspaceResourceId`. Consuming host pools append application groups but do not manage workspace feed/global networking. |
 | `workspaceFeedPrivateEndpointResourceId` | Operational evidence for the Shared Services-owned workspace feed endpoint. |
-| `globalFeedWorkspaceResourceId` | Operational evidence for the Shared Services-owned or adopted global-feed workspace. |
+| `globalFeedWorkspaceResourceId` | Operational evidence for the Shared Services-managed global-feed workspace. |
 | `globalFeedPrivateEndpointResourceId` | Operational evidence for the Shared Services-owned global-feed endpoint. |
 | `fslogixBackupVaultResourceId` | Pooled Host Pool — `existingFilesBackupVaultResourceId`; FSLogix Storage add-on — `recoveryServicesVaultResourceId`. Only present when `deployFSLogixBackupVault` was `true`. |
 | `fslogixBackupPolicyName` | Pooled Host Pool — `existingFilesBackupPolicyName`; FSLogix Storage add-on — `fileSharePolicyName`. Only present when `deployFSLogixBackupVault` was `true`. |

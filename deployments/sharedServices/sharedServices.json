@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "15050927659350865671"
+      "templateHash": "974257607556177297"
     }
   },
   "functions": [
@@ -305,25 +305,25 @@
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Optional. Create or adopt and manage a shared AVD workspace in the AVD control-plane resource group."
+        "description": "Optional. Create or update and manage a shared AVD workspace in the AVD control-plane resource group."
       }
     },
     "avdWorkspaceMode": {
       "type": "string",
       "defaultValue": "Create",
       "allowedValues": [
-        "Adopt",
-        "Create"
+        "Create",
+        "Update"
       ],
       "metadata": {
-        "description": "Optional. Create a shared AVD workspace, or adopt an existing workspace while preserving all application group references."
+        "description": "Optional. Create a shared AVD workspace, or update an existing workspace while preserving all application group references."
       }
     },
     "existingAvdWorkspaceResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Adopt."
+        "description": "Conditional. Existing AVD workspace resource ID. Required when avdWorkspaceMode is Update."
       }
     },
     "avdWorkspaceFriendlyName": {
@@ -376,36 +376,25 @@
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Optional. Create or adopt and manage the global-feed workspace and its deterministically named private endpoint."
+        "description": "Optional. Create or update and manage the global-feed workspace and its deterministically named private endpoint."
       }
     },
     "globalAvdWorkspaceMode": {
       "type": "string",
       "defaultValue": "Create",
       "allowedValues": [
-        "Adopt",
-        "Create"
+        "Create",
+        "Update"
       ],
       "metadata": {
-        "description": "Optional. Create a global-feed workspace, or adopt an existing global-feed workspace while preserving all application group references."
+        "description": "Optional. Create a global-feed workspace, or update an existing global-feed workspace while preserving all application group references."
       }
     },
     "existingGlobalAvdWorkspaceResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Adopt."
-      }
-    },
-    "globalAvdWorkspacePublicNetworkAccess": {
-      "type": "string",
-      "allowedValues": [
-        "Disabled",
-        "Enabled"
-      ],
-      "defaultValue": "Enabled",
-      "metadata": {
-        "description": "Optional. Public network access mode managed on the global-feed workspace."
+        "description": "Conditional. Existing global-feed workspace resource ID. Required when globalAvdWorkspaceMode is Update."
       }
     },
     "globalFeedResourceGroupNameOverride": {
@@ -1120,8 +1109,8 @@
     "encryptionKeyVaultName": "[if(not(empty(variables('effectiveEncryptionKeyVaultNameOverride'))), variables('effectiveEncryptionKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
     "fslogixBackupVaultName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'recoveryServicesVaults'), variables('resourceAbbreviations').recoveryServicesVaults), 'files', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
     "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]",
-    "avdWorkspaceConfigurationIsValid": "[if(or(or(not(parameters('manageAvdWorkspace')), and(equals(parameters('avdWorkspaceMode'), 'Create'), empty(parameters('existingAvdWorkspaceResourceId')))), and(equals(parameters('avdWorkspaceMode'), 'Adopt'), not(empty(parameters('existingAvdWorkspaceResourceId'))))), true(), fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.'))]",
-    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Adopt'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Adopt.'))]"
+    "avdWorkspaceConfigurationIsValid": "[if(or(or(not(parameters('manageAvdWorkspace')), and(equals(parameters('avdWorkspaceMode'), 'Create'), empty(parameters('existingAvdWorkspaceResourceId')))), and(equals(parameters('avdWorkspaceMode'), 'Update'), not(empty(parameters('existingAvdWorkspaceResourceId'))))), true(), fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
+    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Update'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]"
   },
   "resources": {
     "operationsResourceGroup": {
@@ -1991,9 +1980,6 @@
           "globalWorkspaceResourceGroupName": {
             "value": "[variables('globalFeedResourceGroupName')]"
           },
-          "globalWorkspacePublicNetworkAccess": {
-            "value": "[parameters('globalAvdWorkspacePublicNetworkAccess')]"
-          },
           "globalFeedPrivateEndpointSubnetResourceId": {
             "value": "[parameters('globalFeedPrivateEndpointSubnetResourceId')]"
           },
@@ -2018,7 +2004,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "8469061534575371329"
+              "templateHash": "1243829077110892354"
             }
           },
           "functions": [
@@ -2044,8 +2030,8 @@
             "workspaceMode": {
               "type": "string",
               "allowedValues": [
-                "Adopt",
-                "Create"
+                "Create",
+                "Update"
               ]
             },
             "manageWorkspace": {
@@ -2093,8 +2079,8 @@
             "globalWorkspaceMode": {
               "type": "string",
               "allowedValues": [
-                "Adopt",
-                "Create"
+                "Create",
+                "Update"
               ]
             },
             "globalWorkspaceName": {
@@ -2109,13 +2095,6 @@
             "createGlobalWorkspaceResourceGroup": {
               "type": "bool",
               "defaultValue": true
-            },
-            "globalWorkspacePublicNetworkAccess": {
-              "type": "string",
-              "allowedValues": [
-                "Disabled",
-                "Enabled"
-              ]
             },
             "globalFeedPrivateEndpointSubnetResourceId": {
               "type": "string"
@@ -2135,22 +2114,22 @@
             }
           },
           "variables": {
-            "adoptWorkspace": "[and(parameters('manageWorkspace'), equals(parameters('workspaceMode'), 'Adopt'))]",
-            "adoptGlobalWorkspace": "[and(parameters('manageGlobalWorkspace'), equals(parameters('globalWorkspaceMode'), 'Adopt'))]",
+            "updateWorkspace": "[and(parameters('manageWorkspace'), equals(parameters('workspaceMode'), 'Update'))]",
+            "updateGlobalWorkspace": "[and(parameters('manageGlobalWorkspace'), equals(parameters('globalWorkspaceMode'), 'Update'))]",
             "workspaceFeedVirtualNetworkResourceId": "[__bicep.virtualNetworkResourceIdFromSubnet(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))]",
             "globalFeedVirtualNetworkResourceId": "[__bicep.virtualNetworkResourceIdFromSubnet(parameters('globalFeedPrivateEndpointSubnetResourceId'))]",
-            "effectiveWorkspaceName": "[if(variables('adoptWorkspace'), last(split(parameters('workspaceResourceId'), '/')), parameters('workspaceName'))]",
-            "effectiveWorkspaceSubscriptionId": "[if(variables('adoptWorkspace'), split(parameters('workspaceResourceId'), '/')[2], subscription().subscriptionId)]",
-            "effectiveWorkspaceResourceGroupName": "[if(variables('adoptWorkspace'), split(parameters('workspaceResourceId'), '/')[4], parameters('workspaceResourceGroupName'))]",
-            "workspaceDiagnosticSettings": "[if(and(not(variables('adoptWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
+            "effectiveWorkspaceName": "[if(variables('updateWorkspace'), last(split(parameters('workspaceResourceId'), '/')), parameters('workspaceName'))]",
+            "effectiveWorkspaceSubscriptionId": "[if(variables('updateWorkspace'), split(parameters('workspaceResourceId'), '/')[2], subscription().subscriptionId)]",
+            "effectiveWorkspaceResourceGroupName": "[if(variables('updateWorkspace'), split(parameters('workspaceResourceId'), '/')[4], parameters('workspaceResourceGroupName'))]",
+            "workspaceDiagnosticSettings": "[if(and(not(variables('updateWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "workspaceFeedVnetName": "[if(not(empty(variables('workspaceFeedVirtualNetworkResourceId'))), last(split(variables('workspaceFeedVirtualNetworkResourceId'), '/')), '')]",
             "workspaceFeedVnetId": "[if(less(length(variables('workspaceFeedVnetName')), 37), variables('workspaceFeedVnetName'), uniqueString(variables('workspaceFeedVnetName')))]",
             "workspaceFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
             "workspaceFeedPrivateEndpointNICName": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
-            "effectiveGlobalWorkspaceName": "[if(variables('adoptGlobalWorkspace'), last(split(parameters('globalWorkspaceResourceId'), '/')), parameters('globalWorkspaceName'))]",
-            "effectiveGlobalWorkspaceSubscriptionId": "[if(variables('adoptGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
-            "effectiveGlobalWorkspaceResourceGroupName": "[if(variables('adoptGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[4], parameters('globalWorkspaceResourceGroupName'))]",
-            "globalWorkspaceDiagnosticSettings": "[if(and(not(variables('adoptGlobalWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
+            "effectiveGlobalWorkspaceName": "[if(variables('updateGlobalWorkspace'), last(split(parameters('globalWorkspaceResourceId'), '/')), parameters('globalWorkspaceName'))]",
+            "effectiveGlobalWorkspaceSubscriptionId": "[if(variables('updateGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
+            "effectiveGlobalWorkspaceResourceGroupName": "[if(variables('updateGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[4], parameters('globalWorkspaceResourceGroupName'))]",
+            "globalWorkspaceDiagnosticSettings": "[if(and(not(variables('updateGlobalWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "globalFeedVnetName": "[if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), last(split(variables('globalFeedVirtualNetworkResourceId'), '/')), '')]",
             "globalFeedVnetId": "[if(less(length(variables('globalFeedVnetName')), 37), variables('globalFeedVnetName'), uniqueString(variables('globalFeedVnetName')))]",
             "globalFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'global'), 'RESOURCE', variables('effectiveGlobalWorkspaceName')), 'VNETID', variables('globalFeedVnetId'))]",
@@ -2158,7 +2137,7 @@
           },
           "resources": {
             "existingWorkspace": {
-              "condition": "[variables('adoptWorkspace')]",
+              "condition": "[variables('updateWorkspace')]",
               "existing": true,
               "type": "Microsoft.DesktopVirtualization/workspaces",
               "apiVersion": "2023-09-05",
@@ -2167,7 +2146,7 @@
               "name": "[last(split(parameters('workspaceResourceId'), '/'))]"
             },
             "existingGlobalWorkspace": {
-              "condition": "[variables('adoptGlobalWorkspace')]",
+              "condition": "[variables('updateGlobalWorkspace')]",
               "existing": true,
               "type": "Microsoft.DesktopVirtualization/workspaces",
               "apiVersion": "2023-09-05",
@@ -2194,7 +2173,7 @@
               "name": "[last(split(variables('globalFeedVirtualNetworkResourceId'), '/'))]"
             },
             "workspaceResourceGroup": {
-              "condition": "[and(and(parameters('manageWorkspace'), not(variables('adoptWorkspace'))), parameters('createWorkspaceResourceGroup'))]",
+              "condition": "[and(and(parameters('manageWorkspace'), not(variables('updateWorkspace'))), parameters('createWorkspaceResourceGroup'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('workspaceResourceGroup-{0}', uniqueString('workspaceResourceGroup', deployment().name))]",
@@ -2275,12 +2254,12 @@
                   "name": {
                     "value": "[variables('effectiveWorkspaceName')]"
                   },
-                  "location": "[if(variables('adoptWorkspace'), createObject('value', reference('existingWorkspace', '2023-09-05', 'full').location), createObject('value', parameters('workspaceLocation')))]",
-                  "tags": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
-                  "friendlyName": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').friendlyName, '')), createObject('value', parameters('workspaceFriendlyName')))]",
-                  "description": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').description, '')), createObject('value', ''))]",
-                  "publicNetworkAccess": "[if(and(variables('adoptWorkspace'), empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))), if(equals(reference('existingWorkspace').publicNetworkAccess, 'Disabled'), createObject('value', 'Disabled'), createObject('value', 'Enabled')), createObject('value', parameters('workspacePublicNetworkAccess')))]",
-                  "applicationGroupResourceIds": "[if(variables('adoptWorkspace'), createObject('value', coalesce(reference('existingWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]",
+                  "location": "[if(variables('updateWorkspace'), createObject('value', reference('existingWorkspace', '2023-09-05', 'full').location), createObject('value', parameters('workspaceLocation')))]",
+                  "tags": "[if(variables('updateWorkspace'), createObject('value', coalesce(reference('existingWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
+                  "friendlyName": "[if(variables('updateWorkspace'), createObject('value', coalesce(reference('existingWorkspace').friendlyName, '')), createObject('value', parameters('workspaceFriendlyName')))]",
+                  "description": "[if(variables('updateWorkspace'), createObject('value', coalesce(reference('existingWorkspace').description, '')), createObject('value', ''))]",
+                  "publicNetworkAccess": "[if(and(variables('updateWorkspace'), empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId'))), if(equals(reference('existingWorkspace').publicNetworkAccess, 'Disabled'), createObject('value', 'Disabled'), createObject('value', 'Enabled')), createObject('value', parameters('workspacePublicNetworkAccess')))]",
+                  "applicationGroupResourceIds": "[if(variables('updateWorkspace'), createObject('value', coalesce(reference('existingWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]",
                   "diagnosticSettings": {
                     "value": "[variables('workspaceDiagnosticSettings')]"
                   }
@@ -2652,7 +2631,7 @@
               ]
             },
             "globalWorkspaceResourceGroup": {
-              "condition": "[and(and(parameters('manageGlobalWorkspace'), not(variables('adoptGlobalWorkspace'))), parameters('createGlobalWorkspaceResourceGroup'))]",
+              "condition": "[and(and(parameters('manageGlobalWorkspace'), not(variables('updateGlobalWorkspace'))), parameters('createGlobalWorkspaceResourceGroup'))]",
               "type": "Microsoft.Resources/deployments",
               "apiVersion": "2025-04-01",
               "name": "[format('globalWorkspaceResourceGroup-{0}', uniqueString('globalWorkspaceResourceGroup', deployment().name))]",
@@ -2663,7 +2642,7 @@
                 },
                 "mode": "Incremental",
                 "parameters": {
-                  "location": "[if(variables('adoptGlobalWorkspace'), createObject('value', reference('existingGlobalWorkspace', '2023-09-05', 'full').location), if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), createObject('value', reference('globalFeedVirtualNetwork', '2024-05-01', 'full').location), createObject('value', parameters('workspaceLocation'))))]",
+                  "location": "[if(variables('updateGlobalWorkspace'), createObject('value', reference('existingGlobalWorkspace', '2023-09-05', 'full').location), if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), createObject('value', reference('globalFeedVirtualNetwork', '2024-05-01', 'full').location), createObject('value', parameters('workspaceLocation'))))]",
                   "name": {
                     "value": "[parameters('globalWorkspaceResourceGroupName')]"
                   },
@@ -2735,14 +2714,14 @@
                   "name": {
                     "value": "[variables('effectiveGlobalWorkspaceName')]"
                   },
-                  "location": "[if(variables('adoptGlobalWorkspace'), createObject('value', reference('existingGlobalWorkspace', '2023-09-05', 'full').location), if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), createObject('value', reference('globalFeedVirtualNetwork', '2024-05-01', 'full').location), createObject('value', parameters('workspaceLocation'))))]",
-                  "tags": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
-                  "friendlyName": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').friendlyName, '')), createObject('value', ''))]",
-                  "description": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').description, '')), createObject('value', ''))]",
+                  "location": "[if(variables('updateGlobalWorkspace'), createObject('value', reference('existingGlobalWorkspace', '2023-09-05', 'full').location), if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), createObject('value', reference('globalFeedVirtualNetwork', '2024-05-01', 'full').location), createObject('value', parameters('workspaceLocation'))))]",
+                  "tags": "[if(variables('updateGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace', '2023-09-05', 'full').tags, createObject())), createObject('value', coalesce(tryGet(parameters('tags'), 'Microsoft.DesktopVirtualization/Workspaces'), createObject())))]",
+                  "friendlyName": "[if(variables('updateGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').friendlyName, '')), createObject('value', ''))]",
+                  "description": "[if(variables('updateGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').description, '')), createObject('value', ''))]",
                   "publicNetworkAccess": {
-                    "value": "[parameters('globalWorkspacePublicNetworkAccess')]"
+                    "value": "Enabled"
                   },
-                  "applicationGroupResourceIds": "[if(variables('adoptGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]",
+                  "applicationGroupResourceIds": "[if(variables('updateGlobalWorkspace'), createObject('value', coalesce(reference('existingGlobalWorkspace').applicationGroupReferences, createArray())), createObject('value', createArray()))]",
                   "diagnosticSettings": {
                     "value": "[variables('globalWorkspaceDiagnosticSettings')]"
                   }

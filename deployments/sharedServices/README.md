@@ -26,7 +26,7 @@ Shared Services is not a separate prerequisite for every host pool. The standard
 entry orchestrators call the same Shared Services template. The Standard PoC uses host-pool-specific
 naming overrides; the full production forms use shared naming by default. Deploy the standalone
 Shared Services Template Spec first when
-enterprise resources must exist independently and be adopted by one or more consumers, including:
+enterprise resources must exist independently and be reused by one or more consumers, including:
 
 - Image Management using customer-managed keys (CMK)
 - Central monitoring required before diagnostic-enabled resources are created
@@ -38,7 +38,7 @@ When Shared Services manages an AVD workspace, pass its `avdWorkspaceResourceId`
 `existingFeedWorkspaceResourceId` on every standard or automated host-pool deployment that shares
 the workspace. Those consumers preserve and append application-group references. Workspace public
 access and feed/global Private Link are managed only when explicitly selected through Shared
-Services. Otherwise, adoption preserves the existing workspace settings.
+Services. Otherwise, updating preserves the existing workspace settings.
 
 > **Shared workspace deployment concurrency:** Serialize host-pool deployments that register to
 > one workspace. Each host-pool orchestrator performs a read-modify-write update to append its application
@@ -88,9 +88,9 @@ All resources from one Shared Services deployment use the same Azure region.
 | Encryption Key Vault | `deployEncryptionKeyVault = true` | Premium SKU; soft delete and purge protection enabled |
 | Key Vault private endpoints | `privateEndpoint = true` and the applicable vault is deployed | Uses the supplied subnet; DNS integration is optional in Bicep but normally required operationally |
 | Monitoring resource group, workspace, DCR, and DCE | `deployMonitoring = true` | Can be placed in the operations subscription or another selected subscription |
-| Shared AVD workspace | `manageAvdWorkspace = true` | Creates a workspace in a dedicated control-plane resource group or adopts any selected existing workspace |
+| Shared AVD workspace | `manageAvdWorkspace = true` | Creates a workspace in a dedicated control-plane resource group or updates any selected existing workspace |
 | Workspace feed private endpoint | Shared workspace managed and `workspaceFeedPrivateEndpointSubnetResourceId` supplied | Creates or updates the deterministic endpoint name; arbitrary differently named endpoints are not adopted |
-| Global-feed workspace and private endpoint | `manageGlobalAvdWorkspace = true` | Creates or adopts the workspace and creates or updates its deterministic global endpoint |
+| Global-feed workspace and private endpoint | `manageGlobalAvdWorkspace = true` | Creates or updates the workspace and creates or updates its deterministic global endpoint |
 | Recovery Services vault and Azure Files policy | `deployFSLogixBackupVault = true` | Snapshot data remains in each storage account; the vault maintains backup policy and metadata |
 | Recovery Services private endpoint | Backup vault deployed, `privateEndpoint = true`, and private endpoint/DNS inputs supplied | Requires the Azure Backup, Blob, and Queue private DNS zones for complete DNS integration |
 
@@ -156,25 +156,28 @@ private DNS zones, AMPLS private endpoints, or DNS links.
 | Parameter | Default | Purpose |
 | --- | --- | --- |
 | `manageAvdWorkspace` | `false` | Enable shared AVD workspace ownership |
-| `avdWorkspaceMode` | `Create` | Create a workspace or adopt an existing workspace |
-| `existingAvdWorkspaceResourceId` | Empty | Existing workspace selected for adoption |
+| `avdWorkspaceMode` | `Create` | Create a workspace or update an existing workspace |
+| `existingAvdWorkspaceResourceId` | Empty | Existing workspace selected for update |
 | `avdWorkspaceFriendlyName` | Empty | Friendly name for a newly created workspace |
 | `avdWorkspacePublicNetworkAccess` | `Enabled` | Managed public-network setting for the shared workspace |
 | `workspaceFeedPrivateEndpointSubnetResourceId` | Empty | Existing subnet for the workspace `feed` endpoint; empty disables the endpoint |
 | `avdPrivateDnsZoneResourceId` | Empty | Optional private DNS zone associated with the feed endpoint |
 | `manageGlobalAvdWorkspace` | `false` | Manage a global-feed workspace and endpoint |
-| `globalAvdWorkspaceMode` | `Create` | Create or adopt the global-feed workspace |
-| `existingGlobalAvdWorkspaceResourceId` | Empty | Existing global-feed workspace selected for adoption |
-| `globalAvdWorkspacePublicNetworkAccess` | `Enabled` | Managed public-network setting for the global-feed workspace |
+| `globalAvdWorkspaceMode` | `Create` | Create or update the global-feed workspace |
+| `existingGlobalAvdWorkspaceResourceId` | Empty | Existing global-feed workspace selected for update |
 | `globalFeedPrivateEndpointSubnetResourceId` | Empty | Required subnet for the global endpoint |
 | `globalFeedPrivateDnsZoneResourceId` | Empty | Optional private DNS zone associated with the global endpoint |
 
-Adoption updates an existing workspace only when management is explicitly requested. Shared
+Update mode modifies an existing workspace only when management is explicitly requested. Shared
 Services preserves all existing `applicationGroupReferences`, as well as the workspace name,
 location, resource group, tags, friendly name, and description. When a feed endpoint or other
 workspace management option is selected, Shared Services manages the selected public-network
 setting and deterministic Private Link endpoint. When those options are not selected, it preserves
 the existing public-network setting and feed/global configuration.
+
+Azure Virtual Desktop ignores private-only public network access on the workspace that owns the
+`global` subresource. FederalAVD therefore always submits `Enabled` for that workspace and does not
+expose a global-workspace public-access setting.
 
 Shared Services intentionally does not accept an arbitrary existing private endpoint resource ID:
 if another endpoint uses a different name, it remains separately owned. Re-running Shared Services
@@ -380,7 +383,7 @@ resource-group name, and FSLogix backup policy resource ID.
   the Azure Files storage account and protected items.
 - Shared Services owns workspace-level settings and its deterministically named feed endpoints.
   Host-pool deployments own host pools, application groups, and connection endpoints. When a host
-  pool attaches an application group to an adopted workspace, retain Shared Services ownership so
+  pool attaches an application group to an updated workspace, retain Shared Services ownership so
   later public-network or endpoint updates continue preserving the complete reference list.
 - Serialize host-pool deployments that attach application groups to the same workspace. The core
   must read the current reference list before writing the appended list, so parallel registrations

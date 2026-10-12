@@ -236,9 +236,9 @@ customer/parameters/hostpools/
 #### Deployment Scope
 
 The entry orchestrator always creates the selected pool-specific resources and either creates or
-adopts Shared Services resources based on the options you select. New workspaces default to shared
+reuses Shared Services resources based on the options you select. New workspaces default to shared
 production naming. Use individual **Use Existing** toggles (portal) or pre-populated resource ID
-parameters (automation) to adopt existing shared infrastructure:
+parameters (automation) to reuse existing shared infrastructure:
 
 For production reuse, deploy AVD Shared Services independently when needed and pass its outputs to
 the parameters below. Standalone Shared Services is also required when the resources must exist
@@ -258,7 +258,7 @@ not configure the full production host-pool orchestrator as a PoC. Set
 `existingFeedWorkspaceResourceId` to the current workspace ID before redeploying when that
 workspace must be retained.
 
-For the normal shared-workspace model, deploy or adopt the workspace through AVD Shared Services
+For the normal shared-workspace model, deploy or update the workspace through AVD Shared Services
 and pass its `avdWorkspaceResourceId` output as `existingFeedWorkspaceResourceId`. A host-pool
 deployment with `None` or `HostPool` private routes updates the workspace only to preserve and
 append application-group references. Selecting `FeedAndHostPool` or `All` explicitly authorizes

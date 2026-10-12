@@ -218,7 +218,6 @@ module workspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bice
     globalWorkspaceName: ''
     globalWorkspaceResourceId: ''
     globalWorkspaceResourceGroupName: ''
-    globalWorkspacePublicNetworkAccess: 'Enabled'
     globalFeedPrivateEndpointSubnetResourceId: ''
     globalFeedPrivateDnsZoneResourceId: ''
     privateEndpointNameConv: naming.outputs.privateEndpointNameConv

@@ -60,7 +60,7 @@ Use these four questions to route the deployment:
     existing Key Vault, monitoring, and FSLogix backup resources, so deploy Step 1 first or supply
     approved existing resources when those options are required.
 4. **Must Shared Services exist before the host pool?** Both full Step 4 orchestrators can create or
-    adopt the workspace, Key Vaults, monitoring, and shared FSLogix backup resources selected in
+    reuse the workspace, Key Vaults, monitoring, and shared FSLogix backup resources selected in
     their forms. Deploy standalone Step 1 first only when Image Management needs its encryption Key
     Vault, policy requires monitoring before other resources, an add-on needs the outputs first, or
     multiple deployments must consume centrally owned resources. Add Networking (Step 0) when no
@@ -148,9 +148,9 @@ with the full **AVD Host Pool** form.
 >
 > **Host-pool orchestrators:** The full standard and automated entry templates always compose
 > Shared Services before their pool-specific modules. When Step 1 was deployed independently, the
-> full host-pool form selects and adopts its workspace, Key Vault, monitoring, DCR, DCE, and FSLogix
+> full host-pool form selects and reuses its workspace, Key Vault, monitoring, DCR, DCE, and FSLogix
 > backup outputs. When Step 1 was not deployed separately, that same internal Shared Services call
-> creates or adopts the resources selected in the host-pool form. The Standard PoC uses a dedicated
+> creates or reuses the resources selected in the host-pool form. The Standard PoC uses a dedicated
 > entry orchestrator that composes the same lower-level host-pool modules with standalone networking,
 > host-pool-specific naming, and fixed evaluation settings. Automated
 > management intentionally uses only the full automated form.
@@ -296,7 +296,7 @@ In the Azure portal, open **Template Specs**, select the first required componen
 **Deploy**. Follow the order shown in [Choose Your Path](#choose-your-path). Skip optional components
 rather than filling out forms for resources the environment does not need. Deploy AVD Shared
 Services first only when its outputs have an earlier consumer or a separately owned lifecycle.
-Otherwise, the full Step 4 host-pool form can create or adopt the selected workspace, Key Vault,
+Otherwise, the full Step 4 host-pool form can create or reuse the selected workspace, Key Vault,
 monitoring, DCR, DCE, and FSLogix backup resources through its internal Shared Services call. New
 production workspaces use shared naming by default. Evaluation parameters use host-pool-specific
 naming.
@@ -554,7 +554,7 @@ New-AzDeployment `
 **⏭️ Skip this standalone step if:** No component needs Shared Services outputs before the host pool
 and the organization does not require a separate shared-resource ownership boundary. This applies
 to both evaluation and production. The full standard and automated Step 4 entry orchestrators call
-Shared Services internally and can create or adopt the selected workspace, Key Vault, monitoring,
+Shared Services internally and can create or reuse the selected workspace, Key Vault, monitoring,
 DCR, DCE, and FSLogix backup resources. The Standard PoC uses a separate, constrained orchestrator
 that composes only the lower-level modules required for its host-pool-specific deployment.
 
@@ -572,7 +572,7 @@ Use Step 1 by choice when multiple host pools or supporting components should sh
 workspace, Key Vaults, monitoring, or the FSLogix Azure Files backup vault and policy under a
 separate lifecycle. Production does not require standalone Step 1 merely because those resources
 are selected: each full Step 4 orchestrator composes the same lower-level Shared Services capability
-modules and can create or adopt them when no earlier dependency exists. The Step 4 templates do not
+modules and can create or reuse them when no earlier dependency exists. The Step 4 templates do not
 embed the standalone Step 1 entry template.
 
 > **⚠️ Common mistake — sequence matters with Image Management CMK:** Deploy AVD Shared Services
@@ -593,7 +593,7 @@ embed the standalone Step 1 entry template.
 4. Retain the Key Vault, monitoring, FSLogix backup vault, and policy outputs required
     by downstream forms.
 
-When adopting an existing workspace, feed/global networking and workspace public access are
+When updating an existing workspace, feed/global networking and workspace public access are
 managed only when explicitly selected. Otherwise Shared Services preserves those properties.
 
 <details>
@@ -614,7 +614,7 @@ resource, parameter, prerequisite, networking, deployment, and output reference.
 | **Log Analytics Workspace** *(optional)* | `law-avd-{loc}` | Central workspace for Key Vault and Image Management storage account diagnostic settings, and host pool monitoring |
 | **AVD Insights Data Collection Rule** *(optional)* | `microsoft-avdi-{loc}` | Shared DCR that every host pool referencing this workspace can reuse via `existingAVDInsightsDataCollectionRuleResourceId`, instead of the first host pool creating its own |
 | **Data Collection Endpoint** *(optional)* | `dce-avd-{loc}` | Shared DCE that every host pool referencing this workspace can reuse via `existingDataCollectionEndpointResourceId` |
-| **Shared AVD Workspace** *(optional)* | `vdws-avd-{loc}` | Shared workspace created or adopted by Shared Services; pass `avdWorkspaceResourceId` to each host pool as `existingFeedWorkspaceResourceId` |
+| **Shared AVD Workspace** *(optional)* | `vdws-avd-{loc}` | Shared workspace created or updated by Shared Services; pass `avdWorkspaceResourceId` to each host pool as `existingFeedWorkspaceResourceId` |
 | **AVD control-plane resource group** *(optional)* | `rg-avd-control-plane-{loc}` | Dedicated owner for a newly created shared workspace and its optional feed private endpoint |
 | **FSLogix Recovery Services Vault** *(optional)* | `rsv-avd-files-{loc}` | Shared regional vault and Azure Files snapshot backup policy for pooled host pools and standalone FSLogix storage deployments |
 
@@ -894,7 +894,7 @@ records. Do not continue configuring that deployment as a pilot. Return to
 
 The selected standard or automated entry Template Spec is an orchestrator that calls Shared
 Services and then its pool-specific modules. The full forms expose whether those resources are
-created by this deployment or adopted from standalone Step 1. New pilot and production workspaces
+created by this deployment or reused from standalone Step 1. New pilot and production workspaces
 use shared names by default; disposable PoC parameters use host-pool-specific names. If multiple
 host pools register application groups to one workspace, deploy them serially to avoid a
 read-modify-write race on the workspace reference list.

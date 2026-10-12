@@ -1,8 +1,8 @@
 targetScope = 'subscription'
 
 @allowed([
-  'Adopt'
   'Create'
+  'Update'
 ])
 param workspaceMode string
 param manageWorkspace bool
@@ -20,15 +20,14 @@ param logAnalyticsWorkspaceResourceId string = ''
 param manageGlobalWorkspace bool
 
 @allowed([
-  'Adopt'
   'Create'
+  'Update'
 ])
 param globalWorkspaceMode string
 param globalWorkspaceName string
 param globalWorkspaceResourceId string
 param globalWorkspaceResourceGroupName string
 param createGlobalWorkspaceResourceGroup bool = true
-param globalWorkspacePublicNetworkAccess 'Disabled' | 'Enabled'
 param globalFeedPrivateEndpointSubnetResourceId string
 param globalFeedPrivateDnsZoneResourceId string
 
@@ -36,15 +35,15 @@ param privateEndpointNameConv string
 param privateEndpointNICNameConv string
 param tags object = {}
 
-var adoptWorkspace = manageWorkspace && workspaceMode == 'Adopt'
-var adoptGlobalWorkspace = manageGlobalWorkspace && globalWorkspaceMode == 'Adopt'
+var updateWorkspace = manageWorkspace && workspaceMode == 'Update'
+var updateGlobalWorkspace = manageGlobalWorkspace && globalWorkspaceMode == 'Update'
 
-resource existingWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (adoptWorkspace) {
+resource existingWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (updateWorkspace) {
   name: last(split(workspaceResourceId, '/'))
   scope: resourceGroup(split(workspaceResourceId, '/')[2], split(workspaceResourceId, '/')[4])
 }
 
-resource existingGlobalWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (adoptGlobalWorkspace) {
+resource existingGlobalWorkspace 'Microsoft.DesktopVirtualization/workspaces@2023-09-05' existing = if (updateGlobalWorkspace) {
   name: last(split(globalWorkspaceResourceId, '/'))
   scope: resourceGroup(split(globalWorkspaceResourceId, '/')[2], split(globalWorkspaceResourceId, '/')[4])
 }
@@ -65,29 +64,29 @@ resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01'
   scope: resourceGroup(split(globalFeedVirtualNetworkResourceId, '/')[2], split(globalFeedVirtualNetworkResourceId, '/')[4])
 }
 
-var effectiveWorkspaceName = adoptWorkspace ? existingWorkspace!.name : workspaceName
-var effectiveWorkspaceSubscriptionId = adoptWorkspace ? split(workspaceResourceId, '/')[2] : subscription().subscriptionId
-var effectiveWorkspaceResourceGroupName = adoptWorkspace ? split(workspaceResourceId, '/')[4] : workspaceResourceGroupName
-var effectiveWorkspaceLocation = adoptWorkspace ? existingWorkspace!.location : workspaceLocation
-var effectiveWorkspaceTags = adoptWorkspace ? existingWorkspace!.tags ?? {} : tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
-var effectiveWorkspaceFriendlyName = adoptWorkspace ? existingWorkspace!.properties.friendlyName ?? '' : workspaceFriendlyName
-var effectiveWorkspaceDescription = adoptWorkspace ? existingWorkspace!.properties.description ?? '' : ''
-var effectiveWorkspaceApplicationGroupReferences = adoptWorkspace
+var effectiveWorkspaceName = updateWorkspace ? existingWorkspace!.name : workspaceName
+var effectiveWorkspaceSubscriptionId = updateWorkspace ? split(workspaceResourceId, '/')[2] : subscription().subscriptionId
+var effectiveWorkspaceResourceGroupName = updateWorkspace ? split(workspaceResourceId, '/')[4] : workspaceResourceGroupName
+var effectiveWorkspaceLocation = updateWorkspace ? existingWorkspace!.location : workspaceLocation
+var effectiveWorkspaceTags = updateWorkspace ? existingWorkspace!.tags ?? {} : tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
+var effectiveWorkspaceFriendlyName = updateWorkspace ? existingWorkspace!.properties.friendlyName ?? '' : workspaceFriendlyName
+var effectiveWorkspaceDescription = updateWorkspace ? existingWorkspace!.properties.description ?? '' : ''
+var effectiveWorkspaceApplicationGroupReferences = updateWorkspace
   ? existingWorkspace!.properties.applicationGroupReferences ?? []
   : []
-var workspaceDiagnosticSettings = !adoptWorkspace && !empty(logAnalyticsWorkspaceResourceId)
+var workspaceDiagnosticSettings = !updateWorkspace && !empty(logAnalyticsWorkspaceResourceId)
   ? {
       name: 'WVDInsights'
       workspaceId: logAnalyticsWorkspaceResourceId
     }
   : null
-var effectiveWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = adoptWorkspace && empty(
+var effectiveWorkspacePublicNetworkAccess 'Disabled' | 'Enabled' = updateWorkspace && empty(
   workspaceFeedPrivateEndpointSubnetResourceId
 )
   ? (existingWorkspace!.properties.publicNetworkAccess == 'Disabled' ? 'Disabled' : 'Enabled')
   : workspacePublicNetworkAccess
 
-module workspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageWorkspace && !adoptWorkspace && createWorkspaceResourceGroup) {
+module workspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageWorkspace && !updateWorkspace && createWorkspaceResourceGroup) {
   scope: subscription()
   params: {
     location: workspaceLocation
@@ -145,36 +144,36 @@ module workspaceFeedPrivateEndpoint '../../resourceModules/network/privateEndpoi
   }
 }
 
-var effectiveGlobalWorkspaceName = adoptGlobalWorkspace ? existingGlobalWorkspace!.name : globalWorkspaceName
-var effectiveGlobalWorkspaceSubscriptionId = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceName = updateGlobalWorkspace ? existingGlobalWorkspace!.name : globalWorkspaceName
+var effectiveGlobalWorkspaceSubscriptionId = updateGlobalWorkspace
   ? split(globalWorkspaceResourceId, '/')[2]
   : subscription().subscriptionId
-var effectiveGlobalWorkspaceResourceGroupName = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceResourceGroupName = updateGlobalWorkspace
   ? split(globalWorkspaceResourceId, '/')[4]
   : globalWorkspaceResourceGroupName
-var effectiveGlobalWorkspaceLocation = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceLocation = updateGlobalWorkspace
   ? existingGlobalWorkspace!.location
   : !empty(globalFeedVirtualNetworkResourceId) ? globalFeedVirtualNetwork!.location : workspaceLocation
-var effectiveGlobalWorkspaceTags = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceTags = updateGlobalWorkspace
   ? existingGlobalWorkspace!.tags ?? {}
   : tags[?'Microsoft.DesktopVirtualization/Workspaces'] ?? {}
-var effectiveGlobalWorkspaceFriendlyName = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceFriendlyName = updateGlobalWorkspace
   ? existingGlobalWorkspace!.properties.friendlyName ?? ''
   : ''
-var effectiveGlobalWorkspaceDescription = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceDescription = updateGlobalWorkspace
   ? existingGlobalWorkspace!.properties.description ?? ''
   : ''
-var effectiveGlobalWorkspaceApplicationGroupReferences = adoptGlobalWorkspace
+var effectiveGlobalWorkspaceApplicationGroupReferences = updateGlobalWorkspace
   ? existingGlobalWorkspace!.properties.applicationGroupReferences ?? []
   : []
-var globalWorkspaceDiagnosticSettings = !adoptGlobalWorkspace && !empty(logAnalyticsWorkspaceResourceId)
+var globalWorkspaceDiagnosticSettings = !updateGlobalWorkspace && !empty(logAnalyticsWorkspaceResourceId)
   ? {
       name: 'WVDInsights'
       workspaceId: logAnalyticsWorkspaceResourceId
     }
   : null
 
-module globalWorkspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageGlobalWorkspace && !adoptGlobalWorkspace && createGlobalWorkspaceResourceGroup) {
+module globalWorkspaceResourceGroup '../../resourceModules/resources/resourceGroups/deploy.bicep' = if (manageGlobalWorkspace && !updateGlobalWorkspace && createGlobalWorkspaceResourceGroup) {
   scope: subscription()
   params: {
     location: effectiveGlobalWorkspaceLocation
@@ -191,7 +190,7 @@ module globalWorkspace '../../resourceModules/desktopVirtualization/workspaces/d
     tags: effectiveGlobalWorkspaceTags
     friendlyName: effectiveGlobalWorkspaceFriendlyName
     description: effectiveGlobalWorkspaceDescription
-    publicNetworkAccess: globalWorkspacePublicNetworkAccess
+    publicNetworkAccess: 'Enabled'
     applicationGroupResourceIds: effectiveGlobalWorkspaceApplicationGroupReferences
     diagnosticSettings: globalWorkspaceDiagnosticSettings
   }
