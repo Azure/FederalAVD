@@ -32,6 +32,14 @@ host-pool FSLogix experience. Encryption key management, private networking, mon
 recovery are grouped on the Zero Trust Configuration page. Resource tags and optional naming
 overrides are grouped on the final Tags and Naming page.
 
+For Azure Files, the portal form checks the Storage resource provider SKU inventory for the selected
+subscription and region. It checks `Standard_ZRS` with the `StorageV2` account kind for Standard
+storage and `Premium_ZRS` with the `FileStorage` account kind for Premium storage. When the matching
+ZRS SKU is available and has no location restriction, the form offers both LRS and ZRS, defaults to
+ZRS, and warns only if LRS is selected. Otherwise, only LRS is offered. Direct Bicep, PowerShell, and
+CI/CD deployments retain the `LocallyRedundant` parameter default and must select
+`ZoneRedundant` explicitly.
+
 For Cloud Cache, the form follows the host-pool workflow instead of accepting raw identifiers.
 Azure Files users select a remote region and existing storage accounts discovered from Azure.
 Azure NetApp Files users select a remote account, capacity pool, and volumes. The add-on accepts

@@ -353,6 +353,51 @@ Describe 'Common host-pool UI form behavior' {
     }
 }
 
+Describe 'FSLogix Storage add-on redundancy behavior' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json') -Raw |
+            ConvertFrom-Json
+        $scopeStep = $form.view.properties.steps | Where-Object { $_.name -eq 'scope' }
+        $storageSkusApi = $scopeStep.elements | Where-Object { $_.name -eq 'storageSkusApi' }
+        $storageStep = $form.view.properties.steps | Where-Object { $_.name -eq 'storage' }
+        $storageRedundancy = $storageStep.elements | Where-Object { $_.name -eq 'storageRedundancy' }
+        $storageRedundancyWarning = $storageStep.elements |
+            Where-Object { $_.name -eq 'storageRedundancyWarning' }
+    }
+
+    It 'queries tier-specific Azure Files ZRS SKUs for the selected scope' {
+        $storageSkusApi.condition | Should Match 'resourceScope\.subscription\.id'
+        $storageSkusApi.condition | Should Match 'resourceScope\.location'
+        $storageSkusApi.request.path | Should Match 'Microsoft\.Storage/skus\?api-version=2021-09-01'
+        $storageSkusApi.request.transforms.standardZrs | Should Match "name == 'Standard_ZRS'"
+        $storageSkusApi.request.transforms.standardZrs | Should Match "kind == 'StorageV2'"
+        $storageSkusApi.request.transforms.standardZrs | Should Match "restrictions\[\?type == 'Location'\]"
+        $storageSkusApi.request.transforms.premiumZrs | Should Match "name == 'Premium_ZRS'"
+        $storageSkusApi.request.transforms.premiumZrs | Should Match "kind == 'FileStorage'"
+        $storageSkusApi.request.transforms.premiumZrs | Should Match "restrictions\[\?type == 'Location'\]"
+    }
+
+    It 'defaults to ZRS and offers it only when the selected tier supports it in the region' {
+        $storageRedundancy.defaultValue | Should Match "'Zone Redundant', 'Locally Redundant'"
+        $storageRedundancy.defaultValue | Should Match "storageService, 'AzureFiles Premium'"
+        $storageRedundancy.defaultValue | Should Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
+        $storageRedundancy.defaultValue | Should Match 'sku\.locations'
+        $storageRedundancy.defaultValue | Should Not Match 'tryGet|coalesce'
+        $storageRedundancy.constraints.allowedValues | Should Match 'ZoneRedundant'
+        $storageRedundancy.constraints.allowedValues | Should Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
+        $storageRedundancy.constraints.allowedValues | Should Not Match 'tryGet|coalesce'
+    }
+
+    It 'warns only when ZRS is available and LRS is selected' {
+        $storageRedundancyWarning.options.style | Should Be 'Warning'
+        $storageRedundancyWarning.visible | Should Match "storageRedundancy, 'LocallyRedundant'"
+        $storageRedundancyWarning.visible | Should Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
+        $storageRedundancyWarning.visible | Should Match 'sku\.locations'
+        $storageRedundancyWarning.visible | Should Not Match 'tryGet|coalesce'
+        $form.view.outputs.parameters.fslogixStorageRedundancy | Should Match 'storageRedundancy'
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
 
