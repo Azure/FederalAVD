@@ -5,11 +5,12 @@ $optimizerPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\sc
 $optimizerReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\README.md'
 $imageBuildReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\README.md'
 $imageBuildGuidePath = Join-Path -Path $repoRoot -ChildPath 'docs\image-build.md'
+$sysprepPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\Invoke-Sysprep.ps1'
 $oneDriveArtifactPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\artifacts\Configure-OneDrivePolicy'
 $oneDriveScriptPath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'Configure-OneDrivePolicy.ps1'
 $oneDriveReadmePath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'README.md'
 
-foreach ($scriptPath in @($optimizerPath, $oneDriveScriptPath)) {
+foreach ($scriptPath in @($optimizerPath, $sysprepPath, $oneDriveScriptPath)) {
     $tokens = $null
     $parseErrors = $null
     [Management.Automation.Language.Parser]::ParseFile(
@@ -24,6 +25,25 @@ foreach ($scriptPath in @($optimizerPath, $oneDriveScriptPath)) {
     if (Get-Content -LiteralPath $scriptPath | Where-Object { $_ -match '[^\x00-\x7E]' }) {
         throw "$(Split-Path -Path $scriptPath -Leaf) contains non-ASCII content."
     }
+}
+
+$sysprepText = Get-Content -LiteralPath $sysprepPath -Raw
+foreach ($expectedText in @(
+    'Waiting up to 30 minutes with 60-second diagnostics.',
+    'Write-SysprepHeartbeat -ProcessId $Pi.dwProcessId',
+    'Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId',
+    'Sysprep registry state: CleanupState=',
+    'System32\Sysprep\Panther\setupact.log',
+    'System32\Sysprep\Panther\setuperr.log',
+    'Timed out after 30 minutes waiting for sysprep to complete.'
+)) {
+    if (-not $sysprepText.Contains($expectedText)) {
+        throw "Invoke-Sysprep.ps1 is missing required timeout diagnostics: $expectedText"
+    }
+}
+if ($sysprepText.IndexOf('Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId') -gt
+    $sysprepText.IndexOf('throw $WaitFailureMessage')) {
+    throw 'Invoke-Sysprep.ps1 must capture diagnostics before throwing a timeout or wait failure.'
 }
 
 $optimizerText = Get-Content -LiteralPath $optimizerPath -Raw
