@@ -12,6 +12,87 @@ function Write-Log {
     Write-Output $Entry
 }
 
+function Get-SystemDriveBitLockerVolume {
+    $GetBitLockerVolume = Get-Command -Name Get-BitLockerVolume -ErrorAction SilentlyContinue
+    if ($null -eq $GetBitLockerVolume) {
+        throw 'Get-BitLockerVolume is unavailable. The image build cannot verify that the operating system volume is decrypted before Sysprep.'
+    }
+
+    $Volume = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop
+    if ($null -eq $Volume) {
+        throw "Get-BitLockerVolume returned no result for the operating system volume '$env:SystemDrive'."
+    }
+
+    return $Volume
+}
+
+function Write-BitLockerVolumeState {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Volume,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Context
+    )
+
+    $KeyProtectorTypes = @(
+        $Volume.KeyProtector |
+            ForEach-Object { [string]$_.KeyProtectorType } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    $KeyProtectorSummary = if ($KeyProtectorTypes.Count -gt 0) {
+        $KeyProtectorTypes -join ', '
+    }
+    else {
+        'None'
+    }
+
+    Write-Log ("BitLocker state ({0}): mount point {1}, volume status {2}, protection status {3}, encrypted {4}%, method {5}, protector types {6}." -f `
+        $Context, $Volume.MountPoint, $Volume.VolumeStatus, $Volume.ProtectionStatus, `
+        $Volume.EncryptionPercentage, $Volume.EncryptionMethod, $KeyProtectorSummary)
+}
+
+function Disable-SystemDriveBitLocker {
+    param(
+        [int]$TimeoutMinutes = 60
+    )
+
+    $SystemDrive = $env:SystemDrive
+    $Volume = Get-SystemDriveBitLockerVolume
+    Write-BitLockerVolumeState -Volume $Volume -Context 'initial'
+
+    if ([string]$Volume.VolumeStatus -eq 'FullyDecrypted' -and [int]$Volume.EncryptionPercentage -eq 0) {
+        Write-Log "The operating system volume '$SystemDrive' is fully decrypted."
+        return
+    }
+
+    Write-Log "The operating system volume '$SystemDrive' is encrypted. Starting full decryption before Sysprep."
+    Disable-BitLocker -MountPoint $SystemDrive -ErrorAction Stop | Out-Null
+
+    $Deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    do {
+        Start-Sleep -Seconds 30
+        $Volume = Get-SystemDriveBitLockerVolume
+        Write-BitLockerVolumeState -Volume $Volume -Context 'decryption progress'
+
+        if ([string]$Volume.VolumeStatus -eq 'FullyDecrypted' -and [int]$Volume.EncryptionPercentage -eq 0) {
+            Write-Log "The operating system volume '$SystemDrive' is fully decrypted."
+            return
+        }
+    } while ((Get-Date) -lt $Deadline)
+
+    throw "Timed out after $TimeoutMinutes minutes waiting for the operating system volume '$SystemDrive' to become fully decrypted."
+}
+
+function Assert-SystemDriveDecrypted {
+    $Volume = Get-SystemDriveBitLockerVolume
+    Write-BitLockerVolumeState -Volume $Volume -Context 'pre-Sysprep verification'
+
+    if ([string]$Volume.VolumeStatus -ne 'FullyDecrypted' -or [int]$Volume.EncryptionPercentage -ne 0) {
+        throw "The operating system volume '$env:SystemDrive' is not fully decrypted immediately before Sysprep."
+    }
+}
+
 function Get-RegistryValue {
     param(
         [Parameter(Mandatory = $true)]
@@ -193,6 +274,10 @@ function Write-SysprepDiagnostics {
 
 try {
     Write-Log "Starting sysprep script"
+
+    # Windows 11 automatic device encryption can encrypt a Trusted Launch VM even
+    # when its protectors remain off. Azure image capture requires a decrypted OS volume.
+    Disable-SystemDriveBitLocker -TimeoutMinutes 60
 
     $Services = 'RdAgent', 'WindowsTelemetryService', 'WindowsAzureGuestAgent'
     ForEach ($Service in $Services) {
@@ -436,6 +521,7 @@ public static class SysprepLauncher {
     # Log MDE state immediately before process creation. Image-builder onboarding should be
     # prevented by the environment's Defender for Cloud or other onboarding configuration.
     Write-MdeImageState
+    Assert-SystemDriveDecrypted
 
     $CreateOk = [SysprepLauncher]::CreateProcessAsUser(
         $UserToken, $SysprepExe, $CmdLine,

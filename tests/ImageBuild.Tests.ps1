@@ -6,11 +6,14 @@ $optimizerReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBu
 $imageBuildReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\README.md'
 $imageBuildGuidePath = Join-Path -Path $repoRoot -ChildPath 'docs\image-build.md'
 $sysprepPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\Invoke-Sysprep.ps1'
+$automaticDeviceEncryptionPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\Disable-AutomaticDeviceEncryption.ps1'
+$generalizeVmPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\modules\generalizeVm.bicep'
+$customizeImagePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\modules\customizeImage.bicep'
 $oneDriveArtifactPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\artifacts\Configure-OneDrivePolicy'
 $oneDriveScriptPath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'Configure-OneDrivePolicy.ps1'
 $oneDriveReadmePath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'README.md'
 
-foreach ($scriptPath in @($optimizerPath, $sysprepPath, $oneDriveScriptPath)) {
+foreach ($scriptPath in @($optimizerPath, $sysprepPath, $automaticDeviceEncryptionPath, $oneDriveScriptPath)) {
     $tokens = $null
     $parseErrors = $null
     [Management.Automation.Language.Parser]::ParseFile(
@@ -29,6 +32,10 @@ foreach ($scriptPath in @($optimizerPath, $sysprepPath, $oneDriveScriptPath)) {
 
 $sysprepText = Get-Content -LiteralPath $sysprepPath -Raw
 foreach ($expectedText in @(
+    'Disable-SystemDriveBitLocker -TimeoutMinutes 60',
+    'Disable-BitLocker -MountPoint $SystemDrive',
+    "VolumeStatus -eq 'FullyDecrypted'",
+    'Assert-SystemDriveDecrypted',
     'Waiting up to 30 minutes with 60-second diagnostics.',
     'Write-SysprepHeartbeat -ProcessId $Pi.dwProcessId',
     'Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId',
@@ -44,6 +51,35 @@ foreach ($expectedText in @(
 if ($sysprepText.IndexOf('Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId') -gt
     $sysprepText.IndexOf('throw $WaitFailureMessage')) {
     throw 'Invoke-Sysprep.ps1 must capture diagnostics before throwing a timeout or wait failure.'
+}
+if ($sysprepText.IndexOf('Disable-SystemDriveBitLocker -TimeoutMinutes 60') -gt
+    $sysprepText.IndexOf('$Services =')) {
+    throw 'Invoke-Sysprep.ps1 must start operating system volume decryption before service preparation.'
+}
+if ($sysprepText.LastIndexOf('Assert-SystemDriveDecrypted') -gt
+    $sysprepText.IndexOf('$CreateOk = [SysprepLauncher]::CreateProcessAsUser')) {
+    throw 'Invoke-Sysprep.ps1 must verify the operating system volume before creating the Sysprep process.'
+}
+$generalizeVmText = Get-Content -LiteralPath $generalizeVmPath -Raw
+if ($generalizeVmText -notmatch "resource sysprep[\s\S]*?timeoutInSeconds: 10800") {
+    throw 'The Sysprep Run Command must allow enough time for operating system volume decryption and Sysprep.'
+}
+$automaticDeviceEncryptionText = Get-Content -LiteralPath $automaticDeviceEncryptionPath -Raw
+foreach ($expectedText in @(
+    'Disable-BitLocker -MountPoint $SystemDrive',
+    "VolumeStatus -eq 'DecryptionInProgress'",
+    'The image build will continue while it completes.'
+)) {
+    if (-not $automaticDeviceEncryptionText.Contains($expectedText)) {
+        throw "Disable-AutomaticDeviceEncryption.ps1 is missing required behavior: $expectedText"
+    }
+}
+$customizeImageText = Get-Content -LiteralPath $customizeImagePath -Raw
+if ($customizeImageText -notmatch "resource disableAutomaticDeviceEncryption[\s\S]*?loadTextContent\('\.\./scripts/Disable-AutomaticDeviceEncryption\.ps1'\)") {
+    throw 'The image customization module must run the automatic device encryption script.'
+}
+if ($customizeImageText -notmatch "module conditionalRestartPreBuild[\s\S]*?dependsOn:\s*\[\s*disableAutomaticDeviceEncryption\s*\]") {
+    throw 'The pre-build CBS check must wait until operating system volume decryption has started.'
 }
 
 $optimizerText = Get-Content -LiteralPath $optimizerPath -Raw

@@ -1210,6 +1210,10 @@ image-customization-logs/
 **Symptoms:** Image capture fails, sysprep errors in logs  
 **Solution:**
 
+- Check the Sysprep output for the recorded BitLocker state. Windows automatic device encryption
+  can encrypt a Trusted Launch build VM even when protection is suspended. Decryption starts
+  immediately after provisioning and overlaps image customization. Finalization waits for any
+  remaining decryption and requires `FullyDecrypted` before Sysprep.
 - Review VDI customizations (must support sysprep)
 - Check for running services (stop before sysprep)
 - Avoid `/norestart` in final customizations
