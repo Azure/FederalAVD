@@ -219,10 +219,11 @@ Restarts the image VM after a customization that requests a reboot.
 
 - **Parameters:** `ResourceManagerUri`, `UserAssignedIdentityClientId`, `VmResourceId`, optional
   `StableSeconds`, `ReadyTimeoutSeconds`, and `PollIntervalSeconds`
-- **Behavior:** Uses Azure REST with managed identity and waits for the VM to remain running with
-  the guest agent ready for a continuous stability window. The post-Windows Update restart uses a
-  three-minute window so a follow-up TrustedInstaller servicing reboot resets the timer instead of
-  interrupting the next Run Command.
+- **Behavior:** Uses Azure REST with managed identity, follows the ARM restart long-running
+  operation to completion, and then waits for the VM to remain running with the guest agent ready
+  for a continuous stability window. The post-Windows Update restart uses a three-minute window so
+  a follow-up TrustedInstaller servicing reboot resets the timer instead of interrupting the next
+  Run Command.
 
 ### [Resize-Disk.ps1](Resize-Disk.ps1)
 
