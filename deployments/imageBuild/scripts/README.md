@@ -234,25 +234,14 @@ Extends the image VM's operating-system partition to consume the available manag
 
 ## Image Finalization and Capture
 
-### [Disable-AutomaticDeviceEncryption.ps1](Disable-AutomaticDeviceEncryption.ps1)
-
-Starts operating system volume decryption immediately after the image VM is provisioned.
-
-- **Parameters:** None
-- **Behavior:** Records the BitLocker state and calls `Disable-BitLocker` when Windows automatic
-  device encryption is active. It returns after decryption starts so the pre-build restart check,
-  updates, and image customizations can run while decryption continues.
-- **Output:** BitLocker state in the Run Command output blob and
-  `C:\Windows\Logs\Disable-AutomaticDeviceEncryption.log`
-
 ### [Invoke-Sysprep.ps1](Invoke-Sysprep.ps1)
 
 Runs Sysprep under the named built-in administrator rather than SYSTEM and captures Panther logs.
 
 - **Parameters:** `AdminPassword`
-- **Behavior:** Waits for any remaining operating system volume decryption, waits for required
-  services and CBS servicing, prepares the administrator profile, verifies the volume is still
-  decrypted, launches Sysprep with
+- **Behavior:** Detects Windows automatic device encryption, fully decrypts the operating system
+  volume before finalization, waits for required services and CBS servicing, prepares the
+  administrator profile, verifies the volume is still decrypted, launches Sysprep with
   `/oobe /generalize /quit /mode:vm`, checks the exit code, and emits Panther logs to Run Command
   output.
 - **Output:** Sysprep Panther logs in the Run Command output blob

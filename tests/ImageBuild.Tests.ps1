@@ -6,14 +6,12 @@ $optimizerReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBu
 $imageBuildReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\README.md'
 $imageBuildGuidePath = Join-Path -Path $repoRoot -ChildPath 'docs\image-build.md'
 $sysprepPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\Invoke-Sysprep.ps1'
-$automaticDeviceEncryptionPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\Disable-AutomaticDeviceEncryption.ps1'
 $generalizeVmPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\modules\generalizeVm.bicep'
-$customizeImagePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\modules\customizeImage.bicep'
 $oneDriveArtifactPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\artifacts\Configure-OneDrivePolicy'
 $oneDriveScriptPath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'Configure-OneDrivePolicy.ps1'
 $oneDriveReadmePath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'README.md'
 
-foreach ($scriptPath in @($optimizerPath, $sysprepPath, $automaticDeviceEncryptionPath, $oneDriveScriptPath)) {
+foreach ($scriptPath in @($optimizerPath, $sysprepPath, $oneDriveScriptPath)) {
     $tokens = $null
     $parseErrors = $null
     [Management.Automation.Language.Parser]::ParseFile(
@@ -63,23 +61,6 @@ if ($sysprepText.LastIndexOf('Assert-SystemDriveDecrypted') -gt
 $generalizeVmText = Get-Content -LiteralPath $generalizeVmPath -Raw
 if ($generalizeVmText -notmatch "resource sysprep[\s\S]*?timeoutInSeconds: 10800") {
     throw 'The Sysprep Run Command must allow enough time for operating system volume decryption and Sysprep.'
-}
-$automaticDeviceEncryptionText = Get-Content -LiteralPath $automaticDeviceEncryptionPath -Raw
-foreach ($expectedText in @(
-    'Disable-BitLocker -MountPoint $SystemDrive',
-    "VolumeStatus -eq 'DecryptionInProgress'",
-    'The image build will continue while it completes.'
-)) {
-    if (-not $automaticDeviceEncryptionText.Contains($expectedText)) {
-        throw "Disable-AutomaticDeviceEncryption.ps1 is missing required behavior: $expectedText"
-    }
-}
-$customizeImageText = Get-Content -LiteralPath $customizeImagePath -Raw
-if ($customizeImageText -notmatch "resource disableAutomaticDeviceEncryption[\s\S]*?loadTextContent\('\.\./scripts/Disable-AutomaticDeviceEncryption\.ps1'\)") {
-    throw 'The image customization module must run the automatic device encryption script.'
-}
-if ($customizeImageText -notmatch "module conditionalRestartPreBuild[\s\S]*?dependsOn:\s*\[\s*disableAutomaticDeviceEncryption\s*\]") {
-    throw 'The pre-build CBS check must wait until operating system volume decryption has started.'
 }
 
 $optimizerText = Get-Content -LiteralPath $optimizerPath -Raw

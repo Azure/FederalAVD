@@ -166,31 +166,6 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
   name: orchestrationVmName
 }
 
-// Windows 11 automatic device encryption can begin during deployment-time OOBE
-// on Trusted Launch VMs. Start decryption immediately and allow it to overlap
-// the remaining image customization work.
-resource disableAutomaticDeviceEncryption 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
-  name: 'disable-automatic-device-encryption'
-  location: location
-  parent: imageVm
-  properties: {
-    asyncExecution: false
-    outputBlobManagedIdentity: empty(logBlobContainerUri)
-      ? null
-      : {
-          clientId: userAssignedIdentityClientId
-        }
-    outputBlobUri: empty(logBlobContainerUri)
-      ? null
-      : '${logBlobContainerUri}${imageVmName}-Disable-AutomaticDeviceEncryption-${buildTimestamp}.log'
-    source: {
-      script: loadTextContent('../scripts/Disable-AutomaticDeviceEncryption.ps1')
-    }
-    timeoutInSeconds: 600
-    treatFailureAsDeploymentFailure: true
-  }
-}
-
 // CBS check before any customization work begins.
 // Marketplace images are sometimes published with pending CBS state (a WU cycle ran
 // during image preparation but the VM was not rebooted before capture). Running with
@@ -207,9 +182,6 @@ module conditionalRestartPreBuild 'conditionalRestart.bicep' = {
     buildTimestamp: buildTimestamp
     context: 'PreBuild'
   }
-  dependsOn: [
-    disableAutomaticDeviceEncryption
-  ]
 }
 
 resource createBuildDir 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = if (useBuildDir) {
