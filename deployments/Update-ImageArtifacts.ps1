@@ -313,22 +313,28 @@ function Get-InternetUrl {
     )
     $HTML = Invoke-WebRequest -Uri $WebSiteUrl -UseBasicParsing
     $Links = $HTML.Links
-    $LinkHref = $HTML.Links.Href | Get-Unique | Where-Object { $_ -like $SearchString }
-    If ($LinkHref) {
-        if ($LinkHref.Contains('http://') -or $LinkHref.Contains('https://')) {
-            Return $LinkHref
-        }
-        Else {
-            Return $WebSiteUrl.AbsoluteUri + $LinkHref
-        }
-    }
-    $LinkHref = $Links | Where-Object { $_.OuterHTML -like $SearchString }
-    If ($LinkHref) {
-        Return $LinkHref.href
-    }
+    $LinkHrefs = @($HTML.Links.Href | Where-Object { $_ -like $SearchString })
+    $LinkHrefs += @($Links | Where-Object { $_.OuterHTML -like $SearchString } | ForEach-Object { $_.href })
+
     $escapedPattern = [Regex]::Escape($SearchString) -replace '\\\*', '[^"''\s>]*'
     $regex = "https?://[^""'\s>]*$escapedPattern"
-    Return ([regex]::Matches($html.Content, $regex)).Value
+    $LinkHrefs += @([regex]::Matches($HTML.Content, $regex) | ForEach-Object { $_.Value })
+
+    $ResolvedUrls = @(
+        $LinkHrefs |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { [uri]::new($WebSiteUrl, [string]$_).AbsoluteUri } |
+            Sort-Object -Unique
+    )
+
+    If ($ResolvedUrls.Count -eq 0) {
+        Return $null
+    }
+    If ($ResolvedUrls.Count -gt 1) {
+        Throw "Found multiple download URLs matching '$SearchString' on '$WebSiteUrl': $($ResolvedUrls -join ', ')"
+    }
+
+    Return [string]$ResolvedUrls[0]
 }
 
 Function Get-InternetFile {
