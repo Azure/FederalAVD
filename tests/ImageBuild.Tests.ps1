@@ -5,11 +5,13 @@ $optimizerPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\sc
 $optimizerReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\README.md'
 $imageBuildReadmePath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\README.md'
 $imageBuildGuidePath = Join-Path -Path $repoRoot -ChildPath 'docs\image-build.md'
+$sysprepPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\scripts\Invoke-Sysprep.ps1'
+$generalizeVmPath = Join-Path -Path $repoRoot -ChildPath 'deployments\imageBuild\modules\generalizeVm.bicep'
 $oneDriveArtifactPath = Join-Path -Path $repoRoot -ChildPath 'customer-examples\artifacts\Configure-OneDrivePolicy'
 $oneDriveScriptPath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'Configure-OneDrivePolicy.ps1'
 $oneDriveReadmePath = Join-Path -Path $oneDriveArtifactPath -ChildPath 'README.md'
 
-foreach ($scriptPath in @($optimizerPath, $oneDriveScriptPath)) {
+foreach ($scriptPath in @($optimizerPath, $sysprepPath, $oneDriveScriptPath)) {
     $tokens = $null
     $parseErrors = $null
     [Management.Automation.Language.Parser]::ParseFile(
@@ -26,6 +28,41 @@ foreach ($scriptPath in @($optimizerPath, $oneDriveScriptPath)) {
     }
 }
 
+$sysprepText = Get-Content -LiteralPath $sysprepPath -Raw
+foreach ($expectedText in @(
+    'Disable-SystemDriveBitLocker -TimeoutMinutes 60',
+    'Disable-BitLocker -MountPoint $SystemDrive',
+    "VolumeStatus -eq 'FullyDecrypted'",
+    'Assert-SystemDriveDecrypted',
+    'Waiting up to 30 minutes with 60-second diagnostics.',
+    'Write-SysprepHeartbeat -ProcessId $Pi.dwProcessId',
+    'Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId',
+    'Sysprep registry state: CleanupState=',
+    'System32\Sysprep\Panther\setupact.log',
+    'System32\Sysprep\Panther\setuperr.log',
+    'Timed out after 30 minutes waiting for sysprep to complete.'
+)) {
+    if (-not $sysprepText.Contains($expectedText)) {
+        throw "Invoke-Sysprep.ps1 is missing required timeout diagnostics: $expectedText"
+    }
+}
+if ($sysprepText.IndexOf('Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId') -gt
+    $sysprepText.IndexOf('throw $WaitFailureMessage')) {
+    throw 'Invoke-Sysprep.ps1 must capture diagnostics before throwing a timeout or wait failure.'
+}
+if ($sysprepText.IndexOf('Disable-SystemDriveBitLocker -TimeoutMinutes 60') -gt
+    $sysprepText.IndexOf('$Services =')) {
+    throw 'Invoke-Sysprep.ps1 must start operating system volume decryption before service preparation.'
+}
+if ($sysprepText.LastIndexOf('Assert-SystemDriveDecrypted') -gt
+    $sysprepText.IndexOf('$CreateOk = [SysprepLauncher]::CreateProcessAsUser')) {
+    throw 'Invoke-Sysprep.ps1 must verify the operating system volume before creating the Sysprep process.'
+}
+$generalizeVmText = Get-Content -LiteralPath $generalizeVmPath -Raw
+if ($generalizeVmText -notmatch "resource sysprep[\s\S]*?timeoutInSeconds: 10800") {
+    throw 'The Sysprep Run Command must allow enough time for operating system volume decryption and Sysprep.'
+}
+
 $optimizerText = Get-Content -LiteralPath $optimizerPath -Raw
 $optimizerExpectations = @(
     "[ValidateSet('None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent')]",
@@ -37,12 +74,50 @@ $optimizerExpectations = @(
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'AllowStorageSenseTemporaryFilesCleanup' -Value 1",
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseRecycleBinCleanupThreshold' -Value 30",
     "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseDownloadsCleanupThreshold' -Value 0",
-    "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30"
+    "Set-PolicyValue -Path `$ssPolicyPath -Name 'ConfigStorageSenseCloudContentDehydrationThreshold' -Value 30",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1",
+    "Set-PolicyValue -Path `$searchPath -Name 'EnableDynamicContentInWSB' -Value 0"
 )
 foreach ($expectedText in $optimizerExpectations) {
     if (-not $optimizerText.Contains($expectedText)) {
         throw "Optimize-AVDImage.ps1 is missing required behavior: $expectedText"
     }
+}
+$airGappedSection = [regex]::Match(
+    $optimizerText,
+    '(?s)# SECTION 7 - Air-Gapped / Restricted Network Settings.*?# end if AirGapped - Section 7'
+).Value
+foreach ($expectedText in @(
+    'if (-not $RunFullOptimization) {',
+    "Set-PolicyValue -Path `$airGappedSearchPath -Name 'DisableWebSearch' -Value 1",
+    "Set-PolicyValue -Path `$airGappedSearchPath -Name 'ConnectedSearchUseWeb' -Value 0",
+    "Set-PolicyValue -Path `$airGappedSearchPath -Name 'EnableDynamicContentInWSB' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' -Name 'DODownloadMode' -Value 99",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' -Name 'AutoDownloadAndUpdateMapData' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' -Name 'AllowMessageSync' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Speech' -Name 'AllowSpeechModelUpdate' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' -Name 'AllowFindMyDevice' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' -Name 'AllowDiskHealthModelUpdates' -Value 0",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications' -Name 'NoCloudApplicationNotification' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' -Name 'PreventDeviceMetadataFromNetwork' -Value 1",
+    "Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform' -Name 'NoGenTicket' -Value 1",
+    "Set-PolicyValue -Path `$airGappedUserCloudContent -Name 'DisableWindowsSpotlightFeatures' -Value 1",
+    "Set-PolicyValue -Path `$airGappedUserCloudContent -Name 'DisableTailoredExperiencesWithDiagnosticData' -Value 1"
+)) {
+    if (-not $airGappedSection.Contains($expectedText)) {
+        throw "Optimize-AVDImage.ps1 air-gapped mode is missing required behavior: $expectedText"
+    }
+}
+if ($airGappedSection -notmatch '(?s)if \(-not \$RunNonPersistentSections\) \{\s+Set-PolicyValue .*?Windows Error Reporting.*?-Name ''Disabled''.*?-Name ''DontSendAdditionalData''') {
+    throw 'Optimize-AVDImage.ps1 air-gapped mode does not avoid duplicate nonpersistent WER policy writes.'
+}
+if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*?-Name 'AllowTelemetry' -Value 0") {
+    throw 'Optimize-AVDImage.ps1 disables required diagnostic data used by Intune reporting.'
 }
 if ($optimizerText -match "(?m)^\s*Set-PolicyValue .*PreventNetworkTrafficPreUserSignIn") {
     throw 'Optimize-AVDImage.ps1 enables PreventNetworkTrafficPreUserSignIn, which conflicts with silent OneDrive configuration.'

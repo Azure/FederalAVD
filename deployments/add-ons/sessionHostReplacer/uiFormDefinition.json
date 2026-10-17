@@ -183,7 +183,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "text": "Best Practices\n\nSchedule replacements during off-peak hours (typically overnight or early morning, e.g., 12 AM - 6 AM) when Azure Virtual Desktop Scaling Plans have already powered off most VMs for cost savings. The Session Host Replacer prioritizes powered-off VMs for replacement, resulting in zero user impact and optimal cost efficiency.",
-                "style": "Success"
+                "style": "Info"
               }
             },
             {
@@ -376,7 +376,7 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "text": "Best Practices\n\nIf managing multiple host pools, stagger the execution time by setting different start minutes for each deployment to prevent simultaneous runs and avoid API throttling. The function executes twice per hour: at the start minute and 30 minutes later (e.g., :15 and :45 if start minute is 15).",
-                "style": "Success"
+                "style": "Info"
               }
             },
             {
@@ -433,7 +433,7 @@
               "name": "replacementMode",
               "type": "Microsoft.Common.DropDown",
               "label": "Replacement Mode",
-              "toolTip": "Select the Replacement Mode Option. Side-by-Side (Add then Delete): Adds new session hosts before deleting old ones resulting in zero downtime during updates, but higher cost during update cycles (can temporarily double host pool size). This mode does NOT support dedicated hosts. Requires sufficient vCPU quota and subnet IP space for both old and new hosts simultaneously. Delete-First (Delete then Add): Deletes idle session hosts before adding replacements resulting in lower cost (maintains approximately target capacity throughout), but temporary capacity reduction during replacements. Supports dedicated hosts - preserves dedicated host assignments and zones. Reuses hostnames for seamless transitions",
+              "toolTip": "Side-by-Side continuously adds capacity before removal. Delete-First continuously replaces idle hosts while preserving a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured Delete-First replacer without redeploying it.",
               "defaultValue": "Side-by-Side (Add then Delete)",
               "constraints": {
                 "required": true,
@@ -498,7 +498,7 @@
               "name": "minimumCapacityPercentage",
               "type": "Microsoft.Common.Slider",
               "label": "Availability Safety Floor (%)",
-              "toolTip": "Availability Safety Floor: Prevents pool capacity from dropping below this percentage during replacements, ensuring minimum availability. Smart Scaling Plan Integration (Phase-Aware): If a scaling plan is assigned to your host pool: RampUp/Peak phases: This configured value acts as a safety floor (whichever is higher: this config or scaling plan target). RampDown/OffPeak phases: Scaling plan percentage used directly (can go below this value for aggressive off-hours replacements). This allows safe, aggressive replacements during off-peak when users aren't active, while maintaining your safety floor during business hours. Falls back to this static value if no scaling plan configured. Example: Config=70%, Scaling Plan Peak=90%, OffPeak=50%. Result: Peak uses 90%, OffPeak uses 50% (aggressive off-hours updates). Guidance: 80% = very conservative, 50% = balanced. This works with 'Blast Radius Limit' to control replacement pace.",
+              "toolTip": "DeleteFirst availability floor used when no enabled scaling-plan schedule can be evaluated. With a scaling plan, RampDown and OffPeak use the plan target but always retain at least one online healthy host. New destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak so autoscale can prepare user capacity. The floor is capped at target minus one while replacement is active, allowing pools with at least two hosts to progress one host at a time. A single-host pool cannot use exact-name DeleteFirst replacement without an outage or temporary capacity.",
               "min": 20,
               "max": 100,
               "defaultValue": 80,
@@ -512,7 +512,7 @@
               "name": "maxDeletionsPerCycle",
               "type": "Microsoft.Common.Slider",
               "label": "Blast Radius Limit (VMs per cycle)",
-              "toolTip": "Blast Radius Limit: Caps the absolute number of VMs deleted/deployed per cycle, regardless of available headroom above the safety floor. Limits impact if issues occur during replacement. Example: With 500 target VMs and 50% floor (250 minimum), you have 250 VM headroom. Setting this to 50 means max 50 deleted per cycle despite having 250 of headroom. Guidance: Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower = slower/safer, higher = faster replacement. Works with Progressive Scale-Up which further limits initial cycles.",
+              "toolTip": "Blast Radius Limit: Caps the absolute number of VMs deleted and replaced per cycle, regardless of available headroom above the safety floor. Progressive Scale-Up can select a smaller initial batch, and the capacity floor can reduce it further. Example: With 500 target VMs and a 50% floor, setting this to 50 limits each cycle to 50 deletions even though 250 VMs of headroom exists. Guidance: Small pools (< 100 VMs): 20-50. Large pools (> 200 VMs): 50-100. Lower is slower and more conservative.",
               "min": 1,
               "max": 100,
               "defaultValue": 50,
@@ -548,7 +548,7 @@
               "name": "maxDeploymentBatchSize",
               "type": "Microsoft.Common.Slider",
               "label": "Deployment Batch Size Ceiling",
-              "toolTip": "Deployment Ceiling: Maximum number of VMs that can be deployed in a single cycle, but actual deployments are controlled by Progressive Scale-Up which starts conservatively and increases gradually. How it works: With Progressive Scale-Up enabled (default), initial cycles deploy a small percentage (e.g., 20%), then gradually increase (50%, 80%, 100%) after successful runs. This ceiling prevents deploying more than this limit even at 100%. Example: 100 target VMs, ceiling set to 100, Progressive Scale-Up at 20%: Cycle 1 deploys ~20 VMs (not 100), then 40 VMs, then 64 VMs, then up to 100 VM ceiling. Guidance: Set to maximum you're comfortable deploying simultaneously. Progressive Scale-Up provides safety for initial cycles.",
+              "toolTip": "Deployment Ceiling: Maximum number of VMs deployed in a SideBySide cycle. With Progressive Scale-Up enabled, the percentage-based confidence ramp can select a smaller batch; this setting remains the absolute ceiling. Guidance: Set it to the largest deployment you are comfortable submitting simultaneously.",
               "min": 1,
               "max": 1000,
               "defaultValue": 100,
@@ -583,13 +583,13 @@
               "name": "progressiveScaleUpTextBlock",
               "type": "Microsoft.Common.TextBlock",
               "options": {
-                "text": "Progressive scale-up starts with a small percentage of hosts and gradually increases after successful deployments. This helps identify issues before deploying to all hosts."
+                "text": "Progressive scale-up starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. The SideBySide deployment ceiling or DeleteFirst blast-radius ceiling still applies."
               }
             },
             {
               "name": "enableProgressiveScaleUp",
               "type": "Microsoft.Common.CheckBox",
-              "defaultValue": true,
+              "defaultValue": false,
               "label": "Enable Progressive Scale-Up",
               "toolTip": "Enable percentage-based progressive deployment of session host replacements."
             },
@@ -763,7 +763,7 @@
               "name": "deviceCleanupInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Device Cleanup Automation Overview\n\nDevice cleanup automation removes stale Entra ID and/or Intune device records when session hosts are deleted. This is especially important when session hosts are Entra ID-joined to prevent accumulation of orphaned device records.\n\nRequired Microsoft Graph API Permissions\n\nThe function app's managed identity requires the following permissions:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Air-Gapped Clouds such as Azure Government Secret and Azure Government Top Secret. In these environments, the Intune Device Cleanup option will be automatically disabled.",
+                "text": "Device Cleanup Automation Overview\n\nEntra device cleanup is required when Delete-First reuses names for Microsoft Entra joined session hosts. It remains optional for domain-joined and hybrid-joined hosts. Intune cleanup is optional but highly recommended before Delete-First hostname reuse for Intune-enrolled Entra-joined or hybrid-joined hosts.\n\nRequired Microsoft Graph API Permissions\n\nGrant only the permission for each enabled cleanup target:\n- 'Device.ReadWrite.All' - Required for Entra ID device deletion\n- 'DeviceManagementManagedDevices.ReadWrite.All' - Required for Intune device deletion\n\nAir-Gapped Cloud Limitations\n\nIntune is not currently available in Azure Government Secret or Azure Government Top Secret. Leave Intune cleanup disabled unless your environment support team confirms availability, and grant only permissions advertised by Microsoft Graph in that environment.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/graph/permissions-reference"
               }
@@ -772,20 +772,51 @@
               "name": "removeEntraDevice",
               "type": "Microsoft.Common.CheckBox",
               "label": "Remove Entra ID Device Records",
-              "toolTip": "Remove Entra ID device records when deleting session hosts.",
-              "defaultValue": true
+              "toolTip": "Remove Entra ID device records when deleting session hosts. Required for exact-name Delete-First and Maintenance Window replacement of Microsoft Entra joined hosts.",
+              "defaultValue": true,
+              "constraints": {
+                "required": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+                "validationMessage": "Entra device cleanup is required when an exact-name mode reuses names for Microsoft Entra joined session hosts."
+              }
             },
             {
               "name": "removeIntuneDevice",
               "type": "Microsoft.Common.CheckBox",
               "label": "Remove Intune Device Records",
-              "toolTip": "Remove Intune device records when deleting session hosts.",
+              "toolTip": "Remove Intune device records when deleting session hosts. Highly recommended before Delete-First hostname reuse for Intune-enrolled Entra-joined or hybrid-joined hosts. Intune is not currently available in Azure Government Secret or Top Secret; leave disabled unless availability is confirmed for the target environment.",
               "defaultValue": true
+            },
+            {
+              "name": "entraDeleteFirstCleanupInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+              "options": {
+                "style": "Warning",
+                "text": "Delete-First and Maintenance Window reuse session host names. Entra device cleanup is required for Microsoft Entra joined hosts and cannot be disabled for these combinations."
+              }
+            },
+            {
+              "name": "entraIntuneCleanupRecommendationInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('hosts').management.intune, not(steps('replacerConfig').removeIntuneDevice))]",
+              "options": {
+                "style": "Warning",
+                "text": "Intune cleanup is highly recommended for these Intune-enrolled Microsoft Entra joined hosts. Reusing names without cleanup can leave stale or duplicate Intune managed-device records."
+              }
+            },
+            {
+              "name": "hybridIntuneCleanupRecommendationInfoBox",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), not(steps('replacerConfig').removeIntuneDevice))]",
+              "options": {
+                "style": "Warning",
+                "text": "If these AD DS hosts are Microsoft Entra hybrid joined and enrolled in Intune, Intune cleanup is highly recommended before Delete-First hostname reuse to prevent stale or duplicate managed-device records."
+              }
             },
             {
               "name": "identityTypeHeader",
               "type": "Microsoft.Common.TextBlock",
-              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
               "options": {
                 "text": "Function App Managed Identity"
               }
@@ -793,7 +824,7 @@
             {
               "name": "identityTypeInfoBox",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
               "options": {
                 "text": "Choose the type of managed identity the function app will use for authentication. 'System-Assigned' is simpler (created automatically), while 'User-Assigned' allows pre-granting Graph permissions before deployment (required for immediate device cleanup in DeleteFirst mode).",
                 "style": "Info"
@@ -802,7 +833,7 @@
             {
               "name": "identityType",
               "type": "Microsoft.Common.DropDown",
-              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice)]",
+              "visible": "[or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
               "label": "Managed Identity Type",
               "multiLine": true,
               "defaultValue": "System-Assigned",
@@ -826,7 +857,7 @@
             {
               "name": "sessionHostReplacerUserAssignedIdentitiesApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)), or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "condition": "[and(not(empty(steps('basics').subscription.id)), not(empty(steps('basics').location)), or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.ManagedIdentity/userAssignedIdentities?api-version=2023-01-31')]"
@@ -838,11 +869,11 @@
               "label": "User-Assigned Managed Identity",
               "filter": true,
               "multiLine": true,
-              "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
+              "visible": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned'))]",
               "toolTip": "Select a User-Assigned Managed Identity in the Function App deployment region that has the required Microsoft Graph API permissions (Device.ReadWrite.All and/or DeviceManagementManagedDevices.ReadWrite.All). Microsoft.Web cannot attach an identity from another region.",
               "constraints": {
                 "allowedValues": "[map(filter(steps('replacerConfig').sessionHostReplacerUserAssignedIdentitiesApi.value, (identity) => equals(toLower(identity.location), toLower(steps('basics').location.name))), (identity) => parse(concat('{\"label\":\"', identity.name, '\",\"description\":\"Resource Group: ', first(skip(split(identity.id, '/'), 4)), ', Location: ', identity.location, '\",\"value\":\"', identity.id, '\"}')))]",
-                "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
+                "required": "[and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned'))]"
               }
             }
           ]
@@ -1900,8 +1931,8 @@
                             "required": true,
                             "validations": [
                               {
-                                "regex": "^(?![_-])[A-Za-z0-9_-]{1,13}(?<![_-])$",
-                                "message": "The value must not contain spaces or end or begin with a dash or underscore."
+                                "regex": "^(?![_.-])[A-Za-z0-9_.-]{1,20}(?<![_.-])$",
+                                "message": "The value must not contain spaces or end or begin with a dash, underscore, or period."
                               }
                             ]
                           }
@@ -3511,13 +3542,13 @@
         "tagPendingDrainTimestamp": "[steps('replacerConfig').tagPendingDrainTimestamp]",
         "tagScalingPlanExclusionTag": "[steps('replacerConfig').tagScalingPlanExclusionTag]",
         "tagValidatedImage": "[steps('replacerConfig').tagValidatedImage]",
-        "removeEntraDevice": "[steps('replacerConfig').removeEntraDevice]",
+        "removeEntraDevice": "[or(steps('replacerConfig').removeEntraDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID')))]",
         "removeIntuneDevice": "[steps('replacerConfig').removeIntuneDevice]",
         "enableProgressiveScaleUp": "[steps('replacerConfig').enableProgressiveScaleUp]",
         "initialDeploymentPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').initialDeploymentPercentage, 10)]",
         "scaleUpIncrementPercentage": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').scaleUpIncrementPercentage, 20)]",
         "successfulRunsBeforeScaleUp": "[if(steps('replacerConfig').enableProgressiveScaleUp, steps('replacerConfig').successfulRunsBeforeScaleUp, 1)]",
-        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
+        "sessionHostReplacerUserAssignedIdentityResourceId": "[if(and(or(steps('replacerConfig').removeEntraDevice, steps('replacerConfig').removeIntuneDevice, and(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))), equals(steps('replacerConfig').identityType, 'UserAssigned')), steps('replacerConfig').sessionHostReplacerUserAssignedIdentity, '')]",
         "powerShellVersion": "[steps('infrastructure').powerShellVersion]",
         "existingAppServicePlanResourceId": "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]",
         "appServicePlanResourceGroupName": "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]",

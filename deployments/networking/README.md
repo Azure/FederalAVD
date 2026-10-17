@@ -6,6 +6,9 @@
 > **Create**, then download the generated template and parameters after submission. Use the examples
 > below only after that guided deployment, or as a fallback when the Template Spec UI is unavailable.
 
+After changing the form or template, republish the Template Spec and deploy the updated version;
+sandbox preview alone does not verify the published template-to-form parameter contract.
+
 ## Overview
 
 This Azure Bicep template deploys a complete networking infrastructure for Azure Virtual Desktop (AVD) deployments. It creates a hub-spoke or standalone network architecture with security controls, routing options, and Azure service private endpoints.
@@ -16,7 +19,7 @@ Provide a production-ready network foundation for AVD with:
 
 - Virtual network with customizable address space and subnets
 - Network security groups (NSGs) for traffic control
-- Routing options (NAT gateway or NVA force-tunnel)
+- Routing options (NAT gateway, NVA force-tunnel, or existing/propagated routes)
 - Optional hub peering for hybrid connectivity
 - Private DNS zones for Azure services
 - DDoS Network Protection (optional)
@@ -58,6 +61,20 @@ Subscription
 | **NAT Gateway** (default) | Outbound internet via NAT gateway | Simplest option, Azure-managed outbound connectivity |
 | **NVA Force-Tunnel** | All traffic routed through Network Virtual Appliance | Centralized inspection, hub-spoke with firewall |
 | **NVA + AVD Bypass** | NVA routing with AVD service traffic bypass routes | Hybrid: Firewall for internet, direct AVD service connectivity |
+| **Use Existing / Propagated Routes** | No NAT gateway, public IP, or route table created by this template | Hub VPN/ExpressRoute gateway routes or separately managed routing and egress |
+
+All created subnets explicitly disable implicit Azure default outbound access. This does not
+disable explicit egress through a NAT gateway, NVA, or hub gateway. For existing/propagated
+routes, configure and validate an outbound path separately. Peering alone does not provide
+outbound connectivity; hub gateway transit, use of the remote gateway, and propagation of the
+required routes (including a default route when needed) must be configured. The form's **Use
+Gateway on hub** option configures gateway transit and remote-gateway use on the peerings; it
+does not configure the gateway or advertise routes.
+
+NVA routing retains a local NAT gateway when AVD bypass or public-network RDP Shortpath is
+enabled. Existing/propagated routing never creates a local NAT gateway or bypass routes, even
+when those feature flags are supplied; the selected upstream egress path must provide any
+required STUN/TURN connectivity.
 
 ## Prerequisites
 
@@ -187,10 +204,15 @@ Subscription
 
 - **Type:** String
 - **Default:** `nat`
-- **Allowed Values:** `nat`, `nva`
+- **Allowed Values:** `nat`, `nva`, `default`
 - **Description:** Routing method for subnet traffic
   - `nat` - NAT gateway for outbound connectivity
   - `nva` - Route through Network Virtual Appliance (firewall)
+  - `default` - Use existing/propagated routes; do not create or attach a NAT gateway or route table
+
+Implicit Azure default outbound access is always disabled (`defaultOutboundAccess: false`) on
+created subnets and is not configurable. Remove the former `defaultOutboundAccess` parameter
+from existing parameter files before deploying this version.
 
 #### `includeAvdBypassRoutes`
 

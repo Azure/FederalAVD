@@ -40,6 +40,9 @@ param globalFeedRegion string = ''
 @description('Existing feed workspace resource ID. Pass empty string when creating a new workspace.')
 param existingFeedWorkspaceResourceId string = ''
 
+@description('Subscription ID that owns Shared Services resources. Defaults to the deployment subscription.')
+param sharedServicesSubscriptionId string = subscription().subscriptionId
+
 targetScope = 'subscription'
 
 // ── Location resolution ───────────────────────────────────────────────────────
@@ -122,12 +125,21 @@ var depVirtualMachineNicName   = '${depVirtualMachineName}-${cnv_rtCodes.network
 // ── Operations / Monitoring Resource Groups ───────────────────────────────────
 var resourceGroupOperations = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'operations', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var resourceGroupMonitoring = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'monitoring', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupConsolidated = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedResourceGroupOperations = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'operations', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedResourceGroupMonitoring = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'monitoring', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // Seed matches sharedServices.bicep exactly.
 var uniqueStringOperations = take(
   !contains(cnv_components, 'location')
     ? uniqueString(subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion)
     : uniqueString(subscription().subscriptionId, resourceGroupOperations),
+  6
+)
+var sharedUniqueStringOperations = take(
+  !contains(cnv_components, 'location')
+    ? uniqueString(sharedServicesSubscriptionId, sharedResourceGroupOperations, controlPlaneRegion)
+    : uniqueString(sharedServicesSubscriptionId, sharedResourceGroupOperations),
   6
 )
 
@@ -140,10 +152,18 @@ var keyVaultNameSecrets = !empty(cnv_secretsKeyVaultNameOverride)
 var keyVaultNameEncryption = !empty(cnv_encryptionKeyVaultNameOverride)
   ? cnv_encryptionKeyVaultNameOverride
   : take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc${cnv_delimiter}${uniqueStringOperations}', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var sharedKeyVaultNameSecrets = !empty(cnv_secretsKeyVaultNameOverride)
+  ? cnv_secretsKeyVaultNameOverride
+  : take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'sec${cnv_delimiter}${sharedUniqueStringOperations}', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
+var sharedKeyVaultNameEncryption = !empty(cnv_encryptionKeyVaultNameOverride)
+  ? cnv_encryptionKeyVaultNameOverride
+  : take(kvSanitize(cnv(cnv_components, cnv_delimiter, cnv_rtCodes.keyVaults, 'enc${cnv_delimiter}${sharedUniqueStringOperations}', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)), 24)
 
 // ── Monitoring ────────────────────────────────────────────────────────────────
 var dataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var logAnalyticsWorkspaceName  = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.logAnalyticsWorkspaces,  '', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedDataCollectionEndpointName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.dataCollectionEndpoints, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedLogAnalyticsWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.logAnalyticsWorkspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Global Feed Resources ─────────────────────────────────────────────────────
 // Global feed is a single shared resource — no location component in its name.
@@ -153,12 +173,12 @@ var globalFeedResourceGroupName = !empty(globalFeedRegion)
 var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global${cnv_delimiter}feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane Shared Resources ───────────────────────────────────────────
-var resourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-  : split(existingFeedWorkspaceResourceId, '/')[4]
+var resourceGroupControlPlane = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}${cnv_delimiter}control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var workspaceName = empty(existingFeedWorkspaceResourceId)
-  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : last(split(existingFeedWorkspaceResourceId, '/'))
+var sharedResourceGroupControlPlane = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane HostPool Resources ──────────────────────────────────────────
 var desktopApplicationGroupName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.desktopApplicationGroups, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
@@ -178,6 +198,7 @@ var privateEndpointNICNameConv = replace(privateEndpointNICNameConvTemp, 'RESOUR
 
 var recoveryServicesVaultNameVMs     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  identifier, cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var recoveryServicesVaultNameFSLogix = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults,  'files',    cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedRecoveryServicesVaultNameFSLogix = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.recoveryServicesVaults, 'files', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var userAssignedIdentityNameConv     = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities, '${identifier}${cnv_delimiter}TOKEN', cnv_vmsloc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 var policyRemediationIdentityName    = replace(userAssignedIdentityNameConv, 'TOKEN', 'policy${cnv_delimiter}remediation')
 var azureMonitorAgentIdentityName    = replace(userAssignedIdentityNameConv, 'TOKEN', 'ama')
@@ -227,18 +248,28 @@ output depVirtualMachineNicName  string = depVirtualMachineNicName
 
 output resourceGroupOperations   string = resourceGroupOperations
 output resourceGroupMonitoring   string = resourceGroupMonitoring
+output resourceGroupConsolidated string = resourceGroupConsolidated
 output uniqueStringOperations    string = uniqueStringOperations
 output keyVaultNameSecrets       string = keyVaultNameSecrets
 output keyVaultNameEncryption    string = keyVaultNameEncryption
+output sharedResourceGroupOperations string = sharedResourceGroupOperations
+output sharedResourceGroupMonitoring string = sharedResourceGroupMonitoring
+output sharedResourceGroupControlPlane string = sharedResourceGroupControlPlane
+output sharedKeyVaultNameSecrets string = sharedKeyVaultNameSecrets
+output sharedKeyVaultNameEncryption string = sharedKeyVaultNameEncryption
+output sharedRecoveryServicesVaultNameFSLogix string = sharedRecoveryServicesVaultNameFSLogix
 
 output dataCollectionEndpointName string = dataCollectionEndpointName
 output logAnalyticsWorkspaceName   string = logAnalyticsWorkspaceName
+output sharedDataCollectionEndpointName string = sharedDataCollectionEndpointName
+output sharedLogAnalyticsWorkspaceName string = sharedLogAnalyticsWorkspaceName
 
 output globalFeedResourceGroupName string = globalFeedResourceGroupName
 output globalFeedWorkspaceName      string = globalFeedWorkspaceName
 
 output resourceGroupControlPlane    string = resourceGroupControlPlane
 output workspaceName                string = workspaceName
+output sharedWorkspaceName          string = sharedWorkspaceName
 output desktopApplicationGroupName  string = desktopApplicationGroupName
 output hostPoolName                 string = hostPoolName
 output scalingPlanName              string = scalingPlanName

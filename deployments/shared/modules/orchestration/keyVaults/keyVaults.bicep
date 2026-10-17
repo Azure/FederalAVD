@@ -59,6 +59,15 @@ var secretList = union(
 var deploySecretsKv = deploySecretsKeyVault
 var deploySecretsKvPe = deploySecretsKv && privateEndpoint && !empty(privateEndpointSubnetResourceId)
 var deployEncryptionKvPe = deployEncryptionKeyVault && privateEndpoint && !empty(privateEndpointSubnetResourceId)
+var deployKeyVaultPrivateEndpoint = deploySecretsKvPe || deployEncryptionKvPe
+
+resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (deployKeyVaultPrivateEndpoint) {
+  name: split(privateEndpointSubnetResourceId, '/')[8]
+  scope: resourceGroup(
+    split(privateEndpointSubnetResourceId, '/')[2],
+    split(privateEndpointSubnetResourceId, '/')[4]
+  )
+}
 
 // Resolve publicNetworkAccess for each vault. When PE is used and no IPs are permitted, public access
 // is disabled — the PE becomes the sole access path. IP allowances or an explicit override keep it open.
@@ -118,6 +127,7 @@ module secretsKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy
       privateEndpointVnetId
     )
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+    location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId
     privateLinkServiceId: secretsKeyVault!.outputs.resourceId
     groupId: 'vault'
@@ -171,6 +181,7 @@ module encryptionKeyVault_pe '../../resourceModules/network/privateEndpoints/dep
       privateEndpointVnetId
     )
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+    location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId
     privateLinkServiceId: encryptionKeyVault!.outputs.resourceId
     groupId: 'vault'

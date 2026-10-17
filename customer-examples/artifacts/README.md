@@ -84,6 +84,7 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Configure-ChromePolicy](Configure-ChromePolicy/) | Apply Google Chrome Group Policy settings, including search provider enforcement | `ChromeEnterpriseAdministrativeTemplates` |
 | [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper | — |
 | [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO, including search provider enforcement | `EdgeEnterpriseAdministrativeTemplates` |
+| [Configure-LocalServiceAccount](Configure-LocalServiceAccount/) | Create or update a local service account using a Key Vault password | — |
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
 | [Configure-OneDrivePolicy](Configure-OneDrivePolicy/) | Configure OneDrive Known Folder Move and free-space thresholds | — |
 | [Configure-RemoteDesktopPolicy](Configure-RemoteDesktopPolicy/) | Configure Remote Desktop session policies | — |
@@ -108,5 +109,5 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Notepad-PlusPlus](Notepad-PlusPlus/) | Notepad++ | `NotepadPlusPlus` |
 | [PuTTY](PuTTY/) | PuTTY SSH client | `PuTTY` |
 | [Use-KeyVault-Secret](Use-KeyVault-Secret/) | Retrieve an Azure Key Vault secret from a Run Command using a user-assigned managed identity | — |
-| [Windows-11-RSAT-Offline](Windows-11-RSAT-Offline/) | Install selected Windows 11 RSAT capabilities from manually staged Features on Demand media | — (manually staged) |
+| [Windows-11-RSAT](Windows-11-RSAT/) | Install selected Windows 11 RSAT capabilities from preferred offline media with online fallback | — (optional manually staged payload) |
 | [Windows-Catalog-Updates](Windows-Catalog-Updates/) | Windows patches from Microsoft Update Catalog (air-gapped) | — (manually staged) |

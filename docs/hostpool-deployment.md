@@ -18,15 +18,20 @@ solution supports both pooled and personal host pools with enterprise-grade feat
 security controls. FederalAVD or your own tooling creates and registers the VMs; for pooled custom
 image fleets, the optional Session Host Replacer can automate recurring drain-and-replace updates.
 
+The published `deployments/hostpools/hostpool.json` entry template is an orchestrator. It composes
+Shared Services directly with the pool-specific control-plane, FSLogix, session-host, security,
+backup, and monitoring modules. Shared Services owns the workspace, feed/global Private Link,
+monitoring, Key Vaults, and shared FSLogix backup resources.
+
 ### What Gets Deployed
 
 A complete host pool deployment includes:
 
 | Component | Resources Created |
 | --- | --- |
-| **🖥️ AVD Control Plane** | Host pool, workspace, application groups, session hosts |
+| **🖥️ AVD Control Plane** | Shared Services-owned workspace plus pool-specific host pool, application group, connection endpoint, and session hosts |
 | **💾 Storage** | FSLogix profile storage (Azure Files or NetApp Files) |
-| **🔐 Security** | Secrets Key Vault (optional inline), Encryption Key Vault (optional inline), disk encryption sets, storage encryption UAI, RBAC assignments |
+| **🔐 Security** | Shared Services-owned Secrets and Encryption Key Vaults, disk encryption sets, storage encryption UAI, RBAC assignments |
 | **📊 Monitoring** | Log Analytics workspace, diagnostic settings, Application Insights |
 | **🌐 Networking** | Private endpoints, network security (Zero Trust option) |
 | **💿 Backup** | Recovery Services Vault (optional) — VM backup for **personal** host pools; FSLogix Azure Files file share backup for **pooled** host pools |
@@ -50,7 +55,8 @@ Before deploying a host pool, ensure you have completed these prerequisites from
 
 ### Key Vault Prerequisites (Optional) {#security-prerequisites-optional}
 
-For production deployments or any deployment using Customer Managed Keys (CMK), deploy the Key Vaults first:
+For enterprise deployments or any upstream consumer that requires Customer Managed Keys (CMK),
+deploy AVD Shared Services first:
 
 **🔒 [Key Vaults Deployment Guide](quick-start.md#step-1-deploy-key-vaults-cmk-with-custom-images)**
 
@@ -66,9 +72,7 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 | Using CMK for disks or FSLogix storage | 🔒 **Deploy Security first** — pass `existingEncryptionKeyVaultResourceId` to host pool |
 | Pre-provisioning credentials in a KV | 🔒 **Deploy Security first** — pass `existingCredentialsKeyVaultResourceId` to host pool |
 | Multiple host pools sharing one encryption KV | 🔒 **Deploy Security first** — all host pools reference the same KV |
-| Simple PoC / dev with platform-managed keys | ✅ **Skip** — deploy host pool directly; Key Vaults will be created inline when CMK is requested |
-
-**Inline fallback:** If `existingEncryptionKeyVaultResourceId` is empty and CMK is requested, the host pool deployment creates both KVs inline in `rg-avd-operations-{loc}`. The inline KV names are derived using the same seed as the standalone security deployment, so the names will match if you later run the security deployment separately.
+| Disposable Standard PoC | ✅ **Use the dedicated AVD Standard PoC** — it creates its own fixed evaluation resources and ends in teardown |
 
 > **⚠️ Common mistake — Storage 403 when uploading artifacts:** `Owner` and `Contributor` grant control-plane access only and do not cover blob read/write when shared key access is disabled (the default in this solution). Add **Storage Blob Data Contributor** on the artifacts storage account to the identity running `Update-ImageArtifacts.ps1` or `Deploy-ImageManagement.ps1`. See [troubleshooting](troubleshooting.md#storage-blob-data-access-fails-with-403).
 
@@ -83,7 +87,7 @@ The key vault deployment creates `rg-avd-operations-{loc}` with:
 >
 > **Required RBAC depends on CMK type:**
 >
-> - **Standard CMK** (disk or storage encryption, non-confidential VM): The **deploying identity** needs `Key Vault Crypto Officer` on the encryption Key Vault. ARM creates the encryption keys directly during deployment. This applies whether the KV was pre-deployed or created inline — creating the vault does not grant the deploying identity any key operation rights. This role may be removed after initial deployment if key rotation is managed separately.
+> - **Standard CMK** (disk or storage encryption, non-confidential VM): The **deploying identity** needs `Key Vault Crypto Officer` on the encryption Key Vault. ARM creates the encryption keys directly during deployment. This applies whether the KV was pre-deployed or created by the orchestrator's Shared Services phase — creating the vault does not grant the deploying identity any key operation rights. This role may be removed after initial deployment if key rotation is managed separately.
 >
 > - **Confidential VM + HSM** (`confidentialVMOSDiskEncryption = true` and `keyManagementDisks = CustomerManagedHSM`): Encryption keys cannot be created via ARM for this scenario. Instead, a Run Command on the deployment VM creates the key, and the **deployment VM's user-assigned identity** is automatically assigned `Key Vault Crypto Officer` by the deployment. The deploying identity does **not** need Crypto Officer — it only needs `Role Based Access Control Administrator` on the operations resource group so the deployment can grant that role to the deployment VM's identity.
 
@@ -119,6 +123,8 @@ If building custom images with pre-installed software:
 Use the Template Spec portal form for every first deployment. The form guides resource selection
 and validation, then provides the working parameter file used for subsequent PowerShell, Azure CLI,
 or CI/CD deployments.
+
+The AVD Host Pool Template Spec publishes the entry orchestrator at its existing path.
 
 ### Method 1: Template Spec Portal Form (First Deployment)
 
@@ -229,15 +235,15 @@ customer/parameters/hostpools/
 
 #### Deployment Scope
 
-The host pool deployment always creates all resources — resource groups, AVD control plane, session hosts, monitoring, Key Vaults — based on the options you select. Use individual **Use Existing** toggles (portal) or pre-populated resource ID parameters (automation) to reuse shared infrastructure instead of creating new resources:
+The entry orchestrator always creates the selected pool-specific resources and either creates or
+reuses Shared Services resources based on the options you select. New workspaces default to shared
+production naming. Use individual **Use Existing** toggles (portal) or pre-populated resource ID
+parameters (automation) to reuse existing shared infrastructure:
 
-In a standard-host-pool-only environment, the first deployment can create Key Vaults, monitoring,
-and the FSLogix Azure Files backup vault and policy. Later host-pool portal forms can discover and
-select those resources. Automation can pass the first deployment's shared-resource outputs to the
-parameters below.
-Use AVD Shared Services instead when the resources must exist before the first host pool, such as
-for automated host-pool credentials, Image Management CMK, or a standalone FSLogix Storage add-on
-that enables CMK, diagnostics, or Azure Files backup.
+For production reuse, deploy AVD Shared Services independently when needed and pass its outputs to
+the parameters below. Standalone Shared Services is also required when the resources must exist
+before the first host pool, such as for Image Management CMK or an FSLogix Storage add-on that
+enables CMK, diagnostics, or Azure Files backup.
 
 | Shared resource | "Use Existing" control | Parameter to supply |
 | --- | --- | --- |
@@ -246,6 +252,18 @@ that enables CMK, diagnostics, or Azure Files backup.
 | Credentials Key Vault | **Credentials source → Key Vault** (Identity step) | `existingCredentialsKeyVaultResourceId` |
 | Encryption Key Vault | **Use Existing Encryption Key Vault** checkbox (Zero Trust → Encryption Key Management) | `existingEncryptionKeyVaultResourceId` |
 | Recovery Services Vault | **Use Existing Recovery Services Vault** checkbox | `existingVmBackupVaultResourceId` |
+
+For a disposable proof of concept, use the dedicated **AVD Standard PoC** deployment surface. Do
+not configure the full production host-pool orchestrator as a PoC. Set
+`existingFeedWorkspaceResourceId` to the current workspace ID before redeploying when that
+workspace must be retained.
+
+For the normal shared-workspace model, deploy or update the workspace through AVD Shared Services
+and pass its `avdWorkspaceResourceId` output as `existingFeedWorkspaceResourceId`. A host-pool
+deployment with `None` or `HostPool` private routes updates the workspace only to preserve and
+append application-group references. Selecting `FeedAndHostPool` or `All` explicitly authorizes
+the deployment to update that existing workspace's public access and workspace-feed Private Link
+configuration; the portal warns that this can affect every host pool registered to the workspace.
 
 The deployment returns the effective resource IDs whether it created the resource or reused an
 existing one. Use `credentialsKeyVaultResourceId`, `encryptionKeyVaultResourceId`,
@@ -273,9 +291,9 @@ To deploy all host pool infrastructure without creating session host VMs, set `s
 | **identitySolution** | Identity and authentication method | `ActiveDirectoryDomainServices`<br>`EntraDomainServices`<br>`EntraKerberos-Hybrid`<br>`EntraKerberos-CloudOnly`<br>`EntraId` |
 | **domainName** | AD domain name (if applicable) | `contoso.com` |
 | **domainJoinUserName** | Domain join account UPN | `djoin@contoso.com` |
-| **deploySecretsKeyVault** | Deploy an inline Secrets Key Vault to store VM admin and domain-join credentials (configured in the **Identity → Credentials** portal step) | `true` / `false` |
-| **secretsKeyVaultEnableSoftDelete** | Enable soft delete on the inline Secrets Key Vault | `true` (default) |
-| **secretsKeyVaultEnablePurgeProtection** | Enable purge protection on the inline Secrets Key Vault | `true` (default) |
+| **deploySecretsKeyVault** | Ask the orchestrator's Shared Services phase to deploy a Secrets Key Vault for VM admin and domain-join credentials (configured in the **Identity → Credentials** portal step) | `true` / `false` |
+| **secretsKeyVaultEnableSoftDelete** | Enable soft delete on the orchestrated Secrets Key Vault | `true` (default) |
+| **secretsKeyVaultEnablePurgeProtection** | Enable purge protection on the orchestrated Secrets Key Vault | `true` (default) |
 | **secretsKeyVaultRetentionInDays** | Soft-delete retention period for the Secrets Key Vault (7–90 days). Use `7` in test environments to minimise the wait before a deleted vault name can be reused. | `90` (default) |
 
 **[Identity Solutions Details](features.md#identity-solutions)**
@@ -383,12 +401,17 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 ### Deployment Sequence
 
-When deploying a `Complete` host pool, resources are created in this order to maximize parallelism and ensure RBAC assignments propagate before dependent resources need them:
+When deploying a `Complete` host pool, the entry orchestrator runs Shared Services first and passes
+its effective resource IDs directly to the pool-specific modules. Those modules create resources
+in this order to maximize parallelism and ensure RBAC assignments propagate before dependent
+resources need them:
 
 ```mermaid
 graph TD
+    SS[Shared Services<br/>create or adopt shared resources]
     RG[Resource Groups<br/>all in parallel]
-    RG --> KV[Key Vaults<br/>inline - if no security prereq]
+    SS --> RG
+    RG --> KV[Key Vaults<br/>Shared Services phase]
     RG --> PREREQ[Deployment VM<br/>prereqs]
     KV --> CMK[Disk CMK + Storage CMK<br/>keys · DES · UAI · role assignments]
     PREREQ --> CMK
@@ -403,6 +426,12 @@ graph TD
 ```
 
 > **CMK timing:** Disk Encryption Sets and the storage encryption User-Assigned Identity are created in the same phase as Monitoring and Control Plane (~5–15 minutes before VMs and storage accounts deploy). This gives Azure RBAC propagation time to complete before the resources that depend on those role assignments are created, without requiring any polling or deployment VM dependency.
+
+> **Shared workspace serialization:** The orchestrator appends its application-group reference while
+> preserving the workspace's other references and properties. Deploy host pools that register to
+> the same workspace serially because concurrent read-modify-write updates can lose a reference.
+> Existing workspace feed/global networking and public access are managed only when explicitly
+> selected through the Shared Services phase.
 
 ### PowerShell Deployment After Parameter Export
 
@@ -539,10 +568,10 @@ Backup behavior depends on host pool type and the `recoveryServices` parameter:
 
 | Host Pool Type | `recoveryServices` | `useExistingRSV` | Additional requirements | Vault | Backed Up |
 | --- | --- | --- | --- | --- | --- |
-| **Personal** | `true` | `false` | — | Created inline | VM OS disks |
+| **Personal** | `true` | `false` | — | Created by the host-pool orchestrator | VM OS disks |
 | **Personal** | `true` | `true` | `existingVmBackupVaultResourceId` required | Existing | VM OS disks |
 | **Personal** | `false` | — | — | Not created | Nothing |
-| **Pooled** | `true` | `false` | `deployFSLogixStorage=true` + Azure Files | Created inline | FSLogix file shares |
+| **Pooled** | `true` | `false` | `deployFSLogixStorage=true` + Azure Files | Created by Shared Services phase | FSLogix file shares |
 | **Pooled** | `true` | `true` | `deployFSLogixStorage=true` + Azure Files + `existingFilesBackupVaultResourceId` | Existing | FSLogix file shares |
 | **Pooled** | `false` | — | — | Not created | Nothing |
 
@@ -1234,16 +1263,29 @@ Create the Confidential VM Orchestrator service principal:
 # Install Microsoft Graph module
 Install-Module -Name Microsoft.Graph -Scope CurrentUser
 
-# Connect to Graph
-Connect-Graph -Tenant "<tenant-id>" -Scopes Application.ReadWrite.All
+# Connect to the correct Microsoft Graph environment first.
+# In Secret or Top Secret, use the authorized environment-specific instructions and values.
+Connect-MgGraph `
+    -Environment '<authorized-graph-environment-name>' `
+    -TenantId '<tenant-id>' `
+    -Scopes 'Application.ReadWrite.All'
+Get-MgContext | Select-Object Account, TenantId, Environment, Scopes
 
-# Create service principal
-New-MgServicePrincipal -AppId bf7b6499-ff71-4aa2-97a4-f372087be7f0 -DisplayName "Confidential VM Orchestrator"
+# Create the service principal only when it does not already exist.
+$orchestratorAppId = 'bf7b6499-ff71-4aa2-97a4-f372087be7f0'
+$orchestrator = Get-MgServicePrincipal -Filter "appId eq '$orchestratorAppId'"
+if (-not $orchestrator) {
+    $orchestrator = New-MgServicePrincipal `
+        -AppId $orchestratorAppId `
+        -DisplayName 'Confidential VM Orchestrator'
+}
 
 # Get the object ID (needed for deployment parameter)
-Get-MgServicePrincipal -Filter "displayName eq 'Confidential VM Orchestrator'" | 
-    Select-Object Id, DisplayName
+$orchestrator | Select-Object Id, DisplayName
 ```
+
+This public repository intentionally does not publish or infer Microsoft Graph environment names
+or endpoints for Azure Government Secret or Azure Government Top Secret.
 
 Use the returned `Id` value for the `confidentialVMOrchestratorObjectId` parameter.
 

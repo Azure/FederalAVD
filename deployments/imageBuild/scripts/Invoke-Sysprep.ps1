@@ -12,6 +12,87 @@ function Write-Log {
     Write-Output $Entry
 }
 
+function Get-SystemDriveBitLockerVolume {
+    $GetBitLockerVolume = Get-Command -Name Get-BitLockerVolume -ErrorAction SilentlyContinue
+    if ($null -eq $GetBitLockerVolume) {
+        throw 'Get-BitLockerVolume is unavailable. The image build cannot verify that the operating system volume is decrypted before Sysprep.'
+    }
+
+    $Volume = Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction Stop
+    if ($null -eq $Volume) {
+        throw "Get-BitLockerVolume returned no result for the operating system volume '$env:SystemDrive'."
+    }
+
+    return $Volume
+}
+
+function Write-BitLockerVolumeState {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Volume,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Context
+    )
+
+    $KeyProtectorTypes = @(
+        $Volume.KeyProtector |
+            ForEach-Object { [string]$_.KeyProtectorType } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+    $KeyProtectorSummary = if ($KeyProtectorTypes.Count -gt 0) {
+        $KeyProtectorTypes -join ', '
+    }
+    else {
+        'None'
+    }
+
+    Write-Log ("BitLocker state ({0}): mount point {1}, volume status {2}, protection status {3}, encrypted {4}%, method {5}, protector types {6}." -f `
+        $Context, $Volume.MountPoint, $Volume.VolumeStatus, $Volume.ProtectionStatus, `
+        $Volume.EncryptionPercentage, $Volume.EncryptionMethod, $KeyProtectorSummary)
+}
+
+function Disable-SystemDriveBitLocker {
+    param(
+        [int]$TimeoutMinutes = 60
+    )
+
+    $SystemDrive = $env:SystemDrive
+    $Volume = Get-SystemDriveBitLockerVolume
+    Write-BitLockerVolumeState -Volume $Volume -Context 'initial'
+
+    if ([string]$Volume.VolumeStatus -eq 'FullyDecrypted' -and [int]$Volume.EncryptionPercentage -eq 0) {
+        Write-Log "The operating system volume '$SystemDrive' is fully decrypted."
+        return
+    }
+
+    Write-Log "The operating system volume '$SystemDrive' is encrypted. Starting full decryption before Sysprep."
+    Disable-BitLocker -MountPoint $SystemDrive -ErrorAction Stop | Out-Null
+
+    $Deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+    do {
+        Start-Sleep -Seconds 30
+        $Volume = Get-SystemDriveBitLockerVolume
+        Write-BitLockerVolumeState -Volume $Volume -Context 'decryption progress'
+
+        if ([string]$Volume.VolumeStatus -eq 'FullyDecrypted' -and [int]$Volume.EncryptionPercentage -eq 0) {
+            Write-Log "The operating system volume '$SystemDrive' is fully decrypted."
+            return
+        }
+    } while ((Get-Date) -lt $Deadline)
+
+    throw "Timed out after $TimeoutMinutes minutes waiting for the operating system volume '$SystemDrive' to become fully decrypted."
+}
+
+function Assert-SystemDriveDecrypted {
+    $Volume = Get-SystemDriveBitLockerVolume
+    Write-BitLockerVolumeState -Volume $Volume -Context 'pre-Sysprep verification'
+
+    if ([string]$Volume.VolumeStatus -ne 'FullyDecrypted' -or [int]$Volume.EncryptionPercentage -ne 0) {
+        throw "The operating system volume '$env:SystemDrive' is not fully decrypted immediately before Sysprep."
+    }
+}
+
 function Get-RegistryValue {
     param(
         [Parameter(Mandatory = $true)]
@@ -74,8 +155,129 @@ function Write-MdeImageState {
     Write-Log 'Verified that the image VM has no active Microsoft Defender for Endpoint registration or device identity.'
 }
 
+function Write-SysprepHeartbeat {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId,
+
+        [Parameter(Mandatory = $true)]
+        [datetime]$StartedAt
+    )
+
+    $Elapsed = [math]::Round(((Get-Date) - $StartedAt).TotalMinutes, 1)
+    $SysprepProcess = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if ($null -eq $SysprepProcess) {
+        Write-Log "Sysprep heartbeat at $Elapsed minute(s): PID $ProcessId is no longer queryable."
+    }
+    else {
+        try {
+            Write-Log ("Sysprep heartbeat at {0} minute(s): PID {1}, CPU {2:N2}s, threads {3}, handles {4}, working set {5:N1} MB." -f `
+                $Elapsed, $ProcessId, $SysprepProcess.CPU, $SysprepProcess.Threads.Count, `
+                $SysprepProcess.HandleCount, ($SysprepProcess.WorkingSet64 / 1MB))
+        }
+        catch {
+            Write-Log "Sysprep heartbeat at $Elapsed minute(s): PID $ProcessId exited while process details were being collected."
+        }
+    }
+
+    foreach ($Path in @(
+        "$env:SystemRoot\System32\Sysprep\Panther\setupact.log",
+        "$env:SystemRoot\System32\Sysprep\Panther\setuperr.log"
+    )) {
+        if (Test-Path -LiteralPath $Path) {
+            $LogInfo = Get-Item -LiteralPath $Path
+            Write-Log ("Sysprep heartbeat log '{0}': {1} bytes, last updated {2:MM/dd/yyyy HH:mm:ss}." -f `
+                $LogInfo.Name, $LogInfo.Length, $LogInfo.LastWriteTime)
+        }
+        else {
+            Write-Log "Sysprep heartbeat log not found yet: $Path"
+        }
+    }
+}
+
+function Write-DiagnosticLogFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [int]$Tail = 0
+    )
+
+    if (Test-Path -LiteralPath $Path) {
+        $LogInfo = Get-Item -LiteralPath $Path
+        Write-Output ""
+        $CaptureDescription = 'complete file'
+        if ($Tail -gt 0) {
+            $CaptureDescription = "last $Tail lines"
+        }
+        Write-Log ("=== BEGIN {0} ({1}, {2} bytes, last updated {3:MM/dd/yyyy HH:mm:ss}) ===" -f `
+            $Path, $CaptureDescription, $LogInfo.Length, $LogInfo.LastWriteTime)
+        if ($Tail -gt 0) {
+            Get-Content -LiteralPath $Path -Tail $Tail -ErrorAction Continue | ForEach-Object { Write-Output $_ }
+        }
+        else {
+            Get-Content -LiteralPath $Path -ErrorAction Continue | ForEach-Object { Write-Output $_ }
+        }
+        Write-Log "=== END $Path ==="
+    }
+    else {
+        Write-Log "Diagnostic log file not found: $Path"
+    }
+}
+
+function Write-SysprepDiagnostics {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$ProcessId,
+
+        [Parameter(Mandatory = $true)]
+        [datetime]$StartedAt
+    )
+
+    Write-Log "Collecting Sysprep diagnostics before script exit."
+    Write-SysprepHeartbeat -ProcessId $ProcessId -StartedAt $StartedAt
+
+    $SysprepStatusPath = 'HKLM:\SYSTEM\Setup\Status\SysprepStatus'
+    $SetupStatePath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State'
+    Write-Log ("Sysprep registry state: CleanupState={0}, GeneralizationState={1}, ImageState={2}." -f `
+        (Get-RegistryValue -Path $SysprepStatusPath -Name CleanupState), `
+        (Get-RegistryValue -Path $SysprepStatusPath -Name GeneralizationState), `
+        (Get-RegistryValue -Path $SetupStatePath -Name ImageState))
+
+    $ChildProcesses = @()
+    try {
+        $ChildProcesses = @(
+            Get-CimInstance -ClassName Win32_Process -Filter "ParentProcessId = $ProcessId" -ErrorAction Stop
+        )
+    }
+    catch {
+        Write-Log "Unable to query child processes for Sysprep PID $ProcessId`: $($_.Exception.Message)"
+    }
+    if ($ChildProcesses.Count -eq 0) {
+        Write-Log "No direct child processes were found for Sysprep PID $ProcessId."
+    }
+    else {
+        foreach ($ChildProcess in $ChildProcesses) {
+            Write-Log "Sysprep child process: PID $($ChildProcess.ProcessId), name '$($ChildProcess.Name)', command line '$($ChildProcess.CommandLine)'."
+        }
+    }
+
+    foreach ($Log in @(
+        @{ Path = "$env:SystemRoot\System32\Sysprep\Panther\setupact.log"; Tail = 0 },
+        @{ Path = "$env:SystemRoot\System32\Sysprep\Panther\setuperr.log"; Tail = 0 },
+        @{ Path = "$env:SystemRoot\Panther\setupact.log"; Tail = 500 },
+        @{ Path = "$env:SystemRoot\Panther\setuperr.log"; Tail = 500 }
+    )) {
+        Write-DiagnosticLogFile -Path $Log.Path -Tail $Log.Tail
+    }
+}
+
 try {
     Write-Log "Starting sysprep script"
+
+    # Windows 11 automatic device encryption can encrypt a Trusted Launch VM even
+    # when its protectors remain off. Azure image capture requires a decrypted OS volume.
+    Disable-SystemDriveBitLocker -TimeoutMinutes 60
 
     $Services = 'RdAgent', 'WindowsTelemetryService', 'WindowsAzureGuestAgent'
     ForEach ($Service in $Services) {
@@ -319,6 +521,7 @@ public static class SysprepLauncher {
     # Log MDE state immediately before process creation. Image-builder onboarding should be
     # prevented by the environment's Defender for Cloud or other onboarding configuration.
     Write-MdeImageState
+    Assert-SystemDriveDecrypted
 
     $CreateOk = [SysprepLauncher]::CreateProcessAsUser(
         $UserToken, $SysprepExe, $CmdLine,
@@ -337,11 +540,42 @@ public static class SysprepLauncher {
         throw "CreateProcessAsUser failed with Win32 error $CreateErr."
     }
 
-    Write-Log "Sysprep process started (PID $($Pi.dwProcessId)). Waiting up to 30 minutes."
-    $WaitResult = [SysprepLauncher]::WaitForSingleObject($Pi.hProcess, 1800000)
+    $SysprepStartedAt = Get-Date
+    $SysprepDeadline = $SysprepStartedAt.AddMinutes(30)
+    $WaitObject0 = [uint32]0
+    $WaitTimeout = [uint32]258
+    $WaitFailed = [uint32]::MaxValue
+    Write-Log "Sysprep process started (PID $($Pi.dwProcessId)). Waiting up to 30 minutes with 60-second diagnostics."
+    $WaitResult = $WaitTimeout
+    $WaitFailureMessage = ''
+    do {
+        $RemainingMilliseconds = [math]::Max(0, [math]::Floor(($SysprepDeadline - (Get-Date)).TotalMilliseconds))
+        if ($RemainingMilliseconds -eq 0) {
+            break
+        }
+
+        $WaitMilliseconds = [uint32][math]::Min(60000, $RemainingMilliseconds)
+        $WaitResult = [SysprepLauncher]::WaitForSingleObject($Pi.hProcess, $WaitMilliseconds)
+        if ($WaitResult -eq $WaitObject0) {
+            break
+        }
+        if ($WaitResult -eq $WaitFailed) {
+            $WaitError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            $WaitFailureMessage = "WaitForSingleObject failed with Win32 error $WaitError."
+            break
+        }
+
+        Write-SysprepHeartbeat -ProcessId $Pi.dwProcessId -StartedAt $SysprepStartedAt
+    } while ((Get-Date) -lt $SysprepDeadline)
 
     $SysprepExitCode = [uint32]0
     [SysprepLauncher]::GetExitCodeProcess($Pi.hProcess, [ref]$SysprepExitCode) | Out-Null
+    if ($WaitResult -eq $WaitTimeout -and [string]::IsNullOrEmpty($WaitFailureMessage)) {
+        $WaitFailureMessage = "Timed out after 30 minutes waiting for sysprep to complete. The last reported exit code was 0x$('{0:X8}' -f $SysprepExitCode)."
+    }
+
+    Write-SysprepDiagnostics -ProcessId $Pi.dwProcessId -StartedAt $SysprepStartedAt
+
     [SysprepLauncher]::CloseHandle($Pi.hProcess) | Out-Null
     [SysprepLauncher]::CloseHandle($Pi.hThread) | Out-Null
     Write-Log "Sysprep process handle closed. Exit code captured: 0x$('{0:X8}' -f $SysprepExitCode) ($SysprepExitCode)"
@@ -352,25 +586,8 @@ public static class SysprepLauncher {
     [SysprepLauncher]::CloseHandle($UserToken) | Out-Null
     Write-Log "User profile unloaded."
 
-    if ($WaitResult -eq 0x102) {  # WAIT_TIMEOUT
-        throw "Timed out after 30 minutes waiting for sysprep to complete."
-    }
-
-    # -- Capture Panther logs into Run Command output (goes to outputBlobUri) ---
-    # Writing to stdout here means the content lands in the same blob that ARM
-    # already captures for this Run Command  - no separate upload needed.
-    foreach ($logFile in @(
-        "$env:SystemRoot\System32\Sysprep\Panther\setupact.log",
-        "$env:SystemRoot\System32\Sysprep\Panther\setuperr.log"
-    )) {
-        if (Test-Path $logFile) {
-            Write-Output ""
-            Write-Log "=== BEGIN $(Split-Path $logFile -Leaf) ==="
-            Get-Content $logFile | ForEach-Object { Write-Output $_ }
-            Write-Log "=== END $(Split-Path $logFile -Leaf) ==="
-        } else {
-            Write-Log "Log file not found: $logFile"
-        }
+    if (-not [string]::IsNullOrEmpty($WaitFailureMessage)) {
+        throw $WaitFailureMessage
     }
 
     # Fail the deployment with full log context if sysprep returned non-zero

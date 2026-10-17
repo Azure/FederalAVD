@@ -38,6 +38,7 @@ resource sysprep 'Microsoft.Compute/virtualMachines/runCommands@2023-03-01' = {
     source: {
       script: loadTextContent('../scripts/Invoke-Sysprep.ps1')
     }
+    timeoutInSeconds: 10800
     treatFailureAsDeploymentFailure: true
   }
 }

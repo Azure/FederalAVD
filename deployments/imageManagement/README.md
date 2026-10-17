@@ -100,7 +100,7 @@ The Azure identity running this deployment needs:
 
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
-- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. Set the optional `imageManagementStoragePrefix` property to a shared prefix of up to 5 lowercase letters or numbers when storage account names must begin with an organization-specific token. The resulting names append `imgassets` or `imglogs`, the location abbreviation, and a deterministic 6-character uniqueness suffix. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
 
 ### Storage Configuration
 

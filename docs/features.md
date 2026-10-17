@@ -2,6 +2,10 @@
 
 # Features
 
+This page describes individual FederalAVD capabilities. See
+[Secure Endpoint Architecture](secure-endpoint-architecture.md) for how those capabilities combine
+with customer-owned controls into an endpoint lifecycle and controlled AI service access layer.
+
 ## Zero Trust Architecture
 
 This solution is designed to align with Microsoft's Zero Trust security principles for Azure Virtual Desktop. Zero Trust is a security framework that assumes breach and verifies each request as though it originates from an uncontrolled network. The implementation includes multiple layers of security controls that work together to protect your AVD environment.
@@ -654,14 +658,23 @@ session hosts in standard host pools.
   updates; capacity can temporarily double
 - `DeleteFirst` mode removes eligible hosts before adding replacements to reduce temporary cost,
   quota, and subnet requirements at the expense of a temporary capacity reduction
+- A guarded one-time maintenance request temporarily expedites configured DeleteFirst behavior,
+  can notify and explicitly sign out users, and supports an authorized full-pool outage including
+  a one-host pool without redeploying the replacer
 - Graceful session draining with configurable grace period (default: 24 hours)
 - Progressive scale-up, configurable batch ceilings, and per-cycle deletion limits
-- Availability safety floor with phase-aware scaling-plan integration
+- Availability safety floors that preserve the active scaling target in `SideBySide`, plus a
+  60-minute pre-RampUp and active-hours destructive-work freeze for `DeleteFirst`
 - Optional shutdown retention for rapid rollback in `SideBySide` mode
 - Auto-detected target capacity or an explicit target session-host count
 - Dedicated-host assignment and hostname preservation in `DeleteFirst` mode
+- Exact-name and dedicated-host preservation during a maintenance override, with autoscale disabled and
+  durable request replay protection
 - Tag-based opt-in model for controlled automation
-- Optional Entra ID and Intune device cleanup
+- Entra device cleanup required for exact-name `DeleteFirst` and maintenance-override replacement of
+  Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts
+- Optional Intune cleanup, highly recommended before exact-name reuse for
+  Intune-enrolled Entra-joined or hybrid-joined hosts
 - Template Spec integration for consistent deployments
 
 Session Host Replacer does not support automated host pools because Azure Virtual Desktop owns the
@@ -754,7 +767,11 @@ availability = 'None'                      // No infrastructure redundancy
 
 Azure Files storage accounts for FSLogix can be configured with Zone-Redundant Storage (ZRS) using the `fslogixStorageRedundancy` parameter. ZRS replicates data synchronously across three availability zones within a region, protecting user profile data against a datacenter-level failure without any operator action or failover.
 
-**`fslogixStorageRedundancy` is an independent parameter** — it is not automatically derived from the session host `availability` setting. The default is `LocallyRedundant`. For production deployments where session hosts are deployed across availability zones, explicitly set `fslogixStorageRedundancy = 'ZoneRedundant'` to align storage resilience with compute resilience.
+**`fslogixStorageRedundancy` remains an independently configurable parameter.** In the standard and
+automated host-pool Portal forms, it defaults to `ZoneRedundant` when session hosts use Availability
+Zones and warns if `LocallyRedundant` is selected instead. Direct Bicep and parameter-file
+deployments retain the `LocallyRedundant` parameter default; set it to `ZoneRedundant` to align
+storage resilience with zonal compute resilience.
 
 > **Azure Files Premium and GRS:** Azure Files Premium does not support Geo-Redundant Storage (GRS). ZRS is the highest redundancy tier available for production-grade (Premium) FSLogix storage. This is a platform constraint — cross-region profile redundancy requires FSLogix Cloud Cache or an accepted per-region profile strategy. See [BCDR — Profile Strategy](bcdr.md#profile-strategy-for-cross-region-deployments).
 

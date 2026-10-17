@@ -11,19 +11,71 @@ param parentResourceId string = ''
 param storageKeyNames array
 param identityName string = ''
 
-module cmk 'customerManagedKeys.bicep' = {
+var keyVaultName = last(split(keyVaultResourceId, '/'))
+var keyVaultSubscriptionId = split(keyVaultResourceId, '/')[2]
+var keyVaultResourceGroup = split(keyVaultResourceId, '/')[4]
+var kty = contains(keyManagementType, 'HSM') ? 'RSA-HSM' : 'RSA'
+var parentTag = !empty(parentResourceId) ? { 'cm-resource-parent': parentResourceId } : {}
+var rotationPolicy = {
+  attributes: {
+    expiryTime: 'P${string(keyExpirationInDays)}D'
+  }
+  lifetimeActions: [
+    {
+      action: { type: 'Notify' }
+      trigger: { timeBeforeExpiry: 'P10D' }
+    }
+    {
+      action: { type: 'Rotate' }
+      trigger: { timeAfterCreate: 'P${string(keyExpirationInDays - 7)}D' }
+    }
+  ]
+}
+
+module storageKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
+  for keyName in storageKeyNames: {
+    scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+    params: {
+      keyVaultName: keyVaultName
+      name: keyName
+      kty: kty
+      keySize: 4096
+      attributesEnabled: true
+      attributesExportable: false
+      rotationPolicy: rotationPolicy
+      tags: parentTag
+    }
+  }
+]
+
+module storageEncryptionIdentity '../../resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
   scope: resourceGroup(resourceGroupName)
   params: {
-    keyVaultResourceId: keyVaultResourceId
-    keyManagementType: keyManagementType
-    keyExpirationInDays: keyExpirationInDays
+    name: identityName
     location: location
-    tags: tags
-    parentResourceId: parentResourceId
-    keyNames: storageKeyNames
-    identityName: identityName
+    tags: union(parentTag, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
   }
 }
 
+module storageKeyRoleAssignments '../../resourceModules/keyVault/vaults/keys/roleAssignment.bicep' = [
+  for (keyName, i) in storageKeyNames: {
+    scope: resourceGroup(keyVaultSubscriptionId, keyVaultResourceGroup)
+    params: {
+      keyVaultName: keyVaultName
+      keyName: keyName
+      assignments: [
+        {
+          principalId: storageEncryptionIdentity.outputs.principalId
+          principalType: 'ServicePrincipal'
+          roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
+        }
+      ]
+    }
+    dependsOn: [
+      storageKeys[i]
+    ]
+  }
+]
+
 @description('Resource ID of the storage encryption user-assigned identity.')
-output storageEncryptionIdentityResourceId string = cmk.outputs.identityResourceId
+output storageEncryptionIdentityResourceId string = storageEncryptionIdentity.outputs.resourceId

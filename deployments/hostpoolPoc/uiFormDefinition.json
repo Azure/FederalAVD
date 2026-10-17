@@ -1,0 +1,339 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "Azure Virtual Desktop Standard PoC - Disposable Demo",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "PoC Basics",
+          "elements": [
+            {
+              "name": "scopeInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "This streamlined form deploys a disposable demonstration environment: one pooled standard-management host pool with a host-pool-specific workspace, one standalone virtual network, a private session-host subnet with explicit NAT Gateway outbound access, the latest Windows 11 multi-session Microsoft 365 marketplace image available in the selected region, and Trusted Launch. Persistent PoC resources are placed in one resource group to simplify teardown."
+              }
+            },
+            {
+              "name": "productionWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Disposable demo only - tear this deployment down after the demonstration or first-step validation. Do not expand, harden, reuse, or promote it into a pilot or production environment. This form intentionally omits production capacity planning, availability, scaling, backup, private connectivity, customer-managed encryption, and other security and operational choices. Start a new pilot or production design with the full AVD Host Pool form."
+              }
+            },
+            {
+              "name": "policyCompatibilityWarning",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "Policy compatibility warning - this streamlined PoC intentionally omits many enterprise and Zero Trust controls. Common Azure Policy guardrails in federal, regulated, or centrally governed subscriptions may deny this deployment, including requirements for Private Endpoints, customer-managed keys, approved hub networking, restricted public access, centralized diagnostics, backup, tags, or approved SKUs. Deploy only in an approved evaluation subscription or with a documented policy exception. Do not weaken production guardrails to make this PoC deploy."
+              }
+            },
+            {
+              "name": "scope",
+              "type": "Microsoft.Common.ResourceScope",
+              "location": {
+                "label": "PoC Region",
+                "toolTip": "Select the subscription and region where the disposable PoC will be deployed.",
+                "resourceTypes": [
+                  "Microsoft.Compute/virtualMachines",
+                  "Microsoft.DesktopVirtualization/hostPools",
+                  "Microsoft.DesktopVirtualization/workspaces"
+                ]
+              }
+            },
+            {
+              "name": "identifier",
+              "type": "Microsoft.Common.TextBox",
+              "label": "PoC Identifier",
+              "placeholder": "Example: evaluation",
+              "toolTip": "A short identifier included in the PoC workspace, resource-group, host-pool, and session-host names.",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "regex": "^[a-zA-Z0-9]([a-zA-Z0-9_.-]*[a-zA-Z0-9])?$",
+                    "message": "Use only letters, numbers, underscores, dashes, or dots, and begin and end with a letter or number."
+                  },
+                  {
+                    "isValid": "[lessOrEquals(length(steps('basics').identifier), 16)]",
+                    "message": "The identifier cannot exceed 16 characters."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "userAccessInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "The selected Microsoft Entra security groups receive access to launch the desktop and sign in to the Entra-joined session hosts. Add the users who will test the PoC to one of these groups before deployment.",
+                "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/azure-ad-joined-session-hosts"
+              }
+            },
+            {
+              "name": "groupPickerBlade",
+              "type": "Microsoft.Solutions.BladeInvokeControl",
+              "openBladeStatus": "[steps('basics').groupSelector.changing]",
+              "bladeReference": {
+                "name": "ObjectPickerBlade",
+                "extension": "Microsoft_AAD_IAM",
+                "parameters": {
+                  "queries": 32,
+                  "disablers": 4,
+                  "bladeSubtitle": "Pick the groups to assign",
+                  "additionalQueriesOnSearch": 0,
+                  "advancedQueryOptions": {
+                    "suggestedObjectsOptions": {}
+                  },
+                  "selectionMaximum": 3,
+                  "selectionMinimum": 1,
+                  "bladeTitle": "Select PoC User Groups",
+                  "informationHeader": {
+                    "informationText": "Select the Entra security groups that can launch the PoC desktop.",
+                    "informationLink": ""
+                  },
+                  "inviteEnabled": true,
+                  "searchBoxLabel": "Search for a group",
+                  "searchBoxPlaceHolderText": "Enter a group name",
+                  "searchBoxTooltip": "Search Microsoft Entra ID security groups.",
+                  "searchGridNoRowsMessage": "No groups found",
+                  "selectButtonText": "Select Groups",
+                  "selectedGridLabel": "Selected Groups",
+                  "selectedGridNoRowsMessage": "Select at least one group"
+                }
+              },
+              "transforms": {
+                "groups": "selectedObjects|[*].{id:id, name:displayName}"
+              }
+            },
+            {
+              "name": "groupSelector",
+              "type": "Microsoft.Common.Selector",
+              "label": "Desktop User Groups",
+              "keyPath": "name",
+              "descriptionKeyPath": "id",
+              "value": "[steps('basics').groupPickerBlade.transformed.groups]",
+              "barColor": "[if(empty(steps('basics').groupPickerBlade.transformed.groups), '#FF0000', '#7FBA00')]",
+              "constraints": {
+                "required": true
+              },
+              "link": "[if(empty(steps('basics').groupPickerBlade.transformed.groups), 'Select groups', 'Update selected groups')]"
+            }
+          ]
+        },
+        {
+          "name": "sessionHosts",
+          "label": "Session Hosts",
+          "elements": [
+            {
+              "name": "networkInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "The PoC creates one isolated virtual network and a private session-host subnet. A Standard public IP and NAT Gateway provide explicit outbound access for Azure Virtual Desktop, Microsoft Entra ID, Windows activation, updates, and other public dependencies. Session-host network interfaces do not receive public IP addresses. NAT Gateway incurs hourly and data-processing charges and does not filter outbound destinations; delete the consolidated PoC resource group after the demonstration.",
+                "uri": "https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview"
+              }
+            },
+            {
+              "name": "office365SkusApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('basics').scope.subscription.id)), not(empty(steps('basics').scope.location.name)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/locations/', steps('basics').scope.location.name, '/publishers/MicrosoftWindowsDesktop/artifacttypes/vmimage/offers/office-365/skus?api-version=2022-08-01')]",
+                "transforms": {
+                  "latest": "sort_by([?starts_with(name, `win11`) && contains(name, `avd`) && contains(name, `m365`) && !contains(name, `entn`) && !contains(name, `ltsc`)] | [*].name, &@)|reverse(@)|[0]"
+                }
+              }
+            },
+            {
+              "name": "imageInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "The form automatically queries the selected region for MicrosoftWindowsDesktop office-365 images and deploys the latest available Windows 11 multi-session SKU with Microsoft 365 Apps."
+              }
+            },
+            {
+              "name": "virtualMachineNamePrefix",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Session Host Name Prefix",
+              "defaultValue": "[toLower(take(concat('avd', steps('basics').identifier), 14))]",
+              "toolTip": "Prefix used for the PoC session-host VM name. The deployment appends a numeric index.",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "regex": "^(?!-)(?!.*-$)(?![0-9]+$)[A-Za-z0-9-]+$",
+                    "message": "Use letters, numbers, and dashes; do not begin or end with a dash or use only numbers."
+                  },
+                  {
+                    "isValid": "[lessOrEquals(length(steps('sessionHosts').virtualMachineNamePrefix), 14)]",
+                    "message": "The prefix cannot exceed 14 characters."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "vmSizesApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(empty(steps('basics').scope.subscription.id)), not(empty(steps('basics').scope.location.name)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').scope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('basics').scope.location.name, decodeUriComponent('%27'))]",
+                "transforms": {
+                  "sizes": "sort_by(value[?resourceType == 'virtualMachines'] | [?starts_with(name, 'Standard_D4s_') || starts_with(name, 'Standard_D4as_')] | [?capabilities[?name == 'vCPUs'].value | [0] == '4'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] | [*].{label:name, value:name, description:join(' | ', [join(' ', [capabilities[?name == 'vCPUs'].value | [0], 'vCPUs']), join(' ', [capabilities[?name == 'MemoryGB'].value | [0], 'GB RAM'])])}, &label)"
+                }
+              }
+            },
+            {
+              "name": "virtualMachineSize",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Virtual Machine Size",
+              "multiLine": true,
+              "filter": true,
+              "toolTip": "Select a region-available 4-vCPU Standard D4s or D4as VM size. Each option shows its vCPU and memory capacity.",
+              "constraints": {
+                "allowedValues": "[steps('sessionHosts').vmSizesApi.transformed.sizes]",
+                "required": true
+              }
+            },
+            {
+              "name": "credentialsInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "These credentials create the local administrator account on each session host. They are deployment credentials, not the credentials that assigned users use to connect to the desktop."
+              }
+            },
+            {
+              "name": "localAdminUsername",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Local Administrator Username",
+              "constraints": {
+                "required": true
+              }
+            },
+            {
+              "name": "localAdminPassword",
+              "type": "Microsoft.Common.PasswordBox",
+              "label": {
+                "password": "Local Administrator Password",
+                "confirmPassword": "Confirm Password"
+              },
+              "toolTip": "Use a 12-123 character password with upper case, lower case, number, and special characters.",
+              "constraints": {
+                "required": true,
+                "regex": "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=_!*<>()])(?=\\S+$).{12,123}$",
+                "validationMessage": "Use 12-123 characters including upper case, lower case, number, and special characters other than slash or dash."
+              },
+              "options": {
+                "hideConfirmation": false
+              }
+            }
+          ]
+        },
+        {
+          "name": "options",
+          "label": "Optional PoC Features",
+          "elements": [
+            {
+              "name": "fslogixInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "FSLogix profile containers store each user's Windows profile in Azure Files so the profile can follow the user between session hosts. When enabled, this PoC deploys two session hosts so you can demonstrate profile roaming. It uses a storage account key stored in Windows Credential Manager for a low-friction evaluation; production deployments should evaluate the passwordless identity and storage controls required by their security baseline.",
+                "uri": "https://learn.microsoft.com/en-us/fslogix/overview-what-is-fslogix"
+              }
+            },
+            {
+              "name": "deployFSLogixStorage",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "FSLogix Profile Containers",
+              "defaultValue": "Yes - deploy FSLogix profile containers (2 hosts)",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Yes - deploy FSLogix profile containers (2 hosts)",
+                    "value": true
+                  },
+                  {
+                    "label": "No - use local profiles only (1 host)",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            {
+              "name": "monitoringInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "AVD Insights creates a Log Analytics workspace, Data Collection Rule, and Data Collection Endpoint in the consolidated PoC resource group. Enable it to evaluate connection and session-host diagnostics; leave it disabled for a faster, lower-cost profile-roaming or connectivity demonstration.",
+                "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/insights"
+              }
+            },
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "AVD Insights Monitoring",
+              "defaultValue": "No - skip monitoring resources",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Yes - deploy AVD Insights resources",
+                    "value": true
+                  },
+                  {
+                    "label": "No - skip monitoring resources",
+                    "value": false
+                  }
+                ]
+              }
+            },
+            {
+              "name": "ssoInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "The PoC enables the host-pool RDP property for Microsoft Entra single sign-on. A tenant administrator must also enable Microsoft Entra authentication for RDP on the Windows Cloud Login service principal and review Conditional Access. Users can still see a consent prompt unless trusted session-host device groups are configured.",
+                "uri": "https://learn.microsoft.com/en-us/azure/virtual-desktop/configure-single-sign-on"
+              }
+            },
+            {
+              "name": "fixedSettings",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Info",
+                "text": "For simplicity, this disposable PoC fixes the remaining choices: a standalone 10.250.0.0/16 virtual network, a private 10.250.0.0/24 session-host subnet, NAT Gateway outbound access, pooled depth-first load balancing, public AVD routes, Trusted Launch, no availability infrastructure, no scaling plan, no backup, no Private Endpoints, no AVD Private Link, no customer-managed keys, and no runtime customizations. After the demo, delete the consolidated PoC resource group and clean up any related directory or device records. Use a new full AVD Host Pool deployment for a pilot or production environment."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "kind": "Subscription",
+      "subscriptionId": "[steps('basics').scope.subscription.id]",
+      "location": "[steps('basics').scope.location.name]",
+      "parameters": {
+        "identifier": "[steps('basics').identifier]",
+        "virtualMachineAdminUserName": "[steps('sessionHosts').localAdminUsername]",
+        "virtualMachineAdminPassword": "[steps('sessionHosts').localAdminPassword]",
+        "appGroupSecurityGroups": "[steps('basics').groupPickerBlade.transformed.groups]",
+        "virtualMachineNamePrefix": "[steps('sessionHosts').virtualMachineNamePrefix]",
+        "imageSku": "[steps('sessionHosts').office365SkusApi.transformed.latest]",
+        "virtualMachineSize": "[steps('sessionHosts').virtualMachineSize]",
+        "deployFSLogixStorage": "[steps('options').deployFSLogixStorage]",
+        "enableMonitoring": "[steps('options').enableMonitoring]"
+      }
+    }
+  }
+}

@@ -13,7 +13,7 @@
         to deploy the requested number of session hosts
 
     Designed as a pre-flight check for the FederalAVD PoC / starter deployment.
-    The default values match the poc.hostpool.parameters.json example file:
+    The default values match the poc.hostpoolPoc.parameters.json example file:
         virtualMachineSize : Standard_D4ads_v5  (4 vCPUs per VM)
         sessionHostCount   : 2
 

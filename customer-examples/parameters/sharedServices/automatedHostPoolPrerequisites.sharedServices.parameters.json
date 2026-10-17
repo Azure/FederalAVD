@@ -1,5 +1,5 @@
 {
-    // Secrets-vault prerequisite for the automated host-pool PoC.
+    // Minimal Secrets Key Vault prerequisite example for an automated host pool.
     // Supply the VM administrator username and password as secure deployment parameters.
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",

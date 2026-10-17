@@ -19,7 +19,7 @@ Once I answer, give me **exactly one next step** - not a menu. Route me as follo
 
 - **Existing VNet + marketplace images -> standard PoC:** Start with the standard Host Pool Template Spec portal form. Tell me to select **Create** on **Review + create**, then download its generated template and parameters after submission and save the parameter file under `customer/parameters/hostpools/`. Do not start with PowerShell or hand-edited JSON.
 - **Multiple standard host pools with shared supporting resources:** The first Step 4 deployment can create Key Vaults, monitoring, and the FSLogix backup vault/policy. Later standard host-pool forms should select those existing resources. Do not require Step 1 unless the resources must exist before the first host pool.
-- **Automated host-pool PoC:** Deploy AVD Shared Services with the Secrets Key Vault enabled first, then pass its `secretsKeyVaultResourceId` output to `credentialsKeyVaultResourceId` in the automated Host Pool deployment.
+- **Automated host pool:** Use the full automated Host Pool deployment; there is no automated PoC path. Its orchestrator can create or adopt the required Shared Services credentials Key Vault. Require standalone Step 1 only when that vault must preexist or have a separate lifecycle.
 - **Need networking:** Start with Step 0, then continue to the appropriate next step.
 - **Need runtime artifacts without a custom image:** Step 2 (imageManagement) -> Step 4 (hostPool).
 - **Need a custom image, no Image Management CMK or centralized monitoring prerequisite:** Step 2 (imageManagement) -> Step 3 (imageBuild) -> Step 4 (hostPool).

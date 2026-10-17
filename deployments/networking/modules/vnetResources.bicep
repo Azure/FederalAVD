@@ -1,6 +1,11 @@
 param vnetName string
 param vnetAddressPrefixes array
 param subnets array
+@allowed([
+  'default'
+  'nva'
+  'nat'
+])
 param defaultRouting string
 param includeAvdBypassRoutes bool
 param rdpShortpathManagedNetworks bool
@@ -22,9 +27,9 @@ param tags object
 
 var azureCloud = environment().name
 
-// NAT Gateway is needed for: NAT routing mode, AVD bypass routes (cone NAT ensures STUN works
-// for service traffic), or RDP Shortpath on public networks (STUN requires cone-shaped NAT).
-var deployNatGateway = defaultRouting == 'nat' || includeAvdBypassRoutes || rdpShortpathPublicNetworks
+// Existing/propagated routing leaves egress to the upstream network, including STUN/TURN.
+// NVA bypass and public Shortpath use a local NAT gateway for cone NAT.
+var deployNatGateway = defaultRouting == 'nat' || (defaultRouting == 'nva' && (includeAvdBypassRoutes || rdpShortpathPublicNetworks))
 
 // AVD service tag bypass — covers broker, control plane, AND the 51.5.0.0/16 STUN/TURN relay
 // range. Verified 2026-05-04: 51.5.0.0/16 is explicitly listed in the commercial
@@ -162,12 +167,13 @@ var snetHosts = [for subnet in hostsSubnetsList: {
   name: subnet.name
   properties: {
     addressPrefix: subnet.addressPrefix
+    defaultOutboundAccess: false
     natGateway: deployNatGateway
       ? {
           id: natGateway.id
         }
       : null
-    routeTable: defaultRouting != 'nat'
+    routeTable: defaultRouting == 'nva'
       ? {
           id: routeTable.id
         }
@@ -184,6 +190,7 @@ var snetPrivateEndpoints = !empty(peSubnetsList)
         name: peSubnetsList[0].name
         properties: {
           addressPrefix: peSubnetsList[0].addressPrefix
+          defaultOutboundAccess: false
         }
       }
     ]
@@ -195,12 +202,13 @@ var snetFunctionApp = !empty(faSubnetsList)
         name: faSubnetsList[0].name
         properties: {
           addressPrefix: faSubnetsList[0].addressPrefix
+          defaultOutboundAccess: false
           natGateway: deployNatGateway
             ? {
                 id: natGateway.id
               }
             : null
-          routeTable: defaultRouting != 'nat'
+          routeTable: defaultRouting == 'nva'
             ? {
                 id: routeTable.id
               }
@@ -336,7 +344,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-09-01' = {
 }
 
 @batchSize(1)
-resource snets 'Microsoft.Network/virtualNetworks/subnets@2022-05-01' = [
+resource snets 'Microsoft.Network/virtualNetworks/subnets@2024-05-01' = [
   for subnet in allSubnets: {
     name: subnet.name
     parent: vnet

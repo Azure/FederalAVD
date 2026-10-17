@@ -2,12 +2,137 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $standardFormPath = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
 $bicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$orchestratorPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json'
 $policyAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
 $availabilitySetAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\availabilitySet.bicep'
 $availabilitySetPolicyPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\virtualMachine-availabilitySet.policyDefinition.bicep'
-$creationSettingsPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\sessionHostCreationSettings.policySetDefinition.bicep'
+$controlPlaneModulePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
 $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
+
+Describe 'Automated host-pool AVD Private Link virtual networks' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $controlPlaneModule = Get-Content -LiteralPath $controlPlaneModulePath -Raw
+        $standardControlPlaneModule = Get-Content -LiteralPath (
+            Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
+        ) -Raw
+        $sharedWorkspaceModule = Get-Content -LiteralPath (
+            Join-Path $repoRoot 'deployments\shared\modules\orchestration\avdWorkspace\avdWorkspace.bicep'
+        ) -Raw
+    }
+
+    It 'keeps only the host-pool connection virtual network in the automated core' {
+        $controlPlaneModule | Should Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $controlPlaneModule | Should Match 'location: hostPoolPrivateEndpointVirtualNetwork!\.location'
+        $controlPlaneModule | Should Not Match 'indexOf\('
+        $controlPlaneModule | Should Not Match 'workspaceFeedPrivateEndpoint'
+        $controlPlaneModule | Should Not Match 'globalFeedPrivateEndpoint'
+    }
+
+    It 'keeps only the host-pool connection virtual network in the standard core' {
+        $standardControlPlaneModule | Should Match "resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $standardControlPlaneModule | Should Match 'location: hostPoolPrivateEndpointVirtualNetwork!\.location'
+        $standardControlPlaneModule | Should Not Match 'indexOf\('
+        $standardControlPlaneModule | Should Not Match 'workspaceFeedPrivateEndpoint'
+        $standardControlPlaneModule | Should Not Match 'globalFeedPrivateEndpoint'
+    }
+
+    It 'uses independent conditional workspace feed and global-feed virtual networks in Shared Services' {
+        $sharedWorkspaceModule | Should Match "resource workspaceFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $sharedWorkspaceModule | Should Match "resource globalFeedVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if"
+        $sharedWorkspaceModule | Should Not Match 'indexOf\('
+    }
+
+    It 'matches the standard form Private Link subsection headers' {
+        $zeroTrustStep = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+        $privateLink = $zeroTrustStep.elements | Where-Object { $_.name -eq 'avdPrivateLink' }
+        $textBlocks = @($privateLink.elements | Where-Object { $_.type -eq 'Microsoft.Common.TextBlock' })
+
+        ($textBlocks.options.text -contains 'Remote Session Connections') | Should Be $true
+        ($textBlocks.options.text -contains 'Workspace Feed') | Should Be $true
+        ($textBlocks.options.text -contains 'Global Feed') | Should Be $true
+        ($textBlocks | Where-Object { $_.name -eq 'hostPoolHeader' }).visible |
+            Should Be "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
+        ($textBlocks | Where-Object { $_.name -eq 'workspaceFeedHeader' }).visible |
+            Should Be "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, not(equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'HostPool')))]"
+        ($textBlocks | Where-Object { $_.name -eq 'globalFeedHeader' }).visible |
+            Should Match "equals\(steps\('zeroTrust'\)\.avdPrivateLink\.privateRoutes, 'All'\)"
+    }
+}
+
+Describe 'Automated host-pool Shared Services create-or-adopt controls' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $orchestrator = Get-Content -LiteralPath $orchestratorPath -Raw
+        $profilesStep = $form.view.properties.steps | Where-Object { $_.name -eq 'profiles' }
+        $storage = $profilesStep.elements | Where-Object { $_.name -eq 'storage' }
+        $zeroTrustStep = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+        $keyManagement = $zeroTrustStep.elements | Where-Object { $_.name -eq 'keyManagement' }
+        $privateEndpoints = $zeroTrustStep.elements | Where-Object { $_.name -eq 'privateEndpoints' }
+    }
+
+    It 'creates or adopts the shared FSLogix backup vault and policy' {
+        $registerBackup = $storage.elements | Where-Object { $_.name -eq 'registerBackup' }
+        $useExistingVault = $storage.elements | Where-Object { $_.name -eq 'useExistingRecoveryServicesVault' }
+        $backupRetention = $storage.elements | Where-Object { $_.name -eq 'backupRetentionDays' }
+        $vaultSelector = $storage.elements | Where-Object { $_.name -eq 'recoveryServicesVault' }
+
+        $registerBackup.label | Should Be 'Enable FSLogix Azure Files Backup'
+        $useExistingVault.defaultValue | Should Be $false
+        $backupRetention.visible | Should Match 'not\(steps'
+        $vaultSelector.visible | Should Match 'useExistingRecoveryServicesVault'
+        $vaultSelector.constraints.required | Should Match 'useExistingRecoveryServicesVault'
+        $form.view.outputs.parameters.enableFSLogixBackup | Should Match 'registerBackup'
+        $form.view.outputs.parameters.existingFilesBackupVaultResourceId | Should Match 'useExistingRecoveryServicesVault'
+        $orchestrator | Should Match 'param enableFSLogixBackup bool = false'
+        $orchestrator | Should Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
+        $orchestrator | Should Match 'createVault: true'
+        $orchestrator | Should Match 'var effectiveFilesBackupVaultResourceId = fslogixBackupIsRequested'
+        $orchestrator | Should Match 'sharedFilesBackup!\.outputs\.recoveryServicesVaultResourceId'
+        $orchestrator | Should Match 'recoveryServicesVaultResourceId: effectiveFilesBackupVaultResourceId'
+    }
+
+    It 'creates or adopts one encryption Key Vault for disk and FSLogix CMK consumers' {
+        $useExistingKeyVault = $keyManagement.elements | Where-Object { $_.name -eq 'useExistingEncryptionKv' }
+        $keyVaultSelector = $keyManagement.elements | Where-Object { $_.name -eq 'existingEncryptionKeyVault' }
+        $retention = $keyManagement.elements | Where-Object { $_.name -eq 'encKvRetentionInDays' }
+
+        $useExistingKeyVault.defaultValue | Should Be $false
+        $keyVaultSelector.visible | Should Match 'useExistingEncryptionKv'
+        $keyVaultSelector.constraints.required | Should Match 'useExistingEncryptionKv'
+        $retention.visible | Should Match 'not\(steps'
+        $form.view.outputs.parameters.encryptionKeyVaultResourceId | Should Match 'useExistingEncryptionKv'
+        $form.view.outputs.parameters.fslogixEncryptionKeyVaultResourceId | Should Match 'useExistingEncryptionKv'
+        $orchestrator | Should Match 'var existingSharedEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match 'deployEncryptionKeyVault: deploySharedEncryptionKeyVault'
+        $orchestrator | Should Match 'keyVaultResourceId: effectiveFSLogixEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match 'keyVaultResourceId: diskEncryptionSetConfigurationIsValid \? effectiveDiskEncryptionKeyVaultResourceId'
+        $orchestrator | Should Match "credentialsKeyVaultSecretBaseUri = 'https://\$\{last\(.+\)\}\$\{environment\(\)\.suffixes\.keyvaultDns\}/secrets'"
+        $orchestrator | Should Match "encryptionKeyVaultUri: deployFslogixStorageCmk[\s\S]+?\$\{environment\(\)\.suffixes\.keyvaultDns\}/'"
+        $orchestrator | Should Not Match "\}\.\$\{environment\(\)\.suffixes\.keyvaultDns\}"
+    }
+
+    It 'configures Shared Services and FSLogix private endpoints from one portal choice' {
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'operationsVirtualNetwork' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'operationsSubnet' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'virtualNetwork' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'privateEndpointSubnet' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureKeyVaultPrivateDnsZone' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureBackupPrivateDnsZone' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureBlobPrivateDnsZone' }).Count | Should Be 1
+        @($privateEndpoints.elements | Where-Object { $_.name -eq 'azureQueuePrivateDnsZone' }).Count | Should Be 1
+        $form.view.outputs.parameters.deployPrivateEndpoints | Should Match 'deployPrivateEndpoints'
+        $form.view.outputs.parameters.operationsPrivateEndpointSubnetResourceId | Should Match 'operationsSubnet'
+        $form.view.outputs.parameters.azureKeyVaultPrivateDnsZoneResourceId | Should Match 'azureKeyVaultPrivateDnsZone'
+        $form.view.outputs.parameters.azureBackupPrivateDnsZoneResourceId | Should Match 'azureBackupPrivateDnsZone'
+        $orchestrator | Should Match 'param deployPrivateEndpoints bool = false'
+        $orchestrator | Should Match 'param operationsPrivateEndpointSubnetResourceId string'
+        $orchestrator | Should Match 'privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId'
+        $orchestrator | Should Match 'azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId'
+        $orchestrator | Should Match 'azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId'
+    }
+}
 
 Describe 'Automated host-pool Availability Set placement' {
     BeforeAll {
@@ -19,7 +144,6 @@ Describe 'Automated host-pool Availability Set placement' {
         $policyAdapter = Get-Content -LiteralPath $policyAdapterPath -Raw
         $availabilitySetAdapter = Get-Content -LiteralPath $availabilitySetAdapterPath -Raw
         $availabilitySetPolicy = Get-Content -LiteralPath $availabilitySetPolicyPath -Raw
-        $creationSettings = Get-Content -LiteralPath $creationSettingsPath -Raw
         $readme = Get-Content -LiteralPath $readmePath -Raw
         $hostsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'hosts' }
         $hostDetails = $hostsStep.elements | Where-Object { $_.name -eq 'hostDetails' }
@@ -57,7 +181,8 @@ Describe 'Automated host-pool Availability Set placement' {
         $availabilitySetAdapter | Should Not Match 'padLeft\('
         $availabilitySetAdapter | Should Match 'output resourceId string'
         $bicep | Should Match 'Availability Zones and an Availability Set are mutually exclusive'
-        $bicep | Should Match "availability == 'AvailabilityZones' \? availabilityZones : null"
+        $bicep | Should Match "availabilityConfigurationIsValid && availability == 'AvailabilityZones'"
+        $bicep | Should Match '\? sort\(availabilityZones, \(a, b\) => a < b\)'
         $readme | Should Match 'create one managed Availability Set'
         $readme | Should Match 'mutually exclusive'
     }
@@ -70,12 +195,11 @@ Describe 'Automated host-pool Availability Set placement' {
         $availabilitySetPolicy | Should Not Match 'availabilitySetResourceIds'
         $availabilitySetPolicy | Should Not Match 'first\(skip\('
         $availabilitySetPolicy | Should Not Match 'last\(split\(field\('
-        $creationSettings | Should Match "policyDefinitionReferenceId: 'configureAvailabilitySet'"
-        $creationSettings | Should Match "availabilitySetResourceId:"
-        $creationSettings | Should Not Match 'availabilitySetResourceIds'
-        ([regex]::Matches($creationSettings, "policyDefinitionReferenceId: 'configureAvailabilitySet'")).Count | Should Be 1
-        $policyAdapter | Should Match "availabilitySetEffect:"
-        $policyAdapter | Should Match "value: empty\(availabilitySetResourceId\) \? 'Disabled' : 'Modify'"
+        $policyAdapter | Should Match "module availabilitySetPolicyDefinition .* = if \(!empty\(availabilitySetResourceId\)\)"
+        $policyAdapter | Should Match "module availabilitySetPolicyAssignment .* = if \(!empty\(availabilitySetResourceId\)\)"
+        $policyAdapter | Should Match "name: 'avd-sh-availability-set'"
+        $policyAdapter | Should Match "policyDefinitionResourceId: availabilitySetPolicyDefinition!\.outputs\.policyDefinitionResourceId"
+        $policyAdapter | Should Match "value: 'Modify'"
         $policyAdapter | Should Not Match 'availabilitySetResourceIds'
         $bicep | Should Match "availabilitySetResourceId: deployAvailabilitySet \? availabilitySet!\.outputs\.resourceId : ''"
         $readme | Should Match 'before the Compute\s+resource provider processes each VM creation request'
@@ -108,6 +232,39 @@ Describe 'Automated host-pool Availability Set placement' {
         $formJson | Should Match "schedule\.rampUpMaximumHostPoolSize"
         $formJson | Should Match "schedule\.rampDownMaximumHostPoolSize"
         $formJson | Should Match '"deleteOriginalVm": "\[if\(equals\(steps\(''hosts''\)\.availability\.option, ''AvailabilitySets''\), true,'
+    }
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$policyAdapterPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
+
+Describe 'Automated host-pool conditional policy capabilities' {
+    BeforeAll {
+        $policyAdapter = Get-Content -LiteralPath $policyAdapterPath -Raw
+    }
+
+    It 'does not deploy the fixed creation-settings initiative' {
+        $policyAdapter | Should Not Match 'sessionHostCreationSettings'
+        $policyAdapter | Should Not Match 'avd-sh-creation-settings'
+    }
+
+    It 'conditions creation-setting definitions and assignments on their capabilities' {
+        $policyAdapter | Should Match 'var configureSessionHostCompute = encryptionAtHost \|\| diskSizeGB > 0'
+        $policyAdapter | Should Match "module sessionHostComputePolicyDefinition .* = if \(configureSessionHostCompute\)"
+        $policyAdapter | Should Match "module sessionHostComputePolicyAssignment .* = if \(configureSessionHostCompute\)"
+        $policyAdapter | Should Match "module diskEncryptionSetPolicyDefinition .* = if \(!empty\(diskEncryptionSetResourceId\)\)"
+        $policyAdapter | Should Match "module diskEncryptionSetPolicyAssignment .* = if \(!empty\(diskEncryptionSetResourceId\)\)"
+        $policyAdapter | Should Match "module acceleratedNetworkingPolicyDefinition .* = if \(enableAcceleratedNetworking\)"
+        $policyAdapter | Should Match "module acceleratedNetworkingPolicyAssignment .* = if \(enableAcceleratedNetworking\)"
+        $policyAdapter | Should Match "module availabilitySetPolicyDefinition .* = if \(!empty\(availabilitySetResourceId\)\)"
+        $policyAdapter | Should Match "module availabilitySetPolicyAssignment .* = if \(!empty\(availabilitySetResourceId\)\)"
+    }
+
+    It 'reuses capability modules for monitoring and managed-disk isolation' {
+        $policyAdapter | Should Match "module sessionHostSystemAssignedIdentityPolicyDefinition .* = if \(enableMonitoring\)"
+        $policyAdapter | Should Match 'assignSystemIdentityPolicy: true'
+        $policyAdapter | Should Match "module managedDiskNetworkAccessPolicyAssignment '.+/managedDiskNetworkAccess\.bicep' = if \(disableManagedDiskPublicNetworkAccess\)"
+        $policyAdapter | Should Not Match 'policyIdentityDiskPoolOperator'
     }
 }
 
@@ -190,7 +347,7 @@ $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition
 $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
 $bicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json'
-$exampleParametersPath = Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\poc.automatedHostPool.parameters.json'
+$exampleParametersPath = Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json'
 
 Describe 'Automated host-pool ephemeral OS disk guidance' {
     BeforeAll {
@@ -297,6 +454,46 @@ Describe 'Automated host-pool identity permissions' {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
+$entryTemplatePath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$controlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
+$rbacWaitScriptPath = Join-Path $repoRoot 'deployments\automatedHostPools\scripts\Wait-RbacPropagation.ps1'
+$readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
+
+Describe 'Automated host-pool deployment helper lifecycle' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $entryTemplate = Get-Content -LiteralPath $entryTemplatePath -Raw
+        $controlPlane = Get-Content -LiteralPath $controlPlanePath -Raw
+        $rbacWaitScript = Get-Content -LiteralPath $rbacWaitScriptPath -Raw
+        $readme = Get-Content -LiteralPath $readmePath -Raw
+        $operationsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'operationsAndMonitoring' }
+        $deploymentVm = $operationsStep.elements | Where-Object { $_.name -eq 'deploymentVm' }
+    }
+
+    It 'always deploys and cleans up the temporary helper VM' {
+        (@($deploymentVm.PSObject.Properties.Name) -notcontains 'visible') | Should Be $true
+        $form.view.outputs.parameters.deploymentVirtualMachineSize | Should Be "[steps('operationsAndMonitoring').deploymentVm.size]"
+        $entryTemplate | Should Not Match 'createDeploymentVm'
+        $entryTemplate | Should Match "module deploymentResourceGroup .* = \{"
+        $entryTemplate | Should Match "module deploymentHelper .* = \{"
+        $entryTemplate | Should Match "module cleanupDeploymentHelper .* = \{"
+        $deploymentVm.elements[0].options.text | Should Match 'AzureResourceManager service tag'
+        $readme | Should Match 'always creates a temporary deployment-helper VM'
+    }
+
+    It 'waits 90 seconds after host-pool RBAC before session-host validation' {
+        $controlPlane | Should Match "module rbacPropagationWait[\s\S]+name: 'RBAC-Propagation-Wait'"
+        $controlPlane | Should Match "name: 'WaitSeconds'[\s\S]+value: '90'"
+        $controlPlane | Should Match 'rbacPropagationWait[\s\S]+dependsOn: \[hostPoolPermissions\]'
+        $controlPlane | Should Match 'sessionHostConfiguration[\s\S]+dependsOn: \[rbacPropagationWait\]'
+        $controlPlane | Should Match 'updateDesktopFriendlyName[\s\S]+dependsOn: \[rbacPropagationWait\]'
+        $rbacWaitScript | Should Match 'Start-Sleep -Seconds \$WaitSeconds'
+        $readme | Should Match 'waits 90 seconds'
+    }
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
 $policyPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
 $entryTemplatePath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $controlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
@@ -336,7 +533,8 @@ Describe 'Automated host-pool VM Application assignments' {
     }
 
     It 'excludes subscription-restricted zones from availability choices' {
-        $resourceSkusApi.request.transforms.vmSizes | Should Match 'zones:locationInfo\[0\]\.zones'
+        $resourceSkusApi.request.transforms.vmSizes |
+            Should Match 'zones:sort_by\(locationInfo\[0\]\.zones \|\| `\[\]`, &@\)'
         $resourceSkusApi.request.transforms.vmSizes | Should Match "restrictedZones:restrictions\[\?type == 'Zone'\]\.restrictionInfo\.zones"
         $availabilityOption = $availability.elements | Where-Object { $_.name -eq 'option' }
         $availabilityZones = $availability.elements | Where-Object { $_.name -eq 'availabilityZones' }
@@ -400,7 +598,8 @@ Describe 'Automated host-pool VM Application assignments' {
         $permissionsSource | Should Match "var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'"
         $permissionsSource | Should Match "module vmApplicationGalleryReaderRoles '.+/compute/galleries/roleAssignment.bicep'"
         $permissionsSource | Should Match "galleryName: last\(split\(galleryResourceId, '/'\)\)"
-        $controlPlaneSource | Should Match 'module sessionHostConfiguration[\s\S]+dependsOn: \[hostPoolPermissions\]'
+        $controlPlaneSource | Should Match "module rbacPropagationWait[\s\S]+name: 'RBAC-Propagation-Wait'[\s\S]+value: '90'[\s\S]+dependsOn: \[hostPoolPermissions\]"
+        $controlPlaneSource | Should Match 'module sessionHostConfiguration[\s\S]+dependsOn: \[rbacPropagationWait\]'
     }
 }
 
@@ -469,5 +668,73 @@ Describe 'Automated host-pool workspace selection' {
 
     It 'matches the standard host-pool workspace parameter name' {
         ($form.view.outputs.parameters.PSObject.Properties.Name -join ',') | Should Match '(^|,)existingFeedWorkspaceResourceId(,|$)'
+    }
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
+$bicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
+$armPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json'
+$updateScriptPath = Join-Path $repoRoot 'deployments\automatedHostPools\Update-AutomatedHostPoolImage.ps1'
+
+Describe 'Automated host-pool update logoff delay' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $bicep = Get-Content -LiteralPath $bicepPath -Raw
+        $arm = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $updateScript = Get-Content -LiteralPath $updateScriptPath -Raw
+        $operationsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'operationsAndMonitoring' }
+        $updatesSection = $operationsStep.elements | Where-Object { $_.name -eq 'updates' }
+        $logoffDelay = $updatesSection.elements | Where-Object { $_.name -eq 'logOffDelayMinutes' }
+    }
+
+    It 'enforces the same 60-minute maximum in every deployment surface' {
+        $logoffDelay.min | Should Be 0
+        $logoffDelay.max | Should Be 60
+        $bicep | Should Match '@minValue\(0\)[\r\n]+@maxValue\(60\)[\r\n]+param updateLogOffDelayMinutes'
+        $arm.parameters.updateLogOffDelayMinutes.minValue | Should Be 0
+        $arm.parameters.updateLogOffDelayMinutes.maxValue | Should Be 60
+        $updateScript | Should Match '\[ValidateRange\(0, 60\)\][\r\n]+\s*\[int\]\$LogOffDelayMinutes'
+        $updateScript | Should Not Match 'ValidateRange\(0, 10080\)'
+        $updateScript | Should Match '\$effectiveLogOffDelayMinutes -lt 0 -or \$effectiveLogOffDelayMinutes -gt 60'
+        $form.view.outputs.parameters.updateLogOffDelayMinutes | Should Be "[steps('operationsAndMonitoring').updates.logOffDelayMinutes]"
+    }
+
+    It 'explains future update behavior before monitoring settings' {
+        $elementNames = @($operationsStep.elements.name)
+        $updatesIndex = [array]::IndexOf($elementNames, 'updates')
+        $monitoringIndex = [array]::IndexOf($elementNames, 'monitoring')
+        $updateDefaultsInfo = $updatesSection.elements | Where-Object { $_.name -eq 'updateDefaultsInfo' }
+        $failedCleanupInfo = $updatesSection.elements | Where-Object { $_.name -eq 'failedCleanupInfo' }
+
+        $updatesSection.label | Should Be 'Session Host Update and Cleanup'
+        $updatesIndex | Should BeGreaterThan -1
+        $updatesIndex | Should BeLessThan $monitoringIndex
+        $updateDefaultsInfo.options.text | Should Match 'do not start or schedule an update'
+        $updateDefaultsInfo.options.text | Should Match 'users who remain after the delay are signed out'
+        $failedCleanupInfo.options.text | Should Match 'provisioning a new or replacement host fails'
+        $failedCleanupInfo.options.text | Should Match 'does not control successful host replacement or user sessions'
+    }
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$formPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormDefinition.json'
+
+Describe 'Automated host-pool FSLogix storage prefix' {
+    It 'allows only an optional lowercase alphanumeric prefix up to 13 characters' {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $tagsStep = $form.view.properties.steps | Where-Object { $_.name -eq 'tagsAndNaming' }
+        $namingSection = $tagsStep.elements | Where-Object { $_.name -eq 'naming' }
+        $prefix = $namingSection.elements | Where-Object { $_.name -eq 'fslogixStoragePrefixValue' }
+
+        $prefix.constraints.required | Should Be $false
+        $prefix.constraints.regex | Should Be '^[a-z0-9]{0,13}$'
+        $prefix.toolTip | Should Match 'lowercase letters or numbers'
+        $prefix.constraints.validationMessage | Should Match 'lowercase letters or numbers'
+        '' | Should Match $prefix.constraints.regex
+        'fslogix123456' | Should Match $prefix.constraints.regex
+        'fslogix1234567' | Should Not Match $prefix.constraints.regex
+        'fslogix-prefix' | Should Not Match $prefix.constraints.regex
+        ([regex]::IsMatch('FSLOGIX', $prefix.constraints.regex)) | Should Be $false
     }
 }

@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "14886221605856997464"
+      "version": "0.48.1.52935",
+      "templateHash": "2775130661544679014"
     }
   },
   "parameters": {
@@ -63,11 +63,12 @@
       "type": "string",
       "defaultValue": "nat",
       "allowedValues": [
+        "default",
         "nva",
         "nat"
       ],
       "metadata": {
-        "description": "Optional. The routing method to use for the virtual network subnets."
+        "description": "Optional. The routing method for virtual network subnets. Use default for existing or propagated routes without a managed NAT gateway or route table."
       }
     },
     "includeAvdBypassRoutes": {
@@ -1001,8 +1002,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "7392235862376390437"
+              "version": "0.48.1.52935",
+              "templateHash": "17912357300475645508"
             }
           },
           "parameters": {
@@ -1019,7 +1020,12 @@
               "type": "array"
             },
             "defaultRouting": {
-              "type": "string"
+              "type": "string",
+              "allowedValues": [
+                "default",
+                "nva",
+                "nat"
+              ]
             },
             "includeAvdBypassRoutes": {
               "type": "bool"
@@ -1167,8 +1173,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3095141680741937153"
+                      "version": "0.48.1.52935",
+                      "templateHash": "8853976165305831842"
                     }
                   },
                   "parameters": {
@@ -1182,7 +1188,12 @@
                       "type": "array"
                     },
                     "defaultRouting": {
-                      "type": "string"
+                      "type": "string",
+                      "allowedValues": [
+                        "default",
+                        "nva",
+                        "nat"
+                      ]
                     },
                     "includeAvdBypassRoutes": {
                       "type": "bool"
@@ -1245,8 +1256,9 @@
                           "name": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].name]",
                           "properties": {
                             "addressPrefix": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix]",
+                            "defaultOutboundAccess": false,
                             "natGateway": "[if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                            "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
+                            "routeTable": "[if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
                             "networkSecurityGroup": {
                               "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
                             }
@@ -1255,7 +1267,7 @@
                       }
                     ],
                     "azureCloud": "[environment().name]",
-                    "deployNatGateway": "[or(or(equals(parameters('defaultRouting'), 'nat'), parameters('includeAvdBypassRoutes')), parameters('rdpShortpathPublicNetworks'))]",
+                    "deployNatGateway": "[or(equals(parameters('defaultRouting'), 'nat'), and(equals(parameters('defaultRouting'), 'nva'), or(parameters('includeAvdBypassRoutes'), parameters('rdpShortpathPublicNetworks'))))]",
                     "wvdServiceRoute": [
                       {
                         "name": "AVDServiceTraffic",
@@ -1276,8 +1288,8 @@
                     "hostsSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'hosts')))]",
                     "peSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'privateEndpoints')))]",
                     "faSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'functionApp')))]",
-                    "snetPrivateEndpoints": "[if(not(empty(variables('peSubnetsList'))), createArray(createObject('name', variables('peSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('peSubnetsList')[0].addressPrefix))), createArray())]",
-                    "snetFunctionApp": "[if(not(empty(variables('faSubnetsList'))), createArray(createObject('name', variables('faSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('faSubnetsList')[0].addressPrefix, 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
+                    "snetPrivateEndpoints": "[if(not(empty(variables('peSubnetsList'))), createArray(createObject('name', variables('peSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('peSubnetsList')[0].addressPrefix, 'defaultOutboundAccess', false()))), createArray())]",
+                    "snetFunctionApp": "[if(not(empty(variables('faSubnetsList'))), createArray(createObject('name', variables('faSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('faSubnetsList')[0].addressPrefix, 'defaultOutboundAccess', false(), 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
                     "allSubnets": "[union(variables('snetHosts'), variables('snetPrivateEndpoints'), variables('snetFunctionApp'))]",
                     "effectiveSubnetDefinitions": "[concat(variables('hostsSubnetsList'), take(variables('peSubnetsList'), 1), take(variables('faSubnetsList'), 1))]"
                   },
@@ -1394,7 +1406,7 @@
                         "batchSize": 1
                       },
                       "type": "Microsoft.Network/virtualNetworks/subnets",
-                      "apiVersion": "2022-05-01",
+                      "apiVersion": "2024-05-01",
                       "name": "[format('{0}/{1}', parameters('vnetName'), variables('allSubnets')[copyIndex()].name)]",
                       "properties": "[variables('allSubnets')[copyIndex()].properties]",
                       "dependsOn": [
@@ -1437,8 +1449,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "7410733236420509568"
+                              "version": "0.48.1.52935",
+                              "templateHash": "1456743040429825759"
                             }
                           },
                           "parameters": {
@@ -1531,8 +1543,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "7410733236420509568"
+                              "version": "0.48.1.52935",
+                              "templateHash": "1456743040429825759"
                             }
                           },
                           "parameters": {
@@ -1672,8 +1684,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13295556477426413209"
+              "version": "0.48.1.52935",
+              "templateHash": "618425977677697218"
             }
           },
           "parameters": {
@@ -1736,8 +1748,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "1787709191313946301"
+                      "version": "0.48.1.52935",
+                      "templateHash": "17731635354050486200"
                     }
                   },
                   "parameters": {
@@ -1801,8 +1813,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "1092824874096530174"
+                      "version": "0.48.1.52935",
+                      "templateHash": "6356786979145766174"
                     }
                   },
                   "parameters": {
@@ -1843,8 +1855,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.46.1.21595",
-                              "templateHash": "3294218969377347124"
+                              "version": "0.48.1.52935",
+                              "templateHash": "4320047789187130456"
                             }
                           },
                           "parameters": {

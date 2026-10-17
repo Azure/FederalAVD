@@ -6,6 +6,11 @@ This page maps Federal AVD solution capabilities to security control requirement
 
 > **Scope:** This mapping covers workload-layer controls implemented by this solution's Bicep templates. Azure platform-level controls (physical security, hypervisor isolation, SOC 2 / FedRAMP platform authorization) are inherited from Microsoft's Azure Government authorization package and are not repeated here. See [Azure compliance documentation](https://learn.microsoft.com/en-us/azure/compliance/) for the platform inheritance baseline.
 
+See [Secure Endpoint Architecture](secure-endpoint-architecture.md) for the control-layer,
+shared-responsibility, lifecycle, and evidence model behind these mappings. Neither that architecture
+nor this mapping establishes compliance without organization-specific configuration, validation,
+evidence, assessment, and authorization.
+
 ---
 
 ## How Controls Are Implemented

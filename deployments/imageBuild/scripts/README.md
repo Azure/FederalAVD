@@ -116,8 +116,12 @@ the article's literal recommendations) are documented separately below.
 
 `AirGapped` disables components that otherwise make unsuccessful calls to Microsoft cloud services,
 including SmartScreen cloud lookups, online font providers, Teredo, WER uploads, Defender cloud
-protection, OneSettings, settings sync, activity-history uploads, widgets, and cross-device
-features. It applies independently of the selected optimization profile. These settings are a
+protection, OneSettings, settings sync, activity-history uploads, widgets, cross-device features,
+web Search results, Search highlights, cloud-optimized content, consumer-account content, telemetry, feedback,
+online tips, device metadata, maps, messaging, speech-model updates, storage-health model updates,
+cloud notifications, and Delivery Optimization cloud coordination. User-scope Spotlight and
+tailored-content restrictions are written to local User Group Policy. It applies independently of
+the selected optimization profile. These settings are a
 targeted subset of Microsoft's
 [Manage connections from Windows operating system components to Microsoft services](https://learn.microsoft.com/en-us/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services)
 guidance, not the complete Windows Restricted Traffic Limited Functionality Baseline.
@@ -159,6 +163,7 @@ expanding container.
 | Storage Sense | Disable | Enable and configure | Dehydrates eligible cloud content and cleans temporary profile content before FSLogix compaction. |
 | Optimize Drives | Evaluate or disable | Manual on nonpersistent hosts | Disabled service startup prevents FSLogix VHD disk compaction. |
 | Windows Search | Evaluate or disable | Leave at default | Disabling it breaks Outlook and File Explorer search. |
+| Start/Search online content | Allow by default | Disable web results, dynamic content, cloud-optimized content, and cloud consumer account state content | Suppresses Microsoft Store app offers and other online suggestions while preserving installed-app, local-file, OneDrive, and SharePoint search. |
 | Microsoft Store Install Service | Disable on nonpersistent hosts | Leave at default | WinAppSDK applications can require the on-demand service at first launch. |
 | Sync Host (`OneSyncSvc`) | Candidate for disabling | Leave at default | Mail, contacts, and calendar applications depend on synchronization at sign-in. |
 | Diagnostic services | Disable | Disable only on nonpersistent hosts | Persistent users retain self-service diagnostic capabilities. |
@@ -214,10 +219,11 @@ Restarts the image VM after a customization that requests a reboot.
 
 - **Parameters:** `ResourceManagerUri`, `UserAssignedIdentityClientId`, `VmResourceId`, optional
   `StableSeconds`, `ReadyTimeoutSeconds`, and `PollIntervalSeconds`
-- **Behavior:** Uses Azure REST with managed identity and waits for the VM to remain running with
-  the guest agent ready for a continuous stability window. The post-Windows Update restart uses a
-  three-minute window so a follow-up TrustedInstaller servicing reboot resets the timer instead of
-  interrupting the next Run Command.
+- **Behavior:** Uses Azure REST with managed identity, follows the ARM restart long-running
+  operation to completion, and then waits for the VM to remain running with the guest agent ready
+  for a continuous stability window. The post-Windows Update restart uses a three-minute window so
+  a follow-up TrustedInstaller servicing reboot resets the timer instead of interrupting the next
+  Run Command.
 
 ### [Resize-Disk.ps1](Resize-Disk.ps1)
 
@@ -234,9 +240,11 @@ Extends the image VM's operating-system partition to consume the available manag
 Runs Sysprep under the named built-in administrator rather than SYSTEM and captures Panther logs.
 
 - **Parameters:** `AdminPassword`
-- **Behavior:** Waits for required services and CBS servicing, prepares the administrator profile,
-  launches Sysprep with `/oobe /generalize /quit /mode:vm`, checks the exit code, and emits Panther
-  logs to Run Command output.
+- **Behavior:** Detects Windows automatic device encryption, fully decrypts the operating system
+  volume before finalization, waits for required services and CBS servicing, prepares the
+  administrator profile, verifies the volume is still decrypted, launches Sysprep with
+  `/oobe /generalize /quit /mode:vm`, checks the exit code, and emits Panther logs to Run Command
+  output.
 - **Output:** Sysprep Panther logs in the Run Command output blob
 
 ### [Generalize-Vm.ps1](Generalize-Vm.ps1)

@@ -181,7 +181,7 @@ traces
 | where (message has "Failed to acquire Graph access token" or
          message has "Get-AccessToken returned null or empty" or
          message has "Device cleanup will be skipped") and
-        (message has "Directory.ReadWrite.All" or message has "DeviceManagementManagedDevices.ReadWrite.All")
+        (message has "Device.ReadWrite.All" or message has "DeviceManagementManagedDevices.ReadWrite.All")
 | summarize WarningCount = count(), LastWarning = max(timestamp), sample_message = any(message)
 '''
     threshold: 1

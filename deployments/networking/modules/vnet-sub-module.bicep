@@ -4,6 +4,11 @@ param deployVnetResourceGroup bool
 param vnetName string
 param vnetAddressPrefixes array
 param subnets array
+@allowed([
+  'default'
+  'nva'
+  'nat'
+])
 param defaultRouting string
 param includeAvdBypassRoutes bool
 param rdpShortpathManagedNetworks bool

@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "18053201753370644111"
+      "version": "0.47.16.16243",
+      "templateHash": "15325952740609245924"
     }
   },
   "parameters": {
@@ -164,11 +164,12 @@
     "logsContainerUri": "[if(or(empty(parameters('logsContainerName')), empty(parameters('logsStorageAccountName'))), '', format('https://{0}.blob.{1}/{2}', parameters('logsStorageAccountName'), environment().suffixes.storage, parameters('logsContainerName')))]",
     "scriptsContainerUri": "[if(or(empty(parameters('scriptsContainerName')), empty(parameters('scriptsStorageAccountName'))), '', format('https://{0}.blob.{1}/{2}', parameters('scriptsStorageAccountName'), environment().suffixes.storage, parameters('scriptsContainerName')))]",
     "normalizedScriptContent": "[if(empty(parameters('scriptContent')), '', replace(replace(parameters('scriptContent'), '\r\n', '\n'), '\r', '\n'))]",
-    "resolvedVmNames": "[if(not(empty(parameters('vmPrefix'))), variables('patternVmNames'), parameters('vmNames'))]"
+    "resolvedVmNames": "[if(not(empty(parameters('vmPrefix'))), variables('patternVmNames'), parameters('vmNames'))]",
+    "usesSharedUserAssignedIdentity": "[and(and(not(empty(parameters('logsUserAssignedIdentityResourceId'))), not(empty(parameters('scriptsUserAssignedIdentityResourceId')))), equals(toLower(parameters('logsUserAssignedIdentityResourceId')), toLower(parameters('scriptsUserAssignedIdentityResourceId'))))]"
   },
   "resources": {
     "logsUserAssignedIdentity": {
-      "condition": "[not(empty(parameters('logsUserAssignedIdentityResourceId')))]",
+      "condition": "[and(not(empty(parameters('logsUserAssignedIdentityResourceId'))), not(variables('usesSharedUserAssignedIdentity')))]",
       "existing": true,
       "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
       "apiVersion": "2018-11-30",
@@ -244,8 +245,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13558729109357388682"
+              "version": "0.47.16.16243",
+              "templateHash": "13440780249182889825"
             }
           },
           "parameters": {
@@ -334,7 +335,7 @@
           "logsContainerUri": {
             "value": "[variables('logsContainerUri')]"
           },
-          "logsUserAssignedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('logsUserAssignedIdentity').clientId))]",
+          "logsUserAssignedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), if(variables('usesSharedUserAssignedIdentity'), createObject('value', reference('scriptsUserAssignedIdentity').clientId), createObject('value', reference('logsUserAssignedIdentity').clientId)))]",
           "scriptsUserAssignedIdentityClientId": "[if(empty(parameters('scriptsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('scriptsUserAssignedIdentity').clientId))]",
           "timeStamp": {
             "value": "[parameters('timeStamp')]"
@@ -349,8 +350,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "15068519070017014987"
+              "version": "0.47.16.16243",
+              "templateHash": "14945317255882250513"
             }
           },
           "parameters": {
@@ -475,8 +476,8 @@
           "protectedParameters": "[if(empty(parameters('protectedParameter')), createObject('value', createArray()), createObject('value', createArray(parameters('protectedParameter'))))]",
           "outputBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
           "errorBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
-          "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('logsUserAssignedIdentity').clientId))]",
-          "errorBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), createObject('value', reference('logsUserAssignedIdentity').clientId))]",
+          "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), if(variables('usesSharedUserAssignedIdentity'), createObject('value', reference('scriptsUserAssignedIdentity').clientId), createObject('value', reference('logsUserAssignedIdentity').clientId)))]",
+          "errorBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), if(variables('usesSharedUserAssignedIdentity'), createObject('value', reference('scriptsUserAssignedIdentity').clientId), createObject('value', reference('logsUserAssignedIdentity').clientId)))]",
           "timeoutInSeconds": {
             "value": "[parameters('timeoutInSeconds')]"
           }
@@ -488,8 +489,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "9810196216141102269"
+              "version": "0.47.16.16243",
+              "templateHash": "4447852325834293537"
             }
           },
           "definitions": {

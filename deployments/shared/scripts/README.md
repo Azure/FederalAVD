@@ -91,6 +91,11 @@ Grants the delegated permissions required by Azure Files Kerberos enterprise app
   Microsoft Graph, then creates or updates their delegated permission grants.
 - **Output:** `C:\Windows\Logs\Grant-StorageAccountApplicationConsent-<timestamp>.log`
 
+Both Graph scripts above request a managed identity token for the supplied `GraphEndpoint`. When that
+endpoint is `https://graph.microsoft.us` and Graph returns 401 or 403, they request a separate token
+for `https://dod-graph.microsoft.us` and retry against the DoD endpoint. Graph tokens are not
+interchangeable between the GCC High and DoD Graph deployments.
+
 ### [Set-NtfsPermissionsAzureFiles.ps1](Set-NtfsPermissionsAzureFiles.ps1)
 
 Sets NTFS permissions on Azure Files shares used by FSLogix.

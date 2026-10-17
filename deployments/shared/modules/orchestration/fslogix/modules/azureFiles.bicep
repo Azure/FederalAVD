@@ -55,6 +55,14 @@ var privateEndpointVnetId = length(privateEndpointVnetName) < 37
   ? privateEndpointVnetName
   : uniqueString(privateEndpointVnetName)
 
+resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
+  name: privateEndpointVnetName
+  scope: resourceGroup(
+    split(privateEndpointSubnetResourceId, '/')[2],
+    split(privateEndpointSubnetResourceId, '/')[4]
+  )
+}
+
 var smbSettingsValues = {
   versions: 'SMB3.0;SMB3.1.1;'
   authenticationMethods: 'NTLMv2;Kerberos;'
@@ -81,7 +89,7 @@ var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': ho
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(environment().name, 'us')
-      ? 'https://graph.${environment().suffixes.storage}'
+      ? 'https://graph${replace(environment().suffixes.storage, 'core', '')}'
       : 'https://graph.microsoft.com'
 
 resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = if (!empty(appUpdateUserAssignedIdentityResourceId)) {
@@ -181,6 +189,7 @@ module privateEndpoints '../../../resourceModules/network/privateEndpoints/deplo
         privateEndpointVnetId
       )
       tags: union(parentResourceTags, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+      location: privateEndpointVirtualNetwork!.location
       subnetResourceId: privateEndpointSubnetResourceId
       privateLinkServiceId: storageAccounts[i].outputs.resourceId
       groupId: 'file'
@@ -292,7 +301,7 @@ module updateStorageApplicationsManifest '../../../resourceModules/compute/virtu
 }
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
-module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = {
+module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution != 'EntraId') {
   scope: resourceGroup(deploymentResourceGroupName)
   params: {
     virtualMachineName: deploymentVirtualMachineName

@@ -307,6 +307,46 @@ function Read-FunctionAppSetting {
     }        
 }
 
+function Assert-DeviceCleanupConfiguration {
+    <#
+    .SYNOPSIS
+        Validates identity-aware device cleanup requirements before replacement begins.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $ReplacementMode,
+
+        [Parameter(Mandatory = $true)]
+        [string] $IdentitySolution,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $RemoveEntraDevice,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $RemoveIntuneDevice,
+
+        [Parameter()]
+        [bool] $IntuneEnrollment = $false
+    )
+
+    $isEntraJoined = $IdentitySolution -in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')
+
+    if ($ReplacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and $isEntraJoined -and -not $RemoveEntraDevice) {
+        Write-LogEntry -Message "CRITICAL ERROR: Entra device cleanup is required for exact-name replacement of Microsoft Entra joined session hosts." -Level Error
+        throw "RemoveEntraDevice must be enabled for exact-name replacement of Microsoft Entra joined session hosts"
+    }
+
+    if ($ReplacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and -not $RemoveIntuneDevice) {
+        if ($isEntraJoined -and $IntuneEnrollment) {
+            Write-LogEntry -Message "Intune cleanup is disabled for Intune-enrolled Microsoft Entra joined hosts. Cleanup is highly recommended before DeleteFirst hostname reuse to prevent stale or duplicate managed-device records." -Level Warning
+        }
+        elseif ($IdentitySolution -eq 'ActiveDirectoryDomainServices') {
+            Write-LogEntry -Message "If these AD DS hosts are Microsoft Entra hybrid joined and enrolled in Intune, Intune cleanup is highly recommended before DeleteFirst hostname reuse to prevent stale or duplicate managed-device records." -Level Warning
+        }
+    }
+}
+
 #EndRegion Configuration Functions
 
 #Region Logging and Error Handling
@@ -773,8 +813,8 @@ function Invoke-GraphApiWithRetry {
                 }
             }
             
-            # Retry on authentication/authorization errors (401, 403) or if endpoint not found (404 on base endpoint)
-            if ($statusCode -in @(401, 403, 404) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {
+            # Retry on authentication/authorization errors (401, 403) against the next Graph endpoint
+            if ($statusCode -in @(401, 403) -and $endpoint -ne $endpointsToTry[-1].Endpoint) {
                 Write-LogEntry -Message "Graph API call to $endpoint failed with status $statusCode. Trying next endpoint..." -Level Warning
                 continue
             }
@@ -816,6 +856,7 @@ function Get-VMPowerStates {
         [string] $ARMToken,
         
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [array] $VMResourceIds,
         
         [Parameter()]
@@ -854,4 +895,4 @@ function Get-VMPowerStates {
 #EndRegion VM Helper Functions
 
 # Export functions
-Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Assert-DeviceCleanupConfiguration, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates

@@ -32,6 +32,14 @@ host-pool FSLogix experience. Encryption key management, private networking, mon
 recovery are grouped on the Zero Trust Configuration page. Resource tags and optional naming
 overrides are grouped on the final Tags and Naming page.
 
+For Azure Files, the portal form checks the Storage resource provider SKU inventory for the selected
+subscription and region. It checks `Standard_ZRS` with the `StorageV2` account kind for Standard
+storage and `Premium_ZRS` with the `FileStorage` account kind for Premium storage. When the matching
+ZRS SKU is available and has no location restriction, the form offers both LRS and ZRS, defaults to
+ZRS, and warns only if LRS is selected. Otherwise, only LRS is offered. Direct Bicep, PowerShell, and
+CI/CD deployments retain the `LocallyRedundant` parameter default and must select
+`ZoneRedundant` explicitly.
+
 For Cloud Cache, the form follows the host-pool workflow instead of accepting raw identifiers.
 Azure Files users select a remote region and existing storage accounts discovered from Azure.
 Azure NetApp Files users select a remote account, capacity pool, and volumes. The add-on accepts
@@ -98,7 +106,7 @@ count only after storage, policy, and role assignments complete.
 | Entra Kerberos Cloud Only | Yes | No |
 | Entra ID with storage keys | Yes | No |
 | Share permissions | Default SMB share permission and admin Azure RBAC | Volume configuration |
-| NTFS permissions | Deployment VM Run Command | Deployment VM Run Command |
+| NTFS permissions | Deployment VM Run Command for identity-based authentication; skipped for Entra ID storage keys | Deployment VM Run Command |
 | Private networking | Private endpoint | Delegated subnet |
 | Customer-managed keys | Existing Key Vault; keys and identity created automatically | Managed by the NetApp account path |
 | Diagnostics | Existing Log Analytics workspace | Not configured by the shared module |
@@ -112,10 +120,12 @@ storage accounts and shares as protected items; it does not modify the shared va
 ## NTFS and Entra Kerberos Automation
 
 The add-on calls the same shared FSLogix storage module and scripts as the host-pool deployment.
-For Azure Files, that path creates shares, configures the selected identity provider, applies share
-RBAC, and runs `Set-NtfsPermissionsAzureFiles.ps1` from the temporary deployment VM. AD DS, Entra
-Domain Services, and Entra Kerberos Hybrid use domain group names; Entra Kerberos Cloud Only uses
-Microsoft Entra group object IDs.
+For Azure Files, that path creates shares and configures the selected authentication method.
+Identity-based authentication applies share RBAC and runs `Set-NtfsPermissionsAzureFiles.ps1` from
+the temporary deployment VM. AD DS, Entra Domain Services, and Entra Kerberos Hybrid use domain
+group names; Entra Kerberos Cloud Only uses Microsoft Entra group object IDs. Entra ID
+storage-account-key authentication bypasses share-level and NTFS authorization, so it skips the
+ACL step and does not create a deployment-helper VM.
 
 Entra Kerberos automation follows the host-pool identity model. The temporary deployment identity
 performs Azure Resource Manager and storage operations. A separate existing application-update
@@ -127,8 +137,10 @@ identity is attached to the temporary VM and is used to acquire Microsoft Graph 
 
 The application-update identity must already have the Microsoft Graph application permissions
 `Application.ReadWrite.All` and `DelegatedPermissionGrant.ReadWrite.All`. The add-on does not grant
-these tenant-level permissions, matching the host-pool deployment. Use
-`tools/Test-EntraKerberosManagedIdentityPermissions.ps1` to validate the identity before deployment.
+these tenant-level permissions, matching the host-pool deployment. Connect to the correct Microsoft
+Graph environment first, use `tools/Set-EntraKerberosManagedIdentityPermissions.ps1` to grant the
+permissions, and use `tools/Test-EntraKerberosManagedIdentityPermissions.ps1` to validate the
+identity before deployment. Neither helper selects or disconnects the Graph environment.
 When automation is not selected, complete the documented manual Entra Kerberos tasks after
 deployment. Multifactor authentication exclusions remain manual in either mode.
 
@@ -195,10 +207,12 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
 - **Azure Files backup:** The selected Recovery Services vault and file-share backup policy must
    already exist and be usable by the storage accounts being protected.
 
-The temporary deployment VM uses Run Command to register domain-backed storage, update Entra
-Kerberos applications, grant consent, and initialize NTFS permissions. Its identity receives only
-the deployment-resource-group and storage-resource-group roles needed for that work and cleanup.
-Cleanup removes storage role assignments before deleting the temporary resource group.
+When identity-based authentication requires it, the temporary deployment VM uses Run Command to
+register domain-backed storage, update Entra Kerberos applications, grant consent, and initialize
+NTFS permissions. Its identity receives only the deployment-resource-group and
+storage-resource-group roles needed for that work and cleanup. Cleanup removes storage role
+assignments before deleting the temporary resource group. Entra ID storage-account-key
+authentication skips the temporary VM.
 
 For Azure Files, the temporary VM remains in a workgroup. The scripts install the Active Directory
 RSAT tools, use DNS-based DC Locator to discover an ADWS-capable domain controller, and pass the

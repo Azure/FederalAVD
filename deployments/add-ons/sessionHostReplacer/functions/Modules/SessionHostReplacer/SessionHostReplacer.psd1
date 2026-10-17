@@ -30,6 +30,7 @@
         'Get-GraphEndpoint'
         'Get-AccessToken'
         'Read-FunctionAppSetting'
+        'Assert-DeviceCleanupConfiguration'
         'Write-LogEntry'
         'Invoke-AzureRestMethod'
         'Invoke-AzureRestMethodWithRetry'
@@ -46,6 +47,11 @@
         'Get-Deployments'
         'Get-TemplateSpecVersionResourceId'
         'Remove-FailedDeploymentArtifacts'
+
+        # Maintenance functions (from SessionHostReplacer.Maintenance.psm1)
+        'ConvertFrom-MaintenanceRequest'
+        'Get-MaintenanceExecutionDecision'
+        'Set-MaintenanceApprovedImageVersion'
         
         # Image Management functions (from SessionHostReplacer.ImageManagement.psm1)
         'Compare-ImageVersion'
@@ -55,12 +61,14 @@
         'Get-SessionHostReplacementPlan'
         'Get-SessionHosts'
         'Get-ScalingPlanCurrentTarget'
+        'Get-SessionHostDeletionSafety'
         
         # Lifecycle functions (from SessionHostReplacer.Lifecycle.psm1)
         'Remove-SessionHosts'
         'Remove-VirtualMachine'
         'Remove-ExpiredShutdownVMs'
         'Send-DrainNotification'
+        'Remove-SessionHostUserSessions'
         'Test-NewSessionHostsAvailable'
         
         # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)

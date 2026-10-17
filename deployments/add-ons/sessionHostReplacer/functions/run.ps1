@@ -9,8 +9,8 @@ if ($Timer.IsPastDue) {
 Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
 
 # Log configuration settings for workbook visibility
-$replacementMode = Read-FunctionAppSetting ReplacementMode
-$enableShutdownRetention = $replacementMode -eq 'SideBySide' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)
+$configuredReplacementMode = Read-FunctionAppSetting ReplacementMode
+$replacementMode = $configuredReplacementMode
 $minimumDrainMinutes = Read-FunctionAppSetting MinimumDrainMinutes
 $drainGracePeriodHours = Read-FunctionAppSetting DrainGracePeriodHours
 $minimumCapacityPercentage = Read-FunctionAppSetting MinimumCapacityPercentage
@@ -26,10 +26,88 @@ $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 $enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
 $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
 $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
+$sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
+$sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
+$maintenanceRequestSetting = Read-FunctionAppSetting MaintenanceRequest
+$maintenanceRequestJson = if ($maintenanceRequestSetting -is [string] -or
+    $null -eq $maintenanceRequestSetting) {
+    $maintenanceRequestSetting
+}
+else {
+    $maintenanceRequestSetting | ConvertTo-Json -Depth 10 -Compress
+}
+$maintenanceRequest = if ([string]::IsNullOrWhiteSpace($maintenanceRequestJson)) {
+    $null
+}
+else {
+    ConvertFrom-MaintenanceRequest -RequestJson $maintenanceRequestJson
+}
+$maintenanceDecision = $null
+$maintenanceRequestScheduled = $false
+$initialDeploymentState = Get-DeploymentState
+
+if (-not $maintenanceRequest -and
+    -not [string]::IsNullOrWhiteSpace($initialDeploymentState.ActiveMaintenanceRequestId)) {
+    throw "Maintenance request settings are missing while request '$($initialDeploymentState.ActiveMaintenanceRequestId)' is active."
+}
+
+if ($maintenanceRequest) {
+    if ($configuredReplacementMode -ne 'DeleteFirst') {
+        throw "Maintenance override requires configured ReplacementMode DeleteFirst. Found '$configuredReplacementMode'."
+    }
+
+    if ($initialDeploymentState.LastStatus -eq 'Error') {
+        throw 'Maintenance override cannot continue because deployment state could not be read.'
+    }
+
+    $maintenanceDecision = Get-MaintenanceExecutionDecision `
+        -Request $maintenanceRequest `
+        -DeploymentState $initialDeploymentState
+    Write-LogEntry -Message "MAINTENANCE_REQUEST | RequestId: $($maintenanceRequest.RequestId) | Status: $($maintenanceDecision.Status) | $($maintenanceDecision.Reason)"
+
+    if ($maintenanceDecision.Status -eq 'Scheduled') {
+        Write-LogEntry -Message "Normal $configuredReplacementMode replacement is suspended until the scheduled maintenance request starts." -Level Warning
+        $maintenanceRequestScheduled = $true
+    }
+    elseif ($maintenanceDecision.Status -in @('Expired', 'Completed')) {
+        Write-LogEntry -Message "Maintenance request status is $($maintenanceDecision.Status); resuming configured $configuredReplacementMode behavior."
+        $maintenanceRequest = $null
+    }
+    else {
+        $replacementMode = 'MaintenanceWindow'
+        $sessionHostParameters = Set-MaintenanceApprovedImageVersion `
+            -SessionHostParameters $sessionHostParameters `
+            -ApprovedImageVersion $maintenanceRequest.ApprovedImageVersion
+    }
+}
+$enableShutdownRetention = $replacementMode -eq 'SideBySide' -and (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean)
+$identitySolution = [string]$sessionHostParameters.IdentitySolution
+Assert-DeviceCleanupConfiguration `
+    -ReplacementMode $replacementMode `
+    -IdentitySolution $identitySolution `
+    -RemoveEntraDevice $removeEntraDevice `
+    -RemoveIntuneDevice $removeIntuneDevice `
+    -IntuneEnrollment ([bool]$sessionHostParameters.IntuneEnrollment)
+
+$functionAppSubscriptionId = if ($env:WEBSITE_OWNER_NAME) { ($env:WEBSITE_OWNER_NAME -split '\+')[0] } else { $null }
+$functionAppResourceId = if ($functionAppSubscriptionId -and $env:WEBSITE_RESOURCE_GROUP -and $env:WEBSITE_SITE_NAME) {
+    "/subscriptions/$functionAppSubscriptionId/resourceGroups/$($env:WEBSITE_RESOURCE_GROUP)/providers/Microsoft.Web/sites/$($env:WEBSITE_SITE_NAME)"
+}
+else {
+    'Unavailable'
+}
+$requiredGraphPermissions = @()
+if ($removeEntraDevice) {
+    $requiredGraphPermissions += 'Device.ReadWrite.All'
+}
+if ($removeIntuneDevice) {
+    $requiredGraphPermissions += 'DeviceManagementManagedDevices.ReadWrite.All'
+}
+$requiredGraphPermissionsText = $requiredGraphPermissions -join ', '
 
 # Build settings log with N/A for non-applicable values based on replacement mode
 $settingsLog = @{
-    ReplacementMode             = $replacementMode
+    ReplacementMode             = $configuredReplacementMode
     MinimumDrainMinutes         = $minimumDrainMinutes
     DrainGracePeriodHours       = $drainGracePeriodHours
     MinimumCapacityPercent      = if ($replacementMode -eq 'DeleteFirst') { "$minimumCapacityPercentage (static)" } else { 'N/A' }
@@ -46,7 +124,10 @@ $settingsLog = @{
     DynamicCapacityEnabled      = if ($replacementMode -eq 'DeleteFirst') { 'Yes' } else { 'N/A' }
 }
 
-Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14} | FunctionAppResourceId: {15}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled, $functionAppResourceId
+if ($replacementMode -eq 'MaintenanceWindow') {
+    Write-LogEntry -Message "Effective replacement behavior: MaintenanceWindow override (configured mode: $configuredReplacementMode)."
+}
 
 # Acquire ARM access token
 try {
@@ -70,6 +151,21 @@ $resourceManagerUri = Get-ResourceManagerUri
 $Uri = "$resourceManagerUri/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
 $cachedVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
 Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count
+
+if ($maintenanceRequest) {
+    $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
+    $retainedVMs = @(
+        $cachedVMs |
+            Where-Object {
+                $_.tags -and
+                $_.tags.PSObject.Properties.Name -contains $shutdownRetentionTag -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.tags.$shutdownRetentionTag)
+            }
+    )
+    if ($retainedVMs.Count -gt 0) {
+        throw "Maintenance override cannot run while shutdown-retention VMs exist: $($retainedVMs.name -join ', '). Restore or remove them through the approved rollback or cleanup process before scheduling maintenance."
+    }
+}
 
 # Check for and cleanup expired shutdown VMs BEFORE fetching session hosts (so the list is already clean)
 if ($enableShutdownRetention) {
@@ -108,15 +204,48 @@ if ($enableShutdownRetention) {
 }
 
 # Get session hosts and update tags if needed (pass cached VMs)
-$sessionHosts = Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs
+$sessionHosts = @(Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs)
 Write-LogEntry -Message "Found {0} session hosts" -StringValues $sessionHosts.Count
 
 # Check previous deployment status and pending host mappings
 $previousDeploymentStatus = $null
 
-# Get deployment state if needed (for progressive scale-up OR DeleteFirst mode)
-if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
+# Get deployment state if needed (for progressive scale-up or a delete-before-deploy mode)
+if ($enableProgressiveScaleUp -or $replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     $deploymentState = Get-DeploymentState
+
+    if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and $deploymentState.LastStatus -eq 'Error') {
+        throw "Delete-before-deploy mode cannot continue because deployment recovery state could not be read"
+    }
+
+    if ($maintenanceRequest) {
+        $maintenanceDecision = Get-MaintenanceExecutionDecision `
+            -Request $maintenanceRequest `
+            -DeploymentState $deploymentState
+        Write-LogEntry -Message "MAINTENANCE_REQUEST | RequestId: $($maintenanceRequest.RequestId) | Status: $($maintenanceDecision.Status) | $($maintenanceDecision.Reason)"
+    }
+
+    if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+        try {
+            $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+            if ($pendingMappings -isnot [System.Collections.IDictionary]) {
+                throw "PendingHostMappings must be a JSON object keyed by session host name"
+            }
+            $expectedHostNames = @($pendingMappings.Keys)
+            $registeredHostNames = @($sessionHosts.SessionHostName)
+            $missingHosts = @($expectedHostNames | Where-Object { $_ -notin $registeredHostNames })
+
+            if ($missingHosts.Count -eq 0) {
+                Write-LogEntry -Message "All {0} pending host(s) are registered - clearing recovery mappings" -StringValues $expectedHostNames.Count -Level Trace
+                $deploymentState.PendingHostMappings = '{}'
+                Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
+            }
+        }
+        catch {
+            Write-LogEntry -Message "Delete-First recovery state is invalid or could not be updated: $($_.Exception.Message)" -Level Error
+            throw
+        }
+    }
     
     if (-not [string]::IsNullOrEmpty($deploymentState.LastDeploymentName)) {
         Write-LogEntry -Message "Checking status of previous deployment: {0}" -StringValues $deploymentState.LastDeploymentName
@@ -126,7 +255,7 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
             if ($previousDeploymentStatus.Succeeded) {
                 # Verify hosts from pending mappings actually registered before counting as success (DeleteFirst mode)
                 $allHostsRegistered = $true
-                if ($replacementMode -eq 'DeleteFirst' -and $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
+                if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
                     $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json
                     $expectedHostNames = $pendingMappings.PSObject.Properties.Name
                     $registeredHostNames = $sessionHosts.SessionHostName
@@ -219,6 +348,7 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
                 }
                 catch {
                     Write-LogEntry -Message "Error during failed deployment cleanup: $_" -Level Error
+                    throw
                 }
                 
                 # DO NOT clear pending host mappings - those hosts still need deployment after cleanup
@@ -246,6 +376,16 @@ if ($enableProgressiveScaleUp -or $replacementMode -eq 'DeleteFirst') {
             
             # Save updated state
             Save-DeploymentState -DeploymentState $deploymentState
+
+            if ($previousDeploymentStatus.Running) {
+                Write-LogEntry -Message "Skipping this cycle while deployment {0} remains in progress" -StringValues $deploymentState.LastDeploymentName -Level Warning
+                return
+            }
+
+            if ($previousDeploymentStatus.Succeeded -and $replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and -not $allHostsRegistered) {
+                Write-LogEntry -Message "Skipping this cycle while successfully deployed hosts complete AVD registration" -Level Warning
+                return
+            }
         }
     }
 }
@@ -341,15 +481,21 @@ $runningDeployments = $deploymentsInfo.RunningDeployments
 $failedDeployments = $deploymentsInfo.FailedDeployments
 Write-LogEntry -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count
 
+if ($runningDeployments.Count -gt 0) {
+    Write-LogEntry -Message "Skipping this cycle while {0} session host deployment(s) remain in progress: {1}" -StringValues $runningDeployments.Count, ($runningDeployments.DeploymentName -join ', ') -Level Warning
+    return
+}
+
 # Clean up failed deployments and orphaned VMs
 if ($failedDeployments.Count -gt 0) {
     Write-LogEntry -Message "Processing {0} failed deployments for cleanup" -StringValues $failedDeployments.Count
     Remove-FailedDeploymentArtifacts -ARMToken $ARMToken -FailedDeployments $failedDeployments -RegisteredSessionHostNames $sessionHostsFiltered.SessionHostName -CachedVMs $cachedVMs
 }
 
-# Load session host parameters
-$sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
-$sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
+if ($maintenanceRequestScheduled -and $replacementMode -eq 'SideBySide') {
+    Write-LogEntry -Message 'SideBySide deployment monitoring and failed-deployment cleanup are complete. No new normal replacement work will start while the maintenance request is scheduled.' -Level Warning
+    return
+}
 
 # Get latest version of session host image
 Write-LogEntry -Message "Getting latest image version using Image Reference."
@@ -434,8 +580,8 @@ $latestImageAge = (New-TimeSpan -Start $latestImageVersion.Date -End (Get-Date -
 # Check for work in progress that requires full processing
 $skipLightweightCheck = $false
 
-# DeleteFirst mode: Check for pending host mappings or hosts in drain mode
-if ($replacementMode -eq 'DeleteFirst') {
+# Delete-before-deploy modes: Check for pending host mappings or hosts in drain mode
+if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     $deploymentState = Get-DeploymentState
     $hasPendingMappings = $deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}'
     
@@ -454,6 +600,12 @@ if ($replacementMode -eq 'DeleteFirst') {
 # Check if there are any running or failed deployments (both modes)
 if ($runningDeployments.Count -gt 0 -or $failedDeployments.Count -gt 0) {
     Write-LogEntry -Message "Lightweight check: Found $($runningDeployments.Count) running and $($failedDeployments.Count) failed deployments - proceeding with full processing" -Level Trace
+    $skipLightweightCheck = $true
+}
+
+# An explicit target is also a capacity objective, not only a replacement-cycle baseline.
+if ($targetSessionHostCount -gt 0 -and $sessionHostsFiltered.Count -ne $targetSessionHostCount) {
+    Write-LogEntry -Message "Lightweight check: Current managed host count $($sessionHostsFiltered.Count) differs from explicit target $targetSessionHostCount - proceeding with full processing" -Level Trace
     $skipLightweightCheck = $true
 }
 
@@ -513,7 +665,7 @@ if (-not $skipLightweightCheck) {
 # Query the scaling plan before either planning path so an up-to-date pool can establish
 # exact-image validation evidence for healthy hosts.
 $scalingPlanTarget = $null
-if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
+if ($replacementMode -in @('DeleteFirst', 'SideBySide', 'MaintenanceWindow')) {
     try {
         $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
         $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
@@ -531,9 +683,65 @@ if ($replacementMode -in @('DeleteFirst', 'SideBySide')) {
         }
     }
     catch {
+        if ($replacementMode -eq 'MaintenanceWindow') {
+            throw "MaintenanceWindow cannot verify that autoscale is disabled: $($_.Exception.Message)"
+        }
         Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
         $scalingPlanTarget = $null
     }
+}
+
+$maintenanceCanStartNewBatch = $true
+if ($replacementMode -eq 'MaintenanceWindow') {
+    if ($scalingPlanTarget.ScalingPlanName -and $scalingPlanTarget.Source -ne 'Disabled') {
+        throw "MaintenanceWindow requires autoscale to be disabled. Scaling plan '$($scalingPlanTarget.ScalingPlanName)' is enabled or cannot be safely evaluated."
+    }
+
+    $deploymentState = Get-DeploymentState
+    $maintenanceDecision = Get-MaintenanceExecutionDecision `
+        -Request $maintenanceRequest `
+        -DeploymentState $deploymentState `
+        -LatestImageVersion $latestImageVersion.Version
+    if ($maintenanceDecision.Status -eq 'ImageMismatch') {
+        throw $maintenanceDecision.Reason
+    }
+
+    $maintenanceCanStartNewBatch = $maintenanceDecision.CanStartNewBatch
+    if ([string]::IsNullOrWhiteSpace($deploymentState.ActiveMaintenanceRequestId) -and
+        $maintenanceCanStartNewBatch) {
+        $existingPendingMappings = $deploymentState.PendingHostMappings -and
+            $deploymentState.PendingHostMappings -ne '{}'
+        $existingDrainingHosts = @(
+            $sessionHostsFiltered |
+                Where-Object { $_.PendingDrainTimeStamp }
+        )
+        if ($existingPendingMappings -or $existingDrainingHosts.Count -gt 0) {
+            throw 'Maintenance override cannot start while the configured replacement mode has pending deletion recovery or replacer-owned draining hosts. Remove the request, allow normal recovery to finish, and schedule a new request.'
+        }
+
+        $deploymentState.ActiveMaintenanceRequestId = $maintenanceRequest.RequestId
+        $deploymentState.MaintenanceWindowEndUtc = $maintenanceRequest.WindowEndUtc.ToString('o')
+        $deploymentState.LastStatus = 'MaintenanceActive'
+        Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
+        Write-LogEntry -Message "Maintenance request $($maintenanceRequest.RequestId) is now active."
+    }
+}
+
+$destructiveOperationsFrozen = $replacementMode -eq 'DeleteFirst' -and (
+    $maintenanceRequestScheduled -or (
+        $scalingPlanTarget -and
+        $scalingPlanTarget.Source -eq 'ScalingPlan' -and
+        ($scalingPlanTarget.Phase -in @('RampUp', 'Peak') -or $scalingPlanTarget.Phase -like '*->RampUp*')
+    )
+)
+if ($destructiveOperationsFrozen) {
+    $freezeReason = if ($maintenanceRequestScheduled) {
+        'a one-time maintenance request is scheduled'
+    }
+    else {
+        "scaling phase '$($scalingPlanTarget.Phase)'"
+    }
+    Write-LogEntry -Message "DeleteFirst destructive replacement is frozen because $freezeReason. Deployment recovery and host validation will continue." -Level Warning
 }
 
 # If up to date, skip replacement planning and go straight to the early exit path.
@@ -563,9 +771,44 @@ else {
         -LatestImageVersion $latestImageVersion `
         -AllowImageVersionRollback $allowImageVersionRollback `
         -ScalingPlanTarget $scalingPlanTarget `
+        -MaintenanceMaxVmsRemoved $(if ($maintenanceRequest) { $maintenanceRequest.MaxVmsRemoved } else { 1 }) `
+        -MaintenanceAllowFullPoolOutage $(if ($maintenanceRequest) { $maintenanceRequest.AllowFullPoolOutage } else { $false }) `
         -GraphToken $GraphToken `
         -RemoveEntraDevice $removeEntraDevice `
         -RemoveIntuneDevice $removeIntuneDevice
+}
+
+if ($replacementMode -eq 'MaintenanceWindow' -and -not $maintenanceCanStartNewBatch) {
+    $deploymentState = Get-DeploymentState
+    $hasPendingMaintenanceMappings = $deploymentState.PendingHostMappings -and
+        $deploymentState.PendingHostMappings -ne '{}'
+    $drainingMaintenanceHostNames = @(
+        $sessionHostsFiltered |
+            Where-Object { -not $_.AllowNewSession } |
+            ForEach-Object { $_.SessionHostName }
+    )
+
+    if (-not $hasPendingMaintenanceMappings -and $drainingMaintenanceHostNames.Count -eq 0) {
+        $deploymentState.CompletedMaintenanceRequestId = $maintenanceRequest.RequestId
+        $deploymentState.ActiveMaintenanceRequestId = ''
+        $deploymentState.MaintenanceWindowEndUtc = ''
+        $deploymentState.LastStatus = 'MaintenanceWindowExpiredIncomplete'
+        Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
+        Write-LogEntry -Message "Maintenance window closed before all hosts were replaced. No batch is in flight, so the request is closed without starting another destructive batch." -Level Warning
+        return
+    }
+
+    if (-not $hasPendingMaintenanceMappings) {
+        $hostPoolReplacementPlan.SessionHostsPendingDelete = @(
+            $hostPoolReplacementPlan.SessionHostsPendingDelete |
+                Where-Object { $_.SessionHostName -in $drainingMaintenanceHostNames }
+        )
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount =
+            $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
+        $hostPoolReplacementPlan.PossibleDeploymentsCount =
+            $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
+        Write-LogEntry -Message "Maintenance window is closed. Continuing only the already draining batch: $($drainingMaintenanceHostNames -join ', ')." -Level Warning
+    }
 }
 
 # EARLY EXIT: Check if host pool is up to date (nothing to do)
@@ -577,21 +820,17 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     
     Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
 
-    $scalingPlanUsable = $scalingPlanTarget -and
-        $scalingPlanTarget.Source -eq 'ScalingPlan' -and
-        $null -ne $scalingPlanTarget.CapacityPercentage
-    if ($scalingPlanUsable) {
-        $upToDateHostReadiness = Test-NewSessionHostsAvailable `
-            -ARMToken $ARMToken `
-            -SessionHosts $sessionHosts `
-            -LatestImageVersion $latestImageVersion `
-            -ScalingPlanTarget $scalingPlanTarget
+    $upToDateHostReadiness = Test-NewSessionHostsAvailable `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHosts `
+        -LatestImageVersion $latestImageVersion `
+        -ScalingPlanTarget $scalingPlanTarget
 
-        Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
-    }
+    Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
     
-    # Update LastImageVersion now that the cycle is complete
-    if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
+    # Update cycle state now that replacement is complete.
+    if ((Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) -or
+        $replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
         $deploymentState = Get-DeploymentState
         $currentImageVersion = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { 'N/A' }
         
@@ -599,8 +838,20 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         if ($deploymentState.LastImageVersion -ne $currentImageVersion) {
             Write-LogEntry -Message "Cycle complete - updating LastImageVersion from $($deploymentState.LastImageVersion) to $currentImageVersion" -Level Trace
             $deploymentState.LastImageVersion = $currentImageVersion
-            Save-DeploymentState -DeploymentState $deploymentState
         }
+
+        if ($targetSessionHostCount -eq 0 -and $deploymentState.PendingHostMappings -eq '{}') {
+            $deploymentState.TargetSessionHostCount = 0
+            Write-LogEntry -Message "Cycle complete - clearing the auto-detected target so the next cycle can detect intentional pool-size changes" -Level Trace
+        }
+        if ($replacementMode -eq 'MaintenanceWindow') {
+            $deploymentState.CompletedMaintenanceRequestId = $maintenanceRequest.RequestId
+            $deploymentState.ActiveMaintenanceRequestId = ''
+            $deploymentState.MaintenanceWindowEndUtc = ''
+            $deploymentState.LastStatus = 'MaintenanceComplete'
+            Write-LogEntry -Message "Maintenance request $($maintenanceRequest.RequestId) completed successfully."
+        }
+        Save-DeploymentState -DeploymentState $deploymentState
     }
     
     # CRITICAL: Check if scaling exclusion tags need to be removed before exiting
@@ -768,14 +1019,13 @@ else {
 # New cycle detection will now happen earlier in the flow, before replacement plan calculation
 
 # Check replacement mode to determine execution order
-$replacementMode = Read-FunctionAppSetting ReplacementMode
-Write-LogEntry -Message "Replacement Mode: {0}" -StringValues $replacementMode
+Write-LogEntry -Message "Effective Replacement Mode: {0}" -StringValues $replacementMode
 
-if ($replacementMode -eq 'DeleteFirst') {
+if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     # ================================================================================================
     # DELETE-FIRST MODE: Delete idle hosts first, then deploy replacements
     # ================================================================================================
-    Write-LogEntry -Message "Using DELETE-FIRST mode: will delete idle hosts before deploying replacements"
+    Write-LogEntry -Message "Using $replacementMode delete-before-deploy workflow."
     
     # STEP 1: Delete session hosts first
     $deletedSessionHostNames = @()
@@ -788,7 +1038,7 @@ if ($replacementMode -eq 'DeleteFirst') {
     $deploymentState = Get-DeploymentState
     if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
         try {
-            $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable
+            $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
             Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count
                 
             # Check if any pending hosts are still unresolved (deleted but not registered)
@@ -809,8 +1059,8 @@ if ($replacementMode -eq 'DeleteFirst') {
             }
         }
         catch {
-            Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Warning
-            $hostPropertyMapping = @{}
+            Write-LogEntry -Message "Failed to parse pending host mappings: $_" -Level Error
+            throw
         }
     }
     
@@ -824,11 +1074,58 @@ if ($replacementMode -eq 'DeleteFirst') {
         # Skip the entire delete/deploy cycle - exit DeleteFirst flow
         $shouldSkipEntireFlow = $true
     }
+
+    if ($destructiveOperationsFrozen -and -not $hasPendingUnresolvedHosts) {
+        Write-LogEntry -Message "DeleteFirst mode will not start a new delete/deploy batch during the 60-minute pre-RampUp freeze, RampUp, or Peak." -Level Warning
+        $shouldSkipEntireFlow = $true
+    }
     
     # Log pending host retry scenario
     if ($hasPendingUnresolvedHosts) {
         Write-LogEntry -Message "SAFETY CHECK FAILED: Cannot delete more hosts while previous deletions have unresolved deployments or registration issues" -Level Warning
         Write-LogEntry -Message "Will retry deployment of pending hosts without deleting additional capacity" -Level Warning
+        $deletedSessionHostNames = @($unresolvedHosts)
+
+        $GraphToken = $null
+        if ($removeEntraDevice -or $removeIntuneDevice) {
+            $graphEndpoint = Get-GraphEndpoint
+            $GraphToken = Get-AccessToken -ResourceUri $graphEndpoint
+            if ([string]::IsNullOrEmpty($GraphToken)) {
+                throw "Graph token acquisition failed while validating pending Delete-First cleanup"
+            }
+        }
+
+        $recoverySessionHosts = foreach ($unresolvedHost in $unresolvedHosts) {
+            $savedProperties = $hostPropertyMapping[$unresolvedHost]
+            $vmName = if ($savedProperties.VMName) { $savedProperties.VMName } else { $unresolvedHost }
+            $resourceId = if ($savedProperties.ResourceId) {
+                $savedProperties.ResourceId
+            }
+            else {
+                "/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines/$vmName"
+            }
+
+            if ($removeEntraDevice -or $removeIntuneDevice) {
+                Remove-DeviceFromDirectories -DeviceName $unresolvedHost -GraphToken $GraphToken -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+            }
+
+            [PSCustomObject]@{
+                SessionHostName = $unresolvedHost
+                ResourceId = $resourceId
+            }
+        }
+
+        $recoveryVerification = Confirm-SessionHostDeletions `
+            -ARMToken $ARMToken `
+            -GraphToken $GraphToken `
+            -DeletedHostNames $unresolvedHosts `
+            -SessionHosts @($recoverySessionHosts) `
+            -RemoveEntraDevice $removeEntraDevice `
+            -RemoveIntuneDevice $removeIntuneDevice
+
+        if ($recoveryVerification.IncompleteHosts.Count -gt 0) {
+            throw "Pending Delete-First cleanup remains incomplete - cannot safely reuse hostnames"
+        }
         
         # CRITICAL FIX: Adjust deployment count to only retry pending hosts, not add extra capacity
         # The planning function doesn't know about pending deleted hosts, so it calculates as if pool is short
@@ -839,6 +1136,30 @@ if ($replacementMode -eq 'DeleteFirst') {
         $hostPoolReplacementPlan.PossibleDeploymentsCount = $pendingHostCount
     }
     
+    if (-not $shouldSkipEntireFlow -and
+        -not $hasPendingUnresolvedHosts -and
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and
+        $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        $freshSessionHosts = @(Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs)
+        $finalSafety = Get-SessionHostDeletionSafety `
+            -ARMToken $ARMToken `
+            -SessionHosts $freshSessionHosts `
+            -DeletionCandidates @($hostPoolReplacementPlan.SessionHostsPendingDelete) `
+            -TargetSessionHostCount $hostPoolReplacementPlan.TargetSessionHostCount `
+            -MinimumCapacityPercentage $minimumCapacityPercentage `
+            -ReplacementMode $replacementMode `
+            -ScalingPlanTarget $scalingPlanTarget `
+            -MaintenanceAllowFullPoolOutage $(if ($maintenanceRequest) { $maintenanceRequest.AllowFullPoolOutage } else { $false })
+
+        Write-LogEntry -Message "FINAL_DELETE_SAFETY | OnlineHealthy: {0} | RequiredRemaining: {1} | Candidates: {2}/{3} | Frozen: {4} | Result: {5}" -StringValues $finalSafety.OnlineHealthyHosts, $finalSafety.MinimumOnlineHealthyHosts, $finalSafety.SafeCandidates.Count, $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, $finalSafety.DestructiveOperationsFrozen, $finalSafety.Reason
+        $hostPoolReplacementPlan.SessionHostsPendingDelete = @($finalSafety.SafeCandidates)
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount = $finalSafety.SafeCandidates.Count
+        if ($finalSafety.SafeCandidates.Count -eq 0) {
+            $hostPoolReplacementPlan.PossibleDeploymentsCount = 0
+            $shouldSkipEntireFlow = $true
+        }
+    }
+
     # Execute deletion logic only if we're not in a pending host retry scenario
     if (-not $shouldSkipEntireFlow -and -not $hasPendingUnresolvedHosts) {
         if ($newHostAvailability.TotalNewHosts -gt 0) {
@@ -862,6 +1183,8 @@ if ($replacementMode -eq 'DeleteFirst') {
                         HostId      = $sessionHost.HostId
                         HostGroupId = $sessionHost.HostGroupId
                         Zones       = $sessionHost.Zones
+                        VMName      = $sessionHost.VMName
+                        ResourceId  = $sessionHost.ResourceId
                     }
                     
                     if ($sessionHost.HostId -or $sessionHost.HostGroupId) {
@@ -883,7 +1206,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             else {
                 $deploymentState.PendingHostMappings = '{}'
             }
-            Save-DeploymentState -DeploymentState $deploymentState
+            Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
 
             # Acquire Graph token if device cleanup is enabled
             $GraphToken = $null
@@ -894,21 +1217,28 @@ if ($replacementMode -eq 'DeleteFirst') {
                 
                     if ([string]::IsNullOrEmpty($GraphToken)) {
                         Write-LogEntry -Message "CRITICAL ERROR: Get-AccessToken returned null or empty Graph token but device cleanup is enabled." -Level Error
-                        Write-LogEntry -Message "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Error
+                        Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Error
                         Write-LogEntry -Message "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
                         throw "Graph token acquisition failed but device cleanup is required in DeleteFirst mode"
                     }
                 }
                 catch {
                     Write-LogEntry -Message "CRITICAL ERROR: Failed to acquire Graph access token but device cleanup is enabled: $_" -Level Error
-                    Write-LogEntry -Message "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Error
+                    Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Error
                     Write-LogEntry -Message "Delete-First mode cannot proceed without device cleanup capability - hostname reuse will fail" -Level Error
                     throw "Graph token acquisition failed but device cleanup is required in Delete-First mode"
                 }
             }
         
             # Perform deletion
-            $deletionResults = Remove-SessionHosts -ARMToken $ARMToken -GraphToken $GraphToken -SessionHostsPendingDelete $hostPoolReplacementPlan.SessionHostsPendingDelete -RemoveEntraDevice $removeEntraDevice -RemoveIntuneDevice $removeIntuneDevice
+            $deletionResults = Remove-SessionHosts `
+                -ARMToken $ARMToken `
+                -GraphToken $GraphToken `
+                -SessionHostsPendingDelete $hostPoolReplacementPlan.SessionHostsPendingDelete `
+                -RemoveEntraDevice $removeEntraDevice `
+                -RemoveIntuneDevice $removeIntuneDevice `
+                -MaintenanceLogOffDelayMinutes $(if ($maintenanceRequest) { $maintenanceRequest.LogOffDelayMinutes } else { 0 }) `
+                -MaintenanceLogOffMessage $(if ($maintenanceRequest) { $maintenanceRequest.LogOffMessage } else { 'Scheduled maintenance' })
         
             # Check deletion results
             if ($deletionResults.FailedDeletions.Count -gt 0) {
@@ -954,7 +1284,7 @@ if ($replacementMode -eq 'DeleteFirst') {
                     }
                     
                     Write-LogEntry -Message "Delete-First mode cannot proceed - hostname reuse will fail if devices still exist in Entra ID/Intune" -Level Error
-                    Write-LogEntry -Message "TROUBLESHOOTING: Verify managed identity has Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All)" -Level Error
+                    Write-LogEntry -Message "TROUBLESHOOTING: Verify managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Error
                     throw "Device cleanup verification failed in Delete-First mode - cannot safely reuse hostnames"
                 }
                 
@@ -1013,43 +1343,47 @@ if ($replacementMode -eq 'DeleteFirst') {
             Write-LogEntry -Message "Retrying deployment for {0} pending host(s) from previous failed deployment" -StringValues $hostPropertyMapping.Count -Level Warning
         }
         
+        $deploymentAccepted = $false
         try {
-            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames -PreferredSessionHostNames $deletedSessionHostNames -PreferredHostProperties $hostPropertyMapping
+            $deploymentResult = Deploy-SessionHosts `
+                -ARMToken $ARMToken `
+                -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount `
+                -ExistingSessionHostNames $existingSessionHostNames `
+                -PreferredSessionHostNames $deletedSessionHostNames `
+                -PreferredHostProperties $hostPropertyMapping `
+                -SessionHostParameters $sessionHostParameters
+            $deploymentAccepted = $true
             
             # Log deployment submission immediately for workbook visibility
             Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
             
-            # Update deployment state for progressive scale-up tracking
-            if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
-                $deploymentState = Get-DeploymentState               
-                # Save deployment info for checking on next run
-                $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
-                $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
-                $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
-                $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
-                $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
-                
-                # Save session host names for cleanup tracking if deployment fails
-                if ($deploymentResult.SessionHostNames -and $deploymentResult.SessionHostNames.Count -gt 0) {
-                    # Build mapping with just VM names as keys (DeleteFirst mode will have full properties, this is simplified)
-                    $deploymentMapping = @{}
-                    foreach ($vmName in $deploymentResult.SessionHostNames) {
-                        $deploymentMapping[$vmName] = @{}
+            $deploymentState = Get-DeploymentState
+            $deploymentState.LastDeploymentName = $deploymentResult.DeploymentName
+            $deploymentState.LastDeploymentCount = $deploymentResult.SessionHostCount
+            $deploymentState.LastDeploymentNeeded = $hostPoolReplacementPlan.PossibleDeploymentsCount
+            $deploymentState.LastDeploymentPercentage = if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) { [Math]::Round(($deploymentResult.SessionHostCount / $hostPoolReplacementPlan.PossibleDeploymentsCount) * 100) } else { 0 }
+            $deploymentState.LastTimestamp = Get-Date -AsUTC -Format 'o'
+            $deploymentState.LastStatus = 'Running'
+
+            if ($deploymentResult.SessionHostNames -and $deploymentResult.SessionHostNames.Count -gt 0) {
+                foreach ($vmName in $deploymentResult.SessionHostNames) {
+                    if (-not $hostPropertyMapping.ContainsKey($vmName)) {
+                        $hostPropertyMapping[$vmName] = @{}
                     }
-                    $deploymentState.PendingHostMappings = ($deploymentMapping | ConvertTo-Json -Compress)
-                    Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
                 }
-                else {
-                    $deploymentState.PendingHostMappings = '{}'
-                }
-                
-                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
-                
-                # Save state
-                Save-DeploymentState -DeploymentState $deploymentState
+                $deploymentState.PendingHostMappings = ($hostPropertyMapping | ConvertTo-Json -Compress)
+                Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
             }
+
+            Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+            Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
         }
         catch {
+            if ($deploymentAccepted) {
+                Write-LogEntry -Message "Deployment was accepted but its tracking state could not be saved: $_" -Level Error
+                throw
+            }
+
             Write-LogEntry -Message "Deployment failed with error: $_" -Level Error
             
             # Update state to reflect immediate failure (submission error) if progressive scale-up is enabled
@@ -1065,7 +1399,7 @@ if ($replacementMode -eq 'DeleteFirst') {
             throw
         }
     }
-} # End of DeleteFirst mode
+} # End of delete-before-deploy mode
 else {
     # ================================================================================================
     # SIDE-BY-SIDE MODE: Deploy new hosts first, then delete old ones
@@ -1147,8 +1481,26 @@ else {
         Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
     }
 
-    # STEP 3: Delete session hosts (only if safety check passed or no new hosts to verify)
-    if (($newHostAvailability.SafeToProceed -or $newHostAvailability.TotalNewHosts -eq 0) -and $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+    if ($newHostAvailability.SafeToProceed -and
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and
+        $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        $freshSessionHosts = @(Get-SessionHosts -ARMToken $ARMToken -CachedVMs $cachedVMs)
+        $finalSafety = Get-SessionHostDeletionSafety `
+            -ARMToken $ARMToken `
+            -SessionHosts $freshSessionHosts `
+            -DeletionCandidates @($hostPoolReplacementPlan.SessionHostsPendingDelete) `
+            -TargetSessionHostCount $hostPoolReplacementPlan.TargetSessionHostCount `
+            -MinimumCapacityPercentage $minimumCapacityPercentage `
+            -ReplacementMode SideBySide `
+            -ScalingPlanTarget $scalingPlanTarget
+
+        Write-LogEntry -Message "FINAL_DELETE_SAFETY | OnlineHealthy: {0} | RequiredRemaining: {1} | Candidates: {2}/{3} | Frozen: {4} | Result: {5}" -StringValues $finalSafety.OnlineHealthyHosts, $finalSafety.MinimumOnlineHealthyHosts, $finalSafety.SafeCandidates.Count, $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, $finalSafety.DestructiveOperationsFrozen, $finalSafety.Reason
+        $hostPoolReplacementPlan.SessionHostsPendingDelete = @($finalSafety.SafeCandidates)
+        $hostPoolReplacementPlan.PossibleSessionHostDeleteCount = $finalSafety.SafeCandidates.Count
+    }
+
+    # STEP 3: Delete session hosts only when replacements and the final capacity check are ready.
+    if ($newHostAvailability.SafeToProceed -and $hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
         Write-LogEntry -Message "We will decommission {0} session hosts from this list: {1}" -StringValues $hostPoolReplacementPlan.SessionHostsPendingDelete.Count, ($hostPoolReplacementPlan.SessionHostsPendingDelete.SessionHostName -join ',') -Level Trace
                
         # Acquire Graph token if device cleanup is enabled
@@ -1159,13 +1511,13 @@ else {
                 
                 if ([string]::IsNullOrEmpty($GraphToken)) {
                     Write-Warning "Get-AccessToken returned null or empty Graph token. Device cleanup will be skipped."
-                    Write-LogEntry -Message "HINT: Ensure the managed identity has Directory.ReadWrite.All (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune) permissions" -Level Warning
+                    Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Warning
                     $GraphToken = $null
                 }
             }
             catch {
                 Write-Warning "Failed to acquire Graph access token: $_. Device cleanup will be skipped."
-                Write-LogEntry -Message "HINT: Ensure the managed identity has Cloud Device Administrator role (for Entra ID) and DeviceManagementManagedDevices.ReadWrite.All (for Intune)" -Level Warning
+                Write-LogEntry -Message "HINT: Ensure the managed identity has the required Graph API application permissions: {0}" -StringValues $requiredGraphPermissionsText -Level Warning
                 $GraphToken = $null
             }
         }
@@ -1214,7 +1566,12 @@ else {
 $hostsInDrainMode = ($sessionHostsFiltered | Where-Object { -not $_.AllowNewSession }).Count
 
 # Calculate deploying VM count accounting for ARM deployments and deployments submitted this run
-$currentlyDeploying = [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
+$currentlyDeploying = if ($runningDeployments) {
+    [int](($runningDeployments | ForEach-Object { @($_.SessionHostNames).Count } | Measure-Object -Sum).Sum)
+}
+else {
+    0
+}
 $remainingToDeploy = $hostPoolReplacementPlan.PossibleDeploymentsCount
 if ($deploymentResult) {
     # A deployment was just submitted this run, so it's now running

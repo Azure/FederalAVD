@@ -63,7 +63,7 @@ This is preferred for most deployments because:
 
 Deploy the secondary host pool with its own FSLogix storage. Accept that users who fail over will start from an empty or per-region profile. Use OneDrive Known Folder Move (KFM) to roam Desktop/Documents/Pictures natively, reducing the practical impact of per-region profiles.
 
-> **FSLogix storage redundancy:** Independent of cross-region DR strategy, match FSLogix storage account redundancy to compute resilience. When session hosts are deployed across availability zones, set `fslogixStorageRedundancy = 'ZoneRedundant'` (the default is `LocallyRedundant`). **Azure Files Premium does not support Geo-Redundant Storage (GRS) — ZRS is the highest redundancy tier available for production-grade FSLogix storage.** LRS is appropriate only for single-zone or availability set deployments. Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS in zone-enabled regions as the expected baseline for primary profile storage.
+> **FSLogix storage redundancy:** Independent of cross-region DR strategy, match FSLogix storage account redundancy to compute resilience. When session hosts are deployed across availability zones, set `fslogixStorageRedundancy = 'ZoneRedundant'`. The standard and automated host-pool Portal forms select this default automatically for zonal session hosts; direct Bicep and parameter-file deployments default to `LocallyRedundant`. **Azure Files Premium does not support Geo-Redundant Storage (GRS) — ZRS is the highest redundancy tier available for production-grade FSLogix storage.** LRS is appropriate only for single-zone or availability set deployments. Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS in zone-enabled regions as the expected baseline for primary profile storage.
 
 ### When Cloud Cache Is the Right Answer
 
@@ -395,11 +395,18 @@ Customer-managed key (CMK) encryption is supported for the vault via `keyManagem
 **RTO:** Minutes — power on retained old session hosts.  
 **RPO:** Not applicable — user profile data is unaffected by session host replacement.
 
-When `deployScalingPlan = true` and Session Host Replacer is configured with `ShutdownRetention` mode, replaced (old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather than deleted. If a new image is discovered to have issues, the fleet can be rolled back by:
+When Session Host Replacer uses `SideBySide` mode with shutdown retention enabled, replaced
+(old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather
+than deleted. If a new image is discovered to have issues, initiate rollback with the guarded
+[`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
+operator script. It stops the replacer, powers on selected retained hosts, waits for AVD health,
+restores session acceptance, removes replacer-owned retention controls, and opts restored hosts out
+of automation.
 
-1. Powering on the retained hosts
-2. Draining new hosts
-3. Removing new hosts after users have migrated back
+After restoration, validate user access, drain the bad-image hosts, establish the corrected
+known-good Compute Gallery version, remove the bad-image generation, explicitly opt the intended
+hosts back into automation, and restart the Function App. See the
+[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
 The **Ringed Rollout** setting (0-30 day delay) further limits blast radius by staging new image adoption across the fleet progressively, allowing validation in a subset of hosts before fleet-wide rollout.
 

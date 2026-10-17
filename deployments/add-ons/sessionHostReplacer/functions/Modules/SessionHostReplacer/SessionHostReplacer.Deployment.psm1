@@ -89,6 +89,9 @@ function Get-DeploymentState {
                 LastImageVersion         = $entity.LastImageVersion
                 LastTotalToReplace       = [int]$entity.LastTotalToReplace
                 PendingHostMappings      = if ($entity.PendingHostMappings) { $entity.PendingHostMappings } else { '{}' }
+                ActiveMaintenanceRequestId = if ($entity.ActiveMaintenanceRequestId) { $entity.ActiveMaintenanceRequestId } else { '' }
+                CompletedMaintenanceRequestId = if ($entity.CompletedMaintenanceRequestId) { $entity.CompletedMaintenanceRequestId } else { '' }
+                MaintenanceWindowEndUtc = if ($entity.MaintenanceWindowEndUtc) { $entity.MaintenanceWindowEndUtc } else { '' }
             }
         }
         catch {
@@ -107,6 +110,9 @@ function Get-DeploymentState {
                     LastImageVersion         = ''
                     LastTotalToReplace       = 0
                     PendingHostMappings      = '{}'
+                    ActiveMaintenanceRequestId = ''
+                    CompletedMaintenanceRequestId = ''
+                    MaintenanceWindowEndUtc = ''
                 }
             }
             else {
@@ -130,6 +136,9 @@ function Get-DeploymentState {
             LastImageVersion         = ''
             LastTotalToReplace       = 0
             PendingHostMappings      = '{}'
+            ActiveMaintenanceRequestId = ''
+            CompletedMaintenanceRequestId = ''
+            MaintenanceWindowEndUtc = ''
         }
     }
 }
@@ -241,7 +250,10 @@ function Save-DeploymentState {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
         
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+
+        [Parameter()]
+        [switch] $RequireSuccess
     )
     
     try {
@@ -304,6 +316,9 @@ function Save-DeploymentState {
             LastImageVersion         = if ($DeploymentState.LastImageVersion) { $DeploymentState.LastImageVersion } else { '' }
             LastTotalToReplace       = $DeploymentState.LastTotalToReplace
             PendingHostMappings      = if ($DeploymentState.PendingHostMappings) { $DeploymentState.PendingHostMappings } else { '{}' }
+            ActiveMaintenanceRequestId = if ($DeploymentState.ActiveMaintenanceRequestId) { $DeploymentState.ActiveMaintenanceRequestId } else { '' }
+            CompletedMaintenanceRequestId = if ($DeploymentState.CompletedMaintenanceRequestId) { $DeploymentState.CompletedMaintenanceRequestId } else { '' }
+            MaintenanceWindowEndUtc = if ($DeploymentState.MaintenanceWindowEndUtc) { $DeploymentState.MaintenanceWindowEndUtc } else { '' }
         }
         
         # Check if entity exists
@@ -338,6 +353,9 @@ function Save-DeploymentState {
     }
     catch {
         Write-LogEntry -Message "Failed to save deployment state: $_" -Level Error
+        if ($RequireSuccess) {
+            throw
+        }
     }
 }
 
@@ -596,7 +614,7 @@ function Deploy-SessionHosts {
             } else {
                 $imageRef | Add-Member -NotePropertyName 'version' -NotePropertyValue 'latest' -Force
             }
-            Write-LogEntry -Message "ImageReference.version was not set for marketplace image — defaulting to 'latest'" -Level Trace
+            Write-LogEntry -Message "ImageReference.version was not set for marketplace image - defaulting to 'latest'" -Level Trace
         }
     }
 

@@ -10,6 +10,9 @@ param (
 $ErrorActionPreference = "Stop"
 
 try {
+    # Intune is not currently available in Azure Government Secret or Top Secret.
+    # Connect to the correct Microsoft Graph environment before running this tool.
+
     # Check if Microsoft.Graph.DeviceManagement module is available
     if (-not (Get-Module -ListAvailable -Name Microsoft.Graph.DeviceManagement)) {
         throw "Microsoft.Graph.DeviceManagement module is not installed. Please run: Install-Module Microsoft.Graph.DeviceManagement"
@@ -18,17 +21,18 @@ try {
     # Import the module
     Import-Module Microsoft.Graph.DeviceManagement -ErrorAction Stop
 
-    # Check if user is authenticated
+    # Require an existing environment-specific Microsoft Graph context.
     $context = Get-MgContext -ErrorAction SilentlyContinue
     if (-not $context) {
-        Write-Output "Not authenticated to Microsoft Graph. Please sign in..."
-        Connect-MgGraph -Scopes "DeviceManagementManagedDevices.ReadWrite.All" -ErrorAction Stop
+        throw "No Microsoft Graph context is active. Connect to the correct environment with DeviceManagementManagedDevices.ReadWrite.All, verify Get-MgContext, and retry."
     }
-    else {
-        Write-Output "Using existing Microsoft Graph session"
-        Write-Output "  User: $($context.Account)"
-        Write-Output "  Tenant: $($context.TenantId)"
+    if (-not ($context.Scopes | Where-Object { $_ -ieq 'DeviceManagementManagedDevices.ReadWrite.All' })) {
+        throw "The active Microsoft Graph context is missing DeviceManagementManagedDevices.ReadWrite.All. Reconnect to the same environment with that delegated scope and retry."
     }
+    Write-Output "Using existing Microsoft Graph session"
+    Write-Output "  User: $($context.Account)"
+    Write-Output "  Tenant: $($context.TenantId)"
+    Write-Output "  Environment: $($context.Environment)"
 
     # Search for Intune managed devices with the specified prefix
     Write-Output ""

@@ -200,8 +200,25 @@ detects active MDE onboarding or retained device identity, but it does not block
 tenant-specific offboarding. Review this log after image builds and correct the responsible
 onboarding scope before using the image in production.
 
+Windows 11 automatic device encryption can encrypt the operating system volume on an eligible
+Trusted Launch build VM while leaving BitLocker protection suspended. Encryption at host does not
+disable this guest behavior. At the start of finalization, the Sysprep script records the BitLocker
+volume, protection, encryption percentage, method, and protector types. If the operating system
+volume is encrypted, it starts decryption and waits up to 60 minutes for `FullyDecrypted` and zero
+percent encryption. It verifies that state again immediately before launching Sysprep and fails
+rather than capturing an encrypted image.
+
+While Sysprep is running, the script writes a heartbeat every minute with process CPU, thread,
+handle, working-set, and Panther-log activity. On success, failure, wait errors, or the 30-minute
+timeout, it writes the Sysprep registry state, direct child processes, the complete Sysprep Panther
+logs, and the last 500 lines of the general Windows Panther logs to the image-build Run Command
+output. Use the heartbeat to distinguish an active process from one whose CPU and logs have stopped
+changing, then inspect `setupact.log` and `setuperr.log` for the operation where progress stopped.
+
 References:
 
+- [BitLocker automatic device encryption requirements](https://learn.microsoft.com/windows-hardware/design/device-experiences/oem-bitlocker)
+- [Generalize a Windows VM before creating an image](https://learn.microsoft.com/azure/virtual-machines/generalize)
 - [Enable Defender for Endpoint integration in Defender for Cloud](https://learn.microsoft.com/azure/defender-for-cloud/enable-defender-for-endpoint)
 - [Defender for Endpoint integration architecture](https://learn.microsoft.com/azure/defender-for-cloud/integration-defender-for-endpoint)
 - [Azure Policy excluded scopes](https://learn.microsoft.com/azure/governance/policy/concepts/assignment-structure#excluded-scopes)

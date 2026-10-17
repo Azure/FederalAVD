@@ -24,8 +24,9 @@ param vnetAddressPrefixes array = []
 @description('Optional. The subnets to create within the virtual network. Each item must include "name", "addressPrefix", and "purpose" (hosts | privateEndpoints | functionApp).')
 param subnets array = []
 
-@description('Optional. The routing method to use for the virtual network subnets.')
+@description('Optional. The routing method for virtual network subnets. Use default for existing or propagated routes without a managed NAT gateway or route table.')
 @allowed([
+  'default'
   'nva'
   'nat'
 ])

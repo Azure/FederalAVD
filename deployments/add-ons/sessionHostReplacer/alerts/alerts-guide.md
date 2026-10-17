@@ -69,10 +69,11 @@ traces
 **Impact**: Deployments completely blocked, capacity cannot be restored
 
 **Remediation**:
-1. Run `Set-GraphPermissions.ps1` with managed identity Object ID
-2. Verify permissions: `Directory.ReadWrite.All`, `DeviceManagementManagedDevices.ReadWrite.All`
-3. Check for 401/403 errors in logs
-4. Verify managed identity has Cloud Device Administrator role
+1. Connect to the correct Microsoft Graph environment with the scopes documented in the Session Host Replacer prerequisites
+2. Run `Set-GraphPermissions.ps1` with the managed identity Object ID and the cleanup targets enabled in the deployment
+3. Verify the permission for each enabled cleanup target
+4. Check for 401/403 errors in logs
+5. Verify the active Graph account is authorized to grant application roles
 
 ---
 
@@ -238,7 +239,7 @@ traces
 | where (message has "Failed to acquire Graph access token" or
          message has "Get-AccessToken returned null or empty" or
          message has "Device cleanup will be skipped") and
-        (message has "Directory.ReadWrite.All" or message has "DeviceManagementManagedDevices.ReadWrite.All")
+        (message has "Device.ReadWrite.All" or message has "DeviceManagementManagedDevices.ReadWrite.All")
 | summarize WarningCount = count(), LastWarning = max(timestamp),
             sample_message = any(message) by cloud_RoleName
 ```
@@ -253,10 +254,10 @@ traces
 **Impact**: Device cleanup not happening (Entra/Intune hygiene), potential hostname conflicts in future
 
 **Remediation**:
-1. Run `Set-GraphPermissions.ps1` script
-2. Grant managed identity required Graph permissions
+1. Connect to the correct Microsoft Graph environment with the scopes documented in the Session Host Replacer prerequisites
+2. Run `Set-GraphPermissions.ps1` with the managed identity Object ID and the cleanup targets enabled in the deployment
 3. Verify permissions propagated (can take 15-30 minutes)
-4. Test with `Get-AzureAdDeviceByName` cmdlet
+4. Confirm the helper reports every selected cleanup-target permission as present
 
 ---
 

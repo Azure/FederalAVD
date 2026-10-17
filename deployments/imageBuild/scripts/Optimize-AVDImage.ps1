@@ -35,9 +35,9 @@
 
 .PARAMETER AirGapped
     When true, applies settings for air-gapped or internet-restricted environments:
-    disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER
-    uploads, and DiagTrack telemetry (Section 7). Applies to all profiles, including
-    None. Default is false.
+    suppresses Windows web and cloud content, telemetry, synchronization, metadata,
+    model-update, and diagnostic calls while retaining local Search and core platform
+    functionality (Section 7). Applies to all profiles, including None. Default is false.
 
 .EXAMPLE
     .\Optimize-AVDImage.ps1 -OptimizationProfile NonPersistent-Full
@@ -717,13 +717,19 @@ try {
         Write-Log "--- Section 5: Registry / Policy Settings (All VDI) ---"
 
         # -- Telemetry (DataCollection.admx) --
-        # AllowTelemetry=1 (Basic): minimum for Endpoint Analytics and Update Compliance.
-        # NonPersistent VMs override to 0 in Section 6.
+        # AllowTelemetry=1 (Required): minimum for Endpoint Analytics and Windows Update reporting.
+        # NonPersistent and air-gapped profiles retain this value in Sections 6 and 7.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'DoNotShowFeedbackNotifications' -Value 1
 
         # -- Privacy / Consumer Experiences (CloudContent.admx) --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1
+        # "Turn off cloud consumer account state content" (Windows 11 Enterprise).
+        # Prevents consumer-account cloud content, including Store app offers, from
+        # being presented in Windows experiences while leaving installed apps usable.
+        # Ref: https://learn.microsoft.com/windows/client-management/mdm/policy-csp-experience#disableconsumeraccountstatecontent
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1
         # DisableSoftLanding = Windows Tips. DisableWindowsTips has no ADMX definition.
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableSoftLanding' -Value 1
         # NOTE: DisableThirdPartySuggestions and DisableWindowsSpotlightFeatures are User
@@ -773,12 +779,17 @@ try {
         Set-PolicyValue -Path $locationPath -Name 'DisableWindowsLocationProvider' -Value 1
 
         # -- Search and Cortana (Search.admx) --
+        # "Do not allow web search" enabled: DisableWebSearch=1.
+        # "Don't search the web or display web results in Search" enabled:
+        # ConnectedSearchUseWeb=0. "Allow search highlights" disabled:
+        # EnableDynamicContentInWSB=0. Local app and file search remain enabled.
         $searchPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'
         Set-PolicyValue -Path $searchPath -Name 'AllowCortana' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'AllowCortanaAboveLock' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'AllowSearchToUseLocation' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'DisableWebSearch' -Value 1
         Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchUseWeb' -Value 0
+        Set-PolicyValue -Path $searchPath -Name 'EnableDynamicContentInWSB' -Value 0
         Set-PolicyValue -Path $searchPath -Name 'ConnectedSearchPrivacy' -Value 3  # 3=AnonymousInfoOnly (most restrictive)
         Set-PolicyValue -Path $searchPath -Name 'PreventIndexingOfflineFiles' -Value 1
         Set-PolicyValue -Path $searchPath -Name 'PreventIndexingUncachedExchangeFolders' -Value 1
@@ -1167,8 +1178,10 @@ try {
 
         Write-Log ""
 
-        # Override telemetry to 0 for NonPersistent VMs (transient; no per-VM diagnostic value).
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 0
+        # DataCollection.admx "Allow Diagnostic Data": 1 sends required diagnostic data.
+        # Preserve Intune Endpoint Analytics and Windows Update reporting for pooled hosts.
+        # Ref: https://learn.microsoft.com/windows/client-management/mdm/policy-csp-system#allowtelemetry
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1
 
         # -- WER - disabled NonPersistent only; transient VMs discard crash data at recycle --
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'Disabled' -Value 1
@@ -1220,10 +1233,59 @@ try {
     # outbound calls to Microsoft cloud services, causing timeouts and latency
     # in environments with no internet access. Applies to all profiles,
     # including None.
-    # Ref: [2] Windows Restricted Traffic Baseline
+    # Ref: https://learn.microsoft.com/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services
     # -----------------------------------------------------------------------
     if ($AirGappedBool) {
         Write-Log "--- Section 7: Air-Gapped / Restricted Network Settings ---"
+
+        # Full profiles already apply the settings in this block in Sections 5 and 8.
+        # Air-gapped-only and UpdatesOnly runs need them applied independently.
+        if (-not $RunFullOptimization) {
+            # Search.admx: enable both web-result blocks and disable search highlights.
+            # These policies preserve local app and file search.
+            $airGappedSearchPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'
+            Set-PolicyValue -Path $airGappedSearchPath -Name 'DisableWebSearch' -Value 1
+            Set-PolicyValue -Path $airGappedSearchPath -Name 'ConnectedSearchUseWeb' -Value 0
+            Set-PolicyValue -Path $airGappedSearchPath -Name 'EnableDynamicContentInWSB' -Value 0
+
+            # CloudContent.admx: turn off Microsoft consumer experiences, cloud optimized
+            # content, and consumer-account content such as Store app offers.
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableWindowsConsumerFeatures' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableCloudOptimizedContent' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' -Name 'DisableConsumerAccountStateContent' -Value 1
+
+            # DataCollection.admx: suppress feedback prompts.
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'DoNotShowFeedbackNotifications' -Value 1
+
+            # Microsoft-hosted content and background service downloads. Values match the
+            # named ADMX policies already documented beside their full-profile copies.
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' -Name 'DODownloadMode' -Value 99
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' -Name 'AutoDownloadAndUpdateMapData' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Maps' -Name 'AllowUntriggeredNetworkTrafficOnSettingsPage' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Messaging' -Name 'AllowMessageSync' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Speech' -Name 'AllowSpeechModelUpdate' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\FindMyDevice' -Name 'AllowFindMyDevice' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Internet Explorer\Feeds' -Name 'BackgroundSyncStatus' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageHealth' -Name 'AllowDiskHealthModelUpdates' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\PushNotifications' -Name 'NoCloudApplicationNotification' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer' -Name 'AllowOnlineTips' -Value 0
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Assistance\Client\1.0' -Name 'NoActiveHelp' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata' -Name 'PreventDeviceMetadataFromNetwork' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Software Protection Platform' -Name 'NoGenTicket' -Value 1
+
+            # CloudContent.admx User Configuration policies are persisted in User\Registry.pol.
+            $airGappedUserCloudContent = 'HKLM:\TempDefaultUser\Software\Policies\Microsoft\Windows\CloudContent'
+            Set-PolicyValue -Path $airGappedUserCloudContent -Name 'DisableWindowsSpotlightFeatures' -Value 1
+            Set-PolicyValue -Path $airGappedUserCloudContent -Name 'DisableThirdPartySuggestions' -Value 1
+            Set-PolicyValue -Path $airGappedUserCloudContent -Name 'DisableTailoredExperiencesWithDiagnosticData' -Value 1
+            Set-PolicyValue -Path $airGappedUserCloudContent -Name 'ConfigureWindowsSpotlight' -Value 2
+            Set-PolicyValue -Path $airGappedUserCloudContent -Name 'IncludeEnterpriseSpotlight' -Value 0
+        }
+
+        # DataCollection.admx "Allow Diagnostic Data": retain required diagnostic data
+        # for Intune management and reporting, including on restricted networks.
+        # Ref: https://learn.microsoft.com/windows/client-management/mdm/policy-csp-system#allowtelemetry
+        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -Name 'AllowTelemetry' -Value 1
 
         # NCSI passive polling disabled - SKIP (breaks network awareness APIs; see README)
         # Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'DisablePassivePolling' -Value 1
@@ -1244,9 +1306,11 @@ try {
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet' -Name 'SubmitSamplesConsent' -Value 2
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet' -Name 'DisableBlockAtFirstSeen' -Value 1
 
-        # WER Watson uploads (WindowsErrorReporting.admx); NonPersistent: WerSvc off (S2)
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'Disabled' -Value 1
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'DontSendAdditionalData' -Value 1
+        # WER Watson uploads (WindowsErrorReporting.admx); NonPersistent already applies these in Section 6.
+        if (-not $RunNonPersistentSections) {
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'Disabled' -Value 1
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting' -Name 'DontSendAdditionalData' -Value 1
+        }
 
         # DiagTrack service - NonPersistent: disabled in Section 2
         Disable-VdiService -Name 'DiagTrack' -DisplayName 'Connected User Experiences and Telemetry'
@@ -1267,9 +1331,11 @@ try {
         # Activity Feed upload (OSPolicy.admx) - stops cloud send; local feed kept intact
         Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'UploadUserActivities' -Value 0
 
-        # Connected Devices Platform / Continue Experiences (GroupPolicy.admx)
-        # Disables CDP cross-device handoff, Near Share, and Phone Link cloud coordination
-        Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableCdp' -Value 0
+        # Connected Devices Platform / Continue Experiences (GroupPolicy.admx).
+        # Full profiles already disable CDP in Section 5.
+        if (-not $RunFullOptimization) {
+            Set-PolicyValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' -Name 'EnableCdp' -Value 0
+        }
 
         Invoke-ApplyPolicyQueue
         Write-Log ""

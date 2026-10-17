@@ -28,9 +28,54 @@ Try {
         'Authorization'='Bearer ' + $AzureManagementAccessToken
     }
 
-    # Restart the VM. Post-update callers use a longer stability window so this
-    # orchestration command survives and absorbs follow-up TrustedInstaller reboots.
-    $null = Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Post' -Uri $($ResourceManagerUriFixed + $VmResourceId + '/restart?api-version=2024-03-01')
+    # Restart the VM and wait for the ARM long-running operation to finish before
+    # measuring guest readiness. A restart request can remain pending for several
+    # minutes while Azure still reports the VM and guest agent as ready.
+    $RestartUri = $ResourceManagerUriFixed + $VmResourceId + '/restart?api-version=2024-03-01'
+    $RestartResponse = Invoke-WebRequest -Headers $AzureManagementHeader -Method 'Post' -Uri $RestartUri -Body '' -UseBasicParsing
+
+    if ($RestartResponse.StatusCode -eq 200) {
+        Write-Output 'VM restart completed synchronously.'
+    }
+    elseif ($RestartResponse.StatusCode -eq 202) {
+        $AsyncUrl = $null
+        if ($RestartResponse.Headers.ContainsKey('Azure-AsyncOperation')) {
+            $AsyncUrl = $RestartResponse.Headers['Azure-AsyncOperation']
+        }
+        elseif ($RestartResponse.Headers.ContainsKey('Location')) {
+            $AsyncUrl = $RestartResponse.Headers['Location']
+        }
+        else {
+            throw '202 received from restart API but no async polling URL was returned.'
+        }
+
+        $RestartDeadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)
+        $RetryAfterSeconds = 15
+        if ($RestartResponse.Headers.ContainsKey('Retry-After')) {
+            $ParsedRetryAfter = 0
+            if ([int]::TryParse($RestartResponse.Headers['Retry-After'], [ref]$ParsedRetryAfter) -and $ParsedRetryAfter -gt 0) {
+                $RetryAfterSeconds = $ParsedRetryAfter
+            }
+        }
+
+        Write-Output 'Waiting for the ARM restart operation to complete.'
+        do {
+            if ((Get-Date) -ge $RestartDeadline) {
+                throw "Timed out after $ReadyTimeoutSeconds seconds waiting for the ARM restart operation."
+            }
+
+            Start-Sleep -Seconds $RetryAfterSeconds
+            $RestartStatus = (Invoke-RestMethod -Headers $AzureManagementHeader -Method 'Get' -Uri $AsyncUrl).status
+            Write-Output "Restart operation state: $RestartStatus"
+        } while ($RestartStatus -notin @('Succeeded', 'Failed', 'Canceled'))
+
+        if ($RestartStatus -ne 'Succeeded') {
+            throw "VM restart operation ended with state: $RestartStatus"
+        }
+    }
+    else {
+        throw "Unexpected HTTP $($RestartResponse.StatusCode) from restart API."
+    }
 
     $InstanceViewUri = $ResourceManagerUriFixed + $VmResourceId + '/instanceView?api-version=2024-03-01'
     $ReadyDeadline = (Get-Date).AddSeconds($ReadyTimeoutSeconds)

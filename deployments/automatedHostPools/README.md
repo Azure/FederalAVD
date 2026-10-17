@@ -4,6 +4,10 @@ This subscription-scoped deployment creates a pooled Azure Virtual Desktop host 
 Session Host Configuration (`managementType: Automated`). Azure Virtual Desktop owns creation,
 update, and replacement of the session-host virtual machines.
 
+`automatedHostPool.bicep` is the published entry template. It composes AVD Shared Services and
+directly deploys the pool-specific resources in one flattened template. The current
+`deployments/automatedHostPools/automatedHostPool.json` publication path remains unchanged.
+
 This is not a more automated edition of the standard template; it selects a different, immutable
 Azure Virtual Desktop management approach. Use the
 [host pool management decision guide](../../docs/host-pool-management.md) to compare lifecycle
@@ -31,17 +35,15 @@ distinction between automated and directly managed session-host initialization.
 
 The recommended first-deployment workflow is:
 
-1. Publish the **AVD Shared Services** and **AVD Automated Host Pool** Template Specs with
-  `tools\New-TemplateSpecs.ps1`.
-2. Deploy Shared Services first when a credentials Key Vault is not already available. Capture its
-  `secretsKeyVaultResourceId` output.
-3. Open **AVD Automated Host Pool** under **Template Specs** in the Azure portal and select the
-  credentials Key Vault, subnet, image, availability model, storage, monitoring, and other optional
-  capabilities.
-4. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+1. Publish the **AVD Automated Host Pool** Template Spec with `tools\New-TemplateSpecs.ps1`.
+   For enterprise shared resources, also publish and deploy **AVD Shared Services** first.
+2. Open **AVD Automated Host Pool** under **Template Specs** in the Azure portal and select the
+  credentials Key Vault, workspace, subnet, image, availability model, storage, monitoring, and
+  other optional capabilities.
+3. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
   template and parameters** and store the generated parameter file under
   `customer\parameters\automatedHostPools\`, which is intentionally excluded from git.
-5. Use that validated parameter file for subsequent deployments. Avoid hand-authoring the first
+4. Use that validated parameter file for subsequent deployments. Avoid hand-authoring the first
   parameter file unless the Template Spec UI is unavailable.
 
 Publishing a Template Spec makes its guided form available but does not deploy resources. See
@@ -50,29 +52,43 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
 
 ## Deployment Flow
 
-`automatedHostPool.bicep` follows the standard host-pool orchestration model. Independent phases run
-in parallel; dependencies exist only where one phase consumes another phase's resource or output:
+`automatedHostPool.bicep` follows the standard host-pool orchestration model:
 
-1. Resolves names and creates the control-plane, session-host, storage, deployment-helper, and
-  optional global-feed resource groups.
-2. Starts Azure Virtual Desktop service-principal RBAC, the deployment helper, and FSLogix
+1. Calls Shared Services to create the AVD workspace or explicitly manage feed/global Private Link
+  on an existing workspace, plus monitoring, Key Vaults, and shared FSLogix backup resources. An
+  existing workspace selected with `None` or `HostPool` private routes bypasses this workspace PUT
+  and is updated only by the later application-group association. New workspaces use shared naming
+  so they can be reused across host pools.
+2. Resolves the effective Shared Services resource IDs before deploying pool-specific resources.
+3. Resolves names and creates the pool-specific control-plane, session-host, storage, and
+  deployment-helper resource groups.
+4. Starts Azure Virtual Desktop service-principal RBAC, the always-deployed temporary deployment
+  helper, and FSLogix
   customer-managed-key resources as soon as their scopes exist. Independent preparation continues
   while RBAC completes.
-3. After service-principal RBAC completes, creates the pooled automated host pool, application
-  group, workspace association, AVD Private Link endpoints, optional global-feed workspace, and
-  dynamic scaling plan as one control-plane phase.
-4. Grants the host-pool managed identity access to the host, network, image, credential-vault, and
-  host-pool scopes, then creates `sessionHostConfigurations/default`.
-5. Creates `sessionHostManagements/default` without a provisioning request, which is the API's
+5. After service-principal RBAC completes, creates the pooled automated host pool, application
+  group, workspace association, host-pool connection Private Link endpoint, and dynamic scaling
+  plan as one control-plane phase.
+6. Grants the host-pool managed identity access to the host, network, image, credential-vault, and
+  host-pool scopes, waits 90 seconds for Azure RBAC propagation, then creates
+  `sessionHostConfigurations/default`.
+7. Creates `sessionHostManagements/default` without a provisioning request, which is the API's
   zero-host state. The API does not accept an explicit `instanceCount: 0`.
-6. In parallel, deploys optional FSLogix storage, registers newly created Azure Files shares with
-  an optional existing shared Recovery Services vault and policy, and deploys the policy/RBAC
+8. In parallel, deploys optional FSLogix storage, creates or adopts the shared Recovery Services
+  vault and Azure Files backup policy when backup is enabled, registers newly created shares, and
+  deploys the policy/RBAC
   required for settings the native service does not expose. Policy definitions, assignments, and
   RBAC are deployed before VM creation; policy evaluation and guest remediation remain
   asynchronous.
-7. Updates `sessionHostManagements/default` with the requested `instanceCount` only after the
+9. Updates `sessionHostManagements/default` with the requested `instanceCount` only after the
   zero-host resource, storage-dependent policy inputs, and policy assignments are ready.
-8. Removes the temporary deployment helper after final session-host provisioning is submitted.
+10. Removes the temporary deployment helper and its resource group after final session-host
+  provisioning is submitted.
+
+The core updates the existing workspace only to append its application-group reference and
+preserves the workspace location, tags, friendly name, description, public-network setting, and
+other application-group references. Deploy host pools that register to the same workspace
+serially: concurrent read-modify-write updates can lose a reference.
 
 Shared naming, AVD resources, FSLogix, Key Vault RBAC, and generic role-assignment modules are reused
 rather than copied. Resources created by FederalAVD, including FSLogix storage, private endpoints,
@@ -130,10 +146,11 @@ controlled automated-host-pool test before being used for production scale-out r
 The portal form does not ask for resource group names. Like the standard host-pool deployment in
 this repository, the automated deployment derives them from the selected naming convention:
 
-- When creating a workspace, the host pool, application group, and workspace are deployed to the
-  generated control-plane resource group. When reusing a workspace, its resource group is reused
-  for the host pool and application group. Set `existingFeedWorkspaceResourceId` to the existing
-  workspace resource ID for direct deployments.
+- A new workspace uses shared, region-level production naming. Select an existing workspace when
+  multiple host pools share it.
+- For production reuse, set `existingFeedWorkspaceResourceId` to the Shared Services-owned
+  workspace. The host pool and application group remain pool-specific resources rather than
+  becoming owners of the workspace resource group.
 - Session hosts are deployed to a generated, dedicated session-host resource group. That resource
   group is also the scope for session-host policy and RBAC, so unrelated virtual machines must not
   share it.
@@ -167,10 +184,12 @@ currently exposed as a separate portal control.
   VM Applications per VM, one version of each application, 2 GB per application package, and 50 GB
   total across all application packages. FederalAVD artifact ZIPs can be published with the
   [VM Application publishing workflow](../../docs/vm-applications.md) before this deployment.
-- When Azure Files private endpoints are enabled, the private DNS zone resource ID.
-- To register newly deployed FSLogix Azure Files shares for backup, an existing Recovery Services
-  vault and Azure Files snapshot backup policy in the session-host region. Shared Services can
-  create both and outputs `fslogixBackupVaultResourceId` and `fslogixBackupPolicyName`.
+- When PaaS private endpoints are enabled, endpoint subnets for Shared Services operations
+  resources and FSLogix storage, plus the applicable Key Vault, Azure Files, Azure Backup, Blob,
+  and Queue private DNS zone resource IDs.
+- To register newly deployed FSLogix Azure Files shares for backup, either allow the orchestrator
+  to create the Shared Services Recovery Services vault and policy or select existing resources in
+  the session-host region.
 - AVD Private Link requires endpoint subnets for each selected route. Optional automatic DNS
   integration uses `privatelink.wvd.microsoft.com` and, for initial discovery, the cloud's
   `privatelink-global.wvd.microsoft.com` private DNS zone.
@@ -220,11 +239,12 @@ which includes AVD Agent installation and registration.
 
 ## Detailed Deployment Instructions
 
-An automated host pool always requires a pre-existing credentials Key Vault. The preferred path for
+An automated host pool requires a credentials Key Vault, but the entry orchestrator can create a
+shared vault through Shared Services or adopt an existing enterprise vault. The preferred path for
 every first deployment is the Template Spec portal UI. Its resource pickers, conditional fields,
 and validation guide the administrator to a working deployment and produce the parameter file used
-for subsequent PowerShell or CI/CD deployments. Do not start a first deployment by hand-authoring a
-parameter file unless the Template Spec UI is unavailable.
+for subsequent PowerShell or CI/CD deployments. Do not start a first deployment by hand-authoring
+a parameter file unless the Template Spec UI is unavailable.
 
 > **Application delivery:** Prefer Compute Gallery VM Applications for software that has meaningful
 > install and remove behavior. Use Session Host Customizations for provisioning-time configuration,
@@ -234,7 +254,8 @@ parameter file unless the Template Spec UI is unavailable.
 ### First Deployment: Template Spec Portal Forms
 
 From the repository root, connect to the target Azure Commercial subscription and publish the
-Shared Services and automated host-pool Template Specs:
+automated host-pool Template Spec. Set `-createSharedServices $true` only when the enterprise
+Shared Services form must also be published:
 
 ```powershell
 Connect-AzAccount
@@ -242,7 +263,7 @@ Set-AzContext -Subscription '<subscription-id>'
 
 .\tools\New-TemplateSpecs.ps1 `
   -Location '<region>' `
-  -createSharedServices $true `
+  -createSharedServices $false `
   -createNetwork $false `
   -createImageManagement $false `
   -createCustomImage $false `
@@ -251,16 +272,17 @@ Set-AzContext -Subscription '<subscription-id>'
   -CreateAddOns $false
 ```
 
-Publishing makes the guided forms available; it does not deploy either workload. In the Azure
-portal, open **Template Specs** and deploy them in this order:
+Publishing makes the guided form available; it does not deploy the workload. In the Azure portal:
 
-1. Deploy **AVD Shared Services** with the Secrets Key Vault enabled. On the form's credentials
-  step, supply the VM administrator credentials and any domain-join credentials required by the
-  selected join type.
-2. Deploy **AVD Automated Host Pool**. Select the credentials Key Vault created in step 1, then
-  select the existing subnet, image, and any optional monitoring, encryption, backup, or private
-  endpoint resources.
-3. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
+1. For enterprise reuse, deploy **AVD Shared Services** first and retain its output resource IDs.
+   Skip this standalone deployment when no resource must preexist and no separate shared-resource
+   ownership boundary is required.
+2. Deploy the full **AVD Automated Host Pool** form. Enter credentials so the orchestrator can
+   create the Shared Services vault, or select the existing credentials vault and other Shared
+   Services resources. Automated management has no separate PoC path.
+3. Select the existing subnet, image, and any optional monitoring, encryption, backup, or private
+   endpoint resources.
+4. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
   template and parameters** and save the generated automated-host-pool parameter file under
   `customer\parameters\automatedHostPools\`; this folder is intentionally excluded from git.
 
@@ -292,16 +314,16 @@ Template Spec UI is unavailable:
 
 ```powershell
 New-Item -ItemType Directory -Force customer\parameters\sharedServices | Out-Null
-Copy-Item customer-examples\parameters\sharedServices\poc.automatedHostPoolPrerequisites.sharedServices.parameters.json `
-  customer\parameters\sharedServices\automated-poc.sharedServices.parameters.json
+Copy-Item customer-examples\parameters\sharedServices\automatedHostPoolPrerequisites.sharedServices.parameters.json `
+  customer\parameters\sharedServices\automated-host-pool-prerequisites.sharedServices.parameters.json
 
 $vmAdminUserName = Read-Host 'VM administrator username' -AsSecureString
 $vmAdminPassword = Read-Host 'VM administrator password' -AsSecureString
 $sharedServicesDeployment = New-AzDeployment `
-  -Name 'automated-poc-prerequisites' `
+  -Name 'automated-host-pool-prerequisites' `
   -Location 'eastus' `
   -TemplateFile .\deployments\sharedServices\sharedServices.bicep `
-  -TemplateParameterFile .\customer\parameters\sharedServices\automated-poc.sharedServices.parameters.json `
+  -TemplateParameterFile .\customer\parameters\sharedServices\automated-host-pool-prerequisites.sharedServices.parameters.json `
   -virtualMachineAdminUserName $vmAdminUserName `
   -virtualMachineAdminPassword $vmAdminPassword
 
@@ -323,7 +345,7 @@ automation, or paste that output into the customer parameter file:
 
 ```powershell
 New-Item -ItemType Directory -Force customer\parameters\automatedHostPools | Out-Null
-Copy-Item customer-examples\parameters\automatedHostPools\poc.automatedHostPool.parameters.json `
+Copy-Item customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json `
   customer\parameters\automatedHostPools\myPool.parameters.json
 
 New-AzDeployment `
@@ -342,7 +364,7 @@ FSLogix configuration is not modified by this deployment.
 
 The Template Spec form and direct deployment expose the same resource selections. Network
 selection is limited to the virtual network and subnet so subnet-level NSG configuration remains
-authoritative. Both methods can select an existing shared Recovery Services vault and identify its
+authoritative. Both methods can create or select a shared Recovery Services vault and identify its
 Azure Files snapshot backup policy.
 
 Azure Files share soft delete and Azure Backup retention are separate. Soft delete retains an
@@ -358,7 +380,10 @@ Premium**. Direct deployments can select another supported service and SKU with 
 ## Session Host Availability
 
 Automated host pools support Availability Zones when the selected VM SKU exposes zones in the
-session-host region. Where Availability Zones are unavailable or unsuitable, select **Availability
+session-host region. The deployment stores the selected zones in ascending order regardless of the
+order in the portal selection or parameter file. After session hosts exist,
+Azure Virtual Desktop does not allow the zone list in Session Host Configuration to change. Where
+Availability Zones are unavailable or unsuitable, select **Availability
 Set** to create one managed Availability Set in the dedicated session-host resource group. The
 deployment uses one resource-group-scoped Azure Policy `Modify` assignment to add that set before the Compute
 resource provider processes each VM creation request.
@@ -397,7 +422,7 @@ capabilities are therefore available and are not feature gaps:
 | Guest Attestation integrity monitoring | Policy deploys the Guest Attestation extension for Trusted Launch and Confidential VMs. |
 | AVD Insights monitoring | Policy deploys Azure Monitor Agent and associates the selected DCR and optional DCE. |
 | FSLogix configuration and storage | The deployment composes the shared FSLogix module before host creation, then policy configures the session hosts. |
-| FSLogix Azure Files backup registration | Newly deployed shares can be registered with an existing shared-services Recovery Services vault and Azure Files snapshot backup policy. |
+| FSLogix Azure Files backup registration | Shared Services creates or adopts the Recovery Services vault and Azure Files snapshot backup policy, then newly deployed shares are registered. |
 | Disk Encryption Set and managed-disk network isolation | The DES is created before the temporary deployment helper and directly encrypts its OS disk. Policy injects the same DES into service-created session hosts and disables managed-disk public and export access when selected. |
 | Ordered private customizations | Policy attaches the artifact identity and runs provisioning-time configuration or bootstrap actions from the private artifact source in input order. This is not the preferred path for independently installable applications. |
 | Compute Gallery VM Applications | Preferred runtime delivery for software with an independent lifecycle. Select up to 25 Gallery application version references and their installation order. References can pin a specific version or use `latest`. One resource-group-scoped policy assignment maintains the complete ordered array on every session host. |
@@ -416,9 +441,9 @@ Some differences are deployment-workflow boundaries rather than missing session-
 
 | Standard deployment workflow | Automated deployment workflow |
 | --- | --- |
-| Create credentials or encryption Key Vaults inline | Select existing RBAC-enabled Key Vaults, typically deployed through Shared Services. |
-| Create the complete monitoring stack inline | Select an existing AVD Insights DCR and optional Log Analytics workspace and DCE. |
-| Create or select a Recovery Services vault and configure backup | Deploy the shared FSLogix vault and policy through Shared Services, then select them in the automated host-pool form to register newly deployed shares. Service-managed pooled VMs are replaceable and are not individually backed up by this deployment. |
+| Create or select credentials and encryption Key Vaults | The orchestrator uses Shared Services to create shared resources or adopt existing production vaults. |
+| Create or select the monitoring stack | The orchestrator uses Shared Services to create shared monitoring or adopt an existing AVD Insights DCR, Log Analytics workspace, and DCE. |
+| Create or select a Recovery Services vault and configure backup | The orchestrator uses Shared Services to create or adopt the shared FSLogix vault and policy, then the core registers newly deployed shares. Service-managed pooled VMs are replaceable and are not individually backed up by this deployment. |
 
 See the policy module's [capability matrix](policy/README.md#capability-matrix) and
 [complete parity boundary](policy/README.md#complete-parity-boundary) for implementation details.
@@ -428,13 +453,14 @@ See the policy module's [capability matrix](policy/README.md#capability-matrix) 
 The portal form follows the standard host-pool control layout: Encryption at Host is configured on
 the Session Hosts page, while disk and FSLogix storage key management are configured on the Zero
 Trust Configuration page. Customer-managed disk encryption deploys a Disk Encryption Set and
-customer-managed FSLogix encryption configures the new Azure Files storage accounts. Both use the
-same selected existing RBAC-enabled encryption Key Vault and key-rotation period.
+customer-managed FSLogix encryption configures the new Azure Files storage accounts. Shared
+Services creates or adopts one RBAC-enabled encryption Key Vault for both consumers, unless direct
+deployment parameters intentionally supply separate existing vault IDs.
 
-Unlike the standard host-pool deployment, the automated deployment does not create an encryption
-Key Vault inline. Deploy Shared Services first when customer-managed encryption is required, then
-select its encryption Key Vault in the automated host-pool form. An existing Disk Encryption Set
-can still be supplied with `diskEncryptionSetResourceId` through Bicep or a parameter file.
+The automated entry orchestrator routes Key Vault ownership through Shared Services. For
+production customer-managed encryption, create the shared encryption Key Vault through the
+orchestrator or select an existing Shared Services vault. An existing Disk Encryption Set can
+still be supplied with `diskEncryptionSetResourceId` through Bicep or a parameter file.
 
 For newly deployed FSLogix Azure Files storage, the private endpoint and permitted IP/CIDR controls
 produce the same public-access behavior as the standard deployment:
@@ -444,6 +470,12 @@ produce the same public-access behavior as the standard deployment:
 - Private endpoint disabled with permitted IPs: public access is enabled only for those ranges.
 - Private endpoint disabled with no permitted IPs: public access is enabled from all networks.
 
+The same portal choice can also create private endpoints for newly created Shared Services Key
+Vaults and the shared FSLogix Recovery Services vault. Operations endpoints and FSLogix storage
+endpoints can use different subnets. Every endpoint is deployed in the Azure region of its selected
+subnet's parent virtual network, including when that region differs from the resource group's
+location.
+
 AVD Private Link is configured separately from PaaS private endpoints. The automated deployment
 supports the same route choices as the standard host pool:
 
@@ -451,6 +483,17 @@ supports the same route choices as the standard host pool:
 - `FeedAndHostPool`: adds the workspace `feed` endpoint for private feed download.
 - `All`: adds or reuses the single global-feed workspace and its `global` endpoint for private
   initial feed discovery.
+
+When `existingFeedWorkspaceResourceId` is empty, the orchestrator creates a workspace and
+control-plane resource group with shared, region-level production names. Before redeploying an
+older environment that must retain its existing workspace, set `existingFeedWorkspaceResourceId`
+to that workspace's resource ID.
+
+When `existingFeedWorkspaceResourceId` is supplied, the workspace is treated as shared
+infrastructure. The core preserves and appends its application-group reference. Shared Services
+changes workspace public access or manages workspace-feed/global-feed endpoints only when those
+options are explicitly selected in the orchestrator; otherwise the existing settings are
+preserved.
 
 Host-pool and workspace public network access remain explicit controls. Private DNS-zone groups are
 created when DNS integration is enabled; otherwise DNS records must be managed separately.
@@ -472,6 +515,69 @@ image references. The portal form lists the versions available for the selected 
 offer, and SKU. Parameter-file deployments must provide one of those regional versions.
 
 Compute Gallery images continue to use the selected gallery image-version resource ID.
+
+## Image Updates
+
+After an image build publishes a new version, run
+[Update-AutomatedHostPoolImage.ps1](./Update-AutomatedHostPoolImage.ps1). Do not redeploy the
+template. The script uses the host pool's native
+[session host update](https://learn.microsoft.com/azure/virtual-desktop/session-host-update)
+and runs these steps:
+
+1. Confirms the host pool is automated and that no session host update is scheduled, running,
+   paused, or in an error state.
+2. Picks the target image:
+   - Compute Gallery: the latest version of the current image definition. The version must be
+     succeeded, published, not excluded from latest, targeted to the session host region, and fully
+     replicated there.
+   - Marketplace: the highest version available in the region.
+   - You can override the target with `-ImageDefinitionResourceId` or `-ImageVersionResourceId`.
+3. Exits without changes if that image is already configured, unless you pass `-Force`.
+4. Updates the image in the Session Host Configuration with a PATCH that sends only `imageInfo`.
+   Availability zones and Key Vault credential references are not sent, so the portal's zone and
+   secret re-entry limitations do not apply.
+5. Disables autoscale for this host pool on any assigned scaling plan, as Microsoft requires
+   during an update. Other host pools on the same plan are not affected.
+6. Starts the update immediately, or schedules it for `-ScheduledDateTime`. That time is wall-clock
+   time in `-TimeZone`, which defaults to the host pool management time zone. A schedule must be in
+   the future and no more than 14 days out.
+
+`-MaxVmsRemoved`, `-LogOffDelayMinutes`, `-LogOffMessage`, and `-DeleteOriginalVm` override the
+deployed batch settings for this update only. If you omit them, the update uses the host pool
+management values. `-LogOffDelayMinutes` accepts values from 0 through 60, matching the Azure
+portal limit.
+
+The script doesn't wait for completion unless you pass `-WaitForCompletion`. With that switch, it
+polls until the update finishes and re-enables autoscale only after the update succeeds. If you
+don't wait, or the update fails or is cancelled, autoscale stays disabled. Run the script with
+`-EnableScalingPlans` once the update is finished.
+
+```powershell
+# Preview without changing anything
+.\Update-AutomatedHostPoolImage.ps1 -HostPoolName vdpool-avd-auto-01-use2 `
+    -HostPoolResourceGroupName rg-avd-control-plane-use2 -WhatIf
+
+# Schedule tonight, two hosts per batch
+.\Update-AutomatedHostPoolImage.ps1 -HostPoolName vdpool-avd-auto-01-use2 `
+    -HostPoolResourceGroupName rg-avd-control-plane-use2 `
+    -ScheduledDateTime '2026-10-03 22:00' -TimeZone 'Eastern Standard Time' -MaxVmsRemoved 2
+
+# Re-enable autoscale after a scheduled update completes
+.\Update-AutomatedHostPoolImage.ps1 -HostPoolName vdpool-avd-auto-01-use2 `
+    -HostPoolResourceGroupName rg-avd-control-plane-use2 -EnableScalingPlans
+```
+
+Requirements:
+
+- The Az.Accounts module, signed in to the host pool subscription. The script uses
+  `Invoke-AzRestMethod`, so it works in every Azure cloud.
+- `Desktop Virtualization Host Pool Contributor` (or `Contributor`) on the host pool, and
+  `Desktop Virtualization Contributor` on any assigned scaling plan.
+- Read access to the Compute Gallery image definition, or to the Marketplace image in the region.
+- The image must be in the same subscription as the host pool, a service requirement for session
+  host updates.
+- Only one update can be scheduled or running per host pool, and Microsoft doesn't allow editing
+  a scheduled update. To change one, cancel it in the portal and run the script again.
 
 ## Ephemeral OS Disks
 
@@ -564,13 +670,25 @@ replacement operations to resolve the configured administrator and domain creden
 
 ## Policy Readiness
 
+The deployment always creates a temporary deployment-helper VM. Before creating the Session Host
+Configuration, a Run Command waits 90 seconds after the host-pool managed-identity role assignments
+complete. This targeted delay reduces first-deployment validation failures caused by Azure RBAC
+propagation. The helper also performs SessionDesktop friendly-name updates and optional FSLogix
+storage operations. It uses the session-host subnet, which must allow outbound TCP 443 to the
+`AzureResourceManager` service tag.
+
 When dynamic scaling is disabled, select the desired initial `sessionHostCount`. ARM first creates
 Session Host Management without a provisioning request, which is the API's zero-host state. It then
-deploys storage, policy assignments, and role assignments. A Run Command on the deployment helper VM
-waits five minutes for Azure Policy and role assignments to propagate before ARM updates Session Host
-Management with the requested host count. When dynamic scaling is enabled, the deployment activates
-the scaling plan after the same policy wait and the active schedule determines initial capacity.
-Session Host Management uses `canaryPolicy: Auto` for subsequent image and configuration updates.
+deploys storage, policy assignments, and role assignments. Universal session-host configuration and
+ownership assignments are always deployed. Optional policy definitions, assignments, and RBAC are
+deployed only for the selected compute, encryption, networking, availability, monitoring, disk,
+application, attestation, or customization capabilities.
+
+A Run Command on the deployment helper VM waits five minutes for Azure Policy and role assignments
+to propagate before ARM updates Session Host Management with the requested host count. When dynamic
+scaling is enabled, the deployment activates the scaling plan after the same policy wait and the
+active schedule determines initial capacity. Session Host Management uses `canaryPolicy: Auto` for
+subsequent image and configuration updates.
 
 Azure Policy assignment propagation is eventually consistent and ARM does not expose a separate
 policy-readiness resource. The five-minute delay reduces the chance that initial hosts are created

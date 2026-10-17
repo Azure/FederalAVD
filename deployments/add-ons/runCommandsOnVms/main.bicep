@@ -79,7 +79,9 @@ var normalizedScriptContent = empty(scriptContent) ? '' : replace(replace(script
 var patternVmNames = [for i in range(vmStartIndex, (vmEndIndex - vmStartIndex) + 1): '${vmPrefix}${padLeft(string(i), vmIndexPadding, '0')}']  
 var resolvedVmNames = !empty(vmPrefix) ? patternVmNames : vmNames
 
-resource logsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(logsUserAssignedIdentityResourceId)) {
+var usesSharedUserAssignedIdentity = !empty(logsUserAssignedIdentityResourceId) && !empty(scriptsUserAssignedIdentityResourceId) && toLower(logsUserAssignedIdentityResourceId) == toLower(scriptsUserAssignedIdentityResourceId)
+
+resource logsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(logsUserAssignedIdentityResourceId) && !usesSharedUserAssignedIdentity) {
   name: last(split(logsUserAssignedIdentityResourceId, '/'))
   scope: resourceGroup(
     split(logsUserAssignedIdentityResourceId, '/')[2],
@@ -94,6 +96,15 @@ resource scriptsUserAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIden
     split(scriptsUserAssignedIdentityResourceId, '/')[4]
   )
 }
+
+var logsUserAssignedIdentityClientId = empty(logsUserAssignedIdentityResourceId)
+  ? ''
+  : usesSharedUserAssignedIdentity
+    ? scriptsUserAssignedIdentity!.properties.clientId
+    : logsUserAssignedIdentity!.properties.clientId
+var scriptsUserAssignedIdentityClientId = empty(scriptsUserAssignedIdentityResourceId)
+  ? ''
+  : scriptsUserAssignedIdentity!.properties.clientId
 
 resource existingVms 'Microsoft.Compute/virtualMachines@2023-03-01' existing = [
   for (vmName, i) in resolvedVmNames: {
@@ -123,12 +134,8 @@ module runCommands 'modules/runCommands.bicep' = [
       scripts: multipleScripts
       location: existingVms[i].location
       logsContainerUri: logsContainerUri
-      logsUserAssignedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
-        ? ''
-        : logsUserAssignedIdentity!.properties.clientId
-      scriptsUserAssignedIdentityClientId: empty(scriptsUserAssignedIdentityResourceId)
-        ? ''
-        : scriptsUserAssignedIdentity!.properties.clientId
+      logsUserAssignedIdentityClientId: logsUserAssignedIdentityClientId
+      scriptsUserAssignedIdentityClientId: scriptsUserAssignedIdentityClientId
       timeStamp: timeStamp
       virtualMachineName: vmName
     }
@@ -146,19 +153,13 @@ module runCommand '../../shared/modules/resourceModules/compute/virtualMachines/
       name: runCommandName
       script: normalizedScriptContent
       scriptUri: scriptUri
-      scriptUriManagedIdentityClientId: empty(scriptsUserAssignedIdentityResourceId)
-        ? ''
-        : scriptsUserAssignedIdentity!.properties.clientId
+      scriptUriManagedIdentityClientId: scriptsUserAssignedIdentityClientId
       parameters: parameters
       protectedParameters: empty(protectedParameter) ? [] : [protectedParameter]
       outputBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${vmName}-${runCommandName}-output-${timeStamp}.log'
       errorBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${vmName}-${runCommandName}-error-${timeStamp}.log'
-      outputBlobManagedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
-        ? ''
-        : logsUserAssignedIdentity!.properties.clientId
-      errorBlobManagedIdentityClientId: empty(logsUserAssignedIdentityResourceId)
-        ? ''
-        : logsUserAssignedIdentity!.properties.clientId
+      outputBlobManagedIdentityClientId: logsUserAssignedIdentityClientId
+      errorBlobManagedIdentityClientId: logsUserAssignedIdentityClientId
       timeoutInSeconds: timeoutInSeconds
     }
     dependsOn: [

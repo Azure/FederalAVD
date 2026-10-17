@@ -167,7 +167,7 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Optional. Replacement mode strategy. SideBySide: Adds new hosts before deleting old ones (higher capacity during updates, zero downtime). DeleteFirst: Deletes idle hosts before adding replacements (lower cost, temporary capacity reduction). Default is SideBySide.')
+@description('Optional. Replacement mode strategy. SideBySide adds new hosts before deleting old ones. DeleteFirst continuously replaces idle hosts with a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured DeleteFirst replacer without redeployment. Default is SideBySide.')
 @allowed([
   'SideBySide'
   'DeleteFirst'
@@ -184,12 +184,12 @@ param drainGracePeriodHours int = 24
 @maxValue(120)
 param minimumDrainMinutes int = 15
 
-@description('Optional. Safety floor: minimum percentage of target capacity to maintain during DeleteFirst mode. Deletions are capped to prevent dropping below this threshold. Higher values = more conservative (e.g., 80% keeps more hosts running), lower values = more aggressive (e.g., 50% allows faster replacement). Only applies when replacementMode is DeleteFirst. Default is 80%.')
+@description('Optional. DeleteFirst safety floor used when no enabled scaling-plan schedule is evaluable. With a scaling plan, RampDown and OffPeak use its target but always retain at least one online healthy host; new destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak. The floor is capped at target minus one so pools with at least two hosts can progress one host at a time. Only applies when replacementMode is DeleteFirst. Default is 80%.')
 @minValue(20)
 @maxValue(100)
 param minimumCapacityPercentage int = 80
 
-@description('Optional. Maximum number of hosts to delete and deploy per cycle in DeleteFirst mode. Controls the pace of replacements - function deletes this many idle hosts, then deploys the same number of replacements. Lower values = slower, safer updates. Only applies when replacementMode is DeleteFirst. Default is 5.')
+@description('Optional. Absolute blast-radius ceiling for hosts deleted and replaced per cycle in DeleteFirst mode. Progressive scale-up can select a smaller batch, and the online healthy capacity floor can reduce it further. Lower values are slower and more conservative. Only applies when replacementMode is DeleteFirst. Default is 50.')
 @minValue(1)
 @maxValue(100)
 param maxDeletionsPerCycle int = 50
@@ -236,21 +236,21 @@ param tagScalingPlanExclusionTag string = 'ScalingPlanExclusion'
 @description('Optional. Tag name used to record successful AVD health validation for the exact deployed image. Default is AutoReplaceValidatedImage.')
 param tagValidatedImage string = 'AutoReplaceValidatedImage'
 
-@description('Optional. Whether to remove Entra ID device records when deleting session hosts. Default is true.')
+@description('Optional except for DeleteFirst replacement of Microsoft Entra joined hosts, where Entra device cleanup is always enabled before exact hostname reuse. For domain-joined or hybrid-joined hosts, Entra cleanup remains optional. Default is true.')
 param removeEntraDevice bool = true
 
-@description('Optional. Whether to remove Intune device records when deleting session hosts. Default is true.')
+@description('Optional. Whether to remove Intune device records when deleting session hosts. Cleanup is highly recommended for Intune-enrolled Entra-joined and hybrid-joined hosts before DeleteFirst hostname reuse. Intune is not currently available in Azure Government Secret and Top Secret; leave this disabled unless availability is confirmed for the target environment. Default is true.')
 param removeIntuneDevice bool = true
 
-@description('Optional. Enable progressive scale-up with percentage-based batching for deployments. When enabled, the function will start with a small percentage of needed hosts and gradually increase. Default is false.')
+@description('Optional. Enable percentage-based progressive batching for both replacement modes. The function starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. Mode-specific batch ceilings still apply. Default is false.')
 param enableProgressiveScaleUp bool = false
 
-@description('Optional. Initial deployment size as percentage of total needed hosts. Used when progressive scale-up is enabled. Default is 10%.')
+@description('Optional. Initial deployment size as a percentage of the hosts still needed. Used when progressive scale-up is enabled. Default is 20%.')
 @minValue(1)
 @maxValue(100)
 param initialDeploymentPercentage int = 20
 
-@description('Optional. Percentage increment added after each successful deployment run. Used when progressive scale-up is enabled. Default is 20%.')
+@description('Optional. Percentage increment added after the configured number of successful deployment and registration runs. Used when progressive scale-up is enabled. Default is 40%.')
 @minValue(5)
 @maxValue(50)
 param scaleUpIncrementPercentage int = 40
@@ -491,8 +491,7 @@ var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
 var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
-  : startsWith(cloud, 'us') ? 'https://graph.${environment().suffixes.storage}' : 'https://graph.microsoft.com'
-
+  : startsWith(cloud, 'us') ? 'https://graph${replace(environment().suffixes.storage, 'core', '')}' : 'https://graph.microsoft.com'
 var locationForLookup = startsWith(cloud, 'us') ? substring(location, 5, max(length(location) - 5, 0)) : location
 var functionAppRegionAbbreviation = locations[locationForLookup].abbreviation
 
@@ -504,6 +503,12 @@ var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtual
 var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
 var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention
+var isEntraJoined = contains([
+  'EntraId'
+  'EntraKerberos-Hybrid'
+  'EntraKerberos-CloudOnly'
+], identitySolution)
+var effectiveRemoveEntraDevice = removeEntraDevice || replacementMode == 'DeleteFirst' && isEntraJoined
 
 // ── Naming module - computes all infrastructure resource names ────────────────
 module shrNaming './modules/naming.bicep' = {
@@ -855,6 +860,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           value: replacementMode
         }
         {
+          name: 'MaintenanceRequest'
+          value: ''
+        }
+        {
           name: 'MinimumCapacityPercentage'
           value: string(minimumCapacityPercentage)
         }
@@ -930,7 +939,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       [
         {
           name: 'RemoveEntraDevice'
-          value: string(removeEntraDevice)
+          value: string(effectiveRemoveEntraDevice)
         }
         {
           name: 'RemoveIntuneDevice'
@@ -1049,6 +1058,7 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
       '../requirements.psd1': loadTextContent('functions/requirements.psd1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Maintenance.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Maintenance.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Planning.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.DeviceCleanup.psm1')

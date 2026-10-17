@@ -1,333 +1,149 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Management**](host-pool-management.md) | [**Automation**](automation-guide.md)
 
-# Session Host Replacer Add-On The Session Host Replacer is now available as a standalone add-on. For complete documentation, deployment instructions, and configuration details, see the **[Session Host Replacer Add-On Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**.
+# Session Host Replacer Add-On
 
-> **Standard host pools only.** Session Host Replacer creates and registers replacement VMs, so it
-> must not target an automated host pool that uses Session Host Configuration. Automated pools use
-> native Session Host Update. See [Choose a Host Pool Management Approach](host-pool-management.md).
+The Session Host Replacer is an Azure Function add-on that replaces standard-management Azure
+Virtual Desktop session hosts when a newer Compute Gallery image version is available.
 
-## Overview
+> **Standard host pools only.** Do not target an automated host pool that uses Session Host
+> Configuration. Automated pools use native Session Host Update. See
+> [Choose a Host Pool Management Approach](host-pool-management.md).
 
-The Session Host Replacer is an automated Azure Function that manages the lifecycle of Azure Virtual Desktop session hosts. It monitors session host image versions and automatically drains and replaces outdated VMs to maintain fleet health, security compliance, and image currency.
+## Documentation Map
 
-**Key Features:**
-- **Flexible replacement strategies**: SideBySide (zero-downtime) or DeleteFirst (cost-optimized)
-- **Image version tracking** with automatic updates
-- **Graceful session draining** with configurable grace periods (default: 24 hours)
-- **Minimum drain time** safety buffer for zero-session hosts (default: 15 minutes)
-- **Progressive scale-up** for gradual, validated rollouts
-- **Shutdown retention** for rollback capability (SideBySide mode)
-- **Auto-detect target count** for dynamic scaling plan compatibility
-- **Tag-based opt-in** model with automatic tag healing
-- **Device cleanup** (Entra ID + Intune) with automatic hostname reuse
-- **Template Spec integration** for consistent deployments
-- **Comprehensive monitoring** with pre-built Azure Monitor Workbook dashboard
-- **Multi-cloud support** (Commercial, GCC High, DoD, China; US Secret/Top Secret)
+Each document has one purpose:
+
+| Document | Purpose |
+| --- | --- |
+| [Add-on README](../deployments/add-ons/sessionHostReplacer/README.md) | Prerequisites, deployment, parameters, monitoring, configuration management, and troubleshooting |
+| [Canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) | SideBySide and DeleteFirst sequencing, scaling-phase behavior, readiness, recovery, and safety invariants |
+| [Deployment update guide](../deployments/add-ons/sessionHostReplacer/deployment-guide.md) | Updating the deployed Function App code and reviewing operational settings |
+| [Logging guide](../deployments/add-ons/sessionHostReplacer/logging-guide.md) | Logging conventions and diagnostic configuration |
+| [Alerts guide](../deployments/add-ons/sessionHostReplacer/alerts/alerts-guide.md) | Recommended monitoring alerts |
+
+The canonical flow document is authoritative when a lifecycle summary elsewhere conflicts with
+detailed replacement behavior.
 
 ## Replacement Modes
 
-### SideBySide Mode (Default)
+### SideBySide
 
-- **Zero downtime**: New hosts added before old ones removed
-- **Host pool temporarily doubles** during replacement cycles
-- **Shutdown retention option**: Keep old hosts powered off for rollback
-- **Auto-detect target count**: Compatible with dynamic scaling plans
-- **Best for**: Production environments with SLA requirements
+SideBySide deploys and validates new hosts before removing old hosts.
 
-### DeleteFirst Mode
+- Best availability and rollback options.
+- Requires temporary subnet, compute quota, and VM capacity for both generations.
+- Can retain deallocated old hosts for a configured rollback period.
+- Replacement deployment, validation, and capacity-safe removal can continue during every scaling
+  phase. Old hosts are removed only when the latest-image fleet and the final fresh-state check
+  preserve the active scaling-plan online target.
 
-- **Cost optimized**: No host pool doubling, pays only for needed capacity
-- **Temporary capacity reduction**: Deletes idle hosts before deploying replacements
-- **Hostname reuse**: Leverages deleted names for new hosts
-- **Dedicated host preservation**: Maintains host group assignments
-- **Device cleanup required**: Graph API permissions mandatory
-- **Best for**: Cost-sensitive environments, resource constraints (IPs/quotas), dedicated hosts
+### DeleteFirst
 
-See the [complete mode comparison](../deployments/add-ons/sessionHostReplacer/README.md#replacement-modes) for detailed decision guidance.
+DeleteFirst removes a capacity-safe batch before deploying replacements with the same names.
 
-## Quick Start
+- Avoids temporary pool doubling.
+- Preserves hostnames and dedicated-host placement.
+- Persists recovery mappings before deletion and blocks new deletion until unresolved replacements
+  are registered and healthy.
+- Retains at least one online healthy host.
+- Starts no new delete/deploy batch during the 60-minute pre-RampUp window, RampUp, or Peak.
+- Exact-name replacement is blocked for a one-host target because it cannot preserve availability.
 
-For detailed deployment instructions, prerequisites, and configuration options, refer to the complete add-on documentation:
+### One-Time Maintenance Override
 
-**[Session Host Replacer Add-On - Complete Documentation](../deployments/add-ons/sessionHostReplacer/README.md)**
+An optional one-time maintenance request temporarily expedites an existing DeleteFirst
+configuration for an administrator-approved outage window. No replacement-mode redeployment is
+required. SideBySide replacers are not eligible. Schedule the operation from the separately
+published [Schedule Session Host Maintenance](../deployments/add-ons/sessionHostMaintenance/README.md)
+Template Spec Form View, or use
+[Start-SessionHostMaintenanceReplacement.ps1](../deployments/add-ons/sessionHostReplacer/Start-SessionHostMaintenanceReplacement.ps1)
+for PowerShell automation and air-gapped workflows. Both paths arm an exact image version and UTC
+window.
+
+- Requires explicit forced-sign-out authorization.
+- Requires separate full-pool-outage authorization for a one-host pool or zero-capacity batch.
+- Sends AVD session notifications, waits 0-60 minutes, calls the AVD logoff operation, and verifies
+  zero sessions before deletion.
+- Requires autoscale to be disabled.
+- Starts no new destructive batch after the window closes, but completes recovery already in flight.
+- Reuses exact hostnames and dedicated-host placement.
+- Suspends normal replacement while scheduled or active, then automatically resumes continuous
+  DeleteFirst behavior after completion or expiry.
+- Does not use shutdown retention.
+- Fails closed if any shutdown-retention VM remains from a prior configuration.
+
+Notification delay is timer-driven. With the default 30-minute schedule, forced sign-out can begin
+up to approximately 30 minutes after the configured delay elapses.
+
+See the [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
+for complete sequencing and failure behavior.
 
 ## Key Capabilities
 
-### Progressive Scale-Up
-Gradual deployment rollouts that start with small percentages and increase after successful deployments:
-
-- Configurable initial percentage (e.g., 10% of needed hosts)
-- Incremental scale-up after consecutive successes
-- Automatic reset on failures or new image versions
-- Works in both SideBySide and DeleteFirst modes
-
-### Shutdown Retention (SideBySide Mode)
-Rollback capability by retaining old session hosts in shutdown state:
-
-- Configurable retention period (1-7 days)
-- Automatic cleanup after retention expires
-- Enables quick rollback if issues discovered with new image
-- No additional cost (deallocated VMs only incur disk storage costs)
-
-### Auto-Detect Target Count (SideBySide Mode)
-Automatically maintains the current host count at replacement cycle start:
-
-- Perfect for environments using dynamic scaling plans
-- Adapts to manual scaling adjustments between image updates
-- Function captures initial count when first outdated host detected
-- Maintained throughout entire replacement cycle
-
-### Scaling-Aware Readiness
-Before either replacement mode removes more old capacity, every latest-image host must be ready. A host is ready when it is online, accepting sessions, and has no failed AVD health checks, or when an enabled scaling plan can start it and it has validation evidence for the exact image. At least one latest-image host must remain online healthy.
-
-Without an enabled, evaluable scaling plan, all latest-image hosts must be online healthy. Existing hosts need one online healthy validation pass before they can count as stopped standby capacity. Administrator-owned scaling exclusions are preserved and excluded hosts never count as scalable standby. Shutdown retention remains optional and SideBySide-only; readiness works the same with retention enabled or disabled.
-
-### Ringed Rollout Support
-Delay replacement after new image detection for validation:
-
-- Configurable delay (0-30 days)
-- Validate new image in production before fleet-wide rollout
-- Similar to Windows Update ring strategy
-- Enables gradual exposure of new images
-
-### Device Cleanup & Hostname Reuse
-Automatic cleanup of stale device records with intelligent hostname reuse:
-
-- Removes Entra ID and Intune device records
-- **DeleteFirst mode**: Reuses hostnames from deleted hosts (prevents name exhaustion)
-- **DeleteFirst mode**: Preserves dedicated host assignments
-- Automatic verification of resource cleanup before reuse
-
-### Comprehensive Monitoring
-Pre-built Azure Monitor Workbook dashboard:
-
-- Real-time replacement cycle progress
-- Progressive scale-up status tracking
-- Deployment success/failure trends
-- Host pool health metrics
-- Image version adoption timeline
-- Error and warning alerts
-- Cross-region support (single dashboard for all regions)
-
-## Migration from Integrated Feature
-
-If you were previously using the Session Host Replacer as an integrated hostpool feature, it is now deployed as a separate add-on. The add-on architecture provides:
-
-- Independent lifecycle management
-- Easier updates and maintenance
-- Support for multiple hostpools
-- Enhanced configuration flexibility
-- New replacement modes (DeleteFirst)
-- New features (shutdown retention, progressive scale-up, auto-detect)
-
----
-
-## Legacy Documentation (For Reference Only)
-
-The information below documents the previous integration approach and is retained for reference purposes only. **For current deployments, use the standalone add-on documented above.**
-
----
-
-## Architecture (Legacy)
-
-### Components Created
-
-1. **Azure Function App** - Hosts the PowerShell-based session host replacement logic
-2. **Storage Account** - Stores function app artifacts and queue/table data
-3. **Application Insights** - Monitors function app performance and execution
-4. **App Service Plan** - Shared hosting plan in the management resource group
-
-### Module Structure
-
-The Session Host Replacer owns its deployment templates, permission utility, function entry point,
-and PowerShell modules under `deployments/add-ons/sessionHostReplacer/`. Its scripts are not shared
-deployment scripts and therefore remain with the add-on.
+- Image-version-based replacement with optional rollout delay and rollback protection.
+- Explicit or cycle-based auto-detected target host count.
+- Progressive batch growth with independent mode-specific ceilings.
+- Scaling-aware readiness with exact-image validation evidence.
+- Replacer-owned scaling exclusions that do not overwrite administrator-owned exclusions.
+- Configurable drain notification, minimum drain time, and active-session grace period.
+- Entra device cleanup required for exact-name DeleteFirst and maintenance-override replacement of
+  Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts.
+- Optional Intune cleanup, highly recommended before exact-name reuse for Intune-enrolled
+  Entra-joined or hybrid-joined hosts.
+- Centralized Azure Monitor Workbook and alerting guidance.
+- Validated operational-setting updates through
+  [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).
+- Azure Commercial, Government, Secret, and Top Secret support.
 
 ## Deployment
 
-### Required Parameters
-To enable the session host replacer, set this parameter in your hostpool deployment:
+Deploy one Session Host Replacer instance per standard host pool. Template Specs provide the guided
+portal form in every supported cloud and are the recommended first-deployment method.
 
-```bicep
-deploySessionHostReplacer: true
+Start with the
+[complete deployment prerequisites](../deployments/add-ons/sessionHostReplacer/README.md#prerequisites)
+and
+[Template Spec deployment instructions](../deployments/add-ons/sessionHostReplacer/README.md#template-spec-portal-form-first-deployment).
+
+## Operations
+
+Use the centralized workbook to review replacement progress, effective scaling behavior, current
+configuration, warnings, and errors. Use the guarded configuration command to review or update
+supported operational settings without displaying secrets:
+
+```powershell
+.\Set-SessionHostReplacerConfiguration.ps1 `
+  -FunctionAppName <function-app-name> `
+  -ResourceGroupName <function-app-resource-group>
 ```
 
-### Optional Parameters
-The following deployment parameters are recommended when using session host replacer:
+Replacement mode, timer schedule, identity, networking, permissions, and infrastructure remain
+Template Spec or Bicep deployment concerns. A later Template Spec redeployment can overwrite direct
+operational-setting changes unless its authoritative parameters are updated to match.
 
-```bicep
-// Server Farm (required for function apps)
-existingHostingPlanResourceId: '' // Leave empty to create a new app service plan; provide to reuse an existing one
+Schedule maintenance directly against an existing DeleteFirst Function App with the guarded
+command. Confirm that no replacement, recovery, or retained shutdown VM exists first. Do not
+redeploy while a request is active because deployment initializes the request app setting. Before
+scheduling a later request with `-ReplaceExistingRequest`, confirm that the prior request is
+complete and no pending recovery remains.
 
-// Function App Networking (if using private endpoints)
-functionAppSubnetResourceId: '/subscriptions/.../subnets/snet-functionapps'
-deployPrivateEndpoints: true
-azureFunctionAppPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.azurewebsites.net'
-azureBlobPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.blob.core.usgovcloudapi.net'
-azureFilesPrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.file.core.usgovcloudapi.net'
-azureQueuePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.queue.core.windows.net'
-azureTablePrivateDnsZoneResourceId: '/subscriptions/.../privateDnsZones/privatelink.table.core.windows.net'
-```
+### Shutdown-retention rollback
 
-### Deployment Notes
+Rollback is operator initiated; retained VMs are not restored automatically. Use the guarded
+[rollback script](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1) to stop
+the replacer, start selected retained hosts, validate AVD health, restore session acceptance, remove
+replacer-owned retention controls, and opt the restored hosts out of automation.
 
-- **Function App**: Leave `existingHostingPlanResourceId` empty to deploy a new app service plan inline, or provide an existing one to share a plan across multiple deployments.
-- **Session Hosts add-on**: Not supported (requires control plane resources)
-
-## Configuration
-
-### Function App Settings
-The following settings are automatically configured but can be customized:
-
-| Setting | Default Value | Description |
-| --- | --- | --- |
-| `TargetVMAgeDays` | `45` | Replace session hosts older than this many days |
-| `DrainGracePeriodHours` | `24` | Hours to wait before forcefully removing drained hosts |
-| `MaxSessionHostsToReplace` | `1` | Maximum concurrent replacements |
-| `FixSessionHostTags` | `true` | Automatically fix missing tags on existing hosts |
-| `IncludePreExistingSessionHosts` | `false` | Include pre-existing hosts in automation |
-| `Tag_IncludeInAutomation` | `IncludeInAutoReplace` | Tag to identify hosts for replacement |
-| `Tag_DeployTimestamp` | `AutoReplaceDeployTimestamp` | Tag storing deployment time |
-| `Tag_PendingDrainTimestamp` | `AutoReplacePendingDrainTimestamp` | Tag storing drain start time |
-| `Tag_ScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag to exclude from scaling plan |
-| `Tag_ValidatedImage` | `AutoReplaceValidatedImage` | Exact-image AVD health validation evidence used for scaling-aware standby readiness |
-| `RemoveEntraDevice` | `false` | Remove device from Entra ID on deletion |
-| `RemoveIntuneDevice` | `false` | Remove device from Intune on deletion |
-
-### Schedule
-The function runs on a timer trigger: **Every 6 hours** (`0 0 */6 * * *`)
-
-This can be modified in `sessionHostReplacer.bicep`:
-
-```bicep
-schedule: '0 0 */6 * * *' // Change as needed
-```
-
-## Permissions
-
-### Managed Identity Roles
-The function app is automatically assigned:
-
-- **Desktop Virtualization Virtual Machine Contributor** - On session hosts resource group
-- **Reader** - On host pool resource group
-
-Additional permissions may be needed for:
-
-- Entra ID device removal (requires Graph API permissions)
-- Intune device removal (requires Graph API permissions)
-
-## How It Works
-
-1. **Timer Trigger** - Function executes every 6 hours
-2. **Session Host Discovery** - Retrieves all session hosts from the host pool
-3. **Filtering** - Identifies hosts marked with `IncludeInAutoReplace` tag
-4. **Age Check** - Compares host age against `TargetVMAgeDays`
-5. **Image Version Check** - Compares current image with latest available version
-6. **Deployment Decision** - Determines how many new hosts to deploy
-7. **New Host Deployment** - Creates replacement session hosts
-8. **Drain Mode** - Sets old hosts to drain mode and waits for grace period
-9. **Removal** - Deletes session hosts after grace period expires
-
-## Monitoring
-
-### Application Insights
-When `enableMonitoring: true`:
-
-- Function execution logs
-- Performance metrics
-- Failure tracking
-- Custom telemetry from profile.ps1
-
-### Log Analytics
-All function app logs are sent to the configured Log Analytics workspace.
-
-### Alerts
-Consider creating alerts for:
-
-- Function execution failures
-- Long-running operations
-- High replacement frequency
-
-## Networking
-
-### Private Endpoints
-When `deployPrivateEndpoints: true`, the following private endpoints are created:
-
-- Function App (`sites`)
-- Storage Account (`blob`, `file`, `queue`, `table`)
-
-### Permitted IP Addresses
-When `permittedIPs` is specified (array of IPv4 addresses or CIDR ranges), the deployment restricts public access to the storage account and function app to only those IPs. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. When combined with `privateEndpoint: true`, the private endpoint remains the primary access path and the permitted IPs are applied as an additional firewall allowlist. Leave empty to allow all public traffic.
-
-```bicep
-permittedIPs: [
-  '203.0.113.10'       // trusted workstation
-  '198.51.100.0/24'   // trusted CIDR range
-]
-```
-
-### Virtual Network Integration
-The function app can be integrated with a virtual network using `functionAppSubnetResourceId`. This subnet must be delegated to `Microsoft.Web/serverFarms`.
-
-## Troubleshooting
-
-### Common Issues
-
-**Function not executing:**
-- Check App Service Plan is running
-- Verify timer trigger configuration
-- Check Application Insights for errors
-
-**Permission errors:**
-- Verify managed identity has required roles
-- Check resource group and subscription access
-
-**Session hosts not replacing:**
-- Verify hosts have `IncludeInAutoReplace` tag set to `true`
-- Check `TargetVMAgeDays` configuration
-- Review function logs for decision logic
-
-**Storage access errors:**
-- Ensure function app managed identity has Storage Blob Data Owner role
-- Verify private endpoints are correctly configured
-- Check DNS resolution for storage endpoints
-
-## Cost Considerations
-
-### Resources Deployed
-
-- App Service Plan: **Premium V3 P1v3** (shared with increase quota function if both enabled)
-- Storage Account: **Standard LRS**
-- Application Insights: **Pay-as-you-go**
-- Private Endpoints: **Per endpoint + data processing**
-
-### Cost Optimization
-
-- Shared app service plan reduces costs when multiple function apps are deployed
-- Premium plan is required for virtual network integration
-- Consider Consumption plan for low-frequency executions (requires code changes)
-
-## Security Best Practices
-
-1. **Use Private Endpoints** - Secure all network traffic
-2. **Enable Managed Identity** - Avoid credential management
-3. **Restrict Function App Access** - Use network restrictions
-4. **Monitor Execution** - Enable Application Insights and alerting
-5. **Tag Management** - Use tags to control which hosts are managed
-6. **Test in Non-Production** - Validate replacement logic before production use
-
-## Future Enhancements
-
-Potential improvements:
-
-- Support for Consumption plan deployment option
-- Configurable replacement schedules per host pool
-- Integration with change management systems
-- Support for blue/green deployment patterns
-- Advanced placement constraints (availability zones, dedicated hosts)
+The Function App remains stopped after restoration. Correct the Compute Gallery desired image,
+drain and remove the bad-image generation, explicitly opt the intended hosts back into automation,
+and then restart the Function App. Follow the
+[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
 ## Related Documentation
 
-- [Azure Functions PowerShell Developer Guide](https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell)
-- [AVD Session Host Management](https://learn.microsoft.com/azure/virtual-desktop/set-up-scaling-script)
-- [Azure Function App Networking](https://learn.microsoft.com/azure/azure-functions/functions-networking-options)
+- [Add-Ons](add-ons.md)
+- [Host Pool Management](host-pool-management.md)
+- [Image Automation](automation-guide.md)
+- [Image Build](image-build.md)
+- [BCDR](bcdr.md)
+- [Air-Gapped Clouds](air-gapped-clouds.md)
