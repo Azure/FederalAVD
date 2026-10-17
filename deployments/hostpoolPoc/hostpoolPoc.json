@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "9257402793234806332"
+      "templateHash": "3223392063348239725"
     }
   },
   "definitions": {
@@ -1103,9 +1103,6 @@
           "defaultRouting": {
             "value": "nat"
           },
-          "defaultOutboundAccess": {
-            "value": false
-          },
           "includeAvdBypassRoutes": {
             "value": false
           },
@@ -1169,7 +1166,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "8049050628863777133"
+              "templateHash": "17912357300475645508"
             }
           },
           "parameters": {
@@ -1186,11 +1183,12 @@
               "type": "array"
             },
             "defaultRouting": {
-              "type": "string"
-            },
-            "defaultOutboundAccess": {
-              "type": "bool",
-              "nullable": true
+              "type": "string",
+              "allowedValues": [
+                "default",
+                "nva",
+                "nat"
+              ]
             },
             "includeAvdBypassRoutes": {
               "type": "bool"
@@ -1279,9 +1277,6 @@
                   "defaultRouting": {
                     "value": "[parameters('defaultRouting')]"
                   },
-                  "defaultOutboundAccess": {
-                    "value": "[parameters('defaultOutboundAccess')]"
-                  },
                   "includeAvdBypassRoutes": {
                     "value": "[parameters('includeAvdBypassRoutes')]"
                   },
@@ -1342,7 +1337,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "12683058383206690848"
+                      "templateHash": "8853976165305831842"
                     }
                   },
                   "parameters": {
@@ -1356,11 +1351,12 @@
                       "type": "array"
                     },
                     "defaultRouting": {
-                      "type": "string"
-                    },
-                    "defaultOutboundAccess": {
-                      "type": "bool",
-                      "nullable": true
+                      "type": "string",
+                      "allowedValues": [
+                        "default",
+                        "nva",
+                        "nat"
+                      ]
                     },
                     "includeAvdBypassRoutes": {
                       "type": "bool"
@@ -1423,9 +1419,9 @@
                           "name": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].name]",
                           "properties": {
                             "addressPrefix": "[variables('hostsSubnetsList')[copyIndex('snetHosts')].addressPrefix]",
-                            "defaultOutboundAccess": "[parameters('defaultOutboundAccess')]",
+                            "defaultOutboundAccess": false,
                             "natGateway": "[if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null())]",
-                            "routeTable": "[if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
+                            "routeTable": "[if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null())]",
                             "networkSecurityGroup": {
                               "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
                             }
@@ -1434,7 +1430,7 @@
                       }
                     ],
                     "azureCloud": "[environment().name]",
-                    "deployNatGateway": "[or(or(equals(parameters('defaultRouting'), 'nat'), parameters('includeAvdBypassRoutes')), parameters('rdpShortpathPublicNetworks'))]",
+                    "deployNatGateway": "[or(equals(parameters('defaultRouting'), 'nat'), and(equals(parameters('defaultRouting'), 'nva'), or(parameters('includeAvdBypassRoutes'), parameters('rdpShortpathPublicNetworks'))))]",
                     "wvdServiceRoute": [
                       {
                         "name": "AVDServiceTraffic",
@@ -1455,8 +1451,8 @@
                     "hostsSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'hosts')))]",
                     "peSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'privateEndpoints')))]",
                     "faSubnetsList": "[filter(parameters('subnets'), lambda('s', equals(lambdaVariables('s').purpose, 'functionApp')))]",
-                    "snetPrivateEndpoints": "[if(not(empty(variables('peSubnetsList'))), createArray(createObject('name', variables('peSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('peSubnetsList')[0].addressPrefix))), createArray())]",
-                    "snetFunctionApp": "[if(not(empty(variables('faSubnetsList'))), createArray(createObject('name', variables('faSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('faSubnetsList')[0].addressPrefix, 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(not(equals(parameters('defaultRouting'), 'nat')), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
+                    "snetPrivateEndpoints": "[if(not(empty(variables('peSubnetsList'))), createArray(createObject('name', variables('peSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('peSubnetsList')[0].addressPrefix, 'defaultOutboundAccess', false()))), createArray())]",
+                    "snetFunctionApp": "[if(not(empty(variables('faSubnetsList'))), createArray(createObject('name', variables('faSubnetsList')[0].name, 'properties', createObject('addressPrefix', variables('faSubnetsList')[0].addressPrefix, 'defaultOutboundAccess', false(), 'natGateway', if(variables('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', parameters('natGatewayName'))), null()), 'routeTable', if(equals(parameters('defaultRouting'), 'nva'), createObject('id', resourceId('Microsoft.Network/routeTables', parameters('routeTableName'))), null()), 'delegations', createArray(createObject('name', 'Microsoft.Web/serverFarms', 'properties', createObject('ServiceName', 'Microsoft.Web/serverFarms')))))), createArray())]",
                     "allSubnets": "[union(variables('snetHosts'), variables('snetPrivateEndpoints'), variables('snetFunctionApp'))]",
                     "effectiveSubnetDefinitions": "[concat(variables('hostsSubnetsList'), take(variables('peSubnetsList'), 1), take(variables('faSubnetsList'), 1))]"
                   },

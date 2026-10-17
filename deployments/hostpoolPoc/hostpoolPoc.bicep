@@ -150,7 +150,6 @@ module network '../networking/modules/vnet-sub-module.bicep' = {
       }
     ]
     defaultRouting: 'nat'
-    defaultOutboundAccess: false
     includeAvdBypassRoutes: false
     rdpShortpathManagedNetworks: false
     rdpShortpathPublicNetworks: false

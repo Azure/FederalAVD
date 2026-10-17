@@ -4,8 +4,12 @@ param deployVnetResourceGroup bool
 param vnetName string
 param vnetAddressPrefixes array
 param subnets array
+@allowed([
+  'default'
+  'nva'
+  'nat'
+])
 param defaultRouting string
-param defaultOutboundAccess bool?
 param includeAvdBypassRoutes bool
 param rdpShortpathManagedNetworks bool
 param rdpShortpathPublicNetworks bool
@@ -38,7 +42,6 @@ module vnetResources 'vnetResources.bicep' = {
     vnetAddressPrefixes: vnetAddressPrefixes
     subnets: subnets
     defaultRouting: defaultRouting
-    defaultOutboundAccess: defaultOutboundAccess
     includeAvdBypassRoutes: includeAvdBypassRoutes
     rdpShortpathManagedNetworks: rdpShortpathManagedNetworks
     rdpShortpathPublicNetworks: rdpShortpathPublicNetworks

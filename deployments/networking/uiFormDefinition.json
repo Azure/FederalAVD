@@ -124,7 +124,7 @@
 									"name": "rdpShortpathPublicNetworks",
 									"type": "Microsoft.Common.CheckBox",
 									"label": "RDP Shortpath for Public Networks (STUN/ICE)",
-									"toolTip": "Enables RDP Shortpath for public networks using STUN/ICE. Deploys a NAT Gateway on session host and function app subnets to provide the cone-shaped NAT required for STUN negotiation. On NVA deployments, also adds AVD service bypass routes so STUN/TURN traffic reaches the internet directly. No inbound NSG rule is required — ICE handles traversal entirely through the outbound-initiated cone NAT session."
+									"toolTip": "Enables RDP Shortpath for public networks using STUN/ICE. With NAT or NVA routing, deploys a NAT Gateway on session host and function app subnets for STUN negotiation. On NVA deployments, also adds AVD service bypass routes. With existing/propagated routes, upstream egress must provide the required STUN/TURN connectivity; no local NAT Gateway is deployed."
 								}
 							]
 						}
@@ -208,7 +208,7 @@
 									"type": "Microsoft.Common.InfoBox",
 									"options": {
 										"style": "Info",
-										"text": "Add one row per subnet. The Purpose column determines how each subnet is configured:\n\n- Session Hosts: attached to the NSG and route table; required for AVD session hosts.\n- Private Endpoints: no NSG, route table, or delegation; available when Private Endpoints is enabled.\n- Function App: receives a Microsoft.Web/serverFarms delegation; also attached to the NAT gateway and route table when those are deployed (same conditions as Session Hosts). Available when Storage Quota Automation or Session Host Replacer is enabled."
+										"text": "Add one row per subnet. The Purpose column determines how each subnet is configured:\n\n- Session Hosts: attached to the NSG and, when deployed, the NAT gateway or route table; required for AVD session hosts.\n- Private Endpoints: no NSG, route table, or delegation; available when Private Endpoints is enabled.\n- Function App: receives a Microsoft.Web/serverFarms delegation; also attached to the NAT gateway and route table when those are deployed (same conditions as Session Hosts). Available when Storage Quota Automation or Session Host Replacer is enabled.\n\nImplicit Azure default outbound access is disabled on all created subnets. Use Existing / Propagated Routes leaves outbound routing and egress to your upstream network."
 									}
 								},
 								{
@@ -274,11 +274,11 @@
 									"type": "Microsoft.Common.DropDown",
 									"label": "Default Route Type",
 									"defaultValue": "Network Virtual Appliance",
-									"toolTip": "Select the Default Route Type to Configure.",
+									"toolTip": "Select how outbound connectivity is provided. Use Existing / Propagated Routes creates no NAT gateway or route table; configure routing and egress separately. For hub gateway routes, configure peering and enable Use Gateway on hub. Peering alone does not provide outbound connectivity. Implicit Azure default outbound access is disabled for every option.",
 									"constraints": {
 										"allowedValues": [
 											{
-												"label": "Default (Do not configure)",
+												"label": "Use Existing / Propagated Routes",
 												"value": "default"
 											},
 											{
@@ -739,7 +739,7 @@
 				"customDNSServers": "[if(steps('virtualNetwork').deployVnet, map(filter(steps('virtualNetwork').deploy.dnsServers, (item) => not(empty(item.ipAddress))), (item) => item.ipAddress), parse('[]'))]",
 				"deployDDoSNetworkProtection": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.deployDDoSNetworkProtection, false)]",
 				"hubVnetResourceId": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVnet.id, ''), '')]",
-				"virtualNetworkGatewayOnHub": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVirtualNetworkGateway, ''), '')]",
+				"virtualNetworkGatewayOnHub": "[if(steps('virtualNetwork').deployVnet, if(steps('virtualNetwork').deploy.peerVnetToHub, steps('virtualNetwork').deploy.hubVirtualNetworkGateway, false), false)]",
 				"logAnalyticsWorkspaceResourceId": "[if(and(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.collectNSGDiagLogs), steps('virtualNetwork').deploy.logAnalyticsWorkspace.id, '')]",
 				"nameConvResTypeAtEnd": "[if(steps('virtualNetwork').deployVnet, steps('virtualNetwork').deploy.nameConvResTypeAtEnd, false)]",
 				"privateDNSZonesSubscriptionId": "[if(and(steps('basics').features.privateEndpoints, steps('privateDNSZones').zones.deployMissingZones), steps('privateDNSZones').zones.subscription.subscriptionId, '')]",

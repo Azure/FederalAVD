@@ -765,7 +765,9 @@ Describe 'Standard host-pool PoC form' {
             "resourceId\(\s*subscription\(\)\.subscriptionId,\s*resourceGroupName,"
         )).Count | Should Be 3
         $pocBicep | Should Match "defaultRouting: 'nat'"
-        $pocBicep | Should Match 'defaultOutboundAccess: false'
+        $networkBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\networking\modules\vnetResources.bicep') -Raw
+        $networkBicep | Should Match 'defaultOutboundAccess: false'
+        $pocBicep | Should Not Match 'defaultOutboundAccess:'
         $pocBicep | Should Match 'vnetResourceGroupName: resourceGroupName'
         $pocBicep | Should Match 'subnetResourceId: sessionHostSubnetResourceId'
         $pocBicep | Should Match 'publicIPName:'
