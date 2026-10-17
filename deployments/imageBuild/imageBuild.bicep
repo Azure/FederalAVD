@@ -258,7 +258,7 @@ param imageDefinitionIsAcceleratedNetworkSupported bool = true
 param imageDefinitionIsHibernateSupported bool = false
 
 @description('Optional. Specifies whether the image definition supports capturing images of NVMe disks or Virtual Machines.')
-param imageDefinitionIsHigherStoragePerformanceSupported bool = false
+param imageDefinitionIsHigherStoragePerformanceSupported bool = true
 
 @allowed([
   'Standard'
