@@ -546,8 +546,8 @@ Gallery image version encryption can use platform-managed keys, customer-managed
 #### `imageDefinitionIsHigherStoragePerformanceSupported`
 
 - **Type:** Boolean
-- **Default:** `false`
-- **Description:** Enable NVMe disk controller support. Set to `true` when using NVMe-only VM sizes (v6 and newer, e.g. environments where only v6 SKUs are available). The build VM disk controller type and image definition `DiskControllerTypes` feature are set in lockstep — they must match, so do not enable NVMe support unless the build VM size supports it.
+- **Default:** `true`
+- **Description:** Enable NVMe disk controller support for v6 and newer VM sizes. Set to `false` to use SCSI-only (v5 and earlier). The build VM disk controller type and image definition `DiskControllerTypes` feature are set in lockstep — they must match. The UI form automatically filters VM sizes to show only compatible options based on this setting.
 
 #### `imageDefinitionSecurityType`
 
