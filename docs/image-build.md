@@ -568,11 +568,14 @@ Build multiple images simultaneously:
 ```
 
 The parameter files can reuse the same `customizations[].name` and `vdiCustomizations[].name`
-values. Each customizer's nested ARM deployment name is a 13-character hash of the resource group,
-build VM, customization phase, batch, and full customizer name, so simultaneous builds in the
-same pre-staged build resource group do not share those deployment records. The `custom` or `vdi`
-context is included in the hash rather than appended as a suffix. No name truncation is needed.
-Artifact blob names, installer arguments, and per-VM Run Command names are unchanged.
+values. Each customizer's nested ARM deployment name uses the format `<customizer-name>-<hash>`,
+for example `windows-11-rsat-k3m6p2n8q4r7s` (illustrative hash). The 13-character hash includes the
+resource group, build VM, customization phase, batch, and full customizer name, so simultaneous
+builds in the same pre-staged build resource group do not share those deployment records. The
+`custom` or `vdi` context is included in the hash rather than appended as a suffix. Only the
+readable prefix is truncated to 50 characters to keep deployment names within Azure's
+64-character limit. Artifact blob names, installer arguments, and per-VM Run Command names
+are unchanged.
 
 Use distinct parameter-file prefixes for concurrent launches. When reusing exported parameter
 files, remove a fixed `timeStamp` so each build receives a fresh value. Builds publishing to the

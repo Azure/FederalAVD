@@ -24,7 +24,7 @@ var removeRunCommandName = 'remove-${batchContext}-runCommands-batch-${batchInde
 @batchSize(1)
 module applyCustomizations 'applyCustomization.bicep' = [
   for customization in customizations: {
-    name: uniqueString(resourceGroup().id, imageVmName, batchContext, string(batchIndex), customization.name)
+    name: '${take(customization.name, 50)}-${uniqueString(resourceGroup().id, imageVmName, batchContext, string(batchIndex), customization.name)}'
     params: {
       customization: customization
       location: location
