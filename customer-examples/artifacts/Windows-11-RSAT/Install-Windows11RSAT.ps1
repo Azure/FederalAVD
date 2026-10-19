@@ -117,8 +117,7 @@ foreach ($capabilityName in $capabilityNames) {
                 -Online `
                 -Name $capabilityName `
                 -Source $SourcePath `
-                -LimitAccess `
-                -NoRestart
+                -LimitAccess
 
             if ($result.RestartNeeded) {
                 $restartNeeded = $true
@@ -150,8 +149,7 @@ foreach ($capabilityName in $capabilityNames) {
         Write-Log -Message "Installing capability '$capabilityName' from the online Windows servicing source."
         $result = Add-WindowsCapability `
             -Online `
-            -Name $capabilityName `
-            -NoRestart
+            -Name $capabilityName
 
         if ($result.RestartNeeded) {
             $restartNeeded = $true

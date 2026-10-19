@@ -53,8 +53,12 @@ No payload preparation is required. Leave the `Payload` directory absent and run
 normally. The script calls:
 
 ```powershell
-Add-WindowsCapability -Online -Name '<capability-name>' -NoRestart
+Add-WindowsCapability -Online -Name '<capability-name>'
 ```
+
+`Add-WindowsCapability` does not support a `-NoRestart` parameter. The installer records the
+returned `RestartNeeded` status in its completion log and does not issue a restart command.
+See the [Microsoft cmdlet reference](https://learn.microsoft.com/powershell/module/dism/add-windowscapability).
 
 Windows servicing then uses its configured source. If the device is managed by WSUS, configure
 the **Specify settings for optional component installation and component repair** policy to allow
