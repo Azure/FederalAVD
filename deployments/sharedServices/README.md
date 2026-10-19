@@ -77,7 +77,10 @@ Optional monitoring subscription
     └── DCE
 ```
 
-All resources from one Shared Services deployment use the same Azure region.
+Vaults and other regional services use the configured Shared Services region. Private endpoints
+use their subnet's parent virtual network region, which can differ from the service region.
+The FSLogix backup vault does not require a private endpoint subnet or virtual network lookup
+when private endpoints are disabled.
 
 ### Resource Conditions
 

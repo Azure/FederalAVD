@@ -122,6 +122,36 @@ Describe 'Shared Services AVD workspace ownership' {
         }
     }
 
+    It 'does not require a private endpoint virtual network to determine the backup vault region' {
+        $vaultStart = $backupVaultModule.IndexOf('module recoveryServicesVault ')
+        $vaultEnd = $backupVaultModule.IndexOf('module fileShareBackupPolicy ')
+        $vaultBlock = $backupVaultModule.Substring($vaultStart, $vaultEnd - $vaultStart)
+        $vaultBlock | Should Match '(?m)^\s*location: location\s*$'
+        $vaultBlock | Should Not Match 'privateEndpointVirtualNetwork'
+    }
+
+    It 'uses the subnet virtual network region only inside the conditional backup private endpoint' {
+        $endpointStart = $backupVaultModule.IndexOf('module vaultPrivateEndpoint ')
+        $endpointBlock = $backupVaultModule.Substring($endpointStart)
+        $endpointBlock | Should Match 'if \(createVault && privateEndpoint && !empty\(privateEndpointSubnetResourceId\) && !empty\(azureBackupPrivateDnsZoneResourceId\)\)'
+        $endpointBlock | Should Match 'location: privateEndpointVirtualNetwork!\.location'
+    }
+
+    It 'embeds independent backup vault and private endpoint locations in all consuming templates' {
+        foreach ($case in @(
+            @{ Path = 'deployments\sharedServices\sharedServices.json'; Module = 'fslogixBackupVault' }
+            @{ Path = 'deployments\hostpools\hostpool.json'; Module = 'sharedFilesBackup' }
+            @{ Path = 'deployments\automatedHostPools\automatedHostPool.json'; Module = 'sharedFilesBackup' }
+        )) {
+            $template = Get-Content -LiteralPath (Join-Path $repoRoot $case.Path) -Raw | ConvertFrom-Json
+            $backupTemplate = $template.resources.($case.Module).properties.template
+            $backupTemplate.resources.recoveryServicesVault.properties.parameters.location.value |
+                Should Be "[parameters('location')]"
+            $backupTemplate.resources.vaultPrivateEndpoint.properties.parameters.location.value |
+                Should Match 'privateEndpointVirtualNetwork'
+        }
+    }
+
     It 'separates AVD control-plane ownership, endpoints, and DNS into sections' {
         $controlPlaneStep = $form.view.properties.steps | Where-Object { $_.name -eq 'avdControlPlane' }
         $sectionNames = @($controlPlaneStep.elements | Where-Object {

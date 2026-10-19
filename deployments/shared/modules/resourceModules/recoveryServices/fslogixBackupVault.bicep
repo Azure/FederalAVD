@@ -15,7 +15,7 @@ param vaultName string
 @description('Required. Name of the operations resource group where the vault is or will be deployed.')
 param resourceGroupOperations string
 
-@description('Required. Azure region for all resources.')
+@description('Required. Azure region for the Recovery Services vault. The private endpoint uses its subnet virtual network region.')
 param location string
 
 @description('Optional. Resource ID of the Log Analytics workspace for vault diagnostics.')
@@ -85,7 +85,7 @@ module recoveryServicesVault 'vaults/deploy.bicep' = if (createVault) {
   scope: resourceGroup(resourceGroupOperations)
   params: {
     name: vaultName
-    location: privateEndpointVirtualNetwork!.location
+    location: location
     diagnosticSettings: !empty(logAnalyticsWorkspaceResourceId) ? { workspaceId: logAnalyticsWorkspaceResourceId } : null
     publicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     storageType: 'LocallyRedundant'
@@ -139,7 +139,7 @@ module vaultPrivateEndpoint '../network/privateEndpoints/deploy.bicep' = if (cre
       'VNETID',
       split(privateEndpointSubnetResourceId, '/')[8]
     )
-    location: location
+    location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId
     privateLinkServiceId: recoveryServicesVault!.outputs.resourceId
     groupId: 'AzureBackup'

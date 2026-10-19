@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "17552153864680508332"
+      "templateHash": "16477643039302084521"
     }
   },
   "definitions": {
@@ -5404,7 +5404,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "14193367234030921962"
+              "templateHash": "328170013390115932"
             }
           },
           "parameters": {
@@ -5443,7 +5443,7 @@
             "location": {
               "type": "string",
               "metadata": {
-                "description": "Required. Azure region for all resources."
+                "description": "Required. Azure region for the Recovery Services vault. The private endpoint uses its subnet virtual network region."
               }
             },
             "logAnalyticsWorkspaceResourceId": {
@@ -5560,7 +5560,7 @@
                     "value": "[parameters('vaultName')]"
                   },
                   "location": {
-                    "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                    "value": "[parameters('location')]"
                   },
                   "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
                   "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
@@ -5837,10 +5837,7 @@
                     }
                   }
                 }
-              },
-              "dependsOn": [
-                "privateEndpointVirtualNetwork"
-              ]
+              }
             },
             "fileShareBackupPolicy": {
               "condition": "[parameters('manageBackupPolicy')]",
@@ -5955,7 +5952,7 @@
                     "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('vaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
                   },
                   "location": {
-                    "value": "[parameters('location')]"
+                    "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
                   },
                   "subnetResourceId": {
                     "value": "[parameters('privateEndpointSubnetResourceId')]"
@@ -6093,6 +6090,7 @@
                 }
               },
               "dependsOn": [
+                "privateEndpointVirtualNetwork",
                 "recoveryServicesVault"
               ]
             }
