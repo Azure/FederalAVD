@@ -339,6 +339,14 @@
             "BuiltIn-UWP-Apps\\MPEG2VideoExtension"
         ]
     },
+    "HEVCVideoExtension": {
+        "Description": "HEVC Video Extension - deployment requires appropriate licensing",
+        "WingetId": "9N4WGH0Z6VHQ",
+        "WingetPreserveLayout": true,
+        "DestinationFolders": [
+            "BuiltIn-UWP-Apps\\HEVCVideoExtension"
+        ]
+    },
     "HEIFImageExtension": {
         "Description": "HEIF Image Extension - adds HEIF and AVIF container support; HEIC images also require the separately licensed HEVC extension",
         "WingetId": "9PMMSR1CGPWG",

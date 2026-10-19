@@ -43,6 +43,7 @@ retained after sysprep".
 | `WebpImageExtension` | WebP Image Extension | `9PG2DK419DRG` |
 | `AV1VideoExtension` | AV1 Video Extension | `9MVZQVXJBQ9V` |
 | `MPEG2VideoExtension` | MPEG-2 Video Extension | `9N95Q1ZZPMH4` |
+| `HEVCVideoExtension` | HEVC Video Extension (appropriate licensing required) | `9N4WGH0Z6VHQ` |
 | `HEIFImageExtension` | HEIF Image Extension | `9PMMSR1CGPWG` |
 
 Add or remove entries from `downloads.json` to change which apps are staged through the repository
@@ -56,7 +57,12 @@ package; RDP uses the supported GPU driver directly.
 
 The HEIF Image Extension uses the AV1 Video Extension to display AVIF images. Displaying HEIC and
 other HEVC-compressed HEIF images also requires the separately licensed HEVC Video Extensions
-package, which this artifact doesn't distribute.
+package. The downloads example includes `HEVCVideoExtension` using product ID `9N4WGH0Z6VHQ`;
+remove that entry unless your organization is licensed to deploy it. Package availability does
+not grant installation or redistribution rights. `Update-ImageArtifacts.ps1` tries WinGet first,
+then its direct Microsoft Store fallback for this preserve-layout entry. For connected staging,
+run the repository pipeline below; transfer the resulting approved ZIP through your authorized
+offline process rather than downloading from inside the enclave.
 
 Microsoft App Installer and Windows Package Manager are intentionally excluded. App Installer
 requires its matching offline license for supported all-users provisioning and is handled by the
@@ -127,7 +133,9 @@ file.
 
 The `_build` folder contains a connected-workstation builder that does not depend on
 `Update-ImageArtifacts.ps1` or `downloads.json`. By default it includes every Store ID in the table
-above. It downloads the packages with `winget`, keeps the best x64-compatible package variant,
+above except the separately licensed HEVC extension. The standalone builder is WinGet-only;
+use `Update-ImageArtifacts.ps1` for HEVC staging with the direct Store fallback.
+It downloads the packages with `winget`, keeps the best x64-compatible package variant,
 removes Arm dependencies, deduplicates shared framework packages, and creates one zip for transfer:
 
 ```powershell

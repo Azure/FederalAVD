@@ -301,6 +301,92 @@ Downloads the installer for a Winget package by its package identifier or produc
 | --- | --- |
 | `WingetId` | Winget package identifier or Microsoft Store product code |
 
+#### Automatic Store fallback after WinGet failure
+
+Store-packaged apps continue to use the **same product ID in `WingetId`**. No second ID, URL,
+or opt-in flag is required. For example, add this entry to your customer-owned downloads file
+only if your organization is licensed to deploy this HEVC extension:
+
+```json
+"HEVCVideoExtension": {
+    "Description": "HEVC Video Extension - deployment requires appropriate licensing",
+    "WingetId": "9N4WGH0Z6VHQ",
+    "WingetPreserveLayout": true,
+    "DestinationFolders": [ "BuiltIn-UWP-Apps\\HEVCVideoExtension" ]
+}
+```
+
+The sequence is:
+
+1. Try `winget download` as before.
+2. If WinGet fails, is unavailable after App Installer registration, or returns success without a
+   main APPX/MSIX file, log the failure and try Microsoft's Store catalog/delivery services.
+3. Select the newest x64/neutral main package and the newest dependencies per package family,
+   resource ID, and x86/x64/neutral architecture. Preserve x86 dependencies for bundle provisioning.
+   An encrypted-only newest version causes an error, not an implicit downgrade.
+4. Verify each file's byte count and Microsoft-published SHA256 digest (SHA1 is accepted only for
+   HTTPS package URLs when no SHA256 digest is available). Microsoft's metadata is fetched over
+   HTTPS, but its CDN sometimes supplies HTTP package URLs. Those URLs are used with an explicit
+   warning and **mandatory SHA256 verification**; without SHA256 the download fails. HTTPS
+   certificate checks are never disabled, and HTTPS URLs are never downgraded. Name files using
+   their package identities and place dependencies under `Dependencies\<architecture>`.
+5. Reuse the existing staging, main-variant pruning, shared-dependency deduplication, packaging,
+   and optional `-CopyDownloadsToCustomerArtifacts` flow. `uploadedFileVersionInfo.txt` records
+   whether WinGet or the direct Store fallback supplied each download.
+
+Fallback eligibility requires all of the following:
+
+- A 12-character Store product ID in `WingetId`.
+- `WingetPreserveLayout: true`.
+- `WingetSource: "msstore"`, or no source override (preserve-layout entries default to `msstore`).
+- `Architecture: "x64"` (the default) or `"neutral"`; neutral still targets x64 AVD host staging.
+- A public/connected downloads manifest, including local `-PackageOnly` staging.
+
+Community-source entries (`WingetSource: "winget"`), dotted package IDs, single-file downloads,
+other architecture overrides, and Secret/Top Secret manifests never invoke this fallback.
+Successful WinGet downloads are unchanged. Both methods failing stops the update instead of
+packaging a partial fallback download.
+
+The fallback uses an **undocumented, experimental Microsoft interface** and cannot obtain licenses,
+decrypt packages, or grant access to restricted Store content. Metadata selection is not a Windows
+applicability/installation test: validate the selected version and dependencies on the target image
+before production deployment. No offline license file is generated. Continue to use
+`-SkipDownloadingNewSources` with approved, pre-staged files inside air-gapped environments.
+
+#### Integrated Microsoft Store resolver
+
+The `Get-MicrosoftStorePackageUrl` helper function is included directly in
+[`Update-ImageArtifacts.ps1`](../deployments/Update-ImageArtifacts.ps1). The fallback calls it
+automatically; no separate resolver script, relative tools-folder dependency, third-party
+library, rg-adguard service, or account token is required.
+
+Continue to supply the product ID through `WingetId` in your downloads manifest. The internal
+resolver returns package identities, main-package classification, sizes, digests, encryption
+indicators, and temporary Microsoft-hosted URLs for the staging helper to select and verify.
+
+This is an **experimental, undocumented interface**, not a supported Microsoft download API or a
+separate manifest download method. `Update-ImageArtifacts.ps1` uses it only as the WinGet fallback
+described above. It enumerates package metadata using a synthetic
+Windows 11 desktop profile, not the local machine's applicability rules. Results can include older
+versions and dependencies; do not install every result or interpret an architecture filter as
+proof that a neutral bundle supports that architecture. Microsoft controls flight availability.
+Products without a delivery category, entitlement-restricted packages, and non-packaged desktop
+installers may not be resolvable. Service errors stop the script rather than silently omitting files.
+
+Links expire and must not be treated as permanent `DownloadUrl` manifest entries. Download selected
+unencrypted packages promptly on a connected staging machine, verify their digests and signatures,
+and retain all required dependencies. `IsEncrypted: True` denotes encrypted package files; this tool
+does not decrypt them or obtain offline licenses. A download URL does not grant installation or
+redistribution rights. Prefer the existing WinGet workflow for supported package downloads.
+
+For air-gapped builds, transfer approved, verified files through the authorized process and place
+them in the appropriate `customer/artifacts/` package before packaging with
+`-SkipDownloadingNewSources`. Do not run this public Store lookup inside the enclave. See the
+[Air-Gapped Cloud Guide](air-gapped-clouds.md).
+
+Protocol reference: [StoreLib's public interface description](https://github.com/StoreDev/StoreLib).
+For the supported download command, see [Microsoft's WinGet documentation](https://learn.microsoft.com/en-us/windows/package-manager/winget/download).
+
 #### Finding a WingetId
 
 Two ID formats are used depending on the software source:

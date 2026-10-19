@@ -74,6 +74,9 @@ be committed to source control and used in air-gapped environments on subsequent
 .NOTES
 If `customer\parameters\imageManagement\downloads.json` exists, it is merged on top of the
 auto-selected base environment downloads file. Existing keys are overwritten and new keys are added.
+Preserve-layout Store product IDs try winget first, then use Microsoft's undocumented Store
+delivery service if winget fails or is unavailable. The fallback stages verified, unencrypted
+x64-compatible packages and dependencies. It is disabled for air-gapped download manifests.
 
 .PARAMETER TempDir
 Temporary directory used during artifact packaging. Defaults to $Env:Temp.
@@ -596,6 +599,484 @@ function Add-ContentToBlobContainer {
     }
 }
 
+function Get-MicrosoftStorePackageUrl {
+    <#
+    .SYNOPSIS
+        Resolves Microsoft Store products to Microsoft-hosted package download links.
+    .DESCRIPTION
+        Queries Microsoft's public Display Catalog and FE3 delivery services directly.
+        These are undocumented Store interfaces, not a supported Microsoft download API.
+        No third-party service, library, account token, or package installation is used.
+        Only anonymously available packages can be resolved. Links expire; resolving a
+        link does not grant a license or prove offline provisioning is supported.
+    .PARAMETER ProductId
+        A 12-character Store product ID or an HTTPS Microsoft Store product URL.
+    .PARAMETER Architecture
+        Filters package identities to this architecture plus neutral packages.
+        All (the default) returns every architecture reported by the service.
+    .PARAMETER Ring
+        Store flight ring: Retail (default), RP, Slow, or Fast. Availability is
+        controlled by Microsoft; a ring does not grant access to restricted flights.
+    .EXAMPLE
+        Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 -Architecture x64
+    .EXAMPLE
+        Get-MicrosoftStorePackageUrl -ProductId 'https://apps.microsoft.com/detail/9WZDNCRFHVN5' |
+            Select-Object -ExpandProperty Url
+    .NOTES
+        Run on an internet-connected staging machine, not inside an air-gapped cloud.
+        The query uses a Windows 11 desktop device profile, not local OS detection.
+        Results are not an install plan and can include multiple package versions.
+        Encrypted packages are identified by IsEncrypted; this tool does not decrypt them.
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [Alias('Uri')]
+        [ValidateNotNullOrEmpty()]
+        [string]$ProductId,
+
+        [ValidateSet('All', 'x64', 'x86', 'arm', 'arm64', 'neutral')]
+        [string]$Architecture = 'All',
+
+        [ValidateSet('Retail', 'RP', 'Slow', 'Fast')]
+        [string]$Ring = 'Retail'
+    )
+
+    $ErrorActionPreference = 'Stop'
+    $serviceNamespace = 'http://www.microsoft.com/SoftwareDistribution/Server/ClientWebService'
+    $deliveryEndpoint = 'https://fe3.delivery.mp.microsoft.com/ClientWebService/client.asmx'
+
+    function Invoke-StoreDeliveryRequest {
+        param (
+            [string]$Action,
+            [string]$Body,
+            [switch]$Secured
+        )
+
+        $endpoint = $deliveryEndpoint
+        if ($Secured) {
+            $endpoint += '/secured'
+        }
+        $created = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+        $expires = [DateTime]::UtcNow.AddMinutes(5).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+        $envelope = @"
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope" xmlns:a="http://www.w3.org/2005/08/addressing">
+  <s:Header>
+    <a:Action s:mustUnderstand="1">$serviceNamespace/$Action</a:Action>
+    <a:MessageID>urn:uuid:$([Guid]::NewGuid())</a:MessageID>
+    <a:To s:mustUnderstand="1">$endpoint</a:To>
+    <o:Security s:mustUnderstand="1" xmlns:o="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+      <u:Timestamp xmlns:u="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+        <u:Created>$created</u:Created><u:Expires>$expires</u:Expires>
+      </u:Timestamp>
+      <WindowsUpdateTicketsToken xmlns="http://schemas.microsoft.com/msus/2014/10/WindowsUpdateAuthorization"
+          xmlns:u="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd" u:id="ClientMSA">
+        <TicketType Name="MSA" Version="1.0" Policy="MBI_SSL"><User /></TicketType>
+      </WindowsUpdateTicketsToken>
+    </o:Security>
+  </s:Header>
+  <s:Body>$Body</s:Body>
+</s:Envelope>
+"@
+        Write-Verbose "Calling Microsoft delivery service: $Action"
+        $response = Invoke-WebRequest -UseBasicParsing -Uri $endpoint -Method Post `
+            -ContentType 'application/soap+xml; charset=utf-8' `
+            -Body ([Text.Encoding]::UTF8.GetBytes($envelope)) -TimeoutSec 60
+        $document = New-Object System.Xml.XmlDocument
+        $document.XmlResolver = $null
+        $document.LoadXml([string]$response.Content)
+        $fault = $document.SelectSingleNode("//*[local-name()='Fault']")
+        if ($null -ne $fault) {
+            throw "Microsoft delivery service rejected ${Action}: $($fault.InnerText)"
+        }
+        return ,$document
+    }
+
+    $id = $ProductId.Trim()
+    if ($id -notmatch '^[A-Za-z0-9]{12}$') {
+        $storeUri = $null
+        if (-not [Uri]::TryCreate($id, [UriKind]::Absolute, [ref]$storeUri) -or
+            $storeUri.Scheme -ne 'https' -or
+            $storeUri.Host -notin @('apps.microsoft.com', 'www.microsoft.com', 'microsoft.com')) {
+            throw 'Specify a 12-character Store product ID or an HTTPS apps.microsoft.com / microsoft.com product URL.'
+        }
+        $match = [regex]::Match($storeUri.AbsolutePath, '(?i)/([a-z0-9]{12})/?$')
+        if (-not $match.Success) {
+            throw 'The Store URL must end with a 12-character product ID (query strings are allowed).'
+        }
+        $id = $match.Groups[1].Value
+    }
+    $id = $id.ToUpperInvariant()
+
+    $catalogUri = "https://displaycatalog.mp.microsoft.com/v7.0/products/${id}?market=US&languages=en-US"
+    Write-Verbose "Looking up Microsoft Store product $id"
+    $catalog = Invoke-RestMethod -Uri $catalogUri -TimeoutSec 60
+    $productFamilies = @()
+    $categories = @(
+        foreach ($sku in $catalog.Product.DisplaySkuAvailabilities) {
+            $fulfillment = $sku.Sku.Properties.FulfillmentData
+            if ($fulfillment -is [string] -and -not [string]::IsNullOrWhiteSpace($fulfillment)) {
+                $fulfillment = $fulfillment | ConvertFrom-Json
+            }
+            if ($fulfillment.WuCategoryId) {
+                ([Guid]$fulfillment.WuCategoryId).ToString()
+            }
+            if ($fulfillment.PackageFamilyName) {
+                $productFamilies += [string]$fulfillment.PackageFamilyName
+            }
+        }
+    ) | Select-Object -Unique
+    if (-not $categories) {
+        throw "Product $id has no Store delivery category. It may be unavailable, restricted, or a non-packaged desktop app."
+    }
+
+    $cookieResponse = Invoke-StoreDeliveryRequest -Action GetCookie -Body @"
+<GetCookie xmlns="$serviceNamespace">
+  <oldCookie /><lastChange>2015-10-21T17:01:07Z</lastChange>
+  <currentTime>$([DateTime]::UtcNow.ToString('o'))</currentTime><protocolVersion>1.40</protocolVersion>
+</GetCookie>
+"@
+    $cookie = $cookieResponse.SelectSingleNode("//*[local-name()='GetCookieResult']")
+    if ($null -eq $cookie -or $null -eq $cookie.SelectSingleNode("*[local-name()='EncryptedData']")) {
+        throw 'Microsoft delivery service did not return a cookie.'
+    }
+
+    $flightRing = @{ Retail = 'Retail'; RP = 'RP'; Slow = 'WIS'; Fast = 'WIF' }[$Ring]
+    $deviceAttributes = "FlightRing=$flightRing;OSVersion=10.0.26100.0;OSArchitecture=AMD64;DeviceFamily=Windows.Desktop;OSSkuId=48;InstallationType=Client;App=WU;AppVer=10.0.26100.0;TelemetryLevel=3;IsFlightingEnabled=1;BranchReadinessLevel=CB;CurrentBranch=ge_release;"
+    $packages = @{}
+    foreach ($category in $categories) {
+        $updates = @{}
+        $installedIds = [Collections.Generic.HashSet[int]]::new()
+        foreach ($rootId in @(1, 2, 3)) {
+            [void]$installedIds.Add($rootId)
+        }
+        $cachedIds = [Collections.Generic.HashSet[int]]::new()
+        $syncComplete = $false
+        for ($page = 0; $page -lt 20; $page++) {
+            $installedXml = ($installedIds | Sort-Object | ForEach-Object { "<int>$_</int>" }) -join ''
+            $cachedXml = ($cachedIds | Sort-Object | ForEach-Object { "<int>$_</int>" }) -join ''
+            $sync = Invoke-StoreDeliveryRequest -Action SyncUpdates -Body @"
+<SyncUpdates xmlns="$serviceNamespace">
+  <cookie>$($cookie.InnerXml)</cookie>
+  <parameters>
+    <ExpressQuery>false</ExpressQuery>
+    <InstalledNonLeafUpdateIDs>$installedXml</InstalledNonLeafUpdateIDs>
+    <OtherCachedUpdateIDs>$cachedXml</OtherCachedUpdateIDs>
+    <SkipSoftwareSync>false</SkipSoftwareSync>
+    <NeedTwoGroupOutOfScopeUpdates>true</NeedTwoGroupOutOfScopeUpdates>
+    <FilterAppCategoryIds><CategoryIdentifier><Id>$category</Id></CategoryIdentifier></FilterAppCategoryIds>
+    <TreatAppCategoryIdsAsInstalled>true</TreatAppCategoryIdsAsInstalled>
+    <AlsoPerformRegularSync>false</AlsoPerformRegularSync>
+    <ComputerSpec />
+    <ExtendedUpdateInfoParameters>
+      <XmlUpdateFragmentTypes><XmlUpdateFragmentType>Extended</XmlUpdateFragmentType></XmlUpdateFragmentTypes>
+      <Locales><string>en-US</string><string>en</string></Locales>
+    </ExtendedUpdateInfoParameters>
+    <ClientPreferredLanguages><string>en-US</string></ClientPreferredLanguages>
+    <ProductsParameters>
+      <SyncCurrentVersionOnly>false</SyncCurrentVersionOnly>
+      <DeviceAttributes>$deviceAttributes</DeviceAttributes>
+      <CallerAttributes>Interactive=1;IsSeeker=0;</CallerAttributes><Products />
+    </ProductsParameters>
+  </parameters>
+</SyncUpdates>
+"@
+            $newCookie = $sync.SelectSingleNode("//*[local-name()='NewCookie']")
+            if ($null -ne $newCookie) {
+                $cookie = $newCookie
+            }
+            $newIdCount = 0
+            foreach ($update in $sync.SelectNodes("//*[local-name()='NewUpdates']/*[local-name()='UpdateInfo']")) {
+                $updateId = [int]$update.SelectSingleNode("*[local-name()='ID']").InnerText
+                if ($cachedIds.Add($updateId)) {
+                    $newIdCount++
+                }
+                if ($update.SelectSingleNode("*[local-name()='IsLeaf']").InnerText -eq 'false') {
+                    [void]$installedIds.Add($updateId)
+                }
+            }
+            foreach ($xmlNode in $sync.SelectNodes("//*[local-name()='Xml']")) {
+                # Identity and file metadata arrive as separate escaped fragments keyed by ID.
+                $updateId = $xmlNode.ParentNode.SelectSingleNode("*[local-name()='ID']").InnerText
+                if (-not $updates.ContainsKey($updateId)) {
+                    $updates[$updateId] = New-Object System.Xml.XmlDocument
+                    $updates[$updateId].XmlResolver = $null
+                    $updates[$updateId].LoadXml('<Update />')
+                }
+                $fragment = New-Object System.Xml.XmlDocument
+                $fragment.XmlResolver = $null
+                $fragment.LoadXml("<Update>$($xmlNode.InnerText)</Update>")
+                foreach ($child in $fragment.DocumentElement.ChildNodes) {
+                    [void]$updates[$updateId].DocumentElement.AppendChild($updates[$updateId].ImportNode($child, $true))
+                }
+            }
+            $truncated = $sync.SelectSingleNode("//*[local-name()='Truncated']")
+            if ($newIdCount -eq 0 -and ($null -eq $truncated -or $truncated.InnerText -eq 'false')) {
+                $syncComplete = $true
+                break
+            }
+        }
+        if (-not $syncComplete) {
+            throw 'Microsoft update synchronization did not complete in 20 requests. Refusing to return an incomplete package list.'
+        }
+        foreach ($fragment in $updates.Values) {
+            $identity = $fragment.SelectSingleNode("/Update/*[local-name()='UpdateIdentity']")
+            $metadata = $fragment.SelectSingleNode("//*[local-name()='AppxMetadata']")
+            if ($null -eq $metadata) {
+                continue
+            }
+            $files = @($fragment.SelectNodes("//*[local-name()='Files']/*[local-name()='File']"))
+            if ($null -eq $identity -or $files.Count -eq 0) {
+                throw 'Microsoft returned package metadata without an update identity or file list.'
+            }
+            $moniker = $metadata.GetAttribute('PackageMoniker')
+            $identityParts = $moniker.Split('_')
+            if ($identityParts.Count -ne 5) {
+                throw "Microsoft returned an unrecognized package identity: $moniker"
+            }
+            $family = "$($identityParts[0])_$($identityParts[4])"
+            $packageArchitecture = if ($moniker -match '_(x64|x86|arm64|arm|neutral)_') {
+                $Matches[1]
+            } else {
+                throw "Microsoft returned an unrecognized package architecture: $moniker"
+            }
+            if ($Architecture -ne 'All' -and $packageArchitecture -notin @($Architecture, 'neutral')) {
+                continue
+            }
+            $key = "$($identity.GetAttribute('UpdateID')):$($identity.GetAttribute('RevisionNumber'))"
+            $packages[$key] = @{
+                Identity = $identity
+                Files = $files
+                Moniker = $moniker
+                Architecture = $packageArchitecture
+                Family = $family
+                IsMainPackage = $family -in $productFamilies
+            }
+        }
+    }
+    if ($packages.Count -eq 0) {
+        throw "No package metadata matched product $id and architecture $Architecture. Anonymous access or this device profile may not be supported."
+    }
+
+    $results = @(
+        foreach ($package in $packages.Values) {
+            $locations = Invoke-StoreDeliveryRequest -Action GetExtendedUpdateInfo2 -Secured -Body @"
+<GetExtendedUpdateInfo2 xmlns="$serviceNamespace">
+  <updateIDs><UpdateIdentity>
+    <UpdateID>$($package.Identity.GetAttribute('UpdateID'))</UpdateID>
+    <RevisionNumber>$($package.Identity.GetAttribute('RevisionNumber'))</RevisionNumber>
+  </UpdateIdentity></updateIDs>
+  <infoTypes><XmlUpdateFragmentType>FileUrl</XmlUpdateFragmentType></infoTypes>
+  <deviceAttributes>$deviceAttributes</deviceAttributes>
+</GetExtendedUpdateInfo2>
+"@
+            foreach ($file in $package.Files) {
+                $name = $file.GetAttribute('FileName')
+                if ($name -notmatch '\.(appx|appxbundle|msix|msixbundle|eappx|eappxbundle|emsix|emsixbundle)$') {
+                    continue
+                }
+                $digest = $file.GetAttribute('Digest')
+                $matchingLocations = @(
+                    $locations.SelectNodes("//*[local-name()='FileLocation']") |
+                        Where-Object {
+                            $digestNode = $_.SelectSingleNode("*[local-name()='FileDigest']")
+                            $null -ne $digestNode -and $digestNode.InnerText -ceq $digest
+                        }
+                )
+                if ($matchingLocations.Count -eq 0) {
+                    throw "Microsoft returned no download location for $name. The package may require an entitlement."
+                }
+                foreach ($location in $matchingLocations) {
+                    $urlNode = $location.SelectSingleNode("*[local-name()='Url']")
+                    $downloadUri = $null
+                    if ($null -eq $urlNode -or
+                        -not [Uri]::TryCreate($urlNode.InnerText, [UriKind]::Absolute, [ref]$downloadUri) -or
+                        $downloadUri.Scheme -notin @('https', 'http') -or
+                        -not $downloadUri.Host.EndsWith('.microsoft.com', [StringComparison]::OrdinalIgnoreCase)) {
+                        throw "Microsoft returned an unexpected download URL for $name."
+                    }
+                    [pscustomobject]@{
+                        ProductId = $id
+                        PackageMoniker = $package.Moniker
+                        Architecture = $package.Architecture
+                        PackageFamilyName = $package.Family
+                        IsMainPackage = $package.IsMainPackage
+                        FileName = $name
+                        IsEncrypted = [IO.Path]::GetExtension($name) -match '^\.e'
+                        Size = [long]$file.GetAttribute('Size')
+                        Digest = $digest
+                        DigestAlgorithm = $file.GetAttribute('DigestAlgorithm')
+                        Sha256Digest = ($file.SelectSingleNode("*[local-name()='AdditionalDigest' and @Algorithm='SHA256']")).InnerText
+                        Url = $downloadUri.AbsoluteUri
+                    }
+                }
+            }
+        }
+    )
+    if ($results.Count -eq 0) {
+        throw "Microsoft returned no APPX/MSIX package links for product $id."
+    }
+    $results | Sort-Object -Property PackageMoniker, FileName, Url -Unique
+}
+
+function Save-MicrosoftStorePackages {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ProductId,
+        [Parameter(Mandatory)]
+        [string]$OutputDirectory
+    )
+
+    $Links = @(Get-MicrosoftStorePackageUrl -ProductId $ProductId -Architecture All)
+    $Candidates = @(
+        foreach ($Link in $Links) {
+            if ($Link.PackageMoniker -notmatch '^([A-Za-z0-9.-]+)_([0-9]+(?:\.[0-9]+){3})_(x64|x86|arm64|arm|neutral)_([A-Za-z0-9.~+-]*)_([A-Za-z0-9]+)$') {
+                throw "Unrecognized Store package identity: $($Link.PackageMoniker)"
+            }
+            $PackageVersion = [version]$Matches[2]
+            $PackageArchitecture = $Matches[3]
+            $Group = "$($Matches[1])_$($Matches[3])_$($Matches[4])_$($Matches[5])"
+            if ($PackageArchitecture -notin @('x64', 'x86', 'neutral')) {
+                continue
+            }
+            [pscustomobject]@{
+                Link = $Link
+                Version = $PackageVersion
+                Architecture = $PackageArchitecture
+                ResourceId = $Matches[4]
+                Group = $Group
+                Extension = [IO.Path]::GetExtension($Link.FileName).ToLowerInvariant()
+            }
+        }
+    )
+    $MainCandidates = @($Candidates | Where-Object {
+        $_.Link.IsMainPackage -and $_.Architecture -in @('x64', 'neutral') -and $_.ResourceId -in @('', '~')
+    })
+    if ($MainCandidates.Count -eq 0) {
+        throw "Store product $ProductId has no identifiable x64/neutral main package."
+    }
+    $LatestMainVersion = ($MainCandidates | Sort-Object Version -Descending | Select-Object -First 1).Version
+    $Main = $MainCandidates |
+        Where-Object { $_.Version -eq $LatestMainVersion -and -not $_.Link.IsEncrypted } |
+        Sort-Object @{ Expression = { if ($_.Architecture -eq 'x64') { 0 } else { 1 } } },
+            @{ Expression = { if ($_.Extension -in @('.msixbundle', '.appxbundle')) { 0 } else { 1 } } },
+            @{ Expression = { $_.Link.PackageMoniker } } |
+        Select-Object -First 1
+    if ($null -eq $Main) {
+        throw "The newest Store package for $ProductId ($LatestMainVersion) is encrypted; refusing to downgrade or obtain a license implicitly."
+    }
+    $Selected = @($Main)
+    foreach ($Group in @($Candidates | Where-Object { -not $_.Link.IsMainPackage } | Group-Object Group)) {
+        $LatestVersion = ($Group.Group | Sort-Object Version -Descending | Select-Object -First 1).Version
+        $Dependency = $Group.Group |
+            Where-Object { $_.Version -eq $LatestVersion -and -not $_.Link.IsEncrypted } |
+            Sort-Object @{ Expression = { $_.Link.FileName } } |
+            Select-Object -First 1
+        if ($null -eq $Dependency) {
+            throw "The newest Store dependency '$($Group.Name)' is encrypted; it cannot be staged for offline provisioning."
+        }
+        $Selected += $Dependency
+    }
+
+    foreach ($Package in $Selected) {
+        $Link = $Package.Link
+        if ($Package.Extension -notin @('.msix', '.appx', '.msixbundle', '.appxbundle')) {
+            throw "Unsupported Store package extension: $($Package.Extension)"
+        }
+        $Destination = $OutputDirectory
+        if (-not $Link.IsMainPackage) {
+            $Destination = Join-Path $OutputDirectory "Dependencies\$($Package.Architecture)"
+        }
+        New-Item -Path $Destination -ItemType Directory -Force | Out-Null
+        $FileName = "$($Link.PackageMoniker)$($Package.Extension)"
+        $FilePath = Join-Path $Destination $FileName
+        $PartialPath = "$FilePath.partial"
+        $Algorithm = [string]$Link.DigestAlgorithm
+        $Digest = [string]$Link.Digest
+        if (-not [string]::IsNullOrWhiteSpace($Link.Sha256Digest)) {
+            $Algorithm = 'SHA256'
+            $Digest = [string]$Link.Sha256Digest
+        }
+        if ($Algorithm -notin @('SHA1', 'SHA256') -or [string]::IsNullOrWhiteSpace($Digest) -or $Link.Size -le 0) {
+            throw "Store package '$FileName' has no supported digest or valid byte size."
+        }
+        $ExpectedHash = [BitConverter]::ToString([Convert]::FromBase64String($Digest)).Replace('-', '')
+        $DownloadUri = [uri]$Link.Url
+        if ($DownloadUri.Scheme -notin @('https', 'http') -or
+            -not $DownloadUri.Host.EndsWith('.microsoft.com', [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Unexpected Store download URL for '$FileName'."
+        }
+        if ($DownloadUri.Scheme -eq 'http') {
+            if ($Algorithm -ne 'SHA256') {
+                throw "Store HTTP download '$FileName' requires a SHA256 digest from Microsoft's HTTPS metadata."
+            }
+            Write-Warning "Store CDN supplied HTTP for '$FileName'; verifying SHA256 from Microsoft's HTTPS metadata before accepting it."
+        }
+        try {
+            Write-Verbose "Downloading Store package '$FileName' ($($Link.Size) bytes)."
+            Invoke-WebRequest -UseBasicParsing -Uri $DownloadUri -OutFile $PartialPath -TimeoutSec 300 -MaximumRedirection 0 | Out-Null
+            if ((Get-Item -LiteralPath $PartialPath).Length -ne $Link.Size) {
+                throw "Store package byte-size mismatch for '$FileName'."
+            }
+            if ((Get-FileHash -LiteralPath $PartialPath -Algorithm $Algorithm).Hash -cne $ExpectedHash) {
+                throw "Store package $Algorithm mismatch for '$FileName'."
+            }
+            Move-Item -LiteralPath $PartialPath -Destination $FilePath -Force
+        }
+        finally {
+            if (Test-Path -LiteralPath $PartialPath) {
+                Remove-Item -LiteralPath $PartialPath -Force
+            }
+        }
+    }
+}
+
+function Invoke-WingetOrStoreDownload {
+    [CmdletBinding()]
+    param(
+        [string]$ProductId,
+        [string[]]$WingetArguments,
+        [string]$OutputDirectory,
+        [bool]$AllowStoreFallback
+    )
+
+    $Messages = @()
+    $FailureReason = 'winget is not available on this system.'
+    if (Get-Command -Name winget -ErrorAction SilentlyContinue) {
+        try {
+            $WingetOutput = @(& winget @WingetArguments 2>&1)
+            $WingetExitCode = $LASTEXITCODE
+            $Messages = @($WingetOutput | Where-Object {
+                $_ -match '^Found |[Dd]ownloaded:|[Ee]rror|[Ff]ailed|[Cc]ould not|[Dd]oes not support'
+            })
+            if ($WingetExitCode -ne 0) {
+                $Detail = ($WingetOutput | Select-Object -Last 1 | Out-String).Trim()
+                $FailureReason = "winget download failed with exit code $WingetExitCode. $Detail"
+            }
+            elseif ($AllowStoreFallback -and -not @(Get-ChildItem -LiteralPath $OutputDirectory -File |
+                Where-Object { $_.Extension -in @('.msix', '.msixbundle', '.appx', '.appxbundle') }).Count) {
+                $FailureReason = 'winget returned success but downloaded no main APPX/MSIX package.'
+            }
+            else {
+                return [pscustomobject]@{ Source = 'WinGet'; Messages = $Messages }
+            }
+        }
+        catch {
+            $FailureReason = "winget could not complete: $($_.Exception.Message)"
+        }
+    }
+    if (-not $AllowStoreFallback) {
+        throw $FailureReason
+    }
+    Write-Warning "[$ProductId] $FailureReason Falling back to Microsoft's undocumented Store delivery service."
+    # Discard incomplete WinGet payloads before producing the replacement layout.
+    Remove-Item -LiteralPath $OutputDirectory -Recurse -Force
+    New-Item -Path $OutputDirectory -ItemType Directory -Force | Out-Null
+    Save-MicrosoftStorePackages -ProductId $ProductId -OutputDirectory $OutputDirectory
+    return [pscustomobject]@{ Source = 'MicrosoftStore'; Messages = $Messages }
+}
+
 function Optimize-SharedDependencies {
     # Deduplicates dependency packages across preserve-layout app subfolders.
     # Each app winget downloads brings its own copy of shared framework packages
@@ -782,7 +1263,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             Write-Output "Winget is now available ($(& winget --version))."
         }
         else {
-            Write-Warning "Winget is still not available after registration attempt. Winget-based downloads will be skipped."
+            Write-Warning "Winget is still not available after registration attempt. Eligible Store entries will use the direct Store fallback; other winget-based downloads will be skipped."
         }
     }
 
@@ -885,14 +1366,23 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             }
         }
         If ($UseWinget) {
-            If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
+            $PreserveLayout = ($null -ne $Download.WingetPreserveLayout -and [bool]$Download.WingetPreserveLayout)
+            $WingetArch = if ($null -ne $Download.Architecture -and $Download.Architecture -ne '') {
+                [string]$Download.Architecture
+            } else { 'x64' }
+            $WingetSource = if ($null -ne $Download.WingetSource -and $Download.WingetSource -ne '') {
+                [string]$Download.WingetSource
+            } elseif ($PreserveLayout) { 'msstore' } else { '' }
+            $StoreFallbackEligible = $downloadsParametersPrefix -eq 'public' -and
+                $PreserveLayout -and $Download.WingetId -match '^[A-Za-z0-9]{12}$' -and
+                $WingetSource -eq 'msstore' -and $WingetArch -in @('x64', 'neutral')
+            If (-not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue) -and -not $StoreFallbackEligible) {
                 Write-Warning "[$SoftwareName] Skipping: winget is not available on this system."
             }
             Else {
                 Write-Output "[$SoftwareName] Downloading via winget (Id: $($Download.WingetId))..."
                 # WingetPreserveLayout: skip rename and preserve the downloaded folder structure as-is.
                 # Use this for MSIX/UWP apps where winget creates a versioned bundle + Dependencies subfolder.
-                $PreserveLayout = ($null -ne $Download.WingetPreserveLayout -and [bool]$Download.WingetPreserveLayout)
                 Try {
                     $TempSoftwareDownloadDir = Join-Path -Path $DownloadDir -ChildPath ($SoftwareName.Replace(' ', '_'))
                     If (Test-Path -Path $TempSoftwareDownloadDir) {
@@ -900,7 +1390,9 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     }
                     New-Item -Path $TempSoftwareDownloadDir -ItemType Directory -Force | Out-Null
                     $DestFileName = $Download.DestinationFileName
-                    $DestFileFullName = Join-Path $TempSoftwareDownloadDir -ChildPath $DestFileName
+                    $DestFileFullName = if ($PreserveLayout) { $null } else {
+                        Join-Path $TempSoftwareDownloadDir -ChildPath $DestFileName
+                    }
                     $VersionText = @()
                     $VersionText += "SoftwareName = $SoftwareName"
                     $VersionText += "WingetId = $($Download.WingetId)"
@@ -908,24 +1400,12 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     # Set Architecture to 'neutral' to omit --architecture entirely (needed for
                     # multi-arch Store bundles that winget cannot match to a specific arch).
                     # Valid winget values: x86, x64, arm, arm64.
-                    $WingetArch = if ($null -ne $Download.Architecture -and $Download.Architecture -ne '') {
-                        $Download.Architecture
-                    } else {
-                        'x64'
-                    }
                     $WingetArguments = @(
                         'download', '--id', $Download.WingetId, '--exact',
                         '--download-directory', $TempSoftwareDownloadDir,
                         '--skip-license', '--accept-source-agreements', '--accept-package-agreements',
                         '--disable-interactivity'
                     )
-                    $WingetSource = if ($null -ne $Download.WingetSource -and $Download.WingetSource -ne '') {
-                        [string]$Download.WingetSource
-                    } elseif ($PreserveLayout) {
-                        'msstore'
-                    } else {
-                        ''
-                    }
                     If ($WingetSource -notin @('', 'msstore', 'winget')) {
                         Throw "WingetSource for '$SoftwareName' must be 'msstore' or 'winget'."
                     }
@@ -941,15 +1421,12 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         $WingetArguments += @('--architecture', $WingetArch)
                     }
 
-                    $WingetOutput = @(& winget @WingetArguments 2>&1)
-                    $WingetExitCode = $LASTEXITCODE
-                    $WingetLogFilter = '^Found |[Dd]ownloaded:|[Ee]rror|[Ff]ailed|[Cc]ould not|[Dd]oes not support'
-                    $WingetOutput | Where-Object { $_ -match $WingetLogFilter } |
+                    $DownloadResult = Invoke-WingetOrStoreDownload -ProductId $Download.WingetId `
+                        -WingetArguments $WingetArguments -OutputDirectory $TempSoftwareDownloadDir `
+                        -AllowStoreFallback $StoreFallbackEligible
+                    $VersionText += "DownloadProvider = $($DownloadResult.Source)"
+                    $DownloadResult.Messages |
                         ForEach-Object { Write-Output "[$SoftwareName]  $_" }
-                    If ($WingetExitCode -ne 0) {
-                        $WingetFailureDetail = ($WingetOutput | Select-Object -Last 1).ToString().Trim()
-                        Throw "winget download failed for '$SoftwareName' with exit code $WingetExitCode. $WingetFailureDetail"
-                    }
                     If ($PreserveLayout) {
                         # Preserve the full downloaded layout (bundle + Dependencies subfolder).
                         # Do not rename any files; the install script will discover them by extension.
@@ -1059,7 +1536,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                     Add-Content -Path $FileVersionInfoFile -Value $VersionText
                 }
                 Catch {
-                    Write-Error "Error downloading '$SoftwareName' via winget: $_."
+                    Write-Error "Error downloading '$SoftwareName' using WinGet/Store: $_."
                 }
                 $DestFolders = if ($Download.DestinationFolders.Count -gt 0) { $Download.DestinationFolders } else { @('') }
                 foreach ($DestFolder in $DestFolders) {

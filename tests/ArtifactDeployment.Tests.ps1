@@ -1583,7 +1583,7 @@ Describe 'Built-in UWP app download definitions' {
         $readmeContent | Should Match 'separate `Microsoft-WinGet` artifact'
     }
 
-    It 'defaults the standalone builder to every documented built-in app ID' {
+    It 'defaults the standalone builder to documented built-in app IDs except separately licensed HEVC' {
         $tokens = $null
         $parseErrors = $null
         $builderAst = [System.Management.Automation.Language.Parser]::ParseInput(
@@ -1598,11 +1598,19 @@ Describe 'Built-in UWP app download definitions' {
         $appStoreIdsParameter | Should Not BeNullOrEmpty
         $defaultIds = @($appStoreIdsParameter.DefaultValue.SafeGetValue())
         $downloadIds = @($downloads.PSObject.Properties |
-            Where-Object { @($_.Value.DestinationFolders) -like 'BuiltIn-UWP-Apps\*' } |
+            Where-Object { @($_.Value.DestinationFolders) -like 'BuiltIn-UWP-Apps\*' -and $_.Name -ne 'HEVCVideoExtension' } |
             ForEach-Object { [string]$_.Value.WingetId })
         ($defaultIds | Sort-Object) -join ',' | Should Be (($downloadIds | Sort-Object) -join ',')
         $defaultIds.Count | Should Be 14
         $readmeContent | Should Match 'By default it includes every Store ID in the table'
+    }
+
+    It 'stages separately licensed HEVC through the preserve-layout Store download pipeline' {
+        $downloads.HEVCVideoExtension.WingetId | Should Be '9N4WGH0Z6VHQ'
+        $downloads.HEVCVideoExtension.WingetPreserveLayout | Should Be $true
+        $downloads.HEVCVideoExtension.DestinationFolders[0] | Should Be 'BuiltIn-UWP-Apps\HEVCVideoExtension'
+        $downloads.HEVCVideoExtension.Description | Should Match 'licensing'
+        $readmeContent | Should Match 'standalone builder is WinGet-only'
     }
 
     It 'supports a winget source override and expands dependency archives' {
