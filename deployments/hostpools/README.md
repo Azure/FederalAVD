@@ -482,6 +482,23 @@ Subscription
 
 ### Networking
 
+The standard and automated host-pool forms use separate **Enable PaaS Private DNS Zone
+Integration** and **Enable AVD Private DNS Zone Integration** checkboxes. PaaS controls appear
+only for resources this deployment creates. Azure Files DNS requires new pooled FSLogix Azure
+Files storage. Key Vault DNS appears for a new credentials or encryption vault; adopting an
+encryption vault does not hide DNS for a new credentials vault.
+
+Backup and Queue DNS selectors require a new backup vault: either a Personal VM backup vault
+or a pooled FSLogix backup vault for new Azure Files storage. Personal VM backup also creates
+Disk Access, so its private-endpoint subnet and Blob DNS selector remain available even when
+adopting an existing backup vault. Existing backup-vault endpoints are not reconfigured.
+
+AVD DNS remains independent of PaaS DNS. **AVD Connection and Feed Private DNS Zone** serves remote
+session connections and workspace feed downloads when selected. The global-feed DNS selector
+appears only for `All` routes when no existing global-feed workspace is detected. Disabling DNS
+integration emits no zone IDs for that endpoint group. Hidden inactive PaaS selections do not
+submit endpoint flags, subnets, or DNS zone IDs.
+
 #### `permittedIPs`
 
 - **Type:** Array

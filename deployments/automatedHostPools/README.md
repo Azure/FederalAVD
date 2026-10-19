@@ -483,11 +483,22 @@ produce the same public-access behavior as the standard deployment:
 - Private endpoint disabled with permitted IPs: public access is enabled only for those ranges.
 - Private endpoint disabled with no permitted IPs: public access is enabled from all networks.
 
+The **Permitted IP Addresses** section appears with the PaaS settings, before **AVD Private
+Link**. These IP allowlists do not apply to AVD Private Link.
+
 The same portal choice can also create private endpoints for newly created Shared Services Key
 Vaults and the shared FSLogix Recovery Services vault. Operations endpoints and FSLogix storage
 endpoints can use different subnets. Every endpoint is deployed in the Azure region of its selected
 subnet's parent virtual network, including when that region differs from the resource group's
 location.
+
+The form shows PaaS Private DNS integration only when PaaS private endpoints are enabled and
+this deployment creates an Azure Files storage account, credentials Key Vault, or encryption
+Key Vault. Zone selectors appear only for their consumers: Azure Files for new file storage,
+Key Vault for new vaults, and Backup/Blob/Queue for a new Recovery Services vault. Adopting
+existing resources does not expose DNS controls for endpoints this deployment does not create.
+Disabling storage deployment or selecting a profile solution other than FSLogix also removes
+any DNS controls that would otherwise depend on a previously selected storage encryption setting.
 
 AVD Private Link is configured separately from PaaS private endpoints. The automated deployment
 supports the same route choices as the standard host pool:
@@ -496,6 +507,19 @@ supports the same route choices as the standard host pool:
 - `FeedAndHostPool`: adds the workspace `feed` endpoint for private feed download.
 - `All`: adds or reuses the single global-feed workspace and its `global` endpoint for private
   initial feed discovery.
+
+The separate **Enable AVD Private DNS Zone Integration** checkbox appears only when AVD Private
+Link is enabled. Its **Private DNS Zone Subscription** selector defaults to the deployment
+subscription selected on Basics and can select another accessible subscription containing the
+AVD DNS zones, independently of the PaaS DNS subscription selector. Both AVD zone dropdowns
+query the selected subscription and pass full zone resource IDs to the deployment. The deploying
+identity must have permission to associate those zones with the private endpoints.
+With integration enabled, **AVD Connection and Feed Private DNS Zone** is used for every route choice,
+including `HostPool` (remote session connections only); workspace feed downloads
+share that zone when selected. **Global Feed Private DNS Zone** appears only for `All` when no
+existing global-feed workspace is detected and this deployment will create the global endpoint.
+Disabling either PaaS or AVD DNS integration hides its zone selectors and emits no zone IDs
+for that endpoint group.
 
 When `existingFeedWorkspaceResourceId` is empty, the orchestrator creates a workspace and
 control-plane resource group with shared, region-level production names. Before redeploying an

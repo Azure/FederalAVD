@@ -61,6 +61,110 @@ Describe 'Automated host-pool AVD Private Link virtual networks' {
     }
 }
 
+Describe 'Automated host-pool Private DNS visibility' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $zeroTrustStep = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+        $paas = $zeroTrustStep.elements | Where-Object { $_.name -eq 'privateEndpoints' }
+        $avd = $zeroTrustStep.elements | Where-Object { $_.name -eq 'avdPrivateLink' }
+    }
+
+    It 'requires an active PaaS consumer for both endpoint and DNS checkboxes' {
+        $consumerCondition = $paas.visible.Substring(1, $paas.visible.Length - 2)
+        ($paas.elements | Where-Object name -eq 'deployPrivateEndpoints').visible | Should Be $paas.visible
+        $dnsCheckbox = $paas.elements | Where-Object name -eq 'enablePrivateDNSIntegration'
+        $dnsCheckbox.visible | Should Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, $consumerCondition)]"
+        $dnsCheckbox.label | Should Be 'Enable PaaS Private DNS Zone Integration'
+        $form.view.outputs.parameters.deployPrivateEndpoints | Should Be $dnsCheckbox.visible
+        $paas.visible | Should Not Match 'keyManagementStorage'
+    }
+
+    It 'gates PaaS DNS subscription discovery by the same active consumers' {
+        $consumerCondition = $paas.visible.Substring(1, $paas.visible.Length - 2)
+        $subscription = $paas.elements | Where-Object name -eq 'privateDNSZonesSubscription'
+        $api = $paas.elements | Where-Object name -eq 'privateDNSZonesApi'
+        $subscription.visible | Should Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, $consumerCondition)]"
+        $api.condition | Should Be "[and(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration, $consumerCondition, not(empty(steps('zeroTrust').privateEndpoints.privateDNSZonesSubscription)))]"
+    }
+
+    It 'requires newly deployed Azure Files storage before storage CMK can expose Key Vault DNS' {
+        $keyVault = $paas.elements | Where-Object name -eq 'azureKeyVaultPrivateDnsZone'
+        $keyVault.visible | Should Match "and\(equals\(steps\('profiles'\)\.profileSolution, 'FSLogix'\), steps\('profiles'\)\.deployStorage, contains\(steps\('profiles'\)\.storage\.service, 'AzureFiles'\), contains\(steps\('zeroTrust'\)\.keyManagement\.keyManagementStorage, 'CustomerManaged'\)\)"
+        $operations = $paas.elements | Where-Object name -eq 'operationsSubnet'
+        $operations.visible | Should Match "and\(equals\(steps\('profiles'\)\.profileSolution, 'FSLogix'\), steps\('profiles'\)\.deployStorage, contains\(steps\('profiles'\)\.storage\.service, 'AzureFiles'\), contains\(steps\('zeroTrust'\)\.keyManagement\.keyManagementStorage, 'CustomerManaged'\)\)"
+    }
+
+    It 'ignores hidden storage choices when FSLogix is not the active profile solution' {
+        foreach ($element in @($paas) + @($paas.elements)) {
+            foreach ($property in @('visible', 'condition')) {
+                $expression = $element.$property
+                if ($expression -like "*steps('profiles').deployStorage*") {
+                    $expression | Should Match "equals\(steps\('profiles'\)\.profileSolution, 'FSLogix'\)"
+                }
+            }
+        }
+        $form.view.outputs.parameters.fslogixKeyManagementStorage | Should Be "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('zeroTrust').keyManagement.keyManagementStorage, 'PlatformManaged')]"
+    }
+
+    It 'keeps PaaS zone outputs aligned with the corresponding selector visibility' {
+        foreach ($name in @('azureKeyVaultPrivateDnsZone', 'azureBackupPrivateDnsZone', 'azureBlobPrivateDnsZone', 'azureQueuePrivateDnsZone')) {
+            $selector = $paas.elements | Where-Object name -eq $name
+            $condition = $selector.visible.Substring(1, $selector.visible.Length - 2)
+            $form.view.outputs.parameters."${name}ResourceId" | Should Be "[if($condition, steps('zeroTrust').privateEndpoints.$name, '')]"
+        }
+        $operations = $paas.elements | Where-Object name -eq 'operationsSubnet'
+        $condition = $operations.visible.Substring(1, $operations.visible.Length - 2)
+        $form.view.outputs.parameters.operationsPrivateEndpointSubnetResourceId | Should Be "[if($condition, steps('zeroTrust').privateEndpoints.operationsSubnet.id, '')]"
+    }
+
+    It 'shows connection DNS for every enabled AVD route but global DNS only for a new global endpoint' {
+        $checkbox = $avd.elements | Where-Object name -eq 'enablePrivateDNSIntegration'
+        $connection = $avd.elements | Where-Object name -eq 'avdPrivateDnsZone'
+        $globalFeed = $avd.elements | Where-Object name -eq 'globalFeedPrivateDnsZone'
+        $checkbox.visible | Should Be "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]"
+        $checkbox.label | Should Be 'Enable AVD Private DNS Zone Integration'
+        $connection.label | Should Be 'AVD Connection and Feed Private DNS Zone'
+        $connection.visible | Should Be "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration)]"
+        $globalFeed.visible | Should Be "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration, equals(steps('zeroTrust').avdPrivateLink.privateRoutes, 'All'), empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => contains(workspace.name, 'global-feed'))))]"
+        $condition = $globalFeed.visible.Substring(1, $globalFeed.visible.Length - 2)
+        $form.view.outputs.parameters.globalFeedPrivateDnsZoneResourceId | Should Be "[if($condition, steps('zeroTrust').avdPrivateLink.globalFeedPrivateDnsZone, '')]"
+    }
+
+    It 'allows an independent AVD DNS subscription with a deployment-subscription label default' {
+        $subscription = $avd.elements | Where-Object name -eq 'privateDNSZonesSubscription'
+        @($subscription).Count | Should Be 1
+        $subscription.type | Should Be 'Microsoft.Common.DropDown'
+        $subscription.defaultValue | Should Be "[steps('basics').subscription.displayName]"
+        $subscription.constraints.required | Should Be $true
+        $subscription.constraints.allowedValues | Should Match "steps\('basics'\)\.subscriptionsApi\.value"
+        $subscription.constraints.allowedValues | Should Match 'sub\.subscriptionId'
+        $subscription.visible | Should Be "[and(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.enablePrivateDNSIntegration)]"
+        ($avd.elements | Where-Object name -eq 'privateDNSZonesApi').request.path |
+            Should Be "[concat(steps('zeroTrust').avdPrivateLink.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+    }
+
+    It 'gates subnet discovery together with each endpoint control' {
+        foreach ($pair in @(
+            @{ Section = $paas; Api = 'operationsSubnetsApi'; Selector = 'operationsVirtualNetwork'; Prefix = 'privateEndpoints' }
+            @{ Section = $paas; Api = 'subnetsApi'; Selector = 'virtualNetwork'; Prefix = 'privateEndpoints' }
+            @{ Section = $avd; Api = 'hostPoolSubnetsApi'; Selector = 'hostPoolVirtualNetwork'; Prefix = 'avdPrivateLink' }
+            @{ Section = $avd; Api = 'workspaceFeedSubnetsApi'; Selector = 'workspaceFeedVirtualNetwork'; Prefix = 'avdPrivateLink' }
+            @{ Section = $avd; Api = 'globalFeedSubnetsApi'; Selector = 'globalFeedVirtualNetwork'; Prefix = 'avdPrivateLink' }
+        )) {
+            $api = $pair.Section.elements | Where-Object name -eq $pair.Api
+            $selector = $pair.Section.elements | Where-Object name -eq $pair.Selector
+            $condition = $selector.visible.Substring(1, $selector.visible.Length - 2)
+            $networkCheck = "not(empty(steps('zeroTrust').$($pair.Prefix).$($pair.Selector)))"
+            if ($condition.StartsWith('and(')) {
+                $expectedCondition = $condition.Substring(0, $condition.Length - 1) + ", $networkCheck)"
+            } else {
+                $expectedCondition = "and($condition, $networkCheck)"
+            }
+            $api.condition | Should Be "[$expectedCondition]"
+        }
+    }
+}
+
 Describe 'Automated host-pool Shared Services create-or-adopt controls' {
     BeforeAll {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
