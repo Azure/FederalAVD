@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "12291613525403161237"
+      "templateHash": "13743331454259763240"
     }
   },
   "definitions": {
@@ -2840,7 +2840,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "15272868510914903935"
+              "templateHash": "13232490329503853514"
             }
           },
           "definitions": {
@@ -3677,7 +3677,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "15613026877898496546"
+                      "templateHash": "10485125439938511120"
                     }
                   },
                   "definitions": {
@@ -3780,8 +3780,7 @@
                   },
                   "variables": {
                     "$fxv#0": "Param(\r\n    [string]$ResourceManagerUri,\r\n    [string]$SubscriptionId,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$ImageVmName,\r\n    [string]$ImageBuildResourceGroup,\r\n    [string]$OrchestrationVmName,\r\n    [string]$CurrentRunCommandName\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n$ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n$TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\nif (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n$AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\nfunction Get-RunCommands {\r\n    param(\r\n        [string]$RunCommandsUri,\r\n        [string]$ExcludedRunCommandName = ''\r\n    )\r\n\r\n    return @(\r\n        (Invoke-RestMethod `\r\n            -Headers $AzureManagementHeader `\r\n            -Method 'GET' `\r\n            -Uri $RunCommandsUri).value |\r\n            Where-Object { [string]::IsNullOrEmpty($ExcludedRunCommandName) -or $_.name -ne $ExcludedRunCommandName }\r\n    )\r\n}\r\n\r\n$ResourceGroupId = '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ImageBuildResourceGroup\r\n$VirtualMachineUri = $ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/'\r\n$ImageRunCommandsUri = $VirtualMachineUri + $ImageVmName + '/runCommands?api-version=2024-03-01'\r\n$OrchestrationRunCommandsUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands?api-version=2024-03-01'\r\n\r\n$ImageRunCommands = Get-RunCommands -RunCommandsUri $ImageRunCommandsUri\r\nforeach ($RunCommand in $ImageRunCommands) {\r\n    $DeleteUri = $VirtualMachineUri + $ImageVmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'\r\n    Invoke-RestMethod `\r\n        -Headers $AzureManagementHeader `\r\n        -Method 'DELETE' `\r\n        -Uri $DeleteUri | Out-Null\r\n}\r\n\r\n$DeleteDeadline = (Get-Date).AddMinutes(10)\r\nDo {\r\n    $RemainingImageRunCommands = Get-RunCommands -RunCommandsUri $ImageRunCommandsUri\r\n    if ($RemainingImageRunCommands.Count -gt 0) {\r\n        Start-Sleep -Seconds 5\r\n    }\r\n} Until ($RemainingImageRunCommands.Count -eq 0 -or (Get-Date) -ge $DeleteDeadline)\r\n\r\nif ($RemainingImageRunCommands.Count -gt 0) {\r\n    $RemainingRunCommandNames = $RemainingImageRunCommands | ForEach-Object { $_.name }\r\n    throw \"Timed out waiting for image VM Run Commands to be removed. Remaining commands: $($RemainingRunCommandNames -join ', ')\"\r\n}\r\n\r\n$OrchestrationRunCommands = Get-RunCommands `\r\n    -RunCommandsUri $OrchestrationRunCommandsUri `\r\n    -ExcludedRunCommandName $CurrentRunCommandName\r\n\r\nforeach ($RunCommand in $OrchestrationRunCommands) {\r\n    $DeleteUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'\r\n    Invoke-RestMethod `\r\n        -Headers $AzureManagementHeader `\r\n        -Method 'DELETE' `\r\n        -Uri $DeleteUri | Out-Null\r\n}",
-                    "removeRunCommandName": "[format('remove-{0}-runCommands-batch-{1}', parameters('batchContext'), parameters('batchIndex'))]",
-                    "customizationDeploymentSuffix": "[if(equals(parameters('batchContext'), 'vdi'), 'vdiCustomizer', 'customizer')]"
+                    "removeRunCommandName": "[format('remove-{0}-runCommands-batch-{1}', parameters('batchContext'), parameters('batchIndex'))]"
                   },
                   "resources": {
                     "orchestrationVm": {
@@ -3845,7 +3844,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[if(lessOrEquals(length(format('{0}-{1}', parameters('customizations')[copyIndex()].name, variables('customizationDeploymentSuffix'))), 64), format('{0}-{1}', parameters('customizations')[copyIndex()].name, variables('customizationDeploymentSuffix')), format('{0}-{1}-{2}', take(parameters('customizations')[copyIndex()].name, if(equals(parameters('batchContext'), 'vdi'), 36, 39)), uniqueString(parameters('customizations')[copyIndex()].name), variables('customizationDeploymentSuffix')))]",
+                      "name": "[uniqueString(resourceGroup().id, parameters('imageVmName'), parameters('batchContext'), string(parameters('batchIndex')), parameters('customizations')[copyIndex()].name)]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"
@@ -4234,7 +4233,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "15613026877898496546"
+                      "templateHash": "10485125439938511120"
                     }
                   },
                   "definitions": {
@@ -4337,8 +4336,7 @@
                   },
                   "variables": {
                     "$fxv#0": "Param(\r\n    [string]$ResourceManagerUri,\r\n    [string]$SubscriptionId,\r\n    [string]$UserAssignedIdentityClientId,\r\n    [string]$ImageVmName,\r\n    [string]$ImageBuildResourceGroup,\r\n    [string]$OrchestrationVmName,\r\n    [string]$CurrentRunCommandName\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\n$ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n$TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\nif (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n$AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\nfunction Get-RunCommands {\r\n    param(\r\n        [string]$RunCommandsUri,\r\n        [string]$ExcludedRunCommandName = ''\r\n    )\r\n\r\n    return @(\r\n        (Invoke-RestMethod `\r\n            -Headers $AzureManagementHeader `\r\n            -Method 'GET' `\r\n            -Uri $RunCommandsUri).value |\r\n            Where-Object { [string]::IsNullOrEmpty($ExcludedRunCommandName) -or $_.name -ne $ExcludedRunCommandName }\r\n    )\r\n}\r\n\r\n$ResourceGroupId = '/subscriptions/' + $SubscriptionId + '/resourceGroups/' + $ImageBuildResourceGroup\r\n$VirtualMachineUri = $ResourceManagerUriFixed + $ResourceGroupId + '/providers/Microsoft.Compute/virtualMachines/'\r\n$ImageRunCommandsUri = $VirtualMachineUri + $ImageVmName + '/runCommands?api-version=2024-03-01'\r\n$OrchestrationRunCommandsUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands?api-version=2024-03-01'\r\n\r\n$ImageRunCommands = Get-RunCommands -RunCommandsUri $ImageRunCommandsUri\r\nforeach ($RunCommand in $ImageRunCommands) {\r\n    $DeleteUri = $VirtualMachineUri + $ImageVmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'\r\n    Invoke-RestMethod `\r\n        -Headers $AzureManagementHeader `\r\n        -Method 'DELETE' `\r\n        -Uri $DeleteUri | Out-Null\r\n}\r\n\r\n$DeleteDeadline = (Get-Date).AddMinutes(10)\r\nDo {\r\n    $RemainingImageRunCommands = Get-RunCommands -RunCommandsUri $ImageRunCommandsUri\r\n    if ($RemainingImageRunCommands.Count -gt 0) {\r\n        Start-Sleep -Seconds 5\r\n    }\r\n} Until ($RemainingImageRunCommands.Count -eq 0 -or (Get-Date) -ge $DeleteDeadline)\r\n\r\nif ($RemainingImageRunCommands.Count -gt 0) {\r\n    $RemainingRunCommandNames = $RemainingImageRunCommands | ForEach-Object { $_.name }\r\n    throw \"Timed out waiting for image VM Run Commands to be removed. Remaining commands: $($RemainingRunCommandNames -join ', ')\"\r\n}\r\n\r\n$OrchestrationRunCommands = Get-RunCommands `\r\n    -RunCommandsUri $OrchestrationRunCommandsUri `\r\n    -ExcludedRunCommandName $CurrentRunCommandName\r\n\r\nforeach ($RunCommand in $OrchestrationRunCommands) {\r\n    $DeleteUri = $VirtualMachineUri + $OrchestrationVmName + '/runCommands/' + $RunCommand.name + '?api-version=2024-03-01'\r\n    Invoke-RestMethod `\r\n        -Headers $AzureManagementHeader `\r\n        -Method 'DELETE' `\r\n        -Uri $DeleteUri | Out-Null\r\n}",
-                    "removeRunCommandName": "[format('remove-{0}-runCommands-batch-{1}', parameters('batchContext'), parameters('batchIndex'))]",
-                    "customizationDeploymentSuffix": "[if(equals(parameters('batchContext'), 'vdi'), 'vdiCustomizer', 'customizer')]"
+                    "removeRunCommandName": "[format('remove-{0}-runCommands-batch-{1}', parameters('batchContext'), parameters('batchIndex'))]"
                   },
                   "resources": {
                     "orchestrationVm": {
@@ -4402,7 +4400,7 @@
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[if(lessOrEquals(length(format('{0}-{1}', parameters('customizations')[copyIndex()].name, variables('customizationDeploymentSuffix'))), 64), format('{0}-{1}', parameters('customizations')[copyIndex()].name, variables('customizationDeploymentSuffix')), format('{0}-{1}-{2}', take(parameters('customizations')[copyIndex()].name, if(equals(parameters('batchContext'), 'vdi'), 36, 39)), uniqueString(parameters('customizations')[copyIndex()].name), variables('customizationDeploymentSuffix')))]",
+                      "name": "[uniqueString(resourceGroup().id, parameters('imageVmName'), parameters('batchContext'), string(parameters('batchIndex')), parameters('customizations')[copyIndex()].name)]",
                       "properties": {
                         "expressionEvaluationOptions": {
                           "scope": "inner"

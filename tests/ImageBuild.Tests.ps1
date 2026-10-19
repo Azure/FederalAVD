@@ -692,11 +692,19 @@ Describe 'Image Build Run Command capacity protection' {
         $customizeModule | Should Match 'var customizationBatchSize = 20'
     }
 
-    It 'names each customization deployment after its customizer type without truncation collisions' {
+    It 'isolates customization deployment names by build VM, phase, batch, and full customizer name' {
         $batchModule = Get-Content -LiteralPath $batchModulePath -Raw
-        $batchModule | Should Match "batchContext == 'vdi' \? 'vdiCustomizer' : 'customizer'"
-        $batchModule.Contains("'`${customization.name}-`${customizationDeploymentSuffix}'") | Should Be $true
-        $batchModule | Should Match 'uniqueString\(customization\.name\)'
-        $batchModule | Should Not Match "name: 'apply-\`\$\{batchContext\}"
+        $batchModule | Should Match '(?m)^\s*name: uniqueString\(resourceGroup\(\)\.id, imageVmName, batchContext, string\(batchIndex\), customization\.name\)\s*$'
+        $batchModule | Should Not Match 'customizationDeploymentSuffix|take\(customization\.name'
+        $customizeModule = Get-Content -LiteralPath $customizeModulePath -Raw
+        $customizeModule | Should Match "batchContext: 'custom'"
+        $customizeModule | Should Match "batchContext: 'vdi'"
+    }
+
+    It 'compiles both customization phases to hash-only deployment names without truncation' {
+        $armTemplate = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\imageBuild\imageBuild.json') -Raw
+        $expectedName = "[uniqueString(resourceGroup().id, parameters('imageVmName'), parameters('batchContext'), string(parameters('batchIndex')), parameters('customizations')[copyIndex()].name)]"
+        $namePattern = '"name":\s*"' + [regex]::Escape($expectedName) + '"'
+        [regex]::Matches($armTemplate, $namePattern).Count | Should Be 2
     }
 }

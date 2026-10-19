@@ -567,6 +567,18 @@ Build multiple images simultaneously:
 .\Invoke-ImageBuilds.ps1 -Location "usgovvirginia" -ParameterFilePrefixes @('dev', 'test', 'prod')
 ```
 
+The parameter files can reuse the same `customizations[].name` and `vdiCustomizations[].name`
+values. Each customizer's nested ARM deployment name is a 13-character hash of the resource group,
+build VM, customization phase, batch, and full customizer name, so simultaneous builds in the
+same pre-staged build resource group do not share those deployment records. The `custom` or `vdi`
+context is included in the hash rather than appended as a suffix. No name truncation is needed.
+Artifact blob names, installer arguments, and per-VM Run Command names are unchanged.
+
+Use distinct parameter-file prefixes for concurrent launches. When reusing exported parameter
+files, remove a fixed `timeStamp` so each build receives a fresh value. Builds publishing to the
+same gallery image definition must also use distinct image version numbers; customizer-name
+isolation does not prevent two builds from trying to publish the same image version.
+
 #### Script Parameters
 
 | Parameter | Type | Required | Description |

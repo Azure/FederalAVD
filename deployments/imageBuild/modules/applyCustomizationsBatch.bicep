@@ -20,14 +20,11 @@ resource orchestrationVm 'Microsoft.Compute/virtualMachines@2022-03-01' existing
 }
 
 var removeRunCommandName = 'remove-${batchContext}-runCommands-batch-${batchIndex}'
-var customizationDeploymentSuffix = batchContext == 'vdi' ? 'vdiCustomizer' : 'customizer'
 
 @batchSize(1)
 module applyCustomizations 'applyCustomization.bicep' = [
   for customization in customizations: {
-    name: length('${customization.name}-${customizationDeploymentSuffix}') <= 64
-      ? '${customization.name}-${customizationDeploymentSuffix}'
-      : '${take(customization.name, batchContext == 'vdi' ? 36 : 39)}-${uniqueString(customization.name)}-${customizationDeploymentSuffix}'
+    name: uniqueString(resourceGroup().id, imageVmName, batchContext, string(batchIndex), customization.name)
     params: {
       customization: customization
       location: location
