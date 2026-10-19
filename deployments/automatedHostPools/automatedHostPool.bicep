@@ -856,7 +856,7 @@ var hostPoolCustomTags = union(
     : {}
 )
 
-module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createFeedWorkspace) {
   params: {
     name: naming.outputs.resourceGroupControlPlane
     location: controlPlaneLocation

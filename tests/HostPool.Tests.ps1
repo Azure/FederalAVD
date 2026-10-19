@@ -86,7 +86,7 @@ Describe 'AVD workspace ownership contract' {
 
     It 'keeps host-pool-specific workspace naming exclusive to the dedicated PoC' {
         $namingModule | Should Match "cnv\(cnv_components, cnv_delimiter, cnv_rtCodes\.workspaces, identifier, cnv_cploc"
-        $namingModule | Should Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
+        $namingModule | Should Match 'var resourceGroupControlPlane = sharedResourceGroupControlPlane'
         foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
             $orchestrator | Should Not Match 'workspaceCreationScope'
             $orchestrator | Should Not Match 'createHostPoolSpecificWorkspace'
@@ -104,6 +104,60 @@ Describe 'AVD workspace ownership contract' {
         $automatedParameters = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json') -Raw |
             ConvertFrom-Json
         ($automatedParameters.parameters.PSObject.Properties.Name -join ',') | Should Not Match 'workspaceCreationScope'
+    }
+
+    It 'uses one production control-plane resource group across personas' {
+        $namingModule | Should Match 'var resourceGroupControlPlane = sharedResourceGroupControlPlane'
+        $namingModule | Should Match 'var sharedResourceGroupControlPlane = empty\(existingFeedWorkspaceResourceId\)'
+        $namingModule | Should Match "cnv\(cnv_components, cnv_delimiter, cnv_rtCodes\.resourceGroups, 'control\$\{cnv_delimiter\}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload\)"
+        $namingModule | Should Not Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
+        $standardBicep | Should Match 'var effectiveControlPlaneResourceGroup = naming\.outputs\.resourceGroupControlPlane'
+        $automatedBicep | Should Match 'name: naming\.outputs\.resourceGroupControlPlane'
+        $automatedBicep | Should Match 'resourceGroupName: naming\.outputs\.resourceGroupControlPlane'
+    }
+
+    It 'takes an adopted control-plane resource group from the workspace ID and checks its subscription' {
+        $namingModule | Should Match "toLower\(split\(existingFeedWorkspaceResourceId, '/'\)\[2\]\) == toLower\(sharedServicesSubscriptionId\)"
+        $namingModule | Should Match "\? split\(existingFeedWorkspaceResourceId, '/'\)\[4\]"
+        $namingModule | Should Match "fail\('The existing feed workspace subscription must match the target control-plane subscription\.'\)"
+    }
+
+    It 'does not create or retag the existing workspace resource group when adopting it' {
+        foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
+            $orchestrator | Should Match "module controlPlaneResourceGroup '\.\./shared/modules/resourceModules/resources/resourceGroups/deploy\.bicep' = if \(createFeedWorkspace\)"
+        }
+        $automatedTemplate = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.json') -Raw | ConvertFrom-Json
+        foreach ($template in @($standardTemplate, $automatedTemplate)) {
+            $template.resources.controlPlaneResourceGroup.condition | Should Be "[variables('createFeedWorkspace')]"
+        }
+    }
+
+    It 'retains persona-specific resource names and a separate consolidated PoC resource group' {
+        foreach ($variable in @('hostPoolName', 'desktopApplicationGroupName', 'scalingPlanName')) {
+            $namingModule | Should Match "var $variable\s*= cnv\([^\r\n]+,\s*identifier,\s*cnv_cploc,"
+        }
+        $namingModule | Should Match 'var resourceGroupConsolidated = cnv\([^\r\n]+, identifier, cnv_vmsloc,'
+        $namingModule | Should Match "var resourceGroupHosts\s*= cnv\([^\r\n]+'\$\{identifier\}\$\{cnv_delimiter\}hosts'"
+        $namingModule | Should Match "var resourceGroupStorage\s*= cnv\([^\r\n]+'\$\{identifier\}\$\{cnv_delimiter\}storage'"
+        $pocBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.bicep') -Raw
+        $pocBicep | Should Match 'var resourceGroupName = naming\.outputs\.resourceGroupConsolidated'
+        $pocBicep | Should Match 'workspaceResourceGroupName: resourceGroupName'
+        $pocBicep | Should Not Match 'naming\.outputs\.(resourceGroupControlPlane|sharedResourceGroupControlPlane)'
+    }
+
+    It 'embeds the same centralized control-plane naming in every generated consumer' {
+        foreach ($relativePath in @(
+            'deployments\hostpools\hostpool.json'
+            'deployments\automatedHostPools\automatedHostPool.json'
+            'deployments\hostpoolPoc\hostpoolPoc.json'
+            'deployments\add-ons\fslogixStorage\main.json'
+        )) {
+            $template = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw | ConvertFrom-Json
+            $namingTemplate = $template.resources.naming.properties.template
+            $namingTemplate.variables.resourceGroupControlPlane | Should Be "[variables('sharedResourceGroupControlPlane')]"
+            $namingTemplate.outputs.resourceGroupControlPlane.value | Should Be "[variables('resourceGroupControlPlane')]"
+            $namingTemplate.outputs.sharedResourceGroupControlPlane.value | Should Be "[variables('sharedResourceGroupControlPlane')]"
+        }
     }
 
     It 'composes shared capabilities directly without nesting the Shared Services entry template' {

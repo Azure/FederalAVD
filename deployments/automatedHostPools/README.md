@@ -60,8 +60,8 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
   and is updated only by the later application-group association. New workspaces use shared naming
   so they can be reused across host pools.
 2. Resolves the effective Shared Services resource IDs before deploying pool-specific resources.
-3. Resolves names and creates the pool-specific control-plane, session-host, storage, and
-  deployment-helper resource groups.
+3. Resolves names and creates or reuses the shared regional control-plane resource group, plus
+  the pool-specific session-host, storage, and deployment-helper resource groups.
 4. Starts Azure Virtual Desktop service-principal RBAC, the always-deployed temporary deployment
   helper, and FSLogix
   customer-managed-key resources as soon as their scopes exist. Independent preparation continues
@@ -84,6 +84,19 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
   zero-host resource, storage-dependent policy inputs, and policy assignments are ready.
 10. Removes the temporary deployment helper and its resource group after final session-host
   provisioning is submitted.
+
+When creating a workspace, production control-plane resources share one resource group per
+control-plane region and naming convention, not one per persona. For example, the default convention places the `admin` and
+`finance` host pools in `rg-avd-control-plane-eus` when their control-plane region is East US.
+Host pools, application groups, and scaling plans still have persona-specific names; session-host
+and storage resource groups remain persona-specific. Only the dedicated standard PoC deployment
+uses its persona-specific consolidated resource group.
+
+> **Existing deployments:** Earlier templates put host pools and application groups in
+> persona-specific control-plane resource groups. This naming correction does not move those
+> resources. Do not redeploy an existing pool with the corrected template until its migration
+> approach has been planned: changing a resource group changes resource IDs and can create a
+> second host pool instead of updating the original.
 
 The core updates the existing workspace only to append its application-group reference and
 preserves the workspace location, tags, friendly name, description, public-network setting, and
@@ -494,6 +507,12 @@ infrastructure. The core preserves and appends its application-group reference. 
 changes workspace public access or manages workspace-feed/global-feed endpoints only when those
 options are explicitly selected in the orchestrator; otherwise the existing settings are
 preserved.
+
+The selected workspace's resource group also becomes the resource group for the host pool,
+application group, and scaling plan, even if its name differs from the generated naming convention.
+The deployment does not recreate or retag that existing resource group. Automated host pools
+require the workspace to be in the deployment subscription; a mismatch fails explicitly. Keep
+the selected control-plane region consistent with the workspace region.
 
 Host-pool and workspace public network access remain explicit controls. Private DNS-zone groups are
 created when DNS integration is enabled; otherwise DNS records must be managed separately.

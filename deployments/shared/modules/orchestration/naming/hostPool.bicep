@@ -37,10 +37,10 @@ param identifier string
 @description('Global feed region. Pass empty string when there is no global feed workspace.')
 param globalFeedRegion string = ''
 
-@description('Existing feed workspace resource ID. Pass empty string when creating a new workspace.')
+@description('Existing feed workspace resource ID. When set, its resource group is reused for the control plane. Pass empty string when creating a new workspace.')
 param existingFeedWorkspaceResourceId string = ''
 
-@description('Subscription ID that owns Shared Services resources. Defaults to the deployment subscription.')
+@description('Subscription ID that owns Shared Services and control-plane resources. Defaults to the deployment subscription.')
 param sharedServicesSubscriptionId string = subscription().subscriptionId
 
 targetScope = 'subscription'
@@ -173,11 +173,15 @@ var globalFeedResourceGroupName = !empty(globalFeedRegion)
 var globalFeedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, 'global${cnv_delimiter}feed', '', cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane Shared Resources ───────────────────────────────────────────
-var resourceGroupControlPlane = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, '${identifier}${cnv_delimiter}control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var resourceGroupControlPlane = sharedResourceGroupControlPlane
 var workspaceName = empty(existingFeedWorkspaceResourceId)
   ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, identifier, cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
   : last(split(existingFeedWorkspaceResourceId, '/'))
-var sharedResourceGroupControlPlane = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+var sharedResourceGroupControlPlane = empty(existingFeedWorkspaceResourceId)
+  ? cnv(cnv_components, cnv_delimiter, cnv_rtCodes.resourceGroups, 'control${cnv_delimiter}plane', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
+  : toLower(split(existingFeedWorkspaceResourceId, '/')[2]) == toLower(sharedServicesSubscriptionId)
+      ? split(existingFeedWorkspaceResourceId, '/')[4]
+      : fail('The existing feed workspace subscription must match the target control-plane subscription.')
 var sharedWorkspaceName = cnv(cnv_components, cnv_delimiter, cnv_rtCodes.workspaces, '', cnv_cploc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
 
 // ── Control Plane HostPool Resources ──────────────────────────────────────────

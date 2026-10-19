@@ -117,6 +117,24 @@ The diagram illustrates the following resource group distribution. In the table 
 | Hosts | virtual machines<br>disk encryption set<br>Recovery Services Vault (VM backup, personal host pools only) | rg-hr-01-hosts-va<br>rg-hr-02-hosts-va | One per identifier or per index (if specified). Disk Encryption Set is created here when CMK is used for VM disks. Recovery Services Vault for VM backup is deployed here when `recoveryServices = true` on a personal host pool — one vault per host pool, not shared. |
 | Storage | NetApp Storage Accounts<br>Storage Account(s)<br>function app<br>storage encryption UAI | rg-hr-01-storage-va<br>rg-hr-02-storage-va | One per identifier or per index (if specified). Storage encryption User-Assigned Identity is created here when CMK is used for FSLogix storage. |
 
+Standard and automated production host pools use the same regional Control Plane resource group
+for all personas that share the control-plane subscription and naming convention. The persona
+identifier distinguishes host pools, application groups, and scaling plans inside that group; it
+does not appear in the group's purpose component. The dedicated PoC is the exception: its
+resources remain in one persona-specific consolidated resource group.
+
+When `existingFeedWorkspaceResourceId` is supplied, its resource group takes precedence over
+the generated regional name. Both production deployments reuse that group without creating or
+retagging it. Its subscription must match the target control-plane subscription: for standard
+host pools, set `controlPlaneSubscriptionId` when it differs from the deployment subscription;
+automated host pools use the deployment subscription. Keep the selected control-plane region
+consistent with the workspace region.
+
+> **Existing deployments using per-persona Control Plane resource groups:** Correcting the naming
+> does not relocate existing resources. Plan migration before redeploying those pools with the
+> corrected templates; a different resource group produces different resource IDs and can create
+> a second pool instead of updating the existing one.
+
 Because the Monitoring and Operations resource groups are shared across all host pools in a region, costs for Log Analytics, Recovery Services Vaults, and Key Vaults cannot be attributed per host pool through Azure Cost Management alone. See [Chargeback for Shared Resources](chargeback-shared-resources.md) for query-based approaches that use the `cm-resource-parent` tags stamped on keys, protected items, and VMs.
 
 The code is idempotent, allowing you to scale storage and sessions hosts, but the core management resources will persist and update for any subsequent deployments. Some of those resources are the host pool, application group, and log analytics workspace.

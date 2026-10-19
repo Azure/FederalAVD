@@ -1331,7 +1331,7 @@ module deploymentResourceGroup '../shared/modules/resourceModules/resources/reso
   }
 }
 
-module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
+module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createFeedWorkspace) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     location: effectiveControlPlaneRegion

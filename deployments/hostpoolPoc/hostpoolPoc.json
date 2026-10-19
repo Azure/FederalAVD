@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "3223392063348239725"
+      "templateHash": "1589975701498265062"
     }
   },
   "definitions": {
@@ -172,7 +172,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "16062321758702800706"
+              "templateHash": "4092316732584922871"
             }
           },
           "functions": [
@@ -381,14 +381,14 @@
               "type": "string",
               "defaultValue": "",
               "metadata": {
-                "description": "Existing feed workspace resource ID. Pass empty string when creating a new workspace."
+                "description": "Existing feed workspace resource ID. When set, its resource group is reused for the control plane. Pass empty string when creating a new workspace."
               }
             },
             "sharedServicesSubscriptionId": {
               "type": "string",
               "defaultValue": "[subscription().subscriptionId]",
               "metadata": {
-                "description": "Subscription ID that owns Shared Services resources. Defaults to the deployment subscription."
+                "description": "Subscription ID that owns Shared Services and control-plane resources. Defaults to the deployment subscription."
               }
             }
           },
@@ -725,9 +725,9 @@
             "sharedLogAnalyticsWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').logAnalyticsWorkspaces, '', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedRegion'))), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('global{0}feed', variables('cnv_delimiter')), '', variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), '')]",
             "globalFeedWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, format('global{0}feed', variables('cnv_delimiter')), '', variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
-            "resourceGroupControlPlane": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('{0}{1}control{2}plane', parameters('identifier'), variables('cnv_delimiter'), variables('cnv_delimiter')), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "resourceGroupControlPlane": "[variables('sharedResourceGroupControlPlane')]",
             "workspaceName": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), last(split(parameters('existingFeedWorkspaceResourceId'), '/')))]",
-            "sharedResourceGroupControlPlane": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
+            "sharedResourceGroupControlPlane": "[if(empty(parameters('existingFeedWorkspaceResourceId')), __bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload')), if(equals(toLower(split(parameters('existingFeedWorkspaceResourceId'), '/')[2]), toLower(parameters('sharedServicesSubscriptionId'))), split(parameters('existingFeedWorkspaceResourceId'), '/')[4], fail('The existing feed workspace subscription must match the target control-plane subscription.')))]",
             "sharedWorkspaceName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').workspaces, '', variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "desktopApplicationGroupName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').desktopApplicationGroups, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
             "hostPoolName": "[__bicep.cnv(variables('cnv_components'), variables('cnv_delimiter'), variables('cnv_rtCodes').hostPools, parameters('identifier'), variables('cnv_cploc'), variables('cnv_ff1'), variables('cnv_env'), variables('cnv_ff2'), variables('cnv_workload'))]",
