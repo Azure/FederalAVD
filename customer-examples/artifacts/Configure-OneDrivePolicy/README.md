@@ -17,6 +17,9 @@ redirection of Desktop, Documents, and Pictures to OneDrive for Business.
 - Enable Files On-Demand to limit initial hydration of cloud content
 - Automatically redirect Desktop, Documents, and Pictures folders to OneDrive
 - Prevent users from redirecting protected folders back to the local profile
+- Suppress the successful-KFM notification while retaining a wizard fallback for failed moves
+- Restrict business-account sync to explicitly allowed Microsoft Entra tenants
+- Block personal OneDrive account sync through User policy
 - Optionally enable OneDrive integration for RemoteApp sessions
 
 ## Parameters
@@ -28,6 +31,18 @@ redirection of Desktop, Documents, and Pictures to OneDrive for Business.
 - **Description:** The Microsoft Entra tenant ID for your organization
 - **Format:** GUID (e.g., `12345678-1234-1234-1234-123456789012`)
 - **Purpose:** Associates OneDrive KFM with your specific Microsoft 365 tenant
+
+### `AdditionalAllowedTenantIds`
+
+- **Type:** String array
+- **Required:** No
+- **Default:** No additional tenants
+- **Description:** Additional Microsoft Entra tenant GUIDs allowed to sync business accounts.
+    `TenantId` is always included; IDs are normalized and deduplicated. Additional tenants do
+    not change the tenant targeted by KFM.
+- **Ownership:** Each run replaces the local `AllowTenantList` with this combined list, removing
+    stale local entries. Accounts outside the effective allowlist stop syncing. Review existing
+    business accounts before rolling out this restriction.
 
 ### `EnableRemoteApp`
 
@@ -79,6 +94,14 @@ $tenantId = "12345678-1234-1234-1234-123456789012"
     -MinDiskSpaceLimitInMB 10240
 ```
 
+### Allow an Additional Business Tenant
+
+```powershell
+.\Configure-OneDrivePolicy.ps1 `
+    -TenantId "12345678-1234-1234-1234-123456789012" `
+    -AdditionalAllowedTenantIds "87654321-4321-4321-4321-210987654321"
+```
+
 ### Finding Your Tenant ID
 
 ```powershell
@@ -100,17 +123,48 @@ Connect-AzAccount
 
 ### 2. OneDrive and KFM Configuration
 
-The script configures these computer policies:
+The script configures these computer policies under `SOFTWARE\Policies\Microsoft\OneDrive`:
 
 | Registry value | Value | Effect |
 | --- | --- | --- |
 | `SilentAccountConfig` | `1` | Silently configures OneDrive using an available Microsoft Entra credential. |
 | `FilesOnDemandEnabled` | `1` | Makes new synchronized content online-only by default and downloads content when opened. |
 | `KFMSilentOptIn` | Tenant ID | Silently moves Desktop, Documents, and Pictures into the organization's OneDrive. |
+| `KFMSilentOptInWithNotification` | DWORD `0` | Suppresses the notification after a successful silent move; does not suppress errors or fallback prompts. |
 | `KFMBlockOptOut` | `1` | Prevents users from redirecting protected folders back to the local profile. |
+| `KFMOptInWithWizard` | Tenant ID, REG_SZ | Enables the known-folder-move prompt as a fallback when silent KFM cannot complete. |
+| `AllowTenantList` subkey | Tenant GUID names and REG_SZ tenant GUID data | Allows business-account sync for `TenantId` and optional additional tenant IDs. |
 | `WarningMinDiskSpaceLimitInMB` | Supplied parameter value | Warns before a download would reduce available space below the configured MB threshold; omitted when the parameter is not supplied. |
 | `MinDiskSpaceLimitInMB` | Supplied parameter value | Blocks OneDrive downloads below the configured available-space threshold; omitted when the parameter is not supplied. |
 | `EnableEnhancedShellExperienceForRemoteApp` | `1` when selected | Enables the enhanced shell behavior used by OneDrive in RemoteApp scenarios. |
+
+It also configures **User Configuration > Administrative Templates > OneDrive > Prevent users
+from syncing personal OneDrive accounts**: `DisablePersonalSync`, DWORD `1`, under
+`HKCU\SOFTWARE\Policies\Microsoft\OneDrive`. This is emitted into **User Registry.pol**, not
+the image-build account's live HKCU hive. Existing personal accounts stop syncing, but files
+already downloaded to the computer are not removed.
+
+The notification, wizard, allowlist, and personal-account policies use Registry.pol even when
+the ADMX import is unavailable. The existing core machine settings retain their direct-registry
+fallback in that case.
+
+### Policy Sources and Validation
+
+Mappings were checked against the matching `OneDrive.admx` and English `OneDrive.adml` from
+OneDrive **26.195.1006.0004**, together with Microsoft's
+[OneDrive policy reference](https://learn.microsoft.com/en-us/sharepoint/use-group-policy).
+The artifact copies templates from the installed OneDrive build; revalidate policy compatibility
+if your approved installer uses different templates.
+
+All six requested settings are Computer policies except `DisablePersonalSync`, which is a User
+policy. Files On-Demand requires Windows 10 version 1709 or later; use supported Windows and
+OneDrive versions for your AVD architecture. The other settings retain legacy Windows 7
+supported-on declarations in this ADMX; that is not a statement of current Windows 7 or OneDrive
+runtime support.
+
+Do not combine `AllowTenantList` with `BlockTenantList`. The allowlist takes precedence, and this
+artifact does not remove a separately managed blocklist. Domain Group Policy or MDM can override
+or alter the effective local policies; keep those management sources aligned.
 
 #### Silent Known Folder Move
 
@@ -118,6 +172,11 @@ The script configures these computer policies:
 - **Value:** Your Tenant ID
 - **Effect:** Automatically moves known folders to OneDrive without user prompts
 - **Folders Affected:** Desktop, Documents, Pictures
+
+The artifact sets the successful-move notification option to **No** (`0`) and enables
+**Prompt users to move Windows known folders to OneDrive** for the same tenant. Microsoft
+recommends this combination so users can remediate a failed silent move. It is not a guarantee
+of a completely prompt-free session.
 
 #### Block Opt-Out
 
@@ -135,7 +194,8 @@ The script configures these computer policies:
 ### 4. Registry Configuration
 
 - Sets registry values for OneDrive KFM
-- Applies to all users via Computer Configuration
+- Applies machine settings through Computer Configuration and personal-sync restrictions through
+    User Configuration
 
 ## Policy Settings Applied
 
@@ -147,9 +207,17 @@ Computer Configuration
         +-- Use OneDrive Files On-Demand: [Enabled]
         +-- Silently move Windows known folders to OneDrive: [Enabled]
         |   +-- Tenant ID: [Your Tenant ID]
+        |   +-- Show notification after redirection: [No]
+        +-- Prompt users to move Windows known folders to OneDrive: [Enabled, same Tenant ID]
         +-- Prevent users from redirecting their Windows known folders to their PC: [Enabled]
+        +-- Allow syncing OneDrive accounts for only specific organizations: [Enabled]
         +-- Warn users who are low on disk space: [Configured only when supplied]
         +-- Block file downloads when users are low on disk space: [Configured only when supplied]
+
+User Configuration
++-- Administrative Templates
+    +-- OneDrive
+        +-- Prevent users from syncing personal OneDrive accounts: [Enabled]
 ```
 
 ## Registry Locations
@@ -159,10 +227,25 @@ HKLM:\SOFTWARE\Policies\Microsoft\OneDrive
     SilentAccountConfig: 1
     FilesOnDemandEnabled: 1
         KFMSilentOptIn: [Your Tenant ID]
+        KFMSilentOptInWithNotification: 0 (DWORD)
+        KFMOptInWithWizard: [Your Tenant ID] (REG_SZ)
         KFMBlockOptOut: 1
         WarningMinDiskSpaceLimitInMB: [Supplied value, when configured]
         MinDiskSpaceLimitInMB: [Supplied value, when configured]
+
+HKLM:\SOFTWARE\Policies\Microsoft\OneDrive\AllowTenantList
+    [Allowed tenant GUID]: [Allowed tenant GUID] (REG_SZ, one entry per allowed tenant)
+
+HKCU:\SOFTWARE\Policies\Microsoft\OneDrive
+    DisablePersonalSync: 1 (DWORD, User policy)
 ```
+
+These are configuration outputs, not a live validation of OneDrive behavior. After deploying
+the image, allow startup/sign-in policy processing and test with a new or representative user
+profile and the approved OneDrive build. Check resulting HKLM/HKCU policy values and `gpresult`,
+then verify allowed and disallowed business accounts, blocked personal sync, normal Files
+On-Demand behavior, and KFM success versus failure prompts. Policy changes do not reverse a
+completed folder move or delete previously downloaded account data.
 
 ## Known Folders
 

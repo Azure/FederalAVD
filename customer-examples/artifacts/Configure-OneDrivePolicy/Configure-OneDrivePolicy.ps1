@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
     Configures OneDrive Known Folder Move (KFM) and related per-machine group policy
-    settings for AVD session hosts.
+    settings and personal-account restrictions for AVD session hosts.
 
 .DESCRIPTION
     Applies the OneDrive policies recommended for AVD deployments using local machine
@@ -16,6 +16,11 @@
                           OneDrive without user interaction.
     KFMBlockOptOut                - Prevent users from redirecting known folders back to
                           local paths after KFM has been applied.
+    KFMSilentOptInWithNotification - Suppress the notification after successful KFM.
+    KFMOptInWithWizard            - Prompt users when silent KFM cannot complete.
+    AllowTenantList               - Allow business-account sync only for TenantId and any
+                          AdditionalAllowedTenantIds.
+    DisablePersonalSync           - Block personal OneDrive sync through User policy.
     WarningMinDiskSpaceLimitInMB  - Warn users before a download reduces available space
                           below the configured threshold.
     MinDiskSpaceLimitInMB         - Block downloads when available space is below the
@@ -27,14 +32,20 @@
 
     The script first copies the OneDrive ADMX/ADML templates from the installed OneDrive
     build into %WINDIR%\PolicyDefinitions so that policy keys are written under the correct
-    ADMX-backed paths. If ADMX import fails (e.g., OneDrive not yet installed), settings
-    are written directly to the registry as a fallback.
+    ADMX-backed paths. If ADMX import fails, the existing core machine settings retain
+    their direct-registry fallback. Notification, wizard, tenant allowlist, and personal
+    sync policies use Registry.pol in either case; the writer does not require ADMX.
 
 .PARAMETER TenantId
     Microsoft Entra tenant ID (GUID) for the organization. Used as the value for
     KFMSilentOptIn to scope KFM to the correct tenant. SilentAccountConfig is enabled
     separately and uses the Microsoft Entra credential available in the user session.
     Required.
+
+.PARAMETER AdditionalAllowedTenantIds
+    Optional additional Microsoft Entra tenant IDs (GUIDs) allowed to sync business
+    accounts. TenantId is always included. Each run replaces the local allowlist with
+    this combined, deduplicated list. Accounts outside the effective allowlist stop syncing.
 
 .PARAMETER EnableRemoteApp
     When specified, enables the enhanced shell experience required for OneDrive to launch
@@ -62,12 +73,21 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
     [Parameter(Mandatory = $true)]
+    [ValidateScript({
+        $parsed = [guid]::Empty
+        [guid]::TryParse($_, [ref]$parsed) -and $parsed -ne [guid]::Empty
+    })]
     [string]$TenantId,
     [switch]$EnableRemoteApp,
     [ValidateRange(0, 10240000)]
     [Nullable[int]]$WarningMinDiskSpaceLimitInMB,
     [ValidateRange(0, 10240000)]
-    [Nullable[int]]$MinDiskSpaceLimitInMB
+    [Nullable[int]]$MinDiskSpaceLimitInMB,
+    [ValidateScript({
+        $parsed = [guid]::Empty
+        [guid]::TryParse($_, [ref]$parsed) -and $parsed -ne [guid]::Empty
+    })]
+    [string[]]$AdditionalAllowedTenantIds = @()
 )
 
 #region Functions
@@ -511,6 +531,11 @@ function Invoke-PolicyUpdate {
         $existing = Read-PRegFile -Path $polPath
 
         foreach ($q in $scope.Queue) {
+            if ($q.Name -eq '**DelVals.') {
+                foreach ($entry in @($existing | Where-Object { $_.Key -ieq $q.Key })) {
+                    $existing.Remove($entry) | Out-Null
+                }
+            }
             Set-PRegEntry -Entries $existing -Key $q.Key -Name $q.Name -Type $q.Type -Data $q.Data
         }
 
@@ -617,6 +642,12 @@ if ($null -ne $MinDiskSpaceLimitInMB -and
     $MinDiskSpaceLimitInMB -gt $WarningMinDiskSpaceLimitInMB) {
     throw 'MinDiskSpaceLimitInMB must not exceed WarningMinDiskSpaceLimitInMB.'
 }
+$TenantId = ([guid]$TenantId).ToString('D')
+[string[]]$AllowedTenantIds = @(
+    @($TenantId) + $AdditionalAllowedTenantIds |
+        ForEach-Object { ([guid]$_).ToString('D') } |
+        Select-Object -Unique
+)
 $ref = "https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders"
 Write-Log -Message "Starting OneDrive configuration in accordance with '$ref'."
 
@@ -656,10 +687,9 @@ If ($TenantID -and $TenantID -ne '') {
             Write-Log -Message "Blocking OneDrive downloads when available space is below $MinDiskSpaceLimitInMB MB."
             Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $MinDiskSpaceLimitInMB
         }
-        Invoke-PolicyUpdate
     }
     Else {
-        Write-Log -Category Warning -Message "OneDrive ADMX templates were not imported. Writing settings directly to registry."
+        Write-Log -Category Warning -Message "OneDrive ADMX templates were not imported. Writing core machine settings directly to registry; additional policies still use Registry.pol."
         $oneDriveKey = 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive'
         If (-not (Test-Path $oneDriveKey)) { New-Item -Path $oneDriveKey -Force | Out-Null }
         Write-Log -Message "Configuring OneDrive to automatically sign-in with logged on user credentials."
@@ -678,6 +708,26 @@ If ($TenantID -and $TenantID -ne '') {
             Set-ItemProperty -Path $oneDriveKey -Name 'MinDiskSpaceLimitInMB' -Value $MinDiskSpaceLimitInMB -Type DWord -Force
         }
     }
+
+    # OneDrive.admx KFMOptInNoWizard: "No" is DWORD 0 for the successful-move notification.
+    # KFMOptInWithWizard remains a tenant-ID string so silent failures can prompt for remediation.
+    # https://learn.microsoft.com/en-us/sharepoint/use-group-policy#silently-move-windows-known-folders-to-onedrive
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMSilentOptInWithNotification' -RegistryType DWORD -RegistryData 0
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMOptInWithWizard' -RegistryType String -RegistryData $TenantId
+
+    # AllowTenantList is a Machine policy; replacing its local list revokes previously allowed tenants.
+    # https://learn.microsoft.com/en-us/sharepoint/use-group-policy#allow-syncing-onedrive-accounts-for-only-specific-organizations
+    Clear-PolicyRegistryKeyValues -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive\AllowTenantList'
+    foreach ($allowedTenantId in $AllowedTenantIds) {
+        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive\AllowTenantList' -RegistryValue $allowedTenantId -RegistryType String -RegistryData $allowedTenantId
+    }
+    Write-Log -Message "Configured $($AllowedTenantIds.Count) allowed OneDrive business tenants."
+
+    # "Prevent users from syncing personal OneDrive accounts" is User policy (enabled DWORD 1).
+    # Existing personal accounts stop syncing; previously downloaded files are not removed.
+    # https://learn.microsoft.com/en-us/sharepoint/use-group-policy#prevent-users-from-syncing-personal-onedrive-accounts
+    Set-PolicyRegistryValue -Scope User -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'DisablePersonalSync' -RegistryType DWORD -RegistryData 1
+    Invoke-PolicyUpdate
 }
 If ($EnableRemoteApp) {
     Write-Log -Message "Enabling enhanced shell experience for RemoteApp (required for OneDrive to launch alongside RemoteApp sessions)."

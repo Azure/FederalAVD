@@ -187,6 +187,186 @@ $bicepPath = Join-Path $repoRoot 'deployments\imageBuild\imageBuild.bicep'
 $armPath = Join-Path $repoRoot 'deployments\imageBuild\imageBuild.json'
 $formPath = Join-Path $repoRoot 'deployments\imageBuild\uiFormDefinition.json'
 
+Describe 'OneDrive organization policy configuration' {
+    BeforeAll {
+        $tokens = $null
+        $parseErrors = $null
+        $oneDriveAst = [Management.Automation.Language.Parser]::ParseFile(
+            $oneDriveScriptPath, [ref]$tokens, [ref]$parseErrors
+        )
+        $definitions = $oneDriveAst.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst]
+        }, $false)
+        foreach ($definition in $definitions) {
+            . ([scriptblock]::Create($definition.Extent.Text))
+        }
+        function Set-ItemProperty {
+            [CmdletBinding()]
+            param($Path, $Name, $Value, $Type, [switch]$Force)
+            throw 'Live registry writes are forbidden in OneDrive policy tests.'
+        }
+        $configuration = $oneDriveAst.EndBlock.Statements | Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and
+            $_.Extent.Text.StartsWith('If ($TenantID -and')
+        }
+        $configurePolicy = [scriptblock]::Create($configuration.Extent.Text)
+        $flushPolicy = ($definitions | Where-Object Name -eq 'Invoke-PolicyUpdate').Body.GetScriptBlock()
+        $tenantStatements = $oneDriveAst.EndBlock.Statements | Where-Object {
+            $_.Extent.Text.StartsWith('$TenantId = ([guid]') -or
+            $_.Extent.Text.StartsWith('[string[]]$AllowedTenantIds')
+        }
+        $normalizeTenants = [scriptblock]::Create(
+            (($tenantStatements.Extent.Text -join "`n") + "`n" + '$AllowedTenantIds')
+        )
+        $parameterProbe = [scriptblock]::Create(
+            "[CmdletBinding()]`n$($oneDriveAst.ParamBlock.Extent.Text)`n`$true"
+        )
+    }
+
+    BeforeEach {
+        $TenantId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+        $AdditionalAllowedTenantIds = @()
+        $AllowedTenantIds = @($TenantId, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+        $WarningMinDiskSpaceLimitInMB = $null
+        $MinDiskSpaceLimitInMB = $null
+        $Script:AdmxImported = $true
+        $script:_PRegEnc = [Text.Encoding]::Unicode
+        $script:_PolQueue = [System.Collections.Generic.List[hashtable]]::new()
+        Mock Write-Log {}
+        Mock Invoke-PolicyUpdate {}
+    }
+
+    It 'validates every supplied tenant GUID before the artifact can make changes' {
+        foreach ($arguments in @(
+            @{ TenantId = 'not-a-guid' }
+            @{ TenantId = [guid]::Empty.ToString() }
+            @{ TenantId = $TenantId; AdditionalAllowedTenantIds = @('invalid') }
+        )) {
+            $rejected = $false
+            $previousPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = 'Stop'
+                & $parameterProbe @arguments
+            }
+            catch [System.Management.Automation.ParameterBindingException] {
+                $rejected = $true
+            }
+            finally {
+                $ErrorActionPreference = $previousPreference
+            }
+            $rejected | Should Be $true
+        }
+        (& $parameterProbe -TenantId $TenantId -AdditionalAllowedTenantIds $AllowedTenantIds) | Should Be $true
+    }
+
+    It 'includes the KFM tenant and normalizes and deduplicates additional tenant IDs' {
+        (@(& $normalizeTenants) -join ',') | Should Be $TenantId
+        $TenantId = '{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}'
+        $AdditionalAllowedTenantIds = @(
+            'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+            'BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB'
+            'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+        )
+        $actual = @(& $normalizeTenants)
+        ($actual -join ',') | Should Be 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+    }
+
+    It 'emits exact machine notification and wizard policies while preserving existing KFM and Files On-Demand' {
+        & $configurePolicy
+        foreach ($case in @(
+            @{ Name = 'SilentAccountConfig'; Type = 4; Value = 1 }
+            @{ Name = 'FilesOnDemandEnabled'; Type = 4; Value = 1 }
+            @{ Name = 'KFMBlockOptOut'; Type = 4; Value = 1 }
+            @{ Name = 'KFMSilentOptInWithNotification'; Type = 4; Value = 0 }
+            @{ Name = 'KFMSilentOptIn'; Type = 1; Value = $TenantId }
+            @{ Name = 'KFMOptInWithWizard'; Type = 1; Value = $TenantId }
+        )) {
+            $entries = @($script:_PolQueue | Where-Object {
+                $_.Scope -eq 'Computer' -and $_.Key -eq 'SOFTWARE\Policies\Microsoft\OneDrive' -and $_.Name -eq $case.Name
+            })
+            $entries.Count | Should Be 1
+            $entries[0].Type | Should Be $case.Type
+            if ($case.Type -eq 4) {
+                [BitConverter]::ToUInt32($entries[0].Data, 0) | Should Be $case.Value
+            } else {
+                [Text.Encoding]::Unicode.GetString($entries[0].Data).TrimEnd([char]0) | Should Be $case.Value
+            }
+        }
+        Assert-MockCalled Invoke-PolicyUpdate -Times 1 -Exactly -Scope It
+    }
+
+    It 'writes the allowed tenant IDs as machine REG_SZ list entries and blocks personal sync only in User policy' {
+        & $configurePolicy
+        $list = @($script:_PolQueue | Where-Object { $_.Key -eq 'SOFTWARE\Policies\Microsoft\OneDrive\AllowTenantList' })
+        @($list | Where-Object Name -eq '**DelVals.').Count | Should Be 1
+        foreach ($id in $AllowedTenantIds) {
+            $entry = @($list | Where-Object Name -eq $id)
+            $entry.Count | Should Be 1
+            $entry[0].Scope | Should Be 'Computer'
+            $entry[0].Type | Should Be 1
+            [Text.Encoding]::Unicode.GetString($entry[0].Data).TrimEnd([char]0) | Should Be $id
+        }
+        $personal = @($script:_PolQueue | Where-Object Name -eq 'DisablePersonalSync')
+        $personal.Count | Should Be 1
+        $personal[0].Scope | Should Be 'User'
+        $personal[0].Key | Should Be 'SOFTWARE\Policies\Microsoft\OneDrive'
+        $personal[0].Type | Should Be 4
+        [BitConverter]::ToUInt32($personal[0].Data, 0) | Should Be 1
+    }
+
+    It 'retains the new policy scopes and values when ADMX import is unavailable' {
+        $Script:AdmxImported = $false
+        Mock Test-Path { $true } -ParameterFilter { $Path -eq 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' }
+        Mock Set-ItemProperty {}
+        & $configurePolicy
+        @($script:_PolQueue | Where-Object Name -eq 'KFMSilentOptInWithNotification').Count | Should Be 1
+        @($script:_PolQueue | Where-Object Name -eq 'KFMOptInWithWizard').Count | Should Be 1
+        @($script:_PolQueue | Where-Object { $_.Name -eq 'DisablePersonalSync' -and $_.Scope -eq 'User' }).Count | Should Be 1
+        Assert-MockCalled Set-ItemProperty -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Path -eq 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' -and $Name -eq 'FilesOnDemandEnabled' -and $Value -eq 1
+        }
+        Assert-MockCalled Set-ItemProperty -Times 0 -Exactly -Scope It -ParameterFilter { $Name -eq 'DisablePersonalSync' }
+        Assert-MockCalled Invoke-PolicyUpdate -Times 1 -Exactly -Scope It
+    }
+
+    It 'replaces stale allowlist entries on reruns while preserving unrelated machine and user policies' {
+        $originalSystemRoot = $env:SystemRoot
+        try {
+            $env:SystemRoot = Join-Path $TestDrive 'Windows'
+            $machinePol = Join-Path $env:SystemRoot 'System32\GroupPolicy\Machine\Registry.pol'
+            $userPol = Join-Path $env:SystemRoot 'System32\GroupPolicy\User\Registry.pol'
+            $staleId = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive\AllowTenantList' -RegistryValue $staleId -RegistryType String -RegistryData $staleId
+            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\OtherApplication' -RegistryValue 'Preserved' -RegistryType DWORD -RegistryData 1
+            Set-PolicyRegistryValue -Scope User -RegistryKeyPath 'SOFTWARE\Policies\OtherApplication' -RegistryValue 'Preserved' -RegistryType DWORD -RegistryData 1
+            & $flushPolicy
+            & $configurePolicy
+            & $flushPolicy
+            $machine = Read-PRegFile -Path $machinePol
+            @($machine | Where-Object Name -eq $staleId).Count | Should Be 0
+            @($machine | Where-Object Name -eq 'Preserved').Count | Should Be 1
+            @($machine | Where-Object Name -eq 'DisablePersonalSync').Count | Should Be 0
+            $user = Read-PRegFile -Path $userPol
+            @($user | Where-Object Name -eq 'DisablePersonalSync').Count | Should Be 1
+            @($user | Where-Object Name -eq 'Preserved').Count | Should Be 1
+            $count = $machine.Count
+            & $configurePolicy
+            & $flushPolicy
+            (Read-PRegFile -Path $machinePol).Count | Should Be $count
+            $AllowedTenantIds = @($TenantId)
+            & $configurePolicy
+            & $flushPolicy
+            $machine = Read-PRegFile -Path $machinePol
+            @($machine | Where-Object Name -eq 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb').Count | Should Be 0
+            @($machine | Where-Object Name -eq $TenantId).Count | Should Be 1
+        }
+        finally {
+            $env:SystemRoot = $originalSystemRoot
+        }
+    }
+}
+
 Describe 'Image Build regional replication behavior' {
     It 'limits the primary Compute Gallery to the deployment subscription and region' {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
