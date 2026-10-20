@@ -16,10 +16,11 @@ applications.
 
 ## Notes
 
-- In air-gapped clouds (Secret/Top Secret), the script auto-detects the environment and downloads from air-gapped cloud endpoints — no special switch is required. For artifacts with no configured download URL (WebView2, etc.), manually place the files in the `artifacts/` subdirectory of your customer root (default: `customer/artifacts/`; or `<CustomerRootPath>\artifacts\` when `-CustomerRootPath` is specified) before running. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md) for details.
+- In air-gapped clouds (Secret/Top Secret), the script selects the target-cloud base manifest and downloads from its endpoints when reachable. The standard high-side workflow needs **no customer `downloads.json`**; use `-CustomerDownloadsMode None` to ignore customer download overlays without disabling base downloads or customer artifacts. Pre-stage manual prerequisites and complete selected customer packages under `customer/artifacts/` (or `<CustomerRootPath>\artifacts\`). See [Prepare the Low-to-High Transfer Bundle](air-gapped-clouds.md#prepare-the-low-to-high-transfer-bundle).
+- `-PackageOnly` output is a **low-side working directory**, not a transfer bundle. It uses the public base manifest and can include public OneDrive, Teams, Office Deployment Tool, AVD Agent/Boot Loader, and FSLogix outputs. Do not transfer the entire directory or use `*.zip`; explicitly select approved customer packages and manual prerequisites, leaving public base Microsoft files on low.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
 - Use `-CustomerRootPath <path>` to point to a folder outside the repo zip (e.g., a persistent share or pipeline workspace). Pre-staged artifact files go in `<CustomerRootPath>\artifacts\`; the downloads parameter file goes in `<CustomerRootPath>\parameters\imageManagement\`.
-- Use `-CustomerArtifactsMode None` or `-CustomerDownloadsMode None` to skip customer overlays when you only want repo content.
+- Use `-CustomerArtifactsMode None` to exclude customer artifacts, or `-CustomerDownloadsMode None` to ignore only customer download entries. The latter still packages customer artifacts and processes the cloud-selected base downloads.
 - To merge customer-owned optional downloads, place `downloads.json` in `<CustomerRootPath>\parameters\imageManagement\`; the script discovers it automatically.
 
 ## What This Script Does
@@ -39,8 +40,8 @@ Three sequential phases:
 ### Required Tools
 
 - PowerShell 5.1 or PowerShell 7+
-- Azure PowerShell Az module
-- Active Azure login (`Connect-AzAccount`)
+- Azure PowerShell Az module for upload modes
+- Active Azure login (`Connect-AzAccount`) for upload modes; not required for `-PackageOnly`
 
 ### Required Files
 
@@ -50,7 +51,10 @@ Base downloads parameter files are in `deployments/shared/data/` and are selecte
   - `deployments/shared/data/secret.downloads.parameters.json` (Azure Secret)
   - `deployments/shared/data/topsecret.downloads.parameters.json` (Azure Top Secret)
 
-To download **optional** software (e.g., PowerShell 7, VS Code, LGPO, Git), place a customer-owned downloads file at `customer/parameters/imageManagement/downloads.json`. A ready-to-use example that covers a broad set of common packages is provided at:
+On a **connected preparation system**, to download optional software (e.g., PowerShell 7, VS Code,
+LGPO, Git), place a customer-owned downloads file at
+`customer/parameters/imageManagement/downloads.json`. A ready-to-use example that covers a broad
+set of common packages is provided at:
   - `customer-examples/parameters/imageManagement/downloads.json`
 
 Copy it to the auto-discovered location:
@@ -59,6 +63,12 @@ Copy it to the auto-discovered location:
 Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
           -Destination "customer\parameters\imageManagement\" -Force
 ```
+
+Select only the entries needed for your workload. For low-to-high handoff, this customer manifest
+stays on low; transfer only selected approved complete packages, not this file or the whole
+low-side customer directory. The repository's base manifests stay in the repository on high.
+A separately maintained high-side overlay is optional only for deliberate approved internal source
+overrides; it is not required for pre-staged customer packages.
 
 A minimal reference file with only the repo-required entries is also available at:
   - `deployments/imageManagement/parameters/sample-optional.downloads.parameters.json`
@@ -90,20 +100,23 @@ Choose one of three parameter sets. The two upload modes identify a storage acco
 Local package mode uses the public downloads manifest because it runs on an internet-connected
 system without an Azure cloud context. The download, preserve-layout, dependency deduplication,
 and compression behavior is otherwise identical to the upload modes.
+There is no target-cloud selection in this mode. Public base Microsoft outputs are not approved
+Secret/Top Secret packages; obtain the target-cloud versions within high instead.
 
 ### Common Parameters (all sets)
 
 | Parameter | Type | Default | Description |
 | --- | --- | --- | --- |
 | **DeleteExistingBlobs** | Switch | `$false` | Delete all existing blobs in the container before uploading. Use for a clean refresh rather than incremental update. |
-| **SkipDownloadingNewSources** | Switch | `$false` | Skip downloading new software. Use in air-gapped environments or when the artifacts directory is already current. |
+| **SkipDownloadingNewSources** | Switch | `$false` | Skip all source downloads. On high, use only after every required target-cloud file is staged through approved internal sources. |
+| **CustomerDownloadsMode** | String | `Merge` | `None` ignores the customer download overlay but retains base downloads and customer artifacts. Recommended on high. |
 | **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
 
 ## Usage Examples
 
 ### Create Packages Locally Without Azure
 
-Download the latest sources and write the generated artifact files to a local transfer folder.
+Download the latest sources and write generated artifact files to a low-side working folder.
 No Azure PowerShell login, subscription, or storage account is required:
 
 ```powershell
@@ -111,12 +124,37 @@ cd C:\repos\FederalAVD\deployments
 
 .\Update-ImageArtifacts.ps1 `
     -PackageOnly `
-    -OutputPath "C:\AirGapTransfer"
+    -OutputPath "C:\FederalAVD-PackageOutput"
 ```
 
 For preserve-layout UWP/MSIX entries, this runs the same package selection, architecture pruning,
 and shared dependency deduplication used by storage upload mode. For example, the
-`BuiltIn-UWP-Apps` artifact is written as `C:\AirGapTransfer\BuiltIn-UWP-Apps.zip`.
+`BuiltIn-UWP-Apps` artifact is written as `C:\FederalAVD-PackageOutput\BuiltIn-UWP-Apps.zip`.
+
+For air-gapped use, copy only the explicit approved file allowlist into a separate transfer bundle.
+Do not copy this entire output directory or select every ZIP: the public base `FSLogix.zip` is not
+a customer artifact. Leave public OneDrive, Teams, ODT, AVD Agent/Boot Loader, and FSLogix outputs on
+low, including any copies embedded in customer packages. Follow
+[Prepare the Low-to-High Transfer Bundle](air-gapped-clouds.md#prepare-the-low-to-high-transfer-bundle).
+
+### High-Side Upload Without a Customer Download Manifest
+
+On high, place selected complete artifact ZIPs and manual built-in prerequisites at the
+`customer/artifacts/` root. A complete unpackaged artifact goes under
+`customer/artifacts/<ArtifactName>/` instead. Do not stage both forms of the same artifact.
+After connecting to the target cloud, run from the repository root:
+
+```powershell
+.\deployments\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId '<artifactsStorageAccountResourceId>' `
+    -CustomerDownloadsMode None
+```
+
+The script packages customer folders, passes root files through unchanged, and obtains base
+Microsoft files from the cloud-selected sources. No customer `downloads.json` is required.
+If those endpoints are unreachable, first obtain and stage every required target-cloud file from
+approved internal distribution, then add `-SkipDownloadingNewSources`. That flag skips all source
+downloads and does not validate workload completeness.
 
 ### Standard Update (by Resource ID)
 
@@ -490,6 +528,7 @@ The script stages a merged view — `deployments/shared/artifacts/` first, then 
 > **Where to place pre-staged files:**
 > - **Required air-gapped artifacts** (WebView2, VC Redist, WebRTC): place the file directly in `customer/artifacts/` using the exact filename specified in the downloads file (e.g., `WebView2.exe`). The script picks them up by filename from the root of the artifacts directory.
 > - **Custom application packages**: place the installer and any scripts in a named subdirectory, e.g., `customer/artifacts/Google-Chrome-Enterprise/`. The subdirectory name becomes the zip/package name.
+> - **Prebuilt artifact ZIPs transferred from low**: place only selected approved ZIPs at the root of `customer/artifacts/`; they are uploaded unchanged. Do not copy the full local-package output, and do not also stage the same artifact's source folder.
 > - If you use `-CustomerRootPath`, substitute `<CustomerRootPath>\artifacts\` for `customer/artifacts/` in both cases above.
 
 ```text
@@ -529,7 +568,7 @@ Pass this URL as `artifactsContainerUri` in image build deployments.
 **Download failures**
 - Check internet connectivity from the machine running the script
 - Verify URLs in the downloads parameter file are still valid
-- Use `-SkipDownloadingNewSources` when download endpoints are unreachable and you want to re-package and re-upload already-staged content. For normal air-gapped cloud deployments, the script downloads automatically — see the [Air-Gapped Cloud Guide](air-gapped-clouds.md).
+- On high, use `-CustomerDownloadsMode None` to keep public customer entries out of the download phase. If base endpoints are unreachable, obtain the required target-cloud files through approved internal distribution before using `-SkipDownloadingNewSources`. Do not replace them with public low-side outputs. See the [Air-Gapped Cloud Guide](air-gapped-clouds.md).
 
 **Parameter file not found**
 - The base downloads files are in `deployments/shared/data/` and are included with the repository — they should always be present

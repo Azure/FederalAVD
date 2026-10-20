@@ -221,7 +221,7 @@ Arguments are passed as a single string to `Invoke-Customization.ps1`, which par
 
 Repo-provided artifacts live at `deployments/shared/artifacts/` (currently empty, reserved for future use). Customer-provided artifacts and overrides belong at `customer/artifacts/`.
 
-> **Ready-to-use examples:** `customer-examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). Copy the folders you want directly into `customer/artifacts/` and pair them with the matching entries in `customer-examples/parameters/imageManagement/downloads.json`. See [`customer/README.md`](../customer/README.md) for copy commands.
+> **Ready-to-use examples:** `customer-examples/artifacts/` contains example packages for common software (Chrome, FSLogix, LGPO, STIG tooling, VS Code, built-in UWP apps, and more). On a connected preparation system, copy the folders you want into `customer/artifacts/` and pair them with the matching entries in `customer-examples/parameters/imageManagement/downloads.json`. For air-gapped deployments, prepare complete approved packages on low; do not copy the connected-side customer manifest to high. See [`customer/README.md`](../customer/README.md) for copy commands.
 
 **Note:** The orchestration script `Invoke-Customization.ps1` is at `deployments/shared/scripts/Invoke-Customization.ps1`, not in the artifacts directory. It is embedded into ARM/Bicep deployments using `loadTextContent()`.
 
@@ -231,7 +231,48 @@ Repo-provided artifacts live at `deployments/shared/artifacts/` (currently empty
 
 For a complete reference of all download methods, `downloads.json` fields, pipeline usage with `-CustomerRootPath`, and the full script parameter reference, see the **[Update-ImageArtifacts.ps1 Script Guide](update-image-artifacts.md)**.
 
-> **Air-gapped environments:** Winget-based entries require internet access and cannot be used in air-gapped clouds. See [Air-Gapped Cloud Guide](air-gapped-clouds.md) for alternatives including the pre-staging approach for built-in UWP apps.
+### Air-Gapped Low-to-High Handoff
+
+Use `downloads.json` on **low** to collect selected customer software and build complete artifacts.
+The standard high-side workflow does **not** need a customer `downloads.json`: the repository's
+Secret or Top Secret base manifest supplies the target-cloud Microsoft sources, while approved
+customer packages arrive with their payloads already included.
+
+`-PackageOnly` uses the **public base manifest**. Its output can include public OneDrive, Teams,
+Office Deployment Tool, AVD Agent/Boot Loader, and FSLogix files in addition to your customer ZIPs.
+**Do not transfer the whole output directory or select `*.zip`.** Explicitly select approved
+customer artifacts and manual prerequisites into a separate transfer bundle; leave public base
+Microsoft outputs on low. Also inspect customer ZIPs for unsuitable embedded public installers.
+Obtain target-cloud Microsoft packages within high through approved distribution.
+
+| Selected content | Place on high | Result |
+| --- | --- | --- |
+| Complete prebuilt artifact ZIP | `customer/artifacts/` root | Uploaded unchanged |
+| Complete source artifact folder, including script and payloads | `customer/artifacts/<ArtifactName>/` | Compressed to `<ArtifactName>.zip` |
+| Built-in Teams prerequisites: `WebView2.exe`, `vc_redist.x64.exe`, `MsRdcWebRTCSvc.msi` | `customer/artifacts/` root | Uploaded as individual files |
+
+Choose a prebuilt ZIP or its source folder for a given artifact, not both. Do not nest a ZIP in
+another artifact folder. The ZIP must contain the script and all required installers, policy
+templates, and dependencies; scripts alone do not make an offline application package.
+Winget and public API lookups run only on low, never during high-side packaging or installation.
+
+From the repository root on high, after connecting to the target cloud:
+
+```powershell
+.\deployments\Update-ImageArtifacts.ps1 `
+   -StorageAccountResourceId '<artifactsStorageAccountResourceId>' `
+   -CustomerDownloadsMode None
+```
+
+This ignores customer download overlays but still includes customer artifacts and downloads the
+cloud-selected base Microsoft sources. Add `-SkipDownloadingNewSources` only after every required
+target-cloud file is staged through approved internal sources; it skips all downloads and does not
+check package completeness.
+
+Follow [Prepare the Low-to-High Transfer Bundle](air-gapped-clouds.md#prepare-the-low-to-high-transfer-bundle)
+for the explicit file allowlist, excluded public outputs, management tools, transfer hashes,
+high-side staging, and required network checks. A customer manifest authored specifically for
+approved internal source overrides is optional, not part of this standard handoff.
 
 ### Execution Rules (Invoke-Customization.ps1)
 
@@ -556,13 +597,18 @@ The script creates `Chrome.zip` for image builds, session-host customizations, a
 publication. Add `-DeleteExistingBlobs` only when intentionally replacing the complete contents of
 the artifacts container; omit it for a normal incremental upload.
 
-For local packaging or air-gapped transfer without Azure access:
+For local packaging on a connected preparation system without Azure access:
 
 ```powershell
 .\deployments\Update-ImageArtifacts.ps1 `
       -PackageOnly `
-      -OutputPath 'C:\AirGapTransfer'
+      -OutputPath 'C:\FederalAVD-PackageOutput'
 ```
+
+For air-gapped transfer, select only the approved complete customer ZIPs and manual prerequisites
+from that working output. Do not transfer the entire directory, public base Microsoft installers,
+or the connected-side customer download manifest. Continue with
+[Air-Gapped Low-to-High Handoff](#air-gapped-low-to-high-handoff).
 
 #### Step 6: Hand Off a Dual-Use Package for VM Application Publication
 
@@ -1163,7 +1209,8 @@ New-AzDeployment `
 
 2. **Keep Packages Small**
    - Don't include unnecessary files
-   - Download large installers during execution if possible
+   - For restricted networks, bundle required installers and dependencies before transfer;
+     runtime downloads are an exception only when the endpoint is approved and reachable
    - Use separate packages for unrelated functionality
 
 3. **Version Control**

@@ -85,15 +85,142 @@ Graph context and discover role IDs from that environment. If either required ap
 unavailable, do not use the automated Entra Kerberos application-update path; complete the
 environment-approved manual configuration instead.
 
+## Prepare the Low-to-High Transfer Bundle
+
+**Do not transfer the entire `-PackageOnly` output directory. Do not copy the connected-side
+customer `downloads.json` to high.** Local package mode uses the public base downloads manifest
+and can produce public-cloud Microsoft installers alongside the customer artifact ZIPs you need.
+The output directory is a low-side working area, not an approved transfer bundle.
+
+### Decide What Crosses the Boundary
+
+Select the target cloud, Windows version, applications, policy artifacts, and patching method
+before collecting files. Record a disposition for every dependency:
+
+| Disposition | What belongs here | Action |
+| --- | --- | --- |
+| **Transfer from low** | Repository release; missing management tools; selected customer application or policy packages; offline patches; complete UWP artifact ZIP; Teams prerequisites listed below | Transfer only explicitly selected, approved files through the authorized low-to-high process |
+| **Obtain within high** | Target-cloud AVD Agent, Boot Loader, FSLogix, Office Deployment Tool, OneDrive, Teams bootstrapper, and Teams MSIX | Use the repository's Secret or Top Secret base manifest on high, after verifying management-workstation reachability |
+| **Stage from an approved internal source** | Required target-cloud files whose normal distribution endpoints are unavailable to the high-side workstation | Obtain the correct cloud versions through the environment's approved distribution process; stage locally or host internally; do not substitute public package-mode outputs |
+| **Unresolved** | Missing payloads, dependencies, licensing, or unverified management/build/runtime endpoints | Resolve before requesting transfer or starting the affected deployment |
+
+Prepare an approved management workstation on high. If not already installed, include approved
+PowerShell and Azure PowerShell Az packages with their module dependencies in the transfer.
+Include Microsoft Graph modules only when using the Graph-dependent helpers. Azure CLI or Bicep
+tooling is needed only for workflows that use it; publishing the tracked ARM JSON with
+`New-TemplateSpecs.ps1` does not require compiling Bicep on high.
+
+Keep these **public-source local-package outputs on low**; obtain their target-cloud equivalents
+within high instead:
+
+| Do not select from the public package output | High-side source |
+| --- | --- |
+| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | Target-cloud AVD Agent distribution |
+| `Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi` | Target-cloud AVD Boot Loader distribution |
+| `FSLogix.zip` | Target-cloud FSLogix distribution |
+| `Office365DeploymentTool.exe` | Target-cloud Office distribution |
+| `OneDriveSetup.exe` | Target-cloud OneDrive distribution |
+| `teamsbootstrapper.exe` and `MSTeams-x64.msix` | Target-cloud Teams distribution |
+
+Apply this rule to content **inside customer ZIPs** as well. A ZIP containing a public Teams,
+OneDrive, or FSLogix installer does not become suitable for the target cloud just because it is
+packaged as a customer artifact.
+
+### Prepare and Select Files on Low
+
+1. Copy only the required examples into the connected-side `customer/artifacts/` folder. Use a
+   connected-side `customer/parameters/imageManagement/downloads.json` containing the selected
+   download entries. Include each artifact's installer, configuration, policy templates, and
+   dependencies before packaging. A folder containing only its installation script is not a
+   complete application package. Follow the individual artifact READMEs.
+2. From the repository root on low, package into a fresh working directory:
+
+   ```powershell
+   .\deployments\Update-ImageArtifacts.ps1 `
+       -PackageOnly `
+       -OutputPath 'C:\FederalAVD-PackageOutput'
+   ```
+
+   This can also download the public base Microsoft files listed above. Leave them on low.
+   Downloaded sources are staged temporarily; do not assume they were saved back into
+   `customer/artifacts/`. Select the completed outputs, not the low-side customer tree.
+3. Create a **separate, fresh approved-transfer directory** and copy an explicit allowlist into
+   it. For example, when the selected workload includes Teams and built-in UWP applications:
+
+   ```powershell
+   New-Item -Path 'C:\FederalAVD-ApprovedTransfer\artifacts' -ItemType Directory -Force
+   Copy-Item -LiteralPath @(
+       'C:\FederalAVD-PackageOutput\BuiltIn-UWP-Apps.zip'
+       'C:\FederalAVD-PackageOutput\WebView2.exe'
+       'C:\FederalAVD-PackageOutput\vc_redist.x64.exe'
+       'C:\FederalAVD-PackageOutput\MsRdcWebRTCSvc.msi'
+   ) -Destination 'C:\FederalAVD-ApprovedTransfer\artifacts\' -ErrorAction Stop
+   ```
+
+   This is an example selection, not a universal inventory. Remove unused items and explicitly
+   add the other approved customer packages. Never copy the whole output folder or use
+   `*.zip`: `FSLogix.zip` is also a public base output, not a selected customer artifact.
+   Include patches or other manually collected payloads in their complete artifact package.
+4. Record each approved item's source, version, exact filename, SHA-256, high-side destination,
+   and consuming artifact or deployment parameter. Retain licensing/approval evidence and verify
+   publisher signatures where applicable. Include the repository release/commit and any
+   transferred management-tool dependencies in this inventory. Do not include credentials or
+   connected-side customer configuration in the repository transfer.
+5. Transfer only the approved bundle through the authorized process. On high, verify the received
+   files against the approved inventory and SHA-256 values before staging or uploading.
+
+### Stage and Upload on High
+
+Use a clean high-side customer root; do not mirror the low-side customer directory.
+The package layout determines its destination:
+
+| Transferred content | High-side destination | Upload behavior |
+| --- | --- | --- |
+| Selected prebuilt artifact ZIP, such as `BuiltIn-UWP-Apps.zip` or `Configure-EdgePolicy.zip` | `customer/artifacts/` root | Uploaded unchanged; do not wrap it in another artifact folder |
+| Manually staged `WebView2.exe`, `vc_redist.x64.exe`, `MsRdcWebRTCSvc.msi` when Teams is selected | `customer/artifacts/` root | Uploaded as individual files for the built-in Teams installation |
+| Complete unpackaged customer artifact, including its root script and all payloads | `customer/artifacts/<ArtifactName>/` | Compressed to `<ArtifactName>.zip` |
+
+Choose either a prebuilt ZIP or its source folder for a given artifact, not both.
+With `-CustomerRootPath`, substitute `<CustomerRootPath>\artifacts\` for `customer/artifacts/`.
+
+**No customer `downloads.json` is needed on high for this workflow.** The repository's cloud-selected
+base manifest provides the target-cloud Microsoft download sources; transferred customer packages
+are already complete. Keep those base manifests in the repository. After deploying Image Management
+and connecting to the target cloud, run from the repository root:
+
+```powershell
+.\deployments\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId '<artifactsStorageAccountResourceId>' `
+    -CustomerDownloadsMode None
+```
+
+`-CustomerDownloadsMode None` defensively ignores any customer download overlay while retaining
+customer artifact packages and the cloud-selected base downloads. It does **not** disable the
+target-cloud base downloads.
+
+Only add `-SkipDownloadingNewSources` after obtaining and staging every required target-cloud
+file through approved internal sources. That switch skips **all** downloads; it does not obtain
+missing files or validate that the selected workload is complete. A separately authored high-side
+customer download overlay is an optional advanced mechanism for approved internal source
+overrides, not a transfer requirement. Using one requires explicitly enabling customer merging
+instead of `-CustomerDownloadsMode None`; never reuse the connected-side manifest.
+
+Before building, confirm every selected artifact contains its required payloads, every referenced
+blob is present, and required build/runtime endpoints are reachable. In particular, the built-in
+Office installation still needs the target-cloud Office content endpoint; staging ODT alone is
+not a complete offline Office installation. See
+[Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped).
+
 ## First Deployment Checklist
 
 Use this sequence for the first deployment. The sections later in this guide provide the package
 inventories and parameter details for each step.
 
-1. **Prepare the deployment workstation.** Transfer this repository to an approved management
-   workstation that can reach the target Azure environment. Separately transfer required installers
-   and policy templates from an approved connected system into the matching
-   `customer/artifacts/<FolderName>/` directories. Do not edit files under `customer-examples/`.
+1. **Prepare the deployment workstation and approved transfer bundle.** Follow
+   [Prepare the Low-to-High Transfer Bundle](#prepare-the-low-to-high-transfer-bundle).
+   Transfer the repository, missing management tools, and only the selected complete customer
+   packages and manual prerequisites. Do not transfer the entire local-package output or the
+   connected-side customer `downloads.json`. Do not edit files under `customer-examples/`.
 2. **Configure and connect with Azure PowerShell.** Follow the applicable
    [PowerShell connection article](#configure-and-connect-with-azure-powershell) to register the
    target cloud with `Add-AzEnvironment` and connect with `Connect-AzAccount`. Select the deployment
@@ -167,11 +294,13 @@ inventories and parameter details for each step.
 
    ```powershell
    .\deployments\Update-ImageArtifacts.ps1 `
-       -StorageAccountResourceId '<artifactsStorageAccountResourceId>'
+       -StorageAccountResourceId '<artifactsStorageAccountResourceId>' `
+       -CustomerDownloadsMode None
    ```
 
-   Add `-SkipDownloadingNewSources` when the management workstation cannot reach the approved
-   air-gapped software distribution endpoints.
+   If the management workstation cannot reach the approved air-gapped software distribution
+   endpoints, obtain and stage the required target-cloud files first, then add
+   `-SkipDownloadingNewSources`. Do not use public low-side substitutes.
    To deploy selected packages after VM creation, verify that Compute Gallery VM Applications are
    available in the target cloud and continue with the
    [VM Application publishing guide](vm-applications.md). The publisher uses only pre-staged blobs,
@@ -179,8 +308,9 @@ inventories and parameter details for each step.
 7. **Build the custom image when required.** In the Custom Image Template Spec form, use the outputs from Image
    Management. On **Image Customizations**, set **Download Microsoft Sources from Web** to **No**
    (`downloadLatestMicrosoftContent = false`). Under **VDI Optimizations**, select **Air-gapped /
-   restricted network** (`vdiOptimizationAirGapped = true`). Install all software from the uploaded
-   artifacts, save the generated parameters under `customer/parameters/imageBuild/`, and retain
+   restricted network** (`vdiOptimizationAirGapped = true`). Use the uploaded installers and verify
+   any remaining in-cloud content dependencies, including the Office payload source described
+   below. Save the generated parameters under `customer/parameters/imageBuild/`, and retain
    `customImageResourceId`.
 8. **Deploy the standard host pool.** Select either the verified marketplace image or the custom
    gallery image. Provide internally hosted
@@ -305,18 +435,19 @@ The `Update-ImageArtifacts.ps1` script automatically selects the correct downloa
 | Azure Government Secret (IL6) | `deployments/shared/data/secret.downloads.parameters.json` |
 | Azure Government Top Secret (IL7) | `deployments/shared/data/topsecret.downloads.parameters.json` |
 
-The secret and top secret files are already in the repository. Each entry either has a working air-gapped cloud URL (the script downloads it automatically) or an **empty `DownloadUrl`** (you must place the file manually before running the script).
+The secret and top secret files are already in the repository. Each entry either has a
+target-cloud URL (downloaded when reachable) or an **empty `DownloadUrl`** (stage the file manually
+when its feature is selected). Verify reachability rather than assuming an endpoint is available.
 
-To add software not in the base file, place `downloads.json` in `customer/parameters/imageManagement/`. The script discovers and merges it automatically. See [Update-ImageArtifacts Script Guide](update-image-artifacts.md) for the file format.
+**Do not create or transfer a customer `downloads.json` for the standard high-side workflow.**
+Download and package optional customer software on low, transfer only approved complete packages,
+and use `-CustomerDownloadsMode None` on high. The cloud-selected base manifest remains active.
+See [Prepare the Low-to-High Transfer Bundle](#prepare-the-low-to-high-transfer-bundle).
 
-> **⚠️ WingetId entries are not supported in air-gapped environments.** Winget requires outbound internet access to the Microsoft Store CDN, which is unavailable in air-gapped clouds. The base `secret` and `topsecret` downloads files do not use winget, so a standard run of `Update-ImageArtifacts.ps1` is unaffected.
->
-> **Keep your air-gapped `customer/parameters/imageManagement/downloads.json` free of `WingetId` entries.** Only include `DownloadUrl` entries pointing to URLs reachable from your management system. For built-in UWP apps and codec extensions, see [Built-in UWP apps and codec extensions](#built-in-uwp-apps-and-codec-extensions) in the Windows Updates section below.
->
-> For other software that uses `WingetId`, alternatives include:
->
-> - Replacing `WingetId` with a `DownloadUrl` pointing to an internally hosted copy.
-> - Pre-staging the installer in `customer/artifacts/<FolderName>/` and omitting the entry from `downloads.json` — the script packages and uploads it without attempting a download.
+> **WingetId entries require public network access and must not execute on high.** Resolve them on
+> low and transfer complete approved packages, including dependencies. A deliberately maintained
+> high-side overlay for approved internal sources is optional and separate from this workflow;
+> never copy the example or low-side customer manifest into the high-side customer location.
 
 ---
 
@@ -324,13 +455,13 @@ To add software not in the base file, place `downloads.json` in `customer/parame
 
 `customer-examples/parameters/imageManagement/downloads.json` (a separate, optional overlay
 file — distinct from the repo's built-in `secret`/`topsecret` base files above) contains
-`DownloadUrl`/`GitHubRepo` entries pointing at public internet endpoints (GitHub, vendor CDNs,
-Microsoft/Google update services, etc.). None of these are reachable from air-gapped
-management systems. This affects every example artifact you copy from
-`customer-examples/artifacts/`, including the browser policy configuration scripts:
+download entries pointing at public internet endpoints (GitHub, vendor CDNs, Microsoft/Google
+update services, the Store, etc.). Use it only on low to prepare selected customer artifacts;
+do not transfer it into the high-side customer location. For example:
 
 | Artifact | What to pre-stage | Public source (download on a connected system) |
 | --- | --- | --- |
+| [Configure-AVDSessionHostPolicy](../customer-examples/artifacts/Configure-AVDSessionHostPolicy/README.md) | `AVDGPTemplate.cab` | `https://aka.ms/avdgpo`; bundle it beside the script when installing the administrative template |
 | [Configure-EdgePolicy](../customer-examples/artifacts/Configure-EdgePolicy/README.md) | `MicrosoftEdgePolicyTemplates.cab` | Edge Updates API; use the README's PowerShell resolver because the API endpoint is not the CAB URL |
 | [Configure-ChromePolicy](../customer-examples/artifacts/Configure-ChromePolicy/README.md) | Chrome Enterprise ADMX/ADML ZIP | `https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip` |
 | [Configure-Office365Policy](../customer-examples/artifacts/Configure-Office365Policy/README.md) | `AdminTemplates_x64.exe` | Microsoft Download Center; use the current direct URL and PowerShell command in the README |
@@ -338,11 +469,12 @@ management systems. This affects every example artifact you copy from
 
 The example `downloads.json` is the maintained inventory of public sources and destination
 filenames. On a connected management system, it can download and package these items
-automatically. Do not run those public download entries from an air-gapped management system.
-Instead, use each artifact README to download the package on a connected workstation, transfer
-it into the matching `customer/artifacts/Configure-*Policy/` folder, and run
-`Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`. Each policy script prefers its bundled
-package, so no public network access is needed during the image build.
+automatically on low. Bundle the downloaded payload beside its artifact script before packaging,
+then transfer only the selected complete artifact ZIP, or the complete source folder. Place ZIPs
+at the high-side artifact root and source folders under their artifact names. Run
+`Update-ImageArtifacts.ps1 -CustomerDownloadsMode None` with the required storage-account parameter
+so cloud-specific base downloads still run. Each listed policy script can use its bundled template
+instead of downloading it during the image build.
 
 The other Configure policy examples do not require a separately downloaded template package:
 
@@ -352,10 +484,10 @@ The other Configure policy examples do not require a separately downloaded templ
 | [Configure-RemoteDesktopPolicy](../customer-examples/artifacts/Configure-RemoteDesktopPolicy/README.md) | Uses Remote Desktop policy definitions included with Windows |
 | [Configure-WindowsUpdatePolicy](../customer-examples/artifacts/Configure-WindowsUpdatePolicy/README.md) | Uses Windows Update policy definitions included with Windows |
 
-For any other customer-example artifact, follow the general pattern: download the file on an
-internet-connected system, place it in `customer/artifacts/<FolderName>/`, and run
-`Update-ImageArtifacts.ps1 -SkipDownloadingNewSources` so the script packages and uploads what
-is already staged without attempting a download.
+For other customer-example artifacts, prepare the complete selected package on low using its README.
+Review its payload for target-cloud suitability before transfer. Add `-SkipDownloadingNewSources`
+on high only after all required target-cloud base files are also staged; pre-staging one customer
+artifact is not a reason to suppress the remaining base downloads.
 
 ---
 
@@ -402,12 +534,16 @@ Connect-AzAccount -Environment '<environment-name>'
 Set-AzContext -Subscription "<subscription-id>"
 cd C:\repos\FederalAVD\deployments
 
-.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+.\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+    -CustomerDownloadsMode None
 ```
 
 The script automatically detects the connected environment and selects the correct base downloads file (`secret` or `topsecret`). Items with working air-gapped cloud URLs (AVD Agent, FSLogix, Teams, OneDrive, Office ODT) are downloaded automatically. Items with empty `DownloadUrl` (WebView2, vc_redist, MsRdcWebRTCSvc) and manually staged files in `customer/artifacts/` are packaged and uploaded as-is without a download attempt.
 
-> **If air-gapped network URLs are not reachable** from your management system, add `-SkipDownloadingNewSources` to skip all downloads and only package and upload what is already staged locally.
+> **If air-gapped network URLs are not reachable** from your management system, first obtain and
+> stage the required target-cloud files from approved internal distribution, then add
+> `-SkipDownloadingNewSources`. Do not substitute public low-side outputs.
 
 The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
 
@@ -415,7 +551,11 @@ The `artifactsStorageAccountResourceId` is an output of the imageManagement depl
 
 ### Image Build Parameter Notes
 
-In air-gapped environments, set `downloadLatestMicrosoftContent = false` (default). The build VM will not have internet access to download software — all content must come from the artifacts storage account pre-populated above.
+In air-gapped environments, set `downloadLatestMicrosoftContent = false` (default) and provide
+`artifactsContainerUri` for the populated storage container. This selects staged Microsoft
+installers, not an entirely network-independent installation. Verify remaining approved in-cloud
+dependencies, especially the Office content endpoint described in
+[Microsoft 365 Apps, Teams, and OneDrive](#microsoft-365-apps-teams-and-onedrive-air-gapped).
 
 ---
 
@@ -501,10 +641,14 @@ customer\artifacts\Windows-Catalog-Updates\
 3. Upload to the artifacts storage account:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -CustomerDownloadsMode None
    ```
 
-   > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step and only package and upload what is already staged locally.
+   > **If base download endpoints are unreachable,** stage all required target-cloud files through
+   > approved internal sources before adding `-SkipDownloadingNewSources`. The transferred patch
+   > package alone does not supply those base files.
 
 > **Reboot required after patch installation:** Windows cumulative updates almost always
 > require a reboot to finish applying. Set **`"restart": true`** on the
@@ -559,10 +703,14 @@ re-download before every image build.
 4. Upload to the artifacts storage account:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -CustomerDownloadsMode None
    ```
 
-   > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step.
+   > **If base download endpoints are unreachable,** stage all required target-cloud files through
+   > approved internal sources before adding `-SkipDownloadingNewSources`. The transferred
+   > redistributable package alone does not supply those base files.
 
 > **Refresh cadence:** Re-download before every image build. If the image already has a newer
 > release installed, the installer exits with code `1638` (already current) and no change is
@@ -583,32 +731,31 @@ transfer only the zip to the air-gapped side, and upload it directly.
 
 ##### Step 1 - Build the Zip on a Connected Machine
 
-1. Copy the artifact folder and example downloads file into the connected-side customer folder:
+1. On low, copy the artifact folder into the connected-side customer folder:
 
    ```powershell
    Copy-Item -Recurse -Path "customer-examples\artifacts\BuiltIn-UWP-Apps" `
        -Destination "customer\artifacts\" -Force
 
-   Copy-Item -Path "customer-examples\parameters\imageManagement\downloads.json" `
-       -Destination "customer\parameters\imageManagement\" -Force
    ```
 
-   The artifact folder supplies `Install-BuiltinUwpApps.ps1`. The downloads file supplies the
-   `WingetId` and `WingetPreserveLayout` entries for the apps and codec extensions. If you already
-   maintain a customer downloads file, merge the preserve-layout entries into it instead of
-   replacing it.
+   The artifact folder supplies `Install-BuiltinUwpApps.ps1`. Create or merge a connected-side
+   `customer/parameters/imageManagement/downloads.json` containing only the selected
+   `BuiltIn-UWP-Apps` entries from the example downloads file. Those entries supply the
+   `WingetId` and `WingetPreserveLayout` settings. This customer manifest stays on low.
 
 2. Run `Update-ImageArtifacts.ps1` in local package mode. This does not require an Azure login,
    subscription, or storage account:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 `
+   .\deployments\Update-ImageArtifacts.ps1 `
        -PackageOnly `
-       -OutputPath "C:\AirGapTransfer"
+       -OutputPath "C:\FederalAVD-PackageOutput"
    ```
 
-   The script downloads all winget packages, deduplicates shared dependencies, packages the
-   `BuiltIn-UWP-Apps\` folder, and writes `C:\AirGapTransfer\BuiltIn-UWP-Apps.zip`.
+   Run from the repository root. The script downloads the selected UWP packages, deduplicates
+   shared dependencies, and writes `C:\FederalAVD-PackageOutput\BuiltIn-UWP-Apps.zip`.
+   It also processes the public base downloads; do not transfer the entire output directory.
 
    To use a connected Azure storage account instead, run the script with
    `-StorageAccountResourceId "<connectedStorageAccountResourceId>"`, then download
@@ -616,9 +763,11 @@ transfer only the zip to the air-gapped side, and upload it directly.
 
 ##### Step 2 - Transfer to the Air-Gapped Network
 
-DTA (low-to-high) `BuiltIn-UWP-Apps.zip` to the air-gapped network. Only the single zip file
-needs to be transferred — the full folder structure with all MSIX packages and shared
-dependencies is already inside it.
+Select only `BuiltIn-UWP-Apps.zip` from the working output for this artifact's transfer.
+The full folder structure with all MSIX packages and shared dependencies is already inside it.
+Add it to the [approved transfer inventory](#prepare-the-low-to-high-transfer-bundle), verify its
+hash after transfer, and leave the customer download manifest and unrelated public base outputs
+on low. Other workload dependencies need their own explicit inventory entries.
 
 ##### Step 3 - Upload to the Air-Gapped Storage Account
 
@@ -635,17 +784,19 @@ customer\artifacts\
     ...other folders...
 ```
 
-Then run `Update-ImageArtifacts.ps1` normally — no extra flags needed:
+Then run `Update-ImageArtifacts.ps1` without a customer downloads manifest on high:
 
 ```powershell
-.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+.\deployments\Update-ImageArtifacts.ps1 `
+    -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+    -CustomerDownloadsMode None
 ```
 
 Because `BuiltIn-UWP-Apps.zip` is a root-level file (not a sub-folder), the script copies it
 directly to the upload staging area without re-zipping and uploads it to the air-gapped storage
-account. No winget access is attempted and `-SkipDownloadingNewSources` is not needed, as long
-as your air-gapped `customer/parameters/imageManagement/downloads.json` contains only
-`DownloadUrl` entries pointing to air-gapped-reachable URLs.
+account. Customer download entries are ignored, so no winget lookup is attempted. The cloud-selected
+base downloads still run. Add `-SkipDownloadingNewSources` only after the required target-cloud
+base files have also been obtained and staged through approved internal sources.
 
 ###### Option B - Manual Portal Upload
 
@@ -686,10 +837,14 @@ The `Microsoft-Edge-Enterprise` example artifact installs the Edge Enterprise MS
 4. Upload to the artifacts storage account:
 
    ```powershell
-   .\Update-ImageArtifacts.ps1 -StorageAccountResourceId "<artifactsStorageAccountResourceId>"
+   .\Update-ImageArtifacts.ps1 `
+       -StorageAccountResourceId "<artifactsStorageAccountResourceId>" `
+       -CustomerDownloadsMode None
    ```
 
-   > **If network downloads are not reachable,** add `-SkipDownloadingNewSources` to skip the download step.
+   > **If base download endpoints are unreachable,** stage all required target-cloud files through
+   > approved internal sources before adding `-SkipDownloadingNewSources`. The transferred Edge
+   > package alone does not supply those base files.
 
 > **Refresh cadence:** Replace the MSI with the latest stable release monthly, then repeat steps 3-4. The script detects the installed version and skips installation if Edge is already up to date.
 
@@ -719,7 +874,19 @@ The image build template has first-class support for M365 Apps, Teams, and OneDr
 | `teamsCloudType` | Teams cloud variant | `GovSecret` for Azure Government Secret (IL6); `GovTopSecret` for Azure Government Top Secret (IL7) |
 | `downloadLatestMicrosoftContent` | Download from web instead of storage account | `false` — **do not change this** in air-gapped environments |
 
-When `downloadLatestMicrosoftContent` is `false` (the default), the image build VM downloads all Microsoft content from the artifacts storage account. The Office 365 Deployment Tool, Teams bootstrapper, Teams MSIX, and OneDrive setup are all auto-downloadable from air-gapped cloud endpoints by `Update-ImageArtifacts.ps1`.
+When `downloadLatestMicrosoftContent` is `false` (the default), with `artifactsContainerUri` set,
+the image build obtains the staged Microsoft installers from artifact storage. On high,
+`Update-ImageArtifacts.ps1` can obtain the target-cloud Office Deployment Tool, Teams bootstrapper,
+Teams MSIX, and OneDrive setup from the selected cloud's distribution endpoints when reachable.
+Do not transfer their public local-package counterparts from low.
+
+**ODT is not the Office installation payload.** The built-in Office script downloads the staged
+deployment tool, then runs `/configure` with the target-cloud Office content source and CDN fallback.
+Setting `downloadLatestMicrosoftContent = false` does not make that payload come from artifact
+storage or eliminate Office content-endpoint access. Verify that the **build VM**, not just the
+management workstation, can reach the approved target-cloud Office content endpoint. If it cannot,
+stop the built-in Office path and obtain an environment-approved offline installation procedure;
+the current built-in path does not expose a local Office payload source parameter.
 
 #### Artifacts to stage
 
