@@ -143,10 +143,24 @@ The Azure identity running this deployment needs:
 - **Type:** String
 - **Default:** `PublicEndpoint`
 - **Allowed Values:** `PublicEndpoint`, `PrivateEndpoint`, `ServiceEndpoint`
-- **Description:** Network access mode for both storage accounts.
-  - `PublicEndpoint` — public access open to all (or restricted to `storagePermittedIPs` if provided)
-  - `PrivateEndpoint` — private endpoint deployed; public access disabled unless `storagePermittedIPs` is also provided
-  - `ServiceEndpoint` — storage ACL updated to allow specified subnets only; template does **not** deploy service endpoints to the subnets
+- **Description:** Connectivity configuration for both storage accounts. Public access is selected
+  independently with `paasPublicNetworkAccess`.
+  - `PublicEndpoint` - no private endpoints are created.
+  - `PrivateEndpoint` - private endpoints are created; they can coexist with public access.
+  - `ServiceEndpoint` - configures storage subnet ACLs; the template does **not** enable service
+    endpoints on the subnets. Subnet ACLs restrict access only in restricted mode.
+
+#### `paasPublicNetworkAccess`
+
+- **Default:** `Auto` preserves historical private-endpoint/IP/subnet inference for parameter files.
+- **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
+- **Description:** Shared public-access mode for artifacts and logs storage. Disabled retains IP
+  and subnet rules without enabling public access. Restricted mode denies unmatched traffic even
+  when both lists are empty. Enabled allows all networks regardless of stored rules.
+- **Portal default:** Disabled for Private Endpoint, Enabled with restrictions for Service Endpoint,
+  Enabled for Public Endpoint. Each remains explicitly selectable independently of connectivity.
+- **Exceptions:** `AzureServices` bypass is retained for Compute Gallery integration and can still
+  apply when Disabled. See the [shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
 
 #### `privateEndpointSubnetResourceId`
 
@@ -513,20 +527,20 @@ All defaults: gallery + artifacts storage account, public endpoint. Suitable for
 
 **Public Access (Default)**
 
-- Use `storagePermittedIPs` to restrict access to known IPs or CIDR ranges
-- Use `storageServiceEndpointSubnetResourceIds` with `storageNetworkAccess = ServiceEndpoint` to allow specific subnets
+- Set `paasPublicNetworkAccess = EnabledWithRestrictions` and use `storagePermittedIPs` to permit approved public IPs
+- In restricted mode, use `storageServiceEndpointSubnetResourceIds` to permit specific subnets with service endpoints enabled
 - Shared key access is disabled by default (`storageAllowSharedKeyAccess = false`)
 
 **Private Endpoint**
 
-- Set `storageNetworkAccess = PrivateEndpoint` — public access is fully disabled unless `storagePermittedIPs` is also provided
+- Set `storageNetworkAccess = PrivateEndpoint` and `paasPublicNetworkAccess = Disabled`; entered IP/subnet rules do not enable public access
 - Deploy private endpoint with `privateEndpointSubnetResourceId`
 - Link private DNS zone with `azureBlobPrivateDnsZoneResourceId`
 
 **Private Endpoint + Public IP Allow-list**
 
-- Set `storageNetworkAccess = PrivateEndpoint` and populate `storagePermittedIPs`
-- Internal traffic uses the private endpoint; specified IPs are allowed over the public endpoint
+- Set `storageNetworkAccess = PrivateEndpoint`, `paasPublicNetworkAccess = EnabledWithRestrictions`, and populate `storagePermittedIPs`
+- Internal traffic uses the private endpoint; configured public rules and existing trusted-service exceptions remain allowed
 
 ### Identity-Based Access
 

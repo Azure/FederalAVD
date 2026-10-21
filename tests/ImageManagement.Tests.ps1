@@ -50,13 +50,19 @@ Describe 'Image Management storage account prefix' {
     }
 
     It 'preserves default names and uses deterministic custom-prefix names' {
+        $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\functions.bicep') -Raw
+        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
         $bicep | Should Match "namingConvention\.\?imageManagementStoragePrefix"
-        $bicep | Should Match "must contain no more than 5 lowercase letters or numbers"
-        $bicep | Should Match "location abbreviation must contain no more than 4 characters"
-        $bicep | Should Match "take\(uniqueString\(subscription\(\)\.subscriptionId, resourceGroupName, location\), 6\)"
-        $bicep | Should Match '\$\{effectiveImageManagementStoragePrefix\}imgassets\$\{cnv_loc\}\$\{customPrefixSaUnique\}'
-        $bicep | Should Match '\$\{effectiveImageManagementStoragePrefix\}imglogs\$\{cnv_loc\}\$\{customPrefixSaUnique\}'
-        $bicep | Should Match "cnv_rtFirst[\s\S]+saRtCode\}imgassets"
+        $bicep | Should Match "validateImageStoragePrefix\(imageManagementStoragePrefix, cnv_loc\)"
+        $bicep | Should Match "imageStorageName\(namingConvention, 'artifacts', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
+        $bicep | Should Match "imageStorageName\(namingConvention, 'logs', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
+        $functions | Should Match "fail\('namingConvention.imageManagementStoragePrefix"
+        $functions | Should Match 'length\(prefix\) > namingPolicy.limits.imageManagementStoragePrefix'
+        $functions | Should Match 'length\(region\) > namingPolicy.limits.imageManagementStorageLocation'
+        $functions | Should Match 'uniqueString\(subscriptionId, resourceGroupName, region\)'
+        $policy.limits.imageManagementStoragePrefix | Should Be 5
+        $policy.limits.imageManagementStorageLocation | Should Be 4
+        $policy.limits.uniqueSuffix | Should Be 6
         $arm | Should Match 'imageManagementStoragePrefix'
         $arm | Should Match 'imgassets'
         $arm | Should Match 'imglogs'

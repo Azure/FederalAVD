@@ -225,12 +225,17 @@ Do not commit secret values to parameter files.
 | `azureBlobPrivateDnsZoneResourceId` | Empty | Blob private DNS zone integration for Azure Backup |
 | `azureQueuePrivateDnsZoneResourceId` | Empty | Queue private DNS zone integration for Azure Backup |
 | `permittedIPs` | `[]` | Public IP/CIDR allowlist applied to both Key Vaults |
+| `paasPublicNetworkAccess` | `Auto` | Explicit Key Vault public-access mode: `Disabled`, `EnabledWithRestrictions`, or `Enabled`; `Auto` preserves existing parameter-file behavior |
 | `existingLogAnalyticsWorkspaceResourceId` | Empty | Existing workspace used only for Key Vault and backup-vault diagnostics when new monitoring is not deployed |
 
-If private endpoints are enabled and `permittedIPs` is empty, public access is disabled on the Key
-Vaults. If permitted IPs are also supplied, the Key Vault public endpoint remains enabled but its
-firewall defaults to deny and permits only the supplied addresses. The Recovery Services vault
-disables public access whenever its private endpoint option is enabled.
+Select public access independently of private endpoints. Disabled retains supplied IP rules;
+restricted mode denies unmatched traffic even with an empty list; Enabled allows all networks.
+The existing trusted-service bypass remains configured and can still apply when public access is
+Disabled. With `Auto`, private endpoints without IPs disable public access; IPs enable restricted
+access; without either, all networks are allowed. See the
+[shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
+The Recovery Services vault retains its separate behavior: its private endpoint option disables
+public access.
 
 ### Central Monitoring
 

@@ -1,14 +1,25 @@
+metadata name = 'Disk encryption key orchestration'
+metadata description = 'Creates a Key Vault key, a disk encryption set in an existing target resource group, and key-scoped encryption permissions across subscription deployment scopes.'
+
 targetScope = 'subscription'
 
+@description('Required. Name of the existing target resource group in the deployment subscription.')
 param resourceGroupName string
+@description('Required. Resource ID of the existing Key Vault that holds the encryption keys; may be in another resource group or subscription.')
 param keyVaultResourceId string
+@description('Required. Encryption mode used to select RSA or RSA-HSM keys and single or double disk encryption.')
 param keyManagementType string
+@description('Required. Key expiry interval in days; rotation is scheduled seven days before expiry.')
 param keyExpirationInDays int
+@description('Required. Azure region for the resources deployed by this module.')
 param location string
+@description('Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
 param tags object = {}
 @description('Optional. Resource ID stamped as the cm-resource-parent tag on the key and Disk Encryption Set.')
 param parentResourceId string = ''
+@description('Required. Name of the encryption key to create in the existing Key Vault.')
 param keyName string
+@description('Required. Name of the disk encryption set to create in the target resource group.')
 param diskEncryptionSetName string
 
 var keyVaultName = last(split(keyVaultResourceId, '/'))

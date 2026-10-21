@@ -1,5 +1,11 @@
+metadata name = 'Private endpoint'
+metadata description = 'Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones.'
+
+@description('Required. Name of the private endpoint to deploy.')
 param name string
+@description('Optional. Azure region for the private endpoint; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the private endpoint.')
 param tags object = {}
 
 @description('Resource ID of the subnet to deploy the private endpoint into.')
@@ -53,5 +59,7 @@ resource privateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneG
   }
 }
 
+@description('Resource ID of the private endpoint.')
 output resourceId string = privateEndpoint.id
+@description('Azure resource name of the private endpoint.')
 output name string = privateEndpoint.name

@@ -1,14 +1,17 @@
 targetScope = 'subscription'
 
+import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string
 
 @description('Optional. Identifier used by the shared FederalAVD naming convention.')
+// naming-policy: identifiers.sharedFslogix
 param identifier string = 'fslogix'
 
 @description('Optional. Naming convention used to derive resource names when explicit overrides are not supplied.')
+// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -157,6 +160,9 @@ param privateEndpointNicNameConvention string = ''
 
 @description('Optional. IP addresses or CIDR blocks permitted through the Azure Files firewall.')
 param permittedIPs string[] = []
+
+@description('Optional. Azure Files public-access mode. Auto preserves legacy private-endpoint/IP inference; does not alter existing resources, NetApp Files or backup vault access.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 @description('Optional. Resource ID of an existing Log Analytics workspace for storage diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
@@ -449,6 +455,7 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
     ouPath: organizationalUnitPath
     permittedIPs: permittedIPs
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     privateEndpoint: privateEndpoint
     privateEndpointNameConv: effectivePrivateEndpointNameConvention
     privateEndpointNICNameConv: effectivePrivateEndpointNicNameConvention

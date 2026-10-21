@@ -1,14 +1,27 @@
+metadata name = 'Session host monitoring policy orchestration'
+metadata description = 'Composes monitoring definitions, an initiative, scoped identity permissions, and assignments for a dedicated session-host resource group, with optional system identity assignment and remediation tasks.'
+
 targetScope = 'subscription'
 
+@description('Required. Azure region for the resources deployed by this module.')
 param location string
+@description('Required. Name of the existing dedicated session-host resource group in this subscription; unrelated resources must not share this policy boundary.')
 param targetResourceGroupName string
+@description('Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation.')
 param policyIdentityResourceId string
+@description('Required. Principal object ID of the policy user-assigned identity for role assignments.')
 param policyIdentityPrincipalId string
+@description('Required. Resource ID of the existing system-assigned identity Modify definition; used when assignSystemIdentityPolicy is true.')
 param systemIdentityPolicyDefinitionResourceId string
+@description('Required. Resource ID of the existing data collection rule to associate with session-host VMs.')
 param dataCollectionRuleResourceId string
+@description('Optional. Resource ID of an existing data collection endpoint; empty skips its association.')
 param dataCollectionEndpointResourceId string = ''
+@description('Optional. Whether to assign the supplied system-assigned identity policy before the monitoring initiative.')
 param assignSystemIdentityPolicy bool = true
+@description('Optional. Whether to create deterministic remediation tasks for existing noncompliant resources.')
 param createRemediation bool = false
+@description('Required. Stable ownership label recorded in policy assignment metadata.')
 param ownerId string
 
 var virtualMachineContributorRoleId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
@@ -116,6 +129,9 @@ module dceRemediation 'modules/remediation.bicep' = if (createRemediation && !em
   dependsOn: [agentRemediation]
 }
 
+@description('Resource ID of the monitoring initiative assignment in the target session-host resource group.')
 output monitoringPolicyAssignmentResourceId string = monitoringAssignment.outputs.resourceId
+@description('Resource ID of the system-assigned identity policy assignment, or an empty string when its assignment is disabled.')
 output identityPolicyAssignmentResourceId string = assignSystemIdentityPolicy ? identityAssignment!.outputs.resourceId : ''
+@description('Remediation task resource IDs in identity, Agent, DCR, and optional DCE order; empty when remediation is disabled.')
 output remediationResourceIds string[] = createRemediation ? concat(assignSystemIdentityPolicy ? [identityRemediation!.outputs.resourceId] : [], [agentRemediation!.outputs.resourceId, dcrRemediation!.outputs.resourceId], !empty(dataCollectionEndpointResourceId) ? [dceRemediation!.outputs.resourceId] : []) : []

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "920437846377749579"
+      "templateHash": "6121044435719860827"
     }
   },
   "definitions": {
@@ -41,6 +41,7 @@
         }
       },
       "metadata": {
+        "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
         }
@@ -792,8 +793,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "8962166876708586249"
-            }
+              "templateHash": "8853095034196092187"
+            },
+            "name": "Session host deployment orchestration",
+            "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
           },
           "definitions": {
             "artifactCustomizationType": {
@@ -827,6 +830,7 @@
                 }
               },
               "metadata": {
+                "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
                 }
@@ -836,45 +840,81 @@
           "parameters": {
             "agentBootLoaderDownloadUrl": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. AVD Agent Boot Loader installer URL; empty lets orchestration select the cloud-specific default."
+              }
             },
             "agentDownloadUrl": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. AVD Agent installer URL; empty lets orchestration select the cloud-specific default."
+              }
             },
             "artifactsContainerUri": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Base URI of the existing artifact container used to resolve relative customization blob names."
+              }
             },
             "artifactsUserAssignedIdentityResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing artifact-read identity to attach to session hosts; empty omits that identity."
+              }
             },
             "availability": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Placement mode used to select availability sets or availability zones."
+              }
             },
             "availabilitySetNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Availability set name pattern containing ## for the two-digit set number."
+              }
             },
             "availabilitySetsCount": {
-              "type": "int"
+              "type": "int",
+              "metadata": {
+                "description": "Required. Number of availability sets to create when availability is AvailabilitySets."
+              }
             },
             "availabilitySetsIndex": {
-              "type": "int"
+              "type": "int",
+              "metadata": {
+                "description": "Required. Zero-based starting availability set index before adding one for the name suffix."
+              }
             },
             "availabilityZones": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Ordered availability zone strings used for rotation based on each VM numeric suffix."
               }
             },
             "avdInsightsDataCollectionRulesResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing AVD Insights data collection rule; empty skips its association when monitoring is enabled."
+              }
             },
             "confidentialVMOSDiskEncryption": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether confidential VM OS disk encryption is selected."
+              }
             },
             "customImageResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Custom or Gallery image resource ID used when imageReference is empty; empty falls back to marketplace image inputs."
+              }
             },
             "customImageLicenseType": {
               "type": "string",
@@ -884,213 +924,378 @@
               }
             },
             "dataCollectionEndpointResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of an existing data collection endpoint; empty skips its association."
+              }
             },
             "dedicatedHostGroupResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Single existing dedicated host group ID used when dedicatedHostGroupResourceIds is empty."
+              }
             },
             "dedicatedHostGroupResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "defaultValue": []
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Existing dedicated host group IDs; one applies to all VMs, otherwise entries align with the VM names. Used only when no dedicated hosts are supplied."
+              }
             },
             "dedicatedHostResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Single existing dedicated host ID used when dedicatedHostResourceIds is empty."
+              }
             },
             "dedicatedHostResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "defaultValue": []
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Existing dedicated host IDs; one applies to all VMs, otherwise entries align with the VM names. Takes precedence over host groups."
+              }
             },
             "diskAccessId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing disk access resource; empty selects DenyAll instead of AllowPrivate network access."
+              }
             },
             "diskSizeGB": {
-              "type": "int"
+              "type": "int",
+              "metadata": {
+                "description": "Required. OS disk size in GB; zero preserves the image disk size."
+              }
             },
             "diskSku": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Managed OS disk storage account type."
+              }
             },
             "domainJoinUserPassword": {
-              "type": "securestring"
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Domain account password used when domain operations are selected; otherwise pass an empty string."
+              }
             },
             "domainJoinUserPrincipalName": {
-              "type": "securestring"
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Domain account UPN used when domain operations are selected; otherwise pass an empty string."
+              }
             },
             "domainName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. DNS domain name for selected domain operations; otherwise pass an empty string."
+              }
             },
             "enableAcceleratedNetworking": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to enable accelerated networking on each session-host NIC."
+              }
             },
             "enableIPv6": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to add an IPv6 configuration alongside IPv4 on each session-host NIC."
+              }
             },
             "enableMonitoring": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to deploy Azure Monitor Agent and any supplied data collection associations."
+              }
             },
             "encryptionAtHost": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to enable encryption at host on the deployed VMs."
+              }
             },
             "diskEncryptionSetResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing disk encryption set; empty uses platform-managed disk encryption."
+              }
             },
             "fslogixConfigureSessionHosts": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to forward enabled FSLogix configuration and required storage inputs to session-host initialization."
+              }
             },
             "fslogixContainerType": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. FSLogix container selection forwarded to initialization; names containing CloudCache select its CloudCache argument."
+              }
             },
             "fslogixFileShareNames": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Ordered share name strings for initialization, with profile before Office when both are present."
               }
             },
             "fslogixLocalNetAppVolumeResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Array of existing local NetApp volume IDs, empty or one per share in profile-then-Office order."
               }
             },
             "fslogixLocalStorageAccountResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization."
               }
             },
             "fslogixOSSGroups": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Array of group name strings forwarded as the initialization script OSSGroups argument."
               }
             },
             "fslogixRemoteNetAppVolumeResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Array of existing remote NetApp volume IDs, empty or one per share in profile-then-Office order."
               }
             },
             "fslogixRemoteStorageAccountResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization."
               }
             },
             "fslogixSizeInMBs": {
-              "type": "int"
+              "type": "int",
+              "metadata": {
+                "description": "Required. Profile container size in MB forwarded to session-host initialization."
+              }
             },
             "fslogixStorageService": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Storage backend name forwarded to initialization, AzureFiles or AzureNetAppFiles."
+              }
             },
             "hibernationEnabled": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to enable the VM hibernation additional capability."
+              }
             },
             "hostPoolResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing AVD host pool with an active registration token for VM initialization; also used for ownership tags."
+              }
             },
             "identitySolution": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths."
+              }
             },
             "imageOffer": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Marketplace image offer used when neither imageReference nor customImageResourceId is supplied."
+              }
             },
             "imagePublisher": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Marketplace image publisher used when neither imageReference nor customImageResourceId is supplied."
+              }
             },
             "imageReference": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Explicit Compute image reference object; when empty, customImageResourceId or the marketplace publisher, offer, and SKU are used."
+              }
             },
             "imageSku": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Marketplace image SKU used when neither imageReference nor customImageResourceId is supplied."
+              }
             },
             "integrityMonitoring": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to deploy the Guest Attestation extension on each session host."
+              }
             },
             "intuneEnrollment": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to pass the Intune MDM identifier to applicable Entra sign-in and initialization configuration."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             },
             "virtualMachineNicNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. NIC name pattern containing SHNAME; empty uses the session-host name unchanged."
+              }
             },
             "virtualMachineDiskNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. OS disk name pattern containing SHNAME; empty uses the shared naming policy disk pattern."
+              }
             },
             "ouPath": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default."
+              }
             },
             "preferredZones": {
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "defaultValue": []
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional. Per-VM preferred zone strings forwarded to each VM batch; nonempty entries override zone rotation."
+              }
             },
             "recoveryServicesVaultResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing Recovery Services vault; empty disables backup registration."
+              }
             },
             "secureBootEnabled": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to enable secure boot for a non-Standard VM security type."
+              }
             },
             "securityType": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. VM security type; Standard omits the security type and UEFI settings from the request."
+              }
             },
             "sessionHostCustomizations": {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/artifactCustomizationType"
+              },
+              "metadata": {
+                "description": "Required. Ordered artifact customization objects with name and blobNameOrUri, plus optional arguments and successExitCodes; empty skips customization commands."
               }
             },
             "sessionHostNames": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Required. Ordered session-host computer name strings, each ending in the numeric suffix used for placement."
               }
             },
             "subnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing session-host subnet used by each NIC."
+              }
             },
             "tags": {
-              "type": "object"
+              "type": "object",
+              "metadata": {
+                "description": "Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+              }
             },
             "timeZone": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Windows time zone identifier forwarded to the initialization script."
+              }
             },
             "virtualMachineAdminPassword": {
-              "type": "securestring"
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Local administrator password for the deployed VM."
+              }
             },
             "virtualMachineAdminUserName": {
-              "type": "securestring"
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Local administrator account name for the deployed VM."
+              }
             },
             "virtualMachineNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. VM resource name pattern containing SHNAME; empty uses the session-host name unchanged."
+              }
             },
             "virtualMachineSize": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure VM size for each session host."
+              }
             },
             "vmBackupPolicyName": {
               "type": "string",
-              "defaultValue": "AvdPolicyVm"
+              "defaultValue": "AvdPolicyVm",
+              "metadata": {
+                "description": "Optional. Name of the existing VM backup policy in the selected Recovery Services vault."
+              }
             },
             "vmNameIndexLength": {
               "type": "int",
-              "defaultValue": 2
+              "defaultValue": 2,
+              "metadata": {
+                "description": "Optional. Number of trailing characters parsed as the numeric suffix of each sessionHostNames entry."
+              }
             },
             "vTpmEnabled": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to enable virtual TPM for a non-Standard VM security type."
+              }
             }
           },
           "variables": {
@@ -1175,20 +1380,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "5767772030632182700"
-                    }
+                      "templateHash": "12699174301409301535"
+                    },
+                    "name": "Availability set",
+                    "description": "Deploys an availability set with caller-selected fault and update domains; virtual machines are associated separately."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the availability set to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the availability set; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the availability set."
+                      }
                     },
                     "platformFaultDomainCount": {
                       "type": "int",
@@ -1235,10 +1451,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the availability set."
+                      },
                       "value": "[resourceId('Microsoft.Compute/availabilitySets', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the availability set."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -1275,18 +1497,29 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6096139079858375515"
-                    }
+                      "templateHash": "3025370682010211907"
+                    },
+                    "name": "NetApp SMB endpoint lookup",
+                    "description": "Reads the first mount-target SMB FQDN for existing local and remote NetApp volumes across resource groups, enforcing one volume per share in each nonempty input array."
                   },
                   "parameters": {
                     "localNetAppVolumeResourceIds": {
-                      "type": "array"
+                      "type": "array",
+                      "metadata": {
+                        "description": "Required. Array of existing local NetApp volume IDs, empty or aligned one-to-one with shareNames in profile-then-Office order."
+                      }
                     },
                     "remoteNetAppVolumeResourceIds": {
-                      "type": "array"
+                      "type": "array",
+                      "metadata": {
+                        "description": "Required. Array of existing remote NetApp volume IDs, empty or aligned one-to-one with shareNames in profile-then-Office order."
+                      }
                     },
                     "shareNames": {
-                      "type": "array"
+                      "type": "array",
+                      "metadata": {
+                        "description": "Required. Ordered share name strings used to validate both NetApp volume arrays; profile precedes Office."
+                      }
                     }
                   },
                   "variables": {
@@ -1296,6 +1529,9 @@
                   "outputs": {
                     "localNetAppVolumeSmbServerFqdns": {
                       "type": "array",
+                      "metadata": {
+                        "description": "First mount-target SMB FQDN per local volume, preserving input order; empty when no local volumes are supplied."
+                      },
                       "copy": {
                         "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0)))]",
                         "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
@@ -1303,6 +1539,9 @@
                     },
                     "remoteNetAppVolumeSmbServerFqdns": {
                       "type": "array",
+                      "metadata": {
+                        "description": "First mount-target SMB FQDN per remote volume, preserving input order; empty when no remote volumes are supplied."
+                      },
                       "copy": {
                         "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0)))]",
                         "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
@@ -1532,8 +1771,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "2931981275969494474"
-                    }
+                      "templateHash": "2103064797703094863"
+                    },
+                    "name": "Session host VM batch orchestration",
+                    "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
                   },
                   "definitions": {
                     "artifactCustomizationType": {
@@ -1567,6 +1808,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
                         }
@@ -1575,147 +1817,261 @@
                   },
                   "parameters": {
                     "agentBootLoaderDownloadUrl": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. AVD Agent Boot Loader installer URL forwarded to initialization; the caller resolves cloud-specific defaults."
+                      }
                     },
                     "agentDownloadUrl": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. AVD Agent installer URL forwarded to initialization; the caller resolves cloud-specific defaults."
+                      }
                     },
                     "artifactsContainerUri": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Base URI of the existing artifact container used to resolve relative customization blob names."
+                      }
                     },
                     "artifactsUserAssignedIdentityClientId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Client ID of the artifact-read identity attached to each VM, forwarded to initialization and customization commands."
+                      }
                     },
                     "artifactsUserAssignedIdentityResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing artifact-read identity to attach to session hosts; empty omits that identity."
+                      }
                     },
                     "availability": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Placement mode used to select availability sets or availability zones."
+                      }
                     },
                     "availabilitySetNameConv": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Availability set name pattern containing ## for the two-digit set number."
+                      }
                     },
                     "availabilityZones": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Ordered availability zone strings used for rotation based on each VM numeric suffix."
                       }
                     },
                     "avdInsightsDataCollectionRulesResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing AVD Insights data collection rule; empty skips its association when monitoring is enabled."
+                      }
                     },
                     "confidentialVMOSDiskEncryptionType": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Confidential VM managed disk security encryption type, such as VMGuestStateOnly or DiskWithVMGuestState."
+                      }
                     },
                     "dataCollectionEndpointResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of an existing data collection endpoint; empty skips its association."
+                      }
                     },
                     "dedicatedHostGroupResourceIds": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Existing dedicated host group IDs; one applies to all VMs, otherwise entries align with the VM names. Used only when no dedicated hosts are supplied."
                       }
                     },
                     "dedicatedHostResourceIds": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Existing dedicated host IDs; one applies to all VMs, otherwise entries align with the VM names. Takes precedence over host groups."
                       }
                     },
                     "diskAccessId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Resource ID of an existing disk access resource; empty selects DenyAll instead of AllowPrivate network access."
+                      }
                     },
                     "diskEncryptionSetResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of an existing disk encryption set; empty uses platform-managed disk encryption."
+                      }
                     },
                     "diskSizeGB": {
-                      "type": "int"
+                      "type": "int",
+                      "metadata": {
+                        "description": "Required. OS disk size in GB; zero preserves the image disk size."
+                      }
                     },
                     "diskSku": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Managed OS disk storage account type."
+                      }
                     },
                     "domainJoinUserPassword": {
-                      "type": "securestring"
+                      "type": "securestring",
+                      "metadata": {
+                        "description": "Required. Domain account password used when domain operations are selected; otherwise pass an empty string."
+                      }
                     },
                     "domainJoinUserPrincipalName": {
-                      "type": "securestring"
+                      "type": "securestring",
+                      "metadata": {
+                        "description": "Required. Domain account UPN used when domain operations are selected; otherwise pass an empty string."
+                      }
                     },
                     "domainName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. DNS domain name for selected domain operations; otherwise pass an empty string."
+                      }
                     },
                     "enableAcceleratedNetworking": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to enable accelerated networking on each session-host NIC."
+                      }
                     },
                     "enableIPv6": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to add an IPv6 configuration alongside IPv4 on each session-host NIC."
+                      }
                     },
                     "enableMonitoring": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to deploy Azure Monitor Agent and any supplied data collection associations."
+                      }
                     },
                     "encryptionAtHost": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to enable encryption at host on the deployed VMs."
+                      }
                     },
                     "fslogixConfigureSessionHosts": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to forward enabled FSLogix configuration and required storage inputs to session-host initialization."
+                      }
                     },
                     "fslogixContainerType": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. FSLogix container selection forwarded to initialization; names containing CloudCache select its CloudCache argument."
+                      }
                     },
                     "fslogixFileShareNames": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Ordered share name strings for initialization, with profile before Office when both are present."
                       }
                     },
                     "fslogixLocalNetAppServerFqdns": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Array of local NetApp SMB server FQDN strings aligned with the ordered share names."
                       }
                     },
                     "fslogixLocalStorageAccountResourceIds": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization."
                       }
                     },
                     "fslogixOSSGroups": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Array of group name strings forwarded as the initialization script OSSGroups argument."
                       }
                     },
                     "fslogixRemoteNetAppServerFqdns": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Array of remote NetApp SMB server FQDN strings aligned with the ordered share names."
                       }
                     },
                     "fslogixRemoteStorageAccountResourceIds": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization."
                       }
                     },
                     "fslogixSizeInMBs": {
-                      "type": "int"
+                      "type": "int",
+                      "metadata": {
+                        "description": "Required. Profile container size in MB forwarded to session-host initialization."
+                      }
                     },
                     "fslogixStorageService": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Storage backend name forwarded to initialization, AzureFiles or AzureNetAppFiles."
+                      }
                     },
                     "hibernationEnabled": {
                       "type": "bool",
-                      "defaultValue": false
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Optional. Whether to enable the VM hibernation additional capability."
+                      }
                     },
                     "hostPoolResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing AVD host pool with an active registration token read during VM initialization; also used for ownership tags."
+                      }
                     },
                     "identitySolution": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths."
+                      }
                     },
                     "imageReference": {
-                      "type": "object"
+                      "type": "object",
+                      "metadata": {
+                        "description": "Required. Compute image reference object: { id } for a custom/Gallery image or { publisher, offer, sku, version } for marketplace images."
+                      }
                     },
                     "customImageLicenseType": {
                       "type": "string",
@@ -1725,94 +2081,166 @@
                         "Windows_Server"
                       ],
                       "metadata": {
-                        "description": "Optional. License type applied to VMs deployed from a custom/gallery image. Ignored for marketplace images, where license type is determined from imageReference.publisher."
+                        "description": "Optional. License type applied to custom/gallery image VMs; ignored for marketplace images."
                       }
                     },
                     "integrityMonitoring": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to deploy the Guest Attestation extension on each session host."
+                      }
                     },
                     "intuneEnrollment": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to pass the Intune MDM identifier to applicable Entra sign-in and initialization configuration."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region for the resources deployed by this module."
+                      }
                     },
                     "virtualMachineNicNameConv": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. NIC name pattern containing SHNAME; empty uses the session-host name unchanged."
+                      }
                     },
                     "virtualMachineDiskNameConv": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. OS disk name pattern containing SHNAME; empty uses the shared naming policy disk pattern."
+                      }
                     },
                     "ouPath": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default."
+                      }
                     },
                     "preferredZones": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Optional per-VM zone strings that override rotated zones when nonempty, aligned with VM names."
                       }
                     },
                     "sessionHostCustomizations": {
                       "type": "array",
                       "items": {
                         "$ref": "#/definitions/artifactCustomizationType"
+                      },
+                      "metadata": {
+                        "description": "Required. Ordered artifact customization objects with name and blobNameOrUri, plus optional arguments and successExitCodes; empty skips customization commands."
                       }
                     },
                     "sessionHostNames": {
                       "type": "array",
                       "items": {
                         "type": "string"
+                      },
+                      "metadata": {
+                        "description": "Required. Ordered session-host computer name strings, each ending in the numeric suffix used for placement."
                       }
                     },
                     "vmNumbers": {
                       "type": "array",
                       "items": {
                         "type": "int"
+                      },
+                      "metadata": {
+                        "description": "Required. Numeric suffix values aligned one-to-one with sessionHostNames for availability-zone rotation and availability-set placement."
                       }
                     },
                     "securityType": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. VM security type; Standard omits the security type and UEFI settings from the request."
+                      }
                     },
                     "secureBootEnabled": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to enable secure boot for a non-Standard VM security type."
+                      }
                     },
                     "subnetResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing session-host subnet used by each NIC."
+                      }
                     },
                     "tags": {
-                      "type": "object"
+                      "type": "object",
+                      "metadata": {
+                        "description": "Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+                      }
                     },
                     "timeZone": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Windows time zone identifier forwarded to the initialization script."
+                      }
                     },
                     "virtualMachineAdminPassword": {
-                      "type": "securestring"
+                      "type": "securestring",
+                      "metadata": {
+                        "description": "Required. Local administrator password for the deployed VM."
+                      }
                     },
                     "virtualMachineAdminUserName": {
-                      "type": "securestring"
+                      "type": "securestring",
+                      "metadata": {
+                        "description": "Required. Local administrator account name for the deployed VM."
+                      }
                     },
                     "virtualMachineNameConv": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. VM resource name pattern containing SHNAME; empty uses the session-host name unchanged."
+                      }
                     },
                     "virtualMachineSize": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure VM size for each session host."
+                      }
                     },
                     "vTpmEnabled": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to enable virtual TPM for a non-Standard VM security type."
+                      }
                     },
                     "hasAmdGpu": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to deploy the AMD GPU driver extension and forward AMD initialization selection."
+                      }
                     },
                     "hasNvidiaGpu": {
-                      "type": "bool"
+                      "type": "bool",
+                      "metadata": {
+                        "description": "Required. Whether to deploy the NVIDIA GPU driver extension and forward NVIDIA initialization selection."
+                      }
                     },
                     "recoveryServicesVaultResourceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Resource ID of an existing Recovery Services vault; empty disables backup registration."
+                      }
                     },
                     "vmBackupPolicyName": {
                       "type": "string",
-                      "defaultValue": "AvdPolicyVm"
+                      "defaultValue": "AvdPolicyVm",
+                      "metadata": {
+                        "description": "Optional. Name of the existing VM backup policy in the selected Recovery Services vault."
+                      }
                     },
                     "domainJoinForceUpdateTag": {
                       "type": "string",
@@ -1847,7 +2275,7 @@
                       {
                         "name": "osDiskNames",
                         "count": "[length(range(0, variables('sessionHostCount')))]",
-                        "input": "[if(empty(parameters('virtualMachineDiskNameConv')), format('{0}-osdisk', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]), replace(parameters('virtualMachineDiskNameConv'), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]]))]"
+                        "input": "[replace(if(empty(parameters('virtualMachineDiskNameConv')), variables('namingPolicy').patterns.osDisk, parameters('virtualMachineDiskNameConv')), 'SHNAME', parameters('sessionHostNames')[range(0, variables('sessionHostCount'))[copyIndex('osDiskNames')]])]"
                       }
                     ],
                     "$fxv#0": "[CmdletBinding(SupportsShouldProcess = $true)]\r\nparam (\r\n    # Agent Installation Parameters\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ApiVersion,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$StorageSuffix,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RegistrationToken,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AgentBootLoaderUrl,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AgentUrl,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [ValidateSet('true', 'false', '')]\r\n    [string]$AADJoin,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$MdmId,\r\n    \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    # Session Host Configuration Parameters\r\n    [Parameter(Mandatory = $true)]\r\n    [string]$TimeZone,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AmdVmSize = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$NvidiaVmSize = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$ConfigureFSLogix = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$CloudCache = 'false',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$IdentitySolution = '',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalNetAppServers = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalStorageAccountNames = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$LocalStorageAccountKeys = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$OSSGroups = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteNetAppServers = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteStorageAccountNames = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$RemoteStorageAccountKeys = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$Shares = '[]',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$SizeInMBs = '30000',\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [string]$StorageService = ''\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n\r\n$Script:Name = 'Initialize-SessionHost'\r\n$Script:LogPath = Join-Path -Path $env:SystemRoot -ChildPath \"Logs\\$Script:Name.log\"\r\n\r\n#region Helper Functions\r\n\r\nfunction Write-Log {\r\n    Param (\r\n        [Parameter(Mandatory = $false, Position = 0)]\r\n        [ValidateSet(\"Info\", \"Warning\", \"Error\")]\r\n        $Category = 'Info',\r\n        [Parameter(Mandatory = $true, Position = 1)]\r\n        $Message\r\n    )\r\n\r\n    $DateTime = Get-Date -Format 'MM-dd-yyyy HH:mm:ss'\r\n    $Content = \"[$DateTime]`t$Category`t`t$Message\" \r\n    Add-Content $Script:LogPath $content -ErrorAction Stop\r\n}\r\n\r\nfunction Invoke-MsiWithRetry {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DisplayName,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string[]]$ArgumentList,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$LogPath    \r\n    )\r\n\r\n    $ArgumentList += \"/liwemo+! `\"$LogPath`\"\"\r\n   \r\n    $MaxRetries = 20\r\n    $RetryDelay = 30\r\n    $RetryCount = 0\r\n    $ExitCode = $null\r\n    \r\n    do {        \r\n        if ($RetryCount -gt 0) {\r\n            Write-Log -Message \"Retrying Install $DisplayName in $RetryDelay seconds (Exit code: $ExitCode) - Retry $RetryCount\"\r\n            Start-Sleep -Seconds $RetryDelay\r\n        }\r\n        Write-Log -Message \"Installing $DisplayName\"\r\n        $Process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow\r\n        $ExitCode = $Process.ExitCode        \r\n        $RetryCount++\r\n    } while ($ExitCode -eq 1618 -and $RetryCount -lt $MaxRetries) # 1618 = ERROR_INSTALL_ALREADY_RUNNING\r\n    \r\n    if ($ExitCode -eq 1618) {\r\n        $ErrorMsg = \"Install $DisplayName failed after $MaxRetries retries with Exit code $ExitCode (ERROR_INSTALL_ALREADY_RUNNING)\"\r\n        Write-Log -Category Error -Message $ErrorMsg\r\n        throw $ErrorMsg\r\n    }\r\n    \r\n    Write-Log -Message \"Install $DisplayName finished with Exit code: $ExitCode\"\r\n    \r\n    # Exit codes: 0 = success, 3010 = success but restart required\r\n    if ($ExitCode -notin @(0, 3010)) {\r\n        Write-Log -Category Warning -Message \"$DisplayName installation completed with Exit code: $ExitCode\"\r\n    }\r\n    \r\n    return $ExitCode\r\n}\r\n\r\nfunction Get-RegistrationTokenClaims {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$Token\r\n    )\r\n    \r\n    try {\r\n        $ClaimsSection = $Token.Split('.')[1].Replace('-', '+').Replace('_', '/')\r\n        \r\n        # Pad with '=' to make it valid base64\r\n        while ($ClaimsSection.Length % 4) {\r\n            $ClaimsSection += '='\r\n        }\r\n        \r\n        $ClaimsByteArray = [System.Convert]::FromBase64String($ClaimsSection)\r\n        $ClaimsJson = [System.Text.Encoding]::ASCII.GetString($ClaimsByteArray)\r\n        $Claims = $ClaimsJson | ConvertFrom-Json\r\n        \r\n        return $Claims\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to parse registration token: $($_.Exception.Message)\"\r\n        throw\r\n    }\r\n}\r\n\r\nfunction Get-AgentDownloadUrl {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$BrokerAgentApi\r\n    )\r\n    \r\n    try {\r\n        Write-Log -Message \"Querying broker for agent download URL: $BrokerAgentApi\"\r\n        \r\n        $Response = Invoke-WebRequest -Uri $BrokerAgentApi -UseBasicParsing\r\n        $ResponseJson = $Response.Content | ConvertFrom-Json\r\n        \r\n        Write-Log -Message \"Obtained agent endpoint: $($ResponseJson.agentEndpoint)\"\r\n        \r\n        return $ResponseJson.agentEndpoint\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Failed to get agent download URL: $($_.Exception.Message)\"\r\n        return $null\r\n    }\r\n}\r\n\r\nfunction Get-LatestAgentInstaller {\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$RegistrationToken,\r\n        \r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DownloadFolder\r\n    )\r\n    \r\n    try {\r\n        # Parse the registration token to get broker endpoint\r\n        $Claims = Get-RegistrationTokenClaims -Token $RegistrationToken\r\n        \r\n        if (-not $Claims.GlobalBrokerResourceIdUri) {\r\n            Write-Log -Message \"Unable to obtain broker endpoint from registration token\"\r\n            return $null\r\n        }\r\n        \r\n        # Build the agent API URL\r\n        $BrokerUri = [System.UriBuilder]$Claims.GlobalBrokerResourceIdUri\r\n        $BrokerUri.Path = 'api/agentMsi/v1/agentVersion'\r\n        $BrokerAgentApi = $BrokerUri.Uri.AbsoluteUri\r\n        \r\n        Write-Log -Message \"Broker agent API: $BrokerAgentApi\"\r\n        \r\n        # Get the agent download URL\r\n        $AgentDownloadUrl = Get-AgentDownloadUrl -BrokerAgentApi $BrokerAgentApi\r\n        \r\n        if (-not $AgentDownloadUrl) {\r\n            Write-Log -Message \"Unable to obtain agent download URL from broker\"\r\n            return $null\r\n        }\r\n        \r\n        # Create download folder\r\n        if (-not (Test-Path $DownloadFolder)) {\r\n            New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null\r\n        }\r\n        \r\n        $AgentPath = Join-Path $DownloadFolder 'RDAgent.msi'\r\n        \r\n        # Try primary endpoint\r\n        try {\r\n            Write-Log -Message \"Downloading agent from: $AgentDownloadUrl\"\r\n            Invoke-WebRequest -Uri $AgentDownloadUrl -OutFile $AgentPath -UseBasicParsing\r\n            Write-Log -Message \"Successfully downloaded agent to: $AgentPath\"\r\n            return $AgentPath\r\n        }\r\n        catch {\r\n            Write-Log -Message \"Failed to download from primary endpoint: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        # Try private link endpoint\r\n        try {\r\n            $PrivateLinkUri = [System.UriBuilder]$AgentDownloadUrl\r\n            $PrivateLinkUri.Host = \"$($Claims.EndpointPoolId).$($PrivateLinkUri.Host)\"\r\n            $PrivateLinkUrl = $PrivateLinkUri.Uri.AbsoluteUri\r\n            \r\n            Write-Log -Message \"Trying private link endpoint: $PrivateLinkUrl\"\r\n            Invoke-WebRequest -Uri $PrivateLinkUrl -OutFile $AgentPath -UseBasicParsing\r\n            Write-Log -Message \"Successfully downloaded agent from private link endpoint\"\r\n            return $AgentPath\r\n        }\r\n        catch {\r\n            Write-Log -Category Error -Message \"Failed to download from private link endpoint: $($_.Exception.Message)\"\r\n        }\r\n        \r\n        return $null\r\n    }\r\n    catch {\r\n        Write-Log -Category Error -Message \"Error getting latest agent installer: $($_.Exception.Message)\"\r\n        return $null\r\n    }\r\n}\r\n\r\nfunction Get-InstallerFromUrl {\r\n    param (\r\n        [string]$ApiVersion = $script:ApiVersion,\r\n        [string]$StorageSuffix = $script:StorageSuffix,\r\n        [string]$ClientId = $script:UserAssignedIdentityClientId,\r\n        [string]$Url,\r\n        [string]$DestinationPath,\r\n        [string]$DisplayName,\r\n        [int]$MaxAttempts = 3,\r\n        [int]$RetryDelaySeconds = 10,\r\n        [int]$TimeoutSeconds = 120\r\n    )\r\n\r\n    $ProgressPreference = 'SilentlyContinue'\r\n    For ($Attempt = 1; $Attempt -le $MaxAttempts; $Attempt++) {\r\n        Try {\r\n            $Headers = @{}\r\n\r\n            # If URL is Azure Storage and we have a managed identity, authenticate\r\n            if (-not [string]::IsNullOrEmpty($StorageSuffix) -and $Url -match $StorageSuffix -and -not [string]::IsNullOrEmpty($ClientId)) {\r\n                Write-Log -Message \"Authenticating to Azure Storage using managed identity\"\r\n                $StorageEndpoint = ($Url -split \"://\")[0] + \"://\" + ($Url -split \"/\")[2] + \"/\"\r\n                $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$ApiVersion&resource=$StorageEndpoint&client_id=$ClientId\"\r\n                $AccessToken = ((Invoke-WebRequest -Headers @{Metadata = $true } -Uri $TokenUri -UseBasicParsing -TimeoutSec 30).Content | ConvertFrom-Json).access_token\r\n                $Headers['x-ms-version'] = '2017-11-09'\r\n                $Headers['Authorization'] = \"Bearer $AccessToken\"\r\n            }\r\n\r\n            Write-Log -Message \"Downloading $DisplayName from: $Url (attempt $Attempt of $MaxAttempts)\"\r\n            Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -Headers $Headers -UseBasicParsing -TimeoutSec $TimeoutSeconds\r\n            Write-Log -Message \"Successfully downloaded $DisplayName to: $DestinationPath\"\r\n            return $true\r\n        }\r\n        Catch {\r\n            $FailureMessage = $_.Exception.Message\r\n            Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue\r\n            If ($Attempt -eq $MaxAttempts) {\r\n                Write-Log -Category Error -Message \"Failed to download $DisplayName after $MaxAttempts attempts: $FailureMessage\"\r\n                return $false\r\n            }\r\n\r\n            Write-Log -Category Warning -Message \"Download attempt $Attempt of $MaxAttempts for $DisplayName failed: $FailureMessage. Retrying in $RetryDelaySeconds seconds.\"\r\n            Start-Sleep -Seconds $RetryDelaySeconds\r\n        }\r\n    }\r\n}\r\n\r\nfunction Wait-ForBootLoaderService {\r\n    $ServiceName = 'RDAgentBootLoader'\r\n    $MaxRetries = 18\r\n    $RetryDelay = 10\r\n    $RetryCount = 0\r\n    \r\n    while (-not (Get-Service $ServiceName -ErrorAction SilentlyContinue)) {\r\n        if ($RetryCount -ge $MaxRetries) {\r\n            $ErrorMsg = \"Service $ServiceName not found after $MaxRetries retries\"\r\n            Write-Log -Category Error -Message $ErrorMsg\r\n            throw $ErrorMsg\r\n        }\r\n        \r\n        Write-Log -Message \"Service $ServiceName not found. Retrying in $RetryDelay seconds (Retry $RetryCount of $MaxRetries)\"\r\n        Start-Sleep -Seconds $RetryDelay\r\n        $RetryCount++\r\n    }\r\n    \r\n    Write-Log -Message \"Starting service: $ServiceName\"\r\n    Start-Service $ServiceName\r\n    \r\n    Write-Log -Message \"Service $ServiceName started successfully\"\r\n}\r\n\r\nfunction Get-SessionHostName {\r\n    $Wmi = Get-WmiObject win32_computersystem\r\n    \r\n    if ($Wmi.Domain -eq 'WORKGROUP') {\r\n        return $Wmi.DNSHostName\r\n    }\r\n    \r\n    return \"$($Wmi.DNSHostName).$($Wmi.Domain)\"\r\n}\r\n\r\nFunction ConvertFrom-JsonString {\r\n    [CmdletBinding()]\r\n    param (\r\n        [string]$JsonString,\r\n        [string]$Name,\r\n        [switch]$SensitiveValues      \r\n    )\r\n    If ($JsonString -ne '[]' -and $null -ne $JsonString) {\r\n        [array]$Array = $JsonString.replace('\\', '') | ConvertFrom-Json\r\n        If ($Array.Length -gt 0) {\r\n            If ($SensitiveValues) { Write-Log -message \"Array '$Name' has $($Array.Length) members\" } Else { Write-Log -message \"$($Name): '$($Array -join \"', '\")'\" }\r\n            Return $Array\r\n        }\r\n        Else {\r\n            Return $null\r\n        }            \r\n    }\r\n    Else {\r\n        Return $null\r\n    }    \r\n}\r\n\r\nFunction Convert-GroupToSID {\r\n    [CmdletBinding()]\r\n    Param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$DomainName,\r\n\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$GroupName\r\n    )\r\n    Begin {\r\n        [string]$groupSID = ''\r\n    }\r\n    Process {\r\n        Try {\r\n            $groupSID = (New-Object System.Security.Principal.NTAccount(\"$GroupName\")).Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n        }\r\n        Catch {\r\n            Try {\r\n                $groupSID = (New-Object System.Security.Principal.NTAccount($DomainName, \"$GroupName\")).Translate([System.Security.Principal.SecurityIdentifier]).Value\r\n            }\r\n            Catch {\r\n                Write-Error -Message \"Failed to convert group name '$GroupName' to SID.\"\r\n            }\r\n        }\r\n        Write-Output -InputObject $groupSID\r\n    }\r\n}\r\n\r\nFunction Set-RegistryValue {\r\n    [CmdletBinding()]\r\n    param (\r\n        [Parameter()]\r\n        [string]$Name,\r\n        [Parameter()]\r\n        [string]$Path,\r\n        [Parameter()]\r\n        [string]$PropertyType,\r\n        [Parameter()]\r\n        $Value\r\n    )\r\n    If (!(Test-Path -Path $Path)) {\r\n        New-Item -Path $Path -Force | Out-Null\r\n    }\r\n    $RemoteValue = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue\r\n    If ($RemoteValue) {\r\n        $CurrentValue = Get-ItemPropertyValue -Path $Path -Name $Name\r\n        If ($Value -ne $CurrentValue) {\r\n            Write-Log -message \"Registry update: $Name = $Value (was: $CurrentValue)\"\r\n            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null\r\n        }\r\n    }\r\n    Else {\r\n        Write-Log -message \"Registry create: $Name = $Value\"\r\n        New-ItemProperty -Path $Path -Name $Name -PropertyType $PropertyType -Value $Value -Force | Out-Null\r\n    }\r\n}\r\n\r\nFunction Set-LocalMachinePolicyValue {\r\n    [CmdletBinding()]\r\n    param (\r\n        [Parameter(Mandatory = $true)]\r\n        [string]$Key,\r\n        [Parameter(Mandatory = $true)]\r\n        [string[]]$Name,\r\n        [Parameter(Mandatory = $true)]\r\n        [AllowEmptyString()]\r\n        [object]$Value,\r\n        [Parameter(Mandatory = $false)]\r\n        [ValidateSet('DWord', 'String')]\r\n        [string]$Type = 'DWord',\r\n        [Parameter(Mandatory = $false)]\r\n        [string]$GroupPolicyRoot = \"$env:SystemRoot\\System32\\GroupPolicy\"\r\n    )\r\n\r\n    $Utf16 = [System.Text.Encoding]::Unicode\r\n    $PolicyPath = Join-Path -Path $GroupPolicyRoot -ChildPath 'Machine\\Registry.pol'\r\n    $Entries = [System.Collections.Generic.List[hashtable]]::new()\r\n\r\n    If (Test-Path -Path $PolicyPath) {\r\n        $Raw = [System.IO.File]::ReadAllBytes($PolicyPath)\r\n        If ($Raw.Length -lt 8 -or [System.Text.Encoding]::ASCII.GetString($Raw, 0, 4) -ne 'PReg') {\r\n            Throw \"Invalid Registry.pol header: $PolicyPath\"\r\n        }\r\n        $Position = 8\r\n        While ($Position -lt $Raw.Length) {\r\n            If ($Position + 1 -ge $Raw.Length) { Break }\r\n            If ($Raw[$Position] -ne 0x5B -or $Raw[$Position + 1] -ne 0x00) {\r\n                $Position++\r\n                Continue\r\n            }\r\n            $Position += 2\r\n            $Start = $Position\r\n            While ($Position + 1 -lt $Raw.Length -and -not ($Raw[$Position] -eq 0 -and $Raw[$Position + 1] -eq 0)) { $Position += 2 }\r\n            $EntryKey = $Utf16.GetString($Raw, $Start, $Position - $Start)\r\n            $Position += 4\r\n            $Start = $Position\r\n            While ($Position + 1 -lt $Raw.Length -and -not ($Raw[$Position] -eq 0 -and $Raw[$Position + 1] -eq 0)) { $Position += 2 }\r\n            $EntryName = $Utf16.GetString($Raw, $Start, $Position - $Start)\r\n            $Position += 4\r\n            $EntryType = [BitConverter]::ToUInt32($Raw, $Position)\r\n            $Position += 6\r\n            $EntrySize = [BitConverter]::ToUInt32($Raw, $Position)\r\n            $Position += 6\r\n            $EntryData = If ($EntrySize -gt 0) { [byte[]]$Raw[$Position..($Position + $EntrySize - 1)] } Else { [byte[]]@() }\r\n            $Position += $EntrySize + 2\r\n            $Entries.Add(@{ Key = $EntryKey; Name = $EntryName; Type = $EntryType; Data = $EntryData })\r\n        }\r\n    }\r\n\r\n    $EntryType = If ($Type -eq 'DWord') { [uint32]4 } Else { [uint32]1 }\r\n    $EntryData = If ($Type -eq 'DWord') {\r\n        [BitConverter]::GetBytes([uint32]$Value)\r\n    }\r\n    Else {\r\n        $Utf16.GetBytes(\"$Value`0\")\r\n    }\r\n    ForEach ($ValueName in $Name) {\r\n        @($Entries | Where-Object { $_.Key -ieq $Key -and $_.Name -ieq $ValueName }) | ForEach-Object { $Entries.Remove($_) | Out-Null }\r\n        $Entries.Add(@{ Key = $Key; Name = $ValueName; Type = $EntryType; Data = $EntryData })\r\n    }\r\n\r\n    $Stream = [System.IO.MemoryStream]::new()\r\n    $Writer = [System.IO.BinaryWriter]::new($Stream)\r\n    Try {\r\n        $Writer.Write([System.Text.Encoding]::ASCII.GetBytes('PReg'))\r\n        $Writer.Write([uint32]1)\r\n        ForEach ($Entry in $Entries) {\r\n            $Writer.Write([byte[]](0x5B, 0x00))\r\n            $Writer.Write($Utf16.GetBytes($Entry.Key))\r\n            $Writer.Write([byte[]](0x00, 0x00, 0x3B, 0x00))\r\n            $Writer.Write($Utf16.GetBytes($Entry.Name))\r\n            $Writer.Write([byte[]](0x00, 0x00, 0x3B, 0x00))\r\n            $Writer.Write([uint32]$Entry.Type)\r\n            $Writer.Write([byte[]](0x3B, 0x00))\r\n            $Writer.Write([uint32]$Entry.Data.Length)\r\n            $Writer.Write([byte[]](0x3B, 0x00))\r\n            If ($Entry.Data.Length -gt 0) { $Writer.Write([byte[]]$Entry.Data) }\r\n            $Writer.Write([byte[]](0x5D, 0x00))\r\n        }\r\n        $Writer.Flush()\r\n        $Bytes = $Stream.ToArray()\r\n    }\r\n    Finally {\r\n        $Writer.Dispose()\r\n        $Stream.Dispose()\r\n    }\r\n\r\n    $PolicyDirectory = Split-Path -Path $PolicyPath -Parent\r\n    If (-not (Test-Path -Path $PolicyDirectory)) { New-Item -Path $PolicyDirectory -ItemType Directory -Force | Out-Null }\r\n    $TemporaryPath = \"$PolicyPath.tmp\"\r\n    [System.IO.File]::WriteAllBytes($TemporaryPath, $Bytes)\r\n    If ((Get-Item -Path $TemporaryPath).Length -ne $Bytes.Length) {\r\n        Remove-Item -Path $TemporaryPath -Force -ErrorAction SilentlyContinue\r\n        Throw \"Registry.pol verification failed: $TemporaryPath\"\r\n    }\r\n    Move-Item -Path $TemporaryPath -Destination $PolicyPath -Force\r\n\r\n    $GptPath = Join-Path -Path $GroupPolicyRoot -ChildPath 'gpt.ini'\r\n    $ExistingGpt = If (Test-Path -Path $GptPath) { Get-Content -Path $GptPath -Raw } Else { '' }\r\n    $MachineVersion = [uint16]1\r\n    $UserVersion = [uint16]0\r\n    If ($ExistingGpt -match 'Version\\s*=\\s*(\\d+)') {\r\n        $CurrentVersion = [uint32]$Matches[1]\r\n        $MachineVersion = [uint16]($CurrentVersion -band 0xFFFF)\r\n        $UserVersion = [uint16](($CurrentVersion -shr 16) -band 0xFFFF)\r\n    }\r\n    $MachineVersion++\r\n    $CombinedVersion = ([uint32]$UserVersion -shl 16) -bor [uint32]$MachineVersion\r\n    $RegistryCse = '{35378EAC-683F-11D2-A89A-00C04FBBCFA2}'\r\n    $MachineAdministrativeTemplates = '{D02B1F72-3407-48AE-BA88-E8213C6761F1}'\r\n    $MachineExtensions = If ($ExistingGpt -match 'gPCMachineExtensionNames\\s*=\\s*(.+)') { $Matches[1].Trim() } Else { '' }\r\n    If ($MachineExtensions -notlike \"*$RegistryCse*\") { $MachineExtensions += \"[$RegistryCse$MachineAdministrativeTemplates]\" }\r\n    $UserExtensions = If ($ExistingGpt -match 'gPCUserExtensionNames\\s*=\\s*(.+)') { $Matches[1].Trim() } Else { '' }\r\n    $GptContent = \"[General]`r`n\"\r\n    If ($MachineExtensions) { $GptContent += \"gPCMachineExtensionNames=$MachineExtensions`r`n\" }\r\n    If ($UserExtensions) { $GptContent += \"gPCUserExtensionNames=$UserExtensions`r`n\" }\r\n    $GptContent += \"Version=$CombinedVersion`r`n\"\r\n    [System.IO.File]::WriteAllText($GptPath, $GptContent, [System.Text.Encoding]::ASCII)\r\n    Write-Log -Message \"Local Group Policy update: $($Name.Count) $Type value(s) under $Key\"\r\n}\r\n\r\n#endregion Helper Functions\r\n\r\n#region FSLogix Redirections XML Templates\r\n\r\n$redirectionsXMLStart = @'\r\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<FrxProfileFolderRedirection ExcludeCommonFolders=\"0\">\r\n<Excludes>\r\n'@\r\n\r\n$redirectionsXMLExcludesTeams = @'\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\Logs</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\PerfLog</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\MSTeams_8wekyb3d8bbwe\\LocalCache\\Microsoft\\MSTeams\\EBWebView\\WV2Profile_tfw\\GPUCache</Exclude>\r\n<Exclude Copy=\"0\">AppData\\Local\\Packages\\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\\TempState</Exclude>\r\n'@\r\n\r\n$redirectionsXMLExcludesAzCLI = @'\r\n<Exclude Copy=\"0\">.Azure</Exclude>\r\n'@\r\n\r\n$redirectionsXMLEnd = @'\r\n</Excludes>\r\n<Includes>\r\n</Includes>\r\n</FrxProfileFolderRedirection>\r\n'@\r\n\r\n#endregion FSLogix Redirections XML Templates\r\n\r\n#region Main Script\r\n\r\ntry {\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'AVD Session Host Initialization Starting'\r\n    Write-Log -Message '========================================='\r\n    \r\n    Write-Log -Message \"TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize\"\r\n    Write-Log -Message \"AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { \" | AgentUrl=$AgentUrl\" })$(if ($MdmId) { \" | MdmId=$MdmId\" })\"\r\n    \r\n    #region Phase 1: Session Host Configuration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Phase 1: Session Host Configuration'\r\n    Write-Log -Message '========================================='\r\n    \r\n    # Configure Time Zone\r\n    Set-TimeZone -Id \"$TimeZone\"\r\n    Write-Log -Message \"Time Zone set to: $TimeZone\"\r\n    \r\n    # Initialize registry settings array\r\n    $RegSettings = New-Object System.Collections.ArrayList\r\n    \r\n    # Convert boolean parameters\r\n    [bool]$ConfigureFSLogixBool = [System.Convert]::ToBoolean($ConfigureFSLogix)\r\n    \r\n    # Enable Time Zone Redirection\r\n    Set-LocalMachinePolicyValue -Key 'Software\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'fEnableTimeZoneRedirection' -Value 1\r\n    \r\n    # Add GPU Settings if applicable\r\n    if ($AmdVmSize -eq 'true' -or $NvidiaVmSize -eq 'true') {\r\n        Write-Log -Message \"Adding GPU Settings\"\r\n        Set-LocalMachinePolicyValue -Key 'Software\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'bEnumerateHWBeforeSW' -Value 1\r\n        Set-LocalMachinePolicyValue -Key 'Software\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'AVC444ModePreferred' -Value 1\r\n        Set-LocalMachinePolicyValue -Key 'Software\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'AVChardwareEncodePreferred' -Value 1\r\n    }\r\n    \r\n    # Configure FSLogix if specified\r\n    If ($ConfigureFSLogixBool) {\r\n        Write-Log -Message ''\r\n        Write-Log -Message 'Configuring FSLogix'\r\n        Write-Log -Message \"IdentitySolution: $IdentitySolution\"\r\n        \r\n        # Convert parameters\r\n        $CloudCacheBool = [System.Convert]::ToBoolean($CloudCache)\r\n        Write-Log -Message \"CloudCache: $CloudCacheBool\"\r\n        \r\n        [array]$SharesArray = ConvertFrom-JsonString -JsonString $Shares -Name 'Shares'\r\n        $ProfileShareName = $SharesArray[0]\r\n        if ($SharesArray.Count -gt 1) {\r\n            $OfficeShareName = $SharesArray[1]\r\n        }\r\n        Else {\r\n            $OfficeShareName = $null\r\n        }\r\n        \r\n        Write-Log -message \"ProfileShareName: $ProfileShareName\"\r\n        Write-Log -message \"OfficeShareName: $OfficeShareName\"\r\n        Write-Log -message \"StorageService: $StorageService\"\r\n        \r\n        if ($SizeInMBs -ne '' -and $null -ne $SizeInMBs) {\r\n            [int]$SizeInMBsInt = $SizeInMBs\r\n            Write-Log -message \"SizeInMBs: $SizeInMBsInt\"\r\n        }\r\n        Else {\r\n            [int]$SizeInMBsInt = 30000\r\n            Write-Log -message \"SizeInMBs not specified. Defaulting to: $SizeInMBsInt\"\r\n        }\r\n        \r\n        $AzCLIInstalled = Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Azure CLI' } | Select-Object -First 1\r\n        $TeamsInstalled = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq 'MSTeams' }\r\n        \r\n        # Create Array Lists for storage paths\r\n        [System.Collections.ArrayList]$LocalProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalCloudCacheProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$LocalCloudCacheOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteCloudCacheProfileContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteOfficeContainerPaths = @()\r\n        [System.Collections.ArrayList]$RemoteCloudCacheOfficeContainerPaths = @()\r\n        \r\n        # Process storage accounts based on service type\r\n        switch ($StorageService) {\r\n            'AzureFiles' {\r\n                Write-Log -message \"Gathering Azure Files Storage Account Parameters\"\r\n                [array]$OSSGroupsArray = ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups'\r\n                [array]$LocalStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames'\r\n                [array]$LocalStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues\r\n                [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'\r\n                [array]$RemoteStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues\r\n                \r\n                # Process Local Storage Accounts\r\n                Write-Log -message \"Processing Local Storage Accounts\"\r\n                For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {\r\n                    $SAFQDN = \"$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix\"\r\n                    Write-Log -message \"Local storage [$i]: $SAFQDN\"\r\n\r\n                    If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {\r\n                        Write-Log -message \"Adding storage key for '$SAFQDN' to Credential Manager\"\r\n                        Start-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$SAFQDN /user:localhost\\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])\" -NoNewWindow -Wait\r\n                    }\r\n                    \r\n                    If ($OfficeShareName) {\r\n                        $LocalOfficeContainerPaths.Add(\"\\\\$SAFQDN\\$OfficeShareName\") | Out-Null\r\n                        $LocalCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                    }\r\n                    $LocalProfileContainerPaths.Add(\"\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                    $LocalCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                }\r\n                \r\n                # Process Remote Storage Accounts\r\n                If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                    Write-Log -message \"Processing Remote Storage Accounts\"\r\n                    For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {\r\n                        $SAFQDN = \"$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix\"\r\n                        Write-Log -message \"Remote storage [$i]: $SAFQDN\"\r\n\r\n                        If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {\r\n                            Write-Log -message \"Adding storage key for '$SAFQDN' to Credential Manager\"\r\n                            Start-Process -FilePath 'cmdkey.exe' -ArgumentList \"/add:$($SAFQDN) /user:localhost\\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])\" -NoNewWindow -Wait\r\n                        }\r\n                        \r\n                        If ($OfficeShareName) {\r\n                            $RemoteOfficeContainerPaths.Add(\"\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                            $RemoteCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($OfficeShareName)\") | Out-Null\r\n                        }\r\n                        $RemoteProfileContainerPaths.Add(\"\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                        $RemoteCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($SAFQDN)\\$($ProfileShareName)\") | Out-Null\r\n                    }\r\n                }\r\n            }\r\n            'AzureNetAppFiles' {\r\n                Write-Log -message \"Gathering Azure NetApp Files Storage Account Parameters\"\r\n                [array]$LocalNetAppServersArray = ConvertFrom-JsonString -JsonString $LocalNetAppServers -Name 'LocalNetAppServers'\r\n                [array]$RemoteNetAppServersArray = ConvertFrom-JsonString -JsonString $RemoteNetAppServers -Name 'RemoteNetAppServers'\r\n                \r\n                Write-Log -message \"Local NetApp: $($LocalNetAppServersArray[0])\"\r\n                $LocalProfileContainerPaths.Add(\"\\\\$($LocalNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                $LocalCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($LocalNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                \r\n                If ($LocalNetAppServersArray.Length -gt 1 -and $OfficeShareName) {            \r\n                    $LocalOfficeContainerPaths.Add(\"\\\\$($LocalNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                    $LocalCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($LocalNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                }\r\n                \r\n                If ($RemoteNetAppServersArray.Count -gt 0) {\r\n                    Write-Log -message \"Remote NetApp: $($RemoteNetAppServersArray[0])\"\r\n                    $RemoteProfileContainerPaths.Add(\"\\\\$($RemoteNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                    $RemoteCloudCacheProfileContainerPaths.Add(\"type=smb,connectionString=\\\\$($RemoteNetAppServersArray[0])\\$($ProfileShareName)\") | Out-Null\r\n                    \r\n                    If ($RemoteNetAppServersArray.Length -gt 1 -and $OfficeShareName) {\r\n                        $RemoteOfficeContainerPaths.Add(\"\\\\$($RemoteNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                        $RemoteCloudCacheOfficeContainerPaths.Add(\"type=smb,connectionString=\\\\$($RemoteNetAppServersArray[1])\\$($OfficeShareName)\") | Out-Null\r\n                    }        \r\n                }\r\n            }\r\n        }\r\n        \r\n        # Add Common FSLogix Registry Settings\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'CleanupInvalidSessions'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Apps'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\\SOFTWARE\\Fslogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'DeleteLocalProfileWhenVHDShouldApply'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithFailure'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithTempProfile'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachIntervalSeconds'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 15 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 3 })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = $SizeInMBsInt })\r\n        $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'String'; Value = 'VHDX' })\r\n\r\n        If ($LocalStorageAccountKeysArray.Count -gt 0) {\r\n            $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n        \r\n        if ($CloudCacheBool -eq $True) {\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n        \r\n        # Office Container Settings\r\n        If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })   \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'FlipFlopProfileDirectoryName'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryCount'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 3 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LockedRetryInterval'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 15 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithFailure'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'PreventLoginWithTempProfile'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })    \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachIntervalSeconds'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 15 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'ReAttachRetryCount'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 3 })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = $SizeInMBsInt })\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'String'; Value = 'VHDX' })\r\n\r\n            If ($LocalStorageAccountKeysArray.Count -gt 0) {\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            }\r\n            \r\n            If ($CloudCacheBool -eq $True) {\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'ClearCacheOnLogoff'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'DWord'; Value = 1 })\r\n            }   \r\n        }\r\n        \r\n        # Object Specific Settings or Standard VHDLocations/CCDLocations\r\n        If ($OSSGroupsArray.Count -gt 0) {\r\n            Write-Log -message \"Adding Object Specific Settings\"\r\n            $DomainName = Get-CimInstance -ClassName Win32_ComputerSystem | Select-Object -ExpandProperty Domain\r\n            Write-Log -message \"DomainName: $DomainName\"\r\n            \r\n            For ($i = 0; $i -lt $OSSGroupsArray.Count; $i++) {\r\n                Write-Log -message \"Getting SID for $($OSSGroupsArray[$i])\"        \r\n                $OSSGroupSID = Convert-GroupToSID -DomainName $DomainName -GroupName $OSSGroupsArray[$i]\r\n                [string]$LocalProfileContainerPath = $LocalProfileContainerPaths[$i]\r\n                [string]$LocalCloudCacheProfileContainerPath = $LocalCloudCacheProfileContainerPaths[$i]\r\n\r\n                If ($RemoteStorageAccountNamesArray) {\r\n                    [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]\r\n                    [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]\r\n                    [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath, $RemoteProfileContainerPath)\r\n                    [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath, $RemoteCloudCacheProfileContainerPath)\r\n                }\r\n                Else {\r\n                    [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath)\r\n                    [array]$CloudCacheProfileContainerPathsForGroup = @($LocalCloudCacheProfileContainerPath)\r\n                }\r\n\r\n                If ($CloudCacheBool -eq $True) {\r\n                    Write-Log -message \"Adding Cloud Cache Profile Container Settings: $OSSGroupSID : '$($CloudCacheProfileContainerPathsForGroup -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = \"HKLM:\\SOFTWARE\\FSLogix\\Profiles\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $CloudCacheProfileContainerPathsForGroup })\r\n                }\r\n                Else {\r\n                    Write-Log -message \"Adding Profile Container Settings: $OSSGroupSID : '$($ProfileContainerPathsForGroup -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = \"HKLM:\\SOFTWARE\\FSLogix\\Profiles\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $ProfileContainerPathsForGroup })\r\n                }   \r\n\r\n                If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n                    [string]$LocalOfficeContainerPath = $LocalOfficeContainerPaths[$i]\r\n                    [string]$LocalCloudCacheOfficeContainerPath = $LocalCloudCacheOfficeContainerPaths[$i]\r\n                    \r\n                    If ($RemoteStorageAccountNamesArray) {\r\n                        [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]\r\n                        [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]\r\n                        [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)\r\n                        [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath, $RemoteCloudCacheOfficeContainerPath)\r\n                    }\r\n                    Else {\r\n                        [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath)\r\n                        [array]$CloudCacheOfficeContainerPathsForGroup = @($LocalCloudCacheOfficeContainerPath)\r\n                    }\r\n                    \r\n                    If ($CloudCacheBool -eq $True) {\r\n                        Write-Log -message \"Adding Cloud Cache Office Container Settings: $OSSGroupSID : '$($CloudCacheOfficeContainerPathsForGroup -join \"', '\")'\"\r\n                        $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = \"HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $CloudCacheOfficeContainerPathsForGroup })\r\n                    }\r\n                    Else {\r\n                        Write-Log -message \"Adding Office Container Settings: $OSSGroupSID : '$($OfficeContainerPathsForGroup -join \"', '\")'\"\r\n                        $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = \"HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC\\ObjectSpecific\\$OSSGroupSID\"; PropertyType = 'MultiString'; Value = $OfficeContainerPathsForGroup })\r\n                    }\r\n                }  \r\n            }          \r\n        }\r\n        Else {\r\n            # No OSS Groups, use standard VHDLocations/CCDLocations\r\n            If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                $ProfileContainerPaths = $LocalProfileContainerPaths + $RemoteProfileContainerPaths\r\n                $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths + $RemoteCloudCacheProfileContainerPaths\r\n            }\r\n            Else {\r\n                $ProfileContainerPaths = $LocalProfileContainerPaths\r\n                $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths\r\n            }\r\n            \r\n            If ($CloudCacheBool -eq $True) {\r\n                Write-Log -message \"Adding Cloud Cache Profile Container Settings: '$($CloudCacheProfileContainerPaths -join \"', '\")'\"   \r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'MultiString'; Value = $CloudCacheProfileContainerPaths })             \r\n            }\r\n            Else {\r\n                Write-Log -message \"Adding Profile Container Settings: '$($ProfileContainerPaths -join \"', '\")'\"\r\n                $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'MultiString'; Value = $ProfileContainerPaths })\r\n            }\r\n            \r\n            If ($LocalOfficeContainerPaths.Count -gt 0) {\r\n                If ($RemoteStorageAccountNamesArray.Count -gt 0) {\r\n                    $OfficeContainerPaths = $LocalOfficeContainerPaths + $RemoteOfficeContainerPaths\r\n                    $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths + $RemoteCloudCacheOfficeContainerPaths\r\n                }\r\n                Else {\r\n                    $OfficeContainerPaths = $LocalOfficeContainerPaths\r\n                    $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths\r\n                }\r\n                \r\n                If ($CloudCacheBool -eq $True) {\r\n                    Write-Log -message \"Adding Cloud Cache Office Container Settings: '$($CloudCacheOfficeContainerPaths -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'CCDLocations'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'MultiString'; Value = $CloudCacheOfficeContainerPaths })\r\n                }\r\n                Else {\r\n                    Write-Log -message \"Adding Office Container Settings: '$($OfficeContainerPaths -join \"', '\")'\"\r\n                    $RegSettings.Add([PSCustomObject]@{ Name = 'VHDLocations'; Path = 'HKLM:\\SOFTWARE\\Policies\\FSLogix\\ODFC'; PropertyType = 'MultiString'; Value = $OfficeContainerPaths })\r\n                }\r\n            }    \r\n        }\r\n        \r\n        # FSLogix Redirections for Teams and Az CLI\r\n        If ($TeamsInstalled -or $AzCLIInstalled) {\r\n            $customRedirFolder = \"$env:ProgramData\\FSLogix_CustomRedirections\"\r\n            Write-Log -message \"Creating custom redirections.xml file in $customRedirFolder\"\r\n            If (-not (Test-Path $customRedirFolder )) {\r\n                New-Item -Path $customRedirFolder -ItemType Directory -Force | Out-Null\r\n            }\r\n            $customRedirFilePath = \"$customRedirFolder\\redirections.xml\"\r\n            $redirectionsXMLContent = $redirectionsXMLStart\r\n            if ($AzCLIInstalled) {\r\n                $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLExcludesAzCLI\r\n            }\r\n            if ($TeamsInstalled) {\r\n                $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLExcludesTeams\r\n            }\r\n            $redirectionsXMLContent = $redirectionsXMLContent + \"`n\" + $redirectionsXMLEnd\r\n            $redirectionsXMLContent | Out-File -FilePath $customRedirFilePath -Encoding unicode\r\n            \r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'RedirXMLSourceFolder'; Path = 'HKLM:\\SOFTWARE\\FSLogix\\Profiles'; PropertyType = 'String'; Value = $customRedirFolder })\r\n        }\r\n        \r\n        # Entra Kerberos Cloud Kerberos Ticket Retrieval\r\n        If ($IdentitySolution -match 'EntraKerberos') {\r\n            Write-Log -message \"Adding Entra Kerberos Cloud Kerberos Ticket Retrieval Local Group Policy\"\r\n            Set-LocalMachinePolicyValue -Key 'Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Kerberos\\Parameters' -Name 'CloudKerberosTicketRetrievalEnabled' -Value 1\r\n            Write-Log -message \"Adding Entra Kerberos Load Cred Key From Profile Setting\"\r\n            $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\\Software\\Policies\\Microsoft\\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })\r\n        }\r\n\r\n        # Cloud-only identity with storage keys (EntraId) requires credentials to be stored\r\n        # in Credential Manager via cmdkey so FSLogix can authenticate to Azure Files.\r\n        # \"Network Access: Do not allow storage of passwords and credentials for network\r\n        # authentication\" (DisableDomainCreds) is an older STIG control not commonly seen\r\n        # in current STIG releases, but may still be enforced by legacy baselines or other\r\n        # policy. This is a belt-and-suspenders measure: applying Disabled (0) via secedit\r\n        # ensures the Security Configuration Engine does not silently revert the setting on\r\n        # the next policy refresh, keeping cmdkey credentials intact across reboots.\r\n        If ($IdentitySolution -eq 'EntraId') {\r\n            Write-Log -message \"EntraId identity with storage keys detected - setting 'DisableDomainCreds' to 0 (Disabled) via secedit so FSLogix storage key credentials can be stored in Credential Manager.\"\r\n            $seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'\r\n            $seceditDb  = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.sdb'\r\n            $seceditLog = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.log'\r\n            $infLines = @(\r\n                '[Unicode]'\r\n                'Unicode=yes'\r\n                '[Version]'\r\n                'signature=\"$CHICAGO$\"'\r\n                'Revision=1'\r\n                '[Registry Values]'\r\n                'MACHINE\\System\\CurrentControlSet\\Control\\Lsa\\DisableDomainCreds=4,0'\r\n            )\r\n            [System.IO.File]::WriteAllLines($seceditInf, $infLines, [System.Text.Encoding]::Unicode)\r\n            $secedit = Start-Process -FilePath 'secedit.exe' `\r\n                -ArgumentList \"/configure /cfg `\"$seceditInf`\" /db `\"$seceditDb`\" /log `\"$seceditLog`\" /quiet\" `\r\n                -Wait -PassThru -NoNewWindow\r\n            Write-Log -Message \"secedit.exe exited with code [$($secedit.ExitCode)].\"\r\n            If ($secedit.ExitCode -ne 0) {\r\n                Write-Log -Category Warning -Message \"secedit returned a non-zero exit code. Review log at '$seceditLog'.\"\r\n            }\r\n            Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue\r\n        }\r\n\r\n        # Microsoft Defender Antivirus Local Group Policy exclusions for FSLogix\r\n        $LocalPathExclusions = @(\r\n            \"$env:ProgramData\\FSLogix\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\",\r\n            \"$env:SystemDrive\\Users\\*\\AppData\\Local\\FSLogix\",\r\n            \"$env:SystemRoot\\Temp\\*\\*.vhdx\",\r\n            \"$env:SystemDrive\\Users\\*\\AppData\\Local\\Temp\\*\\*.vhdx\"\r\n        )\r\n        \r\n        # Build UNC path exclusions for containers and their companion files.\r\n        $UncPathExclusions = @()\r\n        $ContainerPaths = @($LocalProfileContainerPaths) + @($LocalOfficeContainerPaths) + @($RemoteProfileContainerPaths) + @($RemoteOfficeContainerPaths)\r\n        $ContainerPatterns = '*.vhdx', '*.vhdx.lock', '*.vhdx.meta', '*.vhdx.metadata'\r\n        ForEach ($ContainerPath in ($ContainerPaths | Where-Object { $_ } | Select-Object -Unique)) {\r\n            $UncPathExclusions += $ContainerPatterns | ForEach-Object { \"$ContainerPath\\*\\$_\" }\r\n        }\r\n\r\n        [string[]]$PathExclusions = @($LocalPathExclusions + $UncPathExclusions | Select-Object -Unique)\r\n\r\n        $ProcessExclusions = @(\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxsvc.exe\",\r\n            \"$env:ProgramFiles\\FSLogix\\Apps\\frxccds.exe\"\r\n        )\r\n\r\n        Try {\r\n            $DefenderExclusionsKey = 'Software\\Policies\\Microsoft\\Windows Defender\\Exclusions'\r\n            Set-LocalMachinePolicyValue -Key $DefenderExclusionsKey -Name 'Exclusions_Paths' -Value 1\r\n            Set-LocalMachinePolicyValue -Key $DefenderExclusionsKey -Name 'Exclusions_Processes' -Value 1\r\n            Set-LocalMachinePolicyValue -Key \"$DefenderExclusionsKey\\Paths\" -Name $PathExclusions -Value '' -Type String\r\n            Set-LocalMachinePolicyValue -Key \"$DefenderExclusionsKey\\Processes\" -Name $ProcessExclusions -Value '' -Type String\r\n            Write-Log -Message \"Configured $($PathExclusions.Count) Defender path exclusions and $($ProcessExclusions.Count) process exclusions in Local Group Policy\"\r\n        }\r\n        Catch {\r\n            Write-Log -Category Warning -Message \"Failed to configure Defender exclusions in Local Group Policy: $_\"\r\n        }\r\n\r\n        # Add local administrator to FSLogix exclude lists\r\n        $LocalAdministrator = (Get-LocalUser | Where-Object { $_.SID -like '*-500' }).Name\r\n        $LocalGroups = 'FSLogix Profile Exclude List', 'FSLogix ODFC Exclude List'\r\n        ForEach ($Group in $LocalGroups) {\r\n            If (-not (Get-LocalGroupMember -Group $Group -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$LocalAdministrator\" })) {\r\n                Write-Log -message \"Adding $LocalAdministrator to $Group\"\r\n                Add-LocalGroupMember -Group $Group -Member $LocalAdministrator -ErrorAction SilentlyContinue\r\n            }\r\n        }\r\n    }\r\n\r\n    Try {\r\n        $GroupPolicyUpdate = Start-Process -FilePath 'gpupdate.exe' -ArgumentList '/target:computer /force /wait:60' -Wait -PassThru -NoNewWindow\r\n        If ($GroupPolicyUpdate.ExitCode -ne 0) {\r\n            Throw \"gpupdate.exe exited with code $($GroupPolicyUpdate.ExitCode)\"\r\n        }\r\n        Write-Log -Message \"Computer Group Policy refreshed successfully\"\r\n    }\r\n    Catch {\r\n        Write-Log -Category Warning -Message \"Failed to refresh computer Group Policy: $_\"\r\n    }\r\n    \r\n    # Apply all registry settings\r\n    ForEach ($Setting in $RegSettings) {\r\n        Set-RegistryValue -Name $Setting.Name -Path $Setting.Path -PropertyType $Setting.PropertyType -Value $Setting.Value\r\n    }\r\n    \r\n    # Resize OS Disk\r\n    Write-Log -Message \"Resizing OS Disk\"\r\n    try {\r\n        $DriveLetter = $env:SystemDrive.TrimEnd(':')\r\n        Update-HostStorageCache -ErrorAction SilentlyContinue\r\n        $Part = Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop\r\n        $CurrentSizeGB = [math]::Round($Part.Size / 1GB, 2)\r\n        Write-Log -Message \"Current partition size: $CurrentSizeGB GB (drive: $DriveLetter)\"\r\n\r\n        # Use diskpart to extend - bypasses VDS entirely, no timing race on first boot.\r\n        $diskpartScript = \"select disk $($Part.DiskNumber)`r`nselect partition $($Part.PartitionNumber)`r`nextend\"\r\n        $scriptPath = Join-Path $env:TEMP 'diskpart_extend.txt'\r\n        [System.IO.File]::WriteAllText($scriptPath, $diskpartScript, [System.Text.Encoding]::ASCII)\r\n        $diskpartOutput = & diskpart /s $scriptPath 2>&1\r\n        Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue\r\n        Write-Log -Message \"Diskpart result: $($diskpartOutput -join ' | ')\"\r\n\r\n        $PartAfter = Get-Partition -DriveLetter $DriveLetter -ErrorAction SilentlyContinue\r\n        if ($PartAfter -and $PartAfter.Size -gt $Part.Size) {\r\n            $NewSizeGB = [math]::Round($PartAfter.Size / 1GB, 2)\r\n            Write-Log -Message \"OS Disk resized successfully: $CurrentSizeGB GB -> $NewSizeGB GB\"\r\n        } else {\r\n            Write-Log -Message \"OS Disk is already at maximum size. No resize needed.\"\r\n        }\r\n    }\r\n    catch {\r\n        Write-Log -Message \"Failed to resize OS Disk: $($_.Exception.Message)\" -Category 'Warning'\r\n        Write-Log -Message \"Continuing with deployment...\"\r\n    }\r\n    \r\n    Write-Log -Message \"Phase 1: Session Host Configuration Complete\"\r\n    \r\n    #endregion Phase 1: Session Host Configuration\r\n\r\n    If ([string]::IsNullOrWhiteSpace($RegistrationToken)) {\r\n        Throw 'RegistrationToken is required.'\r\n    }\r\n\r\n    If ([string]::IsNullOrWhiteSpace($AgentBootLoaderUrl)) {\r\n        Throw 'AgentBootLoaderUrl is required.'\r\n    }\r\n    \r\n    #region Phase 2: AVD Agent Installation and Registration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Phase 2: AVD Agent Installation'\r\n    Write-Log -Message '========================================='\r\n    \r\n    # Install RDS-RD-Server feature if this is a Server OS\r\n    $IsServer = (Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion' -ErrorAction SilentlyContinue).InstallationType -eq 'Server'\r\n    Write-Log -Message \"Operating System Type: $(if ($IsServer) { 'Server' } else { 'Client' })\"\r\n    if ($IsServer) {\r\n        $rdFeature = Get-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction SilentlyContinue\r\n        if ($rdFeature -and -not $rdFeature.Installed) {\r\n            Write-Log -Message 'Installing RDS-RD-Server feature'\r\n            Install-WindowsFeature -Name 'RDS-RD-Server' -ErrorAction Stop | Out-Null\r\n            Write-Log -Message 'RDS-RD-Server feature installed successfully'\r\n        }\r\n    }\r\n    \r\n    # Check if already registered\r\n    $RDInfraReg = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent' -ErrorAction SilentlyContinue\r\n    \r\n    if ($RDInfraReg -and $RDInfraReg.IsRegistered -eq 1 -and $RDInfraReg.RegistrationToken -eq '') {\r\n        Write-Log -Message 'VM is already registered with RDInfraAgent. Skipping installation.'\r\n        exit 0\r\n    }\r\n    \r\n    Write-Log -Message 'VM is not registered. Proceeding with agent installation...'\r\n    \r\n    # Create temporary download folder\r\n    $DownloadFolder = Join-Path -Path $env:TEMP -ChildPath \"AVDAgentInstall_$(Get-Date -Format 'yyyyMMddHHmmss')\"\r\n    New-Item -Path $DownloadFolder -ItemType Directory -Force | Out-Null\r\n    \r\n    # Get Agent Installer with endpoint-first, URL-fallback logic\r\n    $AgentInstallerPath = $null\r\n    $BootLoaderInstallerPath = $null\r\n    \r\n    # Try endpoint first\r\n    Write-Log -Message 'Attempting to download latest agent from Azure endpoint'\r\n    $AgentInstallerPath = Get-LatestAgentInstaller -RegistrationToken $RegistrationToken -DownloadFolder $DownloadFolder\r\n        \r\n    # If endpoint failed and we have a URL, fall back to URL\r\n    if (-not $AgentInstallerPath -and -not [string]::IsNullOrEmpty($AgentUrl)) {\r\n        Write-Log -Message 'Endpoint download failed. Falling back to provided AgentUrl'\r\n        $AgentInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgent.msi'\r\n        $Success = Get-InstallerFromUrl -Url $AgentUrl -DestinationPath $AgentInstallerPath -DisplayName 'RD Agent'            \r\n        if (-not $Success) {\r\n            $AgentInstallerPath = $null\r\n            Write-Log -Category Warning -Message \"Failed to download RD Agent from fallback URL: $AgentUrl\"\r\n        }\r\n    }\r\n    \r\n    # Final check - if we still don't have the agent installer, fail\r\n    if (-not $AgentInstallerPath) {\r\n        throw 'Failed to obtain RD Agent installer from all available sources (Azure endpoint and AgentUrl)'\r\n    }\r\n    \r\n    # Get Agent Boot Loader Installer\r\n    Write-Log -Message 'Downloading agent boot loader from provided URL'\r\n    $BootLoaderInstallerPath = Join-Path -Path $DownloadFolder -ChildPath 'RDAgentBootLoader.msi'\r\n    $Success = Get-InstallerFromUrl -Url $AgentBootLoaderUrl -DestinationPath $BootLoaderInstallerPath -DisplayName 'RD Agent Boot Loader'\r\n\r\n    if (-not $Success) {\r\n        throw 'Failed to download RD Agent Boot Loader'\r\n    }\r\n\r\n    # Final verification that we have both installers\r\n    if (-not $AgentInstallerPath -or -not $BootLoaderInstallerPath) {\r\n        throw 'Failed to obtain required installers. Agent: ' + $(if ($AgentInstallerPath) { 'OK' } else { 'FAILED' }) + ', BootLoader: ' + $(if ($BootLoaderInstallerPath) { 'OK' } else { 'FAILED' })\r\n    }\r\n    \r\n    # Install RD Infra Agent\r\n    Write-Log -Message \"Installing RD Infra Agent from: $AgentInstallerPath\"\r\n    \r\n    Invoke-MsiWithRetry `\r\n        -DisplayName 'RD Infra Agent' `\r\n        -ArgumentList @(\"/i\", $AgentInstallerPath, \"/quiet\", \"/qn\", \"/norestart\", \"/passive\", \"REGISTRATIONTOKEN=$RegistrationToken\") `\r\n        -LogPath \"$env:TEMP\\RDAgentInstall.log\"\r\n    \r\n    # Install RD Agent Boot Loader\r\n    Write-Log -Message \"Installing RD Agent Boot Loader from: $BootLoaderInstallerPath\"\r\n    \r\n    Invoke-MsiWithRetry `\r\n        -DisplayName 'RD Agent Boot Loader' `\r\n        -ArgumentList @(\"/i\", $BootLoaderInstallerPath, \"/quiet\", \"/qn\", \"/norestart\", \"/passive\") `\r\n        -LogPath \"$env:TEMP\\RDAgentBootLoaderInstall.log\"\r\n    \r\n    # Wait for and start the boot loader service\r\n    Wait-ForBootLoaderService\r\n    \r\n    # Clean up download folder\r\n    try {\r\n        Write-Log -Message \"Cleaning up download folder: $DownloadFolder\"\r\n        Remove-Item -Path $DownloadFolder -Force -Recurse -ErrorAction SilentlyContinue\r\n    }\r\n    catch {\r\n        Write-Log -Message \"Warning: Failed to clean up download folder: $($_.Exception.Message)\"\r\n    }\r\n      \r\n    # Get and log the session host name\r\n    $SessionHostName = Get-SessionHostName\r\n    Write-Log -Message \"Successfully registered session host: $SessionHostName\"\r\n    \r\n    Write-Log -Message \"Phase 2: AVD Agent Installation Complete\"\r\n    \r\n    #endregion Phase 2: AVD Agent Installation and Registration\r\n    \r\n    Write-Log -Message ''\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message 'Session Host Initialization Complete'\r\n    Write-Log -Message '========================================='\r\n    Write-Log -Message \"Log file location: $Script:LogPath\"    \r\n    exit 0\r\n}\r\ncatch {\r\n    Write-Log -Category Error -Message \"Initialization failed: $($_.Exception.Message)\"\r\n    Write-Log -Category Error -Message \"Stack Trace: $($_.ScriptStackTrace)\"\r\n    Write-Log -Message \"Log file location: $Script:LogPath\"\r\n    Write-Error -Message \"Initialization failed: $($_.Exception.Message). Review $Script:LogPath on the VM.\" -ErrorAction Continue\r\n    exit 1\r\n}\r\n\r\n#endregion Main Script\r\n",
@@ -1857,7 +2285,420 @@
                     "effectiveFslogixRemoteStorageAccountResourceIds": "[if(equals(parameters('identitySolution'), 'EntraId'), take(parameters('fslogixRemoteStorageAccountResourceIds'), 1), parameters('fslogixRemoteStorageAccountResourceIds'))]",
                     "identityType": "[if(if(or(not(contains(parameters('identitySolution'), 'DomainServices')), parameters('enableMonitoring')), true(), false()), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'SystemAssigned, UserAssigned', 'SystemAssigned'), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'UserAssigned', 'None'))]",
                     "userAssignedIdentities": "[if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), createObject(format('{0}', parameters('artifactsUserAssignedIdentityResourceId')), createObject()), createObject())]",
-                    "identity": "[if(not(equals(variables('identityType'), 'None')), createObject('type', variables('identityType'), 'userAssignedIdentities', if(not(empty(variables('userAssignedIdentities'))), variables('userAssignedIdentities'), null())), null())]"
+                    "identity": "[if(not(equals(variables('identityType'), 'None')), createObject('type', variables('identityType'), 'userAssignedIdentities', if(not(empty(variables('userAssignedIdentities'))), variables('userAssignedIdentities'), null())), null())]",
+                    "_1._2": {
+                      "defaults": {
+                        "components": [
+                          "resourceType",
+                          "workload",
+                          "purpose",
+                          "location"
+                        ],
+                        "delimiter": "-",
+                        "workload": "avd"
+                      },
+                      "identifiers": {
+                        "imageManagement": "image-management",
+                        "replacerFallback": "replacer",
+                        "sharedFslogix": "fslogix"
+                      },
+                      "limits": {
+                        "keyVault": 24,
+                        "functionApp": 60,
+                        "storageAccount": 24,
+                        "deploymentVm": 15,
+                        "fslogixStoragePrefix": 13,
+                        "uniqueSuffix": 6,
+                        "imageManagementStoragePrefix": 5,
+                        "imageManagementStorageLocation": 4
+                      },
+                      "resources": {
+                        "operationsResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "operations"
+                          ]
+                        },
+                        "monitoringResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "monitoring"
+                          ]
+                        },
+                        "controlPlaneResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "control",
+                            "plane"
+                          ]
+                        },
+                        "globalFeedResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "global",
+                            "feed"
+                          ]
+                        },
+                        "globalFeedWorkspace": {
+                          "type": "workspaces",
+                          "purpose": [
+                            "global",
+                            "feed"
+                          ]
+                        },
+                        "workspace": {
+                          "type": "workspaces",
+                          "purpose": []
+                        },
+                        "hostWorkspace": {
+                          "type": "workspaces",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "deploymentResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "{identifier}",
+                            "deployment"
+                          ]
+                        },
+                        "deploymentVm": {
+                          "type": "",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "consolidatedResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "hostsResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "{identifier}",
+                            "hosts"
+                          ]
+                        },
+                        "storageResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "{identifier}",
+                            "storage"
+                          ]
+                        },
+                        "secretsKeyVault": {
+                          "type": "keyVaults",
+                          "purpose": [
+                            "sec",
+                            "{unique}"
+                          ]
+                        },
+                        "encryptionKeyVault": {
+                          "type": "keyVaults",
+                          "purpose": [
+                            "enc",
+                            "{unique}"
+                          ]
+                        },
+                        "dataCollectionEndpoint": {
+                          "type": "dataCollectionEndpoints",
+                          "purpose": []
+                        },
+                        "logAnalyticsWorkspace": {
+                          "type": "logAnalyticsWorkspaces",
+                          "purpose": []
+                        },
+                        "hostPool": {
+                          "type": "hostPools",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "desktopApplicationGroup": {
+                          "type": "desktopApplicationGroups",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "scalingPlan": {
+                          "type": "scalingPlans",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "vmBackupVault": {
+                          "type": "recoveryServicesVaults",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "filesBackupVault": {
+                          "type": "recoveryServicesVaults",
+                          "purpose": [
+                            "files"
+                          ]
+                        },
+                        "identityPattern": {
+                          "type": "userAssignedIdentities",
+                          "purpose": [
+                            "{identifier}",
+                            "TOKEN"
+                          ]
+                        },
+                        "availabilitySet": {
+                          "type": "availabilitySets",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "diskAccess": {
+                          "type": "diskAccesses",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "diskEncryptionSetPattern": {
+                          "type": "diskEncryptionSets",
+                          "purpose": [
+                            "{identifier}",
+                            "TOKEN"
+                          ]
+                        },
+                        "netAppAccount": {
+                          "type": "netAppAccounts",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "netAppCapacityPool": {
+                          "type": "netAppCapacityPools",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "imageManagementResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "imageGallery": {
+                          "type": "computeGalleries",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "imageBlobIdentity": {
+                          "type": "userAssignedIdentities",
+                          "purpose": [
+                            "{identifier}-blob-access"
+                          ]
+                        },
+                        "imageStorageEncryptionIdentity": {
+                          "type": "userAssignedIdentities",
+                          "purpose": [
+                            "{identifier}-storage-cmk"
+                          ]
+                        },
+                        "imageBuildResourceGroup": {
+                          "type": "resourceGroups",
+                          "purpose": [
+                            "image-builds"
+                          ]
+                        },
+                        "imageGalleryCustomerKeys": {
+                          "type": "diskEncryptionSets",
+                          "purpose": [
+                            "{identifier}-customer-keys"
+                          ]
+                        },
+                        "imageGalleryDoubleEncryptionKeys": {
+                          "type": "diskEncryptionSets",
+                          "purpose": [
+                            "{identifier}-platform-and-customer-keys"
+                          ]
+                        },
+                        "imageGalleryConfidentialKeys": {
+                          "type": "diskEncryptionSets",
+                          "purpose": [
+                            "{identifier}-confidential-vm"
+                          ]
+                        },
+                        "replacerFunctionApp": {
+                          "type": "functionApps",
+                          "purpose": [
+                            "{identifier}",
+                            "shr",
+                            "{unique}"
+                          ]
+                        },
+                        "replacerStorage": {
+                          "type": "",
+                          "purpose": [
+                            "{storageIdentifier}shr{unique}"
+                          ],
+                          "format": "storage"
+                        },
+                        "replacerStorageIdentity": {
+                          "type": "userAssignedIdentities",
+                          "purpose": [
+                            "{identifier}",
+                            "shr",
+                            "storage",
+                            "cmk"
+                          ]
+                        },
+                        "replacerHostingPlan": {
+                          "type": "appServicePlans",
+                          "purpose": []
+                        },
+                        "replacerInsights": {
+                          "type": "applicationInsights",
+                          "purpose": [
+                            "{identifier}",
+                            "shr",
+                            "{unique}"
+                          ]
+                        },
+                        "sessionHostsTemplateSpec": {
+                          "type": "templateSpecs",
+                          "purpose": [
+                            "session-hosts"
+                          ]
+                        },
+                        "networkNatGateway": {
+                          "type": "natGateways",
+                          "purpose": []
+                        },
+                        "networkPublicIP": {
+                          "type": "publicIPAddresses",
+                          "purpose": []
+                        },
+                        "networkRouteTable": {
+                          "type": "routeTables",
+                          "purpose": []
+                        },
+                        "networkSecurityGroup": {
+                          "type": "networkSecurityGroups",
+                          "purpose": []
+                        },
+                        "pocVirtualNetwork": {
+                          "type": "virtualNetworks",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "pocHostsSubnet": {
+                          "type": "subnets",
+                          "purpose": [
+                            "{identifier}",
+                            "hosts"
+                          ]
+                        },
+                        "pocNatGateway": {
+                          "type": "natGateways",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "pocPublicIP": {
+                          "type": "publicIPAddresses",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "pocSecurityGroup": {
+                          "type": "networkSecurityGroups",
+                          "purpose": [
+                            "{identifier}"
+                          ]
+                        },
+                        "alertsAutomation": {
+                          "type": "automationAccounts",
+                          "purpose": [
+                            "alerts"
+                          ]
+                        },
+                        "quotaAutomation": {
+                          "type": "automationAccounts",
+                          "purpose": [
+                            "sqm",
+                            "{identifier}"
+                          ],
+                          "omitWorkload": true,
+                          "omitEmptyPurposeParts": true
+                        },
+                        "routesAutomation": {
+                          "type": "automationAccounts",
+                          "purpose": [
+                            "urt",
+                            "{unique}"
+                          ],
+                          "omitWorkload": true
+                        }
+                      },
+                      "patterns": {
+                        "virtualMachine": "SHNAME",
+                        "osDisk": "SHNAME-osdisk",
+                        "nic": "SHNAME-nic",
+                        "standaloneAvailabilitySet": "avset-##",
+                        "privateEndpointFirst": "{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID",
+                        "privateEndpointLast": "RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}",
+                        "privateEndpointNicFirst": "{networkInterfaces}-{endpoint}",
+                        "privateEndpointNicLast": "{endpoint}-{networkInterfaces}",
+                        "deploymentDisk": "{vm}-{osdisks}",
+                        "deploymentNic": "{vm}-{networkInterfaces}",
+                        "availabilitySet": "{name}{delimiter}##",
+                        "policyIdentityPurpose": "policy{delimiter}remediation",
+                        "deploymentIdentityPurpose": "deployment",
+                        "monitorIdentityPurpose": "ama",
+                        "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
+                        "customerDiskPurpose": "customer{delimiter}keys",
+                        "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
+                        "fslogixStoragePrefix": "fslogix{unique}",
+                        "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
+                        "vmKey": "{identifier}-vm-cmk",
+                        "confidentialVmKey": "{identifier}-cvm-cmk",
+                        "recoveryServicesKey": "{identifier}-rsv-cmk",
+                        "imageStorageKey": "{identifier}-storage-cmk",
+                        "replacerStorageKey": "{identifier}-shr-storage-cmk",
+                        "imageGalleryKey": "{identifier}-gallery-cmk",
+                        "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
+                        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
+                        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
+                        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+                        "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
+                        "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
+                        "imageBuildVm": "{prefix}img-{unique}",
+                        "imageBuildOrchestrationVm": "{prefix}orc-{unique}",
+                        "deploymentPrefix": "{prefix}-",
+                        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}",
+                        "functionInsightsOverride": "{name}-insights"
+                      },
+                      "imageStoragePurposes": {
+                        "artifacts": "imgassets",
+                        "logs": "imglogs"
+                      },
+                      "templateSpecs": {
+                        "sharedServices": "shared-services",
+                        "networking": "networking",
+                        "imageBuild": "custom-image",
+                        "hostPool": "hostpool",
+                        "hostPoolPoc": "hostpool-poc",
+                        "automatedHostPool": "automated-hostpool",
+                        "runCommandsOnVms": "run-commands-on-vms",
+                        "updateStorageAccountKeyOnSessionHosts": "update-storage-account-key-on-session-hosts",
+                        "fslogixStorage": "fslogix-storage",
+                        "storageQuotaManager": "storage-quota-manager",
+                        "sessionHostReplacer": "session-host-replacer",
+                        "sessionHostMaintenance": "session-host-maintenance",
+                        "sessionHostPolicy": "session-host-policy"
+                      }
+                    },
+                    "namingPolicy": "[variables('_1._2')]"
                   },
                   "resources": {
                     "hostPool": {
@@ -2335,8 +3176,10 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.48.1.52935",
-                              "templateHash": "17507927205975248211"
-                            }
+                              "templateHash": "12951260404466020760"
+                            },
+                            "name": "Session host customization orchestration",
+                            "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
                           },
                           "definitions": {
                             "artifactCustomizationType": {
@@ -2370,6 +3213,7 @@
                                 }
                               },
                               "metadata": {
+                                "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                                 "__bicep_imported_from!": {
                                   "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
                                 }
@@ -2378,23 +3222,38 @@
                           },
                           "parameters": {
                             "artifactsContainerUri": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Base URI of the existing artifact container used to resolve relative customization blob names."
+                              }
                             },
                             "customizations": {
                               "type": "array",
                               "items": {
                                 "$ref": "#/definitions/artifactCustomizationType"
+                              },
+                              "metadata": {
+                                "description": "Required. Ordered objects with name and blobNameOrUri, plus optional arguments and comma-separated successExitCodes; relative blob names use artifactsContainerUri."
                               }
                             },
                             "location": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]"
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the resources deployed by this module."
+                              }
                             },
                             "userAssignedIdentityClientId": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Client ID of the identity attached to the VM and authorized for the requested operations."
+                              }
                             },
                             "virtualMachineName": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the existing VM in the deployment resource group."
+                              }
                             }
                           },
                           "variables": {
@@ -2478,18 +3337,29 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.48.1.52935",
-                              "templateHash": "11990160868158661460"
-                            }
+                              "templateHash": "5781275916356412343"
+                            },
+                            "name": "OS disk network update orchestration",
+                            "description": "Reads creation data from an existing managed OS disk and forwards it to the disk network-access update in the deployment resource group."
                           },
                           "parameters": {
                             "diskAccessId": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Resource ID of an existing disk access resource; empty selects DenyAll instead of AllowPrivate network access."
+                              }
                             },
                             "diskName": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the existing managed OS disk in the deployment resource group."
+                              }
                             },
                             "location": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Azure region for the resources deployed by this module."
+                              }
                             }
                           },
                           "resources": {
@@ -2529,21 +3399,35 @@
                                     "_generator": {
                                       "name": "bicep",
                                       "version": "0.48.1.52935",
-                                      "templateHash": "3284460443355974699"
-                                    }
+                                      "templateHash": "5495749589252458864"
+                                    },
+                                    "name": "OS disk network access update",
+                                    "description": "Updates a managed disk using preserved creation data, disables public network access, and selects private-only or deny-all network access according to the supplied disk access resource ID."
                                   },
                                   "parameters": {
                                     "creationData": {
-                                      "type": "object"
+                                      "type": "object",
+                                      "metadata": {
+                                        "description": "Required. Existing disk creationData object read from the managed disk and preserved in the update request."
+                                      }
                                     },
                                     "diskName": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "metadata": {
+                                        "description": "Required. Name of the existing managed OS disk in the deployment resource group."
+                                      }
                                     },
                                     "diskAccessId": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "metadata": {
+                                        "description": "Required. Resource ID of an existing disk access resource; empty selects DenyAll instead of AllowPrivate network access."
+                                      }
                                     },
                                     "location": {
-                                      "type": "string"
+                                      "type": "string",
+                                      "metadata": {
+                                        "description": "Required. Azure region for the resources deployed by this module."
+                                      }
                                     }
                                   },
                                   "resources": [
@@ -2615,24 +3499,41 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.48.1.52935",
-                              "templateHash": "11981478169332830810"
-                            }
+                              "templateHash": "17455206039178087163"
+                            },
+                            "name": "Session host VM backup registration",
+                            "description": "Protects named existing session-host VMs using an existing Recovery Services vault and VM backup policy in the deployment resource group."
                           },
                           "parameters": {
                             "policyName": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the existing VM backup policy in the Recovery Services vault."
+                              }
                             },
                             "recoveryServicesVaultName": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the existing Recovery Services vault in the deployment resource group."
+                              }
                             },
                             "resourceGroupHosts": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Name of the existing resource group containing the session-host VMs in this subscription."
+                              }
                             },
                             "virtualMachineNames": {
-                              "type": "array"
+                              "type": "array",
+                              "metadata": {
+                                "description": "Required. Array of existing session-host VM name strings in the hosts resource group."
+                              }
                             },
                             "hostPoolResourceId": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Resource ID of the associated AVD host pool, used for resource ownership tags."
+                              }
                             }
                           },
                           "variables": {
@@ -2665,6 +3566,9 @@
                   "outputs": {
                     "virtualMachineNames": {
                       "type": "array",
+                      "metadata": {
+                        "description": "VM resource name strings in sessionHostNames order after applying virtualMachineNameConv."
+                      },
                       "copy": {
                         "count": "[length(range(0, variables('sessionHostCount')))]",
                         "input": "[variables('virtualMachineNames')[range(0, variables('sessionHostCount'))[copyIndex()]]]"
@@ -2706,18 +3610,26 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "5217295984752693586"
-                    }
+                      "templateHash": "16642941783329896103"
+                    },
+                    "name": "Session host batch output adapter",
+                    "description": "Flattens per-batch VM name arrays into one ordered VM name array without deploying resources."
                   },
                   "parameters": {
                     "virtualMachineNamesPerBatch": {
-                      "type": "array"
+                      "type": "array",
+                      "metadata": {
+                        "description": "Required. Array of per-batch VM name arrays, in deployment batch order."
+                      }
                     }
                   },
                   "resources": [],
                   "outputs": {
                     "virtualMachineNames": {
                       "type": "array",
+                      "metadata": {
+                        "description": "Flattened VM name strings preserving batch order and name order within each batch."
+                      },
                       "value": "[flatten(parameters('virtualMachineNamesPerBatch'))]"
                     }
                   }
@@ -2731,6 +3643,9 @@
           "outputs": {
             "virtualMachineNames": {
               "type": "array",
+              "metadata": {
+                "description": "Flat VM resource name array preserving batch order and the order of sessionHostNames within each batch."
+              },
               "value": "[reference('getFlattenedVmNamesArray').outputs.virtualMachineNames.value]"
             }
           }

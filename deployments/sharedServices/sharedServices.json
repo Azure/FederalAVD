@@ -6,53 +6,30 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "11322456927092920359"
+      "templateHash": "16967836600364510614"
+    }
+  },
+  "definitions": {
+    "publicNetworkAccessMode": {
+      "type": "string",
+      "allowedValues": [
+        "Auto",
+        "Disabled",
+        "Enabled",
+        "EnabledWithRestrictions"
+      ],
+      "metadata": {
+        "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/networking/functions.bicep"
+        }
+      }
     }
   },
   "functions": [
     {
-      "namespace": "__bicep",
+      "namespace": "_1",
       "members": {
-        "resolveComponent": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "comp"
-            },
-            {
-              "type": "string",
-              "name": "rtCode"
-            },
-            {
-              "type": "string",
-              "name": "component"
-            },
-            {
-              "type": "string",
-              "name": "loc"
-            },
-            {
-              "type": "string",
-              "name": "ff1"
-            },
-            {
-              "type": "string",
-              "name": "env"
-            },
-            {
-              "type": "string",
-              "name": "ff2"
-            },
-            {
-              "type": "string",
-              "name": "workload"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
-          }
-        },
         "buildCustomName": {
           "parameters": [
             {
@@ -94,7 +71,88 @@
           ],
           "output": {
             "type": "string",
-            "value": "[join(filter(map(parameters('components'), lambda('comp', __bicep.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+            "value": "[join(filter(map(parameters('components'), lambda('comp', _1.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+          },
+          "metadata": {
+            "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "cnv": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.buildCustomName(filter(parameters('components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('delimiter'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
+          },
+          "metadata": {
+            "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "formatName": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "name"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('namingPolicy').limits.keyVault), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('namingPolicy').limits.functionApp), if(equals(coalesce(tryGet(parameters('rule'), 'format'), ''), 'storage'), take(toLower(if(empty(parameters('delimiter')), parameters('name'), replace(parameters('name'), parameters('delimiter'), ''))), variables('namingPolicy').limits.storageAccount), parameters('name')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
           }
         },
         "kvSanitize": {
@@ -107,6 +165,337 @@
           "output": {
             "type": "string",
             "value": "[replace(replace(parameters('s'), '_', '-'), '.', '-')]"
+          },
+          "metadata": {
+            "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "namePattern": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "pattern"
+            },
+            {
+              "type": "object",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.render(variables('namingPolicy').patterns[parameters('pattern')], union(createObject('delimiter', variables('namingPolicy').defaults.delimiter), parameters('context')))]"
+          },
+          "metadata": {
+            "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "render": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "pattern"
+            },
+            {
+              "type": "object",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[reduce(items(parameters('context')), parameters('pattern'), lambda('result', 'item', replace(lambdaVariables('result'), format('{{{0}}}', lambdaVariables('item').key), string(lambdaVariables('item').value))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resolveComponent": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "comp"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resolvedResourceName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'), parameters('convention').delimiter)]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resourcePurpose": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[join(filter(map(parameters('rule').purpose, lambda('part', _1.render(lambdaVariables('part'), createObject('identifier', parameters('identifier'), 'storageIdentifier', replace(parameters('identifier'), '-', ''), 'unique', parameters('unique'))))), lambda('part', or(not(coalesce(tryGet(parameters('rule'), 'omitEmptyPurposeParts'), false())), not(empty(lambdaVariables('part')))))), parameters('delimiter'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        }
+      }
+    },
+    {
+      "namespace": "__bicep",
+      "members": {
+        "privateEndpointNicPattern": {
+          "parameters": [
+            {
+              "type": "bool",
+              "name": "first"
+            },
+            {
+              "type": "string",
+              "name": "privateEndpointCode"
+            },
+            {
+              "type": "string",
+              "name": "networkInterfaceCode"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.namePattern(if(parameters('first'), 'privateEndpointNicFirst', 'privateEndpointNicLast'), createObject('networkInterfaces', parameters('networkInterfaceCode'), 'endpoint', __bicep.privateEndpointPattern(parameters('first'), parameters('privateEndpointCode'))))]"
+          },
+          "metadata": {
+            "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "privateEndpointPattern": {
+          "parameters": [
+            {
+              "type": "bool",
+              "name": "first"
+            },
+            {
+              "type": "string",
+              "name": "privateEndpointCode"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.namePattern(if(parameters('first'), 'privateEndpointFirst', 'privateEndpointLast'), createObject('privateEndpoints', parameters('privateEndpointCode')))]"
+          },
+          "metadata": {
+            "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "regionAbbreviation": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[variables('_1.locationDefinitions')[if(startsWith(toLower(parameters('cloud')), 'us'), 'other', parameters('cloud'))][if(startsWith(toLower(parameters('cloud')), 'us'), substring(parameters('region'), 5, max(sub(length(parameters('region')), 5), 0)), parameters('region'))].abbreviation]"
+          },
+          "metadata": {
+            "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resolveConvention": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[union(variables('namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
+          },
+          "metadata": {
+            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resourceName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "role"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.resolvedResourceName(__bicep.resolveConvention(parameters('convention')), variables('namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
+          },
+          "metadata": {
+            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault, Function App or Replacer-storage formatting rule.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resourceTypeFirst": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            }
+          ],
+          "output": {
+            "type": "bool",
+            "value": "[or(empty(filter(__bicep.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), not(equals(last(filter(__bicep.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), 'resourceType')))]"
+          },
+          "metadata": {
+            "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "scopedUnique": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "subscriptionId"
+            },
+            {
+              "type": "string",
+              "name": "resourceGroupName"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(not(contains(__bicep.resolveConvention(parameters('convention')).components, 'location')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName')))]"
+          },
+          "metadata": {
+            "description": "Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
           }
         }
       }
@@ -219,7 +608,7 @@
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Optional. Deploy private endpoints for the Key Vaults. When true, public network access is disabled on both Key Vaults."
+        "description": "Optional. Deploy private endpoints for the Key Vaults. Public access is controlled separately by paasPublicNetworkAccess."
       }
     },
     "privateEndpointSubnetResourceId": {
@@ -243,11 +632,18 @@
         "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary."
       }
     },
+    "paasPublicNetworkAccess": {
+      "$ref": "#/definitions/publicNetworkAccessMode",
+      "defaultValue": "Auto",
+      "metadata": {
+        "description": "Optional. Public-access mode for newly deployed Key Vaults. Auto preserves legacy behavior; IP rules remain configured and AzureServices bypass still applies."
+      }
+    },
     "deployMonitoring": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as \"logAnalyticsWorkspaceResourceId\", \"avdInsightsDataCollectionRuleResourceId\", and \"dataCollectionEndpointResourceId\" - pass those to \"existingLogAnalyticsWorkspaceResourceId\", \"existingAVDInsightsDataCollectionRuleResourceId\", and \"existingDataCollectionEndpointResourceId\" on the host pool deployment (and \"logAnalyticsWorkspaceResourceId\" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own."
+        "description": "Optional. Create shared Log Analytics, AVD Insights DCR, and DCE resources in a monitoring resource group; pass their output IDs to consuming deployments."
       }
     },
     "logAnalyticsWorkspaceSubscriptionId": {
@@ -298,7 +694,7 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when \"deployMonitoring\" is false."
+        "description": "Optional. Existing platform-managed AMPLS for the deployed workspace and DCE. Ignored when deployMonitoring is false; the platform owns private connectivity and DNS."
       }
     },
     "manageAvdWorkspace": {
@@ -510,7 +906,7 @@
         "workload": "avd"
       },
       "metadata": {
-        "description": "Optional. Naming convention controlling how all resources in this deployment are named.\nThe default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.\nNote: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.\nComponent requirements:\n  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they\n                 produce identical names and the deployment fails.\n  resourceType — Strongly recommended. Without it resource names carry no type identifier.\n  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds\n                 so cross-region deployments produce distinct Key Vault names, but the location segment\n                 will not appear in resource names.\n  workload, freeform1, environment, freeform2 — Optional static tokens.\nKey properties:\n  components          — ordered array of name components, e.g. [\"resourceType\",\"workload\",\"purpose\",\"location\"]\n  delimiter           — character inserted between components, e.g. \"-\"\n  workload            — solution identifier inserted into names, e.g. \"avd\"\n  freeform1, environment, freeform2 — optional static/context tokens\n  locationAbbreviation — override for the region abbreviation\n  resourceTypeCodes   — object with per-resource-type abbreviation overrides\n    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, workspaces, privateEndpoints, networkInterfaces }\nThis object is produced automatically when deploying via the Azure Portal UI.\nWhen deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties."
+        "description": "Optional. Shared naming-convention overrides. Include purpose to distinguish Secrets and Encryption vaults; omitted properties retain shared defaults."
       }
     },
     "secretsKeyVaultNameOverride": {
@@ -531,509 +927,454 @@
     }
   },
   "variables": {
-    "$fxv#0": {
-      "AzureCloud": {
-        "australiacentral": {
-          "abbreviation": "auc",
-          "recoveryServicesGeo": "acl"
+    "identifier": "[variables('namingPolicy').resources.operationsResourceGroup.purpose[0]]",
+    "effectiveLogAnalyticsWorkspaceSubscription": "[if(empty(parameters('logAnalyticsWorkspaceSubscriptionId')), subscription().subscriptionId, parameters('logAnalyticsWorkspaceSubscriptionId'))]",
+    "createSecretsKeyVault": "[and(parameters('deploySecretsKeyVault'), empty(parameters('existingSecretsKeyVaultResourceId')))]",
+    "createEncryptionKeyVault": "[and(parameters('deployEncryptionKeyVault'), empty(parameters('existingEncryptionKeyVaultResourceId')))]",
+    "createFSLogixBackupVault": "[and(parameters('deployFSLogixBackupVault'), empty(parameters('existingFSLogixBackupVaultResourceId')))]",
+    "deployOperationsResourceGroup": "[or(or(variables('createSecretsKeyVault'), variables('createEncryptionKeyVault')), variables('createFSLogixBackupVault'))]",
+    "locationAbbreviation": "[__bicep.regionAbbreviation(parameters('location'), environment().name)]",
+    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
+    "cnv_rtCodes": "[__bicep.resolveConvention(parameters('namingConvention')).resourceTypeCodes]",
+    "cnv_rtFirst": "[__bicep.resourceTypeFirst(parameters('namingConvention'))]",
+    "customRgName": "[__bicep.resourceName(parameters('namingConvention'), 'operationsResourceGroup', variables('cnv_loc'), variables('identifier'), '')]",
+    "privateEndpointNameConv": "[__bicep.privateEndpointPattern(variables('cnv_rtFirst'), variables('cnv_rtCodes').privateEndpoints)]",
+    "privateEndpointNICNameConv": "[__bicep.privateEndpointNicPattern(variables('cnv_rtFirst'), variables('cnv_rtCodes').privateEndpoints, variables('cnv_rtCodes').networkInterfaces)]",
+    "operationsResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), variables('customRgName'))]",
+    "generatedMonitoringResourceGroupName": "[__bicep.resourceName(parameters('namingConvention'), 'monitoringResourceGroup', variables('cnv_loc'), variables('identifier'), '')]",
+    "monitoringResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), variables('generatedMonitoringResourceGroupName'))]",
+    "logAnalyticsWorkspaceName": "[__bicep.resourceName(parameters('namingConvention'), 'logAnalyticsWorkspace', variables('cnv_loc'), variables('identifier'), '')]",
+    "dataCollectionEndpointName": "[__bicep.resourceName(parameters('namingConvention'), 'dataCollectionEndpoint', variables('cnv_loc'), variables('identifier'), '')]",
+    "generatedControlPlaneResourceGroupName": "[__bicep.resourceName(parameters('namingConvention'), 'controlPlaneResourceGroup', variables('cnv_loc'), variables('identifier'), '')]",
+    "generatedAvdWorkspaceName": "[__bicep.resourceName(parameters('namingConvention'), 'workspace', variables('cnv_loc'), variables('identifier'), '')]",
+    "generatedGlobalFeedResourceGroupName": "[__bicep.resourceName(parameters('namingConvention'), 'globalFeedResourceGroup', '', variables('identifier'), '')]",
+    "generatedGlobalFeedWorkspaceName": "[__bicep.resourceName(parameters('namingConvention'), 'globalFeedWorkspace', '', variables('identifier'), '')]",
+    "controlPlaneResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), if(not(empty(parameters('avdControlPlaneResourceGroupNameOverride'))), parameters('avdControlPlaneResourceGroupNameOverride'), variables('generatedControlPlaneResourceGroupName')))]",
+    "avdWorkspaceName": "[if(not(empty(parameters('avdWorkspaceNameOverride'))), parameters('avdWorkspaceNameOverride'), variables('generatedAvdWorkspaceName'))]",
+    "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedResourceGroupNameOverride'))), parameters('globalFeedResourceGroupNameOverride'), variables('generatedGlobalFeedResourceGroupName'))]",
+    "globalFeedWorkspaceName": "[if(not(empty(parameters('globalFeedWorkspaceNameOverride'))), parameters('globalFeedWorkspaceNameOverride'), variables('generatedGlobalFeedWorkspaceName'))]",
+    "uniqueStringOperations": "[take(__bicep.scopedUnique(parameters('namingConvention'), subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), variables('namingPolicy').limits.uniqueSuffix)]",
+    "effectiveSecretsKeyVaultNameOverride": "[if(not(empty(parameters('secretsKeyVaultNameOverride'))), parameters('secretsKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'secretsKeyVaultNameOverride'), ''))]",
+    "effectiveEncryptionKeyVaultNameOverride": "[if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'encryptionKeyVaultNameOverride'), ''))]",
+    "secretsKeyVaultName": "[if(not(empty(variables('effectiveSecretsKeyVaultNameOverride'))), variables('effectiveSecretsKeyVaultNameOverride'), __bicep.resourceName(parameters('namingConvention'), 'secretsKeyVault', variables('cnv_loc'), variables('identifier'), variables('uniqueStringOperations')))]",
+    "encryptionKeyVaultName": "[if(not(empty(variables('effectiveEncryptionKeyVaultNameOverride'))), variables('effectiveEncryptionKeyVaultNameOverride'), __bicep.resourceName(parameters('namingConvention'), 'encryptionKeyVault', variables('cnv_loc'), variables('identifier'), variables('uniqueStringOperations')))]",
+    "fslogixBackupVaultName": "[__bicep.resourceName(parameters('namingConvention'), 'filesBackupVault', variables('cnv_loc'), variables('identifier'), '')]",
+    "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]",
+    "avdWorkspaceConfigurationIsValid": "[if(or(or(not(parameters('manageAvdWorkspace')), and(equals(parameters('avdWorkspaceMode'), 'Create'), empty(parameters('existingAvdWorkspaceResourceId')))), and(equals(parameters('avdWorkspaceMode'), 'Update'), not(empty(parameters('existingAvdWorkspaceResourceId'))))), true(), fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
+    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Update'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
+    "_1._2": {
+      "defaults": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "identifiers": {
+        "imageManagement": "image-management",
+        "replacerFallback": "replacer",
+        "sharedFslogix": "fslogix"
+      },
+      "limits": {
+        "keyVault": 24,
+        "functionApp": 60,
+        "storageAccount": 24,
+        "deploymentVm": 15,
+        "fslogixStoragePrefix": 13,
+        "uniqueSuffix": 6,
+        "imageManagementStoragePrefix": 5,
+        "imageManagementStorageLocation": 4
+      },
+      "resources": {
+        "operationsResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "operations"
+          ]
         },
-        "australiacentral2": {
-          "abbreviation": "auc2",
-          "recoveryServicesGeo": "acl2"
+        "monitoringResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "monitoring"
+          ]
         },
-        "australiaeast": {
-          "abbreviation": "aue",
-          "recoveryServicesGeo": "ae"
+        "controlPlaneResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "control",
+            "plane"
+          ]
         },
-        "australiasoutheast": {
-          "abbreviation": "ause",
-          "recoveryServicesGeo": "ase"
+        "globalFeedResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "global",
+            "feed"
+          ]
         },
-        "brazilsouth": {
-          "abbreviation": "brs",
-          "recoveryServicesGeo": "brs"
+        "globalFeedWorkspace": {
+          "type": "workspaces",
+          "purpose": [
+            "global",
+            "feed"
+          ]
         },
-        "brazilsoutheast": {
-          "abbreviation": "brse",
-          "recoveryServicesGeo": "bse"
+        "workspace": {
+          "type": "workspaces",
+          "purpose": []
         },
-        "canadacentral": {
-          "abbreviation": "cac",
-          "recoveryServicesGeo": "cnc"
+        "hostWorkspace": {
+          "type": "workspaces",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "canadaeast": {
-          "abbreviation": "cae",
-          "recoveryServicesGeo": "cne"
+        "deploymentResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "deployment"
+          ]
         },
-        "centralindia": {
-          "abbreviation": "inc",
-          "recoveryServicesGeo": "inc"
+        "deploymentVm": {
+          "type": "",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "centralus": {
-          "abbreviation": "usc",
-          "recoveryServicesGeo": "cus"
+        "consolidatedResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "eastasia": {
-          "abbreviation": "ase",
-          "recoveryServicesGeo": "ea"
+        "hostsResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "hosts"
+          ]
         },
-        "eastus": {
-          "abbreviation": "use",
-          "recoveryServicesGeo": "eus"
+        "storageResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "storage"
+          ]
         },
-        "eastus2": {
-          "abbreviation": "use2",
-          "recoveryServicesGeo": "eus2"
+        "secretsKeyVault": {
+          "type": "keyVaults",
+          "purpose": [
+            "sec",
+            "{unique}"
+          ]
         },
-        "francecentral": {
-          "abbreviation": "frc",
-          "recoveryServicesGeo": "frc"
+        "encryptionKeyVault": {
+          "type": "keyVaults",
+          "purpose": [
+            "enc",
+            "{unique}"
+          ]
         },
-        "francesouth": {
-          "abbreviation": "frs",
-          "recoveryServicesGeo": "frs"
+        "dataCollectionEndpoint": {
+          "type": "dataCollectionEndpoints",
+          "purpose": []
         },
-        "germanynorth": {
-          "abbreviation": "den",
-          "recoveryServicesGeo": "gn"
+        "logAnalyticsWorkspace": {
+          "type": "logAnalyticsWorkspaces",
+          "purpose": []
         },
-        "germanywestcentral": {
-          "abbreviation": "dewc",
-          "recoveryServicesGeo": "gwc"
+        "hostPool": {
+          "type": "hostPools",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "israelcentral": {
-          "abbreviation": "ilc",
-          "recoveryServicesGeo": "ilc"
+        "desktopApplicationGroup": {
+          "type": "desktopApplicationGroups",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "italynorth": {
-          "abbreviation": "itn",
-          "recoveryServicesGeo": "itn"
+        "scalingPlan": {
+          "type": "scalingPlans",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "japaneast": {
-          "abbreviation": "jpe",
-          "recoveryServicesGeo": "jpe"
+        "vmBackupVault": {
+          "type": "recoveryServicesVaults",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "japanwest": {
-          "abbreviation": "jpw",
-          "recoveryServicesGeo": "jpw"
+        "filesBackupVault": {
+          "type": "recoveryServicesVaults",
+          "purpose": [
+            "files"
+          ]
         },
-        "jioindiacentral": {
-          "abbreviation": "injc",
-          "recoveryServicesGeo": "jic"
+        "identityPattern": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}",
+            "TOKEN"
+          ]
         },
-        "jioindiawest": {
-          "abbreviation": "injw",
-          "recoveryServicesGeo": "jiw"
+        "availabilitySet": {
+          "type": "availabilitySets",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "koreacentral": {
-          "abbreviation": "krc",
-          "recoveryServicesGeo": "krc"
+        "diskAccess": {
+          "type": "diskAccesses",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "koreasouth": {
-          "abbreviation": "krs",
-          "recoveryServicesGeo": "krs"
+        "diskEncryptionSetPattern": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}",
+            "TOKEN"
+          ]
         },
-        "northcentralus": {
-          "abbreviation": "usnc",
-          "recoveryServicesGeo": "ncus"
+        "netAppAccount": {
+          "type": "netAppAccounts",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "northeurope": {
-          "abbreviation": "eun",
-          "recoveryServicesGeo": "ne"
+        "netAppCapacityPool": {
+          "type": "netAppCapacityPools",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "norwayeast": {
-          "abbreviation": "noe",
-          "recoveryServicesGeo": "nwe"
+        "imageManagementResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "norwaywest": {
-          "abbreviation": "now",
-          "recoveryServicesGeo": "nww"
+        "imageGallery": {
+          "type": "computeGalleries",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "polandcentral": {
-          "abbreviation": "plc",
-          "recoveryServicesGeo": "plc"
+        "imageBlobIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}-blob-access"
+          ]
         },
-        "qatarcentral": {
-          "abbreviation": "qac",
-          "recoveryServicesGeo": "qac"
+        "imageStorageEncryptionIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}-storage-cmk"
+          ]
         },
-        "southafricanorth": {
-          "abbreviation": "zan",
-          "recoveryServicesGeo": "san"
+        "imageBuildResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "image-builds"
+          ]
         },
-        "southafricawest": {
-          "abbreviation": "zaw",
-          "recoveryServicesGeo": "saw"
+        "imageGalleryCustomerKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-customer-keys"
+          ]
         },
-        "southcentralus": {
-          "abbreviation": "ussc",
-          "recoveryServicesGeo": "scus"
+        "imageGalleryDoubleEncryptionKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-platform-and-customer-keys"
+          ]
         },
-        "southeastasia": {
-          "abbreviation": "asse",
-          "recoveryServicesGeo": "sea"
+        "imageGalleryConfidentialKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-confidential-vm"
+          ]
         },
-        "southindia": {
-          "abbreviation": "ins",
-          "recoveryServicesGeo": "ins"
+        "replacerFunctionApp": {
+          "type": "functionApps",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "{unique}"
+          ]
         },
-        "swedencentral": {
-          "abbreviation": "sec",
-          "recoveryServicesGeo": "sdc"
+        "replacerStorage": {
+          "type": "",
+          "purpose": [
+            "{storageIdentifier}shr{unique}"
+          ],
+          "format": "storage"
         },
-        "switzerlandnorth": {
-          "abbreviation": "chn",
-          "recoveryServicesGeo": "szn"
+        "replacerStorageIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "storage",
+            "cmk"
+          ]
         },
-        "switzerlandwest": {
-          "abbreviation": "chw",
-          "recoveryServicesGeo": "szw"
+        "replacerHostingPlan": {
+          "type": "appServicePlans",
+          "purpose": []
         },
-        "uaecentral": {
-          "abbreviation": "aec",
-          "recoveryServicesGeo": "uac"
+        "replacerInsights": {
+          "type": "applicationInsights",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "{unique}"
+          ]
         },
-        "uaenorth": {
-          "abbreviation": "aen",
-          "recoveryServicesGeo": "uan"
+        "sessionHostsTemplateSpec": {
+          "type": "templateSpecs",
+          "purpose": [
+            "session-hosts"
+          ]
         },
-        "uksouth": {
-          "abbreviation": "uks",
-          "recoveryServicesGeo": "uks"
+        "networkNatGateway": {
+          "type": "natGateways",
+          "purpose": []
         },
-        "ukwest": {
-          "abbreviation": "ukw",
-          "recoveryServicesGeo": "ukw"
+        "networkPublicIP": {
+          "type": "publicIPAddresses",
+          "purpose": []
         },
-        "westcentralus": {
-          "abbreviation": "uswc",
-          "recoveryServicesGeo": "wcus"
+        "networkRouteTable": {
+          "type": "routeTables",
+          "purpose": []
         },
-        "westeurope": {
-          "abbreviation": "euw",
-          "recoveryServicesGeo": "we"
+        "networkSecurityGroup": {
+          "type": "networkSecurityGroups",
+          "purpose": []
         },
-        "westindia": {
-          "abbreviation": "inw",
-          "recoveryServicesGeo": "inw"
+        "pocVirtualNetwork": {
+          "type": "virtualNetworks",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "westus": {
-          "abbreviation": "usw",
-          "recoveryServicesGeo": "wus"
+        "pocHostsSubnet": {
+          "type": "subnets",
+          "purpose": [
+            "{identifier}",
+            "hosts"
+          ]
         },
-        "westus2": {
-          "abbreviation": "usw2",
-          "recoveryServicesGeo": "wus2"
+        "pocNatGateway": {
+          "type": "natGateways",
+          "purpose": [
+            "{identifier}"
+          ]
         },
-        "westus3": {
-          "abbreviation": "usw3",
-          "recoveryServicesGeo": "wus3"
+        "pocPublicIP": {
+          "type": "publicIPAddresses",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocSecurityGroup": {
+          "type": "networkSecurityGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "alertsAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "alerts"
+          ]
+        },
+        "quotaAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "sqm",
+            "{identifier}"
+          ],
+          "omitWorkload": true,
+          "omitEmptyPurposeParts": true
+        },
+        "routesAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "urt",
+            "{unique}"
+          ],
+          "omitWorkload": true
         }
       },
-      "AzureUSGovernment": {
-        "usdodcentral": {
-          "abbreviation": "dodc",
-          "recoveryServicesGeo": "udc"
-        },
-        "usdodeast": {
-          "abbreviation": "dode",
-          "recoveryServicesGeo": "ude"
-        },
-        "usgovarizona": {
-          "abbreviation": "az",
-          "recoveryServicesGeo": "uga"
-        },
-        "usgovtexas": {
-          "abbreviation": "tx",
-          "recoveryServicesGeo": "ugt"
-        },
-        "usgovvirginia": {
-          "abbreviation": "va",
-          "recoveryServicesGeo": "ugv"
-        }
+      "patterns": {
+        "virtualMachine": "SHNAME",
+        "osDisk": "SHNAME-osdisk",
+        "nic": "SHNAME-nic",
+        "standaloneAvailabilitySet": "avset-##",
+        "privateEndpointFirst": "{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID",
+        "privateEndpointLast": "RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}",
+        "privateEndpointNicFirst": "{networkInterfaces}-{endpoint}",
+        "privateEndpointNicLast": "{endpoint}-{networkInterfaces}",
+        "deploymentDisk": "{vm}-{osdisks}",
+        "deploymentNic": "{vm}-{networkInterfaces}",
+        "availabilitySet": "{name}{delimiter}##",
+        "policyIdentityPurpose": "policy{delimiter}remediation",
+        "deploymentIdentityPurpose": "deployment",
+        "monitorIdentityPurpose": "ama",
+        "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
+        "customerDiskPurpose": "customer{delimiter}keys",
+        "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
+        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
+        "vmKey": "{identifier}-vm-cmk",
+        "confidentialVmKey": "{identifier}-cvm-cmk",
+        "recoveryServicesKey": "{identifier}-rsv-cmk",
+        "imageStorageKey": "{identifier}-storage-cmk",
+        "replacerStorageKey": "{identifier}-shr-storage-cmk",
+        "imageGalleryKey": "{identifier}-gallery-cmk",
+        "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
+        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
+        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
+        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+        "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
+        "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
+        "imageBuildVm": "{prefix}img-{unique}",
+        "imageBuildOrchestrationVm": "{prefix}orc-{unique}",
+        "deploymentPrefix": "{prefix}-",
+        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}",
+        "functionInsightsOverride": "{name}-insights"
       },
-      "other": {
-        "north": {
-          "abbreviation": "no"
-        },
-        "east": {
-          "abbreviation": "ea"
-        },
-        "south": {
-          "abbreviation": "so"
-        },
-        "west": {
-          "abbreviation": "we"
-        },
-        "central": {
-          "abbreviation": "ce"
-        },
-        "northcentral": {
-          "abbreviation": "noce"
-        },
-        "eastcentral": {
-          "abbreviation": "wece"
-        },
-        "southcentral": {
-          "abbreviation": "soce"
-        },
-        "westcentral": {
-          "abbreviation": "wece"
-        }
+      "imageStoragePurposes": {
+        "artifacts": "imgassets",
+        "logs": "imglogs"
+      },
+      "templateSpecs": {
+        "sharedServices": "shared-services",
+        "networking": "networking",
+        "imageBuild": "custom-image",
+        "hostPool": "hostpool",
+        "hostPoolPoc": "hostpool-poc",
+        "automatedHostPool": "automated-hostpool",
+        "runCommandsOnVms": "run-commands-on-vms",
+        "updateStorageAccountKeyOnSessionHosts": "update-storage-account-key-on-session-hosts",
+        "fslogixStorage": "fslogix-storage",
+        "storageQuotaManager": "storage-quota-manager",
+        "sessionHostReplacer": "session-host-replacer",
+        "sessionHostMaintenance": "session-host-maintenance",
+        "sessionHostPolicy": "session-host-policy"
       }
     },
-    "$fxv#1": {
-      "AzureCloud": {
-        "australiacentral": {
-          "abbreviation": "auc",
-          "recoveryServicesGeo": "acl"
-        },
-        "australiacentral2": {
-          "abbreviation": "auc2",
-          "recoveryServicesGeo": "acl2"
-        },
-        "australiaeast": {
-          "abbreviation": "aue",
-          "recoveryServicesGeo": "ae"
-        },
-        "australiasoutheast": {
-          "abbreviation": "ause",
-          "recoveryServicesGeo": "ase"
-        },
-        "brazilsouth": {
-          "abbreviation": "brs",
-          "recoveryServicesGeo": "brs"
-        },
-        "brazilsoutheast": {
-          "abbreviation": "brse",
-          "recoveryServicesGeo": "bse"
-        },
-        "canadacentral": {
-          "abbreviation": "cac",
-          "recoveryServicesGeo": "cnc"
-        },
-        "canadaeast": {
-          "abbreviation": "cae",
-          "recoveryServicesGeo": "cne"
-        },
-        "centralindia": {
-          "abbreviation": "inc",
-          "recoveryServicesGeo": "inc"
-        },
-        "centralus": {
-          "abbreviation": "usc",
-          "recoveryServicesGeo": "cus"
-        },
-        "eastasia": {
-          "abbreviation": "ase",
-          "recoveryServicesGeo": "ea"
-        },
-        "eastus": {
-          "abbreviation": "use",
-          "recoveryServicesGeo": "eus"
-        },
-        "eastus2": {
-          "abbreviation": "use2",
-          "recoveryServicesGeo": "eus2"
-        },
-        "francecentral": {
-          "abbreviation": "frc",
-          "recoveryServicesGeo": "frc"
-        },
-        "francesouth": {
-          "abbreviation": "frs",
-          "recoveryServicesGeo": "frs"
-        },
-        "germanynorth": {
-          "abbreviation": "den",
-          "recoveryServicesGeo": "gn"
-        },
-        "germanywestcentral": {
-          "abbreviation": "dewc",
-          "recoveryServicesGeo": "gwc"
-        },
-        "israelcentral": {
-          "abbreviation": "ilc",
-          "recoveryServicesGeo": "ilc"
-        },
-        "italynorth": {
-          "abbreviation": "itn",
-          "recoveryServicesGeo": "itn"
-        },
-        "japaneast": {
-          "abbreviation": "jpe",
-          "recoveryServicesGeo": "jpe"
-        },
-        "japanwest": {
-          "abbreviation": "jpw",
-          "recoveryServicesGeo": "jpw"
-        },
-        "jioindiacentral": {
-          "abbreviation": "injc",
-          "recoveryServicesGeo": "jic"
-        },
-        "jioindiawest": {
-          "abbreviation": "injw",
-          "recoveryServicesGeo": "jiw"
-        },
-        "koreacentral": {
-          "abbreviation": "krc",
-          "recoveryServicesGeo": "krc"
-        },
-        "koreasouth": {
-          "abbreviation": "krs",
-          "recoveryServicesGeo": "krs"
-        },
-        "northcentralus": {
-          "abbreviation": "usnc",
-          "recoveryServicesGeo": "ncus"
-        },
-        "northeurope": {
-          "abbreviation": "eun",
-          "recoveryServicesGeo": "ne"
-        },
-        "norwayeast": {
-          "abbreviation": "noe",
-          "recoveryServicesGeo": "nwe"
-        },
-        "norwaywest": {
-          "abbreviation": "now",
-          "recoveryServicesGeo": "nww"
-        },
-        "polandcentral": {
-          "abbreviation": "plc",
-          "recoveryServicesGeo": "plc"
-        },
-        "qatarcentral": {
-          "abbreviation": "qac",
-          "recoveryServicesGeo": "qac"
-        },
-        "southafricanorth": {
-          "abbreviation": "zan",
-          "recoveryServicesGeo": "san"
-        },
-        "southafricawest": {
-          "abbreviation": "zaw",
-          "recoveryServicesGeo": "saw"
-        },
-        "southcentralus": {
-          "abbreviation": "ussc",
-          "recoveryServicesGeo": "scus"
-        },
-        "southeastasia": {
-          "abbreviation": "asse",
-          "recoveryServicesGeo": "sea"
-        },
-        "southindia": {
-          "abbreviation": "ins",
-          "recoveryServicesGeo": "ins"
-        },
-        "swedencentral": {
-          "abbreviation": "sec",
-          "recoveryServicesGeo": "sdc"
-        },
-        "switzerlandnorth": {
-          "abbreviation": "chn",
-          "recoveryServicesGeo": "szn"
-        },
-        "switzerlandwest": {
-          "abbreviation": "chw",
-          "recoveryServicesGeo": "szw"
-        },
-        "uaecentral": {
-          "abbreviation": "aec",
-          "recoveryServicesGeo": "uac"
-        },
-        "uaenorth": {
-          "abbreviation": "aen",
-          "recoveryServicesGeo": "uan"
-        },
-        "uksouth": {
-          "abbreviation": "uks",
-          "recoveryServicesGeo": "uks"
-        },
-        "ukwest": {
-          "abbreviation": "ukw",
-          "recoveryServicesGeo": "ukw"
-        },
-        "westcentralus": {
-          "abbreviation": "uswc",
-          "recoveryServicesGeo": "wcus"
-        },
-        "westeurope": {
-          "abbreviation": "euw",
-          "recoveryServicesGeo": "we"
-        },
-        "westindia": {
-          "abbreviation": "inw",
-          "recoveryServicesGeo": "inw"
-        },
-        "westus": {
-          "abbreviation": "usw",
-          "recoveryServicesGeo": "wus"
-        },
-        "westus2": {
-          "abbreviation": "usw2",
-          "recoveryServicesGeo": "wus2"
-        },
-        "westus3": {
-          "abbreviation": "usw3",
-          "recoveryServicesGeo": "wus3"
-        }
-      },
-      "AzureUSGovernment": {
-        "usdodcentral": {
-          "abbreviation": "dodc",
-          "recoveryServicesGeo": "udc"
-        },
-        "usdodeast": {
-          "abbreviation": "dode",
-          "recoveryServicesGeo": "ude"
-        },
-        "usgovarizona": {
-          "abbreviation": "az",
-          "recoveryServicesGeo": "uga"
-        },
-        "usgovtexas": {
-          "abbreviation": "tx",
-          "recoveryServicesGeo": "ugt"
-        },
-        "usgovvirginia": {
-          "abbreviation": "va",
-          "recoveryServicesGeo": "ugv"
-        }
-      },
-      "other": {
-        "north": {
-          "abbreviation": "no"
-        },
-        "east": {
-          "abbreviation": "ea"
-        },
-        "south": {
-          "abbreviation": "so"
-        },
-        "west": {
-          "abbreviation": "we"
-        },
-        "central": {
-          "abbreviation": "ce"
-        },
-        "northcentral": {
-          "abbreviation": "noce"
-        },
-        "eastcentral": {
-          "abbreviation": "wece"
-        },
-        "southcentral": {
-          "abbreviation": "soce"
-        },
-        "westcentral": {
-          "abbreviation": "wece"
-        }
-      }
-    },
-    "$fxv#2": {
+    "_1._3": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
       "automationAccounts": "aa",
@@ -1066,51 +1407,266 @@
       "templateSpecs": "ts",
       "userAssignedIdentities": "uai",
       "virtualMachines": "vm",
+      "virtualNetworks": "vnet",
+      "subnets": "snet",
       "workbooks": "wb",
       "workspaces": "vdws",
       "imageDefinitions": "vmid"
     },
-    "cloud": "[toLower(environment().name)]",
-    "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
-    "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
-    "resourceAbbreviations": "[variables('$fxv#2')]",
-    "identifier": "operations",
-    "effectiveLogAnalyticsWorkspaceSubscription": "[if(empty(parameters('logAnalyticsWorkspaceSubscriptionId')), subscription().subscriptionId, parameters('logAnalyticsWorkspaceSubscriptionId'))]",
-    "createSecretsKeyVault": "[and(parameters('deploySecretsKeyVault'), empty(parameters('existingSecretsKeyVaultResourceId')))]",
-    "createEncryptionKeyVault": "[and(parameters('deployEncryptionKeyVault'), empty(parameters('existingEncryptionKeyVaultResourceId')))]",
-    "createFSLogixBackupVault": "[and(parameters('deployFSLogixBackupVault'), empty(parameters('existingFSLogixBackupVaultResourceId')))]",
-    "deployOperationsResourceGroup": "[or(or(variables('createSecretsKeyVault'), variables('createEncryptionKeyVault')), variables('createFSLogixBackupVault'))]",
-    "locationAbbreviation": "[variables('locations')[variables('varLocation')].abbreviation]",
-    "cnv_delimiter": "[coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-')]",
-    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, variables('locationAbbreviation'))]",
-    "cnv_rtCodes": "[coalesce(tryGet(parameters('namingConvention'), 'resourceTypeCodes'), createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'keyVaults', variables('resourceAbbreviations').keyVaults, 'recoveryServicesVaults', variables('resourceAbbreviations').recoveryServicesVaults, 'logAnalyticsWorkspaces', variables('resourceAbbreviations').logAnalyticsWorkspaces, 'dataCollectionEndpoints', variables('resourceAbbreviations').dataCollectionEndpoints, 'workspaces', variables('resourceAbbreviations').workspaces, 'privateEndpoints', variables('resourceAbbreviations').privateEndpoints, 'networkInterfaces', variables('resourceAbbreviations').networkInterfaces))]",
-    "cnv_components": "[coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location'))]",
-    "cnv_rtFirst": "[if(not(empty(variables('cnv_components'))), not(equals(last(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none'))))), 'resourceType')), true())]",
-    "customRgName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, variables('identifier'), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "privateEndpointNameConv": "[if(variables('cnv_rtFirst'), format('{0}-RESOURCE-SUBRESOURCE-VNETID', variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}', variables('cnv_rtCodes').privateEndpoints))]",
-    "privateEndpointNICNameConv": "[if(variables('cnv_rtFirst'), format('{0}-{1}-RESOURCE-SUBRESOURCE-VNETID', coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces), variables('cnv_rtCodes').privateEndpoints), format('RESOURCE-SUBRESOURCE-VNETID-{0}-{1}', variables('cnv_rtCodes').privateEndpoints, coalesce(tryGet(variables('cnv_rtCodes'), 'networkInterfaces'), variables('resourceAbbreviations').networkInterfaces)))]",
-    "operationsResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), variables('customRgName'))]",
-    "generatedMonitoringResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, 'monitoring', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "monitoringResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), variables('generatedMonitoringResourceGroupName'))]",
-    "logAnalyticsWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'logAnalyticsWorkspaces'), variables('resourceAbbreviations').logAnalyticsWorkspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "dataCollectionEndpointName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'dataCollectionEndpoints'), variables('resourceAbbreviations').dataCollectionEndpoints), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "generatedControlPlaneResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('control{0}plane', variables('cnv_delimiter')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "generatedAvdWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), '', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "generatedGlobalFeedResourceGroupName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').resourceGroups, format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "generatedGlobalFeedWorkspaceName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'workspaces'), variables('resourceAbbreviations').workspaces), format('global{0}feed', variables('cnv_delimiter')), '', coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "controlPlaneResourceGroupName": "[if(not(empty(parameters('consolidatedResourceGroupName'))), parameters('consolidatedResourceGroupName'), if(not(empty(parameters('avdControlPlaneResourceGroupNameOverride'))), parameters('avdControlPlaneResourceGroupNameOverride'), variables('generatedControlPlaneResourceGroupName')))]",
-    "avdWorkspaceName": "[if(not(empty(parameters('avdWorkspaceNameOverride'))), parameters('avdWorkspaceNameOverride'), variables('generatedAvdWorkspaceName'))]",
-    "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedResourceGroupNameOverride'))), parameters('globalFeedResourceGroupNameOverride'), variables('generatedGlobalFeedResourceGroupName'))]",
-    "globalFeedWorkspaceName": "[if(not(empty(parameters('globalFeedWorkspaceNameOverride'))), parameters('globalFeedWorkspaceNameOverride'), variables('generatedGlobalFeedWorkspaceName'))]",
-    "uniqueStringOperations": "[take(if(not(contains(variables('cnv_components'), 'location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), uniqueString(subscription().subscriptionId, variables('operationsResourceGroupName'))), 6)]",
-    "effectiveSecretsKeyVaultNameOverride": "[if(not(empty(parameters('secretsKeyVaultNameOverride'))), parameters('secretsKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'secretsKeyVaultNameOverride'), ''))]",
-    "effectiveEncryptionKeyVaultNameOverride": "[if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'encryptionKeyVaultNameOverride'), ''))]",
-    "secretsKeyVaultName": "[if(not(empty(variables('effectiveSecretsKeyVaultNameOverride'))), variables('effectiveSecretsKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('sec-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
-    "encryptionKeyVaultName": "[if(not(empty(variables('effectiveEncryptionKeyVaultNameOverride'))), variables('effectiveEncryptionKeyVaultNameOverride'), take(__bicep.kvSanitize(__bicep.buildCustomName(filter(variables('cnv_components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), variables('cnv_delimiter'), variables('cnv_rtCodes').keyVaults, format('enc-{0}', variables('uniqueStringOperations')), variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))), 24))]",
-    "fslogixBackupVaultName": "[__bicep.buildCustomName(filter(variables('cnv_components'), lambda('component', not(equals(lambdaVariables('component'), 'none')))), variables('cnv_delimiter'), coalesce(tryGet(variables('cnv_rtCodes'), 'recoveryServicesVaults'), variables('resourceAbbreviations').recoveryServicesVaults), 'files', variables('cnv_loc'), coalesce(tryGet(parameters('namingConvention'), 'freeform1'), ''), coalesce(tryGet(parameters('namingConvention'), 'environment'), ''), coalesce(tryGet(parameters('namingConvention'), 'freeform2'), ''), if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'))]",
-    "effectiveAzureMonitorPrivateLinkScopeResourceId": "[if(parameters('deployMonitoring'), parameters('azureMonitorPrivateLinkScopeResourceId'), '')]",
-    "avdWorkspaceConfigurationIsValid": "[if(or(or(not(parameters('manageAvdWorkspace')), and(equals(parameters('avdWorkspaceMode'), 'Create'), empty(parameters('existingAvdWorkspaceResourceId')))), and(equals(parameters('avdWorkspaceMode'), 'Update'), not(empty(parameters('existingAvdWorkspaceResourceId'))))), true(), fail('AVD workspace management requires an empty existingAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]",
-    "globalAvdWorkspaceConfigurationIsValid": "[if(or(not(parameters('manageGlobalAvdWorkspace')), and(not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId'))), or(and(equals(parameters('globalAvdWorkspaceMode'), 'Create'), empty(parameters('existingGlobalAvdWorkspaceResourceId'))), and(equals(parameters('globalAvdWorkspaceMode'), 'Update'), not(empty(parameters('existingGlobalAvdWorkspaceResourceId'))))))), true(), fail('Global-feed workspace management requires an endpoint subnet and an empty existingGlobalAvdWorkspaceResourceId for Create, or a workspace resource ID for Update.'))]"
+    "_1._4": {
+      "AzureCloud": {
+        "australiacentral": {
+          "abbreviation": "auc",
+          "recoveryServicesGeo": "acl"
+        },
+        "australiacentral2": {
+          "abbreviation": "auc2",
+          "recoveryServicesGeo": "acl2"
+        },
+        "australiaeast": {
+          "abbreviation": "aue",
+          "recoveryServicesGeo": "ae"
+        },
+        "australiasoutheast": {
+          "abbreviation": "ause",
+          "recoveryServicesGeo": "ase"
+        },
+        "brazilsouth": {
+          "abbreviation": "brs",
+          "recoveryServicesGeo": "brs"
+        },
+        "brazilsoutheast": {
+          "abbreviation": "brse",
+          "recoveryServicesGeo": "bse"
+        },
+        "canadacentral": {
+          "abbreviation": "cac",
+          "recoveryServicesGeo": "cnc"
+        },
+        "canadaeast": {
+          "abbreviation": "cae",
+          "recoveryServicesGeo": "cne"
+        },
+        "centralindia": {
+          "abbreviation": "inc",
+          "recoveryServicesGeo": "inc"
+        },
+        "centralus": {
+          "abbreviation": "usc",
+          "recoveryServicesGeo": "cus"
+        },
+        "eastasia": {
+          "abbreviation": "ase",
+          "recoveryServicesGeo": "ea"
+        },
+        "eastus": {
+          "abbreviation": "use",
+          "recoveryServicesGeo": "eus"
+        },
+        "eastus2": {
+          "abbreviation": "use2",
+          "recoveryServicesGeo": "eus2"
+        },
+        "francecentral": {
+          "abbreviation": "frc",
+          "recoveryServicesGeo": "frc"
+        },
+        "francesouth": {
+          "abbreviation": "frs",
+          "recoveryServicesGeo": "frs"
+        },
+        "germanynorth": {
+          "abbreviation": "den",
+          "recoveryServicesGeo": "gn"
+        },
+        "germanywestcentral": {
+          "abbreviation": "dewc",
+          "recoveryServicesGeo": "gwc"
+        },
+        "israelcentral": {
+          "abbreviation": "ilc",
+          "recoveryServicesGeo": "ilc"
+        },
+        "italynorth": {
+          "abbreviation": "itn",
+          "recoveryServicesGeo": "itn"
+        },
+        "japaneast": {
+          "abbreviation": "jpe",
+          "recoveryServicesGeo": "jpe"
+        },
+        "japanwest": {
+          "abbreviation": "jpw",
+          "recoveryServicesGeo": "jpw"
+        },
+        "jioindiacentral": {
+          "abbreviation": "injc",
+          "recoveryServicesGeo": "jic"
+        },
+        "jioindiawest": {
+          "abbreviation": "injw",
+          "recoveryServicesGeo": "jiw"
+        },
+        "koreacentral": {
+          "abbreviation": "krc",
+          "recoveryServicesGeo": "krc"
+        },
+        "koreasouth": {
+          "abbreviation": "krs",
+          "recoveryServicesGeo": "krs"
+        },
+        "northcentralus": {
+          "abbreviation": "usnc",
+          "recoveryServicesGeo": "ncus"
+        },
+        "northeurope": {
+          "abbreviation": "eun",
+          "recoveryServicesGeo": "ne"
+        },
+        "norwayeast": {
+          "abbreviation": "noe",
+          "recoveryServicesGeo": "nwe"
+        },
+        "norwaywest": {
+          "abbreviation": "now",
+          "recoveryServicesGeo": "nww"
+        },
+        "polandcentral": {
+          "abbreviation": "plc",
+          "recoveryServicesGeo": "plc"
+        },
+        "qatarcentral": {
+          "abbreviation": "qac",
+          "recoveryServicesGeo": "qac"
+        },
+        "southafricanorth": {
+          "abbreviation": "zan",
+          "recoveryServicesGeo": "san"
+        },
+        "southafricawest": {
+          "abbreviation": "zaw",
+          "recoveryServicesGeo": "saw"
+        },
+        "southcentralus": {
+          "abbreviation": "ussc",
+          "recoveryServicesGeo": "scus"
+        },
+        "southeastasia": {
+          "abbreviation": "asse",
+          "recoveryServicesGeo": "sea"
+        },
+        "southindia": {
+          "abbreviation": "ins",
+          "recoveryServicesGeo": "ins"
+        },
+        "swedencentral": {
+          "abbreviation": "sec",
+          "recoveryServicesGeo": "sdc"
+        },
+        "switzerlandnorth": {
+          "abbreviation": "chn",
+          "recoveryServicesGeo": "szn"
+        },
+        "switzerlandwest": {
+          "abbreviation": "chw",
+          "recoveryServicesGeo": "szw"
+        },
+        "uaecentral": {
+          "abbreviation": "aec",
+          "recoveryServicesGeo": "uac"
+        },
+        "uaenorth": {
+          "abbreviation": "aen",
+          "recoveryServicesGeo": "uan"
+        },
+        "uksouth": {
+          "abbreviation": "uks",
+          "recoveryServicesGeo": "uks"
+        },
+        "ukwest": {
+          "abbreviation": "ukw",
+          "recoveryServicesGeo": "ukw"
+        },
+        "westcentralus": {
+          "abbreviation": "uswc",
+          "recoveryServicesGeo": "wcus"
+        },
+        "westeurope": {
+          "abbreviation": "euw",
+          "recoveryServicesGeo": "we"
+        },
+        "westindia": {
+          "abbreviation": "inw",
+          "recoveryServicesGeo": "inw"
+        },
+        "westus": {
+          "abbreviation": "usw",
+          "recoveryServicesGeo": "wus"
+        },
+        "westus2": {
+          "abbreviation": "usw2",
+          "recoveryServicesGeo": "wus2"
+        },
+        "westus3": {
+          "abbreviation": "usw3",
+          "recoveryServicesGeo": "wus3"
+        }
+      },
+      "AzureUSGovernment": {
+        "usdodcentral": {
+          "abbreviation": "dodc",
+          "recoveryServicesGeo": "udc"
+        },
+        "usdodeast": {
+          "abbreviation": "dode",
+          "recoveryServicesGeo": "ude"
+        },
+        "usgovarizona": {
+          "abbreviation": "az",
+          "recoveryServicesGeo": "uga"
+        },
+        "usgovtexas": {
+          "abbreviation": "tx",
+          "recoveryServicesGeo": "ugt"
+        },
+        "usgovvirginia": {
+          "abbreviation": "va",
+          "recoveryServicesGeo": "ugv"
+        }
+      },
+      "other": {
+        "north": {
+          "abbreviation": "no"
+        },
+        "east": {
+          "abbreviation": "ea"
+        },
+        "south": {
+          "abbreviation": "so"
+        },
+        "west": {
+          "abbreviation": "we"
+        },
+        "central": {
+          "abbreviation": "ce"
+        },
+        "northcentral": {
+          "abbreviation": "noce"
+        },
+        "eastcentral": {
+          "abbreviation": "wece"
+        },
+        "southcentral": {
+          "abbreviation": "soce"
+        },
+        "westcentral": {
+          "abbreviation": "wece"
+        }
+      }
+    },
+    "_1.locationDefinitions": "[variables('_1._4')]",
+    "_1.resourceAbbreviations": "[variables('_1._3')]",
+    "namingPolicy": "[variables('_1._2')]"
   },
   "resources": {
     "operationsResourceGroup": {
@@ -1142,19 +1698,30 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "16945675830389891545"
-            }
+              "templateHash": "9072655300844897940"
+            },
+            "name": "Resource group",
+            "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group to deploy."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resource group; must match the parent resource where required."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the resource group."
+              }
             }
           },
           "resources": [
@@ -1169,10 +1736,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the resource group."
+              },
               "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the resource group."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -1209,19 +1782,30 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "16945675830389891545"
-            }
+              "templateHash": "9072655300844897940"
+            },
+            "name": "Resource group",
+            "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group to deploy."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resource group; must match the parent resource where required."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the resource group."
+              }
             }
           },
           "resources": [
@@ -1236,10 +1820,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the resource group."
+              },
               "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the resource group."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -1292,35 +1882,61 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "1779669540845006654"
-            }
+              "templateHash": "2952628345569650749"
+            },
+            "name": "AVD monitoring orchestration",
+            "description": "Creates a Log Analytics workspace, data collection endpoint, and AVD Insights data collection rule in an existing monitoring resource group, optionally adding them to an existing Azure Monitor Private Link Scope."
           },
           "parameters": {
             "azureMonitorPrivateLinkScopeResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of an existing Azure Monitor Private Link Scope; empty skips scope membership and leaves endpoint public access enabled."
+              }
             },
             "dataCollectionEndpointName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the data collection endpoint in the deployment resource group."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             },
             "logAnalyticsWorkspaceName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the Log Analytics workspace to create in the monitoring resource group."
+              }
             },
             "logAnalyticsWorkspaceRetention": {
               "type": "int",
-              "defaultValue": 30
+              "defaultValue": 30,
+              "metadata": {
+                "description": "Optional. Log Analytics workspace retention interval in days."
+              }
             },
             "logAnalyticsWorkspaceSku": {
               "type": "string",
-              "defaultValue": "PerGB2018"
+              "defaultValue": "PerGB2018",
+              "metadata": {
+                "description": "Optional. Pricing SKU of the Log Analytics workspace to create."
+              }
             },
             "resourceGroupMonitoring": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing resource group for the workspace, endpoint, and AVD Insights rule."
+              }
             },
             "tags": {
-              "type": "object"
+              "type": "object",
+              "metadata": {
+                "description": "Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+              }
             }
           },
           "resources": {
@@ -1359,8 +1975,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "10042733705466422881"
-                    }
+                      "templateHash": "1775104530343543910"
+                    },
+                    "name": "Log Analytics workspace",
+                    "description": "Deploys a Log Analytics workspace with caller-selected pricing, retention and optional diagnostics; data collection rules and resource diagnostic sources are configured separately."
                   },
                   "definitions": {
                     "_1.logCategoryType": {
@@ -1397,6 +2015,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -1409,7 +2028,7 @@
                           "type": "string",
                           "nullable": true,
                           "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                            "description": "Optional. Explicit diagnostic setting resource name."
                           }
                         },
                         "workspaceId": {
@@ -1452,6 +2071,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -1460,15 +2080,24 @@
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the log Analytics workspace to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the log Analytics workspace; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the log Analytics workspace."
+                      }
                     },
                     "sku": {
                       "type": "string",
@@ -1482,7 +2111,10 @@
                         "Premium",
                         "Standalone",
                         "Standard"
-                      ]
+                      ],
+                      "metadata": {
+                        "description": "Optional. Log Analytics workspace pricing SKU."
+                      }
                     },
                     "retentionInDays": {
                       "type": "int",
@@ -1493,7 +2125,10 @@
                     },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
                     }
                   },
                   "variables": {
@@ -1541,10 +2176,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the log Analytics workspace."
+                      },
                       "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the log Analytics workspace."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -1580,20 +2221,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "5778756712734420436"
-                    }
+                      "templateHash": "7681794930764384368"
+                    },
+                    "name": "Data collection endpoint",
+                    "description": "Deploys a regional Azure Monitor data collection endpoint with configurable public network access; rule associations and private links are managed separately."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the data collection endpoint to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the data collection endpoint; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the data collection endpoint."
+                      }
                     },
                     "publicNetworkAccess": {
                       "type": "string",
@@ -1601,7 +2253,10 @@
                       "allowedValues": [
                         "Enabled",
                         "Disabled"
-                      ]
+                      ],
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
                     }
                   },
                   "resources": [
@@ -1621,10 +2276,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the data collection endpoint."
+                      },
                       "value": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the data collection endpoint."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -1662,24 +2323,38 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "12065735911828433448"
-                    }
+                      "templateHash": "14845614713441773250"
+                    },
+                    "name": "AVD Insights data collection rule",
+                    "description": "Deploys the regional AVD Insights Windows performance and event collection rule targeting an existing Log Analytics workspace. Agent installation and VM associations are managed separately."
                   },
                   "parameters": {
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the AVD Insights data collection rule; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the AVD Insights data collection rule."
+                      }
                     },
                     "logAnalyticsWorkspaceResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing Log Analytics workspace receiving AVD performance and event data."
+                      }
                     },
                     "dataCollectionEndpointId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Resource ID of an existing data collection endpoint; empty omits the endpoint reference."
+                      }
                     }
                   },
                   "resources": [
@@ -1770,10 +2445,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the AVD Insights data collection rule."
+                      },
                       "value": "[resourceId('Microsoft.Insights/dataCollectionRules', format('microsoft-avdi-{0}', toLower(parameters('location'))))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the AVD Insights data collection rule."
+                      },
                       "value": "[format('microsoft-avdi-{0}', toLower(parameters('location')))]"
                     }
                   }
@@ -1814,8 +2495,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "8989651191107758389"
-                    }
+                      "templateHash": "18081871710595372247"
+                    },
+                    "name": "Cross-scope Azure Monitor resource links",
+                    "description": "Uses subscription scope to route linked-resource deployment to the subscription and resource group parsed from an existing Azure Monitor Private Link Scope ID."
                   },
                   "parameters": {
                     "privateLinkScopeResourceId": {
@@ -1858,15 +2541,23 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.48.1.52935",
-                              "templateHash": "4735036545154031964"
-                            }
+                              "templateHash": "4394776920666586811"
+                            },
+                            "name": "Azure Monitor scoped resources",
+                            "description": "Adds linked resources to an existing Azure Monitor Private Link Scope in the deployment resource group. The caller must select the resource group containing the scope."
                           },
                           "parameters": {
                             "scopedResourceIds": {
-                              "type": "array"
+                              "type": "array",
+                              "metadata": {
+                                "description": "Required. Resource IDs of existing Azure Monitor resources to link to the private link scope."
+                              }
                             },
                             "privateLinkScopeResourceId": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Required. Resource ID of the existing Azure Monitor Private Link Scope; it must be in the deployment resource group."
+                              }
                             }
                           },
                           "resources": [
@@ -1898,18 +2589,30 @@
           "outputs": {
             "avdInsightsDataCollectionRuleResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the created AVD Insights data collection rule."
+              },
               "value": "[reference('avdInsightsDataCollectionRule').outputs.resourceId.value]"
             },
             "avdInsightsDataCollectionRulesResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Compatibility alias returning the same AVD Insights data collection rule resource ID as the singular output."
+              },
               "value": "[reference('avdInsightsDataCollectionRule').outputs.resourceId.value]"
             },
             "dataCollectionEndpointResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the created data collection endpoint."
+              },
               "value": "[reference('dataCollectionEndpoint').outputs.resourceId.value]"
             },
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the created Log Analytics workspace."
+              },
               "value": "[reference('logAnalyticsWorkspace').outputs.resourceId.value]"
             }
           }
@@ -2004,8 +2707,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "1243829077110892354"
-            }
+              "templateHash": "13166458026376910484"
+            },
+            "name": "AVD workspace orchestration",
+            "description": "Creates or updates AVD feed and global workspaces across resource groups with optional private endpoints and diagnostics."
           },
           "functions": [
             {
@@ -2032,85 +2737,154 @@
               "allowedValues": [
                 "Create",
                 "Update"
-              ]
+              ],
+              "metadata": {
+                "description": "Required. Create deploys a new feed workspace; Update reads the existing workspace identified by workspaceResourceId."
+              }
             },
             "manageWorkspace": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether this module manages the feed workspace and its requested private endpoint."
+              }
             },
             "workspaceName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the feed workspace to create; update mode derives it from workspaceResourceId."
+              }
             },
             "workspaceResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Existing feed workspace resource ID required for Update mode; creation mode uses workspaceName instead."
+              }
             },
             "workspaceResourceGroupName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Target feed workspace resource group name in this subscription for Create mode."
+              }
             },
             "createWorkspaceResourceGroup": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to create the feed workspace resource group in Create mode; otherwise it must exist."
+              }
             },
             "workspaceLocation": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for new feed workspace resources and the fallback new global workspace location."
+              }
             },
             "workspaceFriendlyName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Friendly name for a new feed workspace; update mode preserves the existing value."
+              }
             },
             "workspacePublicNetworkAccess": {
               "type": "string",
               "allowedValues": [
                 "Disabled",
                 "Enabled"
-              ]
+              ],
+              "metadata": {
+                "description": "Required. Requested feed workspace public access setting; update without a private endpoint preserves the existing value."
+              }
             },
             "workspaceFeedPrivateEndpointSubnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of an existing subnet for the feed private endpoint; empty skips endpoint creation."
+              }
             },
             "avdPrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing feed private DNS zone; empty omits its endpoint DNS zone group."
+              }
             },
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing Log Analytics workspace; empty omits optional diagnostic settings."
+              }
             },
             "manageGlobalWorkspace": {
-              "type": "bool"
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether this module manages the global discovery workspace and its requested private endpoint."
+              }
             },
             "globalWorkspaceMode": {
               "type": "string",
               "allowedValues": [
                 "Create",
                 "Update"
-              ]
+              ],
+              "metadata": {
+                "description": "Required. Create deploys a new global workspace; Update reads globalWorkspaceResourceId."
+              }
             },
             "globalWorkspaceName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the global workspace to create; update mode derives it from globalWorkspaceResourceId."
+              }
             },
             "globalWorkspaceResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Existing global workspace ID required for Update mode; also passed through when the global workspace is not managed."
+              }
             },
             "globalWorkspaceResourceGroupName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Target global workspace resource group name in this subscription for Create mode."
+              }
             },
             "createGlobalWorkspaceResourceGroup": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to create the global workspace resource group in Create mode; otherwise it must exist."
+              }
             },
             "globalFeedPrivateEndpointSubnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of an existing subnet for the global discovery private endpoint; empty skips endpoint creation."
+              }
             },
             "globalFeedPrivateDnsZoneResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing global discovery private DNS zone; empty omits its endpoint DNS zone group."
+              }
             },
             "privateEndpointNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens."
+              }
             },
             "privateEndpointNICNameConv": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+              }
             }
           },
           "variables": {
@@ -2201,19 +2975,30 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "16945675830389891545"
-                    }
+                      "templateHash": "9072655300844897940"
+                    },
+                    "name": "Resource group",
+                    "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the resource group to deploy."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region for the resource group; must match the parent resource where required."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the resource group."
+                      }
                     }
                   },
                   "resources": [
@@ -2228,10 +3013,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the resource group."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -2272,8 +3063,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6557095143766166062"
-                    }
+                      "templateHash": "14662253317121929692"
+                    },
+                    "name": "AVD workspace",
+                    "description": "Deploys an AVD workspace with caller-supplied application group links and optional diagnostics. Application groups and user access are managed separately."
                   },
                   "definitions": {
                     "_1.logCategoryType": {
@@ -2310,6 +3103,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -2322,7 +3116,7 @@
                           "type": "string",
                           "nullable": true,
                           "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                            "description": "Optional. Explicit diagnostic setting resource name."
                           }
                         },
                         "workspaceId": {
@@ -2365,6 +3159,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -2373,15 +3168,24 @@
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the AVD workspace to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the AVD workspace; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the AVD workspace."
+                      }
                     },
                     "friendlyName": {
                       "type": "string",
@@ -2403,7 +3207,10 @@
                         "Disabled",
                         "Enabled"
                       ],
-                      "defaultValue": "Enabled"
+                      "defaultValue": "Enabled",
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
                     },
                     "applicationGroupResourceIds": {
                       "type": "array",
@@ -2414,7 +3221,10 @@
                     },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
                     }
                   },
                   "variables": {
@@ -2456,10 +3266,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the AVD workspace."
+                      },
                       "value": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the AVD workspace."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -2513,20 +3329,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "17011394048991037578"
-                    }
+                      "templateHash": "15245018200911253295"
+                    },
+                    "name": "Private endpoint",
+                    "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private endpoint to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the private endpoint."
+                      }
                     },
                     "subnetResourceId": {
                       "type": "string",
@@ -2616,10 +3443,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the private endpoint."
+                      },
                       "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the private endpoint."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -2657,19 +3490,30 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "16945675830389891545"
-                    }
+                      "templateHash": "9072655300844897940"
+                    },
+                    "name": "Resource group",
+                    "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the resource group to deploy."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region for the resource group; must match the parent resource where required."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the resource group."
+                      }
                     }
                   },
                   "resources": [
@@ -2684,10 +3528,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the resource group."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -2734,8 +3584,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6557095143766166062"
-                    }
+                      "templateHash": "14662253317121929692"
+                    },
+                    "name": "AVD workspace",
+                    "description": "Deploys an AVD workspace with caller-supplied application group links and optional diagnostics. Application groups and user access are managed separately."
                   },
                   "definitions": {
                     "_1.logCategoryType": {
@@ -2772,6 +3624,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -2784,7 +3637,7 @@
                           "type": "string",
                           "nullable": true,
                           "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                            "description": "Optional. Explicit diagnostic setting resource name."
                           }
                         },
                         "workspaceId": {
@@ -2827,6 +3680,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -2835,15 +3689,24 @@
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the AVD workspace to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the AVD workspace; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the AVD workspace."
+                      }
                     },
                     "friendlyName": {
                       "type": "string",
@@ -2865,7 +3728,10 @@
                         "Disabled",
                         "Enabled"
                       ],
-                      "defaultValue": "Enabled"
+                      "defaultValue": "Enabled",
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
                     },
                     "applicationGroupResourceIds": {
                       "type": "array",
@@ -2876,7 +3742,10 @@
                     },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
                     }
                   },
                   "variables": {
@@ -2918,10 +3787,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the AVD workspace."
+                      },
                       "value": "[resourceId('Microsoft.DesktopVirtualization/workspaces', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the AVD workspace."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -2976,20 +3851,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "17011394048991037578"
-                    }
+                      "templateHash": "15245018200911253295"
+                    },
+                    "name": "Private endpoint",
+                    "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private endpoint to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the private endpoint."
+                      }
                     },
                     "subnetResourceId": {
                       "type": "string",
@@ -3079,10 +3965,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the private endpoint."
+                      },
                       "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the private endpoint."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -3097,26 +3989,44 @@
           "outputs": {
             "workspaceResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Managed feed workspace resource ID, or an empty string when manageWorkspace is false."
+              },
               "value": "[if(parameters('manageWorkspace'), reference('workspace').outputs.resourceId.value, '')]"
             },
             "workspaceFeedPrivateEndpointResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Feed private endpoint resource ID, or an empty string when no managed feed endpoint is requested."
+              },
               "value": "[if(and(parameters('manageWorkspace'), not(empty(parameters('workspaceFeedPrivateEndpointSubnetResourceId')))), reference('workspaceFeedPrivateEndpoint').outputs.resourceId.value, '')]"
             },
             "globalWorkspaceResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Managed global workspace resource ID, or the supplied ID when manageGlobalWorkspace is false."
+              },
               "value": "[if(parameters('manageGlobalWorkspace'), reference('globalWorkspace').outputs.resourceId.value, parameters('globalWorkspaceResourceId'))]"
             },
             "globalFeedPrivateEndpointResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Global discovery private endpoint resource ID, or an empty string when no managed global endpoint is requested."
+              },
               "value": "[if(and(parameters('manageGlobalWorkspace'), not(empty(parameters('globalFeedPrivateEndpointSubnetResourceId')))), reference('globalFeedPrivateEndpoint').outputs.resourceId.value, '')]"
             },
             "controlPlaneResourceGroupName": {
               "type": "string",
+              "metadata": {
+                "description": "Effective feed workspace resource group name, or an empty string when the feed workspace is not managed."
+              },
               "value": "[if(parameters('manageWorkspace'), variables('effectiveWorkspaceResourceGroupName'), '')]"
             },
             "controlPlaneResourceGroupResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Effective feed workspace resource group ID, or an empty string when the feed workspace is not managed."
+              },
               "value": "[if(parameters('manageWorkspace'), format('/subscriptions/{0}/resourceGroups/{1}', variables('effectiveWorkspaceSubscriptionId'), variables('effectiveWorkspaceResourceGroupName')), '')]"
             }
           }
@@ -3194,6 +4104,9 @@
           "permittedIPs": {
             "value": "[parameters('permittedIPs')]"
           },
+          "paasPublicNetworkAccess": {
+            "value": "[parameters('paasPublicNetworkAccess')]"
+          },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('deployMonitoring'), createObject('value', reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId')))]",
           "tags": {
             "value": "[parameters('tags')]"
@@ -3207,82 +4120,194 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "17901447820396344200"
+              "templateHash": "2198958849629625729"
+            },
+            "name": "Shared Key Vault orchestration",
+            "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
+          },
+          "definitions": {
+            "publicNetworkAccessMode": {
+              "type": "string",
+              "allowedValues": [
+                "Auto",
+                "Disabled",
+                "Enabled",
+                "EnabledWithRestrictions"
+              ],
+              "metadata": {
+                "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../networking/functions.bicep"
+                }
+              }
             }
           },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "resolveNetworkAccess": {
+                  "parameters": [
+                    {
+                      "$ref": "#/definitions/publicNetworkAccessMode",
+                      "name": "mode"
+                    },
+                    {
+                      "type": "bool",
+                      "name": "privateEndpoint"
+                    },
+                    {
+                      "type": "bool",
+                      "name": "hasRules"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": {
+                      "publicNetworkAccess": "[if(or(equals(parameters('mode'), 'Disabled'), and(and(equals(parameters('mode'), 'Auto'), parameters('privateEndpoint')), not(parameters('hasRules')))), 'Disabled', 'Enabled')]",
+                      "defaultAction": "[if(or(equals(parameters('mode'), 'Enabled'), and(and(equals(parameters('mode'), 'Auto'), not(parameters('privateEndpoint'))), not(parameters('hasRules')))), 'Allow', 'Deny')]"
+                    }
+                  },
+                  "metadata": {
+                    "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../networking/functions.bicep"
+                    }
+                  }
+                }
+              }
+            }
+          ],
           "parameters": {
             "resourceGroupName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing target resource group in the deployment subscription."
+              }
             },
             "azureKeyVaultPrivateDnsZoneResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing Key Vault private DNS zone; empty omits the private endpoint DNS zone group."
+              }
             },
             "deploySecretsKeyVault": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to deploy the credential vault and any supplied nonempty credential secrets."
+              }
             },
             "secretsKeyVaultName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the credential vault to create when deploySecretsKeyVault is true."
+              }
             },
             "domainJoinUserPassword": {
               "type": "securestring",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Domain account password to store as a credential secret; empty skips this secret."
+              }
             },
             "domainJoinUserPrincipalName": {
               "type": "securestring",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Domain account UPN to store as a credential secret; empty skips this secret."
+              }
             },
             "secretsKeyVaultEnableSoftDelete": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to enable soft delete on the credential vault."
+              }
             },
             "secretsKeyVaultEnablePurgeProtection": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to enable purge protection on the credential vault."
+              }
             },
             "secretsKeyVaultRetentionInDays": {
               "type": "int",
-              "defaultValue": 90
+              "defaultValue": 90,
+              "metadata": {
+                "description": "Optional. Soft-delete retention interval in days for the credential vault."
+              }
             },
             "logAnalyticsWorkspaceResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing Log Analytics workspace; empty omits optional diagnostic settings."
+              }
             },
             "privateEndpoint": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Whether to create private endpoints. Public access is controlled separately by paasPublicNetworkAccess."
+              }
             },
             "privateEndpointSubnetResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected."
+              }
             },
             "privateEndpointNameConv": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens."
+              }
             },
             "privateEndpointNICNameConv": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+              }
             },
             "virtualMachineAdminPassword": {
               "type": "securestring",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Local administrator password to store as a credential secret; empty skips this secret."
+              }
             },
             "virtualMachineAdminUserName": {
               "type": "securestring",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Local administrator account name to store as a credential secret; empty skips this secret."
+              }
             },
             "deployEncryptionKeyVault": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to deploy the Premium encryption vault with soft delete and purge protection."
+              }
             },
             "encryptionKeyVaultName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the encryption vault to create when deployEncryptionKeyVault is true."
+              }
             },
             "encryptionKeyVaultRetentionInDays": {
               "type": "int",
@@ -3298,6 +4323,13 @@
               "defaultValue": [],
               "metadata": {
                 "description": "Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module."
+              }
+            },
+            "paasPublicNetworkAccess": {
+              "$ref": "#/definitions/publicNetworkAccessMode",
+              "defaultValue": "Auto",
+              "metadata": {
+                "description": "Optional. Public-access mode for both vaults. Auto preserves legacy behavior; configured IP rules and AzureServices bypass are retained in all modes."
               }
             }
           },
@@ -3320,18 +4352,17 @@
             "deployEncryptionKvPe": "[and(and(parameters('deployEncryptionKeyVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
             "deployKeyVaultPrivateEndpoint": "[or(variables('deploySecretsKvPe'), variables('deployEncryptionKvPe'))]",
             "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
-            "kvPublicAccessDisabled": "[and(parameters('privateEndpoint'), empty(variables('effectivePermittedIPs')))]",
-            "secretsKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
-            "encryptionKvPublicNetworkAccess": "[if(variables('kvPublicAccessDisabled'), 'Disabled', 'Enabled')]",
-            "kvHasNetworkRestrictions": "[or(parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
+            "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
+            "secretsKvPublicNetworkAccess": "[variables('networkAccess').publicNetworkAccess]",
+            "encryptionKvPublicNetworkAccess": "[variables('networkAccess').publicNetworkAccess]",
             "secretsKvNetworkAcls": {
               "bypass": "AzureServices",
-              "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
+              "defaultAction": "[variables('networkAccess').defaultAction]",
               "ipRules": "[variables('ipRules')]"
             },
             "encryptionKvNetworkAcls": {
               "bypass": "AzureServices",
-              "defaultAction": "[if(variables('kvHasNetworkRestrictions'), 'Deny', 'Allow')]",
+              "defaultAction": "[variables('networkAccess').defaultAction]",
               "ipRules": "[variables('ipRules')]"
             }
           },
@@ -3394,8 +4425,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6342770678444412859"
-                    }
+                      "templateHash": "10106478664532957708"
+                    },
+                    "name": "Key Vault",
+                    "description": "Deploys a Key Vault in the subscription tenant with caller-controlled protection, authorization, network access and optional diagnostics."
                   },
                   "definitions": {
                     "_1.logCategoryType": {
@@ -3432,6 +4465,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -3444,7 +4478,7 @@
                           "type": "string",
                           "nullable": true,
                           "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                            "description": "Optional. Explicit diagnostic setting resource name."
                           }
                         },
                         "workspaceId": {
@@ -3487,6 +4521,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -3495,15 +4530,24 @@
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the key Vault to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the key Vault; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the key Vault."
+                      }
                     },
                     "sku": {
                       "type": "string",
@@ -3518,19 +4562,31 @@
                     },
                     "enableRbacAuthorization": {
                       "type": "bool",
-                      "defaultValue": true
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Use Azure RBAC for vault data-plane authorization; role assignments are managed separately."
+                      }
                     },
                     "enableSoftDelete": {
                       "type": "bool",
-                      "defaultValue": true
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Enable soft delete for the vault."
+                      }
                     },
                     "softDeleteRetentionInDays": {
                       "type": "int",
-                      "defaultValue": 90
+                      "defaultValue": 90,
+                      "metadata": {
+                        "description": "Optional. Number of days deleted vault objects are retained."
+                      }
                     },
                     "enablePurgeProtection": {
                       "type": "bool",
-                      "defaultValue": true
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Enable vault purge protection; false omits the property rather than disabling existing protection."
+                      }
                     },
                     "enabledForDeployment": {
                       "type": "bool",
@@ -3541,7 +4597,10 @@
                     },
                     "enabledForTemplateDeployment": {
                       "type": "bool",
-                      "defaultValue": false
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Optional. Permit ARM template deployments to retrieve secrets from the vault."
+                      }
                     },
                     "enabledForDiskEncryption": {
                       "type": "bool",
@@ -3556,7 +4615,10 @@
                       "allowedValues": [
                         "Enabled",
                         "Disabled"
-                      ]
+                      ],
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
                     },
                     "networkAcls": {
                       "type": "object",
@@ -3566,12 +4628,15 @@
                         "ipRules": []
                       },
                       "metadata": {
-                        "description": "Network ACLs for the vault. Caller is responsible for setting bypass, defaultAction, and ipRules appropriate to the deployment topology (private endpoint, IP allowlist, Azure services bypass)."
+                        "description": "Optional. Vault network ACL object with bypass, defaultAction and ipRules."
                       }
                     },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
                     }
                   },
                   "variables": {
@@ -3629,14 +4694,23 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the key Vault."
+                      },
                       "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the key Vault."
+                      },
                       "value": "[parameters('name')]"
                     },
                     "uri": {
                       "type": "string",
+                      "metadata": {
+                        "description": "HTTPS data-plane URI of the deployed Key Vault."
+                      },
                       "value": "[reference('keyVault').vaultUri]"
                     }
                   }
@@ -3685,20 +4759,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "17011394048991037578"
-                    }
+                      "templateHash": "15245018200911253295"
+                    },
+                    "name": "Private endpoint",
+                    "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private endpoint to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the private endpoint."
+                      }
                     },
                     "subnetResourceId": {
                       "type": "string",
@@ -3788,10 +4873,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the private endpoint."
+                      },
                       "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the private endpoint."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -3835,18 +4926,29 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "4145429113786806653"
-                    }
+                      "templateHash": "11962983282251478937"
+                    },
+                    "name": "Key Vault secret",
+                    "description": "Writes a caller-supplied secure secret value to an existing Key Vault in the deployment resource group; returns the secret resource ID and name, not its value."
                   },
                   "parameters": {
                     "keyVaultName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the existing parent Key Vault in the deployment resource group."
+                      }
                     },
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the key Vault secret within its parent resource."
+                      }
                     },
                     "value": {
-                      "type": "securestring"
+                      "type": "securestring",
+                      "metadata": {
+                        "description": "Required. Secure secret value to write to the selected Key Vault."
+                      }
                     },
                     "contentType": {
                       "type": "string",
@@ -3857,7 +4959,10 @@
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the key Vault secret."
+                      }
                     }
                   },
                   "resources": [
@@ -3875,10 +4980,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the key Vault secret."
+                      },
                       "value": "[resourceId('Microsoft.KeyVault/vaults/secrets', parameters('keyVaultName'), parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the key Vault secret."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -3937,8 +5048,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6342770678444412859"
-                    }
+                      "templateHash": "10106478664532957708"
+                    },
+                    "name": "Key Vault",
+                    "description": "Deploys a Key Vault in the subscription tenant with caller-controlled protection, authorization, network access and optional diagnostics."
                   },
                   "definitions": {
                     "_1.logCategoryType": {
@@ -3975,6 +5088,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -3987,7 +5101,7 @@
                           "type": "string",
                           "nullable": true,
                           "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                            "description": "Optional. Explicit diagnostic setting resource name."
                           }
                         },
                         "workspaceId": {
@@ -4030,6 +5144,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -4038,15 +5153,24 @@
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the key Vault to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the key Vault; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the key Vault."
+                      }
                     },
                     "sku": {
                       "type": "string",
@@ -4061,19 +5185,31 @@
                     },
                     "enableRbacAuthorization": {
                       "type": "bool",
-                      "defaultValue": true
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Use Azure RBAC for vault data-plane authorization; role assignments are managed separately."
+                      }
                     },
                     "enableSoftDelete": {
                       "type": "bool",
-                      "defaultValue": true
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Enable soft delete for the vault."
+                      }
                     },
                     "softDeleteRetentionInDays": {
                       "type": "int",
-                      "defaultValue": 90
+                      "defaultValue": 90,
+                      "metadata": {
+                        "description": "Optional. Number of days deleted vault objects are retained."
+                      }
                     },
                     "enablePurgeProtection": {
                       "type": "bool",
-                      "defaultValue": true
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Enable vault purge protection; false omits the property rather than disabling existing protection."
+                      }
                     },
                     "enabledForDeployment": {
                       "type": "bool",
@@ -4084,7 +5220,10 @@
                     },
                     "enabledForTemplateDeployment": {
                       "type": "bool",
-                      "defaultValue": false
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Optional. Permit ARM template deployments to retrieve secrets from the vault."
+                      }
                     },
                     "enabledForDiskEncryption": {
                       "type": "bool",
@@ -4099,7 +5238,10 @@
                       "allowedValues": [
                         "Enabled",
                         "Disabled"
-                      ]
+                      ],
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
                     },
                     "networkAcls": {
                       "type": "object",
@@ -4109,12 +5251,15 @@
                         "ipRules": []
                       },
                       "metadata": {
-                        "description": "Network ACLs for the vault. Caller is responsible for setting bypass, defaultAction, and ipRules appropriate to the deployment topology (private endpoint, IP allowlist, Azure services bypass)."
+                        "description": "Optional. Vault network ACL object with bypass, defaultAction and ipRules."
                       }
                     },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
                     }
                   },
                   "variables": {
@@ -4172,14 +5317,23 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the key Vault."
+                      },
                       "value": "[resourceId('Microsoft.KeyVault/vaults', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the key Vault."
+                      },
                       "value": "[parameters('name')]"
                     },
                     "uri": {
                       "type": "string",
+                      "metadata": {
+                        "description": "HTTPS data-plane URI of the deployed Key Vault."
+                      },
                       "value": "[reference('keyVault').vaultUri]"
                     }
                   }
@@ -4228,20 +5382,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "17011394048991037578"
-                    }
+                      "templateHash": "15245018200911253295"
+                    },
+                    "name": "Private endpoint",
+                    "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private endpoint to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the private endpoint."
+                      }
                     },
                     "subnetResourceId": {
                       "type": "string",
@@ -4331,10 +5496,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the private endpoint."
+                      },
                       "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the private endpoint."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -4349,14 +5520,23 @@
           "outputs": {
             "secretsKeyVaultResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Created credential vault resource ID, or an empty string when credential vault deployment is disabled."
+              },
               "value": "[if(variables('deploySecretsKv'), reference('secretsKeyVault').outputs.resourceId.value, '')]"
             },
             "encryptionKeyVaultResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Created encryption vault resource ID, or an empty string when encryption vault deployment is disabled."
+              },
               "value": "[if(parameters('deployEncryptionKeyVault'), reference('encryptionKeyVault').outputs.resourceId.value, '')]"
             },
             "encryptionKeyVaultUri": {
               "type": "string",
+              "metadata": {
+                "description": "Created encryption vault URI, or an empty string when encryption vault deployment is disabled."
+              },
               "value": "[if(parameters('deployEncryptionKeyVault'), reference('encryptionKeyVault').outputs.uri.value, '')]"
             }
           }
@@ -4437,8 +5617,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "328170013390115932"
-            }
+              "templateHash": "18375868205953141735"
+            },
+            "name": "FSLogix Azure Files backup vault",
+            "description": "Creates or adopts a Recovery Services vault and optionally manages a daily Azure Files snapshot policy."
           },
           "parameters": {
             "createVault": {
@@ -4451,7 +5633,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Required. Whether to create or update the Azure Files snapshot backup policy."
+                "description": "Optional. Whether to create or update the Azure Files snapshot backup policy."
               }
             },
             "existingRecoveryServicesVaultResourceId": {
@@ -4621,8 +5803,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "1935415979737951843"
-                    }
+                      "templateHash": "10433590796871694637"
+                    },
+                    "name": "Recovery Services vault",
+                    "description": "Deploys a Recovery Services vault with backup storage, security settings and optional diagnostics or CMK. Key access must be granted separately; system-identity CMK can require staged deployment."
                   },
                   "definitions": {
                     "_1.logCategoryType": {
@@ -4659,6 +5843,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -4671,7 +5856,7 @@
                           "type": "string",
                           "nullable": true,
                           "metadata": {
-                            "description": "Optional. Override name for the diagnostic setting resource. If omitted, a deterministic name is generated from the workspace ID."
+                            "description": "Optional. Explicit diagnostic setting resource name."
                           }
                         },
                         "workspaceId": {
@@ -4714,6 +5899,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../types/diagnosticSettings.bicep"
                         }
@@ -4722,19 +5908,31 @@
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the recovery Services vault to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the recovery Services vault; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the recovery Services vault."
+                      }
                     },
                     "publicNetworkAccess": {
                       "type": "string",
-                      "defaultValue": "Disabled"
+                      "defaultValue": "Disabled",
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
                     },
                     "storageType": {
                       "type": "string",
@@ -4782,12 +5980,15 @@
                       "type": "bool",
                       "defaultValue": false,
                       "metadata": {
-                        "description": "Optional. When true, the vault uses its system-assigned managed identity to access the CMK key vault. Required when the vault has a private endpoint — Azure does not support user-assigned identity for CMK in that scenario. Mutually exclusive with cmkUserAssignedIdentityResourceId."
+                        "description": "Optional. Use the vault system identity for CMK; required for private-endpoint CMK and mutually exclusive with cmkUserAssignedIdentityResourceId."
                       }
                     },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
-                      "nullable": true
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
                     }
                   },
                   "variables": {
@@ -4858,14 +6059,23 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the recovery Services vault."
+                      },
                       "value": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the recovery Services vault."
+                      },
                       "value": "[parameters('name')]"
                     },
                     "principalId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Vault identity principal ID when a system identity or CMK user identity is configured; otherwise an empty string."
+                      },
                       "value": "[if(or(parameters('cmkUseSystemAssignedIdentity'), and(variables('cmkEnabled'), not(empty(parameters('cmkUserAssignedIdentityResourceId'))))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
                     }
                   }
@@ -4925,15 +6135,23 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "3558080141387992526"
-                    }
+                      "templateHash": "7438556704380147079"
+                    },
+                    "name": "Recovery Services backup policy",
+                    "description": "Creates or updates a backup policy under an existing Recovery Services vault in the deployment resource group using caller-supplied workload-specific properties."
                   },
                   "parameters": {
                     "recoveryServicesVaultName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the existing Recovery Services vault in the deployment resource group."
+                      }
                     },
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the recovery Services backup policy to deploy."
+                      }
                     },
                     "properties": {
                       "type": "object",
@@ -4953,10 +6171,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the recovery Services backup policy."
+                      },
                       "value": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the recovery Services backup policy."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -5010,20 +6234,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "17011394048991037578"
-                    }
+                      "templateHash": "15245018200911253295"
+                    },
+                    "name": "Private endpoint",
+                    "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private endpoint to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the private endpoint."
+                      }
                     },
                     "subnetResourceId": {
                       "type": "string",
@@ -5113,10 +6348,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the private endpoint."
+                      },
                       "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the private endpoint."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -5131,14 +6372,23 @@
           "outputs": {
             "recoveryServicesVaultResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the newly deployed vault or the caller-supplied existing vault."
+              },
               "value": "[if(parameters('createVault'), reference('recoveryServicesVault').outputs.resourceId.value, parameters('existingRecoveryServicesVaultResourceId'))]"
             },
             "fileShareBackupPolicyName": {
               "type": "string",
+              "metadata": {
+                "description": "Selected Azure Files backup policy name, returned whether or not this module manages the policy."
+              },
               "value": "[parameters('fileSharePolicyName')]"
             },
             "fileShareBackupPolicyResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Constructed policy resource ID in the selected vault; when manageBackupPolicy is false, existence is the caller responsibility."
+              },
               "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.RecoveryServices/vaults/{2}/backupPolicies/{3}', variables('effectiveVaultSubscriptionId'), variables('effectiveVaultResourceGroupName'), variables('effectiveVaultName'), parameters('fileSharePolicyName'))]"
             }
           }
@@ -5168,7 +6418,7 @@
     "secretsKeyVaultResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the Secrets Key Vault. Pass as \"existingCredentialsKeyVaultResourceId\" to the standard host pool, or \"credentialsKeyVaultResourceId\" to the automated host pool, Session Host Replacer, and Session Hosts add-on deployments."
+        "description": "Secrets Key Vault resource ID for credentials access by consuming host-pool and session-host deployments."
       },
       "value": "[if(variables('createSecretsKeyVault'), reference('keyVaults').outputs.secretsKeyVaultResourceId.value, parameters('existingSecretsKeyVaultResourceId'))]"
     },
@@ -5210,7 +6460,7 @@
     "logAnalyticsWorkspaceResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as \"existingLogAnalyticsWorkspaceResourceId\" to the host pool deployment and \"logAnalyticsWorkspaceResourceId\" to the Image Management deployment."
+        "description": "Shared Log Analytics workspace resource ID; empty when not deployed. Supply to host-pool and Image Management diagnostic settings."
       },
       "value": "[if(parameters('deployMonitoring'), reference('monitoring').outputs.logAnalyticsWorkspaceResourceId.value, parameters('existingLogAnalyticsWorkspaceResourceId'))]"
     },
@@ -5280,7 +6530,7 @@
     "fslogixBackupVaultResourceId": {
       "type": "string",
       "metadata": {
-        "description": "The resource ID of the shared FSLogix Recovery Services vault. Pass as \"existingFilesBackupVaultResourceId\" to standard or automated pooled host pool deployments, or \"recoveryServicesVaultResourceId\" to the FSLogix Storage add-on."
+        "description": "Shared FSLogix Recovery Services vault resource ID, for reuse by pooled host pools and the standalone FSLogix Storage add-on."
       },
       "value": "[if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('existingFSLogixBackupVaultResourceId'))]"
     },

@@ -1,3 +1,6 @@
+metadata name = 'Automated AVD host pool'
+metadata description = 'Deploys an automated pooled host pool with a system-assigned identity and optional diagnostics. Session host configuration and management settings are deployed separately.'
+
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
 
 @description('Required. Name of the automated pooled host pool.')
@@ -75,6 +78,9 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
   }
 }
 
+@description('Resource ID of the automated AVD host pool.')
 output resourceId string = hostPool.id
+@description('Azure resource name of the automated AVD host pool.')
 output name string = hostPool.name
+@description('Microsoft Entra principal ID of the automated host pool system-assigned identity.')
 output principalId string = hostPool.identity.principalId

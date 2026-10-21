@@ -1,7 +1,13 @@
 targetScope = 'subscription'
 
+metadata name = 'AVD service principal subscription roles'
+metadata description = 'Assigns subscription-scoped roles to an existing AVD service principal for start VM on connect and the selected scaling method. Does not create the service principal or configure host-pool scaling.'
+
+@description('Required. Object ID of the existing Azure Virtual Desktop service principal, not its application/client ID.')
 param avdServicePrincipalObjectId string
+@description('Optional. Scaling method that selects the subscription role assignments. None assigns the power-on role only when startVMOnConnect is true; other methods assign power-on/off, with the additional VM role for CreateDeletePowerManage.')
 param scalingMethod 'None' | 'PowerManage' | 'CreateDeletePowerManage' = 'None'
+@description('Required. Enables the power-on role assignment when scalingMethod is None. Does not change the host pool start-on-connect setting.')
 param startVMOnConnect bool
 
 var powerOnContributorRoleId = '489581de-a3bd-480d-9518-53dea7416b33'

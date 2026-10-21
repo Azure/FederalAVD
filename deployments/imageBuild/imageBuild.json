@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "5554320366355957898"
+      "templateHash": "8174311112090605636"
     }
   },
   "definitions": {
@@ -75,6 +75,7 @@
         }
       },
       "metadata": {
+        "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../shared/modules/resourceModules/types/customizationTypes.bicep"
         }
@@ -118,12 +119,116 @@
         }
       },
       "metadata": {
+        "description": "Artifact customization input with an optional post-execution VM restart request.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../shared/modules/resourceModules/types/customizationTypes.bicep"
         }
       }
     }
   },
+  "functions": [
+    {
+      "namespace": "__bicep",
+      "members": {
+        "imageBuildRunId": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "subscriptionId"
+            },
+            {
+              "type": "string",
+              "name": "deploymentName"
+            },
+            {
+              "type": "string",
+              "name": "timestamp"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[uniqueString(parameters('subscriptionId'), parameters('deploymentName'), parameters('timestamp'))]"
+          },
+          "metadata": {
+            "description": "Preserves the full build-run identity seeded by subscription, deployment name and timestamp.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "namePattern": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "pattern"
+            },
+            {
+              "type": "object",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.render(variables('namingPolicy').patterns[parameters('pattern')], union(createObject('delimiter', variables('namingPolicy').defaults.delimiter), parameters('context')))]"
+          },
+          "metadata": {
+            "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "regionAbbreviation": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[variables('_1.locationDefinitions')[if(startsWith(toLower(parameters('cloud')), 'us'), 'other', parameters('cloud'))][if(startsWith(toLower(parameters('cloud')), 'us'), substring(parameters('region'), 5, max(sub(length(parameters('region')), 5), 0)), parameters('region'))].abbreviation]"
+          },
+          "metadata": {
+            "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        }
+      }
+    },
+    {
+      "namespace": "_1",
+      "members": {
+        "render": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "pattern"
+            },
+            {
+              "type": "object",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[reduce(items(parameters('context')), parameters('pattern'), lambda('result', 'item', replace(lambdaVariables('result'), format('{{{0}}}', lambdaVariables('item').key), string(lambdaVariables('item').value))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        }
+      }
+    }
+  ],
   "parameters": {
     "timeStamp": {
       "type": "string",
@@ -316,14 +421,14 @@
         "Persistent"
       ],
       "metadata": {
-        "description": "Specifies the VDI optimization profile for VMs provisioned from this image.\n  NonPersistent-UpdatesOnly - Locks down software update channels only (OS, M365, Teams,\n    OneDrive, Edge, WebView2, Store). Use when managing other VDI hardening separately.\n  NonPersistent-Full - Full optimization for pooled host pools (VMs replaced on a regular\n    cadence). All sections applied including update-channel lockdown.\n  Persistent - Full optimization minus update-channel lockdown. Use for personal host pools\n    managed by SCCM, Intune, or similar tooling.\n  None - Skip optimization. Only vdiOptimizationAirGapped takes effect when None.\n\nThis replaces the former applyWindowsDesktopOptimizations + disableSoftwareUpdates parameters.\nRef: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration\n"
+        "description": "Selects the VDI optimization profile. None skips profile optimization; independent vdiOptimizationAirGapped settings can still apply."
       }
     },
     "vdiOptimizationAirGapped": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "When true, applies settings for air-gapped or internet-restricted environments:\ndisables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and\nDiagTrack telemetry (Section 7 of Optimize-AVDImage.ps1). Applies independently of\nvdiOptimizationProfile, including when profile is None. Recommended for air-gapped or\nproxy-only government deployments.\n"
+        "description": "Apply the image's air-gapped/restricted-network optimization settings independently of vdiOptimizationProfile, including when the profile is None."
       }
     },
     "customizations": {
@@ -333,7 +438,7 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "An array of image customization objects that are executed first before any restarts or updates.\nEach object contains the following properties:\n-name: Required. The name of the script or application that is running minus extension\n-blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Optional. Arguments required by the installer or script being ran.\n  For .ps1/.zip: \"-ParamName Value -SwitchParam\"\n  For arrays: use @() syntax with single quotes - e.g. \"-Domains @('a.com','b.com')\" or \"@('a.com', 'b.com')\" (spaces after commas are fine).\n  Single quotes need no JSON escaping. Double quotes within arguments require \\\".\n-restart: Optional. Boolean. When true, the image VM restarts after this customization completes.\n\nJSON example:\n[\n  {\n    \"name\": \"FSLogix\",\n    \"blobNameOrUri\": \"https://aka.ms/fslogix_download\"\n  },\n  {\n    \"name\": \"VSCode\",\n    \"blobNameOrUri\": \"VSCode.zip\",\n    \"arguments\": \"/verysilent /mergetasks=!runcode\",\n    \"restart\": true\n  }\n]\n"
+        "description": "Image customizations executed before restarts and updates: name and blobNameOrUri are required; arguments and restart are optional."
       }
     },
     "vdiCustomizations": {
@@ -343,7 +448,7 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "An array of image customization objects that are executed just before sysprep. These customizations are applications that\ngenerate unique identifiers that should be removed before the image is generalized. Therefore, these customizations are executed without\nrestart switches to prevent the generation of these unique identifiers.\nEach object contains the following properties:\n-name: Required. The name of the script or application that is running minus extension\n-blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.\n-arguments: Optional. Arguments required by the installer or script being ran.\n  For .ps1/.zip: \"-ParamName Value -SwitchParam\"\n  For arrays: use @() syntax with single quotes - e.g. \"-Domains @('a.com','b.com')\" or \"@('a.com', 'b.com')\" (spaces after commas are fine).\n  Single quotes need no JSON escaping. Double quotes within arguments require \\\".\n\n\nJSON example:\n[\n  {\n    \"name\": \"ThirdPartyApp\",\n    \"blobNameOrUri\": \"ThirdPartyApp.zip\",\n    \"arguments\": \"MODE=VDI /norestart\"\n  }\n]\n"
+        "description": "Final pre-sysprep customizations with name, blobNameOrUri, and optional arguments. Do not request restarts that regenerate application-specific identifiers."
       }
     },
     "cleanupDesktop": {
@@ -452,7 +557,7 @@
       "defaultValue": "",
       "maxLength": 80,
       "metadata": {
-        "description": "Conditional. The name of the image Definition to create in the Compute Gallery.\nOnly valid if [imageDefinitionResourceId] is not provided.\nIf left blank, the image definition name will be built on Cloud Adoption Framework principals and based on the [imageDefinitonPublisher], [imageDefinitionOffer], and [imageDefinitionSku] values."
+        "description": "Conditional. New Compute Gallery image definition name; ignored when imageDefinitionResourceId is supplied. Empty derives a name from publisher, offer, and SKU."
       }
     },
     "imageDefinitionPublisher": {
@@ -628,6 +733,642 @@
   },
   "variables": {
     "$fxv#0": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "automationAccounts": "aa",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "disk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "virtualNetworks": "vnet",
+      "subnets": "snet",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "$fxv#1": {
+      "AVDAgent": {
+        "Description": "Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
+      },
+      "AVDAgentBootloader": {
+        "Description": "Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
+      },
+      "Office365DeploymentTool": {
+        "Description": "Office 365 Deployment Tool",
+        "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
+        "DestinationFileName": "Office365DeploymentTool.exe"
+      },
+      "OneDrive": {
+        "Description": "OneDrive Sync Client",
+        "DownloadUrl": "https://update.azure.odsync.ENVSUFFIX/onedrivecontainer/Win/Installer64/OneDriveSetup.exe",
+        "DestinationFileName": "OneDriveSetup.exe"
+      },
+      "TeamsBootstrapper": {
+        "Description": "Microsoft Teams Bootstrapper",
+        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-teamsprovision/lkg/teamsbootstrapper.exe",
+        "DestinationFileName": "teamsbootstrapper.exe"
+      },
+      "Teams64BitMSIX": {
+        "Description": "Microsoft Teams 64-bit MSIX",
+        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-windows-x64/enterprise/webview2/lkg/MSTeams-x64.msix",
+        "DestinationFileName": "MSTeams-x64.msix"
+      },
+      "WebView2Runtime": {
+        "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
+        "DestinationFileName": "WebView2.exe"
+      },
+      "RemoteDesktopWebRTCRedirectorService": {
+        "Description": "Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
+        "DestinationFileName": "MsRdcWebRTCSvc.msi"
+      },
+      "VisualStudioRedistributables": {
+        "Description": "Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
+        "DestinationFileName": "vc_redist.x64.exe"
+      },
+      "FSLogix": {
+        "Description": "FSLogix Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
+        "DestinationFileName": "FSLogix.zip"
+      }
+    },
+    "$fxv#2": {
+      "AVDAgent": {
+        "Description": "Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
+      },
+      "AVDAgentBootloader": {
+        "Description": "Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
+      },
+      "Office365DeploymentTool": {
+        "Description": "Office 365 Deployment Tool",
+        "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
+        "DestinationFileName": "Office365DeploymentTool.exe"
+      },
+      "OneDrive": {
+        "Description": "OneDrive Sync Client",
+        "DownloadUrl": "https://update.azure.odsync.ENVSUFFIX/onedrivecontainer/Win/Installer64/OneDriveSetup.exe",
+        "DestinationFileName": "OneDriveSetup.exe"
+      },
+      "TeamsBootstrapper": {
+        "Description": "Microsoft Teams Bootstrapper",
+        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-teamsprovision/lkg/teamsbootstrapper.exe",
+        "DestinationFileName": "teamsbootstrapper.exe"
+      },
+      "Teams64BitMSIX": {
+        "Description": "Microsoft Teams 64-bit MSIX",
+        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-windows-x64/enterprise/webview2/lkg/MSTeams-x64.msix",
+        "DestinationFileName": "MSTeams-x64.msix"
+      },
+      "WebView2Runtime": {
+        "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
+        "DestinationFileName": "WebView2.exe"
+      },
+      "RemoteDesktopWebRTCRedirectorService": {
+        "Description": "Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
+        "DestinationFileName": "MsRdcWebRTCSvc.msi"
+      },
+      "VisualStudioRedistributables": {
+        "Description": "Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
+        "DownloadUrl": "",
+        "DestinationFileName": "vc_redist.x64.exe"
+      },
+      "FSLogix": {
+        "Description": "FSLogix Installer",
+        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
+        "DestinationFileName": "FSLogix.zip"
+      }
+    },
+    "$fxv#3": {
+      "AVDAgent": {
+        "Description": "Required: Azure Virtual Desktop Agent Installer",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2310011",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
+      },
+      "AVDAgentBootloader": {
+        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2311028",
+        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
+      },
+      "FSLogix": {
+        "Description": "Required: FSLogix",
+        "DownloadUrl": "https://aka.ms/fslogix_download",
+        "DestinationFileName": "FSLogix.zip"
+      },
+      "Office365DeploymentTool": {
+        "Description": "Required: Office 365 Deployment Tool",
+        "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
+        "DestinationFileName": "Office365DeploymentTool.exe"
+      },
+      "OneDrive": {
+        "Description": "Required: OneDrive Sync Client",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=844652",
+        "DestinationFileName": "OneDriveSetup.exe"
+      },
+      "TeamsBootstrapper": {
+        "Description": "Required: Microsoft Teams Bootstrapper",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
+        "DestinationFileName": "teamsbootstrapper.exe"
+      },
+      "Teams64BitMSIX": {
+        "Description": "Required: Microsoft Teams 64-bit MSIX",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
+        "DestinationFileName": "MSTeams-x64.msix"
+      },
+      "WebView2Runtime": {
+        "Description": "Required: Microsoft Edge WebView2 Runtime",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
+        "DestinationFileName": "WebView2.exe"
+      },
+      "RemoteDesktopWebRTCRedirectorService": {
+        "Description": "Required: Microsoft Remote Desktop WebRTC Redirector Service",
+        "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
+        "DestinationFileName": "MsRdcWebRTCSvc.msi"
+      },
+      "VisualStudioRedistributables": {
+        "Description": "Required: Visual Studio C++ Redistributables",
+        "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        "DestinationFileName": "vc_redist.x64.exe"
+      }
+    },
+    "$fxv#4": "$ErrorActionPreference = 'Stop'\r\n\r\ntry {\r\n    $DriveLetter = $env:SystemDrive.TrimEnd(':')\r\n    Update-HostStorageCache -ErrorAction SilentlyContinue\r\n    $Part = Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop\r\n    $CurrentSizeGB = [math]::Round($Part.Size / 1GB, 2)\r\n    Write-Output \"Current partition size: $CurrentSizeGB GB (drive: $DriveLetter)\"\r\n\r\n    # Use diskpart to extend - bypasses VDS entirely, no timing race on first boot.\r\n    $diskpartScript = \"select disk $($Part.DiskNumber)`r`nselect partition $($Part.PartitionNumber)`r`nextend\"\r\n    $scriptPath = Join-Path $env:TEMP 'diskpart_extend.txt'\r\n    [System.IO.File]::WriteAllText($scriptPath, $diskpartScript, [System.Text.Encoding]::ASCII)\r\n    $diskpartOutput = & diskpart /s $scriptPath 2>&1\r\n    Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue\r\n    Write-Output \"Diskpart result: $($diskpartOutput -join ' | ')\"\r\n\r\n    $PartAfter = Get-Partition -DriveLetter $DriveLetter -ErrorAction SilentlyContinue\r\n    if ($PartAfter -and $PartAfter.Size -gt $Part.Size) {\r\n        $NewSizeGB = [math]::Round($PartAfter.Size / 1GB, 2)\r\n        Write-Output \"OS partition resized successfully: $CurrentSizeGB GB -> $NewSizeGB GB\"\r\n    } else {\r\n        Write-Output \"OS partition is already at maximum size. No resize needed.\"\r\n    }\r\n}\r\ncatch {\r\n    Write-Error \"Failed to resize OS partition: $($_.Exception.Message)\"\r\n    exit 1\r\n}\r\n",
+    "$fxv#5": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVmResourceId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ManagementVmResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ImageResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ResourceGroupId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $StopWatch = [Diagnostics.Stopwatch]::StartNew()\r\n\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token  -  use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    Function Invoke-ArmDelete {\r\n        param(\r\n            [Parameter(Mandatory=$true)]\r\n            [string]$Uri\r\n        )\r\n\r\n        Try {\r\n            Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $Uri | Out-Null\r\n        } Catch {\r\n            $StatusCode = if ($null -ne $_.Exception.Response) {\r\n                [int]$_.Exception.Response.StatusCode\r\n            } else {\r\n                $null\r\n            }\r\n\r\n            # Deletion is idempotent; an already-absent temporary resource is the desired state.\r\n            If ($StatusCode -ne 404) {\r\n                Throw\r\n            }\r\n        }\r\n    }\r\n\r\n    Function Wait-ForRunCommandReporting {\r\n        # Match deployment-helper cleanup: allow Managed Run Command at least 30 seconds to report\r\n        # status to ARM before deleting its parent VM or resource group.\r\n        $StopWatch.Stop()\r\n        If ($StopWatch.Elapsed.TotalSeconds -lt 30) {\r\n            Start-Sleep -Seconds (30 - $StopWatch.Elapsed.TotalSeconds)\r\n        }\r\n    }\r\n\r\n    If (-not [string]::IsNullOrEmpty($ResourceGroupId)) {\r\n        # New RG path  -  delete the entire resource group (cleans up all VMs, disks, NICs, images)\r\n        Wait-ForRunCommandReporting\r\n        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '?api-version=2021-04-01')\r\n    } Else {\r\n        # Existing RG path  -  delete individual VMs only, leave the RG intact\r\n\r\n        # Delete Image VM\r\n        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')\r\n\r\n        # Delete the managed image (if it exists  -  only present for Trusted Launch compatible security type)\r\n        If (-not [string]::IsNullOrEmpty($ImageResourceId)) {\r\n            Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')\r\n        }\r\n\r\n        # Delete the Management VM\r\n        Wait-ForRunCommandReporting\r\n        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
+    "buildTimestamp": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
+    "buildRunId": "[__bicep.imageBuildRunId(subscription().subscriptionId, deployment().name, variables('buildTimestamp'))]",
+    "uniqueCustomizers": "[map(range(0, length(parameters('customizations'))), lambda('i', union(createObject('name', if(greater(length(filter(parameters('customizations'), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('customizations')[lambdaVariables('i')].name, length(filter(take(parameters('customizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name))))), parameters('customizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('customizations')[lambdaVariables('i')].blobNameOrUri, 'restart', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'restart'), false())), if(empty(coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'arguments'), '')), createObject(), createObject('arguments', parameters('customizations')[lambdaVariables('i')].arguments)), if(empty(coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'successExitCodes'), '')), createObject(), createObject('successExitCodes', parameters('customizations')[lambdaVariables('i')].successExitCodes)))))]",
+    "uniqueVdiCustomizers": "[map(range(0, length(parameters('vdiCustomizations'))), lambda('i', union(createObject('name', if(greater(length(filter(parameters('vdiCustomizations'), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('vdiCustomizations')[lambdaVariables('i')].name, length(filter(take(parameters('vdiCustomizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name))))), parameters('vdiCustomizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('vdiCustomizations')[lambdaVariables('i')].blobNameOrUri), if(empty(coalesce(tryGet(parameters('vdiCustomizations')[lambdaVariables('i')], 'arguments'), '')), createObject(), createObject('arguments', parameters('vdiCustomizations')[lambdaVariables('i')].arguments)), if(empty(coalesce(tryGet(parameters('vdiCustomizations')[lambdaVariables('i')], 'successExitCodes'), '')), createObject(), createObject('successExitCodes', parameters('vdiCustomizations')[lambdaVariables('i')].successExitCodes)))))]",
+    "cloud": "[toLower(environment().name)]",
+    "locationAbbreviation": "[__bicep.regionAbbreviation(parameters('location'), environment().name)]",
+    "resourceAbbreviations": "[variables('$fxv#0')]",
+    "downloads": "[if(startsWith(variables('cloud'), 'usn'), variables('$fxv#1'), if(startsWith(variables('cloud'), 'uss'), variables('$fxv#2'), variables('$fxv#3')))]",
+    "artifactsContainerUriNormalized": "[if(endsWith(parameters('artifactsContainerUri'), '/'), take(parameters('artifactsContainerUri'), max(sub(length(parameters('artifactsContainerUri')), 1), 0)), parameters('artifactsContainerUri'))]",
+    "depPrefix": "[if(not(empty(parameters('deploymentPrefix'))), __bicep.namePattern('deploymentPrefix', createObject('prefix', parameters('deploymentPrefix'))), '')]",
+    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), __bicep.namePattern('imageBuildResourceGroup', createObject('resourceGroups', variables('resourceAbbreviations').resourceGroups, 'prefix', variables('depPrefix'), 'workload', variables('namingPolicy').defaults.workload, 'location', variables('locationAbbreviation'), 'timestamp', variables('buildTimestamp'), 'unique', take(variables('buildRunId'), variables('namingPolicy').limits.uniqueSuffix))), __bicep.namePattern('imageBuildCustomResourceGroup', createObject('name', parameters('customBuildResourceGroupName'), 'timestamp', variables('buildTimestamp'), 'unique', take(variables('buildRunId'), variables('namingPolicy').limits.uniqueSuffix)))), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
+    "adminPw": "[format('1qaz@WSX{0}', uniqueString(subscription().id, variables('imageBuildResourceGroupName')))]",
+    "adminUserName": "vmadmin",
+    "existingLogStorageAccountName": "[if(empty(parameters('logStorageAccountResourceId')), '', last(split(parameters('logStorageAccountResourceId'), '/')))]",
+    "logContainerUri": "[if(and(parameters('collectCustomizationLogs'), not(empty(parameters('logStorageAccountResourceId')))), format('https://{0}.blob.{1}/{2}/', variables('existingLogStorageAccountName'), environment().suffixes.storage, parameters('logContainerName')), '')]",
+    "normalizedImageDefinitionSecurityType": "[if(equals(parameters('imageDefinitionSecurityType'), 'TrustedLaunchAndConfidentialVMSupported'), 'TrustedLaunchAndConfidentialVmSupported', parameters('imageDefinitionSecurityType'))]",
+    "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
+    "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), replace(__bicep.namePattern('imageDefinition', createObject('imageDefinitions', variables('resourceAbbreviations').imageDefinitions, 'publisher', replace(variables('effectiveGalleryImageDefinitionPublisher'), '-', ''), 'offer', replace(variables('effectiveGalleryImageDefinitionOffer'), '-', ''), 'sku', replace(variables('effectiveGalleryImageDefinitionSku'), '-', ''))), ' ', ''), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
+    "effectiveGalleryImageDefinitionOffer": "[if(not(empty(parameters('imageDefinitionOffer'))), replace(parameters('imageDefinitionOffer'), ' ', ''), parameters('mpOffer'))]",
+    "effectiveGalleryImageDefinitionPublisher": "[if(not(empty(parameters('imageDefinitionPublisher'))), replace(parameters('imageDefinitionPublisher'), ' ', ''), parameters('mpPublisher'))]",
+    "effectiveGalleryImageDefinitionSku": "[if(not(empty(parameters('imageDefinitionSku'))), replace(parameters('imageDefinitionSku'), ' ', ''), parameters('mpSku'))]",
+    "autoImageVersionName": "[format('{0}.{1}.{2}', substring(variables('buildTimestamp'), 0, 4), substring(variables('buildTimestamp'), 4, 4), substring(variables('buildTimestamp'), 8, 4))]",
+    "imageVersionName": "[if(and(and(not(equals(parameters('imageMajorVersion'), -1)), not(equals(parameters('imageMajorVersion'), -1))), not(equals(parameters('imagePatch'), -1))), format('{0}.{1}.{2}', parameters('imageMajorVersion'), parameters('imageMinorVersion'), parameters('imagePatch')), variables('autoImageVersionName'))]",
+    "effectiveConfidentialVmDiskEncryptionSetResourceId": "[if(equals(parameters('galleryImageVersionConfidentialVMEncryptionType'), 'EncryptedWithCmk'), parameters('confidentialVMDiskEncryptionSetResourceId'), '')]",
+    "imageVersionEndOfLifeDate": "[if(greater(parameters('imageVersionEOLinDays'), 0), dateTimeAdd(variables('buildTimestamp'), format('P{0}D', parameters('imageVersionEOLinDays'))), '')]",
+    "imageVmName": "[__bicep.namePattern('imageBuildVm', createObject('prefix', variables('depPrefix'), 'unique', variables('buildRunId')))]",
+    "orchestrationVmName": "[__bicep.namePattern('imageBuildOrchestrationVm', createObject('prefix', variables('depPrefix'), 'unique', variables('buildRunId')))]",
+    "_1._2": {
+      "defaults": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "identifiers": {
+        "imageManagement": "image-management",
+        "replacerFallback": "replacer",
+        "sharedFslogix": "fslogix"
+      },
+      "limits": {
+        "keyVault": 24,
+        "functionApp": 60,
+        "storageAccount": 24,
+        "deploymentVm": 15,
+        "fslogixStoragePrefix": 13,
+        "uniqueSuffix": 6,
+        "imageManagementStoragePrefix": 5,
+        "imageManagementStorageLocation": 4
+      },
+      "resources": {
+        "operationsResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "operations"
+          ]
+        },
+        "monitoringResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "monitoring"
+          ]
+        },
+        "controlPlaneResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "control",
+            "plane"
+          ]
+        },
+        "globalFeedResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "global",
+            "feed"
+          ]
+        },
+        "globalFeedWorkspace": {
+          "type": "workspaces",
+          "purpose": [
+            "global",
+            "feed"
+          ]
+        },
+        "workspace": {
+          "type": "workspaces",
+          "purpose": []
+        },
+        "hostWorkspace": {
+          "type": "workspaces",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "deploymentResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "deployment"
+          ]
+        },
+        "deploymentVm": {
+          "type": "",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "consolidatedResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "hostsResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "hosts"
+          ]
+        },
+        "storageResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "storage"
+          ]
+        },
+        "secretsKeyVault": {
+          "type": "keyVaults",
+          "purpose": [
+            "sec",
+            "{unique}"
+          ]
+        },
+        "encryptionKeyVault": {
+          "type": "keyVaults",
+          "purpose": [
+            "enc",
+            "{unique}"
+          ]
+        },
+        "dataCollectionEndpoint": {
+          "type": "dataCollectionEndpoints",
+          "purpose": []
+        },
+        "logAnalyticsWorkspace": {
+          "type": "logAnalyticsWorkspaces",
+          "purpose": []
+        },
+        "hostPool": {
+          "type": "hostPools",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "desktopApplicationGroup": {
+          "type": "desktopApplicationGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "scalingPlan": {
+          "type": "scalingPlans",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "vmBackupVault": {
+          "type": "recoveryServicesVaults",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "filesBackupVault": {
+          "type": "recoveryServicesVaults",
+          "purpose": [
+            "files"
+          ]
+        },
+        "identityPattern": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}",
+            "TOKEN"
+          ]
+        },
+        "availabilitySet": {
+          "type": "availabilitySets",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "diskAccess": {
+          "type": "diskAccesses",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "diskEncryptionSetPattern": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}",
+            "TOKEN"
+          ]
+        },
+        "netAppAccount": {
+          "type": "netAppAccounts",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "netAppCapacityPool": {
+          "type": "netAppCapacityPools",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "imageManagementResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "imageGallery": {
+          "type": "computeGalleries",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "imageBlobIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}-blob-access"
+          ]
+        },
+        "imageStorageEncryptionIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}-storage-cmk"
+          ]
+        },
+        "imageBuildResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "image-builds"
+          ]
+        },
+        "imageGalleryCustomerKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-customer-keys"
+          ]
+        },
+        "imageGalleryDoubleEncryptionKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-platform-and-customer-keys"
+          ]
+        },
+        "imageGalleryConfidentialKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-confidential-vm"
+          ]
+        },
+        "replacerFunctionApp": {
+          "type": "functionApps",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "{unique}"
+          ]
+        },
+        "replacerStorage": {
+          "type": "",
+          "purpose": [
+            "{storageIdentifier}shr{unique}"
+          ],
+          "format": "storage"
+        },
+        "replacerStorageIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "storage",
+            "cmk"
+          ]
+        },
+        "replacerHostingPlan": {
+          "type": "appServicePlans",
+          "purpose": []
+        },
+        "replacerInsights": {
+          "type": "applicationInsights",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "{unique}"
+          ]
+        },
+        "sessionHostsTemplateSpec": {
+          "type": "templateSpecs",
+          "purpose": [
+            "session-hosts"
+          ]
+        },
+        "networkNatGateway": {
+          "type": "natGateways",
+          "purpose": []
+        },
+        "networkPublicIP": {
+          "type": "publicIPAddresses",
+          "purpose": []
+        },
+        "networkRouteTable": {
+          "type": "routeTables",
+          "purpose": []
+        },
+        "networkSecurityGroup": {
+          "type": "networkSecurityGroups",
+          "purpose": []
+        },
+        "pocVirtualNetwork": {
+          "type": "virtualNetworks",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocHostsSubnet": {
+          "type": "subnets",
+          "purpose": [
+            "{identifier}",
+            "hosts"
+          ]
+        },
+        "pocNatGateway": {
+          "type": "natGateways",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocPublicIP": {
+          "type": "publicIPAddresses",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocSecurityGroup": {
+          "type": "networkSecurityGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "alertsAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "alerts"
+          ]
+        },
+        "quotaAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "sqm",
+            "{identifier}"
+          ],
+          "omitWorkload": true,
+          "omitEmptyPurposeParts": true
+        },
+        "routesAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "urt",
+            "{unique}"
+          ],
+          "omitWorkload": true
+        }
+      },
+      "patterns": {
+        "virtualMachine": "SHNAME",
+        "osDisk": "SHNAME-osdisk",
+        "nic": "SHNAME-nic",
+        "standaloneAvailabilitySet": "avset-##",
+        "privateEndpointFirst": "{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID",
+        "privateEndpointLast": "RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}",
+        "privateEndpointNicFirst": "{networkInterfaces}-{endpoint}",
+        "privateEndpointNicLast": "{endpoint}-{networkInterfaces}",
+        "deploymentDisk": "{vm}-{osdisks}",
+        "deploymentNic": "{vm}-{networkInterfaces}",
+        "availabilitySet": "{name}{delimiter}##",
+        "policyIdentityPurpose": "policy{delimiter}remediation",
+        "deploymentIdentityPurpose": "deployment",
+        "monitorIdentityPurpose": "ama",
+        "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
+        "customerDiskPurpose": "customer{delimiter}keys",
+        "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
+        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
+        "vmKey": "{identifier}-vm-cmk",
+        "confidentialVmKey": "{identifier}-cvm-cmk",
+        "recoveryServicesKey": "{identifier}-rsv-cmk",
+        "imageStorageKey": "{identifier}-storage-cmk",
+        "replacerStorageKey": "{identifier}-shr-storage-cmk",
+        "imageGalleryKey": "{identifier}-gallery-cmk",
+        "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
+        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
+        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
+        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+        "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
+        "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
+        "imageBuildVm": "{prefix}img-{unique}",
+        "imageBuildOrchestrationVm": "{prefix}orc-{unique}",
+        "deploymentPrefix": "{prefix}-",
+        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}",
+        "functionInsightsOverride": "{name}-insights"
+      },
+      "imageStoragePurposes": {
+        "artifacts": "imgassets",
+        "logs": "imglogs"
+      },
+      "templateSpecs": {
+        "sharedServices": "shared-services",
+        "networking": "networking",
+        "imageBuild": "custom-image",
+        "hostPool": "hostpool",
+        "hostPoolPoc": "hostpool-poc",
+        "automatedHostPool": "automated-hostpool",
+        "runCommandsOnVms": "run-commands-on-vms",
+        "updateStorageAccountKeyOnSessionHosts": "update-storage-account-key-on-session-hosts",
+        "fslogixStorage": "fslogix-storage",
+        "storageQuotaManager": "storage-quota-manager",
+        "sessionHostReplacer": "session-host-replacer",
+        "sessionHostMaintenance": "session-host-maintenance",
+        "sessionHostPolicy": "session-host-policy"
+      }
+    },
+    "_1._3": {
       "AzureCloud": {
         "australiacentral": {
           "abbreviation": "auc",
@@ -878,230 +1619,8 @@
         }
       }
     },
-    "$fxv#1": {
-      "applicationInsights": "appi",
-      "appServicePlans": "asp",
-      "automationAccounts": "aa",
-      "availabilitySets": "as",
-      "computeGalleries": "gal",
-      "dataCollectionEndpoints": "dce",
-      "dataCollectionRules": "dcr",
-      "desktopApplicationGroups": "vddag",
-      "diskAccesses": "da",
-      "remoteApplicationGroups": "vdrag",
-      "diskEncryptionSets": "des",
-      "functionApps": "fa",
-      "hostPools": "vdpool",
-      "keyVaults": "kv",
-      "logAnalyticsWorkspaces": "law",
-      "natGateways": "ng",
-      "netAppAccounts": "naa",
-      "netAppCapacityPools": "nacp",
-      "networkInterfaces": "nic",
-      "networkSecurityGroups": "nsg",
-      "osdisks": "disk",
-      "privateEndpoints": "pe",
-      "privateLinkScopes": "pls",
-      "publicIPAddresses": "pip",
-      "recoveryServicesVaults": "rsv",
-      "resourceGroups": "rg",
-      "routeTables": "rt",
-      "scalingPlans": "vdscaling",
-      "storageAccounts": "sa",
-      "templateSpecs": "ts",
-      "userAssignedIdentities": "uai",
-      "virtualMachines": "vm",
-      "workbooks": "wb",
-      "workspaces": "vdws",
-      "imageDefinitions": "vmid"
-    },
-    "$fxv#2": {
-      "AVDAgent": {
-        "Description": "Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
-      },
-      "AVDAgentBootloader": {
-        "Description": "Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
-      },
-      "Office365DeploymentTool": {
-        "Description": "Office 365 Deployment Tool",
-        "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe"
-      },
-      "OneDrive": {
-        "Description": "OneDrive Sync Client",
-        "DownloadUrl": "https://update.azure.odsync.ENVSUFFIX/onedrivecontainer/Win/Installer64/OneDriveSetup.exe",
-        "DestinationFileName": "OneDriveSetup.exe"
-      },
-      "TeamsBootstrapper": {
-        "Description": "Microsoft Teams Bootstrapper",
-        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-teamsprovision/lkg/teamsbootstrapper.exe",
-        "DestinationFileName": "teamsbootstrapper.exe"
-      },
-      "Teams64BitMSIX": {
-        "Description": "Microsoft Teams 64-bit MSIX",
-        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-windows-x64/enterprise/webview2/lkg/MSTeams-x64.msix",
-        "DestinationFileName": "MSTeams-x64.msix"
-      },
-      "WebView2Runtime": {
-        "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
-        "DestinationFileName": "WebView2.exe"
-      },
-      "RemoteDesktopWebRTCRedirectorService": {
-        "Description": "Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi"
-      },
-      "VisualStudioRedistributables": {
-        "Description": "Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
-        "DestinationFileName": "vc_redist.x64.exe"
-      },
-      "FSLogix": {
-        "Description": "FSLogix Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
-        "DestinationFileName": "FSLogix.zip"
-      }
-    },
-    "$fxv#3": {
-      "AVDAgent": {
-        "Description": "Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgent_latest",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
-      },
-      "AVDAgentBootloader": {
-        "Description": "Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/RdAgentBootLoader_latest",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
-      },
-      "Office365DeploymentTool": {
-        "Description": "Office 365 Deployment Tool",
-        "DownloadUrl": "https://officexo.azurefd.ENVSUFFIX/prsstelecontainer/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe"
-      },
-      "OneDrive": {
-        "Description": "OneDrive Sync Client",
-        "DownloadUrl": "https://update.azure.odsync.ENVSUFFIX/onedrivecontainer/Win/Installer64/OneDriveSetup.exe",
-        "DestinationFileName": "OneDriveSetup.exe"
-      },
-      "TeamsBootstrapper": {
-        "Description": "Microsoft Teams Bootstrapper",
-        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-teamsprovision/lkg/teamsbootstrapper.exe",
-        "DestinationFileName": "teamsbootstrapper.exe"
-      },
-      "Teams64BitMSIX": {
-        "Description": "Microsoft Teams 64-bit MSIX",
-        "DownloadUrl": "https://statics.teams.ENVSUFFIX/production-windows-x64/enterprise/webview2/lkg/MSTeams-x64.msix",
-        "DestinationFileName": "MSTeams-x64.msix"
-      },
-      "WebView2Runtime": {
-        "Description": "Microsoft Edge WebView2 Runtime. Used by Teams MSIX client. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
-        "DestinationFileName": "WebView2.exe"
-      },
-      "RemoteDesktopWebRTCRedirectorService": {
-        "Description": "Remote Desktop WebRTC Redirector Service. Used for AVD WebRTC redirection feature. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi"
-      },
-      "VisualStudioRedistributables": {
-        "Description": "Visual Studio C++ Redistributables. Should be brought over to repo for airgap scenarios.",
-        "DownloadUrl": "",
-        "DestinationFileName": "vc_redist.x64.exe"
-      },
-      "FSLogix": {
-        "Description": "FSLogix Installer",
-        "DownloadUrl": "https://aka.ENVSUFFIX/FSLogix_latest",
-        "DestinationFileName": "FSLogix.zip"
-      }
-    },
-    "$fxv#4": {
-      "AVDAgent": {
-        "Description": "Required: Azure Virtual Desktop Agent Installer",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2310011",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgent.Installer-x64.msi"
-      },
-      "AVDAgentBootloader": {
-        "Description": "Required: Azure Virtual Desktop Agent Bootloader Installer",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2311028",
-        "DestinationFileName": "Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi"
-      },
-      "FSLogix": {
-        "Description": "Required: FSLogix",
-        "DownloadUrl": "https://aka.ms/fslogix_download",
-        "DestinationFileName": "FSLogix.zip"
-      },
-      "Office365DeploymentTool": {
-        "Description": "Required: Office 365 Deployment Tool",
-        "DownloadUrl": "https://officecdn.microsoft.com/pr/wsus/setup.exe",
-        "DestinationFileName": "Office365DeploymentTool.exe"
-      },
-      "OneDrive": {
-        "Description": "Required: OneDrive Sync Client",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=844652",
-        "DestinationFileName": "OneDriveSetup.exe"
-      },
-      "TeamsBootstrapper": {
-        "Description": "Required: Microsoft Teams Bootstrapper",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2243204&clcid=0x409",
-        "DestinationFileName": "teamsbootstrapper.exe"
-      },
-      "Teams64BitMSIX": {
-        "Description": "Required: Microsoft Teams 64-bit MSIX",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2196106",
-        "DestinationFileName": "MSTeams-x64.msix"
-      },
-      "WebView2Runtime": {
-        "Description": "Required: Microsoft Edge WebView2 Runtime",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
-        "DestinationFileName": "WebView2.exe"
-      },
-      "RemoteDesktopWebRTCRedirectorService": {
-        "Description": "Required: Microsoft Remote Desktop WebRTC Redirector Service",
-        "DownloadUrl": "https://aka.ms/msrdcwebrtcsvc/msi",
-        "DestinationFileName": "MsRdcWebRTCSvc.msi"
-      },
-      "VisualStudioRedistributables": {
-        "Description": "Required: Visual Studio C++ Redistributables",
-        "DownloadUrl": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
-        "DestinationFileName": "vc_redist.x64.exe"
-      }
-    },
-    "$fxv#5": "$ErrorActionPreference = 'Stop'\r\n\r\ntry {\r\n    $DriveLetter = $env:SystemDrive.TrimEnd(':')\r\n    Update-HostStorageCache -ErrorAction SilentlyContinue\r\n    $Part = Get-Partition -DriveLetter $DriveLetter -ErrorAction Stop\r\n    $CurrentSizeGB = [math]::Round($Part.Size / 1GB, 2)\r\n    Write-Output \"Current partition size: $CurrentSizeGB GB (drive: $DriveLetter)\"\r\n\r\n    # Use diskpart to extend - bypasses VDS entirely, no timing race on first boot.\r\n    $diskpartScript = \"select disk $($Part.DiskNumber)`r`nselect partition $($Part.PartitionNumber)`r`nextend\"\r\n    $scriptPath = Join-Path $env:TEMP 'diskpart_extend.txt'\r\n    [System.IO.File]::WriteAllText($scriptPath, $diskpartScript, [System.Text.Encoding]::ASCII)\r\n    $diskpartOutput = & diskpart /s $scriptPath 2>&1\r\n    Remove-Item $scriptPath -Force -ErrorAction SilentlyContinue\r\n    Write-Output \"Diskpart result: $($diskpartOutput -join ' | ')\"\r\n\r\n    $PartAfter = Get-Partition -DriveLetter $DriveLetter -ErrorAction SilentlyContinue\r\n    if ($PartAfter -and $PartAfter.Size -gt $Part.Size) {\r\n        $NewSizeGB = [math]::Round($PartAfter.Size / 1GB, 2)\r\n        Write-Output \"OS partition resized successfully: $CurrentSizeGB GB -> $NewSizeGB GB\"\r\n    } else {\r\n        Write-Output \"OS partition is already at maximum size. No resize needed.\"\r\n    }\r\n}\r\ncatch {\r\n    Write-Error \"Failed to resize OS partition: $($_.Exception.Message)\"\r\n    exit 1\r\n}\r\n",
-    "$fxv#6": "param(\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ResourceManagerUri,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$UserAssignedIdentityClientId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ImageVmResourceId,\r\n\r\n    [Parameter(Mandatory=$true)]\r\n    [string]$ManagementVmResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ImageResourceId,\r\n\r\n    [Parameter(Mandatory=$false)]\r\n    [string]$ResourceGroupId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nTry {\r\n    $StopWatch = [Diagnostics.Stopwatch]::StartNew()\r\n\r\n    # Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n    $ResourceManagerUriFixed = if($ResourceManagerUri[-1] -eq '/'){$ResourceManagerUri.Substring(0,$ResourceManagerUri.Length - 1)} else {$ResourceManagerUri}\r\n\r\n    # Get an access token  -  use UAI client_id when provided, otherwise fall back to system-assigned identity\r\n    $TokenUri = 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed\r\n    if (-not [string]::IsNullOrEmpty($UserAssignedIdentityClientId)) { $TokenUri += '&client_id=' + $UserAssignedIdentityClientId }\r\n    $AzureManagementAccessToken = (Invoke-RestMethod -Headers @{Metadata=\"true\"} -Uri $TokenUri).access_token\r\n\r\n    # Set header for Azure Management API\r\n    $AzureManagementHeader = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n    }\r\n\r\n    Function Invoke-ArmDelete {\r\n        param(\r\n            [Parameter(Mandatory=$true)]\r\n            [string]$Uri\r\n        )\r\n\r\n        Try {\r\n            Invoke-RestMethod -Headers $AzureManagementHeader -Method 'DELETE' -Uri $Uri | Out-Null\r\n        } Catch {\r\n            $StatusCode = if ($null -ne $_.Exception.Response) {\r\n                [int]$_.Exception.Response.StatusCode\r\n            } else {\r\n                $null\r\n            }\r\n\r\n            # Deletion is idempotent; an already-absent temporary resource is the desired state.\r\n            If ($StatusCode -ne 404) {\r\n                Throw\r\n            }\r\n        }\r\n    }\r\n\r\n    Function Wait-ForRunCommandReporting {\r\n        # Match deployment-helper cleanup: allow Managed Run Command at least 30 seconds to report\r\n        # status to ARM before deleting its parent VM or resource group.\r\n        $StopWatch.Stop()\r\n        If ($StopWatch.Elapsed.TotalSeconds -lt 30) {\r\n            Start-Sleep -Seconds (30 - $StopWatch.Elapsed.TotalSeconds)\r\n        }\r\n    }\r\n\r\n    If (-not [string]::IsNullOrEmpty($ResourceGroupId)) {\r\n        # New RG path  -  delete the entire resource group (cleans up all VMs, disks, NICs, images)\r\n        Wait-ForRunCommandReporting\r\n        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ResourceGroupId + '?api-version=2021-04-01')\r\n    } Else {\r\n        # Existing RG path  -  delete individual VMs only, leave the RG intact\r\n\r\n        # Delete Image VM\r\n        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ImageVmResourceId + '?api-version=2024-03-01')\r\n\r\n        # Delete the managed image (if it exists  -  only present for Trusted Launch compatible security type)\r\n        If (-not [string]::IsNullOrEmpty($ImageResourceId)) {\r\n            Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ImageResourceId + '?api-version=2024-03-01')\r\n        }\r\n\r\n        # Delete the Management VM\r\n        Wait-ForRunCommandReporting\r\n        Invoke-ArmDelete -Uri $($ResourceManagerUriFixed + $ManagementVmResourceId + '?forceDeletion=true&api-version=2024-03-01')\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
-    "buildTimestamp": "[if(startsWith(deployment().name, 'Microsoft.Template-'), substring(deployment().name, 19, 14), parameters('timeStamp'))]",
-    "buildRunId": "[uniqueString(subscription().subscriptionId, deployment().name, variables('buildTimestamp'))]",
-    "uniqueCustomizers": "[map(range(0, length(parameters('customizations'))), lambda('i', union(createObject('name', if(greater(length(filter(parameters('customizations'), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('customizations')[lambdaVariables('i')].name, length(filter(take(parameters('customizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('customizations')[lambdaVariables('i')].name))))), parameters('customizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('customizations')[lambdaVariables('i')].blobNameOrUri, 'restart', coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'restart'), false())), if(empty(coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'arguments'), '')), createObject(), createObject('arguments', parameters('customizations')[lambdaVariables('i')].arguments)), if(empty(coalesce(tryGet(parameters('customizations')[lambdaVariables('i')], 'successExitCodes'), '')), createObject(), createObject('successExitCodes', parameters('customizations')[lambdaVariables('i')].successExitCodes)))))]",
-    "uniqueVdiCustomizers": "[map(range(0, length(parameters('vdiCustomizations'))), lambda('i', union(createObject('name', if(greater(length(filter(parameters('vdiCustomizations'), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name)))), 1), format('{0}-{1}', parameters('vdiCustomizations')[lambdaVariables('i')].name, length(filter(take(parameters('vdiCustomizations'), add(lambdaVariables('i'), 1)), lambda('item', equals(lambdaVariables('item').name, parameters('vdiCustomizations')[lambdaVariables('i')].name))))), parameters('vdiCustomizations')[lambdaVariables('i')].name), 'blobNameOrUri', parameters('vdiCustomizations')[lambdaVariables('i')].blobNameOrUri), if(empty(coalesce(tryGet(parameters('vdiCustomizations')[lambdaVariables('i')], 'arguments'), '')), createObject(), createObject('arguments', parameters('vdiCustomizations')[lambdaVariables('i')].arguments)), if(empty(coalesce(tryGet(parameters('vdiCustomizations')[lambdaVariables('i')], 'successExitCodes'), '')), createObject(), createObject('successExitCodes', parameters('vdiCustomizations')[lambdaVariables('i')].successExitCodes)))))]",
-    "cloud": "[toLower(environment().name)]",
-    "varLocation": "[if(startsWith(variables('cloud'), 'us'), substring(parameters('location'), 5, sub(length(parameters('location')), 5)), parameters('location'))]",
-    "locationsData": "[variables('$fxv#0')]",
-    "locations": "[if(startsWith(variables('cloud'), 'us'), variables('locationsData').other, variables('locationsData')[environment().name])]",
-    "resourceAbbreviations": "[variables('$fxv#1')]",
-    "downloads": "[if(startsWith(variables('cloud'), 'usn'), variables('$fxv#2'), if(startsWith(variables('cloud'), 'uss'), variables('$fxv#3'), variables('$fxv#4')))]",
-    "artifactsContainerUriNormalized": "[if(endsWith(parameters('artifactsContainerUri'), '/'), take(parameters('artifactsContainerUri'), max(sub(length(parameters('artifactsContainerUri')), 1), 0)), parameters('artifactsContainerUri'))]",
-    "depPrefix": "[if(not(empty(parameters('deploymentPrefix'))), format('{0}-', parameters('deploymentPrefix')), '')]",
-    "imageBuildResourceGroupName": "[if(empty(parameters('imageBuildResourceGroupId')), if(empty(parameters('customBuildResourceGroupName')), format('{0}-{1}avd-image-builds-{2}-{3}-{4}', variables('resourceAbbreviations').resourceGroups, variables('depPrefix'), variables('locations')[variables('varLocation')].abbreviation, variables('buildTimestamp'), take(variables('buildRunId'), 6)), format('{0}-{1}-{2}', parameters('customBuildResourceGroupName'), variables('buildTimestamp'), take(variables('buildRunId'), 6))), last(split(parameters('imageBuildResourceGroupId'), '/')))]",
-    "adminPw": "[format('1qaz@WSX{0}', uniqueString(subscription().id, variables('imageBuildResourceGroupName')))]",
-    "adminUserName": "vmadmin",
-    "existingLogStorageAccountName": "[if(empty(parameters('logStorageAccountResourceId')), '', last(split(parameters('logStorageAccountResourceId'), '/')))]",
-    "logContainerUri": "[if(and(parameters('collectCustomizationLogs'), not(empty(parameters('logStorageAccountResourceId')))), format('https://{0}.blob.{1}/{2}/', variables('existingLogStorageAccountName'), environment().suffixes.storage, parameters('logContainerName')), '')]",
-    "normalizedImageDefinitionSecurityType": "[if(equals(parameters('imageDefinitionSecurityType'), 'TrustedLaunchAndConfidentialVMSupported'), 'TrustedLaunchAndConfidentialVmSupported', parameters('imageDefinitionSecurityType'))]",
-    "galleryImageDefinitionHyperVGeneration": "[if(or(endsWith(parameters('mpSku'), 'g2'), startsWith(parameters('mpSku'), 'win11')), 'V2', 'V1')]",
-    "galleryImageDefinitionName": "[if(empty(parameters('imageDefinitionResourceId')), if(empty(parameters('customImageDefinitionName')), replace(format('{0}-{1}-{2}-{3}', variables('resourceAbbreviations').imageDefinitions, replace(variables('effectiveGalleryImageDefinitionPublisher'), '-', ''), replace(variables('effectiveGalleryImageDefinitionOffer'), '-', ''), replace(variables('effectiveGalleryImageDefinitionSku'), '-', '')), ' ', ''), parameters('customImageDefinitionName')), last(split(parameters('imageDefinitionResourceId'), '/')))]",
-    "effectiveGalleryImageDefinitionOffer": "[if(not(empty(parameters('imageDefinitionOffer'))), replace(parameters('imageDefinitionOffer'), ' ', ''), parameters('mpOffer'))]",
-    "effectiveGalleryImageDefinitionPublisher": "[if(not(empty(parameters('imageDefinitionPublisher'))), replace(parameters('imageDefinitionPublisher'), ' ', ''), parameters('mpPublisher'))]",
-    "effectiveGalleryImageDefinitionSku": "[if(not(empty(parameters('imageDefinitionSku'))), replace(parameters('imageDefinitionSku'), ' ', ''), parameters('mpSku'))]",
-    "autoImageVersionName": "[format('{0}.{1}.{2}', substring(variables('buildTimestamp'), 0, 4), substring(variables('buildTimestamp'), 4, 4), substring(variables('buildTimestamp'), 8, 4))]",
-    "imageVersionName": "[if(and(and(not(equals(parameters('imageMajorVersion'), -1)), not(equals(parameters('imageMajorVersion'), -1))), not(equals(parameters('imagePatch'), -1))), format('{0}.{1}.{2}', parameters('imageMajorVersion'), parameters('imageMinorVersion'), parameters('imagePatch')), variables('autoImageVersionName'))]",
-    "effectiveConfidentialVmDiskEncryptionSetResourceId": "[if(equals(parameters('galleryImageVersionConfidentialVMEncryptionType'), 'EncryptedWithCmk'), parameters('confidentialVMDiskEncryptionSetResourceId'), '')]",
-    "imageVersionEndOfLifeDate": "[if(greater(parameters('imageVersionEOLinDays'), 0), dateTimeAdd(variables('buildTimestamp'), format('P{0}D', parameters('imageVersionEOLinDays'))), '')]",
-    "imageVmName": "[format('{0}img-{1}', variables('depPrefix'), variables('buildRunId'))]",
-    "orchestrationVmName": "[format('{0}orc-{1}', variables('depPrefix'), variables('buildRunId'))]"
+    "_1.locationDefinitions": "[variables('_1._3')]",
+    "namingPolicy": "[variables('_1._2')]"
   },
   "resources": {
     "vnet": {
@@ -1199,23 +1718,37 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "878103897211215110"
-            }
+              "templateHash": "15079112600556646126"
+            },
+            "name": "Gallery image definition",
+            "description": "Deploys an image definition under an existing compute gallery in the deployment resource group; image versions are published separately."
           },
           "parameters": {
             "galleryName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing parent compute gallery in the deployment resource group."
+              }
             },
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the gallery image definition within its parent resource."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the gallery image definition; defaults to the deployment resource group region."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the gallery image definition."
+              }
             },
             "architecture": {
               "type": "string",
@@ -1319,10 +1852,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the gallery image definition."
+              },
               "value": "[resourceId('Microsoft.Compute/galleries/images', parameters('galleryName'), parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the gallery image definition."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -1372,23 +1911,37 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "878103897211215110"
-            }
+              "templateHash": "15079112600556646126"
+            },
+            "name": "Gallery image definition",
+            "description": "Deploys an image definition under an existing compute gallery in the deployment resource group; image versions are published separately."
           },
           "parameters": {
             "galleryName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing parent compute gallery in the deployment resource group."
+              }
             },
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the gallery image definition within its parent resource."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the gallery image definition; defaults to the deployment resource group region."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the gallery image definition."
+              }
             },
             "architecture": {
               "type": "string",
@@ -1492,10 +2045,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the gallery image definition."
+              },
               "value": "[resourceId('Microsoft.Compute/galleries/images', parameters('galleryName'), parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the gallery image definition."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -1535,14 +2094,16 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "1742504757442630390"
-            }
+              "templateHash": "888486078838877110"
+            },
+            "name": "Resource group role assignment",
+            "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
           },
           "parameters": {
             "roleDefinitionId": {
               "type": "string",
               "metadata": {
-                "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                "description": "Role definition GUID or fully-qualified resource ID."
               }
             },
             "principalId": {
@@ -1593,6 +2154,9 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the resource group role assignment."
+              },
               "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
             }
           }
@@ -1620,10 +2184,10 @@
             "value": "[variables('orchestrationVmName')]"
           },
           "nicName": {
-            "value": "[format('{0}-nic', variables('orchestrationVmName'))]"
+            "value": "[replace(variables('namingPolicy').patterns.nic, 'SHNAME', variables('orchestrationVmName'))]"
           },
           "osDiskName": {
-            "value": "[format('{0}-osdisk', variables('orchestrationVmName'))]"
+            "value": "[replace(variables('namingPolicy').patterns.osDisk, 'SHNAME', variables('orchestrationVmName'))]"
           },
           "adminPassword": {
             "value": "[variables('adminPw')]"
@@ -1682,8 +2246,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "1589863920087915311"
-            }
+              "templateHash": "9387348923559673592"
+            },
+            "name": "Windows virtual machine",
+            "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
           },
           "definitions": {
             "extensionType": {
@@ -1698,13 +2264,13 @@
                 "publisher": {
                   "type": "string",
                   "metadata": {
-                    "description": "Extension handler publisher. E.g. Microsoft.Compute, Microsoft.Azure.Monitor."
+                    "description": "Extension handler publisher."
                   }
                 },
                 "type": {
                   "type": "string",
                   "metadata": {
-                    "description": "Extension type name. E.g. JsonADDomainExtension, AzureMonitorWindowsAgent."
+                    "description": "Extension type name."
                   }
                 },
                 "typeHandlerVersion": {
@@ -1753,11 +2319,12 @@
                   },
                   "nullable": true,
                   "metadata": {
-                    "description": "Optional. Names of other extensions in this array that must be provisioned before this one. ARM uses this to serialize extension deployment order within the same template."
+                    "description": "Optional. Names of extensions in the same array that must be provisioned before this one."
                   }
                 }
               },
               "metadata": {
+                "description": "VM extension handler, upgrade options and public or protected settings.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../types/computeTypes.bicep"
                 }
@@ -1766,34 +2333,61 @@
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the windows virtual machine to deploy."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the windows virtual machine."
+              }
             },
             "vmSize": {
               "type": "string",
-              "defaultValue": "Standard_D4ads_v6"
+              "defaultValue": "Standard_D4ads_v6",
+              "metadata": {
+                "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
+              }
             },
             "adminUsername": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Local administrator account name for the Windows VM."
+              }
             },
             "adminPassword": {
-              "type": "securestring"
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Local administrator password for the Windows VM, passed as a secure value."
+              }
             },
             "subnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing subnet used by the VM NIC."
+              }
             },
             "nicName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the private network interface created for the VM."
+              }
             },
             "osDiskName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the managed OS disk created from the selected image."
+              }
             },
             "customImageResourceId": {
               "type": "string",
@@ -1804,15 +2398,24 @@
             },
             "imagePublisher": {
               "type": "string",
-              "defaultValue": "MicrosoftWindowsDesktop"
+              "defaultValue": "MicrosoftWindowsDesktop",
+              "metadata": {
+                "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
+              }
             },
             "imageOffer": {
               "type": "string",
-              "defaultValue": "windows-11"
+              "defaultValue": "windows-11",
+              "metadata": {
+                "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
+              }
             },
             "imageSku": {
               "type": "string",
-              "defaultValue": "win11-25h2-avd"
+              "defaultValue": "win11-25h2-avd",
+              "metadata": {
+                "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
+              }
             },
             "osDiskSku": {
               "type": "string",
@@ -1822,7 +2425,10 @@
                 "StandardSSD_LRS",
                 "Standard_LRS",
                 "UltraSSD_LRS"
-              ]
+              ],
+              "metadata": {
+                "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
+              }
             },
             "osDiskSizeGB": {
               "type": "int",
@@ -1859,15 +2465,24 @@
             },
             "enableAcceleratedNetworking": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable accelerated networking on the NIC; the consuming VM size and OS must support it."
+              }
             },
             "encryptionAtHost": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable host-level VM encryption; the selected VM size must support it."
+              }
             },
             "hibernationEnabled": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
+              }
             },
             "securityType": {
               "type": "string",
@@ -1876,15 +2491,24 @@
                 "Standard",
                 "TrustedLaunch",
                 "ConfidentialVM"
-              ]
+              ],
+              "metadata": {
+                "description": "Optional. VM security model; the image and VM size must support the selected model."
+              }
             },
             "secureBootEnabled": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
+              }
             },
             "vTpmEnabled": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
+              }
             },
             "availabilitySetResourceId": {
               "type": "string",
@@ -2056,14 +2680,23 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the windows virtual machine."
+              },
               "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the windows virtual machine."
+              },
               "value": "[parameters('name')]"
             },
             "principalId": {
               "type": "string",
+              "metadata": {
+                "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
+              },
               "value": "[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
             }
           }
@@ -2094,10 +2727,10 @@
             "value": "[variables('imageVmName')]"
           },
           "nicName": {
-            "value": "[format('{0}-nic', variables('imageVmName'))]"
+            "value": "[replace(variables('namingPolicy').patterns.nic, 'SHNAME', variables('imageVmName'))]"
           },
           "osDiskName": {
-            "value": "[format('{0}-osdisk', variables('imageVmName'))]"
+            "value": "[replace(variables('namingPolicy').patterns.osDisk, 'SHNAME', variables('imageVmName'))]"
           },
           "adminPassword": {
             "value": "[variables('adminPw')]"
@@ -2151,8 +2784,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "1589863920087915311"
-            }
+              "templateHash": "9387348923559673592"
+            },
+            "name": "Windows virtual machine",
+            "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
           },
           "definitions": {
             "extensionType": {
@@ -2167,13 +2802,13 @@
                 "publisher": {
                   "type": "string",
                   "metadata": {
-                    "description": "Extension handler publisher. E.g. Microsoft.Compute, Microsoft.Azure.Monitor."
+                    "description": "Extension handler publisher."
                   }
                 },
                 "type": {
                   "type": "string",
                   "metadata": {
-                    "description": "Extension type name. E.g. JsonADDomainExtension, AzureMonitorWindowsAgent."
+                    "description": "Extension type name."
                   }
                 },
                 "typeHandlerVersion": {
@@ -2222,11 +2857,12 @@
                   },
                   "nullable": true,
                   "metadata": {
-                    "description": "Optional. Names of other extensions in this array that must be provisioned before this one. ARM uses this to serialize extension deployment order within the same template."
+                    "description": "Optional. Names of extensions in the same array that must be provisioned before this one."
                   }
                 }
               },
               "metadata": {
+                "description": "VM extension handler, upgrade options and public or protected settings.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../types/computeTypes.bicep"
                 }
@@ -2235,34 +2871,61 @@
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the windows virtual machine to deploy."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the windows virtual machine."
+              }
             },
             "vmSize": {
               "type": "string",
-              "defaultValue": "Standard_D4ads_v6"
+              "defaultValue": "Standard_D4ads_v6",
+              "metadata": {
+                "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
+              }
             },
             "adminUsername": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Local administrator account name for the Windows VM."
+              }
             },
             "adminPassword": {
-              "type": "securestring"
+              "type": "securestring",
+              "metadata": {
+                "description": "Required. Local administrator password for the Windows VM, passed as a secure value."
+              }
             },
             "subnetResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing subnet used by the VM NIC."
+              }
             },
             "nicName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the private network interface created for the VM."
+              }
             },
             "osDiskName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the managed OS disk created from the selected image."
+              }
             },
             "customImageResourceId": {
               "type": "string",
@@ -2273,15 +2936,24 @@
             },
             "imagePublisher": {
               "type": "string",
-              "defaultValue": "MicrosoftWindowsDesktop"
+              "defaultValue": "MicrosoftWindowsDesktop",
+              "metadata": {
+                "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
+              }
             },
             "imageOffer": {
               "type": "string",
-              "defaultValue": "windows-11"
+              "defaultValue": "windows-11",
+              "metadata": {
+                "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
+              }
             },
             "imageSku": {
               "type": "string",
-              "defaultValue": "win11-25h2-avd"
+              "defaultValue": "win11-25h2-avd",
+              "metadata": {
+                "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
+              }
             },
             "osDiskSku": {
               "type": "string",
@@ -2291,7 +2963,10 @@
                 "StandardSSD_LRS",
                 "Standard_LRS",
                 "UltraSSD_LRS"
-              ]
+              ],
+              "metadata": {
+                "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
+              }
             },
             "osDiskSizeGB": {
               "type": "int",
@@ -2328,15 +3003,24 @@
             },
             "enableAcceleratedNetworking": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable accelerated networking on the NIC; the consuming VM size and OS must support it."
+              }
             },
             "encryptionAtHost": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable host-level VM encryption; the selected VM size must support it."
+              }
             },
             "hibernationEnabled": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
+              }
             },
             "securityType": {
               "type": "string",
@@ -2345,15 +3029,24 @@
                 "Standard",
                 "TrustedLaunch",
                 "ConfidentialVM"
-              ]
+              ],
+              "metadata": {
+                "description": "Optional. VM security model; the image and VM size must support the selected model."
+              }
             },
             "secureBootEnabled": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
+              }
             },
             "vTpmEnabled": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
+              }
             },
             "availabilitySetResourceId": {
               "type": "string",
@@ -2525,14 +3218,23 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the windows virtual machine."
+              },
               "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the windows virtual machine."
+              },
               "value": "[parameters('name')]"
             },
             "principalId": {
               "type": "string",
+              "metadata": {
+                "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
+              },
               "value": "[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
             }
           }
@@ -2566,7 +3268,7 @@
             "value": "[reference('imageVm').outputs.name.value]"
           },
           "script": {
-            "value": "[variables('$fxv#5')]"
+            "value": "[variables('$fxv#4')]"
           },
           "treatFailureAsDeploymentFailure": {
             "value": true
@@ -2580,8 +3282,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "14415623443607663715"
-            }
+              "templateHash": "2221754051824373100"
+            },
+            "name": "Virtual machine Run Command",
+            "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
           },
           "definitions": {
             "runCommandParameterType": {
@@ -2595,6 +3299,7 @@
                 }
               },
               "metadata": {
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../../types/customizationTypes.bicep"
                 }
@@ -2603,14 +3308,23 @@
           },
           "parameters": {
             "virtualMachineName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+              }
             },
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the virtual machine Run Command to deploy."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+              }
             },
             "script": {
               "type": "string",
@@ -2736,10 +3450,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the virtual machine Run Command."
+              },
               "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the virtual machine Run Command."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -2840,7 +3560,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "14836410316721990377"
+              "templateHash": "6885775250475911131"
             }
           },
           "definitions": {
@@ -2875,6 +3595,7 @@
                 }
               },
               "metadata": {
+                "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                 }
@@ -2918,6 +3639,7 @@
                 }
               },
               "metadata": {
+                "description": "Artifact customization input with an optional post-execution VM restart request.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                 }
@@ -2934,14 +3656,14 @@
                 "Persistent"
               ],
               "metadata": {
-                "description": "The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (AirGapped still applies)."
+                "description": "VDI optimization profile; None skips profile optimization but independent air-gapped settings can still apply."
               }
             },
             "vdiOptimizationAirGapped": {
               "type": "bool",
               "defaultValue": false,
               "metadata": {
-                "description": "When true, applies settings for air-gapped or internet-restricted environments: disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies independently of vdiOptimizationProfile, including when profile is None."
+                "description": "Apply restricted-network optimization settings independently of vdiOptimizationProfile, including when it is None."
               }
             },
             "appsToRemove": {
@@ -3677,7 +4399,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6655559350002352001"
+                      "templateHash": "3947666253372592081"
                     }
                   },
                   "definitions": {
@@ -3703,6 +4425,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                         }
@@ -3719,6 +4442,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                         }
@@ -3887,7 +4611,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.48.1.52935",
-                              "templateHash": "15568309645018786080"
+                              "templateHash": "1025082705305925655"
                             }
                           },
                           "definitions": {
@@ -3913,6 +4637,7 @@
                                 }
                               },
                               "metadata": {
+                                "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                                 "__bicep_imported_from!": {
                                   "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                                 }
@@ -3929,6 +4654,7 @@
                                 }
                               },
                               "metadata": {
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                                 "__bicep_imported_from!": {
                                   "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                                 }
@@ -4233,7 +4959,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6655559350002352001"
+                      "templateHash": "3947666253372592081"
                     }
                   },
                   "definitions": {
@@ -4259,6 +4985,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                         }
@@ -4275,6 +5002,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                         }
@@ -4443,7 +5171,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.48.1.52935",
-                              "templateHash": "15568309645018786080"
+                              "templateHash": "1025082705305925655"
                             }
                           },
                           "definitions": {
@@ -4469,6 +5197,7 @@
                                 }
                               },
                               "metadata": {
+                                "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                                 "__bicep_imported_from!": {
                                   "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                                 }
@@ -4485,6 +5214,7 @@
                                 }
                               },
                               "metadata": {
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                                 "__bicep_imported_from!": {
                                   "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
                                 }
@@ -4936,7 +5666,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "13495647206211016900"
+              "templateHash": "10942556436674149999"
             }
           },
           "definitions": {
@@ -5002,6 +5732,7 @@
                 }
               },
               "metadata": {
+                "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../shared/modules/resourceModules/types/computeTypes.bicep"
                 }
@@ -5103,20 +5834,31 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "5782945045654254028"
-                    }
+                      "templateHash": "6995951600324760061"
+                    },
+                    "name": "Managed image",
+                    "description": "Captures a managed image from an existing virtual machine supplied by the caller; source VM preparation is managed outside this module."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the managed image to deploy."
+                      }
                     },
                     "location": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]"
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the managed image; defaults to the deployment resource group region."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the managed image."
+                      }
                     },
                     "sourceVirtualMachineResourceId": {
                       "type": "string",
@@ -5154,10 +5896,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the managed image."
+                      },
                       "value": "[resourceId('Microsoft.Compute/images', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the managed image."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -5232,8 +5980,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "1049316812422729260"
-                    }
+                      "templateHash": "11375966293181362815"
+                    },
+                    "name": "Gallery image version",
+                    "description": "Publishes an image version under an existing gallery image definition using a caller-provided image source and regional replication settings."
                   },
                   "definitions": {
                     "galleryImageVersionTargetRegionType": {
@@ -5298,6 +6048,7 @@
                         }
                       },
                       "metadata": {
+                        "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration.",
                         "__bicep_imported_from!": {
                           "sourceTemplate": "../../../../types/computeTypes.bicep"
                         }
@@ -5322,14 +6073,14 @@
                       "type": "string",
                       "minLength": 1,
                       "metadata": {
-                        "description": "Conditional. The name of the parent Azure Shared Image Gallery Image Definition. Required if the template is used in a standalone deployment."
+                        "description": "Required. Name of the existing parent gallery image definition."
                       }
                     },
                     "galleryName": {
                       "type": "string",
                       "minLength": 1,
                       "metadata": {
-                        "description": "Conditional. The name of the Azure Compute gallery that contains the Image Definition for which this version will be created."
+                        "description": "Required. Name of the existing compute gallery containing the image definition."
                       }
                     },
                     "endOfLifeDate": {
@@ -5349,7 +6100,7 @@
                     "replicaCount": {
                       "type": "int",
                       "metadata": {
-                        "description": "Optional. The number of replicas of the Image Version to be created per region. This property would take effect for a region when regionalReplicaCount is not specified. This property is updatable."
+                        "description": "Required. Default regional image replica count unless overridden by regionalReplicaCount."
                       }
                     },
                     "replicationMode": {
@@ -5360,7 +6111,7 @@
                         "Shallow"
                       ],
                       "metadata": {
-                        "description": "Optional. Optional parameter which specifies the mode to be used for replication. This property is not updatable."
+                        "description": "Optional. Image replication mode; cannot be changed after creation."
                       }
                     },
                     "storageAccountType": {
@@ -5372,7 +6123,7 @@
                         "Standard_ZRS"
                       ],
                       "metadata": {
-                        "description": "Optional. Specifies the storage account type to be used to store the image. This property is not updatable."
+                        "description": "Optional. Image storage account type; cannot be changed after creation."
                       }
                     },
                     "targetRegions": {
@@ -5382,7 +6133,7 @@
                       },
                       "defaultValue": [],
                       "metadata": {
-                        "description": "Optional. The target regions where the Image Version is going to be replicated to. If this object is not specified, then the deployment location will be used."
+                        "description": "Optional. Regional replica and encryption settings; an empty array uses the deployment region."
                       }
                     },
                     "diskEncryptionSetId": {
@@ -5602,7 +6353,7 @@
             "value": "[reference('orchestrationVm').outputs.name.value]"
           },
           "script": {
-            "value": "[variables('$fxv#6')]"
+            "value": "[variables('$fxv#5')]"
           },
           "treatFailureAsDeploymentFailure": {
             "value": false
@@ -5644,8 +6395,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "14415623443607663715"
-            }
+              "templateHash": "2221754051824373100"
+            },
+            "name": "Virtual machine Run Command",
+            "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
           },
           "definitions": {
             "runCommandParameterType": {
@@ -5659,6 +6412,7 @@
                 }
               },
               "metadata": {
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../../types/customizationTypes.bicep"
                 }
@@ -5667,14 +6421,23 @@
           },
           "parameters": {
             "virtualMachineName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+              }
             },
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the virtual machine Run Command to deploy."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+              }
             },
             "script": {
               "type": "string",
@@ -5800,10 +6563,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the virtual machine Run Command."
+              },
               "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the virtual machine Run Command."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -5873,8 +6642,10 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "1049316812422729260"
-            }
+              "templateHash": "11375966293181362815"
+            },
+            "name": "Gallery image version",
+            "description": "Publishes an image version under an existing gallery image definition using a caller-provided image source and regional replication settings."
           },
           "definitions": {
             "galleryImageVersionTargetRegionType": {
@@ -5939,6 +6710,7 @@
                 }
               },
               "metadata": {
+                "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../../../types/computeTypes.bicep"
                 }
@@ -5963,14 +6735,14 @@
               "type": "string",
               "minLength": 1,
               "metadata": {
-                "description": "Conditional. The name of the parent Azure Shared Image Gallery Image Definition. Required if the template is used in a standalone deployment."
+                "description": "Required. Name of the existing parent gallery image definition."
               }
             },
             "galleryName": {
               "type": "string",
               "minLength": 1,
               "metadata": {
-                "description": "Conditional. The name of the Azure Compute gallery that contains the Image Definition for which this version will be created."
+                "description": "Required. Name of the existing compute gallery containing the image definition."
               }
             },
             "endOfLifeDate": {
@@ -5990,7 +6762,7 @@
             "replicaCount": {
               "type": "int",
               "metadata": {
-                "description": "Optional. The number of replicas of the Image Version to be created per region. This property would take effect for a region when regionalReplicaCount is not specified. This property is updatable."
+                "description": "Required. Default regional image replica count unless overridden by regionalReplicaCount."
               }
             },
             "replicationMode": {
@@ -6001,7 +6773,7 @@
                 "Shallow"
               ],
               "metadata": {
-                "description": "Optional. Optional parameter which specifies the mode to be used for replication. This property is not updatable."
+                "description": "Optional. Image replication mode; cannot be changed after creation."
               }
             },
             "storageAccountType": {
@@ -6013,7 +6785,7 @@
                 "Standard_ZRS"
               ],
               "metadata": {
-                "description": "Optional. Specifies the storage account type to be used to store the image. This property is not updatable."
+                "description": "Optional. Image storage account type; cannot be changed after creation."
               }
             },
             "targetRegions": {
@@ -6023,7 +6795,7 @@
               },
               "defaultValue": [],
               "metadata": {
-                "description": "Optional. The target regions where the Image Version is going to be replicated to. If this object is not specified, then the deployment location will be used."
+                "description": "Optional. Regional replica and encryption settings; an empty array uses the deployment region."
               }
             },
             "diskEncryptionSetId": {

@@ -117,6 +117,17 @@ its `fslogixBackupVaultResourceId` output to `recoveryServicesVaultResourceId` a
 `fslogixBackupPolicyName` output to `fileSharePolicyName`. The add-on owns registration of its
 storage accounts and shares as protected items; it does not modify the shared vault or policy.
 
+## Public Network Access
+
+`paasPublicNetworkAccess` selects `Disabled`, `EnabledWithRestrictions`, or `Enabled` for newly
+deployed Azure Files storage independently of `privateEndpoint`. The default `Auto` preserves
+existing parameter-file behavior. The Portal offers only the three explicit choices, initially
+Disabled with private endpoints and Enabled otherwise. `permittedIPs` can be staged in Disabled
+mode without enabling public access; restricted mode denies unmatched traffic even with an empty
+list. Existing `AzureServices` exceptions for backup/monitoring remain configured and can still
+apply when public access is Disabled. NetApp Files and existing backup vaults are not reconfigured.
+See the [shared access-mode contract](../../../docs/parameters.md#paas-public-network-access).
+
 ## NTFS and Entra Kerberos Automation
 
 The add-on calls the same shared FSLogix storage module and scripts as the host-pool deployment.

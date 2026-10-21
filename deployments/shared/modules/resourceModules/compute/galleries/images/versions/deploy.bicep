@@ -1,3 +1,6 @@
+metadata name = 'Gallery image version'
+metadata description = 'Publishes an image version under an existing gallery image definition using a caller-provided image source and regional replication settings.'
+
 import { galleryImageVersionTargetRegionType } from '../../../../types/computeTypes.bicep'
 
 @sys.description('Required. Name of the image version.')
@@ -6,11 +9,11 @@ param name string
 @sys.description('Optional. Location for all resources.')
 param location string = resourceGroup().location
 
-@sys.description('Conditional. The name of the parent Azure Shared Image Gallery Image Definition. Required if the template is used in a standalone deployment.')
+@sys.description('Required. Name of the existing parent gallery image definition.')
 @minLength(1)
 param imageDefinitionName string
 
-@sys.description('Conditional. The name of the Azure Compute gallery that contains the Image Definition for which this version will be created.')
+@sys.description('Required. Name of the existing compute gallery containing the image definition.')
 @minLength(1)
 param galleryName string
 
@@ -20,17 +23,18 @@ param endOfLifeDate string = ''
 @sys.description('Optional. If set to true, Virtual Machines deployed from the latest version of the Image Definition will not use this Image Version.')
 param excludeFromLatest bool = false
 
-@sys.description('Optional. The number of replicas of the Image Version to be created per region. This property would take effect for a region when regionalReplicaCount is not specified. This property is updatable.')
+// Replica count can be updated after publishing.
+@sys.description('Required. Default regional image replica count unless overridden by regionalReplicaCount.')
 param replicaCount int
 
-@sys.description('Optional. Optional parameter which specifies the mode to be used for replication. This property is not updatable.')
+@sys.description('Optional. Image replication mode; cannot be changed after creation.')
 @allowed([
   'Full'
   'Shallow'
 ])
 param replicationMode string = 'Full'
 
-@sys.description('Optional. Specifies the storage account type to be used to store the image. This property is not updatable.')
+@sys.description('Optional. Image storage account type; cannot be changed after creation.')
 @allowed([
   'Premium_LRS'
   'Standard_LRS'
@@ -38,7 +42,8 @@ param replicationMode string = 'Full'
 ])
 param storageAccountType string = 'Standard_LRS'
 
-@sys.description('Optional. The target regions where the Image Version is going to be replicated to. If this object is not specified, then the deployment location will be used.')
+// A missing deployment region is appended to a nonempty region array; existing entries are not merged by name.
+@sys.description('Optional. Regional replica and encryption settings; an empty array uses the deployment region.')
 param targetRegions galleryImageVersionTargetRegionType[] = []
 
 @sys.description('Optional. A relative URI containing the resource ID of the disk encryption set.')

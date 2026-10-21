@@ -503,11 +503,22 @@ submit endpoint flags, subnets, or DNS zone IDs.
 
 - **Type:** Array
 - **Optional**
-- **Description:** IP addresses or CIDR blocks permitted on the firewall of all PaaS resources (storage accounts, Key Vaults). Behavior depends on `deployPrivateEndpoints`:
-  - **Private endpoints ON, no IPs:** public access **disabled** — all traffic must use the private endpoint.
-  - **Private endpoints ON, IPs specified:** public access **enabled but restricted** to those ranges — the private endpoint handles internal traffic and the IP allowlist covers management access from known external addresses.
-  - **Private endpoints OFF:** public access enabled; if IPs are specified only those ranges are permitted, otherwise the resource is open to all traffic.
+- **Description:** Public IP/CIDR allowlist for newly deployed Azure Files storage and Key Vaults.
+  Rules are retained when public access is Disabled and do not enable it. Existing trusted-service
+  exceptions remain configured.
 - **Example:** `["203.0.113.10", "198.51.100.0/24"]`
+
+#### `paasPublicNetworkAccess`
+
+- **Default:** `Auto` preserves the historical private-endpoint/IP inference for parameter files.
+- **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
+- **Scope:** One choice for newly deployed Azure Files storage and Key Vaults, independent of
+  private endpoint creation. Existing resources, backup vaults, monitoring and AVD access settings
+  are unchanged. Restricted mode denies unmatched traffic even with an empty IP list.
+- **Portal:** Exposes the three explicit choices, initially Disabled with private endpoints and
+  Enabled otherwise. IP rules can be staged in Disabled mode.
+- **Exceptions:** Existing `AzureServices` bypass remains configured and can still apply when public
+  access is Disabled; see the [shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
 
 ### Security & Encryption
 

@@ -1842,9 +1842,11 @@ Describe 'Session Host Replacer rollback operator experience' {
 Describe 'Session Host Replacer Application Insights isolation' {
     It 'uses naming-convention parity for standard deployments and follows a custom Function App name' {
         Get-Content -LiteralPath $namingPath -Raw |
-            Should Match 'cnv_rtCodes.applicationInsights,\s*hpPurpose'
+            Should Match "resourceName\(namingConvention, 'replacerInsights', loc, identifier, uniqueString\)"
         Get-Content -LiteralPath $bicepPath -Raw |
-            Should Match "var appInsightsName\s*= !empty\(functionAppNameOverride\)\s*\? '\$\{functionAppName\}-insights'\s*: shrNaming.outputs.appInsightsName"
+            Should Match "var appInsightsName\s*= !empty\(functionAppNameOverride\)\s*\? namePattern\('functionInsightsOverride', \{ name: functionAppName \}\)\s*: shrNaming.outputs.appInsightsName"
+        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $policy.patterns.functionInsightsOverride | Should Be '{name}-insights'
     }
 
     It 'deploys Application Insights through the Function App resource-group-scoped module' {

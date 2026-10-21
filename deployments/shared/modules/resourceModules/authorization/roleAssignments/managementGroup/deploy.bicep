@@ -1,6 +1,10 @@
+metadata name = 'Management group role assignment'
+metadata description = 'Assigns an existing role to a principal at the deployment management group scope; the caller must have role-assignment permissions.'
+
 targetScope = 'managementGroup'
 
-@description('Role definition GUID or fully-qualified resource ID (e.g. "/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...").')
+// Example: "/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...".
+@description('Role definition GUID or fully-qualified resource ID.')
 param roleDefinitionId string
 
 @description('Principal ID of the identity receiving the role.')
@@ -27,4 +31,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+@description('Resource ID of the management group role assignment.')
 output resourceId string = roleAssignment.id

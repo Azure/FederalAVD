@@ -1,3 +1,6 @@
+metadata name = 'Automated session host configuration'
+metadata description = 'Creates or updates the default session host configuration under an existing automated host pool in the deployment resource group using caller-supplied properties.'
+
 @description('Required. Name of the parent automated host pool.')
 param hostPoolName string
 
@@ -14,5 +17,7 @@ resource sessionHostConfiguration 'Microsoft.DesktopVirtualization/hostPools/ses
   properties: properties
 }
 
+@description('Resource ID of the automated session host configuration.')
 output resourceId string = sessionHostConfiguration.id
+@description('Azure resource name of the automated session host configuration.')
 output name string = sessionHostConfiguration.name

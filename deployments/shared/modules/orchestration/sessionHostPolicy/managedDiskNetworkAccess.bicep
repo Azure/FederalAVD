@@ -1,11 +1,21 @@
+metadata name = 'Managed disk network policy orchestration'
+metadata description = 'Creates the subscription managed-disk network-access policy definition and optionally provisions resource-group assignment, remediation identity permissions, and remediation.'
+
 targetScope = 'subscription'
 
+@description('Required. Azure region for the resources deployed by this module.')
 param location string
+@description('Required. Name of the existing dedicated session-host resource group in this subscription; unrelated resources must not share this policy boundary.')
 param targetResourceGroupName string
+@description('Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation.')
 param policyIdentityResourceId string
+@description('Required. Principal object ID of the policy user-assigned identity for role assignments.')
 param policyIdentityPrincipalId string
+@description('Optional. Whether to create the resource-group policy assignment and its remediation permissions; the subscription definition is always created.')
 param createAssignment bool = true
+@description('Optional. Whether to create deterministic remediation tasks for existing noncompliant resources.')
 param createRemediation bool = false
+@description('Required. Stable ownership label recorded in policy assignment metadata.')
 param ownerId string
 
 module definition 'modules/managedDiskNetworkAccess.policyDefinition.bicep' = { params: {} }
@@ -38,6 +48,9 @@ module remediation 'modules/remediation.bicep' = if (createAssignment && createR
   params: { name: 'avd-sh-managed-disk-network', policyAssignmentId: assignment!.outputs.resourceId }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = definition.outputs.policyDefinitionResourceId
+@description('Resource ID of the managed-disk policy assignment, or an empty string when createAssignment is false.')
 output policyAssignmentResourceId string = createAssignment ? assignment!.outputs.resourceId : ''
+@description('Remediation task resource ID, or an empty string unless both assignment and remediation are requested.')
 output remediationResourceId string = createAssignment && createRemediation ? remediation!.outputs.resourceId : ''

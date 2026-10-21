@@ -1,3 +1,7 @@
+metadata name = 'Blob lifecycle management policy'
+metadata description = 'Creates or updates the default lifecycle management policy on an existing storage account using the complete caller-supplied rule array.'
+
+@description('Required. Name of the existing storage account in the deployment resource group.')
 param storageAccountName string
 
 @description('Array of lifecycle management policy rules.')
@@ -17,4 +21,5 @@ resource managementPolicy 'Microsoft.Storage/storageAccounts/managementPolicies@
   }
 }
 
+@description('Resource ID of the blob lifecycle management policy.')
 output resourceId string = managementPolicy.id

@@ -1,10 +1,13 @@
+metadata name = 'Customer-managed encryption orchestration'
+metadata description = 'Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions.'
+
 // ============================================================================
 // Unified Customer-Managed Keys Module
 // ============================================================================
 // Single module that handles ALL CMK scenarios in the FederalAVD repo:
 //
-//   PaaS mode     — creates one key + one UAI + role assignment per PaaS
-//                   encryption config. The UAI resource ID and principal ID are
+//   PaaS mode     — creates one key and role assignment per keyNames entry,
+//                   sharing one UAI across all keys. Its resource ID and principal ID are
 //                   returned so callers can embed CMK directly in the storage
 //                   account PUT (avoiding a two-step SAI pattern that fails
 //                   under Azure Policy deny-effect rules).
@@ -48,12 +51,9 @@ param parentResourceId string = ''
 
 // ─── PaaS mode parameters ────────────────────────────────────────────────────
 
-@description('''
-Optional. Names of Key Vault keys to create for CMK encryption.
-One key is created per entry. All keys are assigned to the single identityName UAI.
-For a single storage account, pass a one-element array.
-For FSLogix with multiple accounts, pass all key names (one per account).
-''')
+// For a single storage account, pass a one-element array.
+// For FSLogix with multiple accounts, pass all key names (one per account).
+@description('Optional. Key names to create for CMK encryption; all keys share the identityName user-assigned identity.')
 param keyNames string[] = []
 
 @description('Optional. Name of the user-assigned identity to create for CMK. Required when keyNames is not empty.')
@@ -61,25 +61,15 @@ param identityName string = ''
 
 // ─── Disk mode parameters ────────────────────────────────────────────────────
 
-@description('''
-Optional. Array of disk encryption set CMK configurations.
-Each entry produces: one KV key (unless skipKeyCreation), one DiskEncryptionSet,
-one key-scoped role assignment (Crypto Service Encryption User).
-  keyName                           — name of the key to create
-  diskEncryptionSetName             — name of the DiskEncryptionSet to create
-  confidentialVMOSDiskEncryption    — when true, uses ConfidentialVmEncryptedWithCustomerKey DES type
-                                      and grants CVM Orchestrator the Crypto Release User role
-  confidentialVMOrchestratorObjectId — required when confidentialVMOSDiskEncryption is true;
-                                       object ID of the Confidential VM Orchestrator
-                                       enterprise application (bf7b6499-ff71-4aa2-97a4-f372087be7f0)
-  skipKeyCreation                   — when true, skips key creation (key was pre-created via
-                                      Run Command or external process due to key release policy
-                                      immutability). Used by hostpool Run Command path.
-                                      When false/omitted, key is created via ARM with release policy.
-                                      WARNING: ARM key creation with keyReleasePolicy is a one-time
-                                      operation — the policy is immutable. Re-deploying will fail if
-                                      the key already exists. Use skipKeyCreation on subsequent deploys.
-''')
+// Each entry produces one Key Vault key (unless skipKeyCreation), one DiskEncryptionSet,
+// and one key-scoped Crypto Service Encryption User role assignment.
+// confidentialVMOSDiskEncryption selects ConfidentialVmEncryptedWithCustomerKey and grants the
+// CVM Orchestrator Crypto Release User. Supply the object ID of its enterprise application
+// (application ID bf7b6499-ff71-4aa2-97a4-f372087be7f0) as confidentialVMOrchestratorObjectId.
+// For confidential keys, ARM key creation includes an immutable key release policy. Use
+// skipKeyCreation for keys pre-created via Run Command or another process and on subsequent
+// deployments of those keys; redeploying their release policy can fail.
+@description('Optional. Objects with keyName and diskEncryptionSetName; confidentialVMOrchestratorObjectId is required when confidentialVMOSDiskEncryption is true. Set skipKeyCreation for an existing key with an immutable release policy.')
 param diskEncryptionConfigs diskEncryptionConfigType[] = []
 
 // ─── Types ───────────────────────────────────────────────────────────────────

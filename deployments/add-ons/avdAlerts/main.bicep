@@ -84,18 +84,18 @@ param actionGroupResourceId string
 // Host Pools
 // ================================================================================================
 
-@description('''Required. Array of host pool objects, one per host pool to monitor.
-Each object must have the following properties:
-  hostPoolResourceId:  string  - Full resource ID of the AVD host pool.
-  vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.
-  hostPoolType:        string  - 'Pooled' or 'Personal'. Controls which alerts are deployed.
-
-Example:
-[
-  { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-01", "hostPoolType": "Pooled" }
-  { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-02", "hostPoolType": "Personal" }
-]
-''')
+// Required. Array of host pool objects, one per host pool to monitor.
+// Each object must have the following properties:
+//   hostPoolResourceId:  string  - Full resource ID of the AVD host pool.
+//   vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.
+//   hostPoolType:        string  - 'Pooled' or 'Personal'. Controls which alerts are deployed.
+//
+// Example:
+// [
+//   { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-01", "hostPoolType": "Pooled" }
+//   { "hostPoolResourceId": "/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01", "vmResourceGroupId": "/subscriptions/.../resourceGroups/rg-avd-vms-02", "hostPoolType": "Personal" }
+// ]
+@description('Required. Host pools to monitor: objects with hostPoolResourceId, vmResourceGroupId, and hostPoolType (Pooled or Personal).')
 param hostPoolInfo array
 
 // ================================================================================================
@@ -120,20 +120,22 @@ param anfVolumeResourceIds array = []
 param automationAccountNameOverride string = ''
 
 
-@description('''Optional. URI of the AvdStorageLogData runbook PS1 file.
-Defaults to the public FederalAVD GitHub repository.
-
-For air-gapped or internet-restricted environments, set this to empty (\'\') to skip automatic
-publishing. The runbook will be created in an unpublished (New) state and must be published
-manually via the Portal before the first scheduled run.''')
+// Optional. URI of the AvdStorageLogData runbook PS1 file.
+// Defaults to the public FederalAVD GitHub repository.
+//
+// For air-gapped or internet-restricted environments, set this to empty (\'\') to skip automatic
+// publishing. The runbook will be created in an unpublished (New) state and must be published
+// manually via the Portal before the first scheduled run.
+@description('Optional. Storage-log runbook PS1 URI. Empty skips automatic publishing; manually publish before the first scheduled run in restricted environments.')
 param runbookContentUriStorage string = 'https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/avdAlerts/scripts/Get-StorAcctInfo.ps1'
 
 @description('Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time.')
 param deploymentTime string = utcNow()
 
-@description('''Optional. Set to true on first deployment to let ARM create the job schedule links.
-Set to false on all redeployments. Azure Automation caches job schedule associations by account name
-and raises a Conflict error if ARM tries to create a link that already exists.''')
+// Optional. Set to true on first deployment to let ARM create the job schedule links.
+// Set to false on all redeployments. Azure Automation caches job schedule associations by account name
+// and raises a Conflict error if ARM tries to create a link that already exists.
+@description('Optional. Create runbook/schedule links on first deployment. Set false on redeployment to preserve existing links and avoid association conflicts.')
 param createJobSchedules bool = true
 
 // ================================================================================================
@@ -198,16 +200,12 @@ param enableServiceHealthAlerts bool = true
 // Variables  //
 // ========== //
 
-var cloud                 = toLower(az.environment().name)
-var locationsObject       = loadJsonContent('../../shared/data/locations.json')
-var locationsEnvProperty  = startsWith(cloud, 'us') ? 'other' : cloud
-var locations             = locationsObject[locationsEnvProperty]
-var regionAbbr            = locations[location].abbreviation
-var resourceAbbreviations = loadJsonContent('../../shared/data/resourceAbbreviations.json')
+import { namingPolicy, regionAbbreviation, resourceName } from '../../shared/modules/orchestration/naming/functions.bicep'
+var regionAbbr = regionAbbreviation(location, az.environment().name)
 
 var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
-  : '${resourceAbbreviations.automationAccounts}-avd-alerts-${regionAbbr}'
+  : resourceName(namingPolicy.defaults, 'alertsAutomation', regionAbbr, '', '')
 
 var hasStorageAccounts = !empty(storageAccountResourceIds)
 

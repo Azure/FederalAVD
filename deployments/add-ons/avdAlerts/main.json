@@ -5,10 +5,367 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "1978337979717863271"
+      "version": "0.48.1.52935",
+      "templateHash": "15562235563600249500"
     }
   },
+  "functions": [
+    {
+      "namespace": "_1",
+      "members": {
+        "buildCustomName": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[join(filter(map(parameters('components'), lambda('comp', _1.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
+          },
+          "metadata": {
+            "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "cnv": {
+          "parameters": [
+            {
+              "type": "array",
+              "name": "components"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.buildCustomName(filter(parameters('components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('delimiter'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
+          },
+          "metadata": {
+            "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "formatName": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "name"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('namingPolicy').limits.keyVault), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('namingPolicy').limits.functionApp), if(equals(coalesce(tryGet(parameters('rule'), 'format'), ''), 'storage'), take(toLower(if(empty(parameters('delimiter')), parameters('name'), replace(parameters('name'), parameters('delimiter'), ''))), variables('namingPolicy').limits.storageAccount), parameters('name')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "kvSanitize": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "s"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[replace(replace(parameters('s'), '_', '-'), '.', '-')]"
+          },
+          "metadata": {
+            "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "render": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "pattern"
+            },
+            {
+              "type": "object",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[reduce(items(parameters('context')), parameters('pattern'), lambda('result', 'item', replace(lambdaVariables('result'), format('{{{0}}}', lambdaVariables('item').key), string(lambdaVariables('item').value))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resolveComponent": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "comp"
+            },
+            {
+              "type": "string",
+              "name": "rtCode"
+            },
+            {
+              "type": "string",
+              "name": "component"
+            },
+            {
+              "type": "string",
+              "name": "loc"
+            },
+            {
+              "type": "string",
+              "name": "ff1"
+            },
+            {
+              "type": "string",
+              "name": "env"
+            },
+            {
+              "type": "string",
+              "name": "ff2"
+            },
+            {
+              "type": "string",
+              "name": "workload"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resolveConvention": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[union(variables('namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
+          },
+          "metadata": {
+            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resolvedResourceName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'), parameters('convention').delimiter)]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resourcePurpose": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "delimiter"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[join(filter(map(parameters('rule').purpose, lambda('part', _1.render(lambdaVariables('part'), createObject('identifier', parameters('identifier'), 'storageIdentifier', replace(parameters('identifier'), '-', ''), 'unique', parameters('unique'))))), lambda('part', or(not(coalesce(tryGet(parameters('rule'), 'omitEmptyPurposeParts'), false())), not(empty(lambdaVariables('part')))))), parameters('delimiter'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        }
+      }
+    },
+    {
+      "namespace": "__bicep",
+      "members": {
+        "regionAbbreviation": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[variables('_1.locationDefinitions')[if(startsWith(toLower(parameters('cloud')), 'us'), 'other', parameters('cloud'))][if(startsWith(toLower(parameters('cloud')), 'us'), substring(parameters('region'), 5, max(sub(length(parameters('region')), 5), 0)), parameters('region'))].abbreviation]"
+          },
+          "metadata": {
+            "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        },
+        "resourceName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "role"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.resolvedResourceName(_1.resolveConvention(parameters('convention')), variables('namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
+          },
+          "metadata": {
+            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault, Function App or Replacer-storage formatting rule.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/functions.bicep"
+            }
+          }
+        }
+      }
+    }
+  ],
   "parameters": {
     "location": {
       "type": "string",
@@ -65,7 +422,7 @@
     "hostPoolInfo": {
       "type": "array",
       "metadata": {
-        "description": "Required. Array of host pool objects, one per host pool to monitor.\nEach object must have the following properties:\n  hostPoolResourceId:  string  - Full resource ID of the AVD host pool.\n  vmResourceGroupId:   string  - Resource ID of the resource group containing the session host VMs.\n  hostPoolType:        string  - 'Pooled' or 'Personal'. Controls which alerts are deployed.\n\nExample:\n[\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-01/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-pooled-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-01\", \"hostPoolType\": \"Pooled\" }\n  { \"hostPoolResourceId\": \"/subscriptions/.../resourceGroups/rg-avd-02/providers/Microsoft.DesktopVirtualization/hostPools/hp-avd-personal-01\", \"vmResourceGroupId\": \"/subscriptions/.../resourceGroups/rg-avd-vms-02\", \"hostPoolType\": \"Personal\" }\n]\n"
+        "description": "Required. Host pools to monitor: objects with hostPoolResourceId, vmResourceGroupId, and hostPoolType (Pooled or Personal)."
       }
     },
     "storageAccountResourceIds": {
@@ -93,7 +450,7 @@
       "type": "string",
       "defaultValue": "https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/avdAlerts/scripts/Get-StorAcctInfo.ps1",
       "metadata": {
-        "description": "Optional. URI of the AvdStorageLogData runbook PS1 file.\nDefaults to the public FederalAVD GitHub repository.\n\nFor air-gapped or internet-restricted environments, set this to empty (\\'\\') to skip automatic\npublishing. The runbook will be created in an unpublished (New) state and must be published\nmanually via the Portal before the first scheduled run."
+        "description": "Optional. Storage-log runbook PS1 URI. Empty skips automatic publishing; manually publish before the first scheduled run in restricted environments."
       }
     },
     "deploymentTime": {
@@ -107,7 +464,7 @@
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "Optional. Set to true on first deployment to let ARM create the job schedule links.\nSet to false on all redeployments. Azure Automation caches job schedule associations by account name\nand raises a Conflict error if ARM tries to create a link that already exists."
+        "description": "Optional. Create runbook/schedule links on first deployment. Set false on redeployment to preserve existing links and avoid association conflicts."
       }
     },
     "enableCapacityAlerts": {
@@ -237,7 +594,466 @@
         "input": "[format('{0},{1}', split(parameters('storageAccountResourceIds')[copyIndex('storageRgPairs')], '/')[2], split(parameters('storageAccountResourceIds')[copyIndex('storageRgPairs')], '/')[4])]"
       }
     ],
-    "$fxv#0": {
+    "regionAbbr": "[__bicep.regionAbbreviation(parameters('location'), environment().name)]",
+    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), __bicep.resourceName(variables('namingPolicy').defaults, 'alertsAutomation', variables('regionAbbr'), '', ''))]",
+    "hasStorageAccounts": "[not(empty(parameters('storageAccountResourceIds')))]",
+    "storageAccountResourceIdsJson": "[string(parameters('storageAccountResourceIds'))]",
+    "lawSubscriptionId": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2]]",
+    "lawResourceGroup": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[4]]",
+    "hostPoolInfoDeduped": "[reduce(parameters('hostPoolInfo'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').hostPoolResourceId)), lambdaVariables('item').hostPoolResourceId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]",
+    "vmRgInfoDeduped": "[reduce(variables('hostPoolInfoDeduped'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').vmResourceGroupId)), lambdaVariables('item').vmResourceGroupId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]",
+    "_1._2": {
+      "defaults": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
+      "identifiers": {
+        "imageManagement": "image-management",
+        "replacerFallback": "replacer",
+        "sharedFslogix": "fslogix"
+      },
+      "limits": {
+        "keyVault": 24,
+        "functionApp": 60,
+        "storageAccount": 24,
+        "deploymentVm": 15,
+        "fslogixStoragePrefix": 13,
+        "uniqueSuffix": 6,
+        "imageManagementStoragePrefix": 5,
+        "imageManagementStorageLocation": 4
+      },
+      "resources": {
+        "operationsResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "operations"
+          ]
+        },
+        "monitoringResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "monitoring"
+          ]
+        },
+        "controlPlaneResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "control",
+            "plane"
+          ]
+        },
+        "globalFeedResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "global",
+            "feed"
+          ]
+        },
+        "globalFeedWorkspace": {
+          "type": "workspaces",
+          "purpose": [
+            "global",
+            "feed"
+          ]
+        },
+        "workspace": {
+          "type": "workspaces",
+          "purpose": []
+        },
+        "hostWorkspace": {
+          "type": "workspaces",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "deploymentResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "deployment"
+          ]
+        },
+        "deploymentVm": {
+          "type": "",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "consolidatedResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "hostsResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "hosts"
+          ]
+        },
+        "storageResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}",
+            "storage"
+          ]
+        },
+        "secretsKeyVault": {
+          "type": "keyVaults",
+          "purpose": [
+            "sec",
+            "{unique}"
+          ]
+        },
+        "encryptionKeyVault": {
+          "type": "keyVaults",
+          "purpose": [
+            "enc",
+            "{unique}"
+          ]
+        },
+        "dataCollectionEndpoint": {
+          "type": "dataCollectionEndpoints",
+          "purpose": []
+        },
+        "logAnalyticsWorkspace": {
+          "type": "logAnalyticsWorkspaces",
+          "purpose": []
+        },
+        "hostPool": {
+          "type": "hostPools",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "desktopApplicationGroup": {
+          "type": "desktopApplicationGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "scalingPlan": {
+          "type": "scalingPlans",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "vmBackupVault": {
+          "type": "recoveryServicesVaults",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "filesBackupVault": {
+          "type": "recoveryServicesVaults",
+          "purpose": [
+            "files"
+          ]
+        },
+        "identityPattern": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}",
+            "TOKEN"
+          ]
+        },
+        "availabilitySet": {
+          "type": "availabilitySets",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "diskAccess": {
+          "type": "diskAccesses",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "diskEncryptionSetPattern": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}",
+            "TOKEN"
+          ]
+        },
+        "netAppAccount": {
+          "type": "netAppAccounts",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "netAppCapacityPool": {
+          "type": "netAppCapacityPools",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "imageManagementResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "imageGallery": {
+          "type": "computeGalleries",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "imageBlobIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}-blob-access"
+          ]
+        },
+        "imageStorageEncryptionIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}-storage-cmk"
+          ]
+        },
+        "imageBuildResourceGroup": {
+          "type": "resourceGroups",
+          "purpose": [
+            "image-builds"
+          ]
+        },
+        "imageGalleryCustomerKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-customer-keys"
+          ]
+        },
+        "imageGalleryDoubleEncryptionKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-platform-and-customer-keys"
+          ]
+        },
+        "imageGalleryConfidentialKeys": {
+          "type": "diskEncryptionSets",
+          "purpose": [
+            "{identifier}-confidential-vm"
+          ]
+        },
+        "replacerFunctionApp": {
+          "type": "functionApps",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "{unique}"
+          ]
+        },
+        "replacerStorage": {
+          "type": "",
+          "purpose": [
+            "{storageIdentifier}shr{unique}"
+          ],
+          "format": "storage"
+        },
+        "replacerStorageIdentity": {
+          "type": "userAssignedIdentities",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "storage",
+            "cmk"
+          ]
+        },
+        "replacerHostingPlan": {
+          "type": "appServicePlans",
+          "purpose": []
+        },
+        "replacerInsights": {
+          "type": "applicationInsights",
+          "purpose": [
+            "{identifier}",
+            "shr",
+            "{unique}"
+          ]
+        },
+        "sessionHostsTemplateSpec": {
+          "type": "templateSpecs",
+          "purpose": [
+            "session-hosts"
+          ]
+        },
+        "networkNatGateway": {
+          "type": "natGateways",
+          "purpose": []
+        },
+        "networkPublicIP": {
+          "type": "publicIPAddresses",
+          "purpose": []
+        },
+        "networkRouteTable": {
+          "type": "routeTables",
+          "purpose": []
+        },
+        "networkSecurityGroup": {
+          "type": "networkSecurityGroups",
+          "purpose": []
+        },
+        "pocVirtualNetwork": {
+          "type": "virtualNetworks",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocHostsSubnet": {
+          "type": "subnets",
+          "purpose": [
+            "{identifier}",
+            "hosts"
+          ]
+        },
+        "pocNatGateway": {
+          "type": "natGateways",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocPublicIP": {
+          "type": "publicIPAddresses",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "pocSecurityGroup": {
+          "type": "networkSecurityGroups",
+          "purpose": [
+            "{identifier}"
+          ]
+        },
+        "alertsAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "alerts"
+          ]
+        },
+        "quotaAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "sqm",
+            "{identifier}"
+          ],
+          "omitWorkload": true,
+          "omitEmptyPurposeParts": true
+        },
+        "routesAutomation": {
+          "type": "automationAccounts",
+          "purpose": [
+            "urt",
+            "{unique}"
+          ],
+          "omitWorkload": true
+        }
+      },
+      "patterns": {
+        "virtualMachine": "SHNAME",
+        "osDisk": "SHNAME-osdisk",
+        "nic": "SHNAME-nic",
+        "standaloneAvailabilitySet": "avset-##",
+        "privateEndpointFirst": "{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID",
+        "privateEndpointLast": "RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}",
+        "privateEndpointNicFirst": "{networkInterfaces}-{endpoint}",
+        "privateEndpointNicLast": "{endpoint}-{networkInterfaces}",
+        "deploymentDisk": "{vm}-{osdisks}",
+        "deploymentNic": "{vm}-{networkInterfaces}",
+        "availabilitySet": "{name}{delimiter}##",
+        "policyIdentityPurpose": "policy{delimiter}remediation",
+        "deploymentIdentityPurpose": "deployment",
+        "monitorIdentityPurpose": "ama",
+        "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
+        "customerDiskPurpose": "customer{delimiter}keys",
+        "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
+        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
+        "vmKey": "{identifier}-vm-cmk",
+        "confidentialVmKey": "{identifier}-cvm-cmk",
+        "recoveryServicesKey": "{identifier}-rsv-cmk",
+        "imageStorageKey": "{identifier}-storage-cmk",
+        "replacerStorageKey": "{identifier}-shr-storage-cmk",
+        "imageGalleryKey": "{identifier}-gallery-cmk",
+        "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
+        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
+        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
+        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+        "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
+        "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
+        "imageBuildVm": "{prefix}img-{unique}",
+        "imageBuildOrchestrationVm": "{prefix}orc-{unique}",
+        "deploymentPrefix": "{prefix}-",
+        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}",
+        "functionInsightsOverride": "{name}-insights"
+      },
+      "imageStoragePurposes": {
+        "artifacts": "imgassets",
+        "logs": "imglogs"
+      },
+      "templateSpecs": {
+        "sharedServices": "shared-services",
+        "networking": "networking",
+        "imageBuild": "custom-image",
+        "hostPool": "hostpool",
+        "hostPoolPoc": "hostpool-poc",
+        "automatedHostPool": "automated-hostpool",
+        "runCommandsOnVms": "run-commands-on-vms",
+        "updateStorageAccountKeyOnSessionHosts": "update-storage-account-key-on-session-hosts",
+        "fslogixStorage": "fslogix-storage",
+        "storageQuotaManager": "storage-quota-manager",
+        "sessionHostReplacer": "session-host-replacer",
+        "sessionHostMaintenance": "session-host-maintenance",
+        "sessionHostPolicy": "session-host-policy"
+      }
+    },
+    "_1._3": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "automationAccounts": "aa",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "disk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "virtualNetworks": "vnet",
+      "subnets": "snet",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "_1._4": {
       "AzureCloud": {
         "australiacentral": {
           "abbreviation": "auc",
@@ -488,56 +1304,9 @@
         }
       }
     },
-    "$fxv#1": {
-      "applicationInsights": "appi",
-      "appServicePlans": "asp",
-      "automationAccounts": "aa",
-      "availabilitySets": "as",
-      "computeGalleries": "gal",
-      "dataCollectionEndpoints": "dce",
-      "dataCollectionRules": "dcr",
-      "desktopApplicationGroups": "vddag",
-      "diskAccesses": "da",
-      "remoteApplicationGroups": "vdrag",
-      "diskEncryptionSets": "des",
-      "functionApps": "fa",
-      "hostPools": "vdpool",
-      "keyVaults": "kv",
-      "logAnalyticsWorkspaces": "law",
-      "natGateways": "ng",
-      "netAppAccounts": "naa",
-      "netAppCapacityPools": "nacp",
-      "networkInterfaces": "nic",
-      "networkSecurityGroups": "nsg",
-      "osdisks": "disk",
-      "privateEndpoints": "pe",
-      "privateLinkScopes": "pls",
-      "publicIPAddresses": "pip",
-      "recoveryServicesVaults": "rsv",
-      "resourceGroups": "rg",
-      "routeTables": "rt",
-      "scalingPlans": "vdscaling",
-      "storageAccounts": "sa",
-      "templateSpecs": "ts",
-      "userAssignedIdentities": "uai",
-      "virtualMachines": "vm",
-      "workbooks": "wb",
-      "workspaces": "vdws",
-      "imageDefinitions": "vmid"
-    },
-    "cloud": "[toLower(environment().name)]",
-    "locationsObject": "[variables('$fxv#0')]",
-    "locationsEnvProperty": "[if(startsWith(variables('cloud'), 'us'), 'other', variables('cloud'))]",
-    "locations": "[variables('locationsObject')[variables('locationsEnvProperty')]]",
-    "regionAbbr": "[variables('locations')[parameters('location')].abbreviation]",
-    "resourceAbbreviations": "[variables('$fxv#1')]",
-    "automationAccountName": "[if(not(empty(parameters('automationAccountNameOverride'))), parameters('automationAccountNameOverride'), format('{0}-avd-alerts-{1}', variables('resourceAbbreviations').automationAccounts, variables('regionAbbr')))]",
-    "hasStorageAccounts": "[not(empty(parameters('storageAccountResourceIds')))]",
-    "storageAccountResourceIdsJson": "[string(parameters('storageAccountResourceIds'))]",
-    "lawSubscriptionId": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2]]",
-    "lawResourceGroup": "[split(parameters('logAnalyticsWorkspaceResourceId'), '/')[4]]",
-    "hostPoolInfoDeduped": "[reduce(parameters('hostPoolInfo'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').hostPoolResourceId)), lambdaVariables('item').hostPoolResourceId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]",
-    "vmRgInfoDeduped": "[reduce(variables('hostPoolInfoDeduped'), createArray(), lambda('acc', 'item', if(contains(map(lambdaVariables('acc'), lambda('e', lambdaVariables('e').vmResourceGroupId)), lambdaVariables('item').vmResourceGroupId), lambdaVariables('acc'), concat(lambdaVariables('acc'), createArray(lambdaVariables('item'))))))]"
+    "_1.locationDefinitions": "[variables('_1._4')]",
+    "_1.resourceAbbreviations": "[variables('_1._3')]",
+    "namingPolicy": "[variables('_1._2')]"
   },
   "resources": {
     "newResourceGroup": {
@@ -604,8 +1373,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "3725922968737296394"
+              "version": "0.48.1.52935",
+              "templateHash": "3212645666554180815"
             }
           },
           "parameters": {
@@ -671,7 +1440,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Controls whether ARM creates the job schedule links between runbooks and\nschedules. Leave true for normal deployments - ARM handles idempotent redeployment correctly when\nthe automation account already exists.\n\nSet to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.\nThis error occurs specifically when the automation account was previously deleted from ARM and is\nbeing recreated with the same name. The Azure Automation backend caches associations by account\nname through ARM deletion, causing the recreate to conflict with the cached link."
+                "description": "Optional. Create runbook/schedule links. Set false to preserve cached links when recreating a deleted Automation Account with the same name."
               }
             }
           },
@@ -861,8 +1630,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "10795873954311893403"
+              "version": "0.48.1.52935",
+              "templateHash": "7248443896569011132"
             }
           },
           "parameters": {
@@ -944,8 +1713,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "10795873954311893403"
+              "version": "0.48.1.52935",
+              "templateHash": "7248443896569011132"
             }
           },
           "parameters": {
@@ -1056,8 +1825,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13269192146652480308"
+              "version": "0.48.1.52935",
+              "templateHash": "7188919333596532239"
             }
           },
           "parameters": {
@@ -2435,8 +3204,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "13474267306351702627"
+              "version": "0.48.1.52935",
+              "templateHash": "10585901337706984264"
             }
           },
           "parameters": {
@@ -3008,8 +3777,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "8615744370747316447"
+              "version": "0.48.1.52935",
+              "templateHash": "15178232609245959122"
             }
           },
           "parameters": {
@@ -3478,8 +4247,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "2070282259325786632"
+              "version": "0.48.1.52935",
+              "templateHash": "12711484083074236388"
             }
           },
           "parameters": {
@@ -3630,8 +4399,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "8655860947021697347"
+              "version": "0.48.1.52935",
+              "templateHash": "2333113810444288568"
             }
           },
           "parameters": {

@@ -1,10 +1,12 @@
+import { publicNetworkAccessMode, resolveNetworkAccess } from '../../orchestration/networking/functions.bicep'
+
 @description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
 
-@description('Required. Resource ID of the private DNS zone for blob endpoints (typically privatelink.blob.core.windows.net).')
+@description('Required input; may be empty when blob private DNS integration is not selected. Resource ID of the target-cloud blob private DNS zone. Zone groups are created only when privateEndpoint is true.')
 param azureBlobPrivateDnsZoneResourceId string
 
-@description('Required. Resource ID of the private DNS zone for Function App private endpoints (typically privatelink.azurewebsites.net).')
+@description('Required input; may be empty when Function App private DNS integration is not selected. Resource ID of the target-cloud Function App private DNS zone. Zone groups are created only when privateEndpoint is true.')
 param azureFunctionAppPrivateDnsZoneResourceId string
 
 @description('Optional. Resource ID of the private DNS zone for queue endpoints (typically privatelink.queue.core.windows.net).')
@@ -22,19 +24,19 @@ param enableQueueStorage bool = true
 @description('Optional. Enables table endpoint configuration for AzureWebJobsStorage and table private endpoint DNS integration.')
 param enableTableStorage bool = true
 
-@description('Required when CMK is used. Name of the Key Vault key referenced by storage account encryption settings.')
+@description('Required input; may be empty for PlatformManaged encryption. For CMK, the caller must provision this Key Vault key and storage encryption identity permissions before invoking the module.')
 param encryptionKeyName string
 
-@description('Optional. Resource ID of the Key Vault containing the CMK used for storage account encryption.')
+@description('Required input; may be empty for PlatformManaged encryption. For CMK, resource ID of the existing Key Vault containing encryptionKeyName.')
 param encryptionKeyVaultResourceId string
 
-@description('Optional. Resource ID of a delegated subnet for Function App regional VNet integration.')
+@description('Required input; may be empty to omit regional VNet integration. When provided, supplies the delegated subnet and enables outbound VNet routing. Private endpoints alone do not configure outbound connectivity.')
 param functionAppDelegatedSubnetResourceId string
 
 @description('Required. Name of the Function App.')
 param functionAppName string
 
-@description('Optional. Additional app settings merged into the default Function App configuration.')
+@description('Required. Additional app-setting name/value objects merged into the default runtime and managed-identity settings. Pass an empty array when no additional settings are needed.')
 param functionAppAppSettings array
 
 @description('Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted.')
@@ -60,7 +62,7 @@ param location string
 @description('Optional. Log Analytics workspace resource ID used for Application Insights workspace-based mode.')
 param logAnalyticsWorkspaceResourceId string = ''
 
-@description('Required. Enables or disables deployment of private endpoints for storage and Function App.')
+@description('Required. Creates storage and Function App private endpoints when true. Public access is controlled separately by paasPublicNetworkAccess.')
 param privateEndpoint bool
 
 @description('Required. Naming convention template for private endpoint resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders).')
@@ -79,17 +81,25 @@ param privateLinkScopeResourceId string = ''
 @description('Optional. Additional role definition IDs assigned to the Function App identity on the storage account.')
 param storageAccountRoleDefinitionIds array = []
 
-@description('Required. App Service plan (server farm) resource ID for the Function App.')
+@description('Required. Resource ID of the caller-created or existing App Service plan. This module does not create or change the plan; its operating system, region, and SKU must support the app configuration.')
 param serverFarmId string
 
-@description('Optional. Name for the storage encryption user-assigned identity to create when CMK is selected and functionAppUserAssignedIdentityResourceId is not provided. Computed by caller using naming convention. Required when keyManagementStorageAccounts != PlatformManaged and functionAppUserAssignedIdentityResourceId is empty.')
+// Required for CMK. Name of the dedicated storage encryption identity already provisioned by the
+// caller in this resource group, with Key Vault Crypto Service Encryption User on the key. It is
+// separate from the Function App identity; this module does not create it.
+@description('Required for CMK. Existing dedicated storage encryption identity name in this resource group, with Key Vault Crypto Service Encryption User on the key; not the app identity.')
 param storageEncryptionIdentityName string = ''
 
 @description('Required. Name of the storage account used by the Function App runtime.')
 param storageAccountName string
 
-@description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. When provided alongside a private endpoint, the firewall remains open to these IPs while still requiring PE for all other traffic.')
+// Function App restrictions include AzureCloud; storage retains AzureServices bypass.
+// Explicit Disabled retains these rules without enabling the public endpoint.
+@description('Optional. Allowed app/storage public IPs/CIDRs, retained in all access modes. AzureCloud/AzureServices exceptions also apply; reachability does not grant authorization.')
 param permittedIPs array = []
+
+@description('Optional. Shared app/storage public-access mode. Auto preserves legacy private-endpoint/IP inference. Monitoring access remains separately configured.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 @description('Required. Tag object with resource-type keys used to stamp deployed resources.')
 param tags object
@@ -103,6 +113,8 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
 var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
 var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
+var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
+var restrictPublicAccess = networkAccess.defaultAction == 'Deny'
 var storagePermittedIPs = [for ip in effectivePermittedIPs: endsWith(trim(ip), '/32')
   ? replace(trim(ip), '/32', '')
   : trim(ip)]
@@ -133,8 +145,10 @@ var azureCloudRestriction = [
   }
 ]
 
-var resolvedIpSecurityRestrictions = (privateEndpoint || !empty(effectivePermittedIPs))
-  ? union(permittedIPRestrictions, azureCloudRestriction)
+// An explicit deny-all rule would override Allow in unrestricted mode. Retain allow entries,
+// but emit the catch-all deny only in restricted/disabled modes.
+var resolvedIpSecurityRestrictions = (restrictPublicAccess || !empty(effectivePermittedIPs))
+  ? union(permittedIPRestrictions, restrictPublicAccess ? azureCloudRestriction : [azureCloudRestriction[0]])
   : null
 
 // Build arrays dynamically based on which storage types are enabled
@@ -252,9 +266,9 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
       bypass: 'AzureServices'
       virtualNetworkRules: []
       ipRules: storageIpRules
-      defaultAction: (privateEndpoint || !empty(storageIpRules)) ? 'Deny' : 'Allow'
+      defaultAction: networkAccess.defaultAction
     }
-    publicNetworkAccess: (privateEndpoint && empty(storageIpRules)) ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: networkAccess.publicNetworkAccess
     sasPolicy: {
       expirationAction: 'Log'
       sasExpirationPeriod: '180.00:00:00'
@@ -364,7 +378,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   properties: {
     clientAffinityEnabled: false
     httpsOnly: true
-    publicNetworkAccess: (privateEndpoint && empty(effectivePermittedIPs)) ? 'Disabled' : 'Enabled'
+    publicNetworkAccess: networkAccess.publicNetworkAccess
     serverFarmId: serverFarmId
     siteConfig: {
       alwaysOn: true
@@ -463,8 +477,8 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       netFrameworkVersion: 'v10.0'
       powerShellVersion: powerShellVersion
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
-      ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : null
-      scmIpSecurityRestrictions: (privateEndpoint || !empty(effectivePermittedIPs)) ? [
+      ipSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? networkAccess.defaultAction : null
+      scmIpSecurityRestrictions: restrictPublicAccess ? [
         {
           ipAddress: 'Any'
           action: 'Deny'
@@ -473,9 +487,9 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
           description: 'Deny all access'
         }
       ] : null
-      scmIpSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : null
-      scmIpSecurityRestrictionsUseMain: (privateEndpoint || !empty(effectivePermittedIPs)) ? true : null
-      publicNetworkAccess: (privateEndpoint && empty(effectivePermittedIPs)) ? 'Disabled' : 'Enabled'
+      scmIpSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? networkAccess.defaultAction : null
+      scmIpSecurityRestrictionsUseMain: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? true : null
+      publicNetworkAccess: networkAccess.publicNetworkAccess
       use32BitWorkerProcess: false
     }
     outboundVnetRouting: empty(functionAppDelegatedSubnetResourceId)
@@ -589,3 +603,8 @@ output functionAppPrincipalId string = functionAppPrincipalId
 
 @description('Resource ID of Application Insights when enabled; otherwise empty string.')
 output applicationInsightsResourceId string = enableApplicationInsights ? applicationInsights.id : ''
+metadata name = 'Function App infrastructure'
+// Deploys Windows PowerShell Function App infrastructure, runtime storage, optional monitoring and
+// private endpoints, and storage RBAC in the deployment resource group. Requires a caller-provided
+// plan; function code and storage CMK provisioning are separate.
+metadata description = 'Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned.'

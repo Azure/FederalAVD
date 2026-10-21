@@ -1,11 +1,18 @@
+metadata name = 'AVD Insights data collection rule'
+metadata description = 'Deploys the regional AVD Insights Windows performance and event collection rule targeting an existing Log Analytics workspace. Agent installation and VM associations are managed separately.'
+
 // Opinionated AVD Insights DCR.
 // Deploys the Microsoft-prescribed data collection rule for Azure Virtual Desktop Insights.
 // Collects the AVD-specific performance counters, Windows event logs, and FSLogix events
 // required to populate the AVD Insights workbook in Azure Monitor.
 
+@description('Optional. Azure region for the AVD Insights data collection rule; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the AVD Insights data collection rule.')
 param tags object = {}
+@description('Required. Resource ID of the existing Log Analytics workspace receiving AVD performance and event data.')
 param logAnalyticsWorkspaceResourceId string
+@description('Optional. Resource ID of an existing data collection endpoint; empty omits the endpoint reference.')
 param dataCollectionEndpointId string = ''
 
 resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' = {
@@ -90,5 +97,7 @@ resource dataCollectionRule 'Microsoft.Insights/dataCollectionRules@2022-06-01' 
   }
 }
 
+@description('Resource ID of the AVD Insights data collection rule.')
 output resourceId string = dataCollectionRule.id
+@description('Azure resource name of the AVD Insights data collection rule.')
 output name string = dataCollectionRule.name

@@ -1,3 +1,6 @@
+metadata name = 'VM Applications policy orchestration'
+metadata description = 'Validates an authoritative Gallery application list and resource-group ownership, creates its Modify definition and assignment, grants scoped permissions, and optionally remediates existing session hosts.'
+
 targetScope = 'subscription'
 
 import { vmApplicationAssignmentType } from 'vmApplicationTypes.bicep'
@@ -18,7 +21,7 @@ param policyIdentityResourceId string
 param policyIdentityPrincipalId string
 
 @maxLength(25)
-@description('Required. Authoritative ordered list of Azure Compute Gallery application version references. References may select an immutable semantic version or use /versions/latest.')
+@description('Required. Authoritative ordered list of 1-25 Gallery application references using immutable versions or /versions/latest; one version per application.')
 param vmApplications vmApplicationAssignmentType[]
 
 @description('Optional. Create or update a deterministic remediation task for existing noncompliant VMs.')
@@ -27,7 +30,7 @@ param createRemediation bool = false
 @description('Optional. Grant Virtual Machine Contributor to the policy identity at the target resource group. Disable when the caller already owns this role assignment.')
 param manageVirtualMachineContributorRole bool = true
 
-@description('Optional. Stable ownership label recorded in policy assignment metadata. Deployments targeting the same resource group jointly manage the same deterministic assignment.')
+@description('Optional. Stable ownership label for the assignment; must match any existing session-host policy owner tag on the target resource group.')
 param ownerId string = 'FederalAVD'
 
 var virtualMachineContributorRoleDefinitionId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
@@ -44,6 +47,8 @@ resource targetResourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' exi
   name: targetResourceGroupName
 }
 
+// Deployments targeting the same resource group jointly manage the same deterministic assignment.
+// The owner tag prevents a differently owned deployment from silently taking over that assignment.
 var existingOwnerId = targetResourceGroup.tags[?ownershipTagName] ?? ''
 var ownershipIsValid = empty(existingOwnerId) || existingOwnerId == ownerId
   ? true
@@ -105,8 +110,13 @@ module policyAssignment 'modules/vmApplicationsAssignment.bicep' = {
   ]
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.outputs.policyDefinitionResourceId
+@description('Resource ID of the session-host policy assignment.')
 output policyAssignmentResourceId string = policyAssignment.outputs.policyAssignmentResourceId
+@description('The supplied policy user-assigned identity resource ID, returned unchanged.')
 output policyIdentityResourceId string = policyIdentityResourceId
+@description('Resource ID of the remediation task, or an empty string when remediation is not requested.')
 output remediationResourceId string = policyAssignment.outputs.remediationResourceId
+@description('Resource ID of the existing dedicated session-host resource group governed by the assignment.')
 output targetResourceGroupResourceId string = targetResourceGroup.id

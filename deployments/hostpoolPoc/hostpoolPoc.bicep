@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
+import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/functions.bicep'
 
 @maxLength(16)
 @description('Required. Short name identifying the disposable PoC deployment.')
@@ -59,8 +60,8 @@ module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
 }
 
 var resourceGroupName = naming.outputs.resourceGroupConsolidated
-var virtualNetworkName = 'vnet-avd-${hpBaseName}-${naming.outputs.vmLocationAbbreviation}'
-var sessionHostSubnetName = 'snet-avd-${hpBaseName}-hosts-${naming.outputs.vmLocationAbbreviation}'
+var virtualNetworkName = resourceName(namingPolicy.defaults, 'pocVirtualNetwork', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
+var sessionHostSubnetName = resourceName(namingPolicy.defaults, 'pocHostsSubnet', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
 var virtualNetworkResourceId = resourceId(
   subscription().subscriptionId,
   resourceGroupName,
@@ -153,10 +154,10 @@ module network '../networking/modules/vnet-sub-module.bicep' = {
     includeAvdBypassRoutes: false
     rdpShortpathManagedNetworks: false
     rdpShortpathPublicNetworks: false
-    natGatewayName: 'ng-avd-${hpBaseName}-${naming.outputs.vmLocationAbbreviation}'
-    publicIPName: 'pip-avd-${hpBaseName}-${naming.outputs.vmLocationAbbreviation}'
+    natGatewayName: resourceName(namingPolicy.defaults, 'pocNatGateway', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
+    publicIPName: resourceName(namingPolicy.defaults, 'pocPublicIP', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
     routeTableName: ''
-    nsgName: 'nsg-avd-${hpBaseName}-${naming.outputs.vmLocationAbbreviation}'
+    nsgName: resourceName(namingPolicy.defaults, 'pocSecurityGroup', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
     logAnalyticsWorkspaceResourceId: ''
     nvaIPAddress: ''
     customDNSServers: []
@@ -270,17 +271,9 @@ module controlPlane '../hostpools/modules/control-plane/controlPlane.bicep' = {
       {
         hostsResourceGroupId: subscriptionResourceId('Microsoft.Resources/resourceGroups', resourceGroupName)
         hpIdentifier: hpBaseName
-        hpNamingConvention: string({
-          components: [
-            'resourceType'
-            'workload'
-            'purpose'
-            'location'
-          ]
-          delimiter: '-'
-          workload: 'avd'
+        hpNamingConvention: string(union(namingPolicy.defaults, {
           vmsLocationAbbreviation: naming.outputs.vmLocationAbbreviation
-        })
+        }))
       },
       deployFSLogixStorage
         ? {

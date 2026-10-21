@@ -63,6 +63,16 @@
                   }
                 ]
               }
+            },
+            {
+              "name": "federalAvdNamingPolicy",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Generated naming policy",
+              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"imageManagement\":\"image-management\",\"replacerFallback\":\"replacer\",\"sharedFslogix\":\"fslogix\"},\"limits\":{\"keyVault\":24,\"functionApp\":60,\"storageAccount\":24,\"deploymentVm\":15,\"fslogixStoragePrefix\":13,\"uniqueSuffix\":6,\"imageManagementStoragePrefix\":5,\"imageManagementStorageLocation\":4},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\",\"privateEndpointFirst\":\"{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID\",\"privateEndpointLast\":\"RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}\",\"privateEndpointNicFirst\":\"{networkInterfaces}-{endpoint}\",\"privateEndpointNicLast\":\"{endpoint}-{networkInterfaces}\",\"deploymentDisk\":\"{vm}-{osdisks}\",\"deploymentNic\":\"{vm}-{networkInterfaces}\",\"availabilitySet\":\"{name}{delimiter}##\",\"policyIdentityPurpose\":\"policy{delimiter}remediation\",\"deploymentIdentityPurpose\":\"deployment\",\"monitorIdentityPurpose\":\"ama\",\"confidentialDiskPurpose\":\"confvm{delimiter}customer{delimiter}keys\",\"customerDiskPurpose\":\"customer{delimiter}keys\",\"doubleEncryptionDiskPurpose\":\"platform{delimiter}and{delimiter}customer{delimiter}keys\",\"fslogixStoragePrefix\":\"fslogix{unique}\",\"fslogixKey\":\"{identifier}-{storagePrefix}##-cmk\",\"vmKey\":\"{identifier}-vm-cmk\",\"confidentialVmKey\":\"{identifier}-cvm-cmk\",\"recoveryServicesKey\":\"{identifier}-rsv-cmk\",\"imageStorageKey\":\"{identifier}-storage-cmk\",\"replacerStorageKey\":\"{identifier}-shr-storage-cmk\",\"imageGalleryKey\":\"{identifier}-gallery-cmk\",\"imageGalleryConfidentialKey\":\"{identifier}-gallery-cvm-cmk\",\"imageStorageFirst\":\"{storageAccounts}{purpose}{location}{unique}\",\"imageStorageLast\":\"{purpose}{location}{unique}{storageAccounts}\",\"imageStorageCustomPrefix\":\"{prefix}{purpose}{location}{unique}\",\"imageBuildResourceGroup\":\"{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}\",\"imageBuildCustomResourceGroup\":\"{name}-{timestamp}-{unique}\",\"imageBuildVm\":\"{prefix}img-{unique}\",\"imageBuildOrchestrationVm\":\"{prefix}orc-{unique}\",\"deploymentPrefix\":\"{prefix}-\",\"imageDefinition\":\"{imageDefinitions}-{publisher}-{offer}-{sku}\",\"functionInsightsOverride\":\"{name}-insights\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"},\"purposePatterns\":{\"operationsResourceGroup\":\"operations\",\"monitoringResourceGroup\":\"monitoring\",\"controlPlaneResourceGroup\":\"control{delimiter}plane\",\"globalFeedResourceGroup\":\"global{delimiter}feed\",\"globalFeedWorkspace\":\"global{delimiter}feed\",\"workspace\":\"\",\"hostWorkspace\":\"{identifier}\",\"deploymentResourceGroup\":\"{identifier}{delimiter}deployment\",\"deploymentVm\":\"{identifier}\",\"consolidatedResourceGroup\":\"{identifier}\",\"hostsResourceGroup\":\"{identifier}{delimiter}hosts\",\"storageResourceGroup\":\"{identifier}{delimiter}storage\",\"secretsKeyVault\":\"sec{delimiter}{unique}\",\"encryptionKeyVault\":\"enc{delimiter}{unique}\",\"dataCollectionEndpoint\":\"\",\"logAnalyticsWorkspace\":\"\",\"hostPool\":\"{identifier}\",\"desktopApplicationGroup\":\"{identifier}\",\"scalingPlan\":\"{identifier}\",\"vmBackupVault\":\"{identifier}\",\"filesBackupVault\":\"files\",\"identityPattern\":\"{identifier}{delimiter}TOKEN\",\"availabilitySet\":\"{identifier}\",\"diskAccess\":\"{identifier}\",\"diskEncryptionSetPattern\":\"{identifier}{delimiter}TOKEN\",\"netAppAccount\":\"{identifier}\",\"netAppCapacityPool\":\"{identifier}\",\"imageManagementResourceGroup\":\"{identifier}\",\"imageGallery\":\"{identifier}\",\"imageBlobIdentity\":\"{identifier}-blob-access\",\"imageStorageEncryptionIdentity\":\"{identifier}-storage-cmk\",\"imageBuildResourceGroup\":\"image-builds\",\"imageGalleryCustomerKeys\":\"{identifier}-customer-keys\",\"imageGalleryDoubleEncryptionKeys\":\"{identifier}-platform-and-customer-keys\",\"imageGalleryConfidentialKeys\":\"{identifier}-confidential-vm\",\"replacerFunctionApp\":\"{identifier}{delimiter}shr{delimiter}{unique}\",\"replacerStorage\":\"{storageIdentifier}shr{unique}\",\"replacerStorageIdentity\":\"{identifier}{delimiter}shr{delimiter}storage{delimiter}cmk\",\"replacerHostingPlan\":\"\",\"replacerInsights\":\"{identifier}{delimiter}shr{delimiter}{unique}\",\"sessionHostsTemplateSpec\":\"session-hosts\",\"networkNatGateway\":\"\",\"networkPublicIP\":\"\",\"networkRouteTable\":\"\",\"networkSecurityGroup\":\"\",\"pocVirtualNetwork\":\"{identifier}\",\"pocHostsSubnet\":\"{identifier}{delimiter}hosts\",\"pocNatGateway\":\"{identifier}\",\"pocPublicIP\":\"{identifier}\",\"pocSecurityGroup\":\"{identifier}\",\"alertsAutomation\":\"alerts\",\"quotaAutomation\":\"sqm{delimiter}{identifier}\",\"routesAutomation\":\"urt{delimiter}{unique}\"}}",
+              "visible": false,
+              "constraints": {
+                "required": false
+              }
             }
           ]
         },
@@ -484,13 +494,34 @@
                           "constraints": {
                             "required": true,
                             "allowedValues": [
-                              { "label": "Monday", "value": "Monday" },
-                              { "label": "Tuesday", "value": "Tuesday" },
-                              { "label": "Wednesday", "value": "Wednesday" },
-                              { "label": "Thursday", "value": "Thursday" },
-                              { "label": "Friday", "value": "Friday" },
-                              { "label": "Saturday", "value": "Saturday" },
-                              { "label": "Sunday", "value": "Sunday" }
+                              {
+                                "label": "Monday",
+                                "value": "Monday"
+                              },
+                              {
+                                "label": "Tuesday",
+                                "value": "Tuesday"
+                              },
+                              {
+                                "label": "Wednesday",
+                                "value": "Wednesday"
+                              },
+                              {
+                                "label": "Thursday",
+                                "value": "Thursday"
+                              },
+                              {
+                                "label": "Friday",
+                                "value": "Friday"
+                              },
+                              {
+                                "label": "Saturday",
+                                "value": "Saturday"
+                              },
+                              {
+                                "label": "Sunday",
+                                "value": "Sunday"
+                              }
                             ]
                           }
                         }
@@ -501,7 +532,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "08:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 08:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 08:00."
+                          }
                         }
                       },
                       {
@@ -510,7 +545,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Breadth-First",
-                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": {
+                            "required": false,
+                            "allowedValues": [
+                              {
+                                "label": "Breadth-First",
+                                "value": "BreadthFirst"
+                              },
+                              {
+                                "label": "Depth-First",
+                                "value": "DepthFirst"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -519,7 +566,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "20",
-                          "constraints": { "required": true, "regex": "^(100|[1-9]?[0-9])$", "validationMessage": "Enter 0-100." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(100|[1-9]?[0-9])$",
+                            "validationMessage": "Enter 0-100."
+                          }
                         }
                       },
                       {
@@ -528,7 +579,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "60",
-                          "constraints": { "required": true, "regex": "^(100|[1-9][0-9]?)$", "validationMessage": "Enter 1-100." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(100|[1-9][0-9]?)$",
+                            "validationMessage": "Enter 1-100."
+                          }
                         }
                       },
                       {
@@ -537,7 +592,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "09:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 09:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 09:00."
+                          }
                         }
                       },
                       {
@@ -546,7 +605,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Breadth-First",
-                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": {
+                            "required": false,
+                            "allowedValues": [
+                              {
+                                "label": "Breadth-First",
+                                "value": "BreadthFirst"
+                              },
+                              {
+                                "label": "Depth-First",
+                                "value": "DepthFirst"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -555,7 +626,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "18:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 18:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 18:00."
+                          }
                         }
                       },
                       {
@@ -564,7 +639,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Depth-First",
-                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": {
+                            "required": false,
+                            "allowedValues": [
+                              {
+                                "label": "Breadth-First",
+                                "value": "BreadthFirst"
+                              },
+                              {
+                                "label": "Depth-First",
+                                "value": "DepthFirst"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -573,7 +660,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "10",
-                          "constraints": { "required": true, "regex": "^(100|[1-9]?[0-9])$", "validationMessage": "Enter 0-100." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(100|[1-9]?[0-9])$",
+                            "validationMessage": "Enter 0-100."
+                          }
                         }
                       },
                       {
@@ -582,7 +673,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "90",
-                          "constraints": { "required": true, "regex": "^(100|[1-9][0-9]?)$", "validationMessage": "Enter 1-100." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(100|[1-9][0-9]?)$",
+                            "validationMessage": "Enter 1-100."
+                          }
                         }
                       },
                       {
@@ -591,7 +686,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "No",
-                          "constraints": { "required": false, "allowedValues": [{ "label": "Yes", "value": true }, { "label": "No", "value": false }] }
+                          "constraints": {
+                            "required": false,
+                            "allowedValues": [
+                              {
+                                "label": "Yes",
+                                "value": true
+                              },
+                              {
+                                "label": "No",
+                                "value": false
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -600,7 +707,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "30",
-                          "constraints": { "required": false, "regex": "^(?:[0-9]|[1-9][0-9]|1[01][0-9]|120)$", "validationMessage": "Enter 0-120 minutes." }
+                          "constraints": {
+                            "required": false,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|1[01][0-9]|120)$",
+                            "validationMessage": "Enter 0-120 minutes."
+                          }
                         }
                       },
                       {
@@ -610,7 +721,9 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "Save your work and sign out. This session host is being removed by autoscale.",
-                          "constraints": { "required": false }
+                          "constraints": {
+                            "required": false
+                          }
                         }
                       },
                       {
@@ -619,7 +732,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Zero Sessions",
-                          "constraints": { "required": false, "allowedValues": [{ "label": "Zero Sessions", "value": "ZeroSessions" }, { "label": "Zero Active Sessions", "value": "ZeroActiveSessions" }] }
+                          "constraints": {
+                            "required": false,
+                            "allowedValues": [
+                              {
+                                "label": "Zero Sessions",
+                                "value": "ZeroSessions"
+                              },
+                              {
+                                "label": "Zero Active Sessions",
+                                "value": "ZeroActiveSessions"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -628,7 +753,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "22:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 22:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 22:00."
+                          }
                         }
                       },
                       {
@@ -637,7 +766,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Depth-First",
-                          "constraints": { "required": false, "allowedValues": [{ "label": "Breadth-First", "value": "BreadthFirst" }, { "label": "Depth-First", "value": "DepthFirst" }] }
+                          "constraints": {
+                            "required": false,
+                            "allowedValues": [
+                              {
+                                "label": "Breadth-First",
+                                "value": "BreadthFirst"
+                              },
+                              {
+                                "label": "Depth-First",
+                                "value": "DepthFirst"
+                              }
+                            ]
+                          }
                         }
                       }
                     ]
@@ -684,13 +825,34 @@
                           "constraints": {
                             "required": true,
                             "allowedValues": [
-                              { "label": "Monday", "value": "Monday" },
-                              { "label": "Tuesday", "value": "Tuesday" },
-                              { "label": "Wednesday", "value": "Wednesday" },
-                              { "label": "Thursday", "value": "Thursday" },
-                              { "label": "Friday", "value": "Friday" },
-                              { "label": "Saturday", "value": "Saturday" },
-                              { "label": "Sunday", "value": "Sunday" }
+                              {
+                                "label": "Monday",
+                                "value": "Monday"
+                              },
+                              {
+                                "label": "Tuesday",
+                                "value": "Tuesday"
+                              },
+                              {
+                                "label": "Wednesday",
+                                "value": "Wednesday"
+                              },
+                              {
+                                "label": "Thursday",
+                                "value": "Thursday"
+                              },
+                              {
+                                "label": "Friday",
+                                "value": "Friday"
+                              },
+                              {
+                                "label": "Saturday",
+                                "value": "Saturday"
+                              },
+                              {
+                                "label": "Sunday",
+                                "value": "Sunday"
+                              }
                             ]
                           }
                         }
@@ -701,7 +863,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "08:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 08:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 08:00."
+                          }
                         }
                       },
                       {
@@ -713,9 +879,18 @@
                           "constraints": {
                             "required": true,
                             "allowedValues": [
-                              { "label": "None", "value": "None" },
-                              { "label": "With Assigned User", "value": "WithAssignedUser" },
-                              { "label": "All", "value": "All" }
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "With Assigned User",
+                                "value": "WithAssignedUser"
+                              },
+                              {
+                                "label": "All",
+                                "value": "All"
+                              }
                             ]
                           }
                         }
@@ -726,7 +901,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Enable",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "Enable",
+                                "value": "Enable"
+                              },
+                              {
+                                "label": "Disable",
+                                "value": "Disable"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -735,7 +922,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "0",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -744,7 +935,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "None",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -753,7 +960,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "0",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -762,7 +973,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "None",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -771,7 +998,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "09:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 09:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 09:00."
+                          }
                         }
                       },
                       {
@@ -780,7 +1011,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Enable",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "Enable",
+                                "value": "Enable"
+                              },
+                              {
+                                "label": "Disable",
+                                "value": "Disable"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -789,7 +1032,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "0",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -798,7 +1045,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "None",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -807,7 +1070,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "0",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -816,7 +1083,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "None",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -825,7 +1108,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "17:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 17:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 17:00."
+                          }
                         }
                       },
                       {
@@ -834,7 +1121,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Disable",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "Enable",
+                                "value": "Enable"
+                              },
+                              {
+                                "label": "Disable",
+                                "value": "Disable"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -843,7 +1142,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "30",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -852,7 +1155,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Deallocate",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -861,7 +1180,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "30",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -870,7 +1193,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Deallocate",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -879,7 +1218,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "20:00",
-                          "constraints": { "required": true, "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "validationMessage": "Use HH:mm, for example 20:00." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                            "validationMessage": "Use HH:mm, for example 20:00."
+                          }
                         }
                       },
                       {
@@ -888,7 +1231,19 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Disable",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "Enable", "value": "Enable" }, { "label": "Disable", "value": "Disable" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "Enable",
+                                "value": "Enable"
+                              },
+                              {
+                                "label": "Disable",
+                                "value": "Disable"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -897,7 +1252,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "30",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -906,7 +1265,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Deallocate",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       },
                       {
@@ -915,7 +1290,11 @@
                         "element": {
                           "type": "Microsoft.Common.TextBox",
                           "placeholder": "30",
-                          "constraints": { "required": true, "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$", "validationMessage": "Enter 0-360 minutes." }
+                          "constraints": {
+                            "required": true,
+                            "regex": "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|3[0-5][0-9]|360)$",
+                            "validationMessage": "Enter 0-360 minutes."
+                          }
                         }
                       },
                       {
@@ -924,7 +1303,23 @@
                         "element": {
                           "type": "Microsoft.Common.DropDown",
                           "placeholder": "Deallocate",
-                          "constraints": { "required": true, "allowedValues": [{ "label": "None", "value": "None" }, { "label": "Deallocate", "value": "Deallocate" }, { "label": "Hibernate", "value": "Hibernate" }] }
+                          "constraints": {
+                            "required": true,
+                            "allowedValues": [
+                              {
+                                "label": "None",
+                                "value": "None"
+                              },
+                              {
+                                "label": "Deallocate",
+                                "value": "Deallocate"
+                              },
+                              {
+                                "label": "Hibernate",
+                                "value": "Hibernate"
+                              }
+                            ]
+                          }
                         }
                       }
                     ]
@@ -2935,7 +3330,7 @@
                 {
                   "name": "cloudOnlyRbacRegionInfoBox",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-CloudOnly'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]" ,
+                  "visible": "[and(equals(steps('userProfiles').userIdentity, 'EntraKerberos-CloudOnly'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None'))))]",
                   "options": {
                     "style": "Warning",
                     "text": "Azure Files share-level RBAC for cloud-only identities — required for least-privilege NTFS permissions and profile sharding — is available only in a subset of Azure Commercial regions. Azure Government is not currently supported for this capability. Verify that your target region is on the supported list before proceeding. Click anywhere on this infobox for the list of supported regions.",
@@ -4050,9 +4445,24 @@
             {
               "name": "permittedIPsSection",
               "type": "Microsoft.Common.Section",
-              "label": "Permitted IP Addresses",
+              "label": "PaaS Public Network Access",
               "visible": "[or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').identity.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)))]",
               "elements": [
+                {
+                  "name": "paasPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "[if(steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, 'Disabled', 'Enabled')]",
+                  "toolTip": "Shared by newly deployed Azure Files storage and Key Vaults, independently of private endpoints. Existing resources and backup/monitoring access are unchanged.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Disabled", "value": "Disabled" },
+                      { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
+                      { "label": "Enabled", "value": "Enabled" }
+                    ]
+                  }
+                },
                 {
                   "name": "permittedIPsInfo",
                   "type": "Microsoft.Common.TextBlock",
@@ -4065,33 +4475,34 @@
                   "name": "permittedIPsDescription",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "These IP ranges control public network access on PaaS resources (storage accounts, Key Vaults) deployed by this solution. The behavior depends on whether private endpoints are also deployed."
+                    "text": "Select public access independently of private endpoints. This choice applies to newly deployed Azure Files storage and Key Vaults; existing resources, AVD connection/feed settings, backup vaults and monitoring are unchanged."
                   }
                 },
                 {
                   "name": "permittedIPsScenario1",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "• Private endpoints ON, no IPs entered: public access DISABLED. All traffic must use the private endpoint. Use this for fully private deployments."
+                    "text": "Disabled: entered IP rules remain configured but do not enable public access. Ensure a working private access path. Trusted-service exceptions remain configured; Key Vault's trusted-service bypass can still apply."
                   }
                 },
                 {
                   "name": "permittedIPsScenario2",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "• Private endpoints ON, IPs entered: public access ENABLED but restricted to the specified ranges. The private endpoint handles internal traffic; the IP allowlist covers management access from known external addresses (e.g., a deployment workstation or on-premises CIDR)."
+                    "text": "Enabled with restrictions: permit the entered public IP ranges and existing trusted-service exceptions. Unmatched traffic is denied even when the IP list is empty. Private endpoints can coexist with these restrictions."
                   }
                 },
                 {
                   "name": "permittedIPsScenario3",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "• Private endpoints OFF: public access ENABLED. If IPs are entered, only those ranges are permitted. If empty, the resource is open to all public traffic."
+                    "text": "Enabled: allow all networks regardless of stored IP rules. Authentication and authorization are still required in every mode."
                   }
                 },
                 {
                   "name": "permittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
+                  "visible": "[not(equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'Enabled'))]",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "label": "Permitted IP Addresses / CIDR Ranges",
                   "constraints": {
@@ -4588,7 +4999,7 @@
                   "name": "delimiter",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Delimiter",
-                  "defaultValue": "-",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.delimiter]",
                   "toolTip": "Character placed between each component. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
                   "constraints": {
                     "required": true,
@@ -4925,7 +5336,7 @@
                     "regex": "^[a-z0-9-]{1,20}$",
                     "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
                   },
-                  "defaultValue": "avd"
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.workload]"
                 },
                 {
                   "name": "environmentValue",
@@ -5055,10 +5466,10 @@
                 {
                   "name": "kvNameTruncationWarning",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''))),24)]",
+                  "visible": "[greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''))),24)]",
                   "options": {
                     "style": "Warning",
-                    "text": "[concat('Key Vault base name is ',string(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),'')))),' characters — the name will be automatically truncated to 24 characters at deployment. Consider shortening your naming convention to preserve uniqueness.')]"
+                    "text": "[concat('Key Vault base name is ',string(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),'')))),' characters — the name will be automatically truncated to 24 characters at deployment. Consider shortening your naming convention to preserve uniqueness.')]"
                   }
                 },
                 {
@@ -5104,7 +5515,6 @@
                     "text": "No location segment in your naming convention — a location code is automatically included in the Key Vault unique string seed to prevent name collisions across regions."
                   }
                 },
-
                 {
                   "name": "customizeAbbreviations",
                   "type": "Microsoft.Common.CheckBox",
@@ -5119,7 +5529,7 @@
                   "name": "rtCodeRg",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Resource Groups abbreviation",
-                  "defaultValue": "rg",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.resourceGroups]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in resource groups names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5132,7 +5542,7 @@
                   "name": "rtCodeHp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Host Pools abbreviation",
-                  "defaultValue": "vdpool",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in host pools names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5145,7 +5555,7 @@
                   "name": "rtCodeDag",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Desktop Application Groups abbreviation",
-                  "defaultValue": "vddag",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.desktopApplicationGroups]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in desktop application groups names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5158,7 +5568,7 @@
                   "name": "rtCodeWs",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Workspaces abbreviation",
-                  "defaultValue": "vdws",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.workspaces]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in workspaces names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5171,7 +5581,7 @@
                   "name": "rtCodeSp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Scaling Plans abbreviation",
-                  "defaultValue": "vdscaling",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.scalingPlans]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in scaling plans names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5184,7 +5594,7 @@
                   "name": "rtCodeVm",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual Machines abbreviation",
-                  "defaultValue": "vm",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.virtualMachines]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in virtual machines names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5197,7 +5607,7 @@
                   "name": "rtCodeDisk",
                   "type": "Microsoft.Common.TextBox",
                   "label": "OS Disks abbreviation",
-                  "defaultValue": "disk",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.osdisks]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in os disks names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5210,7 +5620,7 @@
                   "name": "rtCodeDes",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Disk Encryption Sets abbreviation",
-                  "defaultValue": "des",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.diskEncryptionSets]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in disk encryption sets names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5223,7 +5633,7 @@
                   "name": "rtCodeDa",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Disk Accesses abbreviation",
-                  "defaultValue": "da",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.diskAccesses]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in disk accesses names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5236,7 +5646,7 @@
                   "name": "rtCodeAs",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Availability Sets abbreviation",
-                  "defaultValue": "as",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.availabilitySets]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in availability sets names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5249,7 +5659,7 @@
                   "name": "rtCodeSa",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage Accounts abbreviation",
-                  "defaultValue": "sa",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.storageAccounts]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in storage accounts names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5262,7 +5672,7 @@
                   "name": "rtCodeNaa",
                   "type": "Microsoft.Common.TextBox",
                   "label": "NetApp Accounts abbreviation",
-                  "defaultValue": "naa",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.netAppAccounts]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in netapp accounts names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5275,7 +5685,7 @@
                   "name": "rtCodeNacp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "NetApp Capacity Pools abbreviation",
-                  "defaultValue": "nacp",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.netAppCapacityPools]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in netapp capacity pools names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5288,7 +5698,7 @@
                   "name": "rtCodeKv",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Key Vaults abbreviation",
-                  "defaultValue": "kv",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in key vaults names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5301,7 +5711,7 @@
                   "name": "rtCodeUai",
                   "type": "Microsoft.Common.TextBox",
                   "label": "User Assigned Identities abbreviation",
-                  "defaultValue": "uai",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.userAssignedIdentities]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in user assigned identities names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5314,7 +5724,7 @@
                   "name": "rtCodePe",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints abbreviation",
-                  "defaultValue": "pe",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.privateEndpoints]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in private endpoints names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5327,7 +5737,7 @@
                   "name": "rtCodeNic",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interfaces abbreviation",
-                  "defaultValue": "nic",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.networkInterfaces]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in network interfaces names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5340,7 +5750,7 @@
                   "name": "rtCodeLaw",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Log Analytics Workspaces abbreviation",
-                  "defaultValue": "law",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.logAnalyticsWorkspaces]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in log analytics workspaces names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5353,7 +5763,7 @@
                   "name": "rtCodeDce",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Data Collection Endpoints abbreviation",
-                  "defaultValue": "dce",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.dataCollectionEndpoints]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in data collection endpoints names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5366,7 +5776,7 @@
                   "name": "rtCodeRsv",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Recovery Services Vaults abbreviation",
-                  "defaultValue": "rsv",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.recoveryServicesVaults]",
                   "toolTip": "Abbreviation substituted for the Resource Type component in recovery services vaults names.",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
@@ -5387,7 +5797,7 @@
                   "name": "vmNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual Machine Naming Convention",
-                  "defaultValue": "SHNAME",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine]",
                   "toolTip": "Naming pattern for session host VMs. SHNAME is replaced with the session host name at deployment time (e.g., 'SHNAME' becomes 'avd01').",
                   "constraints": {
                     "required": true,
@@ -5399,7 +5809,7 @@
                   "name": "diskNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "OS Disk Naming Convention",
-                  "defaultValue": "SHNAME-osdisk",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk]",
                   "toolTip": "Naming pattern for session host OS disks. SHNAME is replaced with the VM name (e.g., 'SHNAME-osdisk' becomes 'avd01-osdisk').",
                   "constraints": {
                     "required": true,
@@ -5411,7 +5821,7 @@
                   "name": "nicNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interface Naming Convention",
-                  "defaultValue": "SHNAME-nic",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).patterns.nic]",
                   "toolTip": "Naming pattern for session host network interfaces. SHNAME is replaced with the VM name (e.g., 'SHNAME-nic' becomes 'avd01-nic').",
                   "constraints": {
                     "required": true,
@@ -5437,21 +5847,21 @@
                   "name": "previewHostPool",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "[concat('Host Pool: ',concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),'vdpool',steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),steps('basics').identifier,if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')))]"
+                    "text": "[concat('Host Pool: ',concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools,steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),replace(replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.hostPool, '{delimiter}', steps('tagsAndNaming').naming.delimiter), '{identifier}', steps('basics').identifier),if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools,steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),replace(replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.hostPool, '{delimiter}', steps('tagsAndNaming').naming.delimiter), '{identifier}', steps('basics').identifier),if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools,steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),replace(replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.hostPool, '{delimiter}', steps('tagsAndNaming').naming.delimiter), '{identifier}', steps('basics').identifier),if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools,steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),replace(replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.hostPool, '{delimiter}', steps('tagsAndNaming').naming.delimiter), '{identifier}', steps('basics').identifier),if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools,steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),replace(replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.hostPool, '{delimiter}', steps('tagsAndNaming').naming.delimiter), '{identifier}', steps('basics').identifier),if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeHp),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools,steps('tagsAndNaming').naming.rtCodeHp),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),replace(replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.hostPool, '{delimiter}', steps('tagsAndNaming').naming.delimiter), '{identifier}', steps('basics').identifier),if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride)),steps('tagsAndNaming').naming.cpLocationAbbreviationOverride,'{cp-loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),'')))]"
                   }
                 },
                 {
                   "name": "previewKvSecrets",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "[concat('KV (Secrets): ',if(greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''))),20),concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')),concat(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-{unique}',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')),'-{unique}')))]"
+                    "text": "[concat('KV (Secrets): ',if(greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''))),20),concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),'')),concat(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.keyVaults,steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),replace(parse(steps('basics').federalAvdNamingPolicy).purposePatterns.secretsKeyVault, '{delimiter}', steps('tagsAndNaming').naming.delimiter),if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride)),steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),parse(steps('basics').federalAvdNamingPolicy).defaults.workload,steps('tagsAndNaming').naming.workloadValue)))))))),'')),concat(steps('tagsAndNaming').naming.delimiter, '{unique}'))))]"
                   }
                 },
                 {
                   "name": "previewVmPatterns",
                   "type": "Microsoft.Common.TextBlock",
                   "options": {
-                    "text": "[concat('VM: ',if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))),'resourceType'),concat(concat(steps('hosts').naming.virtualMachineNamePrefix,if(equals(steps('hosts').naming.indexPadding,1),'#',if(equals(steps('hosts').naming.indexPadding,2),'##','###'))),'-',if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm)),concat(if(empty(steps('tagsAndNaming').naming.rtCodeVm),'vm',steps('tagsAndNaming').naming.rtCodeVm),'-',concat(steps('hosts').naming.virtualMachineNamePrefix,if(equals(steps('hosts').naming.indexPadding,1),'#',if(equals(steps('hosts').naming.indexPadding,2),'##','###'))))),'  |  ','Disk: ',if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))),'resourceType'),concat(concat(steps('hosts').naming.virtualMachineNamePrefix,if(equals(steps('hosts').naming.indexPadding,1),'#',if(equals(steps('hosts').naming.indexPadding,2),'##','###'))),'-',if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'osdisk',steps('tagsAndNaming').naming.rtCodeDisk)),concat(if(empty(steps('tagsAndNaming').naming.rtCodeDisk),'osdisk',steps('tagsAndNaming').naming.rtCodeDisk),'-',concat(steps('hosts').naming.virtualMachineNamePrefix,if(equals(steps('hosts').naming.indexPadding,1),'#',if(equals(steps('hosts').naming.indexPadding,2),'##','###'))))),'  |  ','NIC: ',if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))),'resourceType'),concat(concat(steps('hosts').naming.virtualMachineNamePrefix,if(equals(steps('hosts').naming.indexPadding,1),'#',if(equals(steps('hosts').naming.indexPadding,2),'##','###'))),'-',if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic)),concat(if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic),'-',concat(steps('hosts').naming.virtualMachineNamePrefix,if(equals(steps('hosts').naming.indexPadding,1),'#',if(equals(steps('hosts').naming.indexPadding,2),'##','###'))))))]"
+                    "text": "[concat('VM: ', parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, ' | Disk: ', parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk, ' | NIC: ', parse(steps('basics').federalAvdNamingPolicy).patterns.nic)]"
                   }
                 },
                 {
@@ -5606,6 +6016,7 @@
         "encryptionKeyVaultRetentionInDays": "[if(and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv)), steps('zeroTrust').keyManagement.encKvRetentionInDays, 90)]",
         "existingEncryptionKeyVaultResourceId": "[if(and(steps('zeroTrust').keyManagement.useExistingEncryptionKv, or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'))), steps('zeroTrust').keyManagement.existingEncryptionKeyVault.id, '')]",
         "keyExpirationInDays": "[if(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged')), steps('zeroTrust').keyManagement.keyExpirationInDays, 180)]",
+        "paasPublicNetworkAccess": "[if(or(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('hosts').identity.deploySecretsKeyVault, and(or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementRecoveryServicesVault, 'CustomerManaged'), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(steps('zeroTrust').keyManagement.useExistingEncryptionKv))), steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'Auto')]",
         "enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",
         "monitoringSubscriptionId": "[if(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.subscription.subscriptionId, '')]",
         "existingLogAnalyticsWorkspaceResourceId": "[if(and(steps('operationsAndMonitoring').monitoring.enableMonitoring, steps('operationsAndMonitoring').monitoring.useExistingMonitoring), steps('operationsAndMonitoring').monitoring.logAnalyticsWorkspace, '')]",

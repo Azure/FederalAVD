@@ -3,7 +3,9 @@
 
 targetScope = 'subscription'
 
+import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { namingPolicy, namePattern, regionAbbreviation, scopeIdUnique } from '../../shared/modules/orchestration/naming/functions.bicep'
 
 // ========== //
 // Parameters //
@@ -27,9 +29,11 @@ param tags object = {}
 // Naming Convention Parameters
 // ================================================================================================
 
-@description('''Naming convention controlling how Function App infrastructure resources are named.
-Should match the convention used when deploying the host pool. Pre-populated from the
-hpNamingConvention tag on the host pool resource.''')
+// Naming convention controlling how Function App infrastructure resources are named.
+// Should match the convention used when deploying the host pool. Pre-populated from the
+// hpNamingConvention tag on the host pool resource.
+@description('Optional. Function App infrastructure naming convention; match the host pool convention. The Portal populates it from the hpNamingConvention tag.')
+// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -39,7 +43,11 @@ param namingConvention object = {
 @description('Optional. The host pool base name / identifier used for naming (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource. When empty, falls back to a generic placeholder.')
 param identifier string = ''
 
-@description('Optional. Overrides for resource type abbreviations used when computing infrastructure resource names. Only the keys you provide are overridden; all others use CAF defaults. Supported keys: functionApps, appServicePlans, applicationInsights, templateSpecs, userAssignedIdentities, privateEndpoints, networkInterfaces.')
+// Optional. Overrides for resource type abbreviations used when computing infrastructure resource
+// names. Only the keys you provide are overridden; all others use CAF defaults. Supported keys:
+// functionApps, appServicePlans, applicationInsights, templateSpecs, userAssignedIdentities,
+// privateEndpoints, networkInterfaces.
+@description('Optional. Partial resource-type abbreviation overrides for Function App infrastructure. Unspecified keys retain shared defaults.')
 param namingResourceTypeCodes object = {}
 
 // ================================================================================================
@@ -48,31 +56,51 @@ param namingResourceTypeCodes object = {}
 // When specified, these override the naming convention for individual resources.
 // ================================================================================================
 
-@description('Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens).')
+// Optional. Explicit name for the Function App. If not provided, name is derived from host pool naming
+// convention. Use this for brownfield deployments with non-standard host pool names. Must be globally
+// unique and follow Azure naming rules (2-60 chars, alphanumeric and hyphens).
+@description('Optional. Complete Function App name override; otherwise generated. Must be globally unique, 2-60 alphanumeric or hyphen characters.')
 @maxLength(60)
 param functionAppNameOverride string = ''
 
-@description('Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is derived from host pool naming convention. Use this for brownfield deployments with non-standard host pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only.')
+// Optional. Explicit name for the Storage Account (used by Function App). If not provided, name is
+// derived from host pool naming convention. Use this for brownfield deployments with non-standard host
+// pool names. Must be globally unique, 3-24 chars, lowercase alphanumeric only.
+@description('Optional. Complete runtime storage account name override; otherwise generated. Must be globally unique, 3-24 lowercase alphanumeric characters.')
 @maxLength(24)
 param storageAccountNameOverride string = ''
 
-@description('Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is derived from host pool naming convention. Use this for brownfield deployments where a CMK identity was previously created with a specific name. Must follow Azure naming rules (3-128 chars, alphanumeric, hyphens, underscores).')
+// Optional. Explicit name for the storage encryption user-assigned identity. If not provided, name is
+// derived from host pool naming convention. Use this for brownfield deployments where a CMK identity
+// was previously created with a specific name. Must follow Azure naming rules (3-128 chars,
+// alphanumeric, hyphens, underscores).
+@description('Optional. Storage encryption identity name override; otherwise generated. Use 3-128 alphanumeric, hyphen, or underscore characters.')
 @maxLength(128)
 param storageEncryptionIdentityNameOverride string = ''
 
-@description('Required. Naming convention for session host virtual machines. SHNAME is replaced with the session host name at deploy time (e.g., "SHNAME" becomes "avdhost001"). Pre-populated from the virtualMachineNameConv tag on the hosts resource group.')
+// Required. Naming convention for session host virtual machines. SHNAME is replaced with the session
+// host name at deploy time (e.g., "SHNAME" becomes "avdhost001"). Pre-populated from the
+// virtualMachineNameConv tag on the hosts resource group.
+@description('Required. Session-host VM name pattern; SHNAME is replaced at deployment. The Portal reads the virtualMachineNameConv tag from the hosts resource group.')
+// naming-policy: patterns.virtualMachine
 param virtualMachineNameConv string = 'SHNAME'
 
 @description('Required. Naming convention for session host OS disks. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineDiskNameConv tag on the hosts resource group.')
+// naming-policy: patterns.osDisk
 param virtualMachineDiskNameConv string = 'SHNAME-osdisk'
 
 @description('Required. Naming convention for session host network interfaces. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineNicNameConv tag on the hosts resource group.')
+// naming-policy: patterns.nic
 param virtualMachineNicNameConv string = 'SHNAME-nic'
 
 @description('Required. Naming convention for availability sets. ## is replaced with the set index (e.g., "avset-##" becomes "avset-01"). Pre-populated from the availabilitySetNameConv tag on the hosts resource group.')
+// naming-policy: patterns.standaloneAvailabilitySet
 param availabilitySetNameConv string = 'avset-##'
 
-@description('Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming convention. Use this for brownfield deployments where an existing plan was created with a non-standard name, or when sharing an ASP across add-ons.')
+// Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming
+// convention. Use this for brownfield deployments where an existing plan was created with a
+// non-standard name, or when sharing an ASP across add-ons.
+@description('Optional. Complete App Service plan name override for a managed plan; otherwise generated. Does not select an existing plan by resource ID.')
 @maxLength(40)
 param appServicePlanNameOverride string = ''
 
@@ -82,13 +110,20 @@ param appServicePlanNameOverride string = ''
 // security, encryption, and monitoring capabilities.
 // ================================================================================================
 
-@description('Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). The identity must be in the same Azure region as the Function App because Microsoft.Web enforces regional identity isolation. If not provided, the function app will use its system-assigned managed identity.')
+// Optional. The resource ID of the User-Assigned Managed Identity with Microsoft Graph API permissions
+// (Device.ReadWrite.All, DeviceManagementManagedDevices.ReadWrite.All). The identity must be in the
+// same Azure region as the Function App because Microsoft.Web enforces regional identity isolation. If
+// not provided, the function app will use its system-assigned managed identity.
+@description('Optional. Existing same-region app UAI with Device.ReadWrite.All and DeviceManagementManagedDevices.ReadWrite.All Graph permissions; empty uses system-assigned identity.')
 param sessionHostReplacerUserAssignedIdentityResourceId string = ''
 
 @description('Optional. The resource ID of an existing App Service Plan for the function app. If not provided, a new plan will be deployed.')
 param existingAppServicePlanResourceId string = ''
 
-@description('Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to deploy into the same resource group as the function app. Useful when sharing a single App Service Plan across multiple add-ons in a central operations resource group.')
+// Optional. The name of the resource group to deploy the new App Service Plan into. Leave empty to
+// deploy into the same resource group as the function app. Useful when sharing a single App Service
+// Plan across multiple add-ons in a central operations resource group.
+@description('Optional. Resource group for a new App Service plan. Empty uses the Function App resource group; ignored when an existing plan ID is supplied.')
 param appServicePlanResourceGroupName string = ''
 
 @description('Optional. The SKU for the App Service Plan. Only applies if existingAppServicePlanResourceId is not provided. Default is P0v3 for cost optimization.')
@@ -108,6 +143,9 @@ param privateEndpoint bool = false
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the function app storage account firewall. Use when managing from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
+
+@description('Optional. Shared public-access mode for the Function App and runtime storage. Auto preserves legacy private-endpoint/IP inference; existing service exceptions remain configured.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 @description('Optional. The subnet resource ID for private endpoints. Required if privateEndpoint is true.')
 param privateEndpointSubnetResourceId string = ''
@@ -143,7 +181,10 @@ param privateLinkScopeResourceId string = ''
 // including lifecycle policies, tagging strategies, device cleanup, and execution schedule.
 // ================================================================================================
 
-@description('Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted. Existing Function Apps change versions only when this template is redeployed with a different value.')
+// Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions
+// runtime v4 in the deployment region. Preview versions are permitted. Existing Function Apps change
+// versions only when this template is redeployed with a different value.
+@description('Optional. PowerShell worker version supported by Functions v4 in the deployment region. Redeploy to change an existing app\'s worker version.')
 param powerShellVersion string = '7.4'
 
 @description('Required. The resource ID of the Key Vault containing session host credential secrets (VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, DomainJoinUserPrincipalName).')
@@ -158,7 +199,13 @@ param templateSpecName string = ''
 @description('Optional. The version of the Template Spec. Default is 1.0.0.')
 param templateSpecVersion string = '1.0.0'
 
-@description('Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day} {month} {day-of-week}). Default runs every 30 minutes starting at minute 0 (runs at :00 and :30). To stagger across deployments, vary the minute (e.g., "0 15,45 * * * *" runs at :15 and :45 past each hour). For half-hourly execution during specific hours, use "0 0,30 8-17 * * 1-5" for 8 AM to 5 PM weekdays. The UI form automatically generates the correct format when you select hours and start minute.')
+// Optional. Timer schedule for the function app (NCrontab format: {second} {minute} {hour} {day}
+// {month} {day-of-week}). Default runs every 30 minutes starting at minute 0 (runs at :00 and :30). To
+// stagger across deployments, vary the minute (e.g., "0 15,45 * * * *" runs at :15 and :45 past each
+// hour). For half-hourly execution during specific hours, use "0 0,30 8-17 * * 1-5" for 8 AM to 5 PM
+// weekdays. The UI form automatically generates the correct format when you select hours and start
+// minute.
+@description('Optional. Six-field NCRONTAB timer schedule including seconds. Default runs at minutes 0 and 30 each hour; the Portal can generate this value.')
 param timerSchedule string = '0 0,30 * * * *'
 
 @description('Optional. Whether to deploy the Azure Monitor Workbook dashboard into the selected Log Analytics workspace resource group. Deployments that use the same workspace converge on the same workbook. Default is true.')
@@ -167,7 +214,10 @@ param deployWorkbook bool = true
 @description('Optional. The Azure region for the centralized workbook deployment. Defaults to the function app location. The workbook location does not affect its ability to query cross-region Application Insights instances.')
 param workbookLocation string = location
 
-@description('Optional. Replacement mode strategy. SideBySide adds new hosts before deleting old ones. DeleteFirst continuously replaces idle hosts with a capacity floor. A guarded one-time maintenance request can temporarily expedite a configured DeleteFirst replacer without redeployment. Default is SideBySide.')
+// Optional. Replacement mode strategy. SideBySide adds new hosts before deleting old ones. DeleteFirst
+// continuously replaces idle hosts with a capacity floor. A guarded one-time maintenance request can
+// temporarily expedite a configured DeleteFirst replacer without redeployment. Default is SideBySide.
+@description('Optional. SideBySide adds hosts before retiring old ones; DeleteFirst replaces idle hosts subject to capacity safeguards.')
 @allowed([
   'SideBySide'
   'DeleteFirst'
@@ -179,35 +229,60 @@ param replacementMode string = 'SideBySide'
 @maxValue(168)
 param drainGracePeriodHours int = 24
 
-@description('Optional. Minimum drain time in minutes for session hosts with ZERO sessions before deletion. With hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide safety buffer for API lag, race conditions, and admin intervention. Default is 15 minutes.')
+// Optional. Minimum drain time in minutes for session hosts with ZERO sessions before deletion. With
+// hourly scheduling: 0=current run, 1-60=next run (~1hr), 61-120=second run (~2hrs). Values >0 provide
+// safety buffer for API lag, race conditions, and admin intervention. Default is 15 minutes.
+@description('Optional. Minimum drain time for hosts with no sessions before deletion. Nonzero values provide a safety buffer; default is 15 minutes.')
 @minValue(0)
 @maxValue(120)
 param minimumDrainMinutes int = 15
 
-@description('Optional. DeleteFirst safety floor used when no enabled scaling-plan schedule is evaluable. With a scaling plan, RampDown and OffPeak use its target but always retain at least one online healthy host; new destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak. The floor is capped at target minus one so pools with at least two hosts can progress one host at a time. Only applies when replacementMode is DeleteFirst. Default is 80%.')
+// Optional. DeleteFirst safety floor used when no enabled scaling-plan schedule is evaluable. With a
+// scaling plan, RampDown and OffPeak use its target but always retain at least one online healthy
+// host; new destructive batches freeze 60 minutes before RampUp and throughout RampUp and Peak. The
+// floor is capped at target minus one so pools with at least two hosts can progress one host at a
+// time. Only applies when replacementMode is DeleteFirst. Default is 80%.
+@description('Optional. DeleteFirst fallback healthy-capacity floor when no scaling schedule is evaluable. Scaling-plan guards also apply; default is 80%.')
 @minValue(20)
 @maxValue(100)
 param minimumCapacityPercentage int = 80
 
-@description('Optional. Absolute blast-radius ceiling for hosts deleted and replaced per cycle in DeleteFirst mode. Progressive scale-up can select a smaller batch, and the online healthy capacity floor can reduce it further. Lower values are slower and more conservative. Only applies when replacementMode is DeleteFirst. Default is 50.')
+// Optional. Absolute blast-radius ceiling for hosts deleted and replaced per cycle in DeleteFirst
+// mode. Progressive scale-up can select a smaller batch, and the online healthy capacity floor can
+// reduce it further. Lower values are slower and more conservative. Only applies when replacementMode
+// is DeleteFirst. Default is 50.
+@description('Optional. Absolute DeleteFirst deletion/replacement ceiling per cycle; batching and capacity safeguards can reduce it. Default is 50.')
 @minValue(1)
 @maxValue(100)
 param maxDeletionsPerCycle int = 50
 
-@description('Optional. Minimum host index for hostname numbering. Gap-filling logic starts from this index when deploying new hosts (e.g., 1 allows host01, host02; 10 allows host10, host11). Applies to both DeleteFirst and SideBySide modes. Default is 1.')
+// Optional. Minimum host index for hostname numbering. Gap-filling logic starts from this index when
+// deploying new hosts (e.g., 1 allows host01, host02; 10 allows host10, host11). Applies to both
+// DeleteFirst and SideBySide modes. Default is 1.
+@description('Optional. Lowest host-numbering index used by gap filling in both replacement modes. Default is 1.')
 @minValue(0)
 @maxValue(999)
 param minimumHostIndex int = 1
 
-@description('Optional. Enable shutdown retention for replaced session hosts in SideBySide mode. When enabled, old session hosts are shutdown (deallocated) instead of deleted, allowing for rollback. They are automatically deleted after the retention period expires. Only applies when replacementMode is SideBySide. Default is false.')
+// Optional. Enable shutdown retention for replaced session hosts in SideBySide mode. When enabled, old
+// session hosts are shutdown (deallocated) instead of deleted, allowing for rollback. They are
+// automatically deleted after the retention period expires. Only applies when replacementMode is
+// SideBySide. Default is false.
+@description('Optional. SideBySide only: deallocate replaced hosts for rollback, then delete them after shutdownRetentionDays. Default is false.')
 param enableShutdownRetention bool = false
 
-@description('Optional. Number of days to retain shutdown session hosts before automatic deletion in SideBySide mode. Provides rollback window in case issues are discovered with new hosts. Only applies when replacementMode is SideBySide and enableShutdownRetention is true. Default is 3 days.')
+// Optional. Number of days to retain shutdown session hosts before automatic deletion in SideBySide
+// mode. Provides rollback window in case issues are discovered with new hosts. Only applies when
+// replacementMode is SideBySide and enableShutdownRetention is true. Default is 3 days.
+@description('Optional. Retention days for replaced hosts when SideBySide shutdown retention is enabled. Default is 3.')
 @minValue(1)
 @maxValue(7)
 param shutdownRetentionDays int = 3
 
-@description('Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect mode: the function will automatically maintain whatever count exists when a replacement cycle begins, allowing you to manually scale between image updates.')
+// Required. The target number of session hosts to maintain in the host pool. Set to 0 for auto-detect
+// mode: the function will automatically maintain whatever count exists when a replacement cycle
+// begins, allowing you to manually scale between image updates.
+@description('Required. Target host count. Zero detects and retains the host count present when a replacement cycle begins.')
 @minValue(0)
 @maxValue(1000)
 param targetSessionHostCount int = 0
@@ -239,10 +314,17 @@ param tagValidatedImage string = 'AutoReplaceValidatedImage'
 @description('Optional except for DeleteFirst replacement of Microsoft Entra joined hosts, where Entra device cleanup is always enabled before exact hostname reuse. For domain-joined or hybrid-joined hosts, Entra cleanup remains optional. Default is true.')
 param removeEntraDevice bool = true
 
-@description('Optional. Whether to remove Intune device records when deleting session hosts. Cleanup is highly recommended for Intune-enrolled Entra-joined and hybrid-joined hosts before DeleteFirst hostname reuse. Intune is not currently available in Azure Government Secret and Top Secret; leave this disabled unless availability is confirmed for the target environment. Default is true.')
+// Optional. Whether to remove Intune device records when deleting session hosts. Cleanup is highly
+// recommended for Intune-enrolled Entra-joined and hybrid-joined hosts before DeleteFirst hostname
+// reuse. Intune is not currently available in Azure Government Secret and Top Secret; leave this
+// disabled unless availability is confirmed for the target environment. Default is true.
+@description('Optional. Remove Intune records for deleted hosts. Disable in Secret/Top Secret unless Intune availability is confirmed. Default is true.')
 param removeIntuneDevice bool = true
 
-@description('Optional. Enable percentage-based progressive batching for both replacement modes. The function starts with a percentage of the remaining needed hosts and increases after successful deployment and registration. Mode-specific batch ceilings still apply. Default is false.')
+// Optional. Enable percentage-based progressive batching for both replacement modes. The function
+// starts with a percentage of the remaining needed hosts and increases after successful deployment and
+// registration. Mode-specific batch ceilings still apply. Default is false.
+@description('Optional. Increase deployment batches after successful deployment and registration, within mode-specific ceilings. Default is false.')
 param enableProgressiveScaleUp bool = false
 
 @description('Optional. Initial deployment size as a percentage of the hosts still needed. Used when progressive scale-up is enabled. Default is 20%.')
@@ -255,7 +337,11 @@ param initialDeploymentPercentage int = 20
 @maxValue(50)
 param scaleUpIncrementPercentage int = 40
 
-@description('Optional. Maximum number of hosts to deploy per run in SideBySide mode. Controls the pace of new deployments - function adds this many new hosts in parallel before deleting old ones. Lower values = slower rollout, higher values = faster but more resource-intensive. Only applies when replacementMode is SideBySide. Default is 100.')
+// Optional. Maximum number of hosts to deploy per run in SideBySide mode. Controls the pace of new
+// deployments - function adds this many new hosts in parallel before deleting old ones. Lower values =
+// slower rollout, higher values = faster but more resource-intensive. Only applies when
+// replacementMode is SideBySide. Default is 100.
+@description('Optional. Maximum hosts deployed per run in SideBySide mode; controls rollout pace and concurrency. Default is 100.')
 @minValue(1)
 @maxValue(1000)
 param maxDeploymentBatchSize int = 100
@@ -435,25 +521,26 @@ param artifactsContainerUri string = ''
 @description('Optional. Artifacts user assigned identity resource ID.')
 param artifactsUserAssignedIdentityResourceId string = ''
 
-@description('''Optional.
-Array of objects containing the following properties
--name: The name of the script or application that is running minus extension
--blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.
--arguments: Arguments required by the installer or script being ran.
-
-JSON example:
-[
-  {
-    "name": "FSLogix",
-    "blobNameOrUri": "https://aka.ms/fslogix_download"
-  },
-  {
-    "name": "VSCode",
-    "blobNameOrUri": "VSCode.zip",
-    "arguments": "/verysilent /mergetasks=!runcode"
-  }
-]
-''')
+// Optional.
+// Array of objects containing the following properties
+// -name: The name of the script or application that is running minus extension
+// -blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file
+// to download.
+// -arguments: Arguments required by the installer or script being ran.
+//
+// JSON example:
+// [
+//   {
+//     "name": "FSLogix",
+//     "blobNameOrUri": "https://aka.ms/fslogix_download"
+//   },
+//   {
+//     "name": "VSCode",
+//     "blobNameOrUri": "VSCode.zip",
+//     "arguments": "/verysilent /mergetasks=!runcode"
+//   }
+// ]
+@description('Optional. Session-host customization objects with name, blobNameOrUri, and installer/script arguments.')
 param sessionHostCustomizations artifactCustomizationType[] = []
 
 // ========== //
@@ -485,22 +572,18 @@ var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
 //   ##            → availability set numeric index (e.g., '01')
 // ============================================================================
 var cloud = toLower(environment().name)
-var locationsObject = loadJsonContent('../../shared/data/locations.json')
-var locationsEnvProperty = startsWith(cloud, 'us') ? 'other' : cloud
-var locations = locationsObject[locationsEnvProperty]
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
 var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(cloud, 'us') ? 'https://graph${replace(environment().suffixes.storage, 'core', '')}' : 'https://graph.microsoft.com'
-var locationForLookup = startsWith(cloud, 'us') ? substring(location, 5, max(length(location) - 5, 0)) : location
-var functionAppRegionAbbreviation = locations[locationForLookup].abbreviation
+var functionAppRegionAbbreviation = regionAbbreviation(location, environment().name)
 
 // Generate unique identifier for per-host-pool resource names.
-var uniqueStringHosts = take(uniqueString(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName), 6)
+var uniqueStringHosts = scopeIdUnique(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName)
 
 // Resolve effective identifier: use the provided param or fall back to a safe placeholder.
 // Pre-populated from the hpIdentifier tag on the hosts resource group.
-var effectiveIdentifier = !empty(identifier) ? identifier : 'replacer'
+var effectiveIdentifier = !empty(identifier) ? identifier : namingPolicy.identifiers.replacerFallback
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
 var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention
 var isEntraJoined = contains([
@@ -536,11 +619,11 @@ var workbookName = guid(toLower(logAnalyticsWorkspaceResourceId), 'session-host-
 
 // Use explicit overrides when provided (brownfield); otherwise use naming module outputs.
 var functionAppName               = !empty(functionAppNameOverride)                 ? functionAppNameOverride                 : shrNaming.outputs.functionAppName
-var appInsightsName               = !empty(functionAppNameOverride)                 ? '${functionAppName}-insights'           : shrNaming.outputs.appInsightsName
+var appInsightsName               = !empty(functionAppNameOverride)                 ? namePattern('functionInsightsOverride', { name: functionAppName }) : shrNaming.outputs.appInsightsName
 var storageAccountName            = !empty(storageAccountNameOverride)              ? toLower(storageAccountNameOverride)     : shrNaming.outputs.storageAccountName
 var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)   ? storageEncryptionIdentityNameOverride   : shrNaming.outputs.storageEncryptionIdentityName
 var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
-var encryptionKeyName             = '${effectiveIdentifier}-shr-storage-cmk'
+var encryptionKeyName             = namePattern('replacerStorageKey', { identifier: effectiveIdentifier })
 
 // Start storage CMK provisioning before the Function App prerequisites. This gives the
 // key-scoped role assignment time to propagate before the initial CMK-enabled storage PUT.
@@ -1044,6 +1127,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     ]
     storageEncryptionIdentityName: storageEncryptionIdentityName
     permittedIPs: permittedIPs
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     tags: tags
   }
   dependsOn: [storageCmk]

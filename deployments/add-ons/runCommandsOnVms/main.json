@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.47.16.16243",
-      "templateHash": "15325952740609245924"
+      "version": "0.48.1.52935",
+      "templateHash": "8624867809471460244"
     }
   },
   "parameters": {
@@ -245,8 +245,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "13440780249182889825"
+              "version": "0.48.1.52935",
+              "templateHash": "7808428436717425902"
             }
           },
           "parameters": {
@@ -350,8 +350,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "14945317255882250513"
+              "version": "0.48.1.52935",
+              "templateHash": "15035998378796201766"
             }
           },
           "parameters": {
@@ -489,9 +489,11 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.47.16.16243",
-              "templateHash": "4447852325834293537"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "2221754051824373100"
+            },
+            "name": "Virtual machine Run Command",
+            "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
           },
           "definitions": {
             "runCommandParameterType": {
@@ -505,6 +507,7 @@
                 }
               },
               "metadata": {
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                 "__bicep_imported_from!": {
                   "sourceTemplate": "../../../types/customizationTypes.bicep"
                 }
@@ -513,14 +516,23 @@
           },
           "parameters": {
             "virtualMachineName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+              }
             },
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the virtual machine Run Command to deploy."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+              }
             },
             "script": {
               "type": "string",
@@ -646,10 +658,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the virtual machine Run Command."
+              },
               "value": "[resourceId('Microsoft.Compute/virtualMachines/runCommands', parameters('virtualMachineName'), parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the virtual machine Run Command."
+              },
               "value": "[parameters('name')]"
             }
           }

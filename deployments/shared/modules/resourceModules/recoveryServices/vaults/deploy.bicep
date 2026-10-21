@@ -1,9 +1,16 @@
+metadata name = 'Recovery Services vault'
+metadata description = 'Deploys a Recovery Services vault with backup storage, security settings and optional diagnostics or CMK. Key access must be granted separately; system-identity CMK can require staged deployment.'
+
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
 
+@description('Required. Name of the recovery Services vault to deploy.')
 param name string
+@description('Optional. Azure region for the recovery Services vault; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the recovery Services vault.')
 param tags object = {}
 
+@description('Optional. Public network access mode for this resource; private endpoints are configured separately.')
 param publicNetworkAccess string = 'Disabled'
 
 @description('Storage replication type for the vault. GeoRedundant, LocallyRedundant, or ZoneRedundant.')
@@ -24,9 +31,13 @@ param cmkKeyUri string = ''
 @description('Optional. User-assigned identity resource ID used by the vault to access the CMK. Mutually exclusive with cmkUseSystemAssignedIdentity.')
 param cmkUserAssignedIdentityResourceId string = ''
 
-@description('Optional. When true, the vault uses its system-assigned managed identity to access the CMK key vault. Required when the vault has a private endpoint — Azure does not support user-assigned identity for CMK in that scenario. Mutually exclusive with cmkUserAssignedIdentityResourceId.')
+// Azure Backup does not support user-assigned identity for CMK when the vault has a private endpoint.
+// The staged identity/CMK deployment states are documented alongside cmkConfigurationValidated below.
+@description('Optional. Use the vault system identity for CMK; required for private-endpoint CMK and mutually exclusive with cmkUserAssignedIdentityResourceId.')
 param cmkUseSystemAssignedIdentity bool = false
 
+// Referenced diagnostic destination resources must already exist.
+@description('Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings.')
 param diagnosticSettings diagnosticSettingsType?
 
 var cmkEnabled = !empty(cmkKeyUri)
@@ -142,13 +153,16 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
   }
 }
 
+@description('Resource ID of the recovery Services vault.')
 output resourceId string = recoveryServicesVault.id
+@description('Azure resource name of the recovery Services vault.')
 output name string = recoveryServicesVault.name
 // Guard against accessing .identity when the vault was deployed without one.
 // When identity is null (platform-managed keys, no SAI/UAI), ARM cannot evaluate
 // reference(...).identity.principalId at all — not even with the safe-navigation
 // operator — because the property is absent from the API response.
 // Use a param-based conditional so ARM short-circuits before touching .identity.
+@description('Vault identity principal ID when a system identity or CMK user identity is configured; otherwise an empty string.')
 output principalId string = (cmkUseSystemAssignedIdentity || (cmkEnabled && !empty(cmkUserAssignedIdentityResourceId)))
   ? recoveryServicesVault.identity!.principalId!
   : ''

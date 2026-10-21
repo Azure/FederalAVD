@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
   "view": {
     "kind": "Form",
@@ -92,6 +92,16 @@
               "constraints": {
                 "allowedValues": "[steps('basics').locationsApi.transformed.list]",
                 "required": true
+              }
+            },
+            {
+              "name": "federalAvdNamingPolicy",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Generated naming policy",
+              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"imageManagement\":\"image-management\",\"replacerFallback\":\"replacer\",\"sharedFslogix\":\"fslogix\"},\"limits\":{\"keyVault\":24,\"functionApp\":60,\"storageAccount\":24,\"deploymentVm\":15,\"fslogixStoragePrefix\":13,\"uniqueSuffix\":6,\"imageManagementStoragePrefix\":5,\"imageManagementStorageLocation\":4},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\",\"privateEndpointFirst\":\"{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID\",\"privateEndpointLast\":\"RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}\",\"privateEndpointNicFirst\":\"{networkInterfaces}-{endpoint}\",\"privateEndpointNicLast\":\"{endpoint}-{networkInterfaces}\",\"deploymentDisk\":\"{vm}-{osdisks}\",\"deploymentNic\":\"{vm}-{networkInterfaces}\",\"availabilitySet\":\"{name}{delimiter}##\",\"policyIdentityPurpose\":\"policy{delimiter}remediation\",\"deploymentIdentityPurpose\":\"deployment\",\"monitorIdentityPurpose\":\"ama\",\"confidentialDiskPurpose\":\"confvm{delimiter}customer{delimiter}keys\",\"customerDiskPurpose\":\"customer{delimiter}keys\",\"doubleEncryptionDiskPurpose\":\"platform{delimiter}and{delimiter}customer{delimiter}keys\",\"fslogixStoragePrefix\":\"fslogix{unique}\",\"fslogixKey\":\"{identifier}-{storagePrefix}##-cmk\",\"vmKey\":\"{identifier}-vm-cmk\",\"confidentialVmKey\":\"{identifier}-cvm-cmk\",\"recoveryServicesKey\":\"{identifier}-rsv-cmk\",\"imageStorageKey\":\"{identifier}-storage-cmk\",\"replacerStorageKey\":\"{identifier}-shr-storage-cmk\",\"imageGalleryKey\":\"{identifier}-gallery-cmk\",\"imageGalleryConfidentialKey\":\"{identifier}-gallery-cvm-cmk\",\"imageStorageFirst\":\"{storageAccounts}{purpose}{location}{unique}\",\"imageStorageLast\":\"{purpose}{location}{unique}{storageAccounts}\",\"imageStorageCustomPrefix\":\"{prefix}{purpose}{location}{unique}\",\"imageBuildResourceGroup\":\"{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}\",\"imageBuildCustomResourceGroup\":\"{name}-{timestamp}-{unique}\",\"imageBuildVm\":\"{prefix}img-{unique}\",\"imageBuildOrchestrationVm\":\"{prefix}orc-{unique}\",\"deploymentPrefix\":\"{prefix}-\",\"imageDefinition\":\"{imageDefinitions}-{publisher}-{offer}-{sku}\",\"functionInsightsOverride\":\"{name}-insights\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"},\"purposePatterns\":{\"operationsResourceGroup\":\"operations\",\"monitoringResourceGroup\":\"monitoring\",\"controlPlaneResourceGroup\":\"control{delimiter}plane\",\"globalFeedResourceGroup\":\"global{delimiter}feed\",\"globalFeedWorkspace\":\"global{delimiter}feed\",\"workspace\":\"\",\"hostWorkspace\":\"{identifier}\",\"deploymentResourceGroup\":\"{identifier}{delimiter}deployment\",\"deploymentVm\":\"{identifier}\",\"consolidatedResourceGroup\":\"{identifier}\",\"hostsResourceGroup\":\"{identifier}{delimiter}hosts\",\"storageResourceGroup\":\"{identifier}{delimiter}storage\",\"secretsKeyVault\":\"sec{delimiter}{unique}\",\"encryptionKeyVault\":\"enc{delimiter}{unique}\",\"dataCollectionEndpoint\":\"\",\"logAnalyticsWorkspace\":\"\",\"hostPool\":\"{identifier}\",\"desktopApplicationGroup\":\"{identifier}\",\"scalingPlan\":\"{identifier}\",\"vmBackupVault\":\"{identifier}\",\"filesBackupVault\":\"files\",\"identityPattern\":\"{identifier}{delimiter}TOKEN\",\"availabilitySet\":\"{identifier}\",\"diskAccess\":\"{identifier}\",\"diskEncryptionSetPattern\":\"{identifier}{delimiter}TOKEN\",\"netAppAccount\":\"{identifier}\",\"netAppCapacityPool\":\"{identifier}\",\"imageManagementResourceGroup\":\"{identifier}\",\"imageGallery\":\"{identifier}\",\"imageBlobIdentity\":\"{identifier}-blob-access\",\"imageStorageEncryptionIdentity\":\"{identifier}-storage-cmk\",\"imageBuildResourceGroup\":\"image-builds\",\"imageGalleryCustomerKeys\":\"{identifier}-customer-keys\",\"imageGalleryDoubleEncryptionKeys\":\"{identifier}-platform-and-customer-keys\",\"imageGalleryConfidentialKeys\":\"{identifier}-confidential-vm\",\"replacerFunctionApp\":\"{identifier}{delimiter}shr{delimiter}{unique}\",\"replacerStorage\":\"{storageIdentifier}shr{unique}\",\"replacerStorageIdentity\":\"{identifier}{delimiter}shr{delimiter}storage{delimiter}cmk\",\"replacerHostingPlan\":\"\",\"replacerInsights\":\"{identifier}{delimiter}shr{delimiter}{unique}\",\"sessionHostsTemplateSpec\":\"session-hosts\",\"networkNatGateway\":\"\",\"networkPublicIP\":\"\",\"networkRouteTable\":\"\",\"networkSecurityGroup\":\"\",\"pocVirtualNetwork\":\"{identifier}\",\"pocHostsSubnet\":\"{identifier}{delimiter}hosts\",\"pocNatGateway\":\"{identifier}\",\"pocPublicIP\":\"{identifier}\",\"pocSecurityGroup\":\"{identifier}\",\"alertsAutomation\":\"alerts\",\"quotaAutomation\":\"sqm{delimiter}{identifier}\",\"routesAutomation\":\"urt{delimiter}{unique}\"}}",
+              "visible": false,
+              "constraints": {
+                "required": false
               }
             }
           ]
@@ -2711,7 +2721,7 @@
               "name": "zeroTrustNetworkingInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Zero Trust Networking for Function Apps and Azure Resources\n\nThis section configures network-level security controls to enforce Zero Trust Architecture principles for the Session Host Replacer function app and its dependencies (storage accounts, key vaults).\n\nPrivate Endpoints\n\nEnable private connectivity to Platform as a Service (PaaS) resources (Blob Storage, File Storage, and Key Vaults) by assigning private IP addresses from your virtual network. This removes public internet exposure and routes traffic over the Microsoft backbone network.\n\nVirtual Network Integration\n\nThe function app requires outbound virtual network integration to communicate privately with resources protected by private endpoints. This requires a dedicated subnet with Microsoft.Web/serverFarms delegation. Both features require Private DNS Zones for proper name resolution. For centralized DNS management in hub-and-spoke topologies, refer to the Private Link hub-and-spoke deployment guidance linked below.",
+                "text": "Private Networking for the Function App and Runtime Storage\n\nEnable private endpoints for the Function App and its Blob/Table runtime storage, with optional Queue storage. Public network access is selected independently below. Existing Key Vault access is not changed.\n\nThe Function App needs outbound virtual network integration to reach private resources, using a dedicated subnet with Microsoft.Web/serverFarms delegation. Configure private DNS and a working private access path before disabling public access. For centralized DNS, see the linked networking guidance.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
               }
@@ -2884,28 +2894,43 @@
               }
             },
             {
+              "name": "paasPublicNetworkAccess",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Public network access",
+              "defaultValue": "[if(steps('infrastructure').configureZeroTrustNetworking, 'Disabled', 'Enabled')]",
+              "toolTip": "Shared by the Function App and runtime storage independently of private endpoints and VNet integration. Existing Key Vault and monitoring access are unchanged.",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Disabled", "value": "Disabled" },
+                  { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
+                  { "label": "Enabled", "value": "Enabled" }
+                ]
+              }
+            },
+            {
               "name": "permittedIPsInfo",
               "type": "Microsoft.Common.TextBlock",
               "options": {
                 "text": "Permitted IP Addresses / CIDR Ranges (optional)",
                 "style": "Heading"
               },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
+              "visible": true
             },
             {
               "name": "permittedIPsDescription",
               "type": "Microsoft.Common.TextBlock",
               "options": {
-                "text": "Restrict public access to PaaS resources (storage accounts, function app) to specific IP addresses or CIDR ranges. Use this when managing the deployment from a trusted workstation outside the Azure network boundary. Leave empty to allow all public traffic (or rely solely on private endpoints if deployed)."
+                "text": "Disabled retains entered IP rules without enabling public access; ensure a working private path. Enabled with restrictions denies unmatched traffic even with an empty IP list. Enabled allows all networks regardless of stored rules. Restricted app/SCM access also permits the existing AzureCloud service tag; runtime storage retains AzureServices bypass. Network reachability does not grant storage authorization."
               },
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]"
+              "visible": true
             },
             {
               "name": "permittedIPs",
               "type": "Microsoft.Common.EditableGrid",
               "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
               "label": "Permitted IP Addresses / CIDR Ranges",
-              "visible": "[steps('infrastructure').configureZeroTrustNetworking]",
+              "visible": "[not(equals(steps('infrastructure').paasPublicNetworkAccess, 'Enabled'))]",
               "constraints": {
                 "width": "Full",
                 "rows": {
@@ -3190,7 +3215,7 @@
                   "label": "Function Apps",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "fa",
-                  "defaultValue": "fa",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.functionApps]",
                   "toolTip": "Resource type abbreviation for Function Apps. CAF default: fa",
                   "constraints": {
                     "required": false,
@@ -3204,7 +3229,7 @@
                   "label": "App Service Plans",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "asp",
-                  "defaultValue": "asp",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.appServicePlans]",
                   "toolTip": "Resource type abbreviation for App Service Plans. CAF default: asp",
                   "constraints": {
                     "required": false,
@@ -3218,7 +3243,7 @@
                   "label": "Application Insights",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "appi",
-                  "defaultValue": "appi",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.applicationInsights]",
                   "toolTip": "Resource type abbreviation for Application Insights. CAF default: appi",
                   "constraints": {
                     "required": false,
@@ -3232,7 +3257,7 @@
                   "label": "Template Specs",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "ts",
-                  "defaultValue": "ts",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.templateSpecs]",
                   "toolTip": "Resource type abbreviation for Template Specs. CAF default: ts",
                   "constraints": {
                     "required": false,
@@ -3246,7 +3271,7 @@
                   "label": "User-Assigned Identities",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "uai",
-                  "defaultValue": "uai",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.userAssignedIdentities]",
                   "toolTip": "Resource type abbreviation for User-Assigned Managed Identities. CAF default: uai",
                   "constraints": {
                     "required": false,
@@ -3260,7 +3285,7 @@
                   "label": "Private Endpoints",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "pe",
-                  "defaultValue": "pe",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.privateEndpoints]",
                   "toolTip": "Resource type abbreviation for Private Endpoints. CAF default: pe",
                   "constraints": {
                     "required": false,
@@ -3274,7 +3299,7 @@
                   "label": "Network Interfaces",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "nic",
-                  "defaultValue": "nic",
+                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.networkInterfaces]",
                   "toolTip": "Resource type abbreviation for Network Interfaces. CAF default: nic",
                   "constraints": {
                     "required": false,
@@ -3432,7 +3457,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "options": {
-                    "text": "[concat('Preview (substituting avdhost001 for SHNAME, 01 for ##):\n  VM: ', replace(steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, 'SHNAME', 'avdhost001'), '\n  Disk: ', replace(steps('advanced').sessionHostNaming.diskNameConvOverride, 'SHNAME', 'avdhost001'), '\n  NIC: ', replace(steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, 'SHNAME', 'avdhost001'), '\n  Avail. Set: ', replace(steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '##', '01'))]"
+                    "text": "[concat('Preview (substituting avdhost001 for SHNAME, 01 for ##):\n  VM: ', replace(steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, 'avdhost001'), '\n  Disk: ', replace(steps('advanced').sessionHostNaming.diskNameConvOverride, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, 'avdhost001'), '\n  NIC: ', replace(steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, 'avdhost001'), '\n  Avail. Set: ', replace(steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '##', '01'))]"
                   }
                 },
                 {
@@ -3440,7 +3465,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Virtual Machine Naming Convention",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'SHNAME')]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine)]",
                   "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'SHNAME' becomes 'avdvm-001'). This MUST match your existing VM naming.",
                   "constraints": {
                     "required": true,
@@ -3453,7 +3478,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "OS Disk Naming Convention",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'SHNAME-osdisk')]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk)]",
                   "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'SHNAME-osdisk' becomes 'avdvm-001-osdisk'). Should align with existing disk naming.",
                   "constraints": {
                     "required": true,
@@ -3466,7 +3491,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Network Interface Naming Convention",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'SHNAME-nic')]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.nic)]",
                   "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'SHNAME-nic' becomes 'avdvm-001-nic'). Should align with existing NIC naming.",
                   "constraints": {
                     "required": true,
@@ -3480,7 +3505,7 @@
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.standaloneAvailabilitySet)]",
                   "toolTip": "Required. Naming pattern for availability sets. Use ## token for index (e.g., 'avset-##' becomes 'avset-01', 'avset-02'). Only used if availability is set to 'AvailabilitySets'.",
                   "constraints": {
                     "required": true,
@@ -3562,7 +3587,8 @@
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
         "azureTablePrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureTablePrivateDnsZone, '')]",
-        "permittedIPs": "[if(steps('infrastructure').configureZeroTrustNetworking, filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
+        "permittedIPs": "[filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+        "paasPublicNetworkAccess": "[steps('infrastructure').paasPublicNetworkAccess]",
         "identitySolution": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.machineIdentity, if(or(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts))), 'EntraId', steps('userProfiles').userIdentity))]",
         "domainName": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.domainName, '')]",
         "ouPath": "[if(or(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('hosts').identity.machineIdentity, 'EntraDomainServices')), steps('hosts').identity.ouPath, '')]",
@@ -3609,7 +3635,7 @@
         "avdInsightsDataCollectionRulesResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.avdInsightsDataCollectionRule, ''), '')]",
         "dataCollectionEndpointResourceId": "[if(steps('monitoring').sessionHostMonitoringSection.enableSessionHostMonitoring, coalesce(steps('monitoring').sessionHostMonitoringSection.dataCollectionEndpoint, ''), '')]",
         "privateLinkScopeResourceId": "[if(and(steps('monitoring').functionAppMonitoringSection.enableFunctionAppMonitoring, steps('monitoring').functionAppMonitoringSection.enableAMPLS), steps('monitoring').functionAppMonitoringSection.privateLinkScope.id, '')]",
-        "namingConvention": "[parse(if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), '{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\",\"vmsLocationAbbreviation\":\"\"}', steps('basics').hostPoolProps.tags.hpNamingConvention))]",
+        "namingConvention": "[parse(if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), string(parse(steps('basics').federalAvdNamingPolicy).defaults), steps('basics').hostPoolProps.tags.hpNamingConvention))]",
         "namingResourceTypeCodes": "[parse(if(and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations), concat('{\"functionApps\":\"', steps('advanced').infrastructureNaming.functionApps, '\",\"appServicePlans\":\"', steps('advanced').infrastructureNaming.appServicePlans, '\",\"applicationInsights\":\"', steps('advanced').infrastructureNaming.applicationInsights, '\",\"templateSpecs\":\"', steps('advanced').infrastructureNaming.templateSpecs, '\",\"userAssignedIdentities\":\"', steps('advanced').infrastructureNaming.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').infrastructureNaming.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').infrastructureNaming.networkInterfaces, '\"}'), '{}'))]",
         "identifier": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.identifier, ''), coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, ''))]",
         "functionAppNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",

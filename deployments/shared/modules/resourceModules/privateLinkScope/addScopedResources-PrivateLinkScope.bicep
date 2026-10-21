@@ -1,4 +1,9 @@
+metadata name = 'Azure Monitor scoped resources'
+metadata description = 'Adds linked resources to an existing Azure Monitor Private Link Scope in the deployment resource group. The caller must select the resource group containing the scope.'
+
+@description('Required. Resource IDs of existing Azure Monitor resources to link to the private link scope.')
 param scopedResourceIds array
+@description('Required. Resource ID of the existing Azure Monitor Private Link Scope; it must be in the deployment resource group.')
 param privateLinkScopeResourceId string
 
 #disable-next-line BCP081

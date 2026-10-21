@@ -475,16 +475,18 @@ production customer-managed encryption, create the shared encryption Key Vault t
 orchestrator or select an existing Shared Services vault. An existing Disk Encryption Set can
 still be supplied with `diskEncryptionSetResourceId` through Bicep or a parameter file.
 
-For newly deployed FSLogix Azure Files storage, the private endpoint and permitted IP/CIDR controls
-produce the same public-access behavior as the standard deployment:
+The **PaaS Public Network Access** section appears before **AVD Private Link** and offers Disabled,
+Enabled with restrictions, and Enabled independently of private endpoint creation. One choice
+applies to newly deployed Azure Files storage and Key Vaults. The initial Portal choice is Disabled
+with private endpoints, Enabled otherwise. Disabled retains entered IP rules; restricted mode
+denies unmatched traffic even with an empty list. Existing trusted-service exceptions remain
+configured and can still apply when public access is Disabled.
 
-- Private endpoint enabled with no permitted IPs: public network access is disabled.
-- Private endpoint enabled with permitted IPs: public access is enabled only for those ranges.
-- Private endpoint disabled with permitted IPs: public access is enabled only for those ranges.
-- Private endpoint disabled with no permitted IPs: public access is enabled from all networks.
-
-The **Permitted IP Addresses** section appears with the PaaS settings, before **AVD Private
-Link**. These IP allowlists do not apply to AVD Private Link.
+Parameter files use `paasPublicNetworkAccess` (default `Auto` preserves historical behavior) and
+`permittedIPs` for the shared allowlist. Existing `fslogixPermittedIPs` remains supported and is
+combined with the shared list for Azure Files only. These settings do not alter adopted resources,
+AVD Private Link, backup vaults or monitoring. See the
+[shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
 
 The same portal choice can also create private endpoints for newly created Shared Services Key
 Vaults and the shared FSLogix Recovery Services vault. Operations endpoints and FSLogix storage

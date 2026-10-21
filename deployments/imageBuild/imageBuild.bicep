@@ -1,6 +1,7 @@
 targetScope = 'subscription'
 
 import { artifactCustomizationType, restartableArtifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { namingPolicy, namePattern, regionAbbreviation, imageBuildRunId } from '../shared/modules/orchestration/naming/functions.bicep'
 
 type imageVersionTargetRegionInputType = {
   name: string
@@ -107,18 +108,19 @@ param installTeams bool = false
 @description('Optional. The Teams Governmant Cloud type.')
 param teamsCloudType string = 'Commercial'
 
-@description('''Specifies the VDI optimization profile for VMs provisioned from this image.
-  NonPersistent-UpdatesOnly - Locks down software update channels only (OS, M365, Teams,
-    OneDrive, Edge, WebView2, Store). Use when managing other VDI hardening separately.
-  NonPersistent-Full - Full optimization for pooled host pools (VMs replaced on a regular
-    cadence). All sections applied including update-channel lockdown.
-  Persistent - Full optimization minus update-channel lockdown. Use for personal host pools
-    managed by SCCM, Intune, or similar tooling.
-  None - Skip optimization. Only vdiOptimizationAirGapped takes effect when None.
-
-This replaces the former applyWindowsDesktopOptimizations + disableSoftwareUpdates parameters.
-Ref: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration
-''')
+// Specifies the VDI optimization profile for VMs provisioned from this image.
+//   NonPersistent-UpdatesOnly - Locks down software update channels only (OS, M365, Teams,
+//     OneDrive, Edge, WebView2, Store). Use when managing other VDI hardening separately.
+//   NonPersistent-Full - Full optimization for pooled host pools (VMs replaced on a regular
+//     cadence). All sections applied including update-channel lockdown.
+//   Persistent - Full optimization minus update-channel lockdown. Use for personal host pools
+//     managed by SCCM, Intune, or similar tooling.
+//   None - Skip optimization. Only vdiOptimizationAirGapped takes effect when None.
+//
+// This replaces the former applyWindowsDesktopOptimizations + disableSoftwareUpdates parameters.
+// Ref:
+// https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-services/remote-desktop-services-vdi-optimize-configuration
+@description('Selects the VDI optimization profile. None skips profile optimization; independent vdiOptimizationAirGapped settings can still apply.')
 @allowed([
   'None'
   'NonPersistent-UpdatesOnly'
@@ -127,61 +129,65 @@ Ref: https://learn.microsoft.com/en-us/windows-server/remote/remote-desktop-serv
 ])
 param vdiOptimizationProfile string = 'None'
 
-@description('''When true, applies settings for air-gapped or internet-restricted environments:
-disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and
-DiagTrack telemetry (Section 7 of Optimize-AVDImage.ps1). Applies independently of
-vdiOptimizationProfile, including when profile is None. Recommended for air-gapped or
-proxy-only government deployments.
-''')
+// When true, applies settings for air-gapped or internet-restricted environments:
+// disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and
+// DiagTrack telemetry (Section 7 of Optimize-AVDImage.ps1). Applies independently of
+// vdiOptimizationProfile, including when profile is None. Recommended for air-gapped or
+// proxy-only government deployments.
+@description('Apply the image\'s air-gapped/restricted-network optimization settings independently of vdiOptimizationProfile, including when the profile is None.')
 param vdiOptimizationAirGapped bool = false
 
-@description('''An array of image customization objects that are executed first before any restarts or updates.
-Each object contains the following properties:
--name: Required. The name of the script or application that is running minus extension
--blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.
--arguments: Optional. Arguments required by the installer or script being ran.
-  For .ps1/.zip: "-ParamName Value -SwitchParam"
-  For arrays: use @() syntax with single quotes - e.g. "-Domains @('a.com','b.com')" or "@('a.com', 'b.com')" (spaces after commas are fine).
-  Single quotes need no JSON escaping. Double quotes within arguments require \".
--restart: Optional. Boolean. When true, the image VM restarts after this customization completes.
-
-JSON example:
-[
-  {
-    "name": "FSLogix",
-    "blobNameOrUri": "https://aka.ms/fslogix_download"
-  },
-  {
-    "name": "VSCode",
-    "blobNameOrUri": "VSCode.zip",
-    "arguments": "/verysilent /mergetasks=!runcode",
-    "restart": true
-  }
-]
-''')
+// An array of image customization objects that are executed first before any restarts or updates.
+// Each object contains the following properties:
+// -name: Required. The name of the script or application that is running minus extension
+// -blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of
+// the file to download.
+// -arguments: Optional. Arguments required by the installer or script being ran.
+//   For .ps1/.zip: "-ParamName Value -SwitchParam"
+//   For arrays: use @() syntax with single quotes - e.g. "-Domains @('a.com','b.com')" or "@('a.com', 'b.com')" (spaces after commas are fine).
+//   Single quotes need no JSON escaping. Double quotes within arguments require \".
+// -restart: Optional. Boolean. When true, the image VM restarts after this customization completes.
+//
+// JSON example:
+// [
+//   {
+//     "name": "FSLogix",
+//     "blobNameOrUri": "https://aka.ms/fslogix_download"
+//   },
+//   {
+//     "name": "VSCode",
+//     "blobNameOrUri": "VSCode.zip",
+//     "arguments": "/verysilent /mergetasks=!runcode",
+//     "restart": true
+//   }
+// ]
+@description('Image customizations executed before restarts and updates: name and blobNameOrUri are required; arguments and restart are optional.')
 param customizations restartableArtifactCustomizationType[] = []
 
-@description('''An array of image customization objects that are executed just before sysprep. These customizations are applications that
-generate unique identifiers that should be removed before the image is generalized. Therefore, these customizations are executed without
-restart switches to prevent the generation of these unique identifiers.
-Each object contains the following properties:
--name: Required. The name of the script or application that is running minus extension
--blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of the file to download.
--arguments: Optional. Arguments required by the installer or script being ran.
-  For .ps1/.zip: "-ParamName Value -SwitchParam"
-  For arrays: use @() syntax with single quotes - e.g. "-Domains @('a.com','b.com')" or "@('a.com', 'b.com')" (spaces after commas are fine).
-  Single quotes need no JSON escaping. Double quotes within arguments require \".
-
-
-JSON example:
-[
-  {
-    "name": "ThirdPartyApp",
-    "blobNameOrUri": "ThirdPartyApp.zip",
-    "arguments": "MODE=VDI /norestart"
-  }
-]
-''')
+// An array of image customization objects that are executed just before sysprep. These customizations
+// are applications that
+// generate unique identifiers that should be removed before the image is generalized. Therefore, these
+// customizations are executed without
+// restart switches to prevent the generation of these unique identifiers.
+// Each object contains the following properties:
+// -name: Required. The name of the script or application that is running minus extension
+// -blobNameOrUri: Required. The blob name when used with the artifactsContainerUri or the full URI of
+// the file to download.
+// -arguments: Optional. Arguments required by the installer or script being ran.
+//   For .ps1/.zip: "-ParamName Value -SwitchParam"
+//   For arrays: use @() syntax with single quotes - e.g. "-Domains @('a.com','b.com')" or "@('a.com', 'b.com')" (spaces after commas are fine).
+//   Single quotes need no JSON escaping. Double quotes within arguments require \".
+//
+//
+// JSON example:
+// [
+//   {
+//     "name": "ThirdPartyApp",
+//     "blobNameOrUri": "ThirdPartyApp.zip",
+//     "arguments": "MODE=VDI /norestart"
+//   }
+// ]
+@description('Final pre-sysprep customizations with name, blobNameOrUri, and optional arguments. Do not request restarts that regenerate application-specific identifiers.')
 param vdiCustomizations artifactCustomizationType[] = []
 
 @description('Optional. Remove all links from the public desktop.')
@@ -233,9 +239,11 @@ param wsusServer string = ''
 @description('Optional. The resource id of an existing Image Definition in the Compute gallery.')
 param imageDefinitionResourceId string = ''
 
-@description('''Conditional. The name of the image Definition to create in the Compute Gallery.
-Only valid if [imageDefinitionResourceId] is not provided.
-If left blank, the image definition name will be built on Cloud Adoption Framework principals and based on the [imageDefinitonPublisher], [imageDefinitionOffer], and [imageDefinitionSku] values.''')
+// Conditional. The name of the image Definition to create in the Compute Gallery.
+// Only valid if [imageDefinitionResourceId] is not provided.
+// If left blank, the image definition name will be built on Cloud Adoption Framework principals and
+// based on the [imageDefinitonPublisher], [imageDefinitionOffer], and [imageDefinitionSku] values.
+@description('Conditional. New Compute Gallery image definition name; ignored when imageDefinitionResourceId is supplied. Empty derives a name from publisher, offer, and SKU.')
 @maxLength(80)
 param customImageDefinitionName string = ''
 
@@ -336,7 +344,7 @@ param tags object = {}
 var buildTimestamp = startsWith(deployment().name, 'Microsoft.Template-')
   ? substring(deployment().name, 19, 14)
   : timeStamp
-var buildRunId = uniqueString(subscription().subscriptionId, deployment().name, buildTimestamp)
+var buildRunId = imageBuildRunId(subscription().subscriptionId, deployment().name, buildTimestamp)
 
 // Function to ensure unique names in customization arrays by appending index to duplicates
 var uniqueCustomizers = map(range(0, length(customizations)), i => union(
@@ -363,11 +371,7 @@ var uniqueVdiCustomizers = map(range(0, length(vdiCustomizations)), i => union(
 ))
 
 var cloud = toLower(environment().name)
-// account for air-gapped cloud location prefixes
-#disable-next-line BCP329
-var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
-var locationsData = loadJsonContent('../shared/data/locations.json')
-var locations = startsWith(cloud, 'us') ? locationsData.other : locationsData[environment().name]
+var locationAbbreviation = regionAbbreviation(location, environment().name)
 var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
 var downloads = startsWith(cloud, 'usn')
   ? loadJsonContent('../shared/data/topsecret.downloads.parameters.json')
@@ -379,14 +383,25 @@ var artifactsContainerUriNormalized = endsWith(artifactsContainerUri, '/')
   : artifactsContainerUri
 
 var computeLocation = vnet.location
-var depPrefix = !empty(deploymentPrefix) ? '${deploymentPrefix}-' : ''
+var depPrefix = !empty(deploymentPrefix) ? namePattern('deploymentPrefix', { prefix: deploymentPrefix }) : ''
 // The auto-generated and custom names include the deployment timestamp and build run ID so each
 // build gets a unique resource group name. This allows parallel builds and prevents naming conflicts.
 // The orchestration VM deletes the entire resource group at the end of the build.
 var imageBuildResourceGroupName = empty(imageBuildResourceGroupId)
   ? (empty(customBuildResourceGroupName)
-      ? '${resourceAbbreviations.resourceGroups}-${depPrefix}avd-image-builds-${locations[varLocation].abbreviation}-${buildTimestamp}-${take(buildRunId, 6)}'
-      : '${customBuildResourceGroupName}-${buildTimestamp}-${take(buildRunId, 6)}')
+      ? namePattern('imageBuildResourceGroup', {
+          resourceGroups: resourceAbbreviations.resourceGroups
+          prefix: depPrefix
+          workload: namingPolicy.defaults.workload
+          location: locationAbbreviation
+          timestamp: buildTimestamp
+          unique: take(buildRunId, namingPolicy.limits.uniqueSuffix)
+        })
+      : namePattern('imageBuildCustomResourceGroup', {
+          name: customBuildResourceGroupName
+          timestamp: buildTimestamp
+          unique: take(buildRunId, namingPolicy.limits.uniqueSuffix)
+        }))
   : last(split(imageBuildResourceGroupId, '/'))
 
 var adminPw = '1qaz@WSX${uniqueString(subscription().id, imageBuildResourceGroupName)}'
@@ -419,7 +434,12 @@ var galleryImageDefinitionHyperVGeneration = endsWith(mpSku, 'g2') || startsWith
 var galleryImageDefinitionName = empty(imageDefinitionResourceId)
   ? empty(customImageDefinitionName)
       ? replace(
-          '${resourceAbbreviations.imageDefinitions}-${replace(effectiveGalleryImageDefinitionPublisher, '-', '')}-${replace(effectiveGalleryImageDefinitionOffer, '-', '')}-${replace(effectiveGalleryImageDefinitionSku, '-', '')}',
+          namePattern('imageDefinition', {
+            imageDefinitions: resourceAbbreviations.imageDefinitions
+            publisher: replace(effectiveGalleryImageDefinitionPublisher, '-', '')
+            offer: replace(effectiveGalleryImageDefinitionOffer, '-', '')
+            sku: replace(effectiveGalleryImageDefinitionSku, '-', '')
+          }),
           ' ',
           ''
         )
@@ -571,8 +591,8 @@ var imageVersionEndOfLifeDate = imageVersionEOLinDays > 0
   ? dateTimeAdd(buildTimestamp, 'P${imageVersionEOLinDays}D')
   : ''
 
-var imageVmName = '${depPrefix}img-${buildRunId}'
-var orchestrationVmName = '${depPrefix}orc-${buildRunId}'
+var imageVmName = namePattern('imageBuildVm', { prefix: depPrefix, unique: buildRunId })
+var orchestrationVmName = namePattern('imageBuildOrchestrationVm', { prefix: depPrefix, unique: buildRunId })
 
 var vmSecurityType = effectiveGalleryImageDefinitionSecurityType == 'TrustedLaunch'
   ? 'TrustedLaunch'
@@ -711,8 +731,8 @@ module orchestrationVm '../shared/modules/resourceModules/compute/virtualMachine
   params: {
     location: computeLocation
     name: orchestrationVmName
-    nicName: '${orchestrationVmName}-nic'
-    osDiskName: '${orchestrationVmName}-osdisk'
+    nicName: replace(namingPolicy.patterns.nic, 'SHNAME', orchestrationVmName)
+    osDiskName: replace(namingPolicy.patterns.osDisk, 'SHNAME', orchestrationVmName)
     adminPassword: adminPw
     adminUsername: adminUserName
     enableAcceleratedNetworking: vmAcceleratedNetworking
@@ -749,8 +769,8 @@ module imageVm '../shared/modules/resourceModules/compute/virtualMachines/deploy
       : false
     location: computeLocation
     name: imageVmName
-    nicName: '${imageVmName}-nic'
-    osDiskName: '${imageVmName}-osdisk'
+    nicName: replace(namingPolicy.patterns.nic, 'SHNAME', imageVmName)
+    osDiskName: replace(namingPolicy.patterns.osDisk, 'SHNAME', imageVmName)
     adminPassword: adminPw
     adminUsername: adminUserName
     customImageResourceId: customSourceImageResourceId

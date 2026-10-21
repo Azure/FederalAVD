@@ -8,6 +8,73 @@ This page describes the Azure resource topology. See [Secure Endpoint Architectu
 for the control-layer, shared-responsibility, lifecycle, evidence, and AI access model implemented
 through that topology.
 
+## Shared module contracts
+
+Shared Bicep files under `deployments/shared/modules/` describe their purpose with
+`metadata name` and `metadata description`. Parameter and output descriptions
+document their input requirements, resource ownership, collection shapes, and
+returned values. These descriptions are also emitted into compiled ARM templates.
+A parameter without a default remains a required Bicep input even when its
+associated feature is optional; pass an empty value only when its description
+allows it. Descriptions do not replace type constraints or deployment validation.
+
+- **Resource modules** deploy or update a resource and its closely related children.
+  Their descriptions identify existing parent resources and other caller-owned
+  dependencies. A resource-group-scoped module does not create its deployment
+  resource group unless explicitly documented.
+- **Orchestration modules** compose resources, cross-scope deployments, role
+  assignments, and sequencing for a capability. Read their input contracts before
+  invoking lower-level resource modules directly.
+- **Type and function libraries** provide shared contracts or helpers rather than
+  independently deploying a capability.
+
+For capability-level composition, start with the orchestration entry points:
+
+| Capability | Shared entry point |
+| --- | --- |
+| Workspace and application-group composition | [AVD workspace](../deployments/shared/modules/orchestration/avdWorkspace/avdWorkspace.bicep) |
+| Customer-managed encryption dependencies | [Customer-managed keys](../deployments/shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep) |
+| Profile storage | [FSLogix](../deployments/shared/modules/orchestration/fslogix/fslogix.bicep) |
+| Credentials and encryption vaults | [Key Vaults](../deployments/shared/modules/orchestration/keyVaults/keyVaults.bicep) |
+| Host monitoring resources | [Monitoring](../deployments/shared/modules/orchestration/monitoring/monitoring.bicep) |
+| Session host deployment | [Session hosts](../deployments/shared/modules/orchestration/sessionHosts/sessionHosts.bicep) |
+| Session host policy internals | [Policy authoring contract](../deployments/shared/modules/orchestration/sessionHostPolicy/AUTHORING.md) |
+
+Use the [shared naming contract](../deployments/shared/modules/orchestration/naming/README.md)
+for generated names and the
+[Function App composition contract](../deployments/shared/modules/resourceModules/functionApp/README.md)
+for plan ownership, app infrastructure, and function-code deployment.
+
+When adding a shared module, include its purpose, deployment scope, important
+prerequisites, and descriptions for every parameter and output. Preserve these
+contracts when changing a module. Prefer detailed explanations, examples, and
+sequencing guidance in Bicep source comments, which are not transpiled into ARM.
+Keep emitted module metadata and parameter/output descriptions concise while
+retaining the information needed to use the interface correctly. Run
+`Invoke-Pester -Script tests\ModuleMetadata.Tests.ps1` to compile all shared modules
+and check their emitted metadata; Azure CLI and Bicep must already be installed.
+No Azure sign-in or deployment is required. Rebuild affected tracked ARM templates
+after changing descriptions, including nested templates embedded by policy modules.
+
+### Generated-template size budgets
+
+Check size after changing shared modules: their content can appear in multiple
+nested deployments in the transpiled ARM. Microsoft documents an
+[ARM template limit of 4 MB](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/best-practices#template-limits)
+and a separate [Template Spec content limit of approximately 2 MB](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/template-specs).
+The Template Spec budget must include the main template, attached Portal form,
+any packaged linked templates, and publishing metadata/envelope.
+
+The size cases in `tests\TemplateSpecs.Tests.ps1` check all current template/form
+pairs against conservative 4,000,000-byte ARM file and 2,000,000-byte compact
+Template Spec payload budgets. The payload calculation includes the main template,
+Portal form, and a basic version envelope; it is an offline estimate, not the
+exact SDK request or proof of service acceptance. Extend it for packaged linked
+artifacts if those are introduced. ARM also applies expanded-template and
+per-resource limits that raw file measurements cannot prove.
+
+## Naming and resource topology
+
 The deployment utilizes the Cloud Adoption Framework naming conventions and organizes resources and resource groups in accordance with several available parameters:
 
 - Persona Identifier (***identifier***): This parameter is used to uniquely identify the persona of the host pool(s). Each persona, or each group of users with distinct business functions and technical requirements, would require a specific host-pool configuration and thus we use the persona term to identify the host pool. For more information about personas see [User Personas | AVD Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/scenarios/azure-virtual-desktop/migrate-assess#user-personas).

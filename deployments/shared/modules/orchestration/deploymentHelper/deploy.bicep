@@ -1,45 +1,79 @@
-targetScope = 'subscription'
+metadata name = 'Deployment helper orchestration'
+metadata description = 'Deploys a temporary Windows helper VM and managed identity in an existing deployment resource group, with feature-dependent permissions and optional domain join for deployment-time operations.'
 
+targetScope = 'subscription'
+import { namePattern } from '../naming/functions.bicep'
+
+@description('Required. Whether confidential VM OS disk encryption is selected.')
 param confidentialVMOSDiskEncryption bool
 @description('Optional. Disk Encryption Set resource ID used to encrypt the deployment-helper OS disk.')
 param diskEncryptionSetResourceId string = ''
 @secure()
+@description('Required. Domain account password used when domain operations are selected; otherwise pass an empty string.')
 param domainJoinUserPassword string
 @secure()
+@description('Required. Domain account UPN used when domain operations are selected; otherwise pass an empty string.')
 param domainJoinUserPrincipalName string
+@description('Required. DNS domain name for selected domain operations; otherwise pass an empty string.')
 param domainName string
+@description('Required. Azure VM size for the temporary deployment helper.')
 param deploymentVmSize string
+@description('Required. Desktop label whose nonempty value enables helper permissions on AVD application groups.')
 param desktopFriendlyName string
+@description('Required. Whether to enable encryption at host on the deployed VMs.')
 param encryptionAtHost bool
+@description('Required. Whether the deployment helper requires FSLogix storage configuration permissions.')
 param fslogix bool
+@description('Required. Resource ID of an existing storage application update identity to attach to the helper VM; empty omits it.')
 param fslogixAppUpdateUserAssignedIdentityResourceId string
+@description('Optional. Host pool name used to derive the parent tag when parentResourceId is empty.')
 param hostPoolName string = ''
+@description('Optional. Parent resource ID used for cm-resource-parent tags; empty omits the explicit parent.')
 param parentResourceId string = ''
+@description('Required. Whether to domain-join the helper VM when the domain name, account UPN, and password are all nonempty.')
 param domainJoinDeploymentVirtualMachine bool
+@description('Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths.')
 param identitySolution string
+@description('Required. Selected disk key-management mode used to determine helper permissions for encryption operations.')
 param keyManagementDisks string
+@description('Required. Storage encryption mode; PlatformManaged omits customer-managed key configuration.')
 param keyManagementStorageAccounts string
+@description('Required. Azure region for the resources deployed by this module.')
 param location string
+@description('Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default.')
 param ouPath string
+@description('Required. Name of the existing AVD control-plane resource group for helper permissions and parent ID resolution.')
 param resourceGroupControlPlane string
+@description('Required. Name of the existing resource group containing the deployment helper VM.')
 param resourceGroupDeployment string
+@description('Required. Name of the existing resource group containing the session-host VMs in this subscription.')
 param resourceGroupHosts string
+@description('Required. Name of the existing security resource group for conditional encryption-key helper permissions.')
 param resourceGroupSecurity string
+@description('Required. Name of the existing storage resource group in this subscription.')
 param resourceGroupStorage string
+@description('Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
 param tags object
 @description('Changes on each deployment to force the domain-join extension to execute when configured.')
 param domainJoinForceUpdateTag string = utcNow('yyyyMMddHHmmss')
+@description('Optional. Fallback helper identity name pattern containing TOKEN, used when userAssignedIdentityName is empty.')
 param userAssignedIdentityNameConv string = ''
+@description('Optional. Explicit helper identity name; when empty, the name is derived from userAssignedIdentityNameConv.')
 param userAssignedIdentityName string = ''
+@description('Required. Name of the deployment helper VM to create.')
 param virtualMachineName string
+@description('Required. Name of the network interface created for the helper VM.')
 param virtualMachineNICName string
+@description('Required. Name of the OS disk created for the helper VM.')
 param virtualMachineDiskName string
+@description('Required. Resource ID of the existing subnet used by the helper VM.')
 param virtualMachineSubnetResourceId string
+@description('Optional. Whether to grant helper VM Contributor and RBAC Administrator roles on the hosts resource group.')
 param manageHostResourcePermissions bool = true
 
 var deploymentUserAssignedIdentityName = !empty(userAssignedIdentityName)
   ? userAssignedIdentityName
-  : replace(userAssignedIdentityNameConv, 'TOKEN', 'deployment')
+  : replace(userAssignedIdentityNameConv, 'TOKEN', namePattern('deploymentIdentityPurpose', {}))
 var virtualMachineAdminUserName = 'avddeploy'
 var virtualMachineAdminPassword = 'aA1!${uniqueString(subscription().id, resourceGroupDeployment, virtualMachineName)}'
 var effectiveParentResourceId = !empty(parentResourceId)
@@ -271,9 +305,13 @@ module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bice
   }
 }
 
+@description('Client ID of the created deployment helper identity.')
 output deploymentUserAssignedIdentityClientId string = deploymentUserAssignedIdentity.outputs.clientId
+@description('Resource ID of the created deployment helper identity.')
 output deploymentUserAssignedIdentityResourceId string = deploymentUserAssignedIdentity.outputs.resourceId
+@description('Ordered role assignment resource ID strings for cleanup, excluding assignments in the helper resource group.')
 output deploymentUserAssignedIdentityRoleAssignmentIds array = [
   for i in filter(range(0, length(roleAssignments)), i => roleAssignments[i].resourceGroup != resourceGroupDeployment): roleAssignments_deployment[i].outputs.resourceId
 ]
+@description('Name of the created deployment helper VM.')
 output virtualMachineName string = virtualMachine.outputs.name

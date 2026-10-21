@@ -31,6 +31,8 @@
     "templateSpecs": "ts",
     "userAssignedIdentities": "uai",
     "virtualMachines": "vm",
+    "virtualNetworks": "vnet",
+    "subnets": "snet",
     "workbooks": "wb",
     "workspaces": "vdws",
     "imageDefinitions": "vmid"

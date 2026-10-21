@@ -1,6 +1,10 @@
+metadata name = 'Artifact customization input types'
+metadata description = 'Exports artifact, resolved customization and Run Command parameter shapes used by image and session-host customization workflows; does not deploy or execute artifacts.'
+
 // Shared artifact customization and Run Command parameter types.
 
 @export()
+@description('Artifact reference and optional execution arguments or accepted exit codes for a named customization.')
 type artifactCustomizationType = {
   @description('Unique name for the customization.')
   name: string
@@ -16,6 +20,7 @@ type artifactCustomizationType = {
 }
 
 @export()
+@description('Artifact customization input with an optional post-execution VM restart request.')
 type restartableArtifactCustomizationType = {
   @description('Unique name for the customization.')
   name: string
@@ -34,6 +39,7 @@ type restartableArtifactCustomizationType = {
 }
 
 @export()
+@description('Resolved artifact URI and execution settings, including an explicit restart flag.')
 type resolvedCustomizationType = {
   name: string
   uri: string
@@ -43,6 +49,7 @@ type resolvedCustomizationType = {
 }
 
 @export()
+@description('Named string argument passed to a managed Run Command as a regular or protected parameter.')
 type runCommandParameterType = {
   name: string
   value: string

@@ -13,11 +13,7 @@ param (
     [bool]$createAutomatedHostPool = $false,
     [bool]$CreateAddOns = $true,
     [ValidateNotNull()]
-    [object]$NamingConvention = @{
-        components = @('resourceType', 'workload', 'purpose', 'location')
-        delimiter = '-'
-        workload = 'avd'
-    },
+    [object]$NamingConvention = (Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\deployments\shared\data\namingPolicy.json') -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop).defaults,
     [bool]$incrementVersion = $true
 )
 
@@ -95,6 +91,8 @@ function New-ConventionName {
     return [string]::Join($Delimiter, $nameParts)
 }
 
+& (Join-Path $PSScriptRoot 'Sync-NamingPolicy.ps1') -Check
+
 $Context = Get-AzContext
 If ($null -eq $Context) {
     Throw 'You are not logged in to Azure. Please login to azure before continuing'
@@ -106,6 +104,7 @@ $locationsPath = Join-Path $PSScriptRoot -ChildPath '..\deployments\shared\data\
 $resourceAbbreviationsPath = Join-Path $PSScriptRoot -ChildPath '..\deployments\shared\data\resourceAbbreviations.json'
 $locations = Get-Content -Path $locationsPath -Raw | ConvertFrom-Json
 $resourceAbbreviations = Get-Content -Path $resourceAbbreviationsPath -Raw | ConvertFrom-Json
+$namingPolicy = Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
 
 # Determine cloud environment and get location abbreviation
 $cloud = $Context.Environment.Name
@@ -126,7 +125,7 @@ if ($null -eq $locationAbbr) {
     $locationAbbr = $Location
 }
 
-$components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue @('resourceType', 'workload', 'purpose', 'location'))
+$components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue $namingPolicy.defaults.components)
 $allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none')
 $invalidComponents = @($components | Where-Object { $_ -notin $allowedComponents })
 if ($invalidComponents.Count -gt 0) {
@@ -136,8 +135,8 @@ if ($components -notcontains 'purpose') {
     throw "NamingConvention.components must contain 'purpose' so each Template Spec receives a distinct name."
 }
 
-$delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue '-')
-$workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue 'avd')
+$delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue $namingPolicy.defaults.delimiter)
+$workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue $namingPolicy.defaults.workload)
 $environment = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'environment' -DefaultValue '')
 $freeform1 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform1' -DefaultValue '')
 $freeform2 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform2' -DefaultValue '')
@@ -156,7 +155,7 @@ if ($null -eq $ResourceGroupName -or $ResourceGroupName -eq '') {
         -Components $components `
         -Delimiter $delimiter `
         -ResourceTypeCode $resourceGroupTypeCode `
-        -Purpose 'operations' `
+        -Purpose ($namingPolicy.resources.operationsResourceGroup.purpose -join $delimiter) `
         -LocationAbbreviation $locationAbbr `
         -Workload $workload `
         -Environment $environment `
@@ -181,7 +180,7 @@ $templateSpecs = @()
 
 if ($createSharedServices) {
     $templateSpecs += @{
-        Purpose = 'shared-services'
+        Purpose = $namingPolicy.templateSpecs.sharedServices
         DisplayName = 'AVD Shared Services'
         Description = 'Deploys or adopts shared AVD workspace, feed and global Private Link, Key Vault, monitoring, and FSLogix backup resources'
         TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\sharedServices\sharedServices.json'
@@ -191,7 +190,7 @@ if ($createSharedServices) {
 
 if ($createNetwork) {
     $templateSpecs += @{
-        Purpose = 'networking'
+        Purpose = $namingPolicy.templateSpecs.networking
         DisplayName = 'AVD Network Spoke'
         Description = 'Deploys the networking components to support Azure Virtual Desktop'
         TemplateFile = Join-Path $PSScriptRoot -ChildPath '..\deployments\networking\networking.json'
@@ -201,7 +200,7 @@ if ($createNetwork) {
 
 if ($createCustomImage) {
     $templateSpecs += @{
-        Purpose = 'custom-image'
+        Purpose = $namingPolicy.templateSpecs.imageBuild
         DisplayName = 'AVD Custom Image'
         Description = 'Generates a custom image for Azure Virtual Desktop'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageBuild\imageBuild.json'
@@ -211,7 +210,7 @@ if ($createCustomImage) {
 
 if ($createImageManagement) {
     $templateSpecs += @{
-        Purpose = 'image-management'
+        Purpose = $namingPolicy.identifiers.imageManagement
         DisplayName = 'AVD Image Management'
         Description = 'Deploys the image management resources for Azure Virtual Desktop'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\imageManagement\imageManagement.json'
@@ -221,7 +220,7 @@ if ($createImageManagement) {
 
 if ($createHostPool) {
     $templateSpecs += @{
-        Purpose = 'hostpool'
+        Purpose = $namingPolicy.templateSpecs.hostPool
         DisplayName = 'AVD Host Pool'
         Description = 'Orchestrates AVD Shared Services and a standard Azure Virtual Desktop host pool'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpools\hostpool.json'
@@ -231,7 +230,7 @@ if ($createHostPool) {
 
 if ($createHostPoolPoc) {
     $templateSpecs += @{
-        Purpose = 'hostpool-poc'
+        Purpose = $namingPolicy.templateSpecs.hostPoolPoc
         DisplayName = 'AVD Standard PoC'
         Description = 'Deploys a disposable standard-management Azure Virtual Desktop demo with a standalone NAT-backed virtual network'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\hostpoolPoc\hostpoolPoc.json'
@@ -241,7 +240,7 @@ if ($createHostPoolPoc) {
 
 if ($createAutomatedHostPool) {
     $templateSpecs += @{
-        Purpose = 'automated-hostpool'
+        Purpose = $namingPolicy.templateSpecs.automatedHostPool
         DisplayName = 'AVD Automated Host Pool'
         Description = 'Orchestrates AVD Shared Services and an Azure Commercial pooled host pool with automated session host management'
         TemplateFile = Join-Path -Path $PSScriptRoot -ChildPath '..\deployments\automatedHostPools\automatedHostPool.json'
@@ -251,15 +250,15 @@ if ($createAutomatedHostPool) {
 
 if ($CreateAddOns) {
     $addOns = @(
-        @{ Purpose = 'run-commands-on-vms'; PreserveLegacyWithoutWorkload = $true; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
-        @{ Purpose = 'update-storage-account-key-on-session-hosts'; PreserveLegacyWithoutWorkload = $true; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
-        @{ Purpose = 'fslogix-storage'; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
-        @{ Purpose = 'storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
-        @{ Purpose = 'session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
-        @{ Purpose = 'session-host-maintenance'; DisplayName = 'Schedule AVD Session Host Maintenance'; Description = 'Schedules a guarded one-time maintenance replacement on an existing DeleteFirst Session Host Replacer'; FolderName = 'sessionHostMaintenance' }
-        @{ Purpose = 'session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
-        @{ Purpose = 'session-host-policy'; DisplayName = 'AVD Session Host Policy'; Description = 'Assigns reusable Azure Policy capabilities, including VM Applications, to a dedicated session-host resource group'; FolderName = 'sessionHostPolicy' }
-        @{ Purpose = 'alerts'; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
+        @{ Purpose = $namingPolicy.templateSpecs.runCommandsOnVms; PreserveLegacyWithoutWorkload = $true; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
+        @{ Purpose = $namingPolicy.templateSpecs.updateStorageAccountKeyOnSessionHosts; PreserveLegacyWithoutWorkload = $true; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
+        @{ Purpose = $namingPolicy.templateSpecs.fslogixStorage; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
+        @{ Purpose = $namingPolicy.templateSpecs.storageQuotaManager; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
+        @{ Purpose = $namingPolicy.templateSpecs.sessionHostReplacer; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
+        @{ Purpose = $namingPolicy.templateSpecs.sessionHostMaintenance; DisplayName = 'Schedule AVD Session Host Maintenance'; Description = 'Schedules a guarded one-time maintenance replacement on an existing DeleteFirst Session Host Replacer'; FolderName = 'sessionHostMaintenance' }
+        @{ Purpose = $namingPolicy.resources.sessionHostsTemplateSpec.purpose -join $delimiter; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
+        @{ Purpose = $namingPolicy.templateSpecs.sessionHostPolicy; DisplayName = 'AVD Session Host Policy'; Description = 'Assigns reusable Azure Policy capabilities, including VM Applications, to a dedicated session-host resource group'; FolderName = 'sessionHostPolicy' }
+        @{ Purpose = $namingPolicy.resources.alertsAutomation.purpose -join $delimiter; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
     )
 
     foreach ($addOn in $addOns) {

@@ -1,7 +1,13 @@
+metadata name = 'Virtual network'
+metadata description = 'Deploys a virtual network with caller-supplied address space, subnet definitions, optional DNS servers and diagnostics. Referenced subnet dependencies must be provisioned by the caller.'
+
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
 
+@description('Required. Name of the virtual network to deploy.')
 param name string
+@description('Optional. Azure region for the virtual network; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the virtual network.')
 param tags object = {}
 
 @description('Address space prefixes for the virtual network.')
@@ -13,6 +19,8 @@ param subnets array = []
 @description('Optional. Custom DNS server IP addresses.')
 param dnsServers array = []
 
+// Referenced diagnostic destination resources must already exist.
+@description('Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings.')
 param diagnosticSettings diagnosticSettingsType?
 
 resource virtualNetwork 'Microsoft.Network/virtualNetworks@2023-09-01' = {
@@ -61,5 +69,7 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
   }
 }
 
+@description('Resource ID of the virtual network.')
 output resourceId string = virtualNetwork.id
+@description('Azure resource name of the virtual network.')
 output name string = virtualNetwork.name

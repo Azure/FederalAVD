@@ -1,42 +1,84 @@
+metadata name = 'FSLogix Azure Files orchestration'
+metadata description = 'Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM.'
+
+import { publicNetworkAccessMode, resolveNetworkAccess } from '../../networking/functions.bicep'
+
+@description('Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands.')
 param appUpdateUserAssignedIdentityResourceId string
 
+@description('Required. Resource ID of an existing Azure Files private DNS zone; empty omits the private endpoint DNS zone group.')
 param azureFilePrivateDnsZoneResourceId string
+@description('Required. Client ID of the identity attached to the helper VM and authorized for storage configuration.')
 param deploymentUserAssignedIdentityClientId string
+@description('Required. Name of the existing deployment helper VM used to execute storage or cleanup Run Commands.')
 param deploymentVirtualMachineName string
 @secure()
+@description('Required. Domain account password used when domain operations are selected; otherwise pass an empty string.')
 param domainJoinUserPassword string
 @secure()
+@description('Required. Domain account UPN used when domain operations are selected; otherwise pass an empty string.')
 param domainJoinUserPrincipalName string
+@description('Required. DNS domain name for selected domain operations; otherwise pass an empty string.')
 param domainName string
+@description('Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption.')
 param fslogixEncryptionKeyNameConv string
+@description('Required. URI of the existing encryption Key Vault, including the trailing slash; used for customer-managed storage keys.')
 param encryptionKeyVaultUri string
+@description('Required. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption.')
 param encryptionUserAssignedIdentityResourceId string
+@description('Required. Array of share name strings to create or register on every supplied storage account.')
 param fileShares array
+@description('Optional. Resource ID of the associated AVD host pool, used for resource ownership tags.')
 param hostPoolResourceId string = ''
+@description('Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths.')
 param identitySolution string
+@description('Required. Kerberos ticket encryption selection; RC4 selects RC4-HMAC and other values select AES-256 for Azure Files SMB settings.')
 param kerberosEncryptionType string
+@description('Required. Storage encryption mode; PlatformManaged omits customer-managed key configuration.')
 param keyManagementStorageAccounts string
+@description('Required. Azure region for the resources deployed by this module.')
 param location string
+@description('Required. Resource ID of an existing Log Analytics workspace; empty omits storage and file-service diagnostics.')
 param logAnalyticsWorkspaceId string
+@description('Required. Distinguished name of the target organizational unit for selected domain operations; empty uses the domain default.')
 param ouPath string
+@description('Required. Whether to create private endpoints. Public access is controlled separately by paasPublicNetworkAccess.')
 param privateEndpoint bool
+@description('Required. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNameConv string
+@description('Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNICNameConv string
+@description('Required. Resource ID of the existing subnet for private endpoints; required when endpoint creation is selected.')
 param privateEndpointSubnetResourceId string
+@description('Required. Name of the existing helper VM resource group for storage configuration Run Commands.')
 param deploymentResourceGroupName string
+@description('Required. Name of the existing storage resource group in this subscription.')
 param resourceGroupStorage string
+@description('Required. Sharding selection forwarded to the permissions command; None disables Azure Files sharding.')
 param shardingOptions string
+@description('Required. Array of administrator group objects with id and name for Azure Files RBAC or NetApp/domain permissions.')
 param shareAdminGroups array
+@description('Required. Quota per file share or NetApp volume in GiB.')
 param shareSizeInGB int
+@description('Required. Array of user group objects with id and name; the selected identity mode determines which field is forwarded.')
 param shareUserGroups array
+@description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
 param storageAccountNamePrefix string
+@description('Required. Number of indexed Azure Files storage accounts to create.')
 param storageCount int
+@description('Required. Starting numeric index for storage account and encryption-key names.')
 param storageIndex int
+@description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
 param storageSku string
+@description('Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS.')
 param storageRedundancy string
+@description('Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
 param tags object
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
 param permittedIPs array = []
+
+@description('Optional. Storage public-access mode. Auto preserves legacy behavior; IP rules and AzureServices bypass remain configured in all modes.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 @description('Optional. Number of days to retain deleted file shares (1–365).')
 @minValue(1)
@@ -74,12 +116,12 @@ var storageRedundancySuffix = storageRedundancy == 'ZoneRedundant' ? '_ZRS' : '_
 
 // Network ACLs for FSLogix storage accounts.
 // AzureServices bypass is required for Azure Files backup and monitoring.
-// defaultAction falls back to 'Allow' only when no network restrictions are configured (dev/open scenario).
 var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
+var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
 var storageIpRules = [for ip in effectivePermittedIPs: { value: ip, action: 'Allow' }]
 var storageNetworkAcls = {
   bypass: 'AzureServices'
-  defaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : 'Allow'
+  defaultAction: networkAccess.defaultAction
   ipRules: storageIpRules
   virtualNetworkRules: []
 }
@@ -114,7 +156,7 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
       largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
       sasExpirationPeriod: '180.00:00:00'
       networkAcls: storageNetworkAcls
-      publicNetworkAccess: (privateEndpoint && empty(effectivePermittedIPs)) ? 'Disabled' : 'Enabled'
+      publicNetworkAccess: networkAccess.publicNetworkAccess
       azureFilesIdentityBasedAuthentication: identitySolution != 'EntraId'
         ? {
             defaultSharePermission: defaultSharePermission
@@ -362,4 +404,5 @@ module grantStorageApplicationsConsent '../../../resourceModules/compute/virtual
   ]
 }
 
+@description('Created storage account resource IDs in ascending index order starting at storageIndex.')
 output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]

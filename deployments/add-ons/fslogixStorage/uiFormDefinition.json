@@ -59,8 +59,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Use existing", "value": false },
-                  { "label": "Create new", "value": true }
+                  {
+                    "label": "Use existing",
+                    "value": false
+                  },
+                  {
+                    "label": "Create new",
+                    "value": true
+                  }
                 ]
               }
             },
@@ -68,13 +74,19 @@
               "name": "resourceGroupsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('scope').resourceScope.subscription))]",
-              "request": { "method": "GET", "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourcegroups?api-version=2024-03-01')]" }
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/resourcegroups?api-version=2024-03-01')]"
+              }
             },
             {
               "name": "virtualNetworksApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('scope').resourceScope.subscription))]",
-              "request": { "method": "GET", "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]" }
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+              }
             },
             {
               "name": "resourceSkusApi",
@@ -188,6 +200,16 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "federalAvdNamingPolicy",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Generated naming policy",
+              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"imageManagement\":\"image-management\",\"replacerFallback\":\"replacer\",\"sharedFslogix\":\"fslogix\"},\"limits\":{\"keyVault\":24,\"functionApp\":60,\"storageAccount\":24,\"deploymentVm\":15,\"fslogixStoragePrefix\":13,\"uniqueSuffix\":6,\"imageManagementStoragePrefix\":5,\"imageManagementStorageLocation\":4},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\",\"privateEndpointFirst\":\"{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID\",\"privateEndpointLast\":\"RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}\",\"privateEndpointNicFirst\":\"{networkInterfaces}-{endpoint}\",\"privateEndpointNicLast\":\"{endpoint}-{networkInterfaces}\",\"deploymentDisk\":\"{vm}-{osdisks}\",\"deploymentNic\":\"{vm}-{networkInterfaces}\",\"availabilitySet\":\"{name}{delimiter}##\",\"policyIdentityPurpose\":\"policy{delimiter}remediation\",\"deploymentIdentityPurpose\":\"deployment\",\"monitorIdentityPurpose\":\"ama\",\"confidentialDiskPurpose\":\"confvm{delimiter}customer{delimiter}keys\",\"customerDiskPurpose\":\"customer{delimiter}keys\",\"doubleEncryptionDiskPurpose\":\"platform{delimiter}and{delimiter}customer{delimiter}keys\",\"fslogixStoragePrefix\":\"fslogix{unique}\",\"fslogixKey\":\"{identifier}-{storagePrefix}##-cmk\",\"vmKey\":\"{identifier}-vm-cmk\",\"confidentialVmKey\":\"{identifier}-cvm-cmk\",\"recoveryServicesKey\":\"{identifier}-rsv-cmk\",\"imageStorageKey\":\"{identifier}-storage-cmk\",\"replacerStorageKey\":\"{identifier}-shr-storage-cmk\",\"imageGalleryKey\":\"{identifier}-gallery-cmk\",\"imageGalleryConfidentialKey\":\"{identifier}-gallery-cvm-cmk\",\"imageStorageFirst\":\"{storageAccounts}{purpose}{location}{unique}\",\"imageStorageLast\":\"{purpose}{location}{unique}{storageAccounts}\",\"imageStorageCustomPrefix\":\"{prefix}{purpose}{location}{unique}\",\"imageBuildResourceGroup\":\"{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}\",\"imageBuildCustomResourceGroup\":\"{name}-{timestamp}-{unique}\",\"imageBuildVm\":\"{prefix}img-{unique}\",\"imageBuildOrchestrationVm\":\"{prefix}orc-{unique}\",\"deploymentPrefix\":\"{prefix}-\",\"imageDefinition\":\"{imageDefinitions}-{publisher}-{offer}-{sku}\",\"functionInsightsOverride\":\"{name}-insights\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"},\"purposePatterns\":{\"operationsResourceGroup\":\"operations\",\"monitoringResourceGroup\":\"monitoring\",\"controlPlaneResourceGroup\":\"control{delimiter}plane\",\"globalFeedResourceGroup\":\"global{delimiter}feed\",\"globalFeedWorkspace\":\"global{delimiter}feed\",\"workspace\":\"\",\"hostWorkspace\":\"{identifier}\",\"deploymentResourceGroup\":\"{identifier}{delimiter}deployment\",\"deploymentVm\":\"{identifier}\",\"consolidatedResourceGroup\":\"{identifier}\",\"hostsResourceGroup\":\"{identifier}{delimiter}hosts\",\"storageResourceGroup\":\"{identifier}{delimiter}storage\",\"secretsKeyVault\":\"sec{delimiter}{unique}\",\"encryptionKeyVault\":\"enc{delimiter}{unique}\",\"dataCollectionEndpoint\":\"\",\"logAnalyticsWorkspace\":\"\",\"hostPool\":\"{identifier}\",\"desktopApplicationGroup\":\"{identifier}\",\"scalingPlan\":\"{identifier}\",\"vmBackupVault\":\"{identifier}\",\"filesBackupVault\":\"files\",\"identityPattern\":\"{identifier}{delimiter}TOKEN\",\"availabilitySet\":\"{identifier}\",\"diskAccess\":\"{identifier}\",\"diskEncryptionSetPattern\":\"{identifier}{delimiter}TOKEN\",\"netAppAccount\":\"{identifier}\",\"netAppCapacityPool\":\"{identifier}\",\"imageManagementResourceGroup\":\"{identifier}\",\"imageGallery\":\"{identifier}\",\"imageBlobIdentity\":\"{identifier}-blob-access\",\"imageStorageEncryptionIdentity\":\"{identifier}-storage-cmk\",\"imageBuildResourceGroup\":\"image-builds\",\"imageGalleryCustomerKeys\":\"{identifier}-customer-keys\",\"imageGalleryDoubleEncryptionKeys\":\"{identifier}-platform-and-customer-keys\",\"imageGalleryConfidentialKeys\":\"{identifier}-confidential-vm\",\"replacerFunctionApp\":\"{identifier}{delimiter}shr{delimiter}{unique}\",\"replacerStorage\":\"{storageIdentifier}shr{unique}\",\"replacerStorageIdentity\":\"{identifier}{delimiter}shr{delimiter}storage{delimiter}cmk\",\"replacerHostingPlan\":\"\",\"replacerInsights\":\"{identifier}{delimiter}shr{delimiter}{unique}\",\"sessionHostsTemplateSpec\":\"session-hosts\",\"networkNatGateway\":\"\",\"networkPublicIP\":\"\",\"networkRouteTable\":\"\",\"networkSecurityGroup\":\"\",\"pocVirtualNetwork\":\"{identifier}\",\"pocHostsSubnet\":\"{identifier}{delimiter}hosts\",\"pocNatGateway\":\"{identifier}\",\"pocPublicIP\":\"{identifier}\",\"pocSecurityGroup\":\"{identifier}\",\"alertsAutomation\":\"alerts\",\"quotaAutomation\":\"sqm{delimiter}{identifier}\",\"routesAutomation\":\"urt{delimiter}{unique}\"}}",
+              "visible": false,
+              "constraints": {
+                "required": false
+              }
             }
           ]
         },
@@ -267,7 +289,9 @@
               "label": "Domain Name",
               "placeholder": "contoso.com",
               "visible": "[contains(steps('identity').machineIdentity, 'DomainServices')]",
-              "constraints": { "required": true }
+              "constraints": {
+                "required": true
+              }
             },
             {
               "name": "organizationalUnitPath",
@@ -293,8 +317,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Key Vault", "value": "keyVault" },
-                  { "label": "Manual Entry", "value": "manual" }
+                  {
+                    "label": "Key Vault",
+                    "value": "keyVault"
+                  },
+                  {
+                    "label": "Manual Entry",
+                    "value": "manual"
+                  }
                 ]
               }
             },
@@ -314,8 +344,12 @@
               "resourceType": "Microsoft.KeyVault/vaults",
               "toolTip": "Select the Key Vault containing DomainJoinUserPrincipalName and DomainJoinUserPassword.",
               "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault'))]",
-              "constraints": { "required": true },
-              "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+              "constraints": {
+                "required": true
+              },
+              "scope": {
+                "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]"
+              }
             },
             {
               "name": "domainJoinUserPrincipalName",
@@ -339,8 +373,12 @@
               },
               "toolTip": "Enter the password for the domain join account.",
               "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual'))]",
-              "constraints": { "required": true },
-              "options": { "hideConfirmation": false }
+              "constraints": {
+                "required": true
+              },
+              "options": {
+                "hideConfirmation": false
+              }
             },
             {
               "name": "entraKerberosInfo",
@@ -426,10 +464,22 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Cloud Cache, Profile Container", "value": "CloudCacheProfileContainer" },
-                  { "label": "Cloud Cache, Profile and Office Container", "value": "CloudCacheProfileOfficeContainer" },
-                  { "label": "Profile Container", "value": "ProfileContainer" },
-                  { "label": "Profile and Office Container", "value": "ProfileOfficeContainer" }
+                  {
+                    "label": "Cloud Cache, Profile Container",
+                    "value": "CloudCacheProfileContainer"
+                  },
+                  {
+                    "label": "Cloud Cache, Profile and Office Container",
+                    "value": "CloudCacheProfileOfficeContainer"
+                  },
+                  {
+                    "label": "Profile Container",
+                    "value": "ProfileContainer"
+                  },
+                  {
+                    "label": "Profile and Office Container",
+                    "value": "ProfileOfficeContainer"
+                  }
                 ]
               }
             },
@@ -438,14 +488,22 @@
               "type": "Microsoft.Common.TextBox",
               "label": "Profile Container Size (MB)",
               "defaultValue": "30000",
-              "constraints": { "required": true, "regex": "^[1-9][0-9]*$", "validationMessage": "Enter a positive whole number." }
+              "constraints": {
+                "required": true,
+                "regex": "^[1-9][0-9]*$",
+                "validationMessage": "Enter a positive whole number."
+              }
             },
             {
               "name": "shareSizeInGB",
               "type": "Microsoft.Common.TextBox",
               "label": "File Share or Volume Size (GB)",
               "defaultValue": "100",
-              "constraints": { "required": true, "regex": "^[1-9][0-9]*$", "validationMessage": "Enter a positive whole number." }
+              "constraints": {
+                "required": true,
+                "regex": "^[1-9][0-9]*$",
+                "validationMessage": "Enter a positive whole number."
+              }
             },
             {
               "name": "ntfsAccessDescription",
@@ -575,8 +633,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Key Vault", "value": "keyVault" },
-                  { "label": "Manual Entry", "value": "manual" }
+                  {
+                    "label": "Key Vault",
+                    "value": "keyVault"
+                  },
+                  {
+                    "label": "Manual Entry",
+                    "value": "manual"
+                  }
                 ]
               }
             },
@@ -587,8 +651,12 @@
               "resourceType": "Microsoft.KeyVault/vaults",
               "toolTip": "Select the Key Vault containing DomainJoinUserPrincipalName and DomainJoinUserPassword. The account only needs permission to read domain and group information.",
               "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'keyVault'))]",
-              "constraints": { "required": true },
-              "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+              "constraints": {
+                "required": true
+              },
+              "scope": {
+                "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]"
+              }
             },
             {
               "name": "hybridAdLookupUserPrincipalName",
@@ -612,8 +680,12 @@
               },
               "toolTip": "Enter the password for the AD lookup account.",
               "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual'))]",
-              "constraints": { "required": true },
-              "options": { "hideConfirmation": false }
+              "constraints": {
+                "required": true
+              },
+              "options": {
+                "hideConfirmation": false
+              }
             },
             {
               "name": "configureAdminAccess",
@@ -687,7 +759,11 @@
               "label": "Starting Storage Index",
               "defaultValue": "1",
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
-              "constraints": { "required": true, "regex": "^([0-9]|[1-9][0-9])$", "validationMessage": "Enter a number from 0 through 99." }
+              "constraints": {
+                "required": true,
+                "regex": "^([0-9]|[1-9][0-9])$",
+                "validationMessage": "Enter a number from 0 through 99."
+              }
             },
             {
               "name": "netAppDeploymentMode",
@@ -790,13 +866,17 @@
               "name": "remoteStorageHeader",
               "type": "Microsoft.Common.TextBlock",
               "visible": "[contains(steps('storage').containerType, 'CloudCache')]",
-              "options": { "text": "Remote Cloud Cache Storage" }
+              "options": {
+                "text": "Remote Cloud Cache Storage"
+              }
             },
             {
               "name": "remoteStorageInfo",
               "type": "Microsoft.Common.TextBlock",
               "visible": "[contains(steps('storage').containerType, 'CloudCache')]",
-              "options": { "text": "Optionally select storage in a different region for FSLogix Cloud Cache resiliency. When selected, provide one remote storage account per local Azure Files account or one remote NetApp volume per FSLogix share." }
+              "options": {
+                "text": "Optionally select storage in a different region for FSLogix Cloud Cache resiliency. When selected, provide one remote storage account per local Azure Files account or one remote NetApp volume per FSLogix share."
+              }
             },
             {
               "name": "storageAccountsApi",
@@ -805,7 +885,9 @@
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Storage/storageAccounts?api-version=2023-01-01')]",
-                "transforms": { "list": "sort_by(value, &name)|[*].{name:name, id:id, location:location}" }
+                "transforms": {
+                  "list": "sort_by(value, &name)|[*].{name:name, id:id, location:location}"
+                }
               }
             },
             {
@@ -836,7 +918,10 @@
               "name": "wrongRemoteStorageAccountCount",
               "type": "Microsoft.Common.InfoBox",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), not(equals(length(steps('storage').remoteStorageAccounts), 0)), not(equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))))]",
-              "options": { "style": "Error", "text": "Select one remote storage account for each local FSLogix storage account." }
+              "options": {
+                "style": "Error",
+                "text": "Select one remote storage account for each local FSLogix storage account."
+              }
             },
             {
               "name": "remoteNetAppAccountsApi",
@@ -863,7 +948,10 @@
               "name": "remoteNetAppCapacityPoolsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('storage').remoteNetAppAccount))]",
-              "request": { "method": "GET", "path": "[concat(steps('storage').remoteNetAppAccount, '/capacityPools?api-version=2023-11-01')]" }
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('storage').remoteNetAppAccount, '/capacityPools?api-version=2023-11-01')]"
+              }
             },
             {
               "name": "remoteNetAppCapacityPool",
@@ -880,7 +968,10 @@
               "name": "remoteNetAppVolumesApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[not(empty(steps('storage').remoteNetAppCapacityPool))]",
-              "request": { "method": "GET", "path": "[concat(steps('storage').remoteNetAppCapacityPool, '/volumes?api-version=2023-11-01')]" }
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('storage').remoteNetAppCapacityPool, '/volumes?api-version=2023-11-01')]"
+              }
             },
             {
               "name": "remoteNetAppVolumes",
@@ -899,7 +990,10 @@
               "name": "wrongRemoteNetAppVolumeCount",
               "type": "Microsoft.Common.InfoBox",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache'), not(equals(length(steps('storage').remoteNetAppVolumes), 0)), not(equals(length(steps('storage').remoteNetAppVolumes), if(contains(steps('storage').containerType, 'OfficeContainer'), 2, 1))))]",
-              "options": { "style": "Error", "text": "Select one remote NetApp volume per FSLogix share: profile first, then Office when applicable." }
+              "options": {
+                "style": "Error",
+                "text": "Select one remote NetApp volume per FSLogix share: profile first, then Office when applicable."
+              }
             }
           ]
         },
@@ -940,9 +1034,18 @@
                   "constraints": {
                     "required": true,
                     "allowedValues": [
-                      { "label": "Platform-Managed Keys", "value": "PlatformManaged" },
-                      { "label": "Customer-Managed Keys", "value": "CustomerManaged" },
-                      { "label": "Customer-Managed Keys protected by HSM", "value": "CustomerManagedHSM" }
+                      {
+                        "label": "Platform-Managed Keys",
+                        "value": "PlatformManaged"
+                      },
+                      {
+                        "label": "Customer-Managed Keys",
+                        "value": "CustomerManaged"
+                      },
+                      {
+                        "label": "Customer-Managed Keys protected by HSM",
+                        "value": "CustomerManagedHSM"
+                      }
                     ]
                   }
                 },
@@ -953,7 +1056,9 @@
                   "resourceType": "Microsoft.KeyVault/vaults",
                   "toolTip": "Select the existing Key Vault where the deployment will create one encryption key per Azure Files storage account.",
                   "visible": "[contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')]",
-                  "constraints": { "required": true },
+                  "constraints": {
+                    "required": true
+                  },
                   "scope": {
                     "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]",
                     "location": "[steps('scope').resourceScope.location.name]"
@@ -969,7 +1074,9 @@
                   "min": 30,
                   "max": 180,
                   "visible": "[contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')]",
-                  "constraints": { "required": true }
+                  "constraints": {
+                    "required": true
+                  }
                 }
               ]
             },
@@ -984,7 +1091,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Private endpoints keep Azure Files traffic on private network paths. When private endpoints are enabled without permitted public IP ranges, public network access is disabled."
+                    "text": "Private endpoints provide private Azure Files connectivity. Select public network access separately below. Disabled retains entered IP rules without enabling public access; ensure a working private path. Enabled with restrictions denies unmatched traffic even with an empty IP list; existing AzureServices exceptions for backup/monitoring remain configured. Enabled allows all networks regardless of stored rules. Authentication and authorization are still required."
                   }
                 },
                 {
@@ -1049,14 +1156,47 @@
                   }
                 },
                 {
+                  "name": "paasPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "[if(steps('zeroTrust').privateNetworking.privateEndpoint, 'Disabled', 'Enabled')]",
+                  "toolTip": "Applies to newly deployed Azure Files storage independently of private endpoints. NetApp Files and existing backup vaults are unchanged.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Disabled", "value": "Disabled" },
+                      { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
+                      { "label": "Enabled", "value": "Enabled" }
+                    ]
+                  }
+                },
+                {
                   "name": "permittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
+                  "visible": "[not(equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Enabled'))]",
                   "label": "Permitted IP Addresses and CIDR Blocks",
                   "ariaLabel": "Permitted IP Addresses and CIDR Blocks",
                   "constraints": {
                     "width": "Full",
-                    "rows": { "count": { "min": 0, "max": 50 } },
-                    "columns": [ { "id": "value", "header": "IP Address or CIDR", "width": "1fr", "element": { "type": "Microsoft.Common.TextBox", "constraints": { "required": true } } } ]
+                    "rows": {
+                      "count": {
+                        "min": 0,
+                        "max": 50
+                      }
+                    },
+                    "columns": [
+                      {
+                        "id": "value",
+                        "header": "IP Address or CIDR",
+                        "width": "1fr",
+                        "element": {
+                          "type": "Microsoft.Common.TextBox",
+                          "constraints": {
+                            "required": true
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               ]
@@ -1071,8 +1211,12 @@
                   "type": "Microsoft.Solutions.ResourceSelector",
                   "label": "Log Analytics Workspace",
                   "resourceType": "Microsoft.OperationalInsights/workspaces",
-                  "constraints": { "required": false },
-                  "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+                  "constraints": {
+                    "required": false
+                  },
+                  "scope": {
+                    "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]"
+                  }
                 },
                 {
                   "name": "recoveryServicesVault",
@@ -1080,8 +1224,12 @@
                   "label": "Recovery Services Vault",
                   "resourceType": "Microsoft.RecoveryServices/vaults",
                   "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
-                  "constraints": { "required": false },
-                  "scope": { "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]" }
+                  "constraints": {
+                    "required": false
+                  },
+                  "scope": {
+                    "subscriptionId": "[steps('scope').resourceScope.subscription.subscriptionId]"
+                  }
                 },
                 {
                   "name": "fileSharePolicyName",
@@ -1089,7 +1237,9 @@
                   "label": "Azure Files Backup Policy Name",
                   "defaultValue": "filesharepolicy",
                   "visible": "[not(empty(steps('zeroTrust').operations.recoveryServicesVault))]",
-                  "constraints": { "required": true }
+                  "constraints": {
+                    "required": true
+                  }
                 }
               ]
             }
@@ -1241,7 +1391,7 @@
                   "name": "sharedStorageIdentifier",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Shared Storage Identifier",
-                  "defaultValue": "fslogix",
+                  "defaultValue": "[parse(steps('scope').federalAvdNamingPolicy).identifiers.sharedFslogix]",
                   "toolTip": "The default fslogix identifier follows the fixed purpose-token pattern used by shared monitoring, operations, control-plane, and image-management resources. Change it only to distinguish multiple shared FSLogix storage scopes.",
                   "visible": "[equals(steps('scope').storagePurpose.storageAssociation, 'Shared')]",
                   "constraints": {
@@ -1297,7 +1447,11 @@
                   "placeholder": "rg-avd-{identifier}-storage-{location}",
                   "toolTip": "Optional. Explicit storage resource group name. The placeholder previews the standard convention; leave blank to generate the name.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, steps('scope').createStorageResourceGroup)]",
-                  "constraints": { "required": false, "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$", "validationMessage": "Enter a valid resource group name or leave blank to use the generated name." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$",
+                    "validationMessage": "Enter a valid resource group name or leave blank to use the generated name."
+                  }
                 },
                 {
                   "name": "deploymentResourceGroupNameOverride",
@@ -1306,7 +1460,11 @@
                   "placeholder": "rg-avd-{identifier}-deployment-{location}",
                   "toolTip": "Optional. Explicit temporary deployment resource group name. The placeholder previews the standard convention; leave blank to generate the name.",
                   "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
-                  "constraints": { "required": false, "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$", "validationMessage": "Enter a valid resource group name or leave blank to use the generated name." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$",
+                    "validationMessage": "Enter a valid resource group name or leave blank to use the generated name."
+                  }
                 },
                 {
                   "name": "deploymentVirtualMachineNameOverride",
@@ -1315,7 +1473,11 @@
                   "placeholder": "avd{identifier}{location}{unique}",
                   "toolTip": "Optional. Explicit temporary deployment VM name. The generated name removes separators, adds a unique suffix, and is truncated to 15 characters; leave blank to generate it.",
                   "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
-                  "constraints": { "required": false, "regex": "^$|^[A-Za-z0-9-]{1,15}$", "validationMessage": "Use 1-15 letters, numbers, or dashes, or leave blank to use the generated name." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[A-Za-z0-9-]{1,15}$",
+                    "validationMessage": "Use 1-15 letters, numbers, or dashes, or leave blank to use the generated name."
+                  }
                 },
                 {
                   "name": "deploymentVirtualMachineDiskNameOverride",
@@ -1324,7 +1486,9 @@
                   "placeholder": "{vmName}-disk",
                   "toolTip": "Optional. Explicit OS disk name. Replace {vmName} with the temporary deployment VM name, or leave blank to derive the disk name from the generated VM name.",
                   "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
-                  "constraints": { "required": false }
+                  "constraints": {
+                    "required": false
+                  }
                 },
                 {
                   "name": "deploymentVirtualMachineNicNameOverride",
@@ -1333,7 +1497,9 @@
                   "placeholder": "{vmName}-nic",
                   "toolTip": "Optional. Explicit network interface name. Replace {vmName} with the temporary deployment VM name, or leave blank to derive the NIC name from the generated VM name.",
                   "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
-                  "constraints": { "required": false }
+                  "constraints": {
+                    "required": false
+                  }
                 },
                 {
                   "name": "deploymentUserAssignedIdentityNameOverride",
@@ -1342,7 +1508,11 @@
                   "placeholder": "uai-avd-{identifier}-deployment-{location}",
                   "toolTip": "Optional. Explicit name for the temporary deployment user-assigned identity. The placeholder previews the standard convention; leave blank to generate the name.",
                   "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
-                  "constraints": { "required": false, "regex": "^$|^[A-Za-z0-9-_]{3,128}$", "validationMessage": "Use 3-128 letters, numbers, dashes, or underscores, or leave blank to use the generated name." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[A-Za-z0-9-_]{3,128}$",
+                    "validationMessage": "Use 3-128 letters, numbers, dashes, or underscores, or leave blank to use the generated name."
+                  }
                 },
                 {
                   "name": "storageAccountNamePrefixOverride",
@@ -1351,7 +1521,11 @@
                   "placeholder": "fslogix{unique}",
                   "toolTip": "Optional. Lowercase alphanumeric prefix for Azure Files storage accounts. The naming engine appends a generated six-character value by default, and the deployment appends a two-digit storage index to this prefix.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'))]",
-                  "constraints": { "required": false, "regex": "^$|^[a-z0-9]{1,13}$", "validationMessage": "Use 1-13 lowercase letters or numbers so the two-digit index remains AD-compatible, or leave blank to use the generated prefix." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[a-z0-9]{1,13}$",
+                    "validationMessage": "Use 1-13 lowercase letters or numbers so the two-digit index remains AD-compatible, or leave blank to use the generated prefix."
+                  }
                 },
                 {
                   "name": "privateEndpointNameConventionOverride",
@@ -1360,7 +1534,11 @@
                   "placeholder": "pe-RESOURCE-SUBRESOURCE-VNETID",
                   "toolTip": "Optional. Naming convention for private endpoints. RESOURCE, SUBRESOURCE, and VNETID are replaced at deployment time and must remain in the convention.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
-                  "constraints": { "required": false, "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$", "validationMessage": "Include the RESOURCE, SUBRESOURCE, and VNETID tokens, or leave blank to use the generated convention." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$",
+                    "validationMessage": "Include the RESOURCE, SUBRESOURCE, and VNETID tokens, or leave blank to use the generated convention."
+                  }
                 },
                 {
                   "name": "privateEndpointNicNameConventionOverride",
@@ -1369,7 +1547,11 @@
                   "placeholder": "nic-pe-RESOURCE-SUBRESOURCE-VNETID",
                   "toolTip": "Optional. Naming convention for private endpoint network interfaces. RESOURCE, SUBRESOURCE, and VNETID are replaced at deployment time and must remain in the convention.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
-                  "constraints": { "required": false, "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$", "validationMessage": "Include the RESOURCE, SUBRESOURCE, and VNETID tokens, or leave blank to use the generated convention." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^(?=.*RESOURCE)(?=.*SUBRESOURCE)(?=.*VNETID).+$",
+                    "validationMessage": "Include the RESOURCE, SUBRESOURCE, and VNETID tokens, or leave blank to use the generated convention."
+                  }
                 },
                 {
                   "name": "encryptionUserAssignedIdentityNameOverride",
@@ -1378,7 +1560,11 @@
                   "placeholder": "uai-avd-{identifier}-storage-cmk-{location}",
                   "toolTip": "Optional. Explicit name for the Azure Files encryption identity. The placeholder previews the standard convention; leave blank to generate the name.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged'))]",
-                  "constraints": { "required": false, "regex": "^$|^[A-Za-z0-9-_]{3,128}$", "validationMessage": "Use 3-128 letters, numbers, dashes, or underscores, or leave blank to use the generated name." }
+                  "constraints": {
+                    "required": false,
+                    "regex": "^$|^[A-Za-z0-9-_]{3,128}$",
+                    "validationMessage": "Use 3-128 letters, numbers, dashes, or underscores, or leave blank to use the generated name."
+                  }
                 },
                 {
                   "name": "netAppAccountNameOverride",
@@ -1387,7 +1573,9 @@
                   "placeholder": "naa-avd-{identifier}-{location}",
                   "toolTip": "Optional. Explicit Azure NetApp Files account name. The placeholder previews the standard convention; leave blank to generate the name.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll'))]",
-                  "constraints": { "required": false }
+                  "constraints": {
+                    "required": false
+                  }
                 },
                 {
                   "name": "netAppCapacityPoolNameOverride",
@@ -1396,7 +1584,9 @@
                   "placeholder": "nacp-avd-{identifier}-{location}",
                   "toolTip": "Optional. Explicit Azure NetApp Files capacity pool name. The placeholder previews the standard convention; leave blank to generate the name.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), not(equals(steps('storage').netAppDeploymentMode, 'ExistingAccountAndPool')))]",
-                  "constraints": { "required": false }
+                  "constraints": {
+                    "required": false
+                  }
                 },
                 {
                   "name": "smbServerLocationOverride",
@@ -1405,7 +1595,9 @@
                   "placeholder": "{location}",
                   "toolTip": "Optional. Short location token used in the Azure NetApp Files SMB server name (for example, use2). Leave blank to use the naming engine's abbreviation for the selected region.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll'))]",
-                  "constraints": { "required": false }
+                  "constraints": {
+                    "required": false
+                  }
                 }
               ]
             },
@@ -1438,7 +1630,7 @@
       "parameters": {
         "location": "[steps('scope').resourceScope.location.name]",
         "identifier": "[if(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), steps('tagsAndNaming').naming.existingHostPoolPersona, if(equals(steps('scope').storagePurpose.storageAssociation, 'FutureHostPool'), steps('tagsAndNaming').naming.futureHostPoolPersona, steps('tagsAndNaming').naming.sharedStorageIdentifier))]",
-        "namingConvention": "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse('{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"}'))]",
+        "namingConvention": "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse(string(parse(steps('scope').federalAvdNamingPolicy).defaults)))]",
         "storageResourceGroupName": "[if(steps('scope').createStorageResourceGroup, if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.storageResourceGroupNameOverride, ''), ''), steps('scope').storageResourceGroup)]",
         "createStorageResourceGroup": "[steps('scope').createStorageResourceGroup]",
         "deploymentResourceGroupName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentResourceGroupNameOverride, ''), '')]",
@@ -1473,6 +1665,7 @@
         "privateEndpointNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNameConventionOverride, ''), '')]",
         "privateEndpointNicNameConvention": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint), coalesce(steps('tagsAndNaming').naming.privateEndpointNicNameConventionOverride, ''), '')]",
         "permittedIPs": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), filter(map(steps('zeroTrust').privateNetworking.permittedIPs, (item) => item.value), (ip) => not(empty(ip))), parse('[]'))]",
+        "paasPublicNetworkAccess": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Auto')]",
         "logAnalyticsWorkspaceResourceId": "[if(empty(steps('zeroTrust').operations.logAnalyticsWorkspace), '', steps('zeroTrust').operations.logAnalyticsWorkspace.id)]",
         "keyManagementStorage": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').keyManagement.keyManagementStorage, 'PlatformManaged')]",
         "existingEncryptionKeyVaultResourceId": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')), steps('zeroTrust').keyManagement.existingEncryptionKeyVault.id, '')]",

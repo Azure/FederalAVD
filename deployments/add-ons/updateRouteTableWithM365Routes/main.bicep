@@ -67,13 +67,14 @@ param runbookContentUri string = 'https://raw.githubusercontent.com/Azure/Federa
 param deploymentTime string = utcNow()
 
 
-@description('''Optional. Set to true on first deployment, false on all redeployments.
-
-Azure Automation caches the runbook/schedule association by account name. This cache persists
-even after deleting the automation account and recreating it with the same name. ARM cannot
-create a job schedule resource that already exists (Conflict error). Setting this to false on
-redeployment skips creation entirely - the existing link stays active and the runbook keeps
-running on its schedule.''')
+// Optional. Set to true on first deployment, false on all redeployments.
+//
+// Azure Automation caches the runbook/schedule association by account name. This cache persists
+// even after deleting the automation account and recreating it with the same name. ARM cannot
+// create a job schedule resource that already exists (Conflict error). Setting this to false on
+// redeployment skips creation entirely - the existing link stays active and the runbook keeps
+// running on its schedule.
+@description('Optional. Create the runbook/schedule link on first deployment. Set false on redeployment to preserve the existing link and avoid conflicts.')
 param createJobSchedule bool = true
 
 // ========== //
@@ -82,18 +83,14 @@ param createJobSchedule bool = true
 
 var routeTableResourceGroupName = split(routeTableResourceId, '/')[4]
 
-var cloud                 = toLower(environment().name)
-var locationsObject       = loadJsonContent('../../shared/data/locations.json')
-var locationsEnvProperty  = startsWith(cloud, 'us') ? 'other' : cloud
-var locations             = locationsObject[locationsEnvProperty]
-var regionAbbr            = locations[location].abbreviation
-var resourceAbbreviations = loadJsonContent('../../shared/data/resourceAbbreviations.json')
+import { namingPolicy, regionAbbreviation, resourceName, scopeIdUnique } from '../../shared/modules/orchestration/naming/functions.bicep'
+var regionAbbr = regionAbbreviation(location, environment().name)
 
-var uniqueStringUrt = take(uniqueString(resourceGroup().id, routeTableResourceId), 6)
+var uniqueStringUrt = scopeIdUnique(resourceGroup().id, routeTableResourceId)
 
 var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
-  : '${resourceAbbreviations.automationAccounts}-urt-${uniqueStringUrt}-${regionAbbr}'
+  : resourceName(namingPolicy.defaults, 'routesAutomation', regionAbbr, '', uniqueStringUrt)
 
 
 // ========== //

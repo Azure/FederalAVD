@@ -34,6 +34,66 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 ---
 
+## PaaS Public Network Access
+
+Shared Services, Image Management, standard/automated Host Pools, FSLogix Storage,
+and Session Host Replacer accept `paasPublicNetworkAccess`. One choice applies to
+the Storage accounts, Key Vaults, or Function App infrastructure that the selected
+deployment creates; it does not reconfigure adopted resources, AVD connection/feed
+access, Recovery Services vaults, NetApp Files, or monitoring.
+
+| Value | Public endpoint | Firewall default action |
+| --- | --- | --- |
+| `Disabled` | Disabled regardless of IP/subnet rules or private endpoint selection | Deny |
+| `EnabledWithRestrictions` | Enabled alongside any private endpoints | Deny unmatched traffic, including with empty rule lists |
+| `Enabled` | Enabled alongside any private endpoints | Allow all networks, regardless of stored allow rules |
+| `Auto` (parameter-file compatibility default) | Historical private-endpoint/IP/subnet inference | Historical behavior |
+
+The Portal exposes only the first three choices. Its initial choice is Disabled
+with private endpoints and Enabled otherwise. Image Management's Service Endpoint
+option initially selects Enabled with restrictions so subnet restrictions remain
+effective. These are defaults, not constraints linking public access to private
+endpoint creation.
+
+IP rules remain configured in Disabled mode and do not turn public access back on.
+The Portal permits editing them in both Disabled and restricted modes, allowing
+rules to be staged before enabling public access. Image Management also retains
+supplied subnet rules; service endpoints use the **public** storage endpoint and
+do not provide connectivity when public access is Disabled.
+
+Existing purpose-specific exceptions are unchanged: Storage/Key Vault retain
+`AzureServices` bypass; restricted Function App and SCM access retain the
+`AzureCloud` service-tag allowance. Microsoft documents that trusted-service
+exceptions can still apply to Storage and Key Vault when public access is
+Disabled. Disabled is therefore not a universal private-endpoint-only guarantee.
+Authentication and authorization are required in every mode.
+
+Use `permittedIPs` for the shared allowlist (`storagePermittedIPs` in Image
+Management). Automated Host Pools also accept the existing `fslogixPermittedIPs`
+parameter: those entries are combined with `permittedIPs` for Azure Files only,
+preserving the previous contract. Omitted new parameters preserve existing
+parameter-file behavior. A Portal-generated parameter file explicitly selects a mode.
+
+For example, deploy private endpoints while permitting approved public addresses:
+
+```json
+"paasPublicNetworkAccess": { "value": "EnabledWithRestrictions" },
+"permittedIPs": { "value": ["203.0.113.10", "198.51.100.0/24"] }
+```
+
+Select `Disabled` with the same IP list to retain the rules without enabling the
+public endpoint. Before disabling access, provide and validate the private
+connectivity/DNS path for session hosts, image builders, deployment workstations,
+and Function App runtime storage as applicable.
+
+Authoritative service behavior:
+[Storage default access](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security-set-default-access),
+[Storage exceptions and limitations](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security-limitations),
+[Key Vault networking](https://learn.microsoft.com/en-us/azure/key-vault/general/network-security),
+and [App Service access restrictions](https://learn.microsoft.com/en-us/azure/app-service/overview-access-restrictions).
+
+---
+
 ## Add-Ons
 
 | Add-On | Parameters |

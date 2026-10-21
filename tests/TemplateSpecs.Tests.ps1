@@ -12,6 +12,58 @@ if ($parseErrors.Count -gt 0) {
     throw "New-TemplateSpecs.ps1 has $($parseErrors.Count) PowerShell parse error(s)."
 }
 
+$sizeCases = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter 'uiFormDefinition.json' -File -Recurse |
+    ForEach-Object {
+        $formFile = $_.FullName
+        Get-ChildItem -LiteralPath $_.DirectoryName -Filter '*.json' -File |
+            Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) } |
+            ForEach-Object {
+                @{
+                    Name = $_.FullName.Substring($repoRoot.Length + 1)
+                    TemplateFile = $_.FullName
+                    FormFile = $formFile
+                }
+            }
+    })
+
+Describe 'Generated ARM and Template Spec size budgets' {
+    It 'discovers published template and form pairs' {
+        ($sizeCases.Count -gt 0) | Should Be $true
+    }
+
+    It 'keeps <Name> within conservative offline size budgets' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $armBytes = (Get-Item -LiteralPath $TemplateFile).Length
+        if ($armBytes -gt 4000000) {
+            throw "$Name is $armBytes bytes, exceeding the conservative 4,000,000-byte ARM file budget."
+        }
+        $payload = @{
+            location = 'usgovvirginia'
+            properties = @{
+                mainTemplate = Get-Content -LiteralPath $TemplateFile -Raw | ConvertFrom-Json
+                uiFormDefinition = Get-Content -LiteralPath $FormFile -Raw | ConvertFrom-Json
+            }
+        }
+        $json = $payload | ConvertTo-Json -Depth 100 -Compress -WarningAction Stop
+        $payloadBytes = [Text.Encoding]::UTF8.GetByteCount($json)
+        if ($payloadBytes -gt 2000000) {
+            throw "$Name and its Portal form serialize to $payloadBytes bytes, exceeding the conservative 2,000,000-byte Template Spec payload budget."
+        }
+    }
+
+    It 'keeps extended examples out of emitted <Name> parameter descriptions' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $template = Get-Content -LiteralPath $TemplateFile -Raw | ConvertFrom-Json
+        foreach ($parameter in $template.parameters.PSObject.Properties) {
+            if ($parameter.Value.metadata.description -match '(?im)^\s*(?:JSON\s+)?example:\s*$') {
+                throw "$Name parameter $($parameter.Name) embeds an extended example; keep it in Bicep source comments instead."
+            }
+        }
+    }
+}
+
 Describe 'Networking Template Spec form parameter contract' {
     $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\networking\networking.json') -Raw | ConvertFrom-Json
     $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\networking\uiFormDefinition.json') -Raw | ConvertFrom-Json

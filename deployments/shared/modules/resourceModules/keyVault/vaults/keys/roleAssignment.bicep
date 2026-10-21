@@ -1,6 +1,11 @@
+metadata name = 'Key Vault key role assignments'
+metadata description = 'Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group.'
+
 import { roleAssignmentType } from '../../../types/roleAssignmentTypes.bicep'
 
+@description('Required. Name of the existing parent Key Vault in the deployment resource group.')
 param keyVaultName string
+@description('Required. Name of the existing key within the selected Key Vault.')
 param keyName string
 
 @description('Role assignments to apply to this key vault key.')
@@ -33,4 +38,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   }
 ]
 
+@description('Array of role assignment resource IDs in the same order as the assignments input.')
 output resourceIds array = [for (assignment, i) in formattedAssignments: roleAssignment[i].id]

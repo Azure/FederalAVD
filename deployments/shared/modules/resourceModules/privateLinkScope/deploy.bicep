@@ -1,3 +1,6 @@
+metadata name = 'Azure Monitor Private Link Scope'
+metadata description = 'Deploys an Azure Monitor Private Link Scope with ingestion and query access modes; linked resources and private endpoints are configured separately.'
+
 @description('Required. Azure Monitor Private Link Scope name.')
 param name string
 
@@ -34,5 +37,7 @@ resource privateLinkScope 'Microsoft.Insights/privateLinkScopes@2021-09-01' = {
   }
 }
 
+@description('Resource ID of the azure Monitor Private Link Scope.')
 output resourceId string = privateLinkScope.id
+@description('Azure resource name of the azure Monitor Private Link Scope.')
 output resourceName string = privateLinkScope.name

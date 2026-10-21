@@ -1,5 +1,9 @@
+metadata name = 'VM system identity policy definition'
+metadata description = 'Defines a subscription Modify policy adding system-assigned identity to VMs while retaining user-assigned identity type; the caller owns assignment and remediation permissions.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostSystemAssignedIdentity-Modify'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -46,4 +50,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

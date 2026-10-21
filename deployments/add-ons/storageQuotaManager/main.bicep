@@ -25,7 +25,10 @@ param tags object = {}
 // Naming Parameters
 // ================================================================================================
 
-@description('Optional. Short identifier embedded in the Automation Account name, typically the host pool identifier (e.g. pooled-03 or personal-01). Produces aa-sqm-{identifier}-{region}. Leave empty if only one SQM instance will be deployed in this resource group, which produces aa-sqm-{region}.')
+// Optional. Short identifier embedded in the Automation Account name, typically the host pool
+// identifier (e.g. pooled-03 or personal-01). Produces aa-sqm-{identifier}-{region}. Leave empty if
+// only one SQM instance will be deployed in this resource group, which produces aa-sqm-{region}.
+@description('Optional. Host-pool identifier included in the Automation Account name. Empty omits this segment for a single instance.')
 param identifier string = ''
 
 @description('Optional. Explicit name for the Automation Account. Overrides the auto-generated name entirely. Must be 6-128 characters, alphanumeric and hyphens.')
@@ -57,25 +60,27 @@ param storageResourceGroupId string
 @minValue(15)
 param scheduleFrequencyMinutes int = 15
 
-@description('''Optional. URI of the runbook PS1 file to download and publish at deployment time.
-Defaults to the public FederalAVD GitHub repository.
-
-For air-gapped or internet-restricted environments, set this to empty (\'\') to skip
-automatic publishing. The runbook will be created in an unpublished (New) state and must
-be published manually via the Portal or PowerShell before the first scheduled run.
-See the add-on README for step-by-step instructions.''')
+// Optional. URI of the runbook PS1 file to download and publish at deployment time.
+// Defaults to the public FederalAVD GitHub repository.
+//
+// For air-gapped or internet-restricted environments, set this to empty (\'\') to skip
+// automatic publishing. The runbook will be created in an unpublished (New) state and must
+// be published manually via the Portal or PowerShell before the first scheduled run.
+// See the add-on README for step-by-step instructions.
+@description('Optional. Runbook PS1 URI. Empty skips publishing for restricted environments; manually publish the resulting New-state runbook before scheduled execution.')
 param runbookContentUri string = 'https://raw.githubusercontent.com/Azure/FederalAVD/main/deployments/add-ons/storageQuotaManager/runbook/run.ps1'
 
 @description('Optional. UTC timestamp used to compute the first schedule start time. Defaults to deployment time.')
 param deploymentTime string = utcNow()
 
-@description('''Optional. Set to true on first deployment, false on all redeployments.
-
-Azure Automation caches the runbook/schedule association by account name. This cache persists
-even after deleting the automation account and recreating it with the same name. ARM cannot
-create a job schedule resource that already exists (Conflict error). Setting this to false on
-redeployment skips creation entirely - the existing link stays active and the runbook keeps
-running on its schedule.''')
+// Optional. Set to true on first deployment, false on all redeployments.
+//
+// Azure Automation caches the runbook/schedule association by account name. This cache persists
+// even after deleting the automation account and recreating it with the same name. ARM cannot
+// create a job schedule resource that already exists (Conflict error). Setting this to false on
+// redeployment skips creation entirely - the existing link stays active and the runbook keeps
+// running on its schedule.
+@description('Optional. Create the runbook/schedule link on first deployment. Set false on redeployment to preserve the existing link and avoid conflicts.')
 param createJobSchedule bool = true
 
 // ========== //
@@ -85,18 +90,12 @@ param createJobSchedule bool = true
 var storageSubscriptionId    = split(storageResourceGroupId, '/')[2]
 var storageResourceGroupName = split(storageResourceGroupId, '/')[4]
 
-var cloud                 = toLower(environment().name)
-var locationsObject       = loadJsonContent('../../shared/data/locations.json')
-var locationsEnvProperty  = startsWith(cloud, 'us') ? 'other' : cloud
-var locations             = locationsObject[locationsEnvProperty]
-var regionAbbr            = locations[location].abbreviation
-var resourceAbbreviations = loadJsonContent('../../shared/data/resourceAbbreviations.json')
+import { namingPolicy, regionAbbreviation, resourceName } from '../../shared/modules/orchestration/naming/functions.bicep'
+var regionAbbr = regionAbbreviation(location, environment().name)
 
 var automationAccountName = !empty(automationAccountNameOverride)
   ? automationAccountNameOverride
-  : !empty(identifier)
-    ? '${resourceAbbreviations.automationAccounts}-sqm-${identifier}-${regionAbbr}'
-    : '${resourceAbbreviations.automationAccounts}-sqm-${regionAbbr}'
+  : resourceName(namingPolicy.defaults, 'quotaAutomation', regionAbbr, identifier, '')
 
 var resolvedTags = !empty(hostPoolResourceId)
   ? union(tags, { 'cm-resource-parent': hostPoolResourceId })

@@ -1,14 +1,21 @@
 targetScope = 'subscription'
 
+import { resolveConvention, resourceTypeFirst, resourceName, privateEndpointPattern, privateEndpointNicPattern } from '../../../shared/modules/orchestration/naming/functions.bicep'
+
+metadata name = 'Session Host Replacer naming'
+metadata description = 'Computes Replacer infrastructure names using the shared naming functions and host-pool convention. Deploys no resources; explicit brownfield overrides are applied by the caller.'
+
 // ============================================================================
 // Session Host Replacer Naming Module
 // Computes infrastructure resource names for a Session Host Replacer deployment.
 // No resources are deployed - this module is purely for name resolution.
 // ============================================================================
 
-@description('''Naming convention controlling how infrastructure resources are named.
-Should match the convention used when deploying the host pool. Pre-populated from the
-hpNamingComponents, hpNamingDelimiter, and hpNamingWorkload tags on the hosts resource group.''')
+// Naming convention controlling how infrastructure resources are named.
+// Should match the convention used when deploying the host pool. Pre-populated from the
+// hpNamingComponents, hpNamingDelimiter, and hpNamingWorkload tags on the hosts resource group.
+@description('Optional. Infrastructure naming convention matching the host pool. The Portal derives it from naming tags on the hosts resource group.')
+// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -24,78 +31,25 @@ param locationAbbreviation string
 @description('A 6-character unique string scoped to the virtual machines subscription and resource group.')
 param uniqueString string
 
-var cnv_delimiter  = namingConvention.?delimiter   ?? '-'
-var cnv_components = namingConvention.?components  ?? ['resourceType', 'workload', 'purpose', 'location']
-var cnv_workload   = !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-var cnv_ff1        = namingConvention.?freeform1   ?? ''
-var cnv_env        = namingConvention.?environment ?? ''
-var cnv_ff2        = namingConvention.?freeform2   ?? ''
-var abbr           = loadJsonContent('../../../shared/data/resourceAbbreviations.json')
-var cnv_rtCodes    = contains(namingConvention, 'resourceTypeCodes')
-  ? union(abbr, namingConvention.resourceTypeCodes)
-  : abbr
+var cnv_rtCodes = resolveConvention(namingConvention).resourceTypeCodes
 var loc            = !empty(namingConvention.?vmsLocationAbbreviation ?? '') ? namingConvention.vmsLocationAbbreviation : locationAbbreviation
 
-func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  comp == 'resourceType' ? rtCode
-    : comp == 'purpose'     ? component
-    : comp == 'location'    ? loc
-    : comp == 'freeform1'   ? ff1
-    : comp == 'environment' ? env
-    : comp == 'freeform2'   ? ff2
-    : comp == 'workload'    ? workload
-    : ''
+var rtFirst = resourceTypeFirst(namingConvention)
+var functionAppName = resourceName(namingConvention, 'replacerFunctionApp', loc, identifier, uniqueString)
 
-func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  join(
-    filter(
-      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
-      s => !empty(s)
-    ),
-    delimiter
-  )
-
-func cnv(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  buildCustomName(filter(components, s => s != 'none'), delimiter, rtCode, component, loc, ff1, env, ff2, workload)
-
-var nameConvReversed = !empty(cnv_components) && last(filter(cnv_components, s => s != 'none')) == 'resourceType'
-var hpPurpose = '${identifier}${cnv_delimiter}shr${cnv_delimiter}${uniqueString}'
-var sanitizedStorageId = replace(identifier, '-', '')
-var storageRawName = cnv(cnv_components, cnv_delimiter, '', '${sanitizedStorageId}shr${uniqueString}', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload)
-
-var peNameConv = replace(
-  nameConvReversed ? 'RESOURCE-SUBRESOURCE-VNETID-RESOURCETYPE' : 'RESOURCETYPE-RESOURCE-SUBRESOURCE-VNETID',
-  'RESOURCETYPE',
-  cnv_rtCodes.privateEndpoints
-)
-var peNicNameConvTemp = nameConvReversed
-  ? '${peNameConv}-RESOURCETYPE'
-  : 'RESOURCETYPE-${peNameConv}'
-var functionAppName = take(
-  cnv(cnv_components, cnv_delimiter, cnv_rtCodes.functionApps, hpPurpose, loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload),
-  60
-)
-
+@description('Function App name, limited to 60 characters. The caller can replace it with a brownfield override.')
 output functionAppName string = functionAppName
-output storageAccountName string = take(
-  toLower(replace(storageRawName, cnv_delimiter, '')),
-  24
-)
-output storageEncryptionIdentityName string = cnv(
-  cnv_components, cnv_delimiter, cnv_rtCodes.userAssignedIdentities,
-  '${identifier}${cnv_delimiter}shr${cnv_delimiter}storage${cnv_delimiter}cmk', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
-)
-output appServicePlanName string = cnv(
-  cnv_components, cnv_delimiter, cnv_rtCodes.appServicePlans,
-  '', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
-)
-output appInsightsName string = cnv(
-  cnv_components, cnv_delimiter, cnv_rtCodes.applicationInsights,
-  hpPurpose, loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
-)
-output templateSpecName string = cnv(
-  cnv_components, cnv_delimiter, cnv_rtCodes.templateSpecs,
-  'session-hosts', loc, cnv_ff1, cnv_env, cnv_ff2, cnv_workload
-)
-output privateEndpointNameConv string = peNameConv
-output privateEndpointNICNameConv string = replace(peNicNameConvTemp, 'RESOURCETYPE', cnv_rtCodes.networkInterfaces)
+@description('Lowercase storage account name without the convention delimiter, limited to 24 characters.')
+output storageAccountName string = resourceName(namingConvention, 'replacerStorage', loc, identifier, uniqueString)
+@description('Name of the dedicated storage CMK identity; creating the identity and key is the caller responsibility.')
+output storageEncryptionIdentityName string = resourceName(namingConvention, 'replacerStorageIdentity', loc, identifier, '')
+@description('Plan name without a host-pool-specific purpose, allowing shared naming within the chosen scope. The caller selects new or existing plan ownership.')
+output appServicePlanName string = resourceName(namingConvention, 'replacerHostingPlan', loc, identifier, '')
+@description('Host-pool-scoped Application Insights name. The caller adjusts it when overriding the Function App name.')
+output appInsightsName string = resourceName(namingConvention, 'replacerInsights', loc, identifier, uniqueString)
+@description('Name for the session-host deployment Template Spec; the caller can use an existing Template Spec instead.')
+output templateSpecName string = resourceName(namingConvention, 'sessionHostsTemplateSpec', loc, identifier, '')
+@description('Private endpoint pattern containing RESOURCE, SUBRESOURCE, and VNETID placeholders for the consuming module.')
+output privateEndpointNameConv string = privateEndpointPattern(rtFirst, cnv_rtCodes.privateEndpoints)
+@description('Private endpoint NIC pattern containing RESOURCE, SUBRESOURCE, and VNETID placeholders.')
+output privateEndpointNICNameConv string = privateEndpointNicPattern(rtFirst, cnv_rtCodes.privateEndpoints, cnv_rtCodes.networkInterfaces)

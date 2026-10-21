@@ -1,5 +1,8 @@
 targetScope = 'subscription'
 
+import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
+import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, scopedUnique, privateEndpointPattern, privateEndpointNicPattern } from '../shared/modules/orchestration/naming/functions.bicep'
+
 // Deploys the AVD Key Vault prerequisites into the operations resource group: a Secrets Key Vault for
 // credentials (domain join, VM admin) and an Encryption Key Vault for Customer Managed Key (CMK) encryption.
 // Deploy this before any AVD solution that uses CMK or references a pre-provisioned credentials Key Vault.
@@ -80,7 +83,7 @@ param encryptionKeyVaultRetentionInDays int = 90
 
 // ── Private Endpoints ──────────────────────────────────────────────────────────
 
-@description('Optional. Deploy private endpoints for the Key Vaults. When true, public network access is disabled on both Key Vaults.')
+@description('Optional. Deploy private endpoints for the Key Vaults. Public access is controlled separately by paasPublicNetworkAccess.')
 param privateEndpoint bool = false
 
 @description('Conditional. The resource ID of the subnet for Key Vault private endpoints. Required when privateEndpoint is true.')
@@ -94,9 +97,20 @@ param azureKeyVaultPrivateDnsZoneResourceId string = ''
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all Key Vaults deployed by this module. Use when managing from a trusted workstation outside the Azure network boundary.')
 param permittedIPs array = []
 
+@description('Optional. Public-access mode for newly deployed Key Vaults. Auto preserves legacy behavior; IP rules remain configured and AzureServices bypass still applies.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+
 // ── Monitoring ─────────────────────────────────────────────────────────────────
 
-@description('Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as "logAnalyticsWorkspaceResourceId", "avdInsightsDataCollectionRuleResourceId", and "dataCollectionEndpointResourceId" - pass those to "existingLogAnalyticsWorkspaceResourceId", "existingAVDInsightsDataCollectionRuleResourceId", and "existingDataCollectionEndpointResourceId" on the host pool deployment (and "logAnalyticsWorkspaceResourceId" to the Image Management deployment) so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment creating its own.')
+// Optional. Deploy a Log Analytics Workspace, AVD Insights Data Collection Rule, and Data Collection
+// Endpoint into a dedicated monitoring resource group. Their resource IDs are returned as
+// "logAnalyticsWorkspaceResourceId", "avdInsightsDataCollectionRuleResourceId", and
+// "dataCollectionEndpointResourceId" - pass those to "existingLogAnalyticsWorkspaceResourceId",
+// "existingAVDInsightsDataCollectionRuleResourceId", and "existingDataCollectionEndpointResourceId" on
+// the host pool deployment (and "logAnalyticsWorkspaceResourceId" to the Image Management deployment)
+// so every AVD solution shares one workspace and one DCE/DCR instead of the first host pool deployment
+// creating its own.
+@description('Optional. Create shared Log Analytics, AVD Insights DCR, and DCE resources in a monitoring resource group; pass their output IDs to consuming deployments.')
 param deployMonitoring bool = false
 
 @description('Optional. The subscription ID where the Log Analytics Workspace and related monitoring resources will be deployed. If not provided, the operations subscription is used.')
@@ -119,7 +133,11 @@ param existingAVDInsightsDataCollectionRuleResourceId string = ''
 @description('Optional. Existing Data Collection Endpoint resource ID returned to consuming host-pool deployments when monitoring is adopted.')
 param existingDataCollectionEndpointResourceId string = ''
 
-@description('Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint, access modes, and DNS configuration must be managed by the networking platform. Ignored when "deployMonitoring" is false.')
+// Optional. The resource ID of an existing Azure Monitor Private Link Scope (AMPLS) to associate with
+// the deployed Log Analytics Workspace and Data Collection Endpoint. The AMPLS, private endpoint,
+// access modes, and DNS configuration must be managed by the networking platform. Ignored when
+// "deployMonitoring" is false.
+@description('Optional. Existing platform-managed AMPLS for the deployed workspace and DCE. Ignored when deployMonitoring is false; the platform owns private connectivity and DNS.')
 param azureMonitorPrivateLinkScopeResourceId string = ''
 
 // ── Shared AVD Workspace ──────────────────────────────────────────────────────
@@ -218,27 +236,31 @@ param tags object = {}
 
 // ── Non-Specified Values ───────────────────────────────────────────────────────
 
-@description('''Optional. Naming convention controlling how all resources in this deployment are named.
-The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
-Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
-Component requirements:
-  purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they
-                 produce identical names and the deployment fails.
-  resourceType — Strongly recommended. Without it resource names carry no type identifier.
-  location     — Optional. When omitted the location abbreviation is still added to unique-string seeds
-                 so cross-region deployments produce distinct Key Vault names, but the location segment
-                 will not appear in resource names.
-  workload, freeform1, environment, freeform2 — Optional static tokens.
-Key properties:
-  components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
-  delimiter           — character inserted between components, e.g. "-"
-  workload            — solution identifier inserted into names, e.g. "avd"
-  freeform1, environment, freeform2 — optional static/context tokens
-  locationAbbreviation — override for the region abbreviation
-  resourceTypeCodes   — object with per-resource-type abbreviation overrides
-    { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, workspaces, privateEndpoints, networkInterfaces }
-This object is produced automatically when deploying via the Azure Portal UI.
-When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.''')
+// Optional. Naming convention controlling how all resources in this deployment are named.
+// The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention:
+// resourceType-workload-purpose-location.
+// Note: 'purpose' is a FederalAVD addition with no direct CAF equivalent — it provides per-resource
+// uniqueness within a deployment.
+// Component requirements:
+//   purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they
+//                  produce identical names and the deployment fails.
+//   resourceType — Strongly recommended. Without it resource names carry no type identifier.
+//   location     — Optional. When omitted the location abbreviation is still added to unique-string seeds
+//                  so cross-region deployments produce distinct Key Vault names, but the location segment
+//                  will not appear in resource names.
+//   workload, freeform1, environment, freeform2 — Optional static tokens.
+// Key properties:
+//   components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+//   delimiter           — character inserted between components, e.g. "-"
+//   workload            — solution identifier inserted into names, e.g. "avd"
+//   freeform1, environment, freeform2 — optional static/context tokens
+//   locationAbbreviation — override for the region abbreviation
+//   resourceTypeCodes   — object with per-resource-type abbreviation overrides
+//     { resourceGroups, keyVaults, logAnalyticsWorkspaces, dataCollectionEndpoints, workspaces, privateEndpoints, networkInterfaces }
+// This object is produced automatically when deploying via the Azure Portal UI.
+// When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.
+@description('Optional. Shared naming-convention overrides. Include purpose to distinguish Secrets and Encryption vaults; omitted properties retain shared defaults.')
+// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -256,16 +278,9 @@ param encryptionKeyVaultNameOverride string = ''
 
 // ── Naming Convention ──────────────────────────────────────────────────────────
 
-var cloud = toLower(environment().name)
 // Account for air-gapped cloud location prefixes (us-gov, us-sec, etc.)
-#disable-next-line BCP329
-var varLocation = startsWith(cloud, 'us') ? substring(location, 5, length(location) - 5) : location
-var locations = startsWith(cloud, 'us')
-  ? (loadJsonContent('../shared/data/locations.json')).other
-  : (loadJsonContent('../shared/data/locations.json'))[environment().name]
-var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
+var identifier = namingPolicy.resources.operationsResourceGroup.purpose[0]
 
-var identifier = 'operations'
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
   ? subscription().subscriptionId
   : logAnalyticsWorkspaceSubscriptionId
@@ -274,169 +289,54 @@ var createEncryptionKeyVault = deployEncryptionKeyVault && empty(existingEncrypt
 var createFSLogixBackupVault = deployFSLogixBackupVault && empty(existingFSLogixBackupVaultResourceId)
 var deployOperationsResourceGroup = createSecretsKeyVault || createEncryptionKeyVault || createFSLogixBackupVault
 
-#disable-next-line BCP329
-var locationAbbreviation = locations[varLocation].abbreviation
+var locationAbbreviation = regionAbbreviation(location, environment().name)
 
 // ── Naming convention ────────────────────────────────────────────────────────
 // Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
 // Override any component via the namingConvention parameter.
 
-var cnv_delimiter      = namingConvention.?delimiter  ?? '-'
 var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
   ? namingConvention.locationAbbreviation
   : locationAbbreviation
-var cnv_rtCodes  = namingConvention.?resourceTypeCodes ?? {
-  resourceGroups: resourceAbbreviations.resourceGroups
-  keyVaults: resourceAbbreviations.keyVaults
-  recoveryServicesVaults: resourceAbbreviations.recoveryServicesVaults
-  logAnalyticsWorkspaces: resourceAbbreviations.logAnalyticsWorkspaces
-  dataCollectionEndpoints: resourceAbbreviations.dataCollectionEndpoints
-  workspaces: resourceAbbreviations.workspaces
-  privateEndpoints: resourceAbbreviations.privateEndpoints
-  networkInterfaces: resourceAbbreviations.networkInterfaces
-}
-var cnv_components = namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
+var cnv_rtCodes = resolveConvention(namingConvention).resourceTypeCodes
+
 // RT is last only when resourceType is explicitly the last non-'none' component.
-var cnv_rtFirst  = !empty(cnv_components) ? (last(filter(cnv_components, s => s != 'none')) != 'resourceType') : true
+var cnv_rtFirst = resourceTypeFirst(namingConvention)
 
-func resolveComponent(comp string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  comp == 'resourceType' ? rtCode
-    : comp == 'purpose' ? component
-    : comp == 'location'  ? loc
-    : comp == 'freeform1'     ? ff1
-    : comp == 'environment'   ? env
-    : comp == 'freeform2' ? ff2
-    : comp == 'workload'  ? workload
-    : ''
+var customRgName = resourceName(namingConvention, 'operationsResourceGroup', cnv_loc, identifier, '')
 
-func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
-  join(
-    filter(
-      map(components, comp => resolveComponent(comp, rtCode, component, loc, ff1, env, ff2, workload)),
-      s => !empty(s)
-    ),
-    delimiter
-  )
-
-// Key Vault names allow hyphens but not underscores or dots — replace them.
-func kvSanitize(s string) string =>
-  replace(replace(s, '_', '-'), '.', '-')
-
-var customRgName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.resourceGroups,
-  identifier,
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Resource group and resource naming now always use buildCustomName via cnv_components.
 
 // Private endpoint naming conventions — follows the same resource-type-first/last convention as all other resources
-var privateEndpointNameConv = cnv_rtFirst
-  ? '${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
-  : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}'
-var privateEndpointNICNameConv = cnv_rtFirst
-  ? '${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}-${cnv_rtCodes.privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
-  : 'RESOURCE-SUBRESOURCE-VNETID-${cnv_rtCodes.privateEndpoints}-${cnv_rtCodes.?networkInterfaces ?? resourceAbbreviations.networkInterfaces}'
+var privateEndpointNameConv = privateEndpointPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints)
+
+var privateEndpointNICNameConv = privateEndpointNicPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints, cnv_rtCodes.networkInterfaces)
 
 var operationsResourceGroupName = !empty(consolidatedResourceGroupName) ? consolidatedResourceGroupName : customRgName
 
 // Monitoring resource group and Log Analytics Workspace name - only used when deployMonitoring is true.
-var generatedMonitoringResourceGroupName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.resourceGroups,
-  'monitoring',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var generatedMonitoringResourceGroupName = resourceName(namingConvention, 'monitoringResourceGroup', cnv_loc, identifier, '')
+
 var monitoringResourceGroupName = !empty(consolidatedResourceGroupName)
   ? consolidatedResourceGroupName
   : generatedMonitoringResourceGroupName
 
 // No purpose component - matches the single-workspace naming the host pool deployment's inline
 // monitoring module produces, so both paths agree on the same Log Analytics Workspace name.
-var logAnalyticsWorkspaceName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.?logAnalyticsWorkspaces ?? resourceAbbreviations.logAnalyticsWorkspaces,
-  '',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var logAnalyticsWorkspaceName = resourceName(namingConvention, 'logAnalyticsWorkspace', cnv_loc, identifier, '')
 
 // No purpose component - matches the host pool deployment's inline monitoring module naming.
-var dataCollectionEndpointName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.?dataCollectionEndpoints ?? resourceAbbreviations.dataCollectionEndpoints,
-  '',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var dataCollectionEndpointName = resourceName(namingConvention, 'dataCollectionEndpoint', cnv_loc, identifier, '')
 
-var generatedControlPlaneResourceGroupName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.resourceGroups,
-  'control${cnv_delimiter}plane',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var generatedControlPlaneResourceGroupName = resourceName(namingConvention, 'controlPlaneResourceGroup', cnv_loc, identifier, '')
 
-var generatedAvdWorkspaceName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.?workspaces ?? resourceAbbreviations.workspaces,
-  '',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var generatedAvdWorkspaceName = resourceName(namingConvention, 'workspace', cnv_loc, identifier, '')
 
-var generatedGlobalFeedResourceGroupName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.resourceGroups,
-  'global${cnv_delimiter}feed',
-  '',
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var generatedGlobalFeedResourceGroupName = resourceName(namingConvention, 'globalFeedResourceGroup', '', identifier, '')
 
-var generatedGlobalFeedWorkspaceName = buildCustomName(
-  filter(cnv_components, s => s != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.?workspaces ?? resourceAbbreviations.workspaces,
-  'global${cnv_delimiter}feed',
-  '',
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var generatedGlobalFeedWorkspaceName = resourceName(namingConvention, 'globalFeedWorkspace', '', identifier, '')
 
 var controlPlaneResourceGroupName = !empty(consolidatedResourceGroupName)
   ? consolidatedResourceGroupName
@@ -455,12 +355,8 @@ var globalFeedWorkspaceName = !empty(globalFeedWorkspaceNameOverride)
 // Add location to the seed when the convention has no location component,
 // so deployments to different regions don't produce identical Key Vault names.
 // CAF fallback already embeds the location abbreviation in the name itself.
-var uniqueStringOperations = take(
-  !contains(cnv_components, 'location')
-    ? uniqueString(subscription().subscriptionId, operationsResourceGroupName, location)
-    : uniqueString(subscription().subscriptionId, operationsResourceGroupName),
-  6
-)
+var uniqueStringOperations = take(scopedUnique(namingConvention, subscription().subscriptionId, operationsResourceGroupName, location), namingPolicy.limits.uniqueSuffix)
+
 var effectiveSecretsKeyVaultNameOverride = !empty(secretsKeyVaultNameOverride)
   ? secretsKeyVaultNameOverride
   : namingConvention.?secretsKeyVaultNameOverride ?? ''
@@ -471,25 +367,11 @@ var effectiveEncryptionKeyVaultNameOverride = !empty(encryptionKeyVaultNameOverr
 // Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
 // kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
 // kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
-var secretsKeyVaultName = !empty(effectiveSecretsKeyVaultNameOverride)
-  ? effectiveSecretsKeyVaultNameOverride
-  : take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'sec-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
+var secretsKeyVaultName = !empty(effectiveSecretsKeyVaultNameOverride) ? effectiveSecretsKeyVaultNameOverride : resourceName(namingConvention, 'secretsKeyVault', cnv_loc, identifier, uniqueStringOperations)
 
-var encryptionKeyVaultName = !empty(effectiveEncryptionKeyVaultNameOverride)
-  ? effectiveEncryptionKeyVaultNameOverride
-  : take(kvSanitize(buildCustomName(filter(cnv_components, s => s != 'none'), cnv_delimiter, cnv_rtCodes.keyVaults, 'enc-${uniqueStringOperations}', cnv_loc, namingConvention.?freeform1 ?? '', namingConvention.?environment ?? '', namingConvention.?freeform2 ?? '', !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd')), 24)
+var encryptionKeyVaultName = !empty(effectiveEncryptionKeyVaultNameOverride) ? effectiveEncryptionKeyVaultNameOverride : resourceName(namingConvention, 'encryptionKeyVault', cnv_loc, identifier, uniqueStringOperations)
 
-var fslogixBackupVaultName = buildCustomName(
-  filter(cnv_components, component => component != 'none'),
-  cnv_delimiter,
-  cnv_rtCodes.?recoveryServicesVaults ?? resourceAbbreviations.recoveryServicesVaults,
-  'files',
-  cnv_loc,
-  namingConvention.?freeform1 ?? '',
-  namingConvention.?environment ?? '',
-  namingConvention.?freeform2 ?? '',
-  !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-)
+var fslogixBackupVaultName = resourceName(namingConvention, 'filesBackupVault', cnv_loc, identifier, '')
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
@@ -604,6 +486,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
     privateEndpointNameConv: privateEndpointNameConv
     privateEndpointNICNameConv: privateEndpointNICNameConv
     permittedIPs: permittedIPs
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     tags: tags
   }
@@ -655,7 +538,10 @@ output secretsKeyVaultName string = createSecretsKeyVault
   ? secretsKeyVaultName
   : (!empty(existingSecretsKeyVaultResourceId) ? last(split(existingSecretsKeyVaultResourceId, '/')) : '')
 
-@description('The resource ID of the Secrets Key Vault. Pass as "existingCredentialsKeyVaultResourceId" to the standard host pool, or "credentialsKeyVaultResourceId" to the automated host pool, Session Host Replacer, and Session Hosts add-on deployments.')
+// The resource ID of the Secrets Key Vault. Pass as "existingCredentialsKeyVaultResourceId" to the
+// standard host pool, or "credentialsKeyVaultResourceId" to the automated host pool, Session Host
+// Replacer, and Session Hosts add-on deployments.
+@description('Secrets Key Vault resource ID for credentials access by consuming host-pool and session-host deployments.')
 output secretsKeyVaultResourceId string = createSecretsKeyVault
   ? keyVaults.outputs.secretsKeyVaultResourceId
   : existingSecretsKeyVaultResourceId
@@ -679,7 +565,10 @@ output monitoringResourceGroupName string = deployMonitoring ? monitoringResourc
 @description('The name of the Log Analytics Workspace. Empty if not deployed.')
 output logAnalyticsWorkspaceName string = deployMonitoring ? logAnalyticsWorkspaceName : ''
 
-@description('The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as "existingLogAnalyticsWorkspaceResourceId" to the host pool deployment and "logAnalyticsWorkspaceResourceId" to the Image Management deployment.')
+// The resource ID of the Log Analytics Workspace. Empty if not deployed. Pass as
+// "existingLogAnalyticsWorkspaceResourceId" to the host pool deployment and
+// "logAnalyticsWorkspaceResourceId" to the Image Management deployment.
+@description('Shared Log Analytics workspace resource ID; empty when not deployed. Supply to host-pool and Image Management diagnostic settings.')
 output logAnalyticsWorkspaceResourceId string = effectiveLogAnalyticsWorkspaceResourceId
 
 @description('The resource ID of the AVD Insights Data Collection Rule. Empty if the Log Analytics Workspace is not deployed. Pass as "existingAVDInsightsDataCollectionRuleResourceId" to the host pool deployment.')
@@ -709,7 +598,10 @@ output avdControlPlaneResourceGroupName string = manageAvdWorkspace ? avdWorkspa
 @description('The resource ID of the AVD control-plane resource group. For an adopted workspace, this is the workspace existing resource group. Empty when workspace management is disabled.')
 output avdControlPlaneResourceGroupResourceId string = manageAvdWorkspace ? avdWorkspace!.outputs.controlPlaneResourceGroupResourceId : ''
 
-@description('The resource ID of the shared FSLogix Recovery Services vault. Pass as "existingFilesBackupVaultResourceId" to standard or automated pooled host pool deployments, or "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.')
+// The resource ID of the shared FSLogix Recovery Services vault. Pass as
+// "existingFilesBackupVaultResourceId" to standard or automated pooled host pool deployments, or
+// "recoveryServicesVaultResourceId" to the FSLogix Storage add-on.
+@description('Shared FSLogix Recovery Services vault resource ID, for reuse by pooled host pools and the standalone FSLogix Storage add-on.')
 output fslogixBackupVaultResourceId string = effectiveFSLogixBackupVaultResourceId
 
 @description('The name of the shared Azure Files snapshot backup policy. Pass as "existingFilesBackupPolicyName" to standard or automated pooled host pool deployments, or "fileSharePolicyName" to the FSLogix Storage add-on.')

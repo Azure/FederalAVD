@@ -1,5 +1,9 @@
+metadata name = 'Template Spec role assignments'
+metadata description = 'Applies deterministic role assignments at an existing Template Spec in the deployment resource group.'
+
 import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
 
+@description('Required. Name of the existing parent Template Spec in the deployment resource group.')
 param templateSpecName string
 
 @description('Role assignments to apply to this template spec.')
@@ -28,4 +32,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   }
 ]
 
+@description('Array of role assignment resource IDs in the same order as the assignments input.')
 output resourceIds array = [for (assignment, i) in formattedAssignments: roleAssignment[i].id]

@@ -1,4 +1,9 @@
+metadata name = 'Guest Attestation remediation template'
+metadata description = 'Deploys the Guest Attestation extension on an existing VM in the deployment resource group for Azure Policy remediation.'
+
+@description('Required. Azure region for the resources deployed by this module.')
 param location string
+@description('Required. Name of the existing VM in the deployment resource group.')
 param virtualMachineName string
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' existing = {

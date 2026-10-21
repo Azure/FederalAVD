@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "2234385566505785059"
+      "version": "0.48.1.52935",
+      "templateHash": "2468172978193622000"
     }
   },
   "definitions": {
@@ -162,20 +162,31 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "9672734252890707801"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "9072655300844897940"
+            },
+            "name": "Resource group",
+            "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group to deploy."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resource group; must match the parent resource where required."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the resource group."
+              }
             }
           },
           "resources": [
@@ -190,10 +201,16 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the resource group."
+              },
               "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the resource group."
+              },
               "value": "[parameters('name')]"
             }
           }
@@ -227,21 +244,32 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "92643184089507860"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "7465970199175626474"
+            },
+            "name": "User-assigned managed identity",
+            "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
           },
           "parameters": {
             "name": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the user-assigned managed identity to deploy."
+              }
             },
             "location": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]"
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the user-assigned managed identity; defaults to the deployment resource group region."
+              }
             },
             "tags": {
               "type": "object",
-              "defaultValue": {}
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the user-assigned managed identity."
+              }
             }
           },
           "resources": [
@@ -256,18 +284,30 @@
           "outputs": {
             "resourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the user-assigned managed identity."
+              },
               "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
             },
             "name": {
               "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the user-assigned managed identity."
+              },
               "value": "[parameters('name')]"
             },
             "clientId": {
               "type": "string",
+              "metadata": {
+                "description": "Application client ID of the user-assigned managed identity, for identity selection by clients."
+              },
               "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').clientId]"
             },
             "principalId": {
               "type": "string",
+              "metadata": {
+                "description": "Microsoft Entra service principal object ID of the user-assigned managed identity, for granting permissions."
+              },
               "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
             }
           }
@@ -292,14 +332,19 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "8731312306607228401"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "2448076473703730583"
+            },
+            "name": "VM system identity policy definition",
+            "description": "Defines a subscription Modify policy adding system-assigned identity to VMs while retaining user-assigned identity type; the caller owns assignment and remediation permissions."
           },
           "parameters": {
             "policyDefinitionName": {
               "type": "string",
-              "defaultValue": "avdSessionHostSystemAssignedIdentity-Modify"
+              "defaultValue": "avdSessionHostSystemAssignedIdentity-Modify",
+              "metadata": {
+                "description": "Optional. Name of the subscription policy definition to create or update."
+              }
             }
           },
           "resources": [
@@ -363,6 +408,9 @@
           "outputs": {
             "policyDefinitionResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the subscription policy definition created by this module."
+              },
               "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
             }
           }
@@ -413,9 +461,11 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "7964603770913061079"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "13100686071530401455"
+            },
+            "name": "VM Applications policy orchestration",
+            "description": "Validates an authoritative Gallery application list and resource-group ownership, creates its Modify definition and assignment, grants scoped permissions, and optionally remediates existing session hosts."
           },
           "definitions": {
             "vmApplicationAssignmentType": {
@@ -482,7 +532,7 @@
               },
               "maxLength": 25,
               "metadata": {
-                "description": "Required. Authoritative ordered list of Azure Compute Gallery application version references. References may select an immutable semantic version or use /versions/latest."
+                "description": "Required. Authoritative ordered list of 1-25 Gallery application references using immutable versions or /versions/latest; one version per application."
               }
             },
             "createRemediation": {
@@ -503,7 +553,7 @@
               "type": "string",
               "defaultValue": "FederalAVD",
               "metadata": {
-                "description": "Optional. Stable ownership label recorded in policy assignment metadata. Deployments targeting the same resource group jointly manage the same deterministic assignment."
+                "description": "Optional. Stable ownership label for the assignment; must match any existing session-host policy owner tag on the target resource group."
               }
             }
           },
@@ -550,20 +600,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "9672734252890707801"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "9072655300844897940"
+                    },
+                    "name": "Resource group",
+                    "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the resource group to deploy."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region for the resource group; must match the parent resource where required."
+                      }
                     },
                     "tags": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the resource group."
+                      }
                     }
                   },
                   "resources": [
@@ -578,10 +639,16 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
                     },
                     "name": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the resource group."
+                      },
                       "value": "[parameters('name')]"
                     }
                   }
@@ -608,22 +675,33 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "12715987669719701126"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "10548625128021386802"
+                    },
+                    "name": "VM Applications policy definition",
+                    "description": "Defines a subscription Modify policy maintaining the authoritative ordered Gallery application references, including latest-version matching, on VMs; the caller owns assignment and permissions."
                   },
                   "parameters": {
                     "policyDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostVmApplication-Modify"
+                      "defaultValue": "avdSessionHostVmApplication-Modify",
+                      "metadata": {
+                        "description": "Optional. Name of the subscription policy definition to create or update."
+                      }
                     },
                     "policyDefinitionDisplayName": {
                       "type": "string",
-                      "defaultValue": "Configure VM Applications on AVD session hosts"
+                      "defaultValue": "Configure VM Applications on AVD session hosts",
+                      "metadata": {
+                        "description": "Optional. Display name stored on the subscription policy definition."
+                      }
                     },
                     "policyDefinitionDescription": {
                       "type": "string",
-                      "defaultValue": "Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update."
+                      "defaultValue": "Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update.",
+                      "metadata": {
+                        "description": "Optional. Description stored on the subscription policy definition; does not change its policy rule."
+                      }
                     }
                   },
                   "resources": [
@@ -745,6 +823,9 @@
                   "outputs": {
                     "policyDefinitionResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subscription policy definition created by this module."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
                     }
                   }
@@ -782,15 +863,17 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "888486078838877110"
+                    },
+                    "name": "Resource group role assignment",
+                    "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
                   },
                   "parameters": {
                     "roleDefinitionId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                        "description": "Role definition GUID or fully-qualified resource ID."
                       }
                     },
                     "principalId": {
@@ -841,6 +924,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group role assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
                     }
                   }
@@ -884,9 +970,11 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "11685605297839319140"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3671964223659038964"
+                    },
+                    "name": "Compute gallery role assignments",
+                    "description": "Applies deterministic role assignments at an existing compute gallery in the deployment resource group."
                   },
                   "definitions": {
                     "roleAssignmentType": {
@@ -895,7 +983,7 @@
                         "roleDefinitionId": {
                           "type": "string",
                           "metadata": {
-                            "description": "Role definition GUID or fully-qualified resource ID (e.g. \"b24988ac-...\" or \"/providers/Microsoft.Authorization/roleDefinitions/...\")."
+                            "description": "Role definition GUID or fully-qualified resource ID."
                           }
                         },
                         "principalId": {
@@ -988,6 +1076,9 @@
                   "outputs": {
                     "resourceIds": {
                       "type": "array",
+                      "metadata": {
+                        "description": "Array of role assignment resource IDs in the same order as the assignments input."
+                      },
                       "copy": {
                         "count": "[length(variables('formattedAssignments'))]",
                         "input": "[extensionResourceId(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Compute/galleries', parameters('galleryName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
@@ -1032,9 +1123,11 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "15909032788858433822"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "14019292255609123995"
+                    },
+                    "name": "VM Applications policy assignment",
+                    "description": "Assigns the supplied VM Application Modify definition at the dedicated session-host resource group with ownership metadata and an optional deterministic remediation task."
                   },
                   "definitions": {
                     "vmApplicationAssignmentType": {
@@ -1070,26 +1163,44 @@
                   },
                   "parameters": {
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region for the resources deployed by this module."
+                      }
                     },
                     "policyIdentityResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+                      }
                     },
                     "policyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing policy definition or initiative to assign."
+                      }
                     },
                     "vmApplications": {
                       "type": "array",
                       "items": {
                         "$ref": "#/definitions/vmApplicationAssignmentType"
+                      },
+                      "metadata": {
+                        "description": "Required. Authoritative ordered array of objects with packageReferenceId, order, and treatFailureAsDeploymentFailure for Gallery application versions."
                       }
                     },
                     "createRemediation": {
                       "type": "bool",
-                      "defaultValue": false
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Optional. Whether to create deterministic remediation tasks for existing noncompliant resources."
+                      }
                     },
                     "ownerId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Stable ownership label recorded in policy assignment metadata."
+                      }
                     }
                   },
                   "resources": {
@@ -1147,10 +1258,16 @@
                   "outputs": {
                     "policyAssignmentResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the session-host policy assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/policyAssignments', 'avd-sh-vm-applications')]"
                     },
                     "remediationResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the remediation task, or an empty string when remediation is not requested."
+                      },
                       "value": "[if(parameters('createRemediation'), resourceId('Microsoft.PolicyInsights/remediations', 'avd-sh-vm-applications'), '')]"
                     }
                   }
@@ -1167,22 +1284,37 @@
           "outputs": {
             "policyDefinitionResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the subscription policy definition created by this module."
+              },
               "value": "[reference('policyDefinition').outputs.policyDefinitionResourceId.value]"
             },
             "policyAssignmentResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the session-host policy assignment."
+              },
               "value": "[reference('policyAssignment').outputs.policyAssignmentResourceId.value]"
             },
             "policyIdentityResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "The supplied policy user-assigned identity resource ID, returned unchanged."
+              },
               "value": "[parameters('policyIdentityResourceId')]"
             },
             "remediationResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the remediation task, or an empty string when remediation is not requested."
+              },
               "value": "[reference('policyAssignment').outputs.remediationResourceId.value]"
             },
             "targetResourceGroupResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the existing dedicated session-host resource group governed by the assignment."
+              },
               "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('targetResourceGroupName'))]"
             }
           }
@@ -1241,43 +1373,75 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "6530621621173945202"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "14878786381988423075"
+            },
+            "name": "Session host monitoring policy orchestration",
+            "description": "Composes monitoring definitions, an initiative, scoped identity permissions, and assignments for a dedicated session-host resource group, with optional system identity assignment and remediation tasks."
           },
           "parameters": {
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             },
             "targetResourceGroupName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing dedicated session-host resource group in this subscription; unrelated resources must not share this policy boundary."
+              }
             },
             "policyIdentityResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+              }
             },
             "policyIdentityPrincipalId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Principal object ID of the policy user-assigned identity for role assignments."
+              }
             },
             "systemIdentityPolicyDefinitionResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing system-assigned identity Modify definition; used when assignSystemIdentityPolicy is true."
+              }
             },
             "dataCollectionRuleResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing data collection rule to associate with session-host VMs."
+              }
             },
             "dataCollectionEndpointResourceId": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of an existing data collection endpoint; empty skips its association."
+              }
             },
             "assignSystemIdentityPolicy": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to assign the supplied system-assigned identity policy before the monitoring initiative."
+              }
             },
             "createRemediation": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Whether to create deterministic remediation tasks for existing noncompliant resources."
+              }
             },
             "ownerId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Stable ownership label recorded in policy assignment metadata."
+              }
             }
           },
           "variables": {
@@ -1302,14 +1466,19 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "12019150802888863876"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "9183363769846850671"
+                    },
+                    "name": "Azure Monitor Agent policy definition",
+                    "description": "Defines a subscription DeployIfNotExists policy for Azure Monitor Agent on VMs with system-assigned identity; assignment and remediation permissions are owned by the caller."
                   },
                   "parameters": {
                     "policyDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostAzureMonitorAgent-DeployIfNotExists"
+                      "defaultValue": "avdSessionHostAzureMonitorAgent-DeployIfNotExists",
+                      "metadata": {
+                        "description": "Optional. Name of the subscription policy definition to create or update."
+                      }
                     }
                   },
                   "variables": {
@@ -1319,16 +1488,24 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.46.1.21595",
-                          "templateHash": "5763277511451240335"
-                        }
+                          "version": "0.48.1.52935",
+                          "templateHash": "12688311346943431116"
+                        },
+                        "name": "Azure Monitor Agent remediation template",
+                        "description": "Deploys the Azure Monitor Windows Agent extension on an existing VM in the deployment resource group for Azure Policy remediation."
                       },
                       "parameters": {
                         "location": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Azure region for the resources deployed by this module."
+                          }
                         },
                         "virtualMachineName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the existing VM in the deployment resource group."
+                          }
                         }
                       },
                       "resources": [
@@ -1435,6 +1612,9 @@
                   "outputs": {
                     "policyDefinitionResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subscription policy definition created by this module."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
                     }
                   }
@@ -1458,14 +1638,19 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "17383755443359706025"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "198065477472137362"
+                    },
+                    "name": "Monitoring association policy definition",
+                    "description": "Defines a subscription DeployIfNotExists policy associating VMs with a selected data collection rule or endpoint through an embedded remediation template."
                   },
                   "parameters": {
                     "policyDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostMonitoringAssociation-DeployIfNotExists"
+                      "defaultValue": "avdSessionHostMonitoringAssociation-DeployIfNotExists",
+                      "metadata": {
+                        "description": "Optional. Name of the subscription policy definition to create or update."
+                      }
                     }
                   },
                   "variables": {
@@ -1475,19 +1660,30 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.46.1.21595",
-                          "templateHash": "14413757828628509241"
-                        }
+                          "version": "0.48.1.52935",
+                          "templateHash": "10749179182174799801"
+                        },
+                        "name": "Monitoring association remediation template",
+                        "description": "Creates a data collection rule or endpoint association on an existing VM in the deployment resource group according to the supplied association type."
                       },
                       "parameters": {
                         "associationType": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Association selector: DataCollectionRule or DataCollectionEndpoint."
+                          }
                         },
                         "monitoringResourceId": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Resource ID of the existing data collection rule or endpoint selected by associationType."
+                          }
                         },
                         "virtualMachineName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the existing VM in the deployment resource group."
+                          }
                         }
                       },
                       "variables": {
@@ -1605,6 +1801,9 @@
                   "outputs": {
                     "policyDefinitionResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subscription policy definition created by this module."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
                     }
                   }
@@ -1635,20 +1834,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "5076792954559767527"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "16611394882521868833"
+                    },
+                    "name": "Session host monitoring initiative",
+                    "description": "Creates a subscription initiative combining supplied Agent and association definitions for Azure Monitor Agent, a data collection rule, and an optional data collection endpoint."
                   },
                   "parameters": {
                     "policySetDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostMonitoring"
+                      "defaultValue": "avdSessionHostMonitoring",
+                      "metadata": {
+                        "description": "Optional. Name of the subscription monitoring initiative to create or update."
+                      }
                     },
                     "azureMonitorAgentPolicyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing Azure Monitor Agent DeployIfNotExists definition included in the initiative."
+                      }
                     },
                     "monitoringAssociationPolicyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing monitoring association definition reused for the DCR and optional DCE initiative members."
+                      }
                     }
                   },
                   "resources": [
@@ -1737,6 +1947,9 @@
                   "outputs": {
                     "policySetDefinitionResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subscription monitoring initiative created by this module."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Authorization/policySetDefinitions', parameters('policySetDefinitionName'))]"
                     }
                   }
@@ -1777,15 +1990,17 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "888486078838877110"
+                    },
+                    "name": "Resource group role assignment",
+                    "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
                   },
                   "parameters": {
                     "roleDefinitionId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                        "description": "Role definition GUID or fully-qualified resource ID."
                       }
                     },
                     "principalId": {
@@ -1836,6 +2051,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group role assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
                     }
                   }
@@ -1872,15 +2090,17 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "888486078838877110"
+                    },
+                    "name": "Resource group role assignment",
+                    "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
                   },
                   "parameters": {
                     "roleDefinitionId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                        "description": "Role definition GUID or fully-qualified resource ID."
                       }
                     },
                     "principalId": {
@@ -1931,6 +2151,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group role assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
                     }
                   }
@@ -1962,16 +2185,24 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "15048751448252139066"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "14344446969397153080"
+                    },
+                    "name": "Data collection rule policy permissions",
+                    "description": "Grants Reader on an existing data collection rule in the deployment resource group to the supplied policy identity principal."
                   },
                   "parameters": {
                     "dataCollectionRuleName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the existing data collection rule in the deployment resource group."
+                      }
                     },
                     "principalId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Principal object ID of the policy managed identity receiving the scoped role assignment."
+                      }
                     }
                   },
                   "resources": [
@@ -2017,16 +2248,24 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "748117610762690948"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "7857031043293745810"
+                    },
+                    "name": "Data collection endpoint policy permissions",
+                    "description": "Grants Monitoring Contributor on an existing data collection endpoint in the deployment resource group to the supplied policy identity principal."
                   },
                   "parameters": {
                     "dataCollectionEndpointName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the data collection endpoint in the deployment resource group."
+                      }
                     },
                     "principalId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Principal object ID of the policy managed identity receiving the scoped role assignment."
+                      }
                     }
                   },
                   "resources": [
@@ -2096,39 +2335,68 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "319370662275706130"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "1760680025927106016"
+                    },
+                    "name": "Session host policy assignment",
+                    "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic policy assignment name within the dedicated session-host resource group."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region stored on the policy assignment for its managed identity."
+                      }
                     },
                     "policyIdentityResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+                      }
                     },
                     "policyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing policy definition or initiative to assign."
+                      }
                     },
                     "displayName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Human-readable display name for the policy assignment."
+                      }
                     },
                     "description": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Description recorded on the policy assignment."
+                      }
                     },
                     "parameters": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Policy parameter envelope keyed by definition parameter name, with each entry shaped as { value: ... }."
+                      }
                     },
                     "nonComplianceMessage": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Assignment-wide noncompliance message; empty omits custom messages."
+                      }
                     },
                     "ownerId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Stable ownership label recorded in policy assignment metadata."
+                      }
                     }
                   },
                   "resources": [
@@ -2161,6 +2429,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group policy assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
                     }
                   }
@@ -2228,39 +2499,68 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "319370662275706130"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "1760680025927106016"
+                    },
+                    "name": "Session host policy assignment",
+                    "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic policy assignment name within the dedicated session-host resource group."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region stored on the policy assignment for its managed identity."
+                      }
                     },
                     "policyIdentityResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+                      }
                     },
                     "policyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing policy definition or initiative to assign."
+                      }
                     },
                     "displayName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Human-readable display name for the policy assignment."
+                      }
                     },
                     "description": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Description recorded on the policy assignment."
+                      }
                     },
                     "parameters": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Policy parameter envelope keyed by definition parameter name, with each entry shaped as { value: ... }."
+                      }
                     },
                     "nonComplianceMessage": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Assignment-wide noncompliance message; empty omits custom messages."
+                      }
                     },
                     "ownerId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Stable ownership label recorded in policy assignment metadata."
+                      }
                     }
                   },
                   "resources": [
@@ -2293,6 +2593,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group policy assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
                     }
                   }
@@ -2332,20 +2635,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3597061517120723013"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3866258938335596994"
+                    },
+                    "name": "Session host policy remediation task",
+                    "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic remediation task name within the assignment resource group."
+                      }
                     },
                     "policyAssignmentId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing resource-group policy assignment to remediate."
+                      }
                     },
                     "policyDefinitionReferenceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Initiative member reference ID to remediate; leave empty for an individual policy definition."
+                      }
                     }
                   },
                   "resources": [
@@ -2363,6 +2677,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group remediation task."
+                      },
                       "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
                     }
                   }
@@ -2400,20 +2717,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3597061517120723013"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3866258938335596994"
+                    },
+                    "name": "Session host policy remediation task",
+                    "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic remediation task name within the assignment resource group."
+                      }
                     },
                     "policyAssignmentId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing resource-group policy assignment to remediate."
+                      }
                     },
                     "policyDefinitionReferenceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Initiative member reference ID to remediate; leave empty for an individual policy definition."
+                      }
                     }
                   },
                   "resources": [
@@ -2431,6 +2759,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group remediation task."
+                      },
                       "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
                     }
                   }
@@ -2469,20 +2800,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3597061517120723013"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3866258938335596994"
+                    },
+                    "name": "Session host policy remediation task",
+                    "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic remediation task name within the assignment resource group."
+                      }
                     },
                     "policyAssignmentId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing resource-group policy assignment to remediate."
+                      }
                     },
                     "policyDefinitionReferenceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Initiative member reference ID to remediate; leave empty for an individual policy definition."
+                      }
                     }
                   },
                   "resources": [
@@ -2500,6 +2842,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group remediation task."
+                      },
                       "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
                     }
                   }
@@ -2538,20 +2883,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3597061517120723013"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3866258938335596994"
+                    },
+                    "name": "Session host policy remediation task",
+                    "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic remediation task name within the assignment resource group."
+                      }
                     },
                     "policyAssignmentId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing resource-group policy assignment to remediate."
+                      }
                     },
                     "policyDefinitionReferenceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Initiative member reference ID to remediate; leave empty for an individual policy definition."
+                      }
                     }
                   },
                   "resources": [
@@ -2569,6 +2925,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group remediation task."
+                      },
                       "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
                     }
                   }
@@ -2583,16 +2942,25 @@
           "outputs": {
             "monitoringPolicyAssignmentResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the monitoring initiative assignment in the target session-host resource group."
+              },
               "value": "[reference('monitoringAssignment').outputs.resourceId.value]"
             },
             "identityPolicyAssignmentResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the system-assigned identity policy assignment, or an empty string when its assignment is disabled."
+              },
               "value": "[if(parameters('assignSystemIdentityPolicy'), reference('identityAssignment').outputs.resourceId.value, '')]"
             },
             "remediationResourceIds": {
               "type": "array",
               "items": {
                 "type": "string"
+              },
+              "metadata": {
+                "description": "Remediation task resource IDs in identity, Agent, DCR, and optional DCE order; empty when remediation is disabled."
               },
               "value": "[if(parameters('createRemediation'), concat(if(parameters('assignSystemIdentityPolicy'), createArray(reference('identityRemediation').outputs.resourceId.value), createArray()), createArray(reference('agentRemediation').outputs.resourceId.value, reference('dcrRemediation').outputs.resourceId.value), if(not(empty(parameters('dataCollectionEndpointResourceId'))), createArray(reference('dceRemediation').outputs.resourceId.value), createArray())), createArray())]"
             }
@@ -2643,29 +3011,49 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "15230097123546185902"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "13401529006567641089"
+            },
+            "name": "Guest Attestation policy orchestration",
+            "description": "Creates the subscription Guest Attestation policy definition, grants remediation permissions, assigns it to a dedicated session-host resource group, and optionally creates a remediation task."
           },
           "parameters": {
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             },
             "targetResourceGroupName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing dedicated session-host resource group in this subscription; unrelated resources must not share this policy boundary."
+              }
             },
             "policyIdentityResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+              }
             },
             "policyIdentityPrincipalId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Principal object ID of the policy user-assigned identity for role assignments."
+              }
             },
             "createRemediation": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Whether to create deterministic remediation tasks for existing noncompliant resources."
+              }
             },
             "ownerId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Stable ownership label recorded in policy assignment metadata."
+              }
             }
           },
           "resources": {
@@ -2686,14 +3074,19 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "6063839764390554017"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3263178543152150426"
+                    },
+                    "name": "Guest Attestation policy definition",
+                    "description": "Defines a subscription DeployIfNotExists policy for a successfully provisioned Guest Attestation extension on Trusted Launch and Confidential VMs; the caller owns assignment and permissions."
                   },
                   "parameters": {
                     "policyDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostGuestAttestation-DeployIfNotExists"
+                      "defaultValue": "avdSessionHostGuestAttestation-DeployIfNotExists",
+                      "metadata": {
+                        "description": "Optional. Name of the subscription policy definition to create or update."
+                      }
                     }
                   },
                   "variables": {
@@ -2703,16 +3096,24 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.46.1.21595",
-                          "templateHash": "18041353220687360778"
-                        }
+                          "version": "0.48.1.52935",
+                          "templateHash": "18052079899844170519"
+                        },
+                        "name": "Guest Attestation remediation template",
+                        "description": "Deploys the Guest Attestation extension on an existing VM in the deployment resource group for Azure Policy remediation."
                       },
                       "parameters": {
                         "location": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Azure region for the resources deployed by this module."
+                          }
                         },
                         "virtualMachineName": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the existing VM in the deployment resource group."
+                          }
                         }
                       },
                       "resources": [
@@ -2836,6 +3237,9 @@
                   "outputs": {
                     "policyDefinitionResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subscription policy definition created by this module."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
                     }
                   }
@@ -2872,15 +3276,17 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "888486078838877110"
+                    },
+                    "name": "Resource group role assignment",
+                    "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
                   },
                   "parameters": {
                     "roleDefinitionId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                        "description": "Role definition GUID or fully-qualified resource ID."
                       }
                     },
                     "principalId": {
@@ -2931,6 +3337,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group role assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
                     }
                   }
@@ -2986,39 +3395,68 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "319370662275706130"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "1760680025927106016"
+                    },
+                    "name": "Session host policy assignment",
+                    "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic policy assignment name within the dedicated session-host resource group."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region stored on the policy assignment for its managed identity."
+                      }
                     },
                     "policyIdentityResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+                      }
                     },
                     "policyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing policy definition or initiative to assign."
+                      }
                     },
                     "displayName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Human-readable display name for the policy assignment."
+                      }
                     },
                     "description": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Description recorded on the policy assignment."
+                      }
                     },
                     "parameters": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Policy parameter envelope keyed by definition parameter name, with each entry shaped as { value: ... }."
+                      }
                     },
                     "nonComplianceMessage": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Assignment-wide noncompliance message; empty omits custom messages."
+                      }
                     },
                     "ownerId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Stable ownership label recorded in policy assignment metadata."
+                      }
                     }
                   },
                   "resources": [
@@ -3051,6 +3489,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group policy assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
                     }
                   }
@@ -3086,20 +3527,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3597061517120723013"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3866258938335596994"
+                    },
+                    "name": "Session host policy remediation task",
+                    "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic remediation task name within the assignment resource group."
+                      }
                     },
                     "policyAssignmentId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing resource-group policy assignment to remediate."
+                      }
                     },
                     "policyDefinitionReferenceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Initiative member reference ID to remediate; leave empty for an individual policy definition."
+                      }
                     }
                   },
                   "resources": [
@@ -3117,6 +3569,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group remediation task."
+                      },
                       "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
                     }
                   }
@@ -3130,10 +3585,16 @@
           "outputs": {
             "policyAssignmentResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the session-host policy assignment."
+              },
               "value": "[reference('assignment').outputs.resourceId.value]"
             },
             "remediationResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the remediation task, or an empty string when remediation is not requested."
+              },
               "value": "[if(parameters('createRemediation'), reference('remediation').outputs.resourceId.value, '')]"
             }
           }
@@ -3185,33 +3646,56 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.46.1.21595",
-              "templateHash": "1864469326325678141"
-            }
+              "version": "0.48.1.52935",
+              "templateHash": "11529537720838451368"
+            },
+            "name": "Managed disk network policy orchestration",
+            "description": "Creates the subscription managed-disk network-access policy definition and optionally provisions resource-group assignment, remediation identity permissions, and remediation."
           },
           "parameters": {
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             },
             "targetResourceGroupName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing dedicated session-host resource group in this subscription; unrelated resources must not share this policy boundary."
+              }
             },
             "policyIdentityResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+              }
             },
             "policyIdentityPrincipalId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Principal object ID of the policy user-assigned identity for role assignments."
+              }
             },
             "createAssignment": {
               "type": "bool",
-              "defaultValue": true
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to create the resource-group policy assignment and its remediation permissions; the subscription definition is always created."
+              }
             },
             "createRemediation": {
               "type": "bool",
-              "defaultValue": false
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Whether to create deterministic remediation tasks for existing noncompliant resources."
+              }
             },
             "ownerId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Stable ownership label recorded in policy assignment metadata."
+              }
             }
           },
           "resources": {
@@ -3232,14 +3716,19 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "7389546299358214529"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "5922102044400521638"
+                    },
+                    "name": "Managed disk network policy definition",
+                    "description": "Defines a subscription Modify policy that sets managed disk public network access to Disabled and network access policy to DenyAll; assign only within the dedicated session-host resource group."
                   },
                   "parameters": {
                     "policyDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostManagedDiskNetworkAccess-Modify"
+                      "defaultValue": "avdSessionHostManagedDiskNetworkAccess-Modify",
+                      "metadata": {
+                        "description": "Optional. Name of the subscription policy definition to create or update."
+                      }
                     }
                   },
                   "resources": [
@@ -3316,6 +3805,9 @@
                   "outputs": {
                     "policyDefinitionResourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subscription policy definition created by this module."
+                      },
                       "value": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('policyDefinitionName'))]"
                     }
                   }
@@ -3353,15 +3845,17 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "4327984477459593833"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "888486078838877110"
+                    },
+                    "name": "Resource group role assignment",
+                    "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
                   },
                   "parameters": {
                     "roleDefinitionId": {
                       "type": "string",
                       "metadata": {
-                        "description": "Role definition GUID or fully-qualified resource ID (e.g. \"/providers/Microsoft.Authorization/roleDefinitions/c2f4ef07-...\")."
+                        "description": "Role definition GUID or fully-qualified resource ID."
                       }
                     },
                     "principalId": {
@@ -3412,6 +3906,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource group role assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, parameters('principalId'), variables('roleDefinitionIdVar')))]"
                     }
                   }
@@ -3468,39 +3965,68 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "319370662275706130"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "1760680025927106016"
+                    },
+                    "name": "Session host policy assignment",
+                    "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic policy assignment name within the dedicated session-host resource group."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region stored on the policy assignment for its managed identity."
+                      }
                     },
                     "policyIdentityResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing user-assigned identity used by Azure Policy for remediation."
+                      }
                     },
                     "policyDefinitionResourceId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing policy definition or initiative to assign."
+                      }
                     },
                     "displayName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Human-readable display name for the policy assignment."
+                      }
                     },
                     "description": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Description recorded on the policy assignment."
+                      }
                     },
                     "parameters": {
                       "type": "object",
-                      "defaultValue": {}
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Policy parameter envelope keyed by definition parameter name, with each entry shaped as { value: ... }."
+                      }
                     },
                     "nonComplianceMessage": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Assignment-wide noncompliance message; empty omits custom messages."
+                      }
                     },
                     "ownerId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Stable ownership label recorded in policy assignment metadata."
+                      }
                     }
                   },
                   "resources": [
@@ -3533,6 +4059,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group policy assignment."
+                      },
                       "value": "[resourceId('Microsoft.Authorization/policyAssignments', parameters('name'))]"
                     }
                   }
@@ -3568,20 +4097,31 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.46.1.21595",
-                      "templateHash": "3597061517120723013"
-                    }
+                      "version": "0.48.1.52935",
+                      "templateHash": "3866258938335596994"
+                    },
+                    "name": "Session host policy remediation task",
+                    "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
                   },
                   "parameters": {
                     "name": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Deterministic remediation task name within the assignment resource group."
+                      }
                     },
                     "policyAssignmentId": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing resource-group policy assignment to remediate."
+                      }
                     },
                     "policyDefinitionReferenceId": {
                       "type": "string",
-                      "defaultValue": ""
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Initiative member reference ID to remediate; leave empty for an individual policy definition."
+                      }
                     }
                   },
                   "resources": [
@@ -3599,6 +4139,9 @@
                   "outputs": {
                     "resourceId": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource-group remediation task."
+                      },
                       "value": "[resourceId('Microsoft.PolicyInsights/remediations', parameters('name'))]"
                     }
                   }
@@ -3612,14 +4155,23 @@
           "outputs": {
             "policyDefinitionResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the subscription policy definition created by this module."
+              },
               "value": "[reference('definition').outputs.policyDefinitionResourceId.value]"
             },
             "policyAssignmentResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Resource ID of the managed-disk policy assignment, or an empty string when createAssignment is false."
+              },
               "value": "[if(parameters('createAssignment'), reference('assignment').outputs.resourceId.value, '')]"
             },
             "remediationResourceId": {
               "type": "string",
+              "metadata": {
+                "description": "Remediation task resource ID, or an empty string unless both assignment and remediation are requested."
+              },
               "value": "[if(and(parameters('createAssignment'), parameters('createRemediation')), reference('remediation').outputs.resourceId.value, '')]"
             }
           }

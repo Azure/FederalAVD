@@ -486,6 +486,15 @@ The deployment creates or uses an existing Function App:
 
 #### 4. Network Requirements for Zero Trust Networking
 
+`paasPublicNetworkAccess` independently selects `Disabled`, `EnabledWithRestrictions`, or `Enabled`
+for the Function App and runtime storage. `Auto` preserves historical parameter-file behavior.
+The Portal offers the three explicit choices, initially Disabled when Zero Trust networking is
+selected and Enabled otherwise. Public IP rules remain configured when Disabled and do not enable
+access. Restricted mode denies unmatched traffic even with no IPs, but retains the existing
+`AzureCloud` allowance for app/SCM and `AzureServices` bypass for storage. Storage trusted-service
+exceptions can still apply when Disabled. Existing Key Vaults and monitoring access are unchanged.
+See the [shared access-mode contract](../../../docs/parameters.md#paas-public-network-access).
+
 These resources are required only when Zero Trust networking (`privateEndpoint: true`) is enabled:
 
 1. **Function App outbound subnet**

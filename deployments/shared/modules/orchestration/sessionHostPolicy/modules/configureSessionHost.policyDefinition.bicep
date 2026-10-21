@@ -1,7 +1,13 @@
+metadata name = 'Session host configuration policy definition'
+metadata description = 'Defines a subscription DeployIfNotExists policy for the session-host initialization Run Command.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostConfiguration-DeployIfNotExists'
+@description('Optional. Display name stored on the subscription policy definition.')
 param policyDefinitionDisplayName string = 'Configure automated AVD session host virtual machines'
+@description('Optional. Description stored on the subscription policy definition; does not change its policy rule.')
 param policyDefinitionDescription string = 'Deploys a VM Run Command that configures the time zone, enables time zone redirection, optionally configures FSLogix, and expands the OS partition.'
 
 var configureSessionHostTemplate = loadJsonContent('templates/RunCommand/ConfigureSessionHost.json')
@@ -160,6 +166,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           roleDefinitionIds: [
             '/providers/Microsoft.Authorization/roleDefinitions/9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
           ]
+          // Compliance checks successful provisioning of this named command, not a script version.
           existenceCondition: {
             field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'
             equals: 'Succeeded'
@@ -223,4 +230,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

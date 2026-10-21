@@ -1,16 +1,23 @@
+metadata name = 'Compute input types'
+metadata description = 'Exports shared VM extension and gallery image replication input shapes. This type library does not deploy resources; consuming modules determine which optional fields are applied.'
+
 // Compute-specific shared type definitions.
 // Import in compute modules with:
 //   import { extensionType } from '../types/computeTypes.bicep'
 
+// Consuming modules determine which optional extension fields they forward to ARM.
 @export()
+@description('VM extension handler, upgrade options and public or protected settings.')
 type extensionType = {
   @description('Extension resource name. Must be unique within the VM.')
   name: string
 
-  @description('Extension handler publisher. E.g. Microsoft.Compute, Microsoft.Azure.Monitor.')
+  // Examples: Microsoft.Compute, Microsoft.Azure.Monitor.
+  @description('Extension handler publisher.')
   publisher: string
 
-  @description('Extension type name. E.g. JsonADDomainExtension, AzureMonitorWindowsAgent.')
+  // Examples: JsonADDomainExtension, AzureMonitorWindowsAgent.
+  @description('Extension type name.')
   type: string
 
   @description('Major.minor version string. E.g. "1.3". autoUpgradeMinorVersion applies to the minor part.')
@@ -31,11 +38,14 @@ type extensionType = {
 
   suppressFailures: bool?
 
-  @description('Optional. Names of other extensions in this array that must be provisioned before this one. ARM uses this to serialize extension deployment order within the same template.')
+  // When forwarded by the consuming module, ARM uses these names to serialize extension deployment
+  // within the same template. Declaring the field in this type does not itself enforce execution order.
+  @description('Optional. Names of extensions in the same array that must be provisioned before this one.')
   provisionAfterExtensions: string[]?
 }
 
 @export()
+@description('Regional image replication settings, including optional replica count, storage type and disk encryption configuration.')
 type galleryImageVersionTargetRegionType = {
   name: string
   regionalReplicaCount: int?

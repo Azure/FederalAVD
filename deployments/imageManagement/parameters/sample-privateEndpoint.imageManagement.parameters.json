@@ -11,6 +11,9 @@
     "storageNetworkAccess": {
       "value": "PrivateEndpoint"
     },
+    "paasPublicNetworkAccess": {
+      "value": "Disabled"
+    },
     "storageAllowSharedKeyAccess": {
       "value": false
     },

@@ -240,6 +240,18 @@ StateRAMP, IRS 1075, ISO 27001, OMB M-22-09 (federal Zero Trust), CISA ZTMM.
   to `customer/` rather than editing them in place.
 - **Bicep templates** are in `deployments/*/` alongside `.json` (ARM) equivalents. Both are kept
   in sync. Prefer editing `.bicep` source; the `.json` is generated.
+- **Always check generated-template and Template Spec size budgets after template changes.**
+  ARM's documented template limit is 4 MB; Template Specs have a separate approximately 2 MB
+  content limit. Measure UTF-8 serialized content, including the main template, Portal form,
+  linked artifacts, and publishing envelope, not only the Bicep source or ARM file size.
+  Run the size-budget tests in `tests/TemplateSpecs.Tests.ps1`, report remaining headroom,
+  and avoid repeated inlined expressions or duplicated policy/script data. Offline estimates
+  do not prove expanded deployment size or successful publication.
+- **Prefer detailed module documentation in Bicep source comments.** Explain intent,
+  ownership, prerequisites, sequencing, examples, and non-obvious limitations there;
+  comments are not transpiled into ARM. Keep emitted module metadata and parameter/output
+  descriptions concise but sufficient to use the interface correctly. Do not put all
+  explanatory prose in description decorators or duplicate it across nested templates.
 - **Parameter files** use the ARM template parameter schema. Nested `value` objects are normal.
 - **`downloads.json`** entries are merged at runtime: repo-provided base entries are overlaid with
   `customer/parameters/imageManagement/downloads.json`. Customer entries win on name collision.

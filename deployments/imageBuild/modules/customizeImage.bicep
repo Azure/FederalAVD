@@ -2,11 +2,17 @@ targetScope = 'resourceGroup'
 
 import { artifactCustomizationType, restartableArtifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 
-@description('The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only; NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus update-channel lockdown; None skips optimization (AirGapped still applies).')
+// The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only;
+// NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus
+// update-channel lockdown; None skips optimization (AirGapped still applies).
+@description('VDI optimization profile; None skips profile optimization but independent air-gapped settings can still apply.')
 @allowed(['None', 'NonPersistent-UpdatesOnly', 'NonPersistent-Full', 'Persistent'])
 param vdiOptimizationProfile string
 
-@description('When true, applies settings for air-gapped or internet-restricted environments: disables SmartScreen cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies independently of vdiOptimizationProfile, including when profile is None.')
+// When true, applies settings for air-gapped or internet-restricted environments: disables SmartScreen
+// cloud lookups, online font providers, Teredo IPv6, WER uploads, and DiagTrack telemetry. Applies
+// independently of vdiOptimizationProfile, including when profile is None.
+@description('Apply restricted-network optimization settings independently of vdiOptimizationProfile, including when it is None.')
 param vdiOptimizationAirGapped bool = false
 param appsToRemove string[]
 param cloud string

@@ -17,6 +17,7 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
 8. [Add-on naming](#add-on-naming)
 9. [Examples](#examples)
+10. [Maintaining the shared naming policy](#maintaining-the-shared-naming-policy)
 
 ---
 
@@ -40,9 +41,14 @@ For each resource, the engine substitutes:
 | `freeform1` / `freeform2` | Static free-text slots (e.g., organisation name, team) |
 | `none` | Ignored — removed from the output entirely |
 
-Empty-valued components are automatically removed before joining, so there are no leading, trailing, or doubled delimiters.
+Empty-valued top-level components are removed before joining. Separators inside component values are not removed by this step.
 
-**Naming is driven by a single parameter**, `namingConvention`, passed to each solution. The default value produces CAF-aligned names. When it is supplied with custom values, all resource names across the deployment are assembled from the same ordered component array — giving you a fully consistent naming convention in one place.
+Convention-generated names are driven by the shared naming policy and the `namingConvention` parameter. The policy owns defaults, role purposes, patterns, constraints and uniqueness recipes; the parameter supplies customer overrides. Explicit names, existing-resource IDs, provider-required names and lifecycle identifiers are not automatically rewritten.
+
+**Names follow the naming convention subject to resource-specific restrictions.**
+The delimiter controls component assembly, but it is not necessarily preserved in
+the final resource name. For example, Key Vault formatting converts underscores
+and dots to hyphens, while storage account formatting removes separators.
 
 ---
 
@@ -299,14 +305,27 @@ You never set `purpose` manually. The Bicep engine assigns the correct purpose s
 
 Some Azure resource types impose naming constraints that override the standard component assembly:
 
-### Key Vault — 24-character limit
+### Key Vault — permitted characters and 24-character limit
+
+[Azure Key Vault naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftkeyvault)
+require globally unique names of 3–24 alphanumeric or hyphen characters, starting
+with a letter and ending with a letter or number, without consecutive hyphens.
+Hyphens are the only permitted punctuation; using no delimiter is also valid.
+
+The shared engine first assembles components and purpose parts using the
+configured delimiter, then converts `_` and `.` to `-` and applies the length
+limit. Thus `-`, `_`, and `.` conventions produce hyphen-separated vault names;
+an empty delimiter produces joined components without inserted separators.
+This formatting is not complete name validation: arbitrary delimiters such as
+`--`, invalid component characters, or truncation can still produce invalid names.
+Complete name overrides must independently satisfy Azure's rules.
 
 Key Vault names are capped at **24 characters**. The unique suffix is **embedded in the `purpose` slot** rather than appended after assembly. This guarantees a consistent position for the unique token in the final name regardless of the component ordering:
 
 - RT-first default: `kv-avd-sec-d527e9-use` (unique is the 3rd component, before location)
 - RT-last: `avd-sec-d527e9-use2-kv` (unique is part of the 2nd component, before location and RT)
 
-The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
+The purpose joins `sec` or `enc` with the unique token using the configured delimiter (`sec-{unique}` or `enc-{unique}` with the default `-`). The full name is assembled, normalized for Key Vault, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
 
 The `uniqueString()` seed is:
 
@@ -504,7 +523,7 @@ SHNAME  →  avdhost001
 
 > **Note:** The generated KV name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). Portal deployments require complete Key Vault name overrides so meaningful trailing components are not silently lost.
 
-### Example 5 — Underscore delimiter (no hyphens in names)
+### Example 5 — Underscore delimiter with resource-specific exceptions
 
 ```json
 {
@@ -524,7 +543,7 @@ kv-avd-prod-sec-f0485a-u
 SHNAME, SHNAME-osdisk, SHNAME-nic
 ```
 
-> **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names, so the generated KV name always uses `-` regardless of the convention delimiter. Complete overrides must independently satisfy Azure Key Vault naming rules.
+> **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names. An empty convention delimiter remains empty. Complete overrides must independently satisfy Azure Key Vault naming rules.
 
 ### Example 6 — Abbreviation override
 
@@ -550,4 +569,60 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ---
 
-Last updated: 2026-06-17
+## Maintaining the shared naming policy
+
+The authoritative rule catalog is
+[`namingPolicy.json`](../deployments/shared/data/namingPolicy.json).
+[`functions.bicep`](../deployments/shared/modules/orchestration/naming/functions.bicep)
+implements composition, resource formatting, location lookup and uniqueness
+recipes. Abbreviations and region mappings remain in their existing shared
+datasets.
+
+For example, both host pools and Shared Services request the
+`operationsResourceGroup` role. Change that role's purpose once to affect both;
+do not edit their deployment templates separately. A default workload change
+also reaches Image Management, Replacer, networking and workload-bearing
+Automation Accounts. Roles that intentionally omit workload retain that exception.
+
+Bicep parameter defaults and Portal form data are **generated from the policy**,
+not independently maintained naming rules. After editing a policy dataset:
+
+```powershell
+.\tools\Sync-NamingPolicy.ps1
+.\tools\Sync-NamingPolicy.ps1 -Check
+```
+
+The generator updates marked Bicep defaults as literal values, preserving valid
+ARM parameter defaults without file-loading variable references. It also updates
+the Portal policy payloads and component dropdown defaults. Do not edit generated
+defaults manually.
+
+Rebuild affected ARM JSON and run the naming regression and synchronization
+checks. Test the affected steps in a live Azure Portal session after changing
+form bindings; static validation cannot prove Portal rendering behavior.
+The Template Spec publisher reads the same datasets at invocation time.
+See the [maintainer reference](../deployments/shared/modules/orchestration/naming/README.md)
+for implementation boundaries and tests.
+
+### Compatibility and migration
+
+The refactor preserves existing valid generated names and explicit overrides,
+with one approved naming correction: Shared Services vault purposes now honor
+the configured delimiter, matching host pools. Default `-` deployments are
+unchanged. Existing Shared Services deployments using custom delimiters,
+notably an **empty delimiter**, can generate different vault names; use explicit
+vault-name overrides to retain the existing vaults.
+
+Partial resource abbreviation overrides now merge with defaults across solutions.
+Empty/all-`none` component arrays no longer fail merely while determining
+resource-type placement. Delimiter-free Replacer storage avoids the previously
+invalid ARM `replace(..., '', ...)` call. These fixes enable previously failing
+inputs; they do not rename resources from valid deployments.
+
+Role-specific legacy patterns remain explicit in the policy, including
+workload-free quota/route Automation Accounts, standalone `avset-##` patterns,
+specialized image storage and key names, and per-run image-build identities.
+Customer overrides and stored host-pool naming tags still take precedence.
+Changing policy does not migrate or rename existing Azure resources automatically.
+
+Last updated: 2026-10-21

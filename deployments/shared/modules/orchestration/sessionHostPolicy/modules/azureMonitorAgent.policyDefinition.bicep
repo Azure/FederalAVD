@@ -1,5 +1,9 @@
+metadata name = 'Azure Monitor Agent policy definition'
+metadata description = 'Defines a subscription DeployIfNotExists policy for Azure Monitor Agent on VMs with system-assigned identity; assignment and remediation permissions are owned by the caller.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostAzureMonitorAgent-DeployIfNotExists'
 var deploymentTemplate = loadJsonContent('templates/Extensions/AzureMonitorWindowsAgent.json')
 
@@ -50,4 +54,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

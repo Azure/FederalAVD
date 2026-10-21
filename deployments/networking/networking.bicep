@@ -1,4 +1,5 @@
 targetScope = 'subscription'
+import { legacyConvention, regionAbbreviation, resourceName } from '../shared/modules/orchestration/naming/functions.bicep'
 
 // Deploys the core networking infrastructure for Azure Virtual Desktop: Virtual Network, subnets,
 // Network Security Groups, route tables, and optional Azure Firewall or NVA routing configuration.
@@ -143,17 +144,13 @@ var cloud = toLower(environment().name)
 var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
 
 var locations = startsWith(cloud, 'us') ? (loadJsonContent('../shared/data/locations.json')).other : (loadJsonContent('../shared/data/locations.json'))[environment().name]
-#disable-next-line BCP329
-var locationAbbreviation = locations[startsWith(cloud, 'us') ? substring(location, 5, length(location)-5) : location].abbreviation
+var locationAbbreviation = regionAbbreviation(location, environment().name)
 var recoveryServicesGeo = startsWith(cloud, 'us') ? azureRecoveryServicesGeoCode : locations[location].recoveryServicesGeo
-var resourceAbbreviations = loadJsonContent('../shared/data/resourceAbbreviations.json')
-var nameConvSuffix = nameConvResTypeAtEnd ? 'LOCATION-RESOURCETYPE' : 'LOCATION'
-
-var nameConv_Shared_Resources = nameConvResTypeAtEnd ? 'avd-${nameConvSuffix}' : 'RESOURCETYPE-avd-${nameConvSuffix}'
-var natGatewayName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.natGateways), 'LOCATION', locationAbbreviation)
-var publicIPName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.publicIPAddresses), 'LOCATION', locationAbbreviation)
-var routeTableName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.routeTables), 'LOCATION', locationAbbreviation)
-var nsgName = replace(replace(nameConv_Shared_Resources, 'RESOURCETYPE', resourceAbbreviations.networkSecurityGroups), 'LOCATION', locationAbbreviation)
+var namingConvention = legacyConvention(nameConvResTypeAtEnd)
+var natGatewayName = resourceName(namingConvention, 'networkNatGateway', locationAbbreviation, '', '')
+var publicIPName = resourceName(namingConvention, 'networkPublicIP', locationAbbreviation, '', '')
+var routeTableName = resourceName(namingConvention, 'networkRouteTable', locationAbbreviation, '', '')
+var nsgName = resourceName(namingConvention, 'networkSecurityGroup', locationAbbreviation, '', '')
 
 var privateDnsZones_AzureVirtualDesktop = {
   AzureCloud: 'privatelink.wvd.microsoft.com'

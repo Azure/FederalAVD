@@ -1,3 +1,6 @@
+metadata name = 'Disk encryption set role assignments'
+metadata description = 'Applies deterministic role assignments at an existing disk encryption set in the deployment resource group; does not grant access to its encryption key.'
+
 import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
 
 @description('Name of the existing disk encryption set.')
@@ -29,4 +32,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   }
 ]
 
+@description('Array of role assignment resource IDs in the same order as the assignments input.')
 output resourceIds array = [for (assignment, i) in formattedAssignments: roleAssignment[i].id]

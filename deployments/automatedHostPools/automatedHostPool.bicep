@@ -1,5 +1,6 @@
 targetScope = 'subscription'
 
+import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { vmApplicationAssignmentType } from '../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
@@ -46,6 +47,7 @@ param location string
 param controlPlaneLocation string = location
 
 @description('Optional. Naming convention shared with the standard host-pool deployment.')
+// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -455,6 +457,12 @@ param deploymentVirtualMachineSize string = 'Standard_D2ads_v5'
 @description('Optional. IP addresses or CIDR blocks permitted through the Azure Files firewall.')
 param fslogixPermittedIPs string[] = []
 
+@description('Optional. Shared public IP/CIDR allowlist for newly deployed Key Vaults and Azure Files. Azure Files also retains entries supplied through fslogixPermittedIPs.')
+param permittedIPs string[] = []
+
+@description('Optional. Shared public-access mode for newly deployed Key Vaults and Azure Files. Auto preserves legacy behavior; existing resources and backup/monitoring access are unchanged.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
+
 @description('Optional. Deploy a Disk Encryption Set for the deployment helper and session-host OS disks, with policy enforcement for session hosts.')
 param deployDiskEncryptionSet bool = false
 
@@ -608,7 +616,8 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
     privateEndpointNameConv: naming.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
-    permittedIPs: []
+    permittedIPs: permittedIPs
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     tags: tags
   }
@@ -1181,7 +1190,8 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
     netAppCapacityPoolName: naming.outputs.netAppCapacityPoolName
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
     ouPath: empty(fslogixOUPath) ? organizationalUnitPath : fslogixOUPath
-    permittedIPs: fslogixPermittedIPs
+    permittedIPs: union(fslogixPermittedIPs, permittedIPs)
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     privateEndpoint: fslogixPrivateEndpoint
     privateEndpointNameConv: naming.outputs.privateEndpointNameConv
     privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv

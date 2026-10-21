@@ -1,38 +1,67 @@
+metadata name = 'AVD workspace orchestration'
+metadata description = 'Creates or updates AVD feed and global workspaces across resource groups with optional private endpoints and diagnostics.'
+
+// Update mode preserves existing workspace properties unless this module explicitly overrides them.
+// Diagnostic settings are supplied only when creating a workspace; updates leave existing settings alone.
+
 targetScope = 'subscription'
 
 @allowed([
   'Create'
   'Update'
 ])
+@description('Required. Create deploys a new feed workspace; Update reads the existing workspace identified by workspaceResourceId.')
 param workspaceMode string
+@description('Required. Whether this module manages the feed workspace and its requested private endpoint.')
 param manageWorkspace bool
+@description('Required. Name of the feed workspace to create; update mode derives it from workspaceResourceId.')
 param workspaceName string
+@description('Required. Existing feed workspace resource ID required for Update mode; creation mode uses workspaceName instead.')
 param workspaceResourceId string
+@description('Required. Target feed workspace resource group name in this subscription for Create mode.')
 param workspaceResourceGroupName string
+@description('Optional. Whether to create the feed workspace resource group in Create mode; otherwise it must exist.')
 param createWorkspaceResourceGroup bool = true
+@description('Required. Azure region for new feed workspace resources and the fallback new global workspace location.')
 param workspaceLocation string
+@description('Required. Friendly name for a new feed workspace; update mode preserves the existing value.')
 param workspaceFriendlyName string
+@description('Required. Requested feed workspace public access setting; update without a private endpoint preserves the existing value.')
 param workspacePublicNetworkAccess 'Disabled' | 'Enabled'
+@description('Required. Resource ID of an existing subnet for the feed private endpoint; empty skips endpoint creation.')
 param workspaceFeedPrivateEndpointSubnetResourceId string
+@description('Required. Resource ID of the existing feed private DNS zone; empty omits its endpoint DNS zone group.')
 param avdPrivateDnsZoneResourceId string
+@description('Optional. Resource ID of an existing Log Analytics workspace; empty omits optional diagnostic settings.')
 param logAnalyticsWorkspaceResourceId string = ''
 
+@description('Required. Whether this module manages the global discovery workspace and its requested private endpoint.')
 param manageGlobalWorkspace bool
 
 @allowed([
   'Create'
   'Update'
 ])
+@description('Required. Create deploys a new global workspace; Update reads globalWorkspaceResourceId.')
 param globalWorkspaceMode string
+@description('Required. Name of the global workspace to create; update mode derives it from globalWorkspaceResourceId.')
 param globalWorkspaceName string
+@description('Required. Existing global workspace ID required for Update mode; also passed through when the global workspace is not managed.')
 param globalWorkspaceResourceId string
+@description('Required. Target global workspace resource group name in this subscription for Create mode.')
 param globalWorkspaceResourceGroupName string
+@description('Optional. Whether to create the global workspace resource group in Create mode; otherwise it must exist.')
 param createGlobalWorkspaceResourceGroup bool = true
+@description('Required. Resource ID of an existing subnet for the global discovery private endpoint; empty skips endpoint creation.')
 param globalFeedPrivateEndpointSubnetResourceId string
+@description('Required. Resource ID of the existing global discovery private DNS zone; empty omits its endpoint DNS zone group.')
 param globalFeedPrivateDnsZoneResourceId string
 
+@description('Required. Private endpoint name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNameConv string
+@description('Required. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNICNameConv string
+@description('Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
 param tags object = {}
 
 var updateWorkspace = manageWorkspace && workspaceMode == 'Update'
@@ -231,17 +260,23 @@ module globalFeedPrivateEndpoint '../../resourceModules/network/privateEndpoints
   }
 }
 
+@description('Managed feed workspace resource ID, or an empty string when manageWorkspace is false.')
 output workspaceResourceId string = manageWorkspace ? workspace!.outputs.resourceId : ''
+@description('Feed private endpoint resource ID, or an empty string when no managed feed endpoint is requested.')
 output workspaceFeedPrivateEndpointResourceId string = manageWorkspace && !empty(workspaceFeedPrivateEndpointSubnetResourceId)
   ? workspaceFeedPrivateEndpoint!.outputs.resourceId
   : ''
+@description('Managed global workspace resource ID, or the supplied ID when manageGlobalWorkspace is false.')
 output globalWorkspaceResourceId string = manageGlobalWorkspace
   ? globalWorkspace!.outputs.resourceId
   : globalWorkspaceResourceId
+@description('Global discovery private endpoint resource ID, or an empty string when no managed global endpoint is requested.')
 output globalFeedPrivateEndpointResourceId string = manageGlobalWorkspace && !empty(globalFeedPrivateEndpointSubnetResourceId)
   ? globalFeedPrivateEndpoint!.outputs.resourceId
   : ''
+@description('Effective feed workspace resource group name, or an empty string when the feed workspace is not managed.')
 output controlPlaneResourceGroupName string = manageWorkspace ? effectiveWorkspaceResourceGroupName : ''
+@description('Effective feed workspace resource group ID, or an empty string when the feed workspace is not managed.')
 output controlPlaneResourceGroupResourceId string = manageWorkspace
   ? '/subscriptions/${effectiveWorkspaceSubscriptionId}/resourceGroups/${effectiveWorkspaceResourceGroupName}'
   : ''
