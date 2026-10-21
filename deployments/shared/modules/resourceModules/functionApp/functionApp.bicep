@@ -460,7 +460,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       ftpsState: 'Disabled'
       functionAppScaleLimit: 200
       minimumElasticInstanceCount: 0
-      netFrameworkVersion: 'v8.0'
+      netFrameworkVersion: 'v10.0'
       powerShellVersion: powerShellVersion
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
       ipSecurityRestrictionsDefaultAction: (privateEndpoint || !empty(effectivePermittedIPs)) ? 'Deny' : null
