@@ -5,6 +5,17 @@ repo-aware answers in VS Code, github.com chat, and any other Copilot surface.
 
 ---
 
+## Contribution Workflow
+
+Before making repository changes, read [CONTRIBUTING.md](../CONTRIBUTING.md) and
+the applicable [task-specific skills](skills/). Follow their source-generation,
+cross-solution dependency, documentation, and validation requirements.
+Preserve unrelated local changes and keep contributions focused. Report exact
+validation commands, results, and required live checks that remain; do not treat
+offline checks as proof of deployment success. Store reusable architectural
+decisions in the relevant repository documentation and link to them rather than
+relying on prior chat context or duplicating detailed rules here.
+
 ## What This Repo Does
 
 FederalAVD provides enterprise-grade Azure Virtual Desktop (AVD) deployment automation for
