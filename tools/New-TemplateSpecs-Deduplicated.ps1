@@ -600,12 +600,13 @@ foreach ($templateSpec in $templateSpecs) {
     }
     $version = '1.0.0'
     if ($incrementVersion -and $existing.Count -gt 0) {
-        $versions = @(Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpec.Name -Version * -ErrorAction Stop)
+        $existingWithVersions = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpec.Name -ErrorAction Stop
+        $versions = @($existingWithVersions.Versions)
         $latestMajor = -1
         foreach ($item in $versions) {
             $parsedVersion = $null
-            if (-not [version]::TryParse([string]$item.Version, [ref]$parsedVersion)) {
-                throw "Cannot increment non-numeric Template Spec version '$($item.Version)' for '$($templateSpec.Name)'."
+            if (-not [version]::TryParse([string]$item.Name, [ref]$parsedVersion)) {
+                throw "Cannot increment non-numeric Template Spec version '$($item.Name)' for '$($templateSpec.Name)'."
             }
             $latestMajor = [Math]::Max($latestMajor, $parsedVersion.Major)
         }

@@ -356,6 +356,14 @@ The actual VM name is `{pattern}` with `SHNAME = {sessionHostNamePrefix}{paddedI
 
 Explicit `virtualMachineNameConvOverride`, `virtualMachineDiskNameConvOverride`, and `virtualMachineNicNameConvOverride` values continue to take precedence. Existing parameter files and host resource-group tags that specify older patterns are therefore unchanged on redeployment.
 
+In the standard Host Pool Portal form, the **Tags & Naming** step hides these three
+pattern boxes until **Customize VM, OS disk, and NIC naming** is checked. Leaving
+it unchecked uses the shared defaults above, even if custom values were entered
+before unchecking it. Checking it reveals the existing policy-backed defaults and
+`SHNAME` validation. The add-on forms retain their existing host resource-group
+tag inheritance. Automated host pools do not expose these three overrides because
+AVD owns their VM, disk and NIC names.
+
 ### Availability Set — `##` token
 
 The `##` token in availability set names is replaced with the padded availability set index at deployment time, for example `as-avd-01-use` for index 1.

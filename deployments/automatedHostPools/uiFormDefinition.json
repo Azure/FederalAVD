@@ -3129,7 +3129,7 @@
                   "name": "privateRoutes",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Private Traffic Routes",
-                  "defaultValue": "Feed download and remote session connections",
+                  "defaultValue": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), 'Remote session connections only', 'Feed download and remote session connections')]",
                   "visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
                   "constraints": {
                     "required": true,
@@ -3199,7 +3199,7 @@
                   "name": "hostPoolPublicNetworkAccess",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Remote Session Connection Public Access",
-                  "defaultValue": "Enabled for private and public routes",
+                  "defaultValue": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), 'Enabled for clients only', 'Enabled for private and public routes')]",
                   "visible": "[steps('zeroTrust').avdPrivateLink.enablePrivateLink]",
                   "constraints": {
                     "required": true,

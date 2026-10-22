@@ -673,6 +673,110 @@ Describe 'Standard host-pool FSLogix storage prefix' {
     }
 }
 
+Describe 'Host-pool workspace-dependent Private Link defaults' {
+    $privateLinkFormCases = @(
+        @{
+            Name = 'standard host pool'
+            Directory = 'hostpools'
+            Routes = 'avdPrivateLinkConfig'
+            Access = 'hostpoolPublicNetworkAccess'
+            ExistingRouteLabel = 'Only remote session connections use private routes'
+            NewRouteLabel = 'Feed download and remote session connections use private routes'
+            ExistingAccessLabel = 'Enabled For Clients Only'
+            NewAccessLabel = 'Enabled'
+        }
+        @{
+            Name = 'automated host pool'
+            Directory = 'automatedHostPools'
+            Routes = 'privateRoutes'
+            Access = 'hostPoolPublicNetworkAccess'
+            ExistingRouteLabel = 'Remote session connections only'
+            NewRouteLabel = 'Feed download and remote session connections'
+            ExistingAccessLabel = 'Enabled for clients only'
+            NewAccessLabel = 'Enabled for private and public routes'
+        }
+    )
+
+    foreach ($case in $privateLinkFormCases) {
+        Context $case.Name {
+            BeforeAll {
+                $formPath = Join-Path (Split-Path -Parent $PSScriptRoot) "deployments\$($case.Directory)\uiFormDefinition.json"
+                $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+                $zeroTrust = $form.view.properties.steps | Where-Object { $_.name -eq 'zeroTrust' }
+                $privateLink = $zeroTrust.elements | Where-Object { $_.name -eq 'avdPrivateLink' }
+                $routes = $privateLink.elements | Where-Object { $_.name -eq $case.Routes }
+                $access = $privateLink.elements | Where-Object { $_.name -eq $case.Access }
+            }
+
+            It 'uses exact display labels for existing and new workspace defaults' {
+                $routes.defaultValue | Should Be "[if(equals(steps('controlPlane').workspace.createOption, 'update'), '$($case.ExistingRouteLabel)', '$($case.NewRouteLabel)')]"
+                $access.defaultValue | Should Be "[if(equals(steps('controlPlane').workspace.createOption, 'update'), '$($case.ExistingAccessLabel)', '$($case.NewAccessLabel)')]"
+            }
+
+            It 'maps existing workspace defaults to remote sessions and clients-only access' {
+                @($routes.constraints.allowedValues | Where-Object { $_.label -ceq $case.ExistingRouteLabel }).Count | Should Be 1
+                @($access.constraints.allowedValues | Where-Object { $_.label -ceq $case.ExistingAccessLabel }).Count | Should Be 1
+                ($routes.constraints.allowedValues | Where-Object { $_.label -ceq $case.ExistingRouteLabel }).value | Should Be 'HostPool'
+                ($access.constraints.allowedValues | Where-Object { $_.label -ceq $case.ExistingAccessLabel }).value | Should Be 'EnabledForClientsOnly'
+            }
+
+            It 'maps new workspace defaults to feed and remote sessions with unchanged public access' {
+                @($routes.constraints.allowedValues | Where-Object { $_.label -ceq $case.NewRouteLabel }).Count | Should Be 1
+                @($access.constraints.allowedValues | Where-Object { $_.label -ceq $case.NewAccessLabel }).Count | Should Be 1
+                ($routes.constraints.allowedValues | Where-Object { $_.label -ceq $case.NewRouteLabel }).value | Should Be 'FeedAndHostPool'
+                ($access.constraints.allowedValues | Where-Object { $_.label -ceq $case.NewAccessLabel }).value | Should Be 'Enabled'
+            }
+
+            It 'retains all three routing and public-access choices without workspace filtering' {
+                @($routes.constraints.allowedValues).Count | Should Be 3
+                ($routes.constraints.allowedValues.value | Sort-Object) -join ',' | Should Be 'All,FeedAndHostPool,HostPool'
+                @($access.constraints.allowedValues).Count | Should Be 3
+                ($access.constraints.allowedValues.value | Sort-Object) -join ',' | Should Be 'Disabled,Enabled,EnabledForClientsOnly'
+            }
+
+            It 'preserves explicit selections and the Private Link-disabled output behavior' {
+                $form.view.outputs.parameters.avdPrivateLinkPrivateRoutes |
+                    Should Be "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.$($case.Routes), 'None')]"
+                $form.view.outputs.parameters.hostPoolPublicNetworkAccess |
+                    Should Be "[if(steps('zeroTrust').avdPrivateLink.enablePrivateLink, steps('zeroTrust').avdPrivateLink.$($case.Access), 'Enabled')]"
+            }
+        }
+    }
+}
+
+Describe 'Standard host-pool optional session host naming overrides' {
+    BeforeAll {
+        $formPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'deployments\hostpools\uiFormDefinition.json'
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $namingStep = $form.view.properties.steps | Where-Object { $_.name -eq 'tagsAndNaming' }
+        $naming = $namingStep.elements | Where-Object { $_.name -eq 'naming' }
+        $toggle = $naming.elements | Where-Object { $_.name -eq 'customizeSessionHostNaming' }
+        $patternControlNames = @('vmNameConvOverride', 'diskNameConvOverride', 'nicNameConvOverride')
+    }
+
+    It 'makes custom VM, disk and NIC patterns opt-in' {
+        $toggle.type | Should Be 'Microsoft.Common.CheckBox'
+        $toggle.PSObject.Properties['defaultValue'] | Should BeNullOrEmpty
+        $toggle.constraints.required | Should Be $false
+    }
+
+    It 'shows all three pattern boxes only when customization is enabled' {
+        foreach ($controlName in $patternControlNames) {
+            $control = $naming.elements | Where-Object { $_.name -eq $controlName }
+            $control.visible | Should Be "[steps('tagsAndNaming').naming.customizeSessionHostNaming]"
+            $control.constraints.required | Should Be $true
+            ($control.constraints | ConvertTo-Json -Depth 10) | Should Match 'SHNAME'
+        }
+    }
+
+    It 'ignores hidden stale patterns and delegates unchecked or empty overrides to the shared defaults' {
+        foreach ($controlName in $patternControlNames) {
+            $guardedValue = "if(or(not(steps('tagsAndNaming').naming.customizeSessionHostNaming),empty(steps('tagsAndNaming').naming.$controlName)),'',steps('tagsAndNaming').naming.$controlName)"
+            $form.view.outputs.parameters.namingConvention | Should Match ([regex]::Escape($guardedValue))
+        }
+    }
+}
+
 Describe 'Session host resource naming defaults' {
     It 'uses stable shared defaults independent of resource type abbreviations' {
         $repoRoot = Split-Path -Parent $PSScriptRoot

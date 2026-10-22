@@ -269,17 +269,30 @@ function global:New-AzResourceGroup {
     $global:ResourceGroupCreates++
 }
 function global:Get-AzTemplateSpec {
-    [CmdletBinding()]param($ResourceGroupName, $Name, $Version)
+    [CmdletBinding()]param($ResourceGroupName, $Name, [ValidatePattern('^[-\w\._\(\)]+$')][string]$Version)
     $global:SpecReads++
-    if ($global:FixtureMode -in @('Existing', 'VersionReadFailure')) {
-        if ($Version) {
+    if ($global:FixtureMode -in @('Existing', 'EmptyVersions', 'NonNumericVersion', 'VersionReadFailure')) {
+        $spec = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]::new()
+        $spec.Name = $global:SpecName
+        $spec.Location = 'usgovvirginia'
+        $spec.Tags = [System.Collections.Generic.Dictionary[string,string]]::new()
+        $spec.Tags.Add('owner', 'preserved')
+        if ($Name) {
             if ($global:FixtureMode -eq 'VersionReadFailure') { throw 'Fixture version access denied' }
-            [pscustomobject]@{ Version = '2.5.0' }
-            [pscustomobject]@{ Version = '4.0.0' }
+            $versionNames = switch ($global:FixtureMode) {
+                'EmptyVersions' { @() }
+                'NonNumericVersion' { @('release-preview') }
+                default { @('2.5.0', '4.0.0', '3.9.0') }
+            }
+            $spec.Versions = @(
+                foreach ($versionName in $versionNames) {
+                    $specVersion = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpecVersion]::new()
+                    $specVersion.Name = $versionName
+                    $specVersion
+                }
+            )
         }
-        else {
-            [pscustomobject]@{ Name = $global:SpecName; Location = 'usgovvirginia'; Tags = @{ owner = 'preserved' } }
-        }
+        $spec
     }
 }
 function global:Invoke-AzRestMethod {
@@ -320,6 +333,8 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
     It 'handles <Mode> with explicit, isolated publication behavior' -TestCases @(
         @{ Mode = 'Publish'; ExpectedPuts = 2; ExpectedCreates = 0 }
         @{ Mode = 'Existing'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'EmptyVersions'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'NonNumericVersion'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Create'; ExpectedPuts = 2; ExpectedCreates = 1 }
         @{ Mode = 'WhatIf'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'WhatIfMissing'; ExpectedPuts = 0; ExpectedCreates = 0 }
@@ -338,6 +353,9 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         if ($Mode -eq 'VersionReadFailure') {
             $result.Failure | Should Match 'Fixture version access denied'
         }
+        elseif ($Mode -eq 'NonNumericVersion') {
+            $result.Failure | Should Match "Cannot increment non-numeric Template Spec version 'release-preview'"
+        }
         elseif ($Mode -eq 'Forbidden') {
             $result.Failure | Should Match 'HTTP 403'
         }
@@ -354,6 +372,11 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
             if ($Mode -eq 'Existing') {
                 $parent.tags.owner | Should Be 'preserved'
                 $result.RestCalls[1].Path | Should Match '/versions/5.0.0\?'
+                $result.SpecReads | Should Be 2
+            }
+            if ($Mode -eq 'EmptyVersions') {
+                $parent.tags.owner | Should Be 'preserved'
+                $result.RestCalls[1].Path | Should Match '/versions/1.0.0\?'
             }
         }
         if ($Mode -like 'WhatIf*') {

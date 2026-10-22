@@ -101,6 +101,12 @@ naming defaults and adds `-TemplateSpecNameSuffix` for isolated test names and
 `-WhatIf` for preflight without Azure writes. Without a suffix it targets the same
 names as the standard publisher. Version incrementing remains enabled by default;
 disabling it overwrites version `1.0.0`.
+The experimental publisher retrieves existing versions by omitting `-Version`
+from `Get-AzTemplateSpec`, reads each version's `Name` from the returned
+`.Versions` collection, and increments the largest numeric major version.
+`-Version '*'` is not a supported version-listing operation. Non-numeric version
+names and version-read failures stop publication rather than silently selecting
+`1.0.0`.
 
 The experimental path filters the same publication-only annotations, identifies
 byte-identical JSON bodies with SHA-256, and extracts only static deployment

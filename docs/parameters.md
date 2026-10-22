@@ -34,6 +34,23 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 ---
 
+## AVD Private Link Portal Defaults
+
+The standard and automated Host Pool forms retain all three private-routing
+choices. When AVD Private Link is enabled and the Control Plane step selects an
+existing feed workspace, routing defaults to remote session connections only
+(`HostPool`) and remote session public access defaults to clients only
+(`EnabledForClientsOnly`). This avoids managing the existing workspace's feed
+networking unless the operator explicitly selects a feed-routing option.
+
+For a new feed workspace, routing defaults to feed download and remote session
+connections (`FeedAndHostPool`); the existing remote session public-access default
+remains `Enabled`. These are editable Portal defaults, not restrictions. Existing
+workspace ownership warnings, parameter-file defaults and Private Link-disabled
+behavior are unchanged.
+
+---
+
 ## PaaS Public Network Access
 
 Shared Services, Image Management, standard/automated Host Pools, FSLogix Storage,
