@@ -91,8 +91,142 @@ function New-ConventionName {
     return [string]::Join($Delimiter, $nameParts)
 }
 
+function Remove-TemplateSpecSchemaAnnotations {
+    param (
+        [Parameter(Mandatory = $true)]
+        [Newtonsoft.Json.Linq.JObject]$Schema,
+        [bool]$RemoveDescriptions
+    )
+
+    $metadata = $Schema['metadata']
+    if ($metadata -is [Newtonsoft.Json.Linq.JObject]) {
+        if ($RemoveDescriptions) {
+            $metadata.Remove('description') | Out-Null
+        }
+        $metadata.Remove('__bicep_imported_from!') | Out-Null
+        if (-not $metadata.get_HasValues()) {
+            $Schema.Remove('metadata') | Out-Null
+        }
+    }
+
+    # Visit schema children only, never user data in defaultValue or allowedValues.
+    foreach ($collectionName in @('properties', 'mapping')) {
+        $collection = $Schema[$collectionName]
+        if ($collection -is [Newtonsoft.Json.Linq.JObject]) {
+            foreach ($property in @($collection.Properties())) {
+                if ($property.Value -is [Newtonsoft.Json.Linq.JObject]) {
+                    Remove-TemplateSpecSchemaAnnotations -Schema $property.Value -RemoveDescriptions $RemoveDescriptions
+                }
+            }
+        }
+    }
+    foreach ($childName in @('items', 'additionalProperties', 'discriminator')) {
+        $child = $Schema[$childName]
+        if ($child -is [Newtonsoft.Json.Linq.JObject]) {
+            Remove-TemplateSpecSchemaAnnotations -Schema $child -RemoveDescriptions $RemoveDescriptions
+        }
+    }
+    if ($Schema['prefixItems'] -is [Newtonsoft.Json.Linq.JArray]) {
+        foreach ($child in $Schema['prefixItems']) {
+            if ($child -is [Newtonsoft.Json.Linq.JObject]) {
+                Remove-TemplateSpecSchemaAnnotations -Schema $child -RemoveDescriptions $RemoveDescriptions
+            }
+        }
+    }
+}
+
+function Remove-TemplateSpecInternalAnnotations {
+    param (
+        [Parameter(Mandatory = $true)]
+        [Newtonsoft.Json.Linq.JToken]$Node,
+        [bool]$IsRoot = $true
+    )
+
+    if ($Node -is [Newtonsoft.Json.Linq.JObject]) {
+        $isTemplate = [string]$Node['$schema'] -match '^https?://schema\.management\.azure\.com/schemas/[^/]+/(?:subscription|managementGroup|tenant)?deploymentTemplate\.json#?$'
+        if ($isTemplate) {
+            $metadata = $Node['metadata']
+            if ($metadata -is [Newtonsoft.Json.Linq.JObject]) {
+                $metadata.Remove('_generator') | Out-Null
+                if (-not $metadata.get_HasValues()) {
+                    $Node.Remove('metadata') | Out-Null
+                }
+            }
+            foreach ($interfaceName in @('parameters', 'outputs', 'definitions')) {
+                $interface = $Node[$interfaceName]
+                if ($interface -is [Newtonsoft.Json.Linq.JObject]) {
+                    foreach ($property in @($interface.Properties())) {
+                        if ($property.Value -is [Newtonsoft.Json.Linq.JObject]) {
+                            Remove-TemplateSpecSchemaAnnotations -Schema $property.Value -RemoveDescriptions (-not $IsRoot)
+                        }
+                    }
+                }
+            }
+        }
+        foreach ($property in @($Node.Properties())) {
+            if ($property.Name -notin @('metadata', 'defaultValue', 'allowedValues', 'parameters', 'outputs', 'definitions')) {
+                Remove-TemplateSpecInternalAnnotations -Node $property.Value -IsRoot ($IsRoot -and -not $isTemplate)
+            }
+        }
+    }
+    elseif ($Node -is [Newtonsoft.Json.Linq.JArray]) {
+        foreach ($child in $Node) {
+            Remove-TemplateSpecInternalAnnotations -Node $child -IsRoot $IsRoot
+        }
+    }
+}
+
+function New-TemplateSpecPublicationPackage {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$TemplateFile,
+        [Parameter(Mandatory = $true)]
+        [string]$FormFile
+    )
+
+    $package = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Pack($TemplateFile)
+    $package.UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse(
+        (Get-Content -LiteralPath $FormFile -Raw -ErrorAction Stop)
+    )
+    Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
+    foreach ($artifact in $package.Artifacts) {
+        # A linked template is also a public deployment entry point; retain its interface help.
+        Remove-TemplateSpecInternalAnnotations -Node $artifact.Template
+    }
+    return $package
+}
+
+function Get-TemplateSpecPublicationSize {
+    param (
+        [Parameter(Mandatory = $true)]
+        $Package,
+        [Parameter(Mandatory = $true)]
+        [string]$Location
+    )
+
+    $client = [Microsoft.Azure.Management.Resources.TemplateSpecsClient]::new(
+        [Microsoft.Rest.TokenCredentials]::new('offline')
+    )
+    try {
+        $model = [Microsoft.Azure.Management.Resources.Models.TemplateSpecVersion]::new()
+        $model.Location = $Location
+        $model.MainTemplate = $Package.RootTemplate
+        $model.UiFormDefinition = $Package.UIFormDefinition
+        $model.LinkedTemplates = [System.Collections.Generic.List[Microsoft.Azure.Management.Resources.Models.LinkedTemplateArtifact]]::new()
+        foreach ($artifact in $Package.Artifacts) {
+            $model.LinkedTemplates.Add($artifact)
+        }
+        $json = [Microsoft.Rest.Serialization.SafeJsonConvert]::SerializeObject($model, $client.SerializationSettings)
+        return [Text.Encoding]::UTF8.GetByteCount($json)
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
 & (Join-Path $PSScriptRoot 'Sync-NamingPolicy.ps1') -Check
 
+Import-Module Az.Resources -ErrorAction Stop
 $Context = Get-AzContext
 If ($null -eq $Context) {
     Throw 'You are not logged in to Azure. Please login to azure before continuing'
@@ -162,17 +296,6 @@ if ($null -eq $ResourceGroupName -or $ResourceGroupName -eq '') {
         -Freeform1 $freeform1 `
         -Freeform2 $freeform2
     Write-Output "Resource Group Name: $ResourceGroupName"
-}
-
-if ($createResourceGroup) {
-    Write-Output "Searching for Resource Group: $ResourceGroupName"
-    if (Get-AzResourceGroup | Where-Object { $_.ResourceGroupName -eq $ResourceGroupName }) {
-        Write-Output "Resource Group $ResourceGroupName already exists"
-    }
-    else {
-        Write-Output "Resource Group $ResourceGroupName does not exist. Creating Resource Group"
-        New-AzResourceGroup -Name $ResourceGroupName -Location $Location
-    }
 }
 
 # Build collection of template specs to create
@@ -273,69 +396,104 @@ if ($CreateAddOns) {
     }
 }
 
-# Create all template specs using consistent naming convention
-foreach ($templateSpec in $templateSpecs) {
-    $templateSpecWorkload = if (
-        -not $namingConventionSupplied -and
-        $templateSpec.PreserveLegacyWithoutWorkload
-    ) {
-        ''
-    }
-    else {
-        $workload
+$stagingDirectory = Join-Path ([IO.Path]::GetTempPath()) ("FederalAVD-TemplateSpecs-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stagingDirectory -ErrorAction Stop | Out-Null
+try {
+    # Preflight every selection before creating resources or publishing any versions.
+    foreach ($templateSpec in $templateSpecs) {
+        $package = New-TemplateSpecPublicationPackage -TemplateFile $templateSpec.TemplateFile -FormFile $templateSpec.UiFormDefinition
+        $payloadBytes = Get-TemplateSpecPublicationSize -Package $package -Location $Location
+        $metadataAllowanceBytes = 16384
+        if ($payloadBytes + $metadataAllowanceBytes -gt 2000000) {
+            throw "$($templateSpec.DisplayName) requires $payloadBytes bytes plus a $metadataAllowanceBytes-byte publishing metadata allowance, exceeding the 2,000,000-byte Template Spec budget."
+        }
+        Write-Output "$($templateSpec.DisplayName): $payloadBytes publication bytes (plus $metadataAllowanceBytes-byte metadata allowance)."
+        $targetDirectory = Join-Path $stagingDirectory ([string]$templateSpecs.IndexOf($templateSpec))
+        [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Unpack(
+            $package, $targetDirectory, 'main.json', 'uiFormDefinition.json'
+        )
+        $templateSpec.PublicationTemplateFile = Join-Path $targetDirectory 'main.json'
+        $templateSpec.PublicationFormFile = Join-Path $targetDirectory 'uiFormDefinition.json'
     }
 
-    $templateSpecName = New-ConventionName `
-        -Components $components `
-        -Delimiter $delimiter `
-        -ResourceTypeCode $templateSpecTypeCode `
-        -Purpose $templateSpec.Purpose `
-        -LocationAbbreviation $locationAbbr `
-        -Workload $templateSpecWorkload `
-        -Environment $environment `
-        -Freeform1 $freeform1 `
-        -Freeform2 $freeform2
-    
-    # Determine version number
-    $version = '1.0.0'
-    if ($incrementVersion) {
-        # Check if template spec already exists and increment version
-        try {
-            $existingTemplateSpec = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -ErrorAction SilentlyContinue
-            if ($existingTemplateSpec) {
-                # Get all versions and find the latest
-                $versions = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -Version * -ErrorAction SilentlyContinue
-                if ($versions) {
-                    $latestVersion = $versions | ForEach-Object { 
-                        [version]$_.Version 
-                    } | Sort-Object -Descending | Select-Object -First 1
-                    
-                    # Increment major version
-                    $newMajorVersion = $latestVersion.Major + 1
-                    $version = "$newMajorVersion.0.0"
-                    Write-Output "Existing template spec found. Incrementing version from $($latestVersion.ToString()) to $version"
+    if ($createResourceGroup) {
+        Write-Output "Searching for Resource Group: $ResourceGroupName"
+        if (Get-AzResourceGroup | Where-Object { $_.ResourceGroupName -eq $ResourceGroupName }) {
+            Write-Output "Resource Group $ResourceGroupName already exists"
+        }
+        else {
+            Write-Output "Resource Group $ResourceGroupName does not exist. Creating Resource Group"
+            New-AzResourceGroup -Name $ResourceGroupName -Location $Location
+        }
+    }
+
+    # Create all template specs using consistent naming convention
+    foreach ($templateSpec in $templateSpecs) {
+        $templateSpecWorkload = if (
+            -not $namingConventionSupplied -and
+            $templateSpec.PreserveLegacyWithoutWorkload
+        ) {
+            ''
+        }
+        else {
+            $workload
+        }
+
+        $templateSpecName = New-ConventionName `
+            -Components $components `
+            -Delimiter $delimiter `
+            -ResourceTypeCode $templateSpecTypeCode `
+            -Purpose $templateSpec.Purpose `
+            -LocationAbbreviation $locationAbbr `
+            -Workload $templateSpecWorkload `
+            -Environment $environment `
+            -Freeform1 $freeform1 `
+            -Freeform2 $freeform2
+
+        # Determine version number
+        $version = '1.0.0'
+        if ($incrementVersion) {
+            # Check if template spec already exists and increment version
+            try {
+                $existingTemplateSpec = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -ErrorAction SilentlyContinue
+                if ($existingTemplateSpec) {
+                    # Get all versions and find the latest
+                    $versions = Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -Name $templateSpecName -Version * -ErrorAction SilentlyContinue
+                    if ($versions) {
+                        $latestVersion = $versions | ForEach-Object {
+                            [version]$_.Version
+                        } | Sort-Object -Descending | Select-Object -First 1
+
+                        # Increment major version
+                        $newMajorVersion = $latestVersion.Major + 1
+                        $version = "$newMajorVersion.0.0"
+                        Write-Output "Existing template spec found. Incrementing version from $($latestVersion.ToString()) to $version"
+                    }
                 }
             }
+            catch {
+                Write-Verbose "No existing template spec found. Using version 1.0.0"
+            }
         }
-        catch {
-            Write-Verbose "No existing template spec found. Using version 1.0.0"
+        else {
+            Write-Output "Version incrementing disabled. Using version 1.0.0 (will overwrite existing version)"
         }
-    }
-    else {
-        Write-Output "Version incrementing disabled. Using version 1.0.0 (will overwrite existing version)"
-    }
 
-    Write-Output "Creating $($templateSpec.DisplayName) Template Spec: $templateSpecName (v$version)"
-    New-AzTemplateSpec `
-        -ResourceGroupName $ResourceGroupName `
-        -Name $templateSpecName `
-        -DisplayName $templateSpec.DisplayName `
-        -Description $templateSpec.Description `
-        -TemplateFile $templateSpec.TemplateFile `
-        -UiFormDefinitionFile $templateSpec.UiFormDefinition `
-        -Location $Location `
-        -Version $version `
-        -Force
+        Write-Output "Creating $($templateSpec.DisplayName) Template Spec: $templateSpecName (v$version)"
+        New-AzTemplateSpec `
+            -ResourceGroupName $ResourceGroupName `
+            -Name $templateSpecName `
+            -DisplayName $templateSpec.DisplayName `
+            -Description $templateSpec.Description `
+            -TemplateFile $templateSpec.PublicationTemplateFile `
+            -UiFormDefinitionFile $templateSpec.PublicationFormFile `
+            -Location $Location `
+            -Version $version `
+            -Force
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stagingDirectory -Recurse -Force -ErrorAction Stop
 }
 
 Write-Output "Template Specs Created. You can now find them in the Azure Portal in the '$ResourceGroupName' resource group"

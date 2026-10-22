@@ -1,5 +1,16 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$maximumKnownGoodPayloadBytes = 1243608
+Import-Module Az.Resources -ErrorAction Stop
+$publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
+$parseErrors = $null
+$publisherAst = [System.Management.Automation.Language.Parser]::ParseFile($publisherPath, [ref]$null, [ref]$parseErrors)
+if ($parseErrors.Count -gt 0) {
+    throw "New-TemplateSpecs.ps1 has $($parseErrors.Count) PowerShell parse error(s)."
+}
+foreach ($function in $publisherAst.FindAll(
+    { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true
+)) {
+    Invoke-Expression $function.Extent.Text
+}
 
 $orchestratorCases = @(
     @{
@@ -65,25 +76,23 @@ function Get-DeploymentDepth {
 
 Describe 'Published host-pool orchestrator payload sizes' {
     foreach ($orchestratorCase in $orchestratorCases) {
-        It "keeps the $($orchestratorCase.Name) and form below the previous known-good payload" {
-            $template = Get-Content -LiteralPath $orchestratorCase.TemplatePath -Raw | ConvertFrom-Json
-            $minifiedTemplate = $template | ConvertTo-Json -Depth 100 -Compress
-            $form = Get-Content -LiteralPath $orchestratorCase.FormPath -Raw | ConvertFrom-Json
-            $minifiedForm = $form | ConvertTo-Json -Depth 100 -Compress
-            $payloadSize = [System.Text.Encoding]::UTF8.GetByteCount($minifiedTemplate) +
-                [System.Text.Encoding]::UTF8.GetByteCount($minifiedForm)
+        It "keeps the $($orchestratorCase.Name) and form within the native SDK publication budget" {
+            $package = New-TemplateSpecPublicationPackage -TemplateFile $orchestratorCase.TemplatePath -FormFile $orchestratorCase.FormPath
+            $payloadSize = Get-TemplateSpecPublicationSize -Package $package -Location 'usgovvirginia'
 
-            $payloadSize | Should BeLessThan $maximumKnownGoodPayloadBytes
+            ($payloadSize + 16384) | Should BeLessThan 2000000
         }
     }
 
-    It 'publishes the tracked template and form files' {
+    It 'publishes staged annotation-filtered files using the normal cmdlet' {
         $publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
         $publisher = Get-Content -LiteralPath $publisherPath -Raw
 
-        $publisher | Should Match '-TemplateFile \$templateSpec\.TemplateFile'
-        $publisher | Should Match '-UiFormDefinitionFile \$templateSpec\.UiFormDefinition'
+        $publisher | Should Match '-TemplateFile \$templateSpec\.PublicationTemplateFile'
+        $publisher | Should Match '-UiFormDefinitionFile \$templateSpec\.PublicationFormFile'
+        $publisher | Should Match 'TemplateSpecPackagingEngine\]::Unpack'
         $publisher | Should Not Match 'ConvertTo-MinifiedJson'
+        $publisher | Should Not Match 'SerializationSettings\.Formatting\s*='
     }
 
     foreach ($orchestratorCase in @($orchestratorCases | Where-Object { $_.Name -match 'host-pool' })) {

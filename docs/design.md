@@ -65,13 +65,31 @@ and a separate [Template Spec content limit of approximately 2 MB](https://learn
 The Template Spec budget must include the main template, attached Portal form,
 any packaged linked templates, and publishing metadata/envelope.
 
-The size cases in `tests\TemplateSpecs.Tests.ps1` check all current template/form
-pairs against conservative 4,000,000-byte ARM file and 2,000,000-byte compact
-Template Spec payload budgets. The payload calculation includes the main template,
-Portal form, and a basic version envelope; it is an offline estimate, not the
-exact SDK request or proof of service acceptance. Extend it for packaged linked
-artifacts if those are introduced. ARM also applies expanded-template and
-per-resource limits that raw file measurements cannot prove.
+`tools/New-TemplateSpecs.ps1` keeps the full documentation in Bicep source and
+tracked ARM files. Only the temporary publication copy omits nested-template
+parameter/output/type descriptions and Bicep compiler provenance. It retains
+top-level interface descriptions (including linked-template entry points),
+module names and summaries, other interface metadata and validation constraints,
+resource/policy metadata, and the entire Portal form. Developers and Copilot
+should use the repository sources to understand and reuse module contracts, not
+reconstruct them from a published Template Spec.
+
+The publisher uses the normal Az.Resources packaging engine to stage the filtered
+copy, including linked artifacts, and still publishes with `New-AzTemplateSpec`.
+It does not depend on input minification or change SDK serialization settings.
+Before any resource creation or publication, every selected package is measured
+using the installed Az.Resources SDK's normal version-request serializer, including
+the main template, linked artifacts, Portal form, and location envelope. A
+16,384-byte allowance covers additional publishing metadata; the combined budget
+is 2,000,000 bytes. Staging files are removed on success or failure.
+
+Run `Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
+after changes affecting publication. These offline checks require Az.Resources,
+cover all current template/form pairs, enforce the publication budget and a
+4,000,000-byte tracked ARM file budget, and verify annotation filtering preserves
+deployment content. They do not require Azure sign-in and do not prove service
+acceptance. ARM also applies expanded-template and per-resource limits that raw
+file measurements cannot prove.
 
 ## Naming and resource topology
 
