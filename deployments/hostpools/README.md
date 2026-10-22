@@ -52,6 +52,14 @@ deployment with the complete form and production parameters.
 > to the same workspace serially. Registration is a read-modify-write update of the workspace
 > application-group reference list, so concurrent deployments can overwrite one another.
 
+## Desktop and application-group friendly names
+
+When `desktopFriendlyName` is supplied, the standard deployment uses it for both
+the desktop application group's friendly name and the published `SessionDesktop`
+friendly name, matching the automated host-pool behavior. This does not change
+the application group's Azure resource name or ID. An empty value leaves the
+application-group friendly name unset and skips the desktop-name update.
+
 ## Purpose
 
 Deploy production-ready AVD environments with:

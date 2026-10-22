@@ -134,6 +134,7 @@ module applicationGroup '../../../shared/modules/resourceModules/desktopVirtuali
     )
     hostPoolResourceId: hostPool.outputs.resourceId
     applicationGroupType: 'Desktop'
+    friendlyName: desktopFriendlyName
     diagnosticSettings: enableMonitoring
       ? {
           name: 'WVDInsights'

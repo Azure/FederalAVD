@@ -177,6 +177,21 @@ Describe 'AVD workspace ownership contract' {
         $automatedBicep | Should Match "module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep'"
     }
 
+    It 'passes the desktop friendly name to application groups in compiled control planes' {
+        foreach ($relativePath in @(
+            'deployments\hostpools\hostpool.json'
+            'deployments\hostpoolPoc\hostpoolPoc.json'
+            'deployments\automatedHostPools\automatedHostPool.json'
+        )) {
+            $template = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw | ConvertFrom-Json
+            $applicationGroup = $template.resources.controlPlane.properties.template.resources.applicationGroup
+            $applicationGroup.properties.parameters.friendlyName.value | Should Be "[parameters('desktopFriendlyName')]"
+            $applicationGroup.properties.template.parameters.friendlyName.defaultValue | Should Be ''
+        }
+        $standardTemplate.resources.controlPlane.properties.parameters.desktopFriendlyName.value |
+            Should Be "[parameters('desktopFriendlyName')]"
+    }
+
     It 'enables Shared Services private endpoints for new Key Vaults or backup vaults' {
         $standardBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'
         $automatedBicep | Should Match 'var sharedPrivateEndpoint = deployPrivateEndpoints && \(deploySharedKeyVaults \|\| deploySharedFilesBackup\)'

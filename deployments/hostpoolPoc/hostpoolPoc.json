@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "2547312642845533714"
+      "templateHash": "13898811886054676149"
     }
   },
   "definitions": {
@@ -6023,7 +6023,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "12992205986196219911"
+              "templateHash": "1729258902413084189"
             }
           },
           "definitions": {
@@ -7011,6 +7011,9 @@
                   },
                   "applicationGroupType": {
                     "value": "Desktop"
+                  },
+                  "friendlyName": {
+                    "value": "[parameters('desktopFriendlyName')]"
                   },
                   "diagnosticSettings": "[if(parameters('enableMonitoring'), createObject('value', createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]"
                 },
