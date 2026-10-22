@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "2344127451660921169"
+      "templateHash": "13297646994046385507"
     }
   },
   "definitions": {
@@ -8846,7 +8846,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "13878258941972142605"
+              "templateHash": "3309916655866454174"
             }
           },
           "parameters": {
@@ -8936,7 +8936,7 @@
             },
             "powerShellVersion": {
               "type": "string",
-              "defaultValue": "7.4",
+              "defaultValue": "7.6",
               "metadata": {
                 "description": "Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted."
               }
