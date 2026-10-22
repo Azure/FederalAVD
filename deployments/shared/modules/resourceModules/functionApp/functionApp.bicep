@@ -40,7 +40,7 @@ param functionAppName string
 param functionAppAppSettings array
 
 @description('Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted.')
-param powerShellVersion string = '7.4'
+param powerShellVersion string = '7.6'
 
 @description('Optional. Existing user-assigned identity resource ID for the Function App. When omitted, system-assigned identity is used.')
 param functionAppUserAssignedIdentityResourceId string = ''

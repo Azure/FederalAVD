@@ -2560,7 +2560,7 @@
               "name": "powerShellVersion",
               "type": "Microsoft.Common.DropDown",
               "label": "Function App PowerShell Version",
-              "defaultValue": "PowerShell 7.4",
+              "defaultValue": "PowerShell 7.6",
               "toolTip": "Select a supported PowerShell worker available for Azure Functions runtime v4 in this region. Preview versions are included. The Function App remains pinned to this version until this template is redeployed with a different selection.",
               "constraints": {
                 "allowedValues": "[map(filter(first(map(filter(first(map(filter(steps('infrastructure').functionAppStacksApi.value, (stack) => equals(stack.name, 'powershell')), (stack) => stack.properties.majorVersions)), (major) => equals(major.value, '7')), (major) => major.minorVersions)), (version) => and(or(equals(version.stackSettings.windowsRuntimeSettings.isDefault, true), equals(version.stackSettings.windowsRuntimeSettings.isPreview, true)), not(equals(version.stackSettings.windowsRuntimeSettings.isHidden, true)), not(equals(version.stackSettings.windowsRuntimeSettings.isDeprecated, true)), contains(version.stackSettings.windowsRuntimeSettings.supportedFunctionsExtensionVersions, '~4'))), (version) => parse(concat('{\"label\":\"', version.displayText, '\",\"value\":\"', version.stackSettings.windowsRuntimeSettings.siteConfigPropertiesDictionary.powerShellVersion, '\"}')))]",
@@ -2623,7 +2623,7 @@
               "visible": "[not(steps('infrastructure').useExistingHostingPlan)]",
               "label": "App Service Plan SKU",
               "defaultValue": "P0v3 (1 vCPU, 4 GB RAM) - Most Cost-Effective",
-              "toolTip": "Select the SKU for the new App Service Plan. P0v3 is recommended for cost optimization and fully supports all required features (Always On, VNet integration, PowerShell 7.4).",
+              "toolTip": "Select the SKU for the new App Service Plan. P0v3 is recommended for cost optimization and supports the required Always On and VNet integration features. PowerShell version availability depends on the deployment region.",
               "constraints": {
                 "allowedValues": [
                   {

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "3157353710221832169"
+      "templateHash": "11998518565558298869"
     }
   },
   "definitions": {
@@ -400,7 +400,7 @@
     },
     "powerShellVersion": {
       "type": "string",
-      "defaultValue": "7.4",
+      "defaultValue": "7.6",
       "metadata": {
         "description": "Optional. PowerShell worker version supported by Functions v4 in the deployment region. Redeploy to change an existing app's worker version."
       }
@@ -10806,7 +10806,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "5847192864300506466"
+              "templateHash": "1189983350778444877"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -10951,7 +10951,7 @@
             },
             "powerShellVersion": {
               "type": "string",
-              "defaultValue": "7.4",
+              "defaultValue": "7.6",
               "metadata": {
                 "description": "Optional. PowerShell worker version for the Function App. Use a version supported by Azure Functions runtime v4 in the deployment region. Preview versions are permitted."
               }

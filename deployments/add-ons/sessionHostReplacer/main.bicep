@@ -185,7 +185,7 @@ param privateLinkScopeResourceId string = ''
 // runtime v4 in the deployment region. Preview versions are permitted. Existing Function Apps change
 // versions only when this template is redeployed with a different value.
 @description('Optional. PowerShell worker version supported by Functions v4 in the deployment region. Redeploy to change an existing app\'s worker version.')
-param powerShellVersion string = '7.4'
+param powerShellVersion string = '7.6'
 
 @description('Required. The resource ID of the Key Vault containing session host credential secrets (VirtualMachineAdminPassword, VirtualMachineAdminUserName, DomainJoinUserPassword, DomainJoinUserPrincipalName).')
 param credentialsKeyVaultResourceId string

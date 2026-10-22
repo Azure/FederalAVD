@@ -481,8 +481,14 @@ The deployment creates or uses an existing Function App:
 - **Required Features**:
   - Always On (enabled by deployment)
   - VNet Integration support (if using private endpoints)
-  - PowerShell 7.4 runtime
+  - PowerShell 7.6 runtime with .NET 10 (the template and Portal defaults)
 - 💡 **Cost Tip**: P0v3 is the most cost-effective option and fully supports all required features
+
+The Portal lists runtime versions advertised by the selected region's Functions
+stack API. Confirm that PowerShell 7.6 is available in the target cloud and region
+before deployment. Updating the publisher alone does not upgrade an existing
+Function App; redeploy the Replacer with the intended `powerShellVersion`.
+Microsoft documents that [PowerShell 7.6 requires .NET 10](https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell#running-local-on-a-specific-version).
 
 #### 4. Network Requirements for Zero Trust Networking
 

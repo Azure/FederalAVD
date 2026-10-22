@@ -1,6 +1,40 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 
+Describe 'Session Host Replacer PowerShell runtime alignment' {
+    BeforeAll {
+        $entryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
+        $entrySource = Get-Content -LiteralPath $entryPath -Raw
+        $arm = Get-Content -LiteralPath ([IO.Path]::ChangeExtension($entryPath, '.json')) -Raw | ConvertFrom-Json
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
+        $versionControl = $infrastructure.elements | Where-Object name -eq 'powerShellVersion'
+        $functionApp = $arm.resources.functionApp.properties.template
+    }
+
+    It 'aligns entry and shared runtime defaults to PowerShell 7.6' {
+        $entrySource | Should Match "param powerShellVersion string = '7\.6'"
+        $arm.parameters.powerShellVersion.defaultValue | Should Be '7.6'
+        $functionApp.parameters.powerShellVersion.defaultValue | Should Be '7.6'
+        $arm.resources.functionApp.properties.parameters.powerShellVersion.value |
+            Should Be "[parameters('powerShellVersion')]"
+    }
+
+    It 'pairs the configured PowerShell worker with .NET 10' {
+        $functionApp.resources.functionApp.properties.siteConfig.netFrameworkVersion | Should Be 'v10.0'
+        $functionApp.resources.functionApp.properties.siteConfig.powerShellVersion |
+            Should Be "[parameters('powerShellVersion')]"
+    }
+
+    It 'defaults the Portal to PowerShell 7.6 while retaining regional discovery and explicit version selection' {
+        $versionControl.defaultValue | Should Be 'PowerShell 7.6'
+        $versionControl.constraints.allowedValues | Should Match 'functionAppStacksApi'
+        $versionControl.constraints.allowedValues | Should Match 'supportedFunctionsExtensionVersions'
+        $versionControl.constraints.required | Should Be $true
+        $form.view.outputs.parameters.powerShellVersion | Should Be "[steps('infrastructure').powerShellVersion]"
+    }
+}
+
 Describe 'Session Host Replacer App Service Plan resource-group selection' {
     BeforeAll {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
