@@ -95,6 +95,39 @@ file measurements cannot prove.
 
 ### Experimental deduplicated Template Spec publisher
 
+#### Why packaging happens after Bicep compilation
+
+Bicep remains the source of truth for deployment resources, module contracts and
+dependencies. Its normal compiler output embeds modules as nested ARM templates;
+there is no documented build option that emits those modules as separate files
+with `templateLink.relativePath` references for a single Template Spec package.
+Referencing separately published Template Specs from Bicep is a different model:
+it introduces independently published resources and version dependencies rather
+than bundling child templates into one version.
+
+For this approach, keep the existing Bicep module structure and compiler-generated
+ARM files. Treat extraction and deduplication as a publication-only transformation
+of an in-memory copy, not as a second hand-maintained ARM implementation. Do not
+hand-edit tracked ARM output or duplicate Bicep deployment logic to reduce package
+size. The generated package must preserve deployment behavior, including parameter
+passing, outputs, dependencies, conditions, loops, scope and relative-link origin.
+
+Microsoft documents the linked-template packaging mechanism, but the automatic
+extraction, SHA-256 naming and deduplication algorithm are FederalAVD-specific.
+The authoritative references are:
+
+- [Bicep modules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/modules):
+  normal compilation produces a single ARM template with nested templates.
+- [Create a template spec with linked templates](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/template-specs-create-linked):
+  `templateLink.relativePath` is relative to the template declaring the link.
+  A root template references `artifacts/<hash>.json`; a linked artifact in that
+  directory references its sibling as `<hash>.json`.
+- [Template Spec version resource schema](https://learn.microsoft.com/en-us/azure/templates/microsoft.resources/2021-05-01/templatespecs/versions):
+  a version contains `mainTemplate`, `linkedTemplates` entries with `path` and
+  `template`, and an optional `uiFormDefinition`.
+
+#### Implementation and validation
+
 `tools/New-TemplateSpecs-Deduplicated.ps1` is an opt-in testing copy; the standard
 publisher above remains unchanged. It preserves the same deployment selections and
 naming defaults and adds `-TemplateSpecNameSuffix` for isolated test names and

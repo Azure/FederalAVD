@@ -58,3 +58,15 @@ See [FSLogix form parity notes](./references/fslogix-form-parity.md) before alig
 host-pool and standalone storage forms.
 See [storage application sequencing](./references/storage-application-sequencing.md) before changing
 Entra Kerberos, private endpoint, or NTFS permission orchestration.
+
+## Template Spec linked-template packaging
+
+Before changing Template Spec publishing or deduplication, read the
+[design rationale and validation requirements](../../../docs/design.md#experimental-deduplicated-template-spec-publisher).
+Keep Bicep as the source of truth and tracked ARM as compiler output. The experimental
+publisher extracts eligible nested templates into linked artifacts only in the
+publication copy; do not hand-edit generated ARM or restructure deployment logic
+solely to reproduce this packaging. Linked-template packaging is Microsoft-documented;
+automatic extraction and deduplication are repository-specific. Preserve expression
+scope and link origin, and require live publication, Portal rendering and deployment
+validation before treating the experimental path as production-ready.
