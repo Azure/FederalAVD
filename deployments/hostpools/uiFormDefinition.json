@@ -4466,43 +4466,40 @@
                 {
                   "name": "permittedIPsInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "options": {
                     "text": "Permitted IP Addresses / CIDR Ranges (optional)",
                     "style": "Heading"
                   }
                 },
                 {
-                  "name": "permittedIPsDescription",
+                  "name": "permittedIPsDisabledInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'Disabled')]",
                   "options": {
-                    "text": "Select public access independently of private endpoints. This choice applies to newly deployed Azure Files storage and Key Vaults; existing resources, AVD connection/feed settings, backup vaults and monitoring are unchanged."
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
                   }
                 },
                 {
-                  "name": "permittedIPsScenario1",
+                  "name": "permittedIPsRestrictedInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "options": {
-                    "text": "Disabled: entered IP rules remain configured but do not enable public access. Ensure a working private access path. Trusted-service exceptions remain configured; Key Vault's trusted-service bypass can still apply."
+                    "text": "Allow the public IPv4 addresses or CIDR ranges below. Other public traffic is denied, subject to existing trusted-service exceptions."
                   }
                 },
                 {
-                  "name": "permittedIPsScenario2",
+                  "name": "permittedIPsEnabledInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'Enabled')]",
                   "options": {
-                    "text": "Enabled with restrictions: permit the entered public IP ranges and existing trusted-service exceptions. Unmatched traffic is denied even when the IP list is empty. Private endpoints can coexist with these restrictions."
-                  }
-                },
-                {
-                  "name": "permittedIPsScenario3",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "Enabled: allow all networks regardless of stored IP rules. Authentication and authorization are still required in every mode."
+                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
                   }
                 },
                 {
                   "name": "permittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
-                  "visible": "[not(equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'Enabled'))]",
+                  "visible": "[equals(steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "label": "Permitted IP Addresses / CIDR Ranges",
                   "constraints": {

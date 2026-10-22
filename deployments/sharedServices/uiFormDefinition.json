@@ -522,17 +522,33 @@
                   }
                 },
                 {
-                  "name": "infoBox",
-                  "type": "Microsoft.Common.InfoBox",
+                  "name": "permittedIPsDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'Disabled')]",
                   "options": {
-                    "style": "Info",
-                    "text": "Disabled retains entered IP rules without enabling public access; ensure a working private access path. Enabled with restrictions denies unmatched traffic, including when the IP list is empty. Enabled allows all networks regardless of stored IP rules. Trusted Azure services remain allowed where supported, including Key Vault's trusted-service bypass when public access is Disabled. Authentication and authorization are still required."
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "permittedIPsRestrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow the public IPv4 addresses or CIDR ranges below. Other public traffic is denied, subject to existing trusted-service exceptions."
+                  }
+                },
+                {
+                  "name": "permittedIPsEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
                   }
                 },
                 {
                   "name": "permittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
-                  "visible": "[not(equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'Enabled'))]",
+                  "visible": "[equals(steps('operations').permittedIPsSection.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "label": "Permitted IP Addresses / CIDR Ranges",
                   "constraints": {

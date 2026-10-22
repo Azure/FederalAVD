@@ -56,10 +56,13 @@ effective. These are defaults, not constraints linking public access to private
 endpoint creation.
 
 IP rules remain configured in Disabled mode and do not turn public access back on.
-The Portal permits editing them in both Disabled and restricted modes, allowing
-rules to be staged before enabling public access. Image Management also retains
-supplied subnet rules; service endpoints use the **public** storage endpoint and
-do not provide connectivity when public access is Disabled.
+The Portal shows IP-rule entry only for **Enabled with restrictions**, with a short
+explanation for the selected mode. Switching to Disabled or Enabled hides the grid
+without explicitly clearing entered rules; the rule outputs are not gated on the
+access mode. Parameter files can still supply rules in any mode.
+Image Management also retains supplied subnet rules; service endpoints use the
+**public** storage endpoint and do not provide connectivity when public access is
+Disabled.
 
 Existing purpose-specific exceptions are unchanged: Storage/Key Vault retain
 `AzureServices` bypass; restricted Function App and SCM access retain the

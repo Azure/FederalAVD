@@ -1091,7 +1091,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "Private endpoints provide private Azure Files connectivity. Select public network access separately below. Disabled retains entered IP rules without enabling public access; ensure a working private path. Enabled with restrictions denies unmatched traffic even with an empty IP list; existing AzureServices exceptions for backup/monitoring remain configured. Enabled allows all networks regardless of stored rules. Authentication and authorization are still required."
+                    "text": "Private endpoints provide private Azure Files connectivity. Configure public network access separately below."
                   }
                 },
                 {
@@ -1171,9 +1171,33 @@
                   }
                 },
                 {
+                  "name": "permittedIPsDisabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Disabled')]",
+                  "options": {
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "permittedIPsRestrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow the public IPv4 addresses or CIDR ranges below. Other public traffic is denied, subject to existing trusted-service exceptions."
+                  }
+                },
+                {
+                  "name": "permittedIPsEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
+                  }
+                },
+                {
                   "name": "permittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
-                  "visible": "[not(equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'Enabled'))]",
+                  "visible": "[equals(steps('zeroTrust').privateNetworking.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "label": "Permitted IP Addresses and CIDR Blocks",
                   "ariaLabel": "Permitted IP Addresses and CIDR Blocks",
                   "constraints": {

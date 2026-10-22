@@ -122,23 +122,41 @@
                 {
                   "name": "permittedIPsInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "options": {
                     "text": "Permitted IP Addresses / CIDR Ranges (optional)",
                     "style": "Heading"
                   }
                 },
                 {
-                  "name": "permittedIPsDescription",
+                  "name": "permittedIPsDisabledInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Disabled')]",
                   "options": {
-                    "text": "Disabled retains entered IP and subnet rules without enabling public access; ensure a working private access path. Enabled with restrictions allows configured IP/subnet rules and existing trusted-service exceptions, denying unmatched traffic even with empty lists. Enabled allows all networks regardless of stored rules. AzureServices bypass remains configured for Compute Gallery integration. Authentication and authorization are still required."
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "permittedIPsRestrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow the public IPv4 addresses or CIDR ranges below and configured subnet rules. Other public traffic is denied, subject to existing trusted-service exceptions."
+                  }
+                },
+                {
+                  "name": "permittedIPsEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
                   }
                 },
                 {
                   "name": "storagePermittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
                   "label": "Permitted IP Addresses / CIDR Ranges",
-                  "visible": "[not(equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Enabled'))]",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "toolTip": "",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "constraints": {

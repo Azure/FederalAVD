@@ -17,6 +17,18 @@ $matrixCases = @(0..31 | ForEach-Object {
     }
 })
 
+function Get-PublicAccessControlReference($Directory) {
+    switch ($Directory) {
+        'sharedServices' { "steps('operations').permittedIPsSection.paasPublicNetworkAccess" }
+        'imageManagement' { "steps('storageAccounts').storageSettings.paasPublicNetworkAccess" }
+        'hostpools' { "steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess" }
+        'automatedHostPools' { "steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess" }
+        'add-ons\fslogixStorage' { "steps('zeroTrust').privateNetworking.paasPublicNetworkAccess" }
+        'add-ons\sessionHostReplacer' { "steps('infrastructure').paasPublicNetworkAccess" }
+        default { throw "No public-access control reference defined for '$Directory'." }
+    }
+}
+
 Describe 'PaaS public-access Portal contracts' {
     It 'exposes three explicit choices and maps the mode in <Directory>' -TestCases $formCases {
         param($Directory, $Entry)
@@ -51,7 +63,7 @@ Describe 'PaaS public-access Portal contracts' {
         }
     }
 
-    It 'allows staging IP rules in Disabled mode and never gates rule outputs on the access mode' -TestCases $formCases {
+    It 'shows IP rules only in restricted mode without gating rule outputs on the access mode' -TestCases $formCases {
         param($Directory, $Entry)
 
         $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
@@ -63,9 +75,46 @@ Describe 'PaaS public-access Portal contracts' {
         }
         $grids = @(foreach ($step in $form.view.properties.steps) { Find-NetworkGrid $step.elements })
         $grids.Count | Should Be 1
-        $grids[0].visible | Should Match "not\(equals\(.+\.paasPublicNetworkAccess, 'Enabled'\)\)"
+        $modeReference = Get-PublicAccessControlReference $Directory
+        $grids[0].visible | Should Be "[equals($modeReference, 'EnabledWithRestrictions')]"
+        ($null -eq $grids[0].PSObject.Properties['defaultValue']) | Should Be $true
+        $expectedColumn = if ($Directory -eq 'add-ons\fslogixStorage') { 'value' } else { 'ipAddress' }
+        $grids[0].constraints.columns[0].id | Should Be $expectedColumn
         $outputName = if ($Directory -eq 'imageManagement') { 'storagePermittedIPs' } else { 'permittedIPs' }
         $form.view.outputs.parameters.$outputName | Should Not Match 'paasPublicNetworkAccess|configureZeroTrustNetworking'
+    }
+
+    It 'shows one concise literal explanation per mode and gates the IP heading in <Directory>' -TestCases $formCases {
+        param($Directory, $Entry)
+
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
+        function Find-NetworkExplanation($Elements) {
+            foreach ($element in $Elements) {
+                if ($element.name -in @('permittedIPsDisabledInfo', 'permittedIPsRestrictedInfo', 'permittedIPsEnabledInfo', 'permittedIPsInfo')) {
+                    $element
+                }
+                if ($element.elements) { Find-NetworkExplanation $element.elements }
+            }
+        }
+        $controls = @(foreach ($step in $form.view.properties.steps) { Find-NetworkExplanation $step.elements })
+        $modeReference = Get-PublicAccessControlReference $Directory
+        $explanations = @($controls | Where-Object { $_.name -ne 'permittedIPsInfo' })
+        $explanations.Count | Should Be 3
+        foreach ($mode in @(
+            @{ Name = 'permittedIPsDisabledInfo'; Value = 'Disabled' }
+            @{ Name = 'permittedIPsRestrictedInfo'; Value = 'EnabledWithRestrictions' }
+            @{ Name = 'permittedIPsEnabledInfo'; Value = 'Enabled' }
+        )) {
+            $explanation = @($explanations | Where-Object { $_.name -eq $mode.Name })
+            $explanation.Count | Should Be 1
+            $explanation[0].type | Should Be 'Microsoft.Common.TextBlock'
+            $explanation[0].visible | Should Be "[equals($modeReference, '$($mode.Value)')]"
+            $explanation[0].options.text | Should Not Match '^\['
+            $explanation[0].options.text.Length | Should BeLessThan 180
+        }
+        foreach ($heading in @($controls | Where-Object { $_.name -eq 'permittedIPsInfo' })) {
+            $heading.visible | Should Be "[equals($modeReference, 'EnabledWithRestrictions')]"
+        }
     }
 
     It 'preserves subnet restrictions in the initial Service Endpoint selection' {

@@ -2915,22 +2915,38 @@
                 "text": "Permitted IP Addresses / CIDR Ranges (optional)",
                 "style": "Heading"
               },
-              "visible": true
+              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'EnabledWithRestrictions')]"
             },
             {
-              "name": "permittedIPsDescription",
+              "name": "permittedIPsDisabledInfo",
               "type": "Microsoft.Common.TextBlock",
+              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'Disabled')]",
               "options": {
-                "text": "Disabled retains entered IP rules without enabling public access; ensure a working private path. Enabled with restrictions denies unmatched traffic even with an empty IP list. Enabled allows all networks regardless of stored rules. Restricted app/SCM access also permits the existing AzureCloud service tag; runtime storage retains AzureServices bypass. Network reachability does not grant storage authorization."
-              },
-              "visible": true
+                "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+              }
+            },
+            {
+              "name": "permittedIPsRestrictedInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+              "options": {
+                "text": "Allow the public IPv4 addresses or CIDR ranges below. Existing AzureCloud app/SCM access and trusted-service storage exceptions remain allowed."
+              }
+            },
+            {
+              "name": "permittedIPsEnabledInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'Enabled')]",
+              "options": {
+                "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
+              }
             },
             {
               "name": "permittedIPs",
               "type": "Microsoft.Common.EditableGrid",
               "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
               "label": "Permitted IP Addresses / CIDR Ranges",
-              "visible": "[not(equals(steps('infrastructure').paasPublicNetworkAccess, 'Enabled'))]",
+              "visible": "[equals(steps('infrastructure').paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
               "constraints": {
                 "width": "Full",
                 "rows": {
