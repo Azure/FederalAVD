@@ -404,10 +404,16 @@ try {
         $package = New-TemplateSpecPublicationPackage -TemplateFile $templateSpec.TemplateFile -FormFile $templateSpec.UiFormDefinition
         $payloadBytes = Get-TemplateSpecPublicationSize -Package $package -Location $Location
         $metadataAllowanceBytes = 16384
-        if ($payloadBytes + $metadataAllowanceBytes -gt 2000000) {
-            throw "$($templateSpec.DisplayName) requires $payloadBytes bytes plus a $metadataAllowanceBytes-byte publishing metadata allowance, exceeding the 2,000,000-byte Template Spec budget."
+        $publicationBudgetBytes = 2000000
+        $budgetedBytes = $payloadBytes + $metadataAllowanceBytes
+        $remainingHeadroomBytes = $publicationBudgetBytes - $budgetedBytes
+        Write-Output "$($templateSpec.DisplayName) publication size check:"
+        Write-Output ("  Measured request: {0:N0} bytes (template, Portal form, linked templates, and request envelope)." -f $payloadBytes)
+        Write-Output ("  Reserved safety margin: {0:N0} bytes (16 KiB for additional publishing metadata; not added to the template)." -f $metadataAllowanceBytes)
+        if ($remainingHeadroomBytes -lt 0) {
+            throw ("{0}: measured request plus reserved safety margin is {1:N0} bytes, exceeding the {2:N0}-byte Template Spec budget by {3:N0} bytes. Reduce the publication content before retrying." -f $templateSpec.DisplayName, $budgetedBytes, $publicationBudgetBytes, (-$remainingHeadroomBytes))
         }
-        Write-Output "$($templateSpec.DisplayName): $payloadBytes publication bytes (plus $metadataAllowanceBytes-byte metadata allowance)."
+        Write-Output ("  Total checked: {0:N0} / {1:N0} bytes; remaining headroom: {2:N0} bytes." -f $budgetedBytes, $publicationBudgetBytes, $remainingHeadroomBytes)
         $targetDirectory = Join-Path $stagingDirectory ([string]$templateSpecs.IndexOf($templateSpec))
         [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Unpack(
             $package, $targetDirectory, 'main.json', 'uiFormDefinition.json'

@@ -80,8 +80,10 @@ It does not depend on input minification or change SDK serialization settings.
 Before any resource creation or publication, every selected package is measured
 using the installed Az.Resources SDK's normal version-request serializer, including
 the main template, linked artifacts, Portal form, and location envelope. A
-16,384-byte allowance covers additional publishing metadata; the combined budget
-is 2,000,000 bytes. Staging files are removed on success or failure.
+16,384-byte (16 KiB) safety margin reserves room for additional publishing metadata;
+it is not data appended to the template. Output separates the measured request,
+reserved margin, total checked, and remaining headroom against the 2,000,000-byte
+budget. Staging files are removed on success or failure.
 
 Run `Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
 after changes affecting publication. These offline checks require Az.Resources,
