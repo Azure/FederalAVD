@@ -81,6 +81,9 @@ Describe 'Published host-pool orchestrator payload sizes' {
             $payloadSize = Get-TemplateSpecPublicationSize -Package $package -Location 'usgovvirginia'
 
             ($payloadSize + 16384) | Should BeLessThan 2000000
+            if ($orchestratorCase.Name -eq 'standard host-pool orchestrator') {
+                $payloadSize | Should BeLessThan 1820000
+            }
         }
 
     }

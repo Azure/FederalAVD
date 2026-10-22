@@ -33,7 +33,8 @@ both, including the group used to seed associated globally unique names.
 
 Use `resourceName` for convention-generated resources and `namePattern` for
 purpose-specific patterns. Do not introduce another purpose literal or a local
-copy of the convention defaults in a caller.
+copy of the convention defaults in a caller, except for the fixed internal
+deployment-helper fallback described below.
 
 After editing a policy dataset:
 
@@ -63,6 +64,10 @@ checks generated defaults/forms for freshness before accessing Azure.
 
 - Explicit names, existing IDs, customer patterns and adopted host-pool naming
   tags remain authoritative.
+- The temporary deployment helper honors explicit resource names and a supplied
+  identity name pattern. Its internal identity fallback replaces `TOKEN` with
+  the fixed purpose `deployment`; it does not import or evaluate the naming policy.
+  Caller-generated VM, disk and NIC names are unchanged.
 - Quota/route Automation Accounts and two legacy Template Spec publishing
   defaults intentionally omit workload. These are centralized role-specific
   rules, not additional naming engines.
@@ -104,6 +109,14 @@ import { resourceName } from './functions.bicep'
 var operationsName = resourceName({}, 'operationsResourceGroup', 'va', '', '')
 // rg-avd-operations-va
 ```
+
+For a single policy value, prefer a narrow export such as `osDiskNamePattern`.
+It loads `$.patterns.osDisk` directly from the authoritative JSON with
+`loadJsonContent`. Importing the whole `namingPolicy` object for one property
+embeds unrelated rules in each consuming ARM template. Exporting a property of
+an already-loaded object does not avoid that expansion with the current compiler.
+Keep file-backed scalar exports out of parameter defaults; use the generated
+literal-default workflow described above for those.
 
 Both `buildCustomName` and `cnv` accept, in order:
 

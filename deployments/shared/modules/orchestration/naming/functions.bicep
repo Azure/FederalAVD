@@ -5,6 +5,10 @@ metadata description = 'Authoritative FederalAVD naming policy implementation. R
 @description('Authoritative naming defaults, resource roles, patterns and length limits. Edit the shared data file rather than copying rules into consumers.')
 var namingPolicy object = loadJsonContent('../../../data/namingPolicy.json')
 
+@export()
+@description('Default OS disk pattern from the authoritative policy. Import this scalar when no other naming rules are needed.')
+var osDiskNamePattern string = loadJsonContent('../../../data/namingPolicy.json', '$.patterns.osDisk')
+
 var resourceAbbreviations object = loadJsonContent('../../../data/resourceAbbreviations.json')
 var locationDefinitions object = loadJsonContent('../../../data/locations.json')
 

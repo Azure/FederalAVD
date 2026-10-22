@@ -3469,14 +3469,6 @@
                   }
                 },
                 {
-                  "name": "namingPreview",
-                  "type": "Microsoft.Common.TextBlock",
-                  "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
-                  "options": {
-                    "text": "[concat('Preview (substituting avdhost001 for SHNAME, 01 for ##):\n  VM: ', replace(steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, 'avdhost001'), '\n  Disk: ', replace(steps('advanced').sessionHostNaming.diskNameConvOverride, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, 'avdhost001'), '\n  NIC: ', replace(steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine, 'avdhost001'), '\n  Avail. Set: ', replace(steps('advanced').sessionHostNaming.availabilitySetNameConvOverride, '##', '01'))]"
-                  }
-                },
-                {
                   "name": "virtualMachineNameConvOverride",
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",

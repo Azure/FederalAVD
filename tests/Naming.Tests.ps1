@@ -12,6 +12,9 @@ Describe 'Shared naming and module metadata contracts' {
             FunctionApp = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
             HostingPlan = 'deployments\shared\modules\resourceModules\functionApp\functionAppHostingPlan.bicep'
             FunctionDefinition = 'deployments\shared\modules\resourceModules\functionApp\function.bicep'
+            ScalarPattern = 'tests\fixtures\naming-scalar-import.bicep'
+            DeploymentHelper = 'deployments\shared\modules\orchestration\deploymentHelper\deploy.bicep'
+            SessionHostVMs = 'deployments\shared\modules\orchestration\sessionHosts\virtualMachines.bicep'
         }
         foreach ($module in $modulePaths.Keys) {
             $source = Join-Path $repoRoot $modulePaths[$module]
@@ -86,9 +89,29 @@ Describe 'Shared naming and module metadata contracts' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.NamingFunctions) -Raw
         $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var) (\w+)")
         @($documentedExports).Count | Should Be ([regex]::Matches($source, '(?m)^@export\(\)').Count)
-        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'namingPolicy', 'imageStorageName', 'namePattern')) {
+        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should Be 1
         }
+    }
+
+    It 'keeps a scalar policy import below 1200 compiled bytes without the policy catalog' {
+        (Get-Item -LiteralPath (Join-Path $testOutputDirectory 'ScalarPattern.json')).Length | Should BeLessThan 1200
+        $variables = $compiledModules.ScalarPattern.variables | ConvertTo-Json -Depth 100 -Compress
+        $variables | Should Match 'SHNAME-osdisk'
+        $variables | Should Not Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
+    }
+
+    It 'does not embed the policy catalog or generic naming functions in small consumers' {
+        foreach ($name in @('DeploymentHelper', 'SessionHostVMs')) {
+            $variables = $compiledModules[$name].variables | ConvertTo-Json -Depth 100 -Compress
+            $variables | Should Not Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
+            @($compiledModules[$name].functions | Where-Object { $null -ne $_ }).Count | Should Be 0
+        }
+    }
+
+    It 'preserves explicit helper identity names and uses a fixed deployment token for fallback' {
+        $compiledModules.DeploymentHelper.variables.deploymentUserAssignedIdentityName |
+            Should Be "[if(not(empty(parameters('userAssignedIdentityName'))), parameters('userAssignedIdentityName'), replace(parameters('userAssignedIdentityNameConv'), 'TOKEN', 'deployment'))]"
     }
 
     It 'imports shared naming without redeclaring helpers in <Path>' -TestCases @(
@@ -220,6 +243,8 @@ Describe 'Shared naming and module metadata contracts' {
         $changedPolicy.defaults.workload = 'desktop'
         $changedPolicy.resources.operationsResourceGroup.purpose = @('ops')
         $changedPolicy.patterns.imageBuildVm = '{prefix}image-{unique}'
+        $changedPolicy.patterns.osDisk = 'SHNAME-systemdisk'
+        $changedPolicy.patterns.deploymentIdentityPurpose = 'unused-helper-purpose'
         [System.IO.File]::WriteAllText($copiedPolicyPath, (ConvertTo-Json -InputObject $changedPolicy -Depth 100))
         $sync = Join-Path $copyRoot 'tools\Sync-NamingPolicy.ps1'
         $staleDetected = $false
@@ -247,7 +272,7 @@ Describe 'Shared naming and module metadata contracts' {
         }
         $lines = @(
             'using none'
-            "import { namingPolicy, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'"
+            "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'"
             'var namingConvention = {}'
             "var cnv_vmsloc = 'va'"
             "var cnv_loc = 'va'"
@@ -259,6 +284,11 @@ Describe 'Shared naming and module metadata contracts' {
             "var uniqueStringUrt = 'abc123'"
             "var depPrefix = 'dev-'"
             "var buildRunId = 'abc123'"
+            'var sessionHostCount = 2'
+            "var sessionHostNames = ['host01', 'host02']"
+            "var virtualMachineDiskNameConv = ''"
+            "var userAssignedIdentityName = ''"
+            "var userAssignedIdentityNameConv = 'uai-TOKEN-va'"
         )
         $consumers = @(
             @{ Name = 'hostPool'; Path = $modulePaths.HostPoolNaming; Variable = 'resourceGroupOperations' }
@@ -267,13 +297,24 @@ Describe 'Shared naming and module metadata contracts' {
             @{ Name = 'replacer'; Path = $modulePaths.ReplacerNaming; Variable = 'functionAppName' }
             @{ Name = 'networking'; Path = 'deployments\networking\networking.bicep'; Variable = 'natGatewayName' }
             @{ Name = 'imageBuild'; Path = 'deployments\imageBuild\imageBuild.bicep'; Variable = 'imageVmName' }
+            @{ Name = 'osDisks'; Path = $modulePaths.SessionHostVMs; Variable = 'osDiskNames' }
         )
         foreach ($consumer in $consumers) {
             $source = Get-Content -LiteralPath (Join-Path $repoRoot $consumer.Path) -Raw
             $match = [regex]::Matches($source, "(?m)^var $($consumer.Variable) = ([^\r\n]+)")
             $match.Count | Should Be 1
             $lines += "param $($consumer.Name) = $($match[0].Groups[1].Value)"
+            if ($consumer.Name -eq 'osDisks') {
+                $customDiskExpression = $match[0].Groups[1].Value -replace '\bvirtualMachineDiskNameConv\b', "'custom-SHNAME-disk'"
+                $lines += "param customOsDisks = $customDiskExpression"
+            }
         }
+        $helperSource = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.DeploymentHelper) -Raw
+        $helperMatch = [regex]::Match($helperSource, '(?s)var deploymentUserAssignedIdentityName =\s*(.*?)\r?\nvar virtualMachineAdminUserName')
+        $helperMatch.Success | Should Be $true
+        $lines += "param helperDefault = $($helperMatch.Groups[1].Value)"
+        $explicitHelperExpression = $helperMatch.Groups[1].Value -replace '\buserAssignedIdentityName\b', "'explicit-helper'"
+        $lines += "param helperExplicit = $explicitHelperExpression"
         foreach ($name in @('avdAlerts', 'storageQuotaManager', 'updateRouteTableWithM365Routes')) {
             $source = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\add-ons\$name\main.bicep") -Raw
             $match = [regex]::Matches($source, "(?m)^var automationAccountName = !empty\(automationAccountNameOverride\)\r?\n  \? automationAccountNameOverride\r?\n  : ([^\r\n]+)")
@@ -296,6 +337,10 @@ Describe 'Shared naming and module metadata contracts' {
         $names.storageQuotaManager.value | Should Be 'aa-sqm-finance-va'
         $names.updateRouteTableWithM365Routes.value | Should Be 'aa-urt-abc123-va'
         $names.imageBuild.value | Should Be 'dev-image-abc123'
+        ($names.osDisks.value -join ',') | Should Be 'host01-systemdisk,host02-systemdisk'
+        ($names.customOsDisks.value -join ',') | Should Be 'custom-host01-disk,custom-host02-disk'
+        $names.helperDefault.value | Should Be 'uai-deployment-va'
+        $names.helperExplicit.value | Should Be 'explicit-helper'
     }
 
     It 'keeps runtime-derived host-pool naming behind its deployment boundary' {
@@ -321,5 +366,37 @@ Describe 'Shared naming and module metadata contracts' {
         $description | Should Not Match 'Key properties:'
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.HostPoolNaming) -Raw
         $source | Should Match '(?m)^// Component requirements:'
+    }
+}
+
+Describe 'Portal naming without resource-name previews' {
+    It 'omits naming previews without dangling references in <Directory>' -TestCases @(
+        @{ Directory = 'hostpools'; Output = 'namingConvention' }
+        @{ Directory = 'sharedServices'; Output = 'namingConvention' }
+        @{ Directory = 'imageManagement'; Output = 'namingConvention' }
+        @{ Directory = 'add-ons\sessionHostReplacer'; Output = 'namingConvention' }
+        @{ Directory = 'add-ons\avdAlerts'; Output = 'automationAccountNameOverride' }
+        @{ Directory = 'add-ons\storageQuotaManager'; Output = 'automationAccountNameOverride' }
+    ) {
+        param($Directory, $Output)
+
+        $formPath = Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json"
+        $source = Get-Content -LiteralPath $formPath -Raw
+        $form = $source | ConvertFrom-Json
+        $source | Should Not Match '\b(namingPreview|defaultNamePreview|previewConvention|previewHostPool|previewKvSecrets|previewKvEncryption|previewRg|previewGallery|previewVmPatterns|previewNote)\b'
+        [string]::IsNullOrWhiteSpace($form.view.outputs.parameters.$Output) | Should Be $false
+    }
+
+    It 'retains Key Vault truncation warnings and complete-name override validation in <Directory>' -TestCases @(
+        @{ Directory = 'hostpools' }
+        @{ Directory = 'sharedServices' }
+    ) {
+        param($Directory)
+
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw
+        $source | Should Match '"name": "kvNameTruncationWarning"'
+        $source | Should Match '"name": "secretsKeyVaultNameOverride"'
+        $source | Should Match '"name": "encryptionKeyVaultNameOverride"'
+        $source | Should Match 'checkNameAvailability'
     }
 }

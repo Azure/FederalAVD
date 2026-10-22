@@ -45,6 +45,8 @@ Empty-valued top-level components are removed before joining. Separators inside 
 
 Convention-generated names are driven by the shared naming policy and the `namingConvention` parameter. The policy owns defaults, role purposes, patterns, constraints and uniqueness recipes; the parameter supplies customer overrides. Explicit names, existing-resource IDs, provider-required names and lifecycle identifiers are not automatically rewritten.
 
+Portal forms retain naming controls, validation and explicit overrides but omit live resource-name previews to keep Template Spec packages smaller. Names are resolved at deployment time.
+
 **Names follow the naming convention subject to resource-specific restrictions.**
 The delimiter controls component assembly, but it is not necessarily preserved in
 the final resource name. For example, Key Vault formatting converts underscores
@@ -427,7 +429,7 @@ The add-ons are deployed **after** the host pool exists. Session Host Replacer a
 
 ### Portal deployments
 
-When deploying from the Portal, the *Advanced* step pre-populates `namingConvention` and `identifier` from tags on the host pool and its resource group (`hpNamingConvention`, `hpIdentifier`). The derived resource names are shown in a live preview. If the host pool tag is absent, the *Advanced* step surfaces override fields so you can provide explicit names.
+When deploying from the Portal, the *Advanced* step pre-populates `namingConvention` and `identifier` from tags on the host pool and its resource group (`hpNamingConvention`, `hpIdentifier`). If the host pool tag is absent, the *Advanced* step surfaces override fields so you can provide explicit names.
 
 ### Parameter file / CLI deployments
 

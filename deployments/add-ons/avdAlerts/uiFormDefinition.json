@@ -540,13 +540,6 @@
                             "visible": "[steps('storage').storageSection.enableStorageAlerts]",
                             "elements": [
                                 {
-                                    "name": "defaultNamePreview",
-                                    "type": "Microsoft.Common.TextBlock",
-                                    "options": {
-                                        "text": "Default Automation Account name: aa-avd-alerts-{locAbbrev}  (e.g. aa-avd-alerts-eus2)"
-                                    }
-                                },
-                                {
                                     "name": "enableNameOverride",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Override Automation Account Name",

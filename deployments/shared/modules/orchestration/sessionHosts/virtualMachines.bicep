@@ -2,7 +2,7 @@ metadata name = 'Session host VM batch orchestration'
 metadata description = 'Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup.'
 
 import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
-import { namingPolicy } from '../naming/functions.bicep'
+import { osDiskNamePattern } from '../naming/functions.bicep'
 
 @description('Required. AVD Agent Boot Loader installer URL forwarded to initialization; the caller resolves cloud-specific defaults.')
 param agentBootLoaderDownloadUrl string
@@ -178,7 +178,7 @@ var identity = identityType != 'None'
 
 var networkInterfaceNames = [for i in range(0, sessionHostCount): empty(virtualMachineNicNameConv) ? sessionHostNames[i] : replace(virtualMachineNicNameConv, 'SHNAME', sessionHostNames[i])]
 var virtualMachineNames = [for i in range(0, sessionHostCount): empty(virtualMachineNameConv) ? sessionHostNames[i] : replace(virtualMachineNameConv, 'SHNAME', sessionHostNames[i])]
-var osDiskNames = [for i in range(0, sessionHostCount): replace(empty(virtualMachineDiskNameConv) ? namingPolicy.patterns.osDisk : virtualMachineDiskNameConv, 'SHNAME', sessionHostNames[i])]
+var osDiskNames = [for i in range(0, sessionHostCount): replace(empty(virtualMachineDiskNameConv) ? osDiskNamePattern : virtualMachineDiskNameConv, 'SHNAME', sessionHostNames[i])]
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))

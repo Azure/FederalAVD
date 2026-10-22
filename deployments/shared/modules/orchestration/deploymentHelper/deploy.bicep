@@ -2,7 +2,6 @@ metadata name = 'Deployment helper orchestration'
 metadata description = 'Deploys a temporary Windows helper VM and managed identity in an existing deployment resource group, with feature-dependent permissions and optional domain join for deployment-time operations.'
 
 targetScope = 'subscription'
-import { namePattern } from '../naming/functions.bicep'
 
 @description('Required. Whether confidential VM OS disk encryption is selected.')
 param confidentialVMOSDiskEncryption bool
@@ -56,7 +55,7 @@ param resourceGroupStorage string
 param tags object
 @description('Changes on each deployment to force the domain-join extension to execute when configured.')
 param domainJoinForceUpdateTag string = utcNow('yyyyMMddHHmmss')
-@description('Optional. Fallback helper identity name pattern containing TOKEN, used when userAssignedIdentityName is empty.')
+@description('Optional. Fallback helper identity name pattern; TOKEN is replaced with the fixed deployment purpose. Used when userAssignedIdentityName is empty.')
 param userAssignedIdentityNameConv string = ''
 @description('Optional. Explicit helper identity name; when empty, the name is derived from userAssignedIdentityNameConv.')
 param userAssignedIdentityName string = ''
@@ -73,7 +72,7 @@ param manageHostResourcePermissions bool = true
 
 var deploymentUserAssignedIdentityName = !empty(userAssignedIdentityName)
   ? userAssignedIdentityName
-  : replace(userAssignedIdentityNameConv, 'TOKEN', namePattern('deploymentIdentityPurpose', {}))
+  : replace(userAssignedIdentityNameConv, 'TOKEN', 'deployment')
 var virtualMachineAdminUserName = 'avddeploy'
 var virtualMachineAdminPassword = 'aA1!${uniqueString(subscription().id, resourceGroupDeployment, virtualMachineName)}'
 var effectiveParentResourceId = !empty(parentResourceId)
