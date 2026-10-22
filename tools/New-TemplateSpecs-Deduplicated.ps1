@@ -269,30 +269,34 @@ function ConvertTo-DeduplicatedTemplateLinks {
         [bool]$InsideArtifact = $false
     )
 
+    $hasLinkedChildren = $false
     foreach ($resource in (Get-DeduplicatedTemplateResources -Template $Template)) {
         if ([string]$resource['type'] -ine 'Microsoft.Resources/deployments') { continue }
         $properties = $resource['properties']
         if ($properties -isnot [Newtonsoft.Json.Linq.JObject]) { continue }
         $child = $properties['template']
         if ($child -isnot [Newtonsoft.Json.Linq.JObject]) { continue }
-        $hash = Get-DeduplicatedTemplateHash -Template $child
         $evaluationOptions = $properties['expressionEvaluationOptions']
-        if ($evaluationOptions -is [Newtonsoft.Json.Linq.JObject] -and [string]$evaluationOptions['scope'] -ieq 'inner' -and
-            $Candidates.ContainsKey($hash) -and $Candidates[$hash].Count -gt 1) {
-            if (-not $Artifacts.ContainsKey($hash)) {
-                $artifact = $child.DeepClone()
-                $Artifacts[$hash] = $artifact
-                ConvertTo-DeduplicatedTemplateLinks -Template $artifact -Candidates $Candidates -Artifacts $Artifacts -InsideArtifact $true
-            }
-            $relativePath = if ($InsideArtifact) { "$hash.json" } else { "artifacts/$hash.json" }
-            $properties.Remove('template') | Out-Null
-            $properties.Remove('expressionEvaluationOptions') | Out-Null
-            $properties['templateLink'] = [Newtonsoft.Json.Linq.JObject]::FromObject(@{ relativePath = $relativePath })
+        # An inline boundary loses the link origin. Outer/default scope cannot be
+        # extracted safely, so leave its complete subtree inline.
+        if ($evaluationOptions -isnot [Newtonsoft.Json.Linq.JObject] -or [string]$evaluationOptions['scope'] -ine 'inner') {
+            continue
         }
-        else {
-            ConvertTo-DeduplicatedTemplateLinks -Template $child -Candidates $Candidates -Artifacts $Artifacts -InsideArtifact $InsideArtifact
+        $hash = Get-DeduplicatedTemplateHash -Template $child
+        if (-not $Artifacts.ContainsKey($hash)) {
+            $artifact = $child.DeepClone()
+            $childHasLinks = ConvertTo-DeduplicatedTemplateLinks -Template $artifact -Candidates $Candidates -Artifacts $Artifacts -InsideArtifact $true
+            $isDuplicate = $Candidates.ContainsKey($hash) -and $Candidates[$hash].Count -gt 1
+            if (-not $isDuplicate -and -not $childHasLinks) { continue }
+            $Artifacts[$hash] = $artifact
         }
+        $relativePath = if ($InsideArtifact) { "$hash.json" } else { "artifacts/$hash.json" }
+        $properties.Remove('template') | Out-Null
+        $properties.Remove('expressionEvaluationOptions') | Out-Null
+        $properties['templateLink'] = [Newtonsoft.Json.Linq.JObject]::FromObject(@{ relativePath = $relativePath })
+        $hasLinkedChildren = $true
     }
+    return $hasLinkedChildren
 }
 
 function Get-DeduplicatedTemplateSpecPayload {
@@ -341,7 +345,7 @@ function New-DeduplicatedTemplateSpecPackage {
     $candidates = @{}
     Find-DeduplicatedTemplateCandidates -Template $package.RootTemplate -Candidates $candidates
     $artifacts = @{}
-    ConvertTo-DeduplicatedTemplateLinks -Template $package.RootTemplate -Candidates $candidates -Artifacts $artifacts
+    $null = ConvertTo-DeduplicatedTemplateLinks -Template $package.RootTemplate -Candidates $candidates -Artifacts $artifacts
     foreach ($hash in @($artifacts.Keys | Sort-Object)) {
         $package.Artifacts.Add([Microsoft.Azure.Management.Resources.Models.LinkedTemplateArtifact]::new(
             "artifacts/$hash.json", $artifacts[$hash]

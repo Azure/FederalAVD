@@ -588,7 +588,7 @@
                   "name": "delimiter",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Delimiter",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.delimiter]",
+                  "defaultValue": "-",
                   "toolTip": "Character(s) placed between each component. A hyphen (-) is most common. Storage account names cannot contain hyphens — they are stripped automatically for those resources.",
                   "constraints": {
                     "required": true,
@@ -925,7 +925,7 @@
                     "regex": "^[a-z0-9-]{1,20}$",
                     "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
                   },
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.workload]"
+                  "defaultValue": "avd"
                 },
                 {
                   "name": "freeform1Value",

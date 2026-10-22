@@ -73,26 +73,37 @@ foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments')
     }
 }
 
-function Update-ComponentDefaults {
+function Update-PortalNamingDefaults {
     param($Node)
 
     if ($Node -is [System.Management.Automation.PSCustomObject]) {
-        if ($Node.type -eq 'Microsoft.Common.DropDown' -and $Node.name -match '^component([1-6])$') {
-            $index = [int]$Matches[1] - 1
-            $component = if ($index -lt $policy.defaults.components.Count) { $policy.defaults.components[$index] } else { 'none' }
-            $selection = @($Node.constraints.allowedValues | Where-Object { $_.value -eq $component })
+        if ($Node.type -eq 'Microsoft.Common.DropDown' -and ($Node.name -match '^component([1-6])$' -or $Node.name -eq 'delimiter')) {
+            $value = if ($Node.name -eq 'delimiter') {
+                $policy.defaults.delimiter
+            }
+            else {
+                $index = [int]$Node.name.Substring(9) - 1
+                if ($index -lt $policy.defaults.components.Count) { $policy.defaults.components[$index] } else { 'none' }
+            }
+            $selection = @($Node.constraints.allowedValues | Where-Object { $_.value -ceq $value })
             if ($selection.Count -ne 1) {
-                throw "The $($Node.name) dropdown cannot represent naming component '$component'."
+                throw "The $($Node.name) dropdown cannot represent naming default '$value'."
             }
             $Node.defaultValue = $selection[0].label
         }
+        elseif ($Node.type -eq 'Microsoft.Common.TextBox' -and $Node.name -eq 'workloadValue') {
+            $Node.defaultValue = $policy.defaults.workload
+        }
+        elseif ($Node.type -eq 'Microsoft.Common.TextBox' -and $Node.name -eq 'delimiter') {
+            $Node.defaultValue = $policy.defaults.delimiter
+        }
         foreach ($property in @($Node.PSObject.Properties)) {
-            Update-ComponentDefaults -Node $property.Value
+            Update-PortalNamingDefaults -Node $property.Value
         }
     }
     elseif ($Node -is [array]) {
         foreach ($item in $Node) {
-            Update-ComponentDefaults -Node $item
+            Update-PortalNamingDefaults -Node $item
         }
     }
 }
@@ -115,7 +126,7 @@ foreach ($file in $forms) {
     $step = $form.view.properties.steps[0]
     $step.elements = @($step.elements | Where-Object { $_.name -ne 'federalAvdNamingPolicy' }) + @($control)
     $control[0].defaultValue = $payload
-    Update-ComponentDefaults -Node $form
+    Update-PortalNamingDefaults -Node $form
     $after = ConvertTo-Json -InputObject $form -Depth 100
     if ($before -cne $after) {
         if ($Check) {

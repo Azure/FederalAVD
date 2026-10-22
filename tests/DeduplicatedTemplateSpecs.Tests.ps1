@@ -18,7 +18,8 @@ function Expand-TestTemplateArtifacts {
     param(
         [Newtonsoft.Json.Linq.JObject]$Template,
         [hashtable]$Artifacts,
-        [string]$Directory = ''
+        [string]$Directory = '',
+        [bool]$HasLinkContext = $true
     )
 
     $resources = $Template['resources']
@@ -33,17 +34,20 @@ function Expand-TestTemplateArtifacts {
         if ([string]$resource['type'] -ine 'Microsoft.Resources/deployments') { continue }
         $properties = $resource['properties']
         $childDirectory = $Directory
+        $childHasLinkContext = $false
         $link = $properties['templateLink']
         if ($null -ne $link -and $null -ne $link['relativePath']) {
+            if (-not $HasLinkContext) { throw 'Inline deployment cannot resolve relative artifact links.' }
             $path = $Directory + [string]$link['relativePath']
             if (-not $Artifacts.ContainsKey($path)) { throw "Missing artifact '$path'." }
             $properties['template'] = $Artifacts[$path].DeepClone()
             $properties['expressionEvaluationOptions'] = [Newtonsoft.Json.Linq.JObject]::Parse('{"scope":"inner"}')
             $properties.Remove('templateLink') | Out-Null
             $childDirectory = $path.Substring(0, $path.LastIndexOf('/') + 1)
+            $childHasLinkContext = $true
         }
         if ($properties['template'] -is [Newtonsoft.Json.Linq.JObject]) {
-            Expand-TestTemplateArtifacts -Template $properties['template'] -Artifacts $Artifacts -Directory $childDirectory
+            Expand-TestTemplateArtifacts -Template $properties['template'] -Artifacts $Artifacts -Directory $childDirectory -HasLinkContext $childHasLinkContext
         }
     }
 }
@@ -109,7 +113,7 @@ Describe 'Deduplicated publication packages' {
         if ($Name -eq 'deployments\hostpools\hostpool.json') {
             ($package.OriginalPayloadBytes - $package.PayloadBytes) | Should BeGreaterThan 240000
             ($package.PayloadBytes + 16384) | Should BeLessThan 1600000
-            $package.Artifacts.Count | Should Be 12
+            $package.Artifacts.Count | Should Be 28
         }
     }
 
@@ -147,6 +151,68 @@ Describe 'Deduplicated publication packages' {
         [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $restored) | Should Be $true
         $second = New-TestDeduplicationPackage -Template $root -Directory $TestDrive
         (Get-DeduplicatedTemplateSpecPayload $package usgovvirginia) | Should Be (Get-DeduplicatedTemplateSpecPayload $second usgovvirginia)
+    }
+
+    It 'links unique ancestors of duplicate leaves without crossing inline boundaries for <Shape>' -TestCases @(
+        @{ Shape = 'symbolic' }
+        @{ Shape = 'array' }
+    ) {
+        param($Shape)
+
+        $leaf = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}')
+        $root = $leaf.DeepClone()
+        if ($Shape -eq 'symbolic') {
+            $resources = [Newtonsoft.Json.Linq.JObject]::new()
+        }
+        else {
+            $resources = [Newtonsoft.Json.Linq.JArray]::new()
+        }
+        foreach ($name in @('one', 'two')) {
+            $parent = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}')
+            $parent['variables'] = [Newtonsoft.Json.Linq.JObject]::FromObject(@{ unique = $name })
+            $parent['resources'].Add((New-TestInlineDeployment $leaf))
+            $grandparent = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}')
+            $grandparent['resources'].Add((New-TestInlineDeployment $parent))
+            $deployment = New-TestInlineDeployment $grandparent
+            if ($Shape -eq 'symbolic') { $resources[$name] = $deployment } else { $resources.Add($deployment) }
+        }
+        $root['resources'] = $resources
+        $package = New-TestDeduplicationPackage $root $TestDrive
+        $package.Artifacts.Count | Should Be 5
+        $artifacts = @{}
+        foreach ($artifact in $package.Artifacts) { $artifacts[$artifact.Path] = $artifact.Template }
+        $restored = $package.RootTemplate.DeepClone()
+        Expand-TestTemplateArtifacts $restored $artifacts
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $restored) | Should Be $true
+        foreach ($deployment in (Get-DeduplicatedTemplateResources $package.RootTemplate)) {
+            $deployment['properties']['template'] | Should BeNullOrEmpty
+            [string]$deployment['properties']['templateLink']['relativePath'] | Should Match '^artifacts/'
+        }
+    }
+
+    It 'rejects relative artifact links below an inline deployment in the test resolver' {
+        $root = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}')
+        $parent = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[{"type":"Microsoft.Resources/deployments","properties":{"templateLink":{"relativePath":"artifacts/leaf.json"}}}]}')
+        $root['resources'].Add((New-TestInlineDeployment $parent))
+        { Expand-TestTemplateArtifacts $root @{ 'artifacts/leaf.json' = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}') } } |
+            Should Throw 'Inline deployment cannot resolve relative artifact links.'
+    }
+
+    It 'keeps duplicate descendants below <Scope>-scope boundaries inline' -TestCases @(
+        @{ Scope = 'outer' }
+        @{ Scope = 'default' }
+    ) {
+        param($Scope)
+
+        $leaf = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}')
+        $parent = $leaf.DeepClone()
+        $parent['resources'].Add((New-TestInlineDeployment $leaf))
+        $parent['resources'].Add((New-TestInlineDeployment $leaf))
+        $root = $leaf.DeepClone()
+        $root['resources'].Add((New-TestInlineDeployment $parent $Scope))
+        $package = New-TestDeduplicationPackage $root $TestDrive
+        $package.Artifacts.Count | Should Be 0
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should Be $true
     }
 
     It 'leaves <Scope>-scope templates inline' -TestCases @(
@@ -365,7 +431,7 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         if ($ExpectedPuts -eq 2) {
             $parent = $result.RestCalls[0].Payload | ConvertFrom-Json
             $version = $result.RestCalls[1].Payload | ConvertFrom-Json
-            $version.properties.linkedTemplates.Count | Should Be 12
+            $version.properties.linkedTemplates.Count | Should Be 28
             $version.properties.mainTemplate.languageVersion | Should Be '2.0'
             $result.RestCalls[1].Path | Should Match '-dedup-test/versions/'
             $result.RestCalls[1].Path | Should Match '^/subscriptions/'

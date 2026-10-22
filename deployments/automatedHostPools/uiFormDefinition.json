@@ -3760,13 +3760,21 @@
                 },
                 {
                   "name": "delimiter",
-                  "type": "Microsoft.Common.TextBox",
+                  "type": "Microsoft.Common.DropDown",
                   "label": "Delimiter",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.delimiter]",
+                  "defaultValue": "Hyphen (-)",
                   "constraints": {
                     "required": true,
-                    "regex": "^[-_]$",
-                    "validationMessage": "Enter a hyphen or underscore."
+                    "allowedValues": [
+                      {
+                        "label": "Hyphen (-)",
+                        "value": "-"
+                      },
+                      {
+                        "label": "Underscore (_)",
+                        "value": "_"
+                      }
+                    ]
                   }
                 },
                 {
@@ -4037,7 +4045,7 @@
                   "name": "workloadValue",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Workload Value",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.workload]",
+                  "defaultValue": "avd",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'workload'), or(equals(steps('tagsAndNaming').naming.component2, 'workload'), or(equals(steps('tagsAndNaming').naming.component3, 'workload'), or(equals(steps('tagsAndNaming').naming.component4, 'workload'), or(equals(steps('tagsAndNaming').naming.component5, 'workload'), equals(steps('tagsAndNaming').naming.component6, 'workload'))))))]",
                   "constraints": {
                     "required": true,

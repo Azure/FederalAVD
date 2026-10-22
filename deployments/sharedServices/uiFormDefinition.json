@@ -1210,14 +1210,22 @@
                 },
                 {
                   "name": "delimiter",
-                  "type": "Microsoft.Common.TextBox",
+                  "type": "Microsoft.Common.DropDown",
                   "label": "Delimiter",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.delimiter]",
+                  "defaultValue": "Hyphen (-)",
                   "toolTip": "Character placed between each component. A hyphen (-) is most common. Note: Key Vault names allow only hyphens — underscores are automatically replaced with hyphens in Key Vault names.",
                   "constraints": {
                     "required": true,
-                    "regex": "^[-_]$",
-                    "validationMessage": "Must be a single character: hyphen (-) or underscore (_)."
+                    "allowedValues": [
+                      {
+                        "label": "Hyphen (-)",
+                        "value": "-"
+                      },
+                      {
+                        "label": "Underscore (_)",
+                        "value": "_"
+                      }
+                    ]
                   }
                 },
                 {
@@ -1549,7 +1557,7 @@
                     "regex": "^[a-z0-9-]{1,20}$",
                     "validationMessage": "Use 1 to 20 lowercase letters, digits, or hyphens."
                   },
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).defaults.workload]"
+                  "defaultValue": "avd"
                 },
                 {
                   "name": "freeform1Value",

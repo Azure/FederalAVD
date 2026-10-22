@@ -47,6 +47,13 @@ Convention-generated names are driven by the shared naming policy and the `namin
 
 Portal forms retain naming controls, validation and explicit overrides but omit live resource-name previews to keep Template Spec packages smaller. Names are resolved at deployment time.
 
+Standard and automated Host Pool and Shared Services forms select the delimiter
+from **Hyphen (-)** or **Underscore (_)**, defaulting to Hyphen. Image Management
+retains its text box supporting one to three hyphens, underscores or dots.
+All four forms initially populate Workload Value with `avd`. These are generated
+literal defaults from the shared policy, not runtime references to hidden form
+controls; operators can still change the selected delimiter and workload.
+
 **Names follow the naming convention subject to resource-specific restrictions.**
 The delimiter controls component assembly, but it is not necessarily preserved in
 the final resource name. For example, Key Vault formatting converts underscores
@@ -604,7 +611,8 @@ not independently maintained naming rules. After editing a policy dataset:
 
 The generator updates marked Bicep defaults as literal values, preserving valid
 ARM parameter defaults without file-loading variable references. It also updates
-the Portal policy payloads and component dropdown defaults. Do not edit generated
+the Portal policy payloads, component and delimiter dropdown defaults, and literal
+workload/delimiter text-box defaults. Do not edit generated
 defaults manually.
 
 Rebuild affected ARM JSON and run the naming regression and synchronization

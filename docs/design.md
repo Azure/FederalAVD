@@ -113,7 +113,15 @@ byte-identical JSON bodies with SHA-256, and extracts only static deployment
 templates with explicitly declared inner expression scope. It traverses both
 symbolic resource objects and resource arrays, including nested deployments, but
 does not rewrite templates carried as variable/default/output data for later
-runtime use. Outer/default-scope templates remain inline. Pre-existing relative
+runtime use. Unique inner-scope ancestors of extracted duplicates are also linked
+artifacts: a relative link must be declared directly in the main template or a
+linked artifact, never beneath an inline deployment boundary. Otherwise ARM loses
+the template origin and deployment fails with `InvalidTemplateSpec`, even when
+started from the Portal using the Template Spec version.
+
+Outer/default-scope templates and their complete descendant subtrees remain
+inline, because extracting those ancestors would change expression scope.
+Pre-existing relative
 template links are rejected explicitly; the current tracked inputs are
 self-contained. Existing URI/Template Spec ID links remain unchanged.
 
@@ -143,11 +151,19 @@ $test = @{
 ```
 
 Run `Invoke-Pester -Script tests\DeduplicatedTemplateSpecs.Tests.ps1` for offline
-artifact-resolution, restoration-equivalence and request-budget tests. These do
+artifact-resolution (including link-origin boundaries), restoration-equivalence
+and request-budget tests. These do
 not prove Azure service acceptance. Test publication, Portal rendering and actual
 deployments (including cross-scope, optional-feature and CMK paths) before adopting
 the experimental publisher. Confirm API and linked-artifact availability in the
 target Secret/Top Secret enclave; do not substitute public hosting if unavailable.
+
+After updating the publisher, publish a new version and deploy that version by
+Template Spec ID (or its Portal Deploy action). Existing published versions are
+not repaired by updating the local script. Do not deploy the packaged main
+template as local JSON; its relative links require the complete Template Spec.
+See Microsoft's [linked Template Spec guidance](https://learn.microsoft.com/azure/azure-resource-manager/templates/template-specs-create-linked)
+for relative-path resolution.
 
 ## Naming and resource topology
 

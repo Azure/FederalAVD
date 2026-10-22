@@ -215,6 +215,38 @@ Describe 'Shared naming and module metadata contracts' {
         { & (Join-Path $repoRoot 'tools\Sync-NamingPolicy.ps1') -Check } | Should Not Throw
     }
 
+    It 'uses generated literal naming defaults in the <Directory> form' -TestCases @(
+        @{ Directory = 'hostpools'; DelimiterType = 'Microsoft.Common.DropDown' }
+        @{ Directory = 'automatedHostPools'; DelimiterType = 'Microsoft.Common.DropDown' }
+        @{ Directory = 'sharedServices'; DelimiterType = 'Microsoft.Common.DropDown' }
+        @{ Directory = 'imageManagement'; DelimiterType = 'Microsoft.Common.TextBox' }
+    ) {
+        param($Directory, $DelimiterType)
+
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
+        $step = $form.view.properties.steps | Where-Object name -eq 'tagsAndNaming'
+        $naming = $step.elements | Where-Object name -eq 'naming'
+        $delimiter = $naming.elements | Where-Object name -eq 'delimiter'
+        $workload = $naming.elements | Where-Object name -eq 'workloadValue'
+        $workload.defaultValue | Should Be $policy.defaults.workload
+        $workload.defaultValue | Should Be 'avd'
+        $delimiter.type | Should Be $DelimiterType
+        if ($DelimiterType -eq 'Microsoft.Common.DropDown') {
+            $delimiter.defaultValue | Should Be 'Hyphen (-)'
+            @($delimiter.constraints.allowedValues).Count | Should Be 2
+            ($delimiter.constraints.allowedValues | Where-Object label -eq $delimiter.defaultValue).value | Should Be $policy.defaults.delimiter
+            @($delimiter.constraints.allowedValues | Where-Object value -ceq '-').Count | Should Be 1
+            @($delimiter.constraints.allowedValues | Where-Object value -ceq '_').Count | Should Be 1
+            $delimiter.constraints.PSObject.Properties['regex'] | Should BeNullOrEmpty
+        }
+        else {
+            $delimiter.defaultValue | Should Be $policy.defaults.delimiter
+            $delimiter.constraints.regex | Should Be '^[-_.]{1,3}$'
+        }
+        $form.view.outputs.parameters.namingConvention | Should Match "steps\('tagsAndNaming'\)\.naming\.delimiter"
+        $form.view.outputs.parameters.namingConvention | Should Match "steps\('tagsAndNaming'\)\.naming\.workloadValue"
+    }
+
     It 'propagates a changed policy through actual consumer expressions and generated portal defaults' {
         $copyRoot = Join-Path $testOutputDirectory 'propagation'
         $files = @(
@@ -269,6 +301,12 @@ Describe 'Shared naming and module metadata contracts' {
             $payload = ($form.view.properties.steps[0].elements | Where-Object name -eq 'federalAvdNamingPolicy').defaultValue | ConvertFrom-Json
             $payload.defaults.workload | Should Be 'desktop'
             $payload.purposePatterns.operationsResourceGroup | Should Be 'ops'
+            $step = $form.view.properties.steps | Where-Object name -eq 'tagsAndNaming'
+            $naming = $step.elements | Where-Object name -eq 'naming'
+            $workload = $naming.elements | Where-Object name -eq 'workloadValue'
+            if ($workload) {
+                $workload.defaultValue | Should Be 'desktop'
+            }
         }
         $lines = @(
             'using none'
