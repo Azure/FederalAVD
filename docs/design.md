@@ -93,6 +93,56 @@ deployment content. They do not require Azure sign-in and do not prove service
 acceptance. ARM also applies expanded-template and per-resource limits that raw
 file measurements cannot prove.
 
+### Experimental deduplicated Template Spec publisher
+
+`tools/New-TemplateSpecs-Deduplicated.ps1` is an opt-in testing copy; the standard
+publisher above remains unchanged. It preserves the same deployment selections and
+naming defaults and adds `-TemplateSpecNameSuffix` for isolated test names and
+`-WhatIf` for preflight without Azure writes. Without a suffix it targets the same
+names as the standard publisher. Version incrementing remains enabled by default;
+disabling it overwrites version `1.0.0`.
+
+The experimental path filters the same publication-only annotations, identifies
+byte-identical JSON bodies with SHA-256, and extracts only static deployment
+templates with explicitly declared inner expression scope. It traverses both
+symbolic resource objects and resource arrays, including nested deployments, but
+does not rewrite templates carried as variable/default/output data for later
+runtime use. Outer/default-scope templates remain inline. Pre-existing relative
+template links are rejected explicitly; the current tracked inputs are
+self-contained. Existing URI/Template Spec ID links remain unchanged.
+
+Generated linked artifacts are stored once inside the same Template Spec version,
+not on a public URL. The complete request includes the main template, every linked
+artifact and the unmodified Portal form. It is serialized with the normal SDK
+settings, checked against the same budget and reserve, then submitted using the
+documented Template Spec REST API through `Invoke-AzRestMethod -Path`. This avoids
+the native packager's failure to discover links in symbolic resource objects.
+The active Azure context selects the management endpoint; no Commercial endpoint,
+public artifact download or separate template-storage account is introduced.
+
+For an isolated standard host-pool test, sign in to the intended cloud and run:
+
+```powershell
+$test = @{
+    ResourceGroupName = 'rg-avd-template-tests'
+    Location = '<region>'
+    TemplateSpecNameSuffix = 'dedup-test'
+    createHostPool = $true
+    createCustomImage = $false
+    CreateAddOns = $false
+}
+.\tools\New-TemplateSpecs-Deduplicated.ps1 @test -WhatIf
+# After reviewing the context, names and complete-request size:
+.\tools\New-TemplateSpecs-Deduplicated.ps1 @test
+```
+
+Run `Invoke-Pester -Script tests\DeduplicatedTemplateSpecs.Tests.ps1` for offline
+artifact-resolution, restoration-equivalence and request-budget tests. These do
+not prove Azure service acceptance. Test publication, Portal rendering and actual
+deployments (including cross-scope, optional-feature and CMK paths) before adopting
+the experimental publisher. Confirm API and linked-artifact availability in the
+target Secret/Top Secret enclave; do not substitute public hosting if unavailable.
+
 ## Naming and resource topology
 
 The deployment utilizes the Cloud Adoption Framework naming conventions and organizes resources and resource groups in accordance with several available parameters:
