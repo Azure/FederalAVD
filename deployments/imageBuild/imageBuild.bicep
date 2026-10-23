@@ -63,7 +63,8 @@ param mpSku string
 param encryptionAtHost bool = true
 
 @description('The size of the Image build and Orchestration VMs.')
-param vmSize string = 'Standard_D4ads_v6'
+@minLength(1)
+param vmSize string = 'Standard_D4as_v6'
 
 @allowed([
   0
@@ -258,7 +259,7 @@ param imageDefinitionIsAcceleratedNetworkSupported bool = true
 param imageDefinitionIsHibernateSupported bool = false
 
 @description('Optional. Specifies whether the image definition supports capturing images of NVMe disks or Virtual Machines.')
-param imageDefinitionIsHigherStoragePerformanceSupported bool = false
+param imageDefinitionIsHigherStoragePerformanceSupported bool = true
 
 @allowed([
   'Standard'

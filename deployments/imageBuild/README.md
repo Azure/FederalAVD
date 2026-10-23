@@ -216,9 +216,12 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 #### `vmSize`
 
 - **Type:** String
-- **Default:** `Standard_D4ads_v6`
-- **Description:** VM size for both orchestration and image VMs
-- **Recommended:** `Standard_D4ads_v6`, `Standard_D8ads_v6`, `Standard_D4ads_v5`
+- **Default:** `Standard_D4as_v6`
+- **Description:** VM size for both orchestration and image VMs. The default has no local temporary disk; NVMe support applies to the managed OS/data disks and does not require a temporary disk.
+- **Portal selection:** All seven capability filters require the SKU to advertise exactly four vCPUs (`vCPUs: '4'`), including Confidential VM selections; they are not limited by a family-name prefix. They put `Standard_D4as_v6` first when it is compatible and available. The dropdown uses its first available option rather than a fixed default that might not exist in the filtered list. SCSI selections include dual-controller sizes; accelerated networking is required only when selected. An empty list requires changing the features or region, or using a parameter-file deployment with a larger compatible size, not falling back to an incompatible size. The Bicep `vmSize` parameter remains unrestricted by CPU count.
+- **Alternatives:** Select another advertised compatible size, such as `Standard_D4s_v6`. For SCSI builds, explicitly set `imageDefinitionIsHigherStoragePerformanceSupported: false` and choose a SCSI-capable size.
+- **Compatibility:** Parameter-file deployments retain their explicit VM size. Callers that previously omitted the NVMe parameter while selecting a SCSI-only size must now explicitly set it to `false`. Existing image definitions continue to determine the build controller from their stored features.
+- **SKU metadata:** Filters require x64 and Generation 2 support because the orchestration VM uses a Generation 2 image. Legacy sizes that omit `DiskControllerTypes` are treated as SCSI; NVMe requires an explicit capability. Subscription/location restrictions are excluded. This does not establish quota, capacity, OS-image support, or successful deployment.
 
 #### `encryptionAtHost`
 
@@ -535,19 +538,36 @@ Gallery image version encryption can use platform-managed keys, customer-managed
 
 - **Type:** Boolean
 - **Default:** `true`
-- **Description:** Enable Accelerated Networking on VMs deployed from this image. When enabled, the build VM must also support Accelerated Networking — the VM size list is automatically filtered to compatible sizes. Not compatible with Confidential VM security types.
+- **Description:** Enable Accelerated Networking on VMs deployed from this image. When enabled, the build VM must also support Accelerated Networking — the VM size list is automatically filtered to compatible sizes. The form disables this for the exact `ConfidentialVM` build security type, not for `Supported` definitions.
 
 #### `imageDefinitionIsHibernateSupported`
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Enable hibernation support on VMs deployed from this image. Not compatible with NVMe, Confidential VM security types, or Accelerated Networking in some regions. In regions where no VM sizes support both hibernation and accelerated networking simultaneously, the VM size picker will be hidden and the build cannot proceed with both enabled.
+- **Description:** Enable hibernation support on VMs deployed from this image. The form does not combine this with NVMe or the exact `ConfidentialVM` build security type. In regions where no VM sizes support both hibernation and accelerated networking simultaneously, the VM size picker will be hidden and the build cannot proceed with both enabled.
 
 #### `imageDefinitionIsHigherStoragePerformanceSupported`
 
 - **Type:** Boolean
-- **Default:** `false`
-- **Description:** Enable NVMe disk controller support. Set to `true` when using NVMe-only VM sizes (v6 and newer, e.g. environments where only v6 SKUs are available). The build VM disk controller type and image definition `DiskControllerTypes` feature are set in lockstep — they must match, so do not enable NVMe support unless the build VM size supports it.
+- **Default:** `true`
+- **Description:** Enable NVMe disk controller support, matching the default `Standard_D4as_v6` size. The image definition's `DiskControllerTypes` feature and build VM controller are set in lockstep. Select sizes by their advertised controller capabilities rather than a v5/v6 naming rule. The Portal defaults to No for hibernation; Confidential VM builds hide this control and submit `false`. Parameter-file callers must explicitly select compatible feature values and a compatible VM size.
+
+The form uses the following compatibility matrix. Each allowed combination still
+requires a matching SKU, source OS image, subscription access, and region:
+
+| Confidential build (`ConfidentialVM`) | Hibernation | Build controller | Accelerated networking |
+| --- | --- | --- | --- |
+| No | No | SCSI or NVMe, according to the selected feature | Optional; require the capability when enabled |
+| No | Yes | SCSI | Optional; the same SKU must advertise both features when enabled |
+| Yes | No | SCSI | Disabled |
+| Yes | Yes | Not offered | Not offered |
+
+These are this form's supported combinations, not a promise about all future Azure
+VM families. See Microsoft's [hibernation supported configurations](https://learn.microsoft.com/azure/virtual-machines/hibernate-resume#supported-configurations),
+[Confidential VM feature support](https://learn.microsoft.com/azure/confidential-computing/confidential-vm-overview#feature-support),
+and [NVMe requirements](https://learn.microsoft.com/azure/virtual-machines/enable-nvme-remote-faqs).
+Live SKU queries establish advertised capabilities and restrictions, not runtime
+hibernation, Portal rendering, quota, capacity, or successful image capture.
 
 #### `imageDefinitionSecurityType`
 
@@ -555,7 +575,9 @@ Gallery image version encryption can use platform-managed keys, customer-managed
 - **Default:** `TrustedLaunch`
 - **Allowed Values:** `Standard`, `TrustedLaunch`, `TrustedLaunchSupported`, `ConfidentialVM`, `ConfidentialVMSupported`, `TrustedLaunchAndConfidentialVmSupported`
 - **Backward Compatibility:** The legacy spelling `TrustedLaunchAndConfidentialVMSupported` remains accepted and is normalized to Azure's canonical `TrustedLaunchAndConfidentialVmSupported` value.
-- **Description:** Security type for the image definition. Confidential VM variants are incompatible with NVMe, Accelerated Networking, and Hibernation — selecting a Confidential type forces those features off and restricts the build VM size list to Confidential-capable SKUs (DC/EC/NCC series).
+- **Description:** Security type for the image definition. Only the exact `ConfidentialVM` value requires a Confidential build VM, disables NVMe, Accelerated Networking, and Hibernation in the form, and selects the Confidential-capable SKU list. `TrustedLaunch` uses a Trusted Launch build VM. All `Supported` variants use a Standard-security Gen2 build VM and the managed-image capture path without VM Guest State; their VM-size choices follow the selected controller, networking, and hibernation features for both new and existing definitions. These choices do not change the definition's security type or the build/capture implementation.
+- **Portal dependency direction:** Security type is selected first and is never filtered by the feature controls below it. Selecting `ConfidentialVM` for a new definition hides the editable feature controls and displays an informational explanation listing all three effective values as No. The form submits `false` for all three regardless of any retained previous selections; those stale selections also cannot trigger hibernation warnings or hide the Confidential VM-size picker. Switching back restores the editable controls without changing their allowed values based on security type. Existing definitions still use their stored features and compatibility checks rather than rewriting their metadata. The VM-size selector chooses the new or existing definition path before evaluating that path's feature combinations. Portal behavior must be smoke-tested; changing defaults alone does not reset a retained control value.
+- **Source compatibility:** A `Supported` label does not make an arbitrary OS image compatible with Confidential VM or Trusted Launch deployments. Use an appropriate source image and validate the resulting image in each intended security mode. See Microsoft's [Confidential VM Supported image requirements](https://learn.microsoft.com/azure/confidential-computing/create-confidential-vm-from-compute-gallery#confidential-vm-supported-images) and [Trusted Launch Supported image requirements](https://learn.microsoft.com/azure/virtual-machines/trusted-launch-portal#trusted-launch-vm-supported-images). Offline form tests do not prove successful capture or deployment.
 
 ### Image Version
 
@@ -1173,16 +1195,16 @@ image-customization-logs/
 
 - Check regional availability: [Azure VM Products by Region](https://azure.microsoft.com/global-infrastructure/services/?products=virtual-machines)
 - Verify quota limits: Azure Portal > Subscriptions > Usage + quotas
-- Use recommended sizes: `Standard_D4ads_v6` or `Standard_D4ads_v5`
+- Use the default `Standard_D4as_v6` only when it is available and NVMe-compatible; otherwise select another size with the required capabilities.
 
 #### Issue: NVMe Compatibility
 
 **Symptoms:** VM fails to deploy with NVMe support
 **Solution:**
 
-- Use v6 VM series (Dadsv6, Easv6, Eadsv6) and set `imageDefinitionIsHigherStoragePerformanceSupported: true`
-- Check [NVMe VM list](https://learn.microsoft.com/azure/virtual-machines/nvme-overview)
-- For SCSI-only environments (v5 and older VM sizes), leave `imageDefinitionIsHigherStoragePerformanceSupported` at its default (`false`)
+- Match the VM size's advertised `DiskControllerTypes` capability and the source image's NVMe support to the selected build controller.
+- See [NVMe support requirements](https://learn.microsoft.com/azure/virtual-machines/enable-nvme-remote-faqs) and the [Dasv6 specifications](https://learn.microsoft.com/azure/virtual-machines/sizes/general-purpose/dasv6-series).
+- For SCSI-only sizes, explicitly set `imageDefinitionIsHigherStoragePerformanceSupported: false`; the default is now `true`.
 
 #### Issue: Artifact Download Fails
 

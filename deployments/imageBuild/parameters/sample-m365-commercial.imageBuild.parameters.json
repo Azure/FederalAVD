@@ -28,7 +28,7 @@
 
         // ── VM Properties ──────────────────────────────────────────────────────
         "vmSize": {
-            "value": "Standard_D4ads_v6"
+            "value": "Standard_D4as_v6"
         },
         "encryptionAtHost": {
             "value": true
