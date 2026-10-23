@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "8174311112090605636"
+      "templateHash": "16637063280973455546"
     }
   },
   "definitions": {
@@ -327,7 +327,8 @@
     },
     "vmSize": {
       "type": "string",
-      "defaultValue": "Standard_D4ads_v6",
+      "defaultValue": "Standard_D4as_v6",
+      "minLength": 1,
       "metadata": {
         "description": "The size of the Image build and Orchestration VMs."
       }
@@ -600,7 +601,7 @@
     },
     "imageDefinitionIsHigherStoragePerformanceSupported": {
       "type": "bool",
-      "defaultValue": false,
+      "defaultValue": true,
       "metadata": {
         "description": "Optional. Specifies whether the image definition supports capturing images of NVMe disks or Virtual Machines."
       }
