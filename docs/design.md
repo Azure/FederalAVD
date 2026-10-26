@@ -83,7 +83,9 @@ the main template, linked artifacts, Portal form, and location envelope. A
 16,384-byte (16 KiB) safety margin reserves room for additional publishing metadata;
 it is not data appended to the template. Output separates the measured request,
 reserved margin, total checked, and remaining headroom against the 2,000,000-byte
-budget. Publication packaging is performed in memory.
+budget. A warning highlights each package with 200,000 bytes (10%) or less
+remaining after the safety reserve; exceeding the budget still stops publication
+before any Azure writes. Publication packaging is performed in memory.
 
 Run `Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
 after changes affecting publication. These offline checks require Az.Resources,
@@ -93,7 +95,7 @@ deployment content. They do not require Azure sign-in and do not prove service
 acceptance. ARM also applies expanded-template and per-resource limits that raw
 file measurements cannot prove.
 
-### Experimental deduplicated Template Spec publisher
+### Deduplicated Template Spec publisher
 
 #### Why packaging happens after Bicep compilation
 
@@ -134,17 +136,20 @@ standard entry point now uses deduplicated REST publication rather than native f
 It preserves the same deployment selections and naming defaults and supports
 `-TemplateSpecNameSuffix` for isolated test names and `-WhatIf` for preflight without
 Azure writes. Without a suffix it targets the existing standard names.
-The copied script retains its experimental warnings; promotion does not establish
-live publication or deployment compatibility. Version incrementing remains enabled by default;
+Offline checks do not establish live publication or deployment compatibility.
+Version incrementing remains enabled by default;
 disabling it overwrites version `1.0.0`.
 The publisher retrieves existing versions by omitting `-Version`
 from `Get-AzTemplateSpec`, reads each version's `Name` from the returned
 `.Versions` collection, and increments the largest numeric major version.
+Resource-group listing results are enumerated into individual Template Specs
+before matching names, checking locations, or preserving tags; Az.Resources can
+return a collection as a single pipeline object.
 `-Version '*'` is not a supported version-listing operation. Non-numeric version
 names and version-read failures stop publication rather than silently selecting
 `1.0.0`.
 
-The experimental path filters the same publication-only annotations, identifies
+The publisher filters the same publication-only annotations, identifies
 byte-identical JSON bodies with SHA-256, and extracts only static deployment
 templates with explicitly declared inner expression scope. It traverses both
 symbolic resource objects and resource arrays, including nested deployments, but

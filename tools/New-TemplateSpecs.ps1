@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Experimental Template Spec publisher that stores identical inline templates once.
+Template Spec publisher that stores identical inline templates once.
 .DESCRIPTION
 Uses the active Azure context and the ARM REST API to publish the complete package.
-The standard New-TemplateSpecs.ps1 publisher and tracked ARM files are unchanged.
+Deduplication affects only the publication copy; tracked ARM files are unchanged.
 Use -WhatIf first and -TemplateSpecNameSuffix dedup-test for isolated test names.
 Live publication and deployment validation are required before production use.
 #>
@@ -239,7 +239,7 @@ function Find-DeduplicatedTemplateCandidates {
         if ($properties -isnot [Newtonsoft.Json.Linq.JObject]) { continue }
         $link = $properties['templateLink']
         if ($link -is [Newtonsoft.Json.Linq.JObject] -and $null -ne $link['relativePath']) {
-            throw 'This experimental publisher requires self-contained ARM input. Pre-existing relativePath template links are not supported; no package has been published.'
+            throw 'This publisher requires self-contained ARM input. Pre-existing relativePath template links are not supported; no package has been published.'
         }
         $child = $properties['template']
         if ($child -isnot [Newtonsoft.Json.Linq.JObject]) { continue }
@@ -550,21 +550,23 @@ if ($CreateAddOns) {
     }
 }
 
-Write-Warning 'Experimental deduplicated publisher. Use -WhatIf first and -TemplateSpecNameSuffix dedup-test for isolated testing. Publication success does not prove deployment compatibility.'
-
 # Serialize and check every complete request before any Azure writes.
 foreach ($templateSpec in $templateSpecs) {
     $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateSpec.TemplateFile -FormFile $templateSpec.UiFormDefinition -Location $Location
     $templateSpec.PublicationPayload = Get-DeduplicatedTemplateSpecPayload -Package $package -Location $Location
     $budgetedBytes = $package.PayloadBytes + 16384
-    Write-Output "$($templateSpec.DisplayName) experimental publication size check:"
+    Write-Output "$($templateSpec.DisplayName) publication size check:"
     Write-Output ("  Before deduplication: {0:N0} bytes; after: {1:N0} bytes; saved: {2:N0} bytes." -f $package.OriginalPayloadBytes, $package.PayloadBytes, ($package.OriginalPayloadBytes - $package.PayloadBytes))
     Write-Output ("  Packaged linked artifacts: {0}; the measured request includes every artifact and the Portal form." -f $package.Artifacts.Count)
     Write-Output '  Reserved safety margin: 16,384 bytes (16 KiB; not appended to the template).'
     if ($budgetedBytes -gt 2000000) {
         throw "$($templateSpec.DisplayName): complete request plus safety reserve is $budgetedBytes bytes, exceeding the 2,000,000-byte budget. Nothing has been published."
     }
-    Write-Output ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f $budgetedBytes, (2000000 - $budgetedBytes))
+    $remainingBytes = 2000000 - $budgetedBytes
+    Write-Output ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f $budgetedBytes, $remainingBytes)
+    if ($remainingBytes -le 200000) {
+        Write-Warning ("{0} is approaching the Template Spec size limit: {1:N0} / 2,000,000 bytes checked; {2:N0} bytes remaining ({3:N1}%). Includes the 16,384-byte safety reserve." -f $templateSpec.DisplayName, $budgetedBytes, $remainingBytes, ($remainingBytes / 2000000 * 100))
+    }
     $templateSpecWorkload = if (-not $namingConventionSupplied -and $templateSpec.PreserveLegacyWithoutWorkload) { '' } else { $workload }
     $templateSpec.Name = New-ConventionName `
         -Components $components -Delimiter $delimiter -ResourceTypeCode $templateSpecTypeCode `
@@ -593,7 +595,7 @@ if (-not $resourceGroupExists) {
 }
 $existingTemplateSpecs = @()
 if ($resourceGroupExists) {
-    $existingTemplateSpecs = @(Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -ErrorAction Stop)
+    $existingTemplateSpecs = @(Get-AzTemplateSpec -ResourceGroupName $ResourceGroupName -ErrorAction Stop | ForEach-Object { $_ })
 }
 
 $publishedCount = 0
@@ -639,5 +641,5 @@ if ($WhatIfPreference) {
     Write-Output 'WhatIf complete. No resources were created or published.'
 }
 else {
-    Write-Output "Published $publishedCount experimental Template Spec version(s) in '$ResourceGroupName'. Test Portal rendering and actual deployments before production use."
+    Write-Output "Published $publishedCount Template Spec version(s) in '$ResourceGroupName'. Test Portal rendering and actual deployments before production use."
 }

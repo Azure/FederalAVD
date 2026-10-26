@@ -130,11 +130,30 @@ Describe 'Template Spec publication size messages' {
         $templateSpec = @{ DisplayName = 'Test template' }
         $messages = @(& $sizeCheck)
         $messages.Count | Should Be 5
-        $messages[0] | Should Be 'Test template experimental publication size check:'
+        $messages[0] | Should Be 'Test template publication size check:'
         $messages[1] | Should Be ("  Before deduplication: {0:N0} bytes; after: {0:N0} bytes; saved: 0 bytes." -f $Bytes)
         $messages[2] | Should Be '  Packaged linked artifacts: 0; the measured request includes every artifact and the Portal form.'
         $messages[3] | Should Be '  Reserved safety margin: 16,384 bytes (16 KiB; not appended to the template).'
         $messages[4] | Should Be ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f ($Bytes + 16384), (2000000 - $Bytes - 16384))
+    }
+
+    It 'warns only at or below 200,000 bytes of headroom for <Headroom> bytes remaining' -TestCases @(
+        @{ Headroom = 200001; ExpectedWarnings = 0 }
+        @{ Headroom = 200000; ExpectedWarnings = 1 }
+        @{ Headroom = 199999; ExpectedWarnings = 1 }
+        @{ Headroom = 0; ExpectedWarnings = 1 }
+    ) {
+        param($Headroom, $ExpectedWarnings)
+
+        $bytes = 2000000 - 16384 - $Headroom
+        $package = @{ PayloadBytes = $bytes; OriginalPayloadBytes = $bytes; Artifacts = @() }
+        $templateSpec = @{ DisplayName = 'Test template' }
+        $records = @(& $sizeCheck 3>&1)
+        $warnings = @($records | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        $warnings.Count | Should Be $ExpectedWarnings
+        if ($ExpectedWarnings -gt 0) {
+            $warnings[0].Message | Should Be ("Test template is approaching the Template Spec size limit: {0:N0} / 2,000,000 bytes checked; {1:N0} bytes remaining ({2:N1}%). Includes the 16,384-byte safety reserve." -f (2000000 - $Headroom), $Headroom, ($Headroom / 2000000 * 100))
+        }
     }
 
     It 'rejects content one byte over budget and explains the excess' {

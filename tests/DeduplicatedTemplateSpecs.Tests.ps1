@@ -302,7 +302,7 @@ Describe 'Explicit cloud-context Template Spec publication' {
     }
 }
 
-Describe 'Experimental publisher process lifecycle without Azure requests' {
+Describe 'Publisher process lifecycle without Azure requests' {
     BeforeAll {
         $harnessPath = Join-Path $TestDrive 'publisher-harness.ps1'
         $harness = @'
@@ -337,7 +337,27 @@ function global:New-AzResourceGroup {
 function global:Get-AzTemplateSpec {
     [CmdletBinding()]param($ResourceGroupName, $Name, [ValidatePattern('^[-\w\._\(\)]+$')][string]$Version)
     $global:SpecReads++
-    if ($global:FixtureMode -in @('Existing', 'EmptyVersions', 'NonNumericVersion', 'VersionReadFailure')) {
+    if (-not $Name -and $global:FixtureMode -like 'Collection*') {
+        $specs = [System.Collections.Generic.List[Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]]::new()
+        $other = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]::new()
+        $other.Name = 'unrelated-spec'
+        $other.Location = 'EASTUS2'
+        $other.Tags = [System.Collections.Generic.Dictionary[string,string]]::new()
+        $other.Tags.Add('owner', 'unrelated')
+        $specs.Add($other)
+        if ($global:FixtureMode -ne 'CollectionMissing') {
+            $target = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]::new()
+            $target.Name = $global:SpecName
+            $target.Location = if ($global:FixtureMode -eq 'CollectionWrongLocation') { 'westus2' } else { 'USGOVVIRGINIA' }
+            $target.Tags = [System.Collections.Generic.Dictionary[string,string]]::new()
+            $target.Tags.Add('owner', 'preserved')
+            $specs.Add($target)
+        }
+        Write-Output -NoEnumerate $specs
+        return
+    }
+    if ($global:FixtureMode -in @('Existing', 'EmptyVersions', 'NonNumericVersion', 'VersionReadFailure', 'CollectionExisting')) {
+        if ($Name -and $Name -ne $global:SpecName) { throw "Unexpected Template Spec name '$Name'." }
         $spec = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]::new()
         $spec.Name = $global:SpecName
         $spec.Location = 'usgovvirginia'
@@ -399,6 +419,9 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
     It 'handles <Mode> with explicit, isolated publication behavior' -TestCases @(
         @{ Mode = 'Publish'; ExpectedPuts = 2; ExpectedCreates = 0 }
         @{ Mode = 'Existing'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'CollectionExisting'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'CollectionMissing'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'CollectionWrongLocation'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'EmptyVersions'; ExpectedPuts = 2; ExpectedCreates = 0 }
         @{ Mode = 'NonNumericVersion'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Create'; ExpectedPuts = 2; ExpectedCreates = 1 }
@@ -416,7 +439,11 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         $result = $record[0].Substring(7) | ConvertFrom-Json
         @($result.RestCalls).Count | Should Be $ExpectedPuts
         $result.ResourceGroupCreates | Should Be $ExpectedCreates
-        if ($Mode -eq 'VersionReadFailure') {
+        if ($Mode -eq 'CollectionWrongLocation') {
+            $result.Failure | Should Match "is in 'westus2', not 'usgovvirginia'"
+            $result.SpecReads | Should Be 1
+        }
+        elseif ($Mode -eq 'VersionReadFailure') {
             $result.Failure | Should Match 'Fixture version access denied'
         }
         elseif ($Mode -eq 'NonNumericVersion') {
@@ -435,7 +462,7 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
             $version.properties.mainTemplate.languageVersion | Should Be '2.0'
             $result.RestCalls[1].Path | Should Match '-dedup-test/versions/'
             $result.RestCalls[1].Path | Should Match '^/subscriptions/'
-            if ($Mode -eq 'Existing') {
+            if ($Mode -in @('Existing', 'CollectionExisting')) {
                 $parent.tags.owner | Should Be 'preserved'
                 $result.RestCalls[1].Path | Should Match '/versions/5.0.0\?'
                 $result.SpecReads | Should Be 2
@@ -443,6 +470,11 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
             if ($Mode -eq 'EmptyVersions') {
                 $parent.tags.owner | Should Be 'preserved'
                 $result.RestCalls[1].Path | Should Match '/versions/1.0.0\?'
+            }
+            if ($Mode -eq 'CollectionMissing') {
+                $parent.tags | Should BeNullOrEmpty
+                $result.RestCalls[1].Path | Should Match '/versions/1.0.0\?'
+                $result.SpecReads | Should Be 1
             }
         }
         if ($Mode -like 'WhatIf*') {
