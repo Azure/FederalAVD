@@ -77,8 +77,8 @@ function Get-DeploymentDepth {
 Describe 'Published host-pool orchestrator payload sizes' {
     foreach ($orchestratorCase in $orchestratorCases) {
         It "keeps the $($orchestratorCase.Name) and form within the native SDK publication budget" {
-            $package = New-TemplateSpecPublicationPackage -TemplateFile $orchestratorCase.TemplatePath -FormFile $orchestratorCase.FormPath
-            $payloadSize = Get-TemplateSpecPublicationSize -Package $package -Location 'usgovvirginia'
+            $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $orchestratorCase.TemplatePath -FormFile $orchestratorCase.FormPath -Location 'usgovvirginia'
+            $payloadSize = $package.PayloadBytes
 
             ($payloadSize + 16384) | Should BeLessThan 2000000
             if ($orchestratorCase.Name -eq 'standard host-pool orchestrator') {
@@ -88,13 +88,13 @@ Describe 'Published host-pool orchestrator payload sizes' {
 
     }
 
-    It 'publishes staged annotation-filtered files using the normal cmdlet' {
+    It 'publishes complete deduplicated requests using the cloud-aware REST API' {
         $publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
         $publisher = Get-Content -LiteralPath $publisherPath -Raw
 
-        $publisher | Should Match '-TemplateFile \$templateSpec\.PublicationTemplateFile'
-        $publisher | Should Match '-UiFormDefinitionFile \$templateSpec\.PublicationFormFile'
-        $publisher | Should Match 'TemplateSpecPackagingEngine\]::Unpack'
+        $publisher | Should Match 'Publish-DeduplicatedTemplateSpec -ResourceId'
+        $publisher | Should Match '-VersionPayload \$templateSpec\.PublicationPayload'
+        $publisher | Should Match 'Invoke-AzRestMethod -Path'
         $publisher | Should Not Match 'ConvertTo-MinifiedJson'
         $publisher | Should Not Match 'SerializationSettings\.Formatting\s*='
     }
@@ -112,11 +112,11 @@ Describe 'Template Spec publication size messages' {
     $preflight = $publisherAst.Find({
         param($node)
         $node -is [System.Management.Automation.Language.ForEachStatementAst] -and
-        $node.Body.Extent.Text.Contains('$payloadBytes = Get-TemplateSpecPublicationSize')
+        $node.Body.Extent.Text.Contains('$budgetedBytes = $package.PayloadBytes + 16384')
     }, $true)
     $body = $preflight.Body.Extent.Text
-    $start = $body.IndexOf('$metadataAllowanceBytes =')
-    $end = $body.IndexOf('$targetDirectory =')
+    $start = $body.IndexOf('$budgetedBytes =')
+    $end = $body.IndexOf('$templateSpecWorkload =')
     $sizeCheck = [scriptblock]::Create($body.Substring($start, $end - $start))
 
     It 'separates measured bytes, the reserved margin, and remaining headroom for <Bytes> bytes' -TestCases @(
@@ -126,20 +126,21 @@ Describe 'Template Spec publication size messages' {
     ) {
         param($Bytes)
 
-        $payloadBytes = $Bytes
+        $package = @{ PayloadBytes = $Bytes; OriginalPayloadBytes = $Bytes; Artifacts = @() }
         $templateSpec = @{ DisplayName = 'Test template' }
         $messages = @(& $sizeCheck)
-        $messages.Count | Should Be 4
-        $messages[0] | Should Be 'Test template publication size check:'
-        $messages[1] | Should Be ("  Measured request: {0:N0} bytes (template, Portal form, linked templates, and request envelope)." -f $Bytes)
-        $messages[2] | Should Be ("  Reserved safety margin: {0:N0} bytes (16 KiB for additional publishing metadata; not added to the template)." -f 16384)
-        $messages[3] | Should Be ("  Total checked: {0:N0} / {1:N0} bytes; remaining headroom: {2:N0} bytes." -f ($Bytes + 16384), 2000000, (2000000 - $Bytes - 16384))
+        $messages.Count | Should Be 5
+        $messages[0] | Should Be 'Test template experimental publication size check:'
+        $messages[1] | Should Be ("  Before deduplication: {0:N0} bytes; after: {0:N0} bytes; saved: 0 bytes." -f $Bytes)
+        $messages[2] | Should Be '  Packaged linked artifacts: 0; the measured request includes every artifact and the Portal form.'
+        $messages[3] | Should Be '  Reserved safety margin: 16,384 bytes (16 KiB; not appended to the template).'
+        $messages[4] | Should Be ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f ($Bytes + 16384), (2000000 - $Bytes - 16384))
     }
 
     It 'rejects content one byte over budget and explains the excess' {
-        $payloadBytes = 1983617
+        $package = @{ PayloadBytes = 1983617; OriginalPayloadBytes = 1983617; Artifacts = @() }
         $templateSpec = @{ DisplayName = 'Test template' }
         { & $sizeCheck } | Should Throw 'exceeding'
-        { & $sizeCheck } | Should Throw 'by 1 bytes'
+        { & $sizeCheck } | Should Throw 'Nothing has been published'
     }
 }

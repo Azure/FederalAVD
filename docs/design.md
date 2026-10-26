@@ -74,8 +74,8 @@ resource/policy metadata, and the entire Portal form. Developers and Copilot
 should use the repository sources to understand and reuse module contracts, not
 reconstruct them from a published Template Spec.
 
-The publisher uses the normal Az.Resources packaging engine to stage the filtered
-copy, including linked artifacts, and still publishes with `New-AzTemplateSpec`.
+The publisher deduplicates eligible nested templates into linked artifacts in the
+filtered publication copy and publishes the complete package with the Template Spec REST API.
 It does not depend on input minification or change SDK serialization settings.
 Before any resource creation or publication, every selected package is measured
 using the installed Az.Resources SDK's normal version-request serializer, including
@@ -83,7 +83,7 @@ the main template, linked artifacts, Portal form, and location envelope. A
 16,384-byte (16 KiB) safety margin reserves room for additional publishing metadata;
 it is not data appended to the template. Output separates the measured request,
 reserved margin, total checked, and remaining headroom against the 2,000,000-byte
-budget. Staging files are removed on success or failure.
+budget. Publication packaging is performed in memory.
 
 Run `Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
 after changes affecting publication. These offline checks require Az.Resources,
@@ -128,13 +128,16 @@ The authoritative references are:
 
 #### Implementation and validation
 
-`tools/New-TemplateSpecs-Deduplicated.ps1` is an opt-in testing copy; the standard
-publisher above remains unchanged. It preserves the same deployment selections and
-naming defaults and adds `-TemplateSpecNameSuffix` for isolated test names and
-`-WhatIf` for preflight without Azure writes. Without a suffix it targets the same
-names as the standard publisher. Version incrementing remains enabled by default;
+The deduplicated implementation has been promoted to `tools/New-TemplateSpecs.ps1`.
+The separate `tools/New-TemplateSpecs-Deduplicated.ps1` copy has been removed. The
+standard entry point now uses deduplicated REST publication rather than native file staging.
+It preserves the same deployment selections and naming defaults and supports
+`-TemplateSpecNameSuffix` for isolated test names and `-WhatIf` for preflight without
+Azure writes. Without a suffix it targets the existing standard names.
+The copied script retains its experimental warnings; promotion does not establish
+live publication or deployment compatibility. Version incrementing remains enabled by default;
 disabling it overwrites version `1.0.0`.
-The experimental publisher retrieves existing versions by omitting `-Version`
+The publisher retrieves existing versions by omitting `-Version`
 from `Get-AzTemplateSpec`, reads each version's `Name` from the returned
 `.Versions` collection, and increments the largest numeric major version.
 `-Version '*'` is not a supported version-listing operation. Non-numeric version
@@ -178,9 +181,9 @@ $test = @{
     createCustomImage = $false
     CreateAddOns = $false
 }
-.\tools\New-TemplateSpecs-Deduplicated.ps1 @test -WhatIf
+.\tools\New-TemplateSpecs.ps1 @test -WhatIf
 # After reviewing the context, names and complete-request size:
-.\tools\New-TemplateSpecs-Deduplicated.ps1 @test
+.\tools\New-TemplateSpecs.ps1 @test
 ```
 
 Run `Invoke-Pester -Script tests\DeduplicatedTemplateSpecs.Tests.ps1` for offline
@@ -188,7 +191,8 @@ artifact-resolution (including link-origin boundaries), restoration-equivalence
 and request-budget tests. These do
 not prove Azure service acceptance. Test publication, Portal rendering and actual
 deployments (including cross-scope, optional-feature and CMK paths) before adopting
-the experimental publisher. Confirm API and linked-artifact availability in the
+the publisher in production. These tests target the standard entry point.
+Confirm API and linked-artifact availability in the
 target Secret/Top Secret enclave; do not substitute public hosting if unavailable.
 
 After updating the publisher, publish a new version and deploy that version by

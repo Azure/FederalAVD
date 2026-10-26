@@ -47,8 +47,8 @@ Describe 'Generated ARM and Template Spec size budgets' {
         if ($armBytes -gt 4000000) {
             throw "$Name is $armBytes bytes, exceeding the conservative 4,000,000-byte ARM file budget."
         }
-        $package = New-TemplateSpecPublicationPackage -TemplateFile $TemplateFile -FormFile $FormFile
-        $payloadBytes = Get-TemplateSpecPublicationSize -Package $package -Location 'usgovvirginia'
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location 'usgovvirginia'
+        $payloadBytes = $package.PayloadBytes
         if ($payloadBytes + 16384 -gt 2000000) {
             throw "$Name and its Portal form serialize to $payloadBytes bytes using the normal SDK serializer, exceeding the 2,000,000-byte budget including a 16,384-byte metadata allowance."
         }
@@ -58,7 +58,11 @@ Describe 'Generated ARM and Template Spec size budgets' {
         param($Name, $TemplateFile, $FormFile)
 
         $original = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Pack($TemplateFile)
-        $package = New-TemplateSpecPublicationPackage -TemplateFile $TemplateFile -FormFile $FormFile
+        $package = [pscustomobject]@{
+            RootTemplate = $original.RootTemplate.DeepClone()
+            UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $FormFile -Raw))
+        }
+        Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
         $restored = $package.RootTemplate.DeepClone()
         foreach ($metadata in @($original.RootTemplate.SelectTokens('$..metadata'))) {
             $published = $restored.SelectToken($metadata.get_Path())
@@ -104,29 +108,22 @@ Describe 'Generated ARM and Template Spec size budgets' {
         }
     }
 
-    It 'round-trips the publication copy of <Name> through native packaging' -TestCases $sizeCases {
+    It 'filters annotations idempotently without changing the source of <Name>' -TestCases $sizeCases {
         param($Name, $TemplateFile, $FormFile)
 
         $templateHash = (Get-FileHash -LiteralPath $TemplateFile).Hash
         $formHash = (Get-FileHash -LiteralPath $FormFile).Hash
-        $package = New-TemplateSpecPublicationPackage -TemplateFile $TemplateFile -FormFile $FormFile
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location 'usgovvirginia'
         $before = $package.RootTemplate.DeepClone()
         Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
         [Newtonsoft.Json.Linq.JToken]::DeepEquals($before, $package.RootTemplate) | Should Be $true
-        $target = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
-        [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Unpack(
-            $package, $target, 'main.json', 'uiFormDefinition.json'
-        )
-        $repacked = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Pack(
-            (Join-Path $target 'main.json')
-        )
-        $repacked.UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse(
-            (Get-Content -LiteralPath (Join-Path $target 'uiFormDefinition.json') -Raw)
-        )
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($package.RootTemplate, $repacked.RootTemplate) | Should Be $true
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($package.UIFormDefinition, $repacked.UIFormDefinition) | Should Be $true
-        (Get-TemplateSpecPublicationSize -Package $repacked -Location 'usgovvirginia') |
-            Should Be (Get-TemplateSpecPublicationSize -Package $package -Location 'usgovvirginia')
+        foreach ($artifact in $package.Artifacts) {
+            $before = $artifact.Template.DeepClone()
+            Remove-TemplateSpecInternalAnnotations -Node $artifact.Template
+            [Newtonsoft.Json.Linq.JToken]::DeepEquals($before, $artifact.Template) | Should Be $true
+        }
+        [Text.Encoding]::UTF8.GetByteCount((Get-DeduplicatedTemplateSpecPayload -Package $package -Location 'usgovvirginia')) |
+            Should Be $package.PayloadBytes
         (Get-FileHash -LiteralPath $TemplateFile).Hash | Should Be $templateHash
         (Get-FileHash -LiteralPath $FormFile).Hash | Should Be $formHash
     }
@@ -207,7 +204,7 @@ Describe 'Template Spec annotation filtering boundaries' {
         ) | Should Be $true
     }
 
-    It 'retains linked artifacts and their public interface help through staging' {
+    It 'rejects pre-existing relative links instead of publishing an incomplete package' {
         $source = Join-Path $TestDrive 'linked-source'
         New-Item -ItemType Directory -Path $source | Out-Null
         @'
@@ -232,22 +229,9 @@ Describe 'Template Spec annotation filtering boundaries' {
 }
 '@ | Set-Content -LiteralPath (Join-Path $source 'child.json')
         '{}' | Set-Content -LiteralPath (Join-Path $source 'form.json')
-        $package = New-TemplateSpecPublicationPackage -TemplateFile (Join-Path $source 'main.json') -FormFile (Join-Path $source 'form.json')
-        @($package.Artifacts).Count | Should Be 1
-        $linked = $package.Artifacts[0].Template
-        [string]$linked['parameters']['input']['metadata']['description'] | Should Be 'Linked public help'
-        [string]$linked['metadata']['description'] | Should Be 'Linked purpose'
-        ($null -eq $linked['metadata']['_generator']) | Should Be $true
-        $target = Join-Path $TestDrive 'linked-publication'
-        [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Unpack(
-            $package, $target, 'main.json', 'form.json'
-        )
-        $repacked = New-TemplateSpecPublicationPackage -TemplateFile (Join-Path $target 'main.json') -FormFile (Join-Path $target 'form.json')
-        @($repacked.Artifacts).Count | Should Be 1
-        $repacked.Artifacts[0].Path | Should Be $package.Artifacts[0].Path
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($linked, $repacked.Artifacts[0].Template) | Should Be $true
-        (Get-TemplateSpecPublicationSize -Package $repacked -Location 'usgovvirginia') |
-            Should Be (Get-TemplateSpecPublicationSize -Package $package -Location 'usgovvirginia')
+        {
+            New-DeduplicatedTemplateSpecPackage -TemplateFile (Join-Path $source 'main.json') -FormFile (Join-Path $source 'form.json') -Location 'usgovvirginia'
+        } | Should Throw 'Pre-existing relativePath template links are not supported'
     }
 
     It 'reduces the host-pool request using the normal SDK serializer' {
@@ -255,9 +239,9 @@ Describe 'Template Spec annotation filtering boundaries' {
         $formFile = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
         $original = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Pack($templateFile)
         $original.UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $formFile -Raw))
-        $filtered = New-TemplateSpecPublicationPackage -TemplateFile $templateFile -FormFile $formFile
-        $filteredBytes = Get-TemplateSpecPublicationSize -Package $filtered -Location 'usgovvirginia'
-        (Get-TemplateSpecPublicationSize -Package $original -Location 'usgovvirginia') | Should BeGreaterThan $filteredBytes
+        $filtered = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateFile -FormFile $formFile -Location 'usgovvirginia'
+        $filteredBytes = $filtered.PayloadBytes
+        $filtered.OriginalPayloadBytes | Should BeGreaterThan $filteredBytes
         $filteredBytes | Should BeLessThan 1900000
     }
 }

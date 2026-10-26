@@ -1,6 +1,6 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Import-Module Az.Resources -ErrorAction Stop
-$publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs-Deduplicated.ps1'
+$publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
 $parseErrors = $null
 $publisherAst = [System.Management.Automation.Language.Parser]::ParseFile($publisherPath, [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count) { throw ($parseErrors | Out-String) }

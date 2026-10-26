@@ -262,10 +262,10 @@ inventories and parameter details for each step.
    Do not reuse or promote the PoC into a pilot or production environment. Return to this checklist
    and deploy a new environment through the full **AVD Host Pool** Template Spec.
 
-   An optional experimental [deduplicated publisher](design.md#experimental-deduplicated-template-spec-publisher)
+   The standard [deduplicated publisher](design.md#experimental-deduplicated-template-spec-publisher)
    packages shared templates inside the same target-cloud Template Spec without public downloads.
-   Keep the standard publisher as the default. Use `-WhatIf` and a separate test-name suffix
-   when evaluating the experimental copy, and verify actual deployments in the target enclave.
+   The promoted implementation retains experimental warnings. Use `-WhatIf` and a separate
+   test-name suffix first, and verify publication and actual deployments in the target enclave.
 
 4. **Deploy prerequisites through Template Specs.** Deploy Networking only when an existing VNet
    and subnet are unavailable. For IL6 and IL7, deploy AVD Shared Services by default to
