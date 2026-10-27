@@ -86,10 +86,13 @@ for complete sequencing and failure behavior.
 - Scaling-aware readiness with exact-image validation evidence.
 - Replacer-owned scaling exclusions that do not overwrite administrator-owned exclusions.
 - Configurable drain notification, minimum drain time, and active-session grace period.
-- Entra device cleanup required for exact-name DeleteFirst and maintenance-override replacement of
-  Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts.
-- Optional Intune cleanup, highly recommended before exact-name reuse for Intune-enrolled
-  Entra-joined or hybrid-joined hosts.
+- Fail-closed VM, AVD registration, and directory checks before every deployment, including
+  SideBySide recovery of names vacated by manual VM deletion.
+- Mandatory Entra cleanup for native Entra joined hosts and Intune cleanup when those hosts are
+  Intune enrolled. Directory cleanup remains optional for AD DS and hybrid-joined machines.
+- Durable pending-name recovery; required cleanup failure blocks the entire batch and retries on
+  a later scheduled run. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
+  for permissions, ambiguous records, upgrade behavior, and auto-target limitations.
 - Centralized Azure Monitor Workbook and alerting guidance.
 - Validated operational-setting updates through
   [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).

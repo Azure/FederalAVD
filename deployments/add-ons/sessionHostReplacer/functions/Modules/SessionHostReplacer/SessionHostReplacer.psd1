@@ -72,6 +72,11 @@
         'Test-NewSessionHostsAvailable'
         
         # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)
+        'Get-SessionHostVMResourceId'
+        'Test-ReplacerResourceAbsent'
+        'Wait-SessionHostVMDeletions'
+        'Assert-SessionHostNamesAvailable'
+        'Get-SessionHostDirectoryDevices'
         'Remove-DeviceFromDirectories'
         'Remove-EntraDevice'
         'Remove-IntuneDevice'

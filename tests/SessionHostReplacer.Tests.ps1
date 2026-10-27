@@ -458,24 +458,27 @@ Describe 'Session Host Replacer device cleanup requirements' {
         Import-Module $modulePath -Force
     }
 
-    It 'requires Entra cleanup in the form for configured DeleteFirst replacement' {
-        $removeEntraDevice.constraints.required | Should Match "DeleteFirst"
-        $removeEntraDevice.constraints.required | Should Not Match "MaintenanceWindow"
-        $entraCleanupInfo.visible | Should Match "DeleteFirst"
-        $outputs.removeEntraDevice | Should Not Match "MaintenanceWindow"
+    It 'requires native Entra cleanup in every mode including SideBySide vacant slots' {
+        $removeEntraDevice.constraints.required | Should Be "[equals(steps('hosts').identity.machineIdentity, 'EntraID')]"
+        $entraCleanupInfo.visible | Should Be "[equals(steps('hosts').identity.machineIdentity, 'EntraID')]"
+        $outputs.removeEntraDevice | Should Not Match 'DeleteFirst|MaintenanceWindow'
     }
 
-    It 'shows recommendation-only Intune warnings for Entra and hybrid join' {
+    It 'requires native Intune cleanup when enrolled but keeps hybrid cleanup optional' {
         $entraIntuneWarning.visible | Should Match "steps\('hosts'\)\.management\.intune"
         $entraIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
         $hybridIntuneWarning.visible | Should Match "ActiveDirectoryDomainServices"
         $hybridIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
+        $intuneControl = $configStep.elements | Where-Object { $_.name -eq 'removeIntuneDevice' }
+        $intuneControl.constraints.required | Should Be "[and(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('hosts').management.intune)]"
+        $outputs.removeIntuneDevice | Should Match "steps\('hosts'\)\.management\.intune"
     }
 
     It 'forces the effective Entra cleanup setting in Bicep for exact-name Entra join' {
-        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| replacementMode == 'DeleteFirst' && isEntraJoined"
+        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| isEntraJoined"
+        $bicep | Should Match "var effectiveRemoveIntuneDevice = removeIntuneDevice \|\| isEntraJoined && intuneEnrollment"
         $bicep | Should Match "name: 'RemoveEntraDevice'\s+value: string\(effectiveRemoveEntraDevice\)"
-        $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(removeIntuneDevice\)"
+        $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(effectiveRemoveIntuneDevice\)"
     }
 
     It 'fails closed at runtime if the required setting is manually disabled' {
@@ -1622,8 +1625,8 @@ Describe 'Session Host Replacer DeleteFirst recovery contracts' {
     }
 
     It 'fails closed when recovery state cannot be read' {
-        $runScript | Should Match ([regex]::Escape("if (`$replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and `$deploymentState.LastStatus -eq 'Error')"))
-        $runScript | Should Match 'Delete-before-deploy mode cannot continue because deployment recovery state could not be read'
+        $runScript | Should Match ([regex]::Escape("if (`$deploymentState.LastStatus -eq 'Error')"))
+        $runScript | Should Match 'Replacement cannot continue because deployment recovery state could not be read'
     }
 
     It 'requires the pending-host checkpoint to persist before deletion' {

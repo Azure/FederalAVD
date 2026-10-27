@@ -143,7 +143,7 @@ The Session Host Replacer supports three distinct replacement strategies to acco
 - ✅ **Hostname reuse** - leverages deleted names for new hosts
 - ✅ **Dedicated host preservation** - maintains host group assignments
 - ❌ **Temporary capacity reduction** - some hosts unavailable during replacement
-- ⚠️ **Directory cleanup is identity-aware** - VM absence is always verified; Entra cleanup is required for Entra-joined hosts, optional for domain/hybrid join, and Intune cleanup is highly recommended for enrolled Entra/hybrid hosts
+- ⚠️ **Directory cleanup is identity-aware** - VM and AVD absence are always verified. Native Entra join requires Entra cleanup and, when Intune enrolled, Intune cleanup. Directory cleanup remains optional for AD DS and hybrid-joined machines.
 - ❌ **Slower rollouts** - limited by max deletions per cycle
 
 **Configuration parameters**:
@@ -152,8 +152,8 @@ The Session Host Replacer supports three distinct replacement strategies to acco
 - `targetSessionHostCount`: 0 (auto-detect) or Specific number
 - `maxDeletionsPerCycle`: Absolute replacement ceiling per cycle (default: 50)
 - `minimumCapacityPercentage`: Safety floor for available capacity (default: 80%)
-- `removeEntraDevice`: Optionally remove Entra ID records before hostname reuse (default: `true`)
-- `removeIntuneDevice`: Optionally remove Intune records before hostname reuse (default: `true`)
+- `removeEntraDevice`: Remove Entra records; always enabled for native Entra join in every mode (default: `true`)
+- `removeIntuneDevice`: Remove Intune records; always enabled for Intune-enrolled native Entra join (default: `true`)
 
 **Use cases**:
 
@@ -276,7 +276,7 @@ The Session Host Replacer Function App supports two identity options:
 
 - **Pre-created** before deployment
 - **Regional requirement**: Must be in the same Azure region as the Function App because Microsoft.Web cannot attach a user-assigned identity across regional isolation boundaries
-- **Best for**: Pre-authorizing required or optional device cleanup before the first DeleteFirst run
+- **Best for**: Pre-authorizing required or optional device cleanup before the first replacer run
 - **Best for**: Environments with a large number of host pools
 - **Benefit**: Graph permissions can be granted before deployment
 
@@ -293,7 +293,15 @@ The Session Host Replacer Function App supports two identity options:
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
 > [!IMPORTANT]
-> **DeleteFirst mode:** Entra device cleanup is required for Microsoft Entra joined session hosts because their exact names are reused. It remains optional for domain-joined and Microsoft Entra hybrid joined hosts. Intune cleanup is optional but highly recommended for Intune-enrolled Entra-joined or hybrid-joined hosts to prevent stale or duplicate managed-device records.
+> **Every replacement mode:** Native Entra joined hosts require Entra cleanup and, when Intune
+> enrolled, Intune cleanup. SideBySide can reuse vacant names after manual VM deletion, so the same
+> predeployment safety gate applies. AD DS and hybrid-joined machines retain optional directory
+> cleanup; Intune cleanup remains recommended when enrolled.
+>
+> Required cleanup failure blocks the entire deployment batch and stops further deletion in that
+> invocation. Saved pending names retry on later runs. See the [safe-name-reuse contract](replacement-flow.md#safe-name-reuse-in-every-mode)
+> for exact checks, ambiguous device records, live-VM collisions, explicit-target requirements,
+> and manual cleanup of legacy failed VMs without ownership tags.
 >
 > Configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 >
@@ -302,7 +310,7 @@ The Session Host Replacer Function App supports two identity options:
 > scheduling.
 >
 > Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
-> Leave Intune cleanup disabled unless your environment support team confirms availability. Grant
+> Disable Intune enrollment and cleanup unless your environment support team confirms availability. Grant
 > only `Device.ReadWrite.All` for Entra cleanup.
 
 #### 2. Grant Graph API Permissions to Managed Identity
@@ -733,7 +741,7 @@ $params = @{
     resourceGroupName = "rg-avd-management-use2"
     location = "eastus2"
     hostPoolResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.DesktopVirtualization/hostpools/vdpool-prod"
-    # Optional: Only required if device cleanup is needed from first run (DeleteFirst mode).
+    # Optional: Pre-authorize Graph cleanup before the first run, required for native Entra join.
     # The identity must be in the same Azure region as the Function App.
     sessionHostReplacerUserAssignedIdentityResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-sessionhostreplacer"
     # ... other parameters
@@ -1114,8 +1122,8 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `removeEntraDevice` | `true` | Remove Entra ID device records when deleting session hosts. Required for DeleteFirst replacement of Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts. Requires `Device.ReadWrite.All` when enabled. |
-| `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. Optional but highly recommended before DeleteFirst hostname reuse for Intune-enrolled Entra-joined or hybrid-joined hosts. Requires `DeviceManagementManagedDevices.ReadWrite.All` when enabled. Intune is not currently available in Azure Government Secret and Top Secret; set to `false` unless availability is confirmed for the target environment. |
+| `removeEntraDevice` | `true` | Always enabled for native Entra joined hosts in every mode, including SideBySide vacant-name recovery; optional for AD DS and hybrid-joined machines. Requires `Device.ReadWrite.All` when required or enabled. |
+| `removeIntuneDevice` | `true` | Always enabled for Intune-enrolled native Entra joined hosts; optional and recommended for enrolled hybrid-joined machines. Requires `DeviceManagementManagedDevices.ReadWrite.All` when required or enabled. Intune is unavailable in Secret and Top Secret: disable enrollment and cleanup unless availability is confirmed. |
 
 ### Scheduling Parameters
 

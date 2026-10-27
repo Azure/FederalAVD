@@ -438,6 +438,8 @@ function Invoke-AzureRestMethod {
             The request body of the REST call. This is often used with methods like POST, PUT and PATCH.
         .PARAMETER AdditionalHeaders
             Optional additional headers to include in the request.
+        .PARAMETER RequireCollection
+            Reject missing or malformed collection envelopes, including subsequent pages.
         .EXAMPLE
             Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'GET' -Uri 'https://management.azure.com/...'
     #>
@@ -448,6 +450,8 @@ function Invoke-AzureRestMethod {
 
         [parameter(Mandatory = $false)]
         [string]$Method = 'GET',
+
+        [switch]$RequireCollection,
 
         [parameter(Mandatory = $true)]
         [string]$Uri,
@@ -473,6 +477,13 @@ function Invoke-AzureRestMethod {
         # Create an empty array to store the result.
         $QueryRequest = @()
         $dataToUpload = @()
+        $validateCollection = {
+            param($Response)
+            if ($RequireCollection -and ($null -eq $Response -or
+                $Response.value -isnot [System.Collections.IList])) {
+                throw "Invalid collection response from '$Uri'; resource absence cannot be established."
+            }
+        }
 
         # Run the first query.
         if ($Method -eq 'GET') {
@@ -482,12 +493,13 @@ function Invoke-AzureRestMethod {
             $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
         }
         
+        & $validateCollection $QueryRequest
         # Check if response is a direct array or has a value property
         if ($QueryRequest -is [array]) {
             # Direct array response (e.g., marketplace images API)
             $dataToUpload += $QueryRequest
         }
-        elseif ($QueryRequest.value) {
+        elseif ($null -ne $QueryRequest -and $QueryRequest.PSObject.Properties.Name -contains 'value') {
             # Paged response with value property
             $dataToUpload += $QueryRequest.value
         }
@@ -500,10 +512,12 @@ function Invoke-AzureRestMethod {
         if ($Uri -notlike "*`$top*") {
             while ($QueryRequest.'@odata.nextLink' -and $QueryRequest.'@odata.nextLink' -is [string]) {
                 $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -Method $Method -Verbose:$false
+                & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.nextLink -and $QueryRequest.nextLink -is [string]) {
                 $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -Method $Method -Verbose:$false
+                & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.'$skipToken' -and $QueryRequest.'$skipToken' -is [string] -and $Body -ne '') {
@@ -511,6 +525,7 @@ function Invoke-AzureRestMethod {
                 $JsonBody | Add-Member -Type NoteProperty -Name '$skipToken' -Value $QueryRequest.'$skipToken' -Force
                 $Body = $JsonBody | ConvertTo-Json -Depth 10
                 $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
+                & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
         }

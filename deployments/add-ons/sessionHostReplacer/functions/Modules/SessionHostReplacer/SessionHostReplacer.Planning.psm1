@@ -479,9 +479,9 @@ function Get-SessionHostReplacementPlan {
                     $pendingHostNames = @($pendingMappings.Keys)
                 }
 
-                $registeredHostNames = @($SessionHosts.SessionHostName)
+                $registeredHostNames = @($SessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName })
                 $unresolvedPendingCount = @($pendingHostNames | Where-Object { $_ -notin $registeredHostNames }).Count
-                $TargetSessionHostCount = $SessionHosts.Count + $unresolvedPendingCount
+                $TargetSessionHostCount = $registeredHostNames.Count + $unresolvedPendingCount
                 if ($TargetSessionHostCount -le 0) {
                     throw "Auto-detect mode cannot establish a positive target from an empty host pool"
                 }
@@ -570,40 +570,7 @@ function Get-SessionHostReplacementPlan {
     if ($unavailableHosts.Count -gt 0) {
         $unavailableHostNames = $unavailableHosts.SessionHostName -join ','
         Write-LogEntry -Message "CRITICAL: Detected $($unavailableHosts.Count) unavailable session hosts (VMs deleted): $unavailableHostNames" -Level Error
-        Write-LogEntry -Message "Cleaning up device records and host pool registrations before redeployment..." -Level Warning
-        
-        # Clean up device records for each unavailable host
-        foreach ($unavailableHost in $unavailableHosts) {
-            # Remove from Entra ID and Intune if configured
-            if ($GraphToken -and ($RemoveEntraDevice -or $RemoveIntuneDevice)) {
-                try {
-                    Remove-DeviceFromDirectories `
-                        -DeviceName $unavailableHost.SessionHostName `
-                        -GraphToken $GraphToken `
-                        -RemoveEntraDevice $RemoveEntraDevice `
-                        -RemoveIntuneDevice $RemoveIntuneDevice
-                    Write-LogEntry -Message "Cleaned up device records for ghost host: $($unavailableHost.SessionHostName)" -Level Information
-                }
-                catch {
-                    Write-LogEntry -Message "Failed to clean up device records for $($unavailableHost.SessionHostName): $($_.Exception.Message)" -Level Warning
-                }
-            }
-            
-            # Remove stale host pool registration
-            try {
-                $hostPoolPath = "/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName"
-                $sessionHostPath = "$hostPoolPath/sessionHosts/$($unavailableHost.FQDN)"
-                $deleteUri = "$ResourceManagerUri$sessionHostPath`?api-version=2024-04-03&force=true"
-                
-                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Delete -Uri $deleteUri | Out-Null
-                Write-LogEntry -Message "Removed stale host pool registration: $($unavailableHost.FQDN)" -Level Information
-            }
-            catch {
-                Write-LogEntry -Message "Failed to remove host pool registration for $($unavailableHost.FQDN): $($_.Exception.Message)" -Level Warning
-            }
-        }
-        
-        Write-LogEntry -Message "Ghost host cleanup complete. These hosts will be excluded from deletion candidates and counted as needing replacement." -Level Warning
+        Write-LogEntry -Message "Missing hosts require verified predeployment cleanup; planning will not remove identities or registrations." -Level Warning
     }
     
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
@@ -921,7 +888,7 @@ function Get-SessionHostReplacementPlan {
     
     # Auto-detect mode: Clear stored target when replacement cycle is complete
     $configuredTarget = Read-FunctionAppSetting TargetSessionHostCount
-    if ($configuredTarget -eq 0 -and $sessionHostsToReplace.Count -eq 0 -and $sessionHostsPendingDelete.Count -eq 0) {
+    if ($configuredTarget -eq 0 -and $canDeploy -eq 0 -and $unavailableHosts.Count -eq 0 -and $sessionHostsToReplace.Count -eq 0 -and $sessionHostsPendingDelete.Count -eq 0) {
         # All hosts are up to date and nothing pending - clear stored target for next cycle
         try {
             $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName
@@ -940,7 +907,7 @@ function Get-SessionHostReplacementPlan {
         PossibleDeploymentsCount       = $canDeploy
         PossibleSessionHostDeleteCount = $canDelete
         SessionHostsPendingDelete      = $sessionHostsPendingDelete
-        ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
+        ExistingSessionHostNames       = (@($SessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName }) + [array]$runningDeploymentVMNames) | Select-Object -Unique
         TargetSessionHostCount         = $TargetSessionHostCount
         TotalSessionHostsToReplace     = $sessionHostsToReplace.Count
     }
@@ -1109,7 +1076,7 @@ function Get-SessionHosts {
     
     Write-LogEntry -Message "Getting current session hosts in host pool $HostPoolName"
     $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts?api-version=2024-04-03"
-    $sessionHostsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    $sessionHostsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri -RequireCollection
     
     # Extract properties from nested structure
     $sessionHosts = $sessionHostsResponse | ForEach-Object {
@@ -1126,6 +1093,7 @@ function Get-SessionHosts {
     }
     
     $result = foreach ($sh in $sessionHosts) {
+        if ([string]::IsNullOrWhiteSpace($sh.ResourceId)) { throw "AVD registration '$($sh.Name)' has no VM resource ID." }
         # Look up VM from cache by resource ID
         $vmResponse = $null
         if ($CachedVMs -and $CachedVMs.Count -gt 0) {
@@ -1137,14 +1105,28 @@ function Get-SessionHosts {
         
         # Fall back to individual query if not in cache (without instanceView - we'll get power state lazily if needed)
         if (-not $vmResponse) {
+            $vmAbsent = $false
             Write-LogEntry -Message "VM not found in cache, querying individually: $($sh.ResourceId)" -Level Trace
             $Uri = "$ResourceManagerUri$($sh.ResourceId)?api-version=2024-07-01"
             try {
                 $vmResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
             }
             catch {
-                Write-LogEntry -Message "Failed to query VM $($sh.ResourceId): $($_.Exception.Message). VM may have been deleted." -Level Warning
-                $vmResponse = $null
+                if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+                    $vmResponse = $null
+                    $vmAbsent = $true
+                }
+                else {
+                    Write-LogEntry -Message "Unable to determine VM existence for $($sh.ResourceId): $($_.Exception.Message)" -Level Error
+                    throw
+                }
+            }
+            if ($vmResponse.error) {
+                if ($vmResponse.error.code -eq 'ResourceNotFound') { $vmResponse = $null; $vmAbsent = $true }
+                else { throw "VM lookup failed for '$($sh.ResourceId)': $($vmResponse.error.code)" }
+            }
+            if ($null -eq $vmResponse -and -not $vmAbsent -and -not (Test-ReplacerResourceAbsent -ARMToken $ARMToken -ResourceId $sh.ResourceId)) {
+                throw "Unable to establish VM absence for '$($sh.ResourceId)'."
             }
         }
         

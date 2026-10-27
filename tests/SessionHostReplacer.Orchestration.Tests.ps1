@@ -109,6 +109,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             FailRequiredSave = $false
             FailPostDeploymentSaveRuns = @()
             FailCleanupRuns = @()
+            FailPreflightRuns = @()
             VerificationResults = @{}
             DeploymentCalls = @()
             DeletionCalls = @()
@@ -249,12 +250,26 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 $NewSessionHostsCount,
                 $ExistingSessionHostNames,
                 $PreferredSessionHostNames,
-                $PreferredHostProperties
+                $PreferredHostProperties,
+                [switch]$WaitForVMDeletion
+            )
+            $names = if ($PreferredSessionHostNames) { @($PreferredSessionHostNames) }
+            elseif ($global:shrSimulation.DeploymentState.PendingHostMappings -ne '{}') {
+                @(($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).PSObject.Properties.Name |
+                    Where-Object { $_ -notin $ExistingSessionHostNames } | Sort-Object | Select-Object -First $NewSessionHostsCount)
+            }
+            elseif ($global:shrSimulation.AllocatedNames) { @($global:shrSimulation.AllocatedNames) }
+            else { @('avd-new-01', 'avd-new-02') }
+            Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @(
+                $names | ForEach-Object {
+                    [PSCustomObject]@{ SessionHostName = $_; ResourceId = Get-SessionHostVMResourceId -Name $_ }
+                }
             )
             $global:shrSimulation.DeploymentCalls += [PSCustomObject]@{
                 Run = $global:shrSimulation.RunNumber
                 Count = $NewSessionHostsCount
-                PreferredNames = @($PreferredSessionHostNames)
+                PreferredNames = $names
+                WaitForVMDeletion = [bool]$WaitForVMDeletion
             }
             if ($global:shrSimulation.RunNumber -in $global:shrSimulation.FailDeploymentRuns) {
                 throw 'simulated deployment submission failure'
@@ -264,22 +279,30 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             }
             [PSCustomObject]@{
                 DeploymentName = "deployment-$($global:shrSimulation.RunNumber)"
-                SessionHostNames = if ($PreferredSessionHostNames) { @($PreferredSessionHostNames) } else { @('avd-new-01', 'avd-new-02') }
+                SessionHostNames = $names
                 SessionHostCount = $NewSessionHostsCount
             }
         }
         Mock Remove-SessionHosts {
-            param ($SessionHostsPendingDelete)
+            param ($SessionHostsPendingDelete, [switch]$DeferDeviceCleanup)
             $names = @($SessionHostsPendingDelete.SessionHostName)
             $global:shrSimulation.DeletionCalls += [PSCustomObject]@{
                 Run = $global:shrSimulation.RunNumber
                 Names = $names
+                DeferDeviceCleanup = [bool]$DeferDeviceCleanup
             }
             $global:shrSimulation.Hosts = @($global:shrSimulation.Hosts | Where-Object {
                 $_.SessionHostName -notin $names
             })
             if ($global:shrSimulation.RunNumber -in $global:shrSimulation.InterruptAfterDeletionRuns) {
                 throw 'simulated function interruption after host removal'
+            }
+            if (-not $DeferDeviceCleanup) {
+                Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @(
+                    $names | ForEach-Object {
+                        [PSCustomObject]@{ SessionHostName = $_; ResourceId = Get-SessionHostVMResourceId -Name $_ }
+                    }
+                )
             }
             [PSCustomObject]@{
                 SuccessfulDeletions = $names
@@ -292,6 +315,34 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             $global:shrSimulation.DirectoryCleanupCalls += [PSCustomObject]@{
                 Run = $global:shrSimulation.RunNumber
                 Name = $DeviceName
+            }
+        }
+        Mock Get-SessionHostVMResourceId {
+            param($Name)
+            "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/$Name"
+        }
+        Mock Assert-SessionHostNamesAvailable {
+            param($SessionHosts)
+            if ($global:shrSimulation.RunNumber -in $global:shrSimulation.FailPreflightRuns) {
+                throw 'Required directory cleanup failed; deployment batch is blocked.'
+            }
+            foreach ($hostToDeploy in $SessionHosts) {
+                if (@($global:shrSimulation.Hosts | Where-Object {
+                    $_.ResourceId -eq $hostToDeploy.ResourceId -and -not $_.IsUnavailable
+                }).Count -gt 0) {
+                    throw 'VM absence is not confirmed; deployment batch is blocked.'
+                }
+            }
+            foreach ($hostToDeploy in $SessionHosts) {
+                if ($global:shrSettings.RemoveEntraDevice -or $global:shrSettings.RemoveIntuneDevice -or
+                    $global:shrSettings.SessionHostParameters.IdentitySolution -in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')) {
+                    Remove-DeviceFromDirectories -DeviceName $hostToDeploy.SessionHostName
+                }
+            }
+            $verification = Confirm-SessionHostDeletions -ARMToken token -SessionHosts $SessionHosts `
+                -DeletedHostNames @($SessionHosts.SessionHostName)
+            if ($verification.TotalHosts -ne $SessionHosts.Count -or @($verification.IncompleteHosts).Count -gt 0) {
+                throw 'Required cleanup remains incomplete; deployment batch is blocked.'
             }
         }
         Mock Confirm-SessionHostDeletions {
@@ -328,6 +379,138 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Remove-Variable shrSimulation -Scope Global -ErrorAction SilentlyContinue
         Remove-Variable shrSettings -Scope Global -ErrorAction SilentlyContinue
         Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'SideBySide recovers a ghost despite image cooldown and retries the same name after cleanup failure' {
+        $ghost = $global:shrSimulation.Hosts[0]
+        $ghost.IsUnavailable = $true
+        $ghost.ImageVersion = $null
+        $global:shrSimulation.Hosts[1].ImageVersion = '2.0.0'
+        $global:shrSettings.ReplaceSessionHostOnNewImageVersionDelayDays = 9999
+        $global:shrSimulation.FailPreflightRuns = @(1)
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            ExistingSessionHostNames = @('avd-02')
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 1
+        }
+
+        $failure = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $failure.Exception.Message | Should Match 'Required directory cleanup failed'
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
+            Should Be $ghost.ResourceId
+
+        Invoke-OrchestrationCycle -RunNumber 2
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
+            Should Be $ghost.ResourceId
+    }
+
+    It 'DeleteFirst does not clear a ghost recovery mapping or delete another host' {
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSimulation.Hosts[0].IsUnavailable = $true
+        $global:shrSimulation.Hosts[0].ImageVersion = $null
+        $global:shrSimulation.DeploymentState.PendingHostMappings = '{"avd-01":{"VMName":"avd-01","ResourceId":"/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-01"}}'
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            ExistingSessionHostNames = @('avd-02')
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 1
+        }
+        Invoke-OrchestrationCycle -RunNumber 1
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+        $global:shrSimulation.VerificationCalls[0].Names | Should Be @('avd-01')
+    }
+
+    It 'DeleteFirst fills an administrator-deleted slot with required directory cleanup and no deletion of surviving hosts' {
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSettings.SessionHostParameters.IdentitySolution = 'EntraId'
+        $global:shrSettings.SessionHostParameters.IntuneEnrollment = $true
+        $global:shrSimulation.Hosts = @(New-OrchestrationTestHost -Name avd-02 -ImageVersion '2.0.0')
+        $global:shrSimulation.DeploymentState.TargetSessionHostCount = 0
+        $global:shrSimulation.AllocatedNames = @('avd-01')
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            ExistingSessionHostNames = @('avd-02')
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 0
+        }
+        $global:shrSimulation.FailPreflightRuns = @(1)
+        $failure = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+
+        Invoke-OrchestrationCycle -RunNumber 2
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+        $global:shrSimulation.DeploymentCalls[0].WaitForVMDeletion | Should Be $false
+        $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 1
+        $global:shrSimulation.DirectoryCleanupCalls[0].Name | Should Be 'avd-01'
+        $global:shrSimulation.VerificationCalls.Count | Should Be 1
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+    }
+
+    It 'SideBySide performs no deployment or deletion when ghost recovery cannot be checkpointed' {
+        $global:shrSimulation.Hosts[0].IsUnavailable = $true
+        $global:shrSimulation.FailRequiredSave = $true
+        $failure = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $failure.Exception.Message | Should Match 'state write failure'
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 0
+    }
+
+    It 'SideBySide fails closed on unreadable recovery state with progressive batching disabled' {
+        $global:shrSimulation.DeploymentState.LastStatus = 'Error'
+        $failure = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $failure.Exception.Message | Should Match 'recovery state could not be read'
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+    }
+
+    It 'SideBySide waits for live AVD registration after ARM succeeds without redeploying or deleting' {
+        $global:shrSimulation.DeploymentState.LastDeploymentName = 'deployment-previous'
+        $global:shrSimulation.DeploymentState.PendingHostMappings = '{"avd-03":{"ResourceId":"/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-03"}}'
+        $global:shrSimulation.DeploymentStatuses[1] = [PSCustomObject]@{
+            Succeeded = $true; Failed = $false; Running = $false; ProvisioningState = 'Succeeded'
+        }
+        Invoke-OrchestrationCycle -RunNumber 1
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-03'.ResourceId |
+            Should Not BeNullOrEmpty
+    }
+
+    It 'does not resolve a pending name against a live registration for a different VM' {
+        $global:shrSimulation.DeploymentState.PendingHostMappings = '{"avd-01":{"ResourceId":"/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-01"}}'
+        $global:shrSimulation.Hosts[0].ResourceId = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-99'
+        $failure = $null
+        try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
+        $failure | Should Not BeNullOrEmpty
+        $failure.Exception.Message | Should Match 'different VM resource ID'
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 0
     }
 
     It 'SideBySide retries a failed deployment and never removes old hosts before replacements are ready' {
