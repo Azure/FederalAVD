@@ -93,6 +93,9 @@ for complete sequencing and failure behavior.
 - Durable pending-name recovery; required cleanup failure blocks the entire batch and retries on
   a later scheduled run. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
   for permissions, ambiguous records, upgrade behavior, and auto-target limitations.
+- Change-aware predeployment verification: read required records once, poll only requested
+  deletions, and finish with the appropriate VM-absence check. Clean allocations avoid repeated
+  directory and AVD inventory reads.
 - Centralized Azure Monitor Workbook and alerting guidance.
 - Validated operational-setting updates through
   [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).

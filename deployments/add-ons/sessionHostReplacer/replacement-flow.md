@@ -254,24 +254,40 @@ delete ghost registrations or directory records.
 
 Before submitting any batch, the shared gate:
 
-1. Resolves exact VM IDs with `virtualMachineNameConv`. Every selected VM must be absent before
-   any identity or AVD registration is removed. A live, unregistered VM blocks the entire batch.
-2. Requires authoritative ARM `404` or `ResourceNotFound`. Null responses, permission failures,
-   throttling, and unknown errors do not establish absence.
-3. Removes stale same-name Entra records for native Entra joined hosts and Intune records when
+1. Resolves exact VM IDs with `virtualMachineNameConv` and performs read-only discovery: one AVD
+   inventory read and one exact-name lookup per required directory for each selected hostname.
+   Registration matching uses a case-insensitive name index, not a nested scan of the batch.
+2. Requires authoritative ARM `404` or `ResourceNotFound` for every selected VM before any identity
+   or AVD registration is removed. A live, unregistered VM blocks the entire batch. Null responses,
+   permission failures, throttling, and unknown errors do not establish absence.
+3. Plans stale same-name Entra cleanup for native Entra joined hosts and Intune cleanup when
    those hosts use Intune enrollment, regardless of optional cleanup flags. AD DS and hybrid-joined
    machines honor the directory cleanup flags, but VM and AVD checks are always required.
    `EntraKerberos-Hybrid` means a **native Entra joined machine with hybrid user identities**; it
    is not an AD DS hybrid-joined machine.
-4. Removes stale AVD registrations only when their resource ID matches the absent VM. A conflicting
-   VM reference blocks cleanup. All Graph result pages are checked; multiple exact-name device
-   matches are ambiguous and require operator review rather than bulk deletion.
-5. Polls VM, AVD, and required directory absence, checks every requested host was verified, and
-   freshly rechecks the exact VM IDs before the deployment PUT.
+4. Removes discovered directory records and stale AVD registrations only after the whole batch
+   passes discovery and VM-absence checks. A registration must reference the expected VM. All Graph
+   result pages are checked; multiple exact-name devices require operator review, not bulk deletion.
+5. Polls only the systems for which it requested deletion, and only until their absence is confirmed.
+   Already-absent records are not polled again. VM checks are not repeated inside directory or AVD
+   verification. Any cleanup or VM-deletion wait is followed by a fresh whole-batch VM check before
+   the deployment PUT. A clean ordinary allocation ends with its single VM-absence check.
+
+The observations used to skip redundant polling come from the current gate's own validated API
+responses, never caller-supplied success flags or a previous run. A pending-name retry performs
+fresh discovery. The standalone `Confirm-SessionHostDeletions` command retains full verification.
+
+For `B` selected names, `D` required directories, and `P` pages in the AVD inventory, a clean
+ordinary allocation uses `(D + 1) * B + P` reads. Already-clean names following a requested
+VM deletion use `(D + 2) * B + P` reads when the VM wait completes on its first check. For 100
+native Entra joined, Intune-enrolled names and a single AVD page, these are 301 and 401 reads,
+respectively, rather than the previous 702. These counts exclude tokens, recovery-state access,
+deletion requests, additional polling, pagination of directory results, and API retries. Stale
+records require additional confirmation reads only for the affected systems.
 
 Only deletions requested by the current invocation enable the batch VM-deletion wait. A live VM
-found during ordinary name allocation or a pending-name retry blocks immediately rather than
-having its identities removed. SideBySide retirement and expired shutdown-VM cleanup likewise
+found during ordinary name allocation or a pending-name retry blocks without a VM-deletion wait
+or identity deletion. SideBySide retirement and expired shutdown-VM cleanup likewise
 submit their deletion requests before completing one shared batch cleanup gate; standalone VM
 removal still waits for and verifies cleanup before returning. When a retained VM has no AVD
 registration, its actual `osProfile.computerName`, not its potentially prefixed ARM resource name,
