@@ -101,6 +101,7 @@ before collecting files. Record a disposition for every dependency:
 | --- | --- | --- |
 | **Transfer from low** | Repository release; missing management tools; selected customer application or policy packages; offline patches; complete UWP artifact ZIP; Teams prerequisites listed below | Transfer only explicitly selected, approved files through the authorized low-to-high process |
 | **Obtain within high** | Target-cloud AVD Agent, Boot Loader, FSLogix, Office Deployment Tool, OneDrive, Teams bootstrapper, and Teams MSIX | Use the repository's Secret or Top Secret base manifest on high, after verifying management-workstation reachability |
+| **Optionally transfer from low** | AVD Agent, AVD Boot Loader, FSLogix, and `teamsbootstrapper.exe` | Already available within high, so transfer is normally unnecessary; a newer low-side installer may be useful for troubleshooting or testing whether a recent release resolves an issue |
 | **Stage from an approved internal source** | Required target-cloud files whose normal distribution endpoints are unavailable to the high-side workstation | Obtain the correct cloud versions through the environment's approved distribution process; stage locally or host internally; do not substitute public package-mode outputs |
 | **Unresolved** | Missing payloads, dependencies, licensing, or unverified management/build/runtime endpoints | Resolve before requesting transfer or starting the affected deployment |
 
@@ -110,21 +111,33 @@ Include Microsoft Graph modules only when using the Graph-dependent helpers. Azu
 tooling is needed only for workflows that use it; publishing the tracked ARM JSON with
 `New-TemplateSpecs.ps1` does not require compiling Bicep on high.
 
+The following four installers are available within high, so transferring them from low is
+normally unnecessary. They can nevertheless be transferred when desired, including when a
+low-side source offers a newer version than the high-side distribution link:
+
+| Optional low-to-high installer | High-side source |
+| --- | --- |
+| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | Target-cloud AVD Agent distribution |
+| `Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi` | Target-cloud AVD Boot Loader distribution |
+| `FSLogix.zip` | Target-cloud FSLogix distribution |
+| `teamsbootstrapper.exe` | Target-cloud Teams bootstrapper distribution |
+
+This is an alternative source for those installers, not a requirement to transfer them or a
+guarantee that the low-side release is newer. Record the version and verify signatures and hashes
+so troubleshooting results can be tied to the exact installer used. The Teams bootstrapper is
+separate from the Teams MSIX and its prerequisites; transferring it does not supply those files.
+
 Keep these **public-source local-package outputs on low**; obtain their target-cloud equivalents
 within high instead:
 
 | Do not select from the public package output | High-side source |
 | --- | --- |
-| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | Target-cloud AVD Agent distribution |
-| `Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi` | Target-cloud AVD Boot Loader distribution |
-| `FSLogix.zip` | Target-cloud FSLogix distribution |
 | `Office365DeploymentTool.exe` | Target-cloud Office distribution |
 | `OneDriveSetup.exe` | Target-cloud OneDrive distribution |
-| `teamsbootstrapper.exe` and `MSTeams-x64.msix` | Target-cloud Teams distribution |
+| `MSTeams-x64.msix` | Target-cloud Teams distribution |
 
-Apply this rule to content **inside customer ZIPs** as well. A ZIP containing a public Teams,
-OneDrive, or FSLogix installer does not become suitable for the target cloud just because it is
-packaged as a customer artifact.
+Apply this rule to content **inside customer ZIPs** as well. Packaging public Office, OneDrive,
+or Teams MSIX payloads as customer artifacts does not make them target-cloud equivalents.
 
 ### Prepare and Select Files on Low
 
@@ -141,7 +154,8 @@ packaged as a customer artifact.
        -OutputPath 'C:\FederalAVD-PackageOutput'
    ```
 
-   This can also download the public base Microsoft files listed above. Leave them on low.
+   This can also download the public base Microsoft files listed above. Select the four optional
+   installers only when you intend to transfer them; otherwise leave the base outputs on low.
    Downloaded sources are staged temporarily; do not assume they were saved back into
    `customer/artifacts/`. Select the completed outputs, not the low-side customer tree.
 3. Create a **separate, fresh approved-transfer directory** and copy an explicit allowlist into
@@ -159,7 +173,7 @@ packaged as a customer artifact.
 
    This is an example selection, not a universal inventory. Remove unused items and explicitly
    add the other approved customer packages. Never copy the whole output folder or use
-   `*.zip`: `FSLogix.zip` is also a public base output, not a selected customer artifact.
+   `*.zip`: select `FSLogix.zip` explicitly only if you intend to transfer that optional installer.
    Include patches or other manually collected payloads in their complete artifact package.
 4. Record each approved item's source, version, exact filename, SHA-256, high-side destination,
    and consuming artifact or deployment parameter. Retain licensing/approval evidence and verify
@@ -178,6 +192,7 @@ The package layout determines its destination:
 | --- | --- | --- |
 | Selected prebuilt artifact ZIP, such as `BuiltIn-UWP-Apps.zip` or `Configure-EdgePolicy.zip` | `customer/artifacts/` root | Uploaded unchanged; do not wrap it in another artifact folder |
 | Manually staged `WebView2.exe`, `vc_redist.x64.exe`, `MsRdcWebRTCSvc.msi` when Teams is selected | `customer/artifacts/` root | Uploaded as individual files for the built-in Teams installation |
+| Optional transferred AVD Agent MSI, Boot Loader MSI, `FSLogix.zip`, or `teamsbootstrapper.exe` | `customer/artifacts/` root, using the exact filenames above | Stage as individual base files; use the download-skipping workflow below to retain the selected versions |
 | Complete unpackaged customer artifact, including its root script and all payloads | `customer/artifacts/<ArtifactName>/` | Compressed to `<ArtifactName>.zip` |
 
 Choose either a prebuilt ZIP or its source folder for a given artifact, not both.
@@ -198,8 +213,10 @@ and connecting to the target cloud, run from the repository root:
 customer artifact packages and the cloud-selected base downloads. It does **not** disable the
 target-cloud base downloads.
 
-Only add `-SkipDownloadingNewSources` after obtaining and staging every required target-cloud
-file through approved internal sources. That switch skips **all** downloads; it does not obtain
+Only add `-SkipDownloadingNewSources` after obtaining and staging every required base
+file, using high-side sources or the optional low-to-high installers described above as applicable.
+Use it when retaining transferred installer versions rather than downloading the cloud-linked
+versions again. That switch skips **all** downloads; it does not obtain
 missing files or validate that the selected workload is complete. A separately authored high-side
 customer download overlay is an optional advanced mechanism for approved internal source
 overrides, not a transfer requirement. Using one requires explicitly enabling customer merging
@@ -528,6 +545,14 @@ The following artifacts have working URLs in the secret and top secret downloads
 
 If these URLs are not reachable from your management system, download the files manually from the appropriate air-gapped cloud software distribution site and place them in `customer/artifacts/` before running with `-SkipDownloadingNewSources`.
 
+The AVD Agent, Boot Loader, FSLogix, and Teams bootstrapper can also be transferred from low
+when desired. Their availability within high means transfer is normally unnecessary, but a
+newer low-side release may help troubleshoot a new issue or test a potential fix. See
+[Prepare the Low-to-High Transfer Bundle](#prepare-the-low-to-high-transfer-bundle) for filenames
+and staging requirements. To retain those selected versions, stage all required base files
+before using `-SkipDownloadingNewSources`; transferring one installer is not a reason to skip
+downloads for missing dependencies.
+
 ---
 
 ### Upload Artifacts to Storage
@@ -547,8 +572,10 @@ cd C:\repos\FederalAVD\deployments
 The script automatically detects the connected environment and selects the correct base downloads file (`secret` or `topsecret`). Items with working air-gapped cloud URLs (AVD Agent, FSLogix, Teams, OneDrive, Office ODT) are downloaded automatically. Items with empty `DownloadUrl` (WebView2, vc_redist, MsRdcWebRTCSvc) and manually staged files in `customer/artifacts/` are packaged and uploaded as-is without a download attempt.
 
 > **If air-gapped network URLs are not reachable** from your management system, first obtain and
-> stage the required target-cloud files from approved internal distribution, then add
-> `-SkipDownloadingNewSources`. Do not substitute public low-side outputs.
+> stage the required files from high-side distribution or the optional low-to-high sources
+> described above, then add `-SkipDownloadingNewSources`. The optional transfer guidance applies
+> only to the AVD Agent, Boot Loader, FSLogix, and Teams bootstrapper; obtain Office, OneDrive,
+> and Teams MSIX from target-cloud sources.
 
 The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
 
