@@ -1,6 +1,18 @@
-import { cnv } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
-
 var abbreviations = loadJsonContent('../../deployments/shared/data/resourceAbbreviations.json')
+
+// Frozen convention rendering keeps expected values independent of production helpers.
+func legacyComponent(part string, code string, purpose string, location string, freeform1 string, environment string, freeform2 string, workload string) string =>
+  part == 'resourceType' ? code
+    : part == 'purpose' ? purpose
+    : part == 'location' ? location
+    : part == 'freeform1' ? freeform1
+    : part == 'environment' ? environment
+    : part == 'freeform2' ? freeform2
+    : part == 'workload' ? workload
+    : ''
+
+func legacyConventionName(components array, delimiter string, code string, purpose string, location string, freeform1 string, environment string, freeform2 string, workload string) string =>
+  join(filter(map(components, part => legacyComponent(part, code, purpose, location, freeform1, environment, freeform2, workload)), value => !empty(value)), delimiter)
 
 func legacyPurpose(rule object, delimiter string, identifier string, unique string) string =>
   rule.purpose == 'sqm{delimiter}{identifier}' && empty(identifier)
@@ -8,7 +20,7 @@ func legacyPurpose(rule object, delimiter string, identifier string, unique stri
     : replace(replace(replace(replace(rule.purpose, '{delimiter}', delimiter), '{identifier}', identifier), '{unique}', unique), '{storageIdentifier}', replace(identifier, '-', ''))
 
 func legacyRaw(convention object, rule object, region string, identifier string, unique string) string =>
-  cnv(
+  legacyConventionName(
     (rule.?omitWorkload ?? false) ? filter(convention.?components ?? ['resourceType', 'workload', 'purpose', 'location'], component => component != 'workload') : convention.?components ?? ['resourceType', 'workload', 'purpose', 'location'],
     convention.?delimiter ?? '-',
     empty(rule.type) ? '' : union(abbreviations, convention.?resourceTypeCodes ?? {})[rule.type],

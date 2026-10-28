@@ -38,22 +38,31 @@ Describe 'Direct centralized naming bundles' {
         }
     }
 
-    It 'preserves all 969 legacy host-pool outputs across seventeen profiles and all four clouds' {
+    It 'preserves 799 retained values against the unchanged 969-value legacy baseline across all four clouds' {
         $actual.Count | Should Be 17
         $legacy.Count | Should Be 17
+        $retired = @(
+            'uniqueStringStorage', 'resourceGroupMonitoring', 'uniqueStringOperations',
+            'keyVaultNameSecrets', 'keyVaultNameEncryption', 'dataCollectionEndpointName',
+            'logAnalyticsWorkspaceName', 'recoveryServicesVaultNameFSLogix',
+            'azureMonitorAgentIdentityName', 'diskEncryptionSetNameConv'
+        )
         foreach ($profile in $legacy) {
             $result = @($actual | Where-Object name -eq $profile.name)
             $result.Count | Should Be 1
-            @($result[0].hostPool.PSObject.Properties).Count | Should Be 57
-            foreach ($property in $profile.expected.PSObject.Properties) {
+            @($profile.expected.PSObject.Properties).Count | Should Be 57
+            @($result[0].hostPool.PSObject.Properties).Count | Should Be 47
+            $expected = @($profile.expected.PSObject.Properties | Where-Object { $_.Name -notin $retired })
+            ($result[0].hostPool.PSObject.Properties.Name | Sort-Object) -join ',' | Should Be (($expected.Name | Sort-Object) -join ',')
+            foreach ($property in $expected) {
                 $result[0].hostPool.($property.Name) | Should Be $property.Value
             }
         }
     }
 
-    It 'returns only the sixteen shared FSLogix properties and composes them unchanged into host-pool names' {
+    It 'returns only fifteen shared FSLogix properties and composes them unchanged into host-pool names' {
         foreach ($case in $actual) {
-            @($case.fslogix.PSObject.Properties).Count | Should Be 16
+            @($case.fslogix.PSObject.Properties).Count | Should Be 15
             foreach ($property in $case.fslogix.PSObject.Properties) {
                 $case.hostPool.($property.Name) | Should Be $property.Value
             }
@@ -73,12 +82,25 @@ Describe 'Direct centralized naming bundles' {
         $adopted.hostPool.resourceGroupControlPlane | Should Be 'Existing-Feed-RG'
         $adopted.hostPool.workspaceName | Should Be 'Existing-Feed'
         $explicit = $actual | Where-Object name -eq 'explicit-overrides'
-        $explicit.hostPool.keyVaultNameSecrets | Should Be 'kv-explicit-secrets'
+        $explicit.hostPool.sharedKeyVaultNameSecrets | Should Be 'kv-explicit-secrets'
         $explicit.hostPool.sharedKeyVaultNameEncryption | Should Be 'kv-explicit-encryption'
         $east = $actual | Where-Object name -eq 'no-location-east'
         $west = $actual | Where-Object name -eq 'no-location-west'
         $east.fslogix.fslogixStorageAccountNamePrefix | Should Not Be $west.fslogix.fslogixStorageAccountNamePrefix
-        $east.hostPool.keyVaultNameSecrets | Should Not Be $west.hostPool.keyVaultNameSecrets
+        $east.fslogix.encryptionKeyNameFSLogix | Should Not Be $west.fslogix.encryptionKeyNameFSLogix
+    }
+
+    It 'exposes no host-pool result property without a production consumer' {
+        $consumers = @(
+            'deployments\hostpools\hostpool.bicep'
+            'deployments\automatedHostPools\automatedHostPool.bicep'
+            'deployments\hostpoolPoc\hostpoolPoc.bicep'
+            'deployments\add-ons\fslogixStorage\main.bicep'
+        ) | ForEach-Object { Get-Content -LiteralPath (Join-Path $repoRoot $_) -Raw }
+        $members = @([regex]::Matches(($consumers -join "`n"), '\bnaming\.(\w+)') | ForEach-Object { $_.Groups[1].Value })
+        foreach ($property in $actual[0].hostPool.PSObject.Properties) {
+            ($members -contains $property.Name) | Should Be $true
+        }
     }
 
     It 'propagates changed central defaults and role policy through both actual bundle functions' {

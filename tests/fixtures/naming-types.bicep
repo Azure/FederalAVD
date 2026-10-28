@@ -1,4 +1,4 @@
-import { functionAppNames, resourceNameForType, privateEndpointName, privateEndpointVnetToken, shortScopedUnique, fslogixStoragePrefix } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames, resourceNameForType, privateEndpointName, shortScopedUnique, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
 var policy = loadJsonContent('../../deployments/shared/data/namingPolicy.json')
 var context = {
@@ -93,7 +93,7 @@ output encodedResults string = base64(string({
     resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))
   ]
   endpointTokens: map(vnetNames, vnet => {
-    actual: privateEndpointVnetToken(vnet)
+    actual: privateEndpointName('VNETID', '', '', vnet)
     expected: length(vnet) < 37 ? vnet : uniqueString(vnet)
   })
   endpoints: flatten(map(['pe-RESOURCE-SUBRESOURCE-VNETID', 'VNETID-SUBRESOURCE-RESOURCE-nic'], pattern => map(vnetNames, vnet => {
@@ -101,8 +101,8 @@ output encodedResults string = base64(string({
     expected: replace(replace(replace(pattern, 'SUBRESOURCE', 'file'), 'RESOURCE', 'sa-inventory'), 'VNETID', length(vnet) < 37 ? vnet : uniqueString(vnet))
   })))
   prefixes: map(['', 'customer-prefix', 'CUSTOMER-LONG-STORAGE-PREFIX'], prefix => {
-    actual: fslogixStoragePrefix(prefix, 'abc123')
-    expected: empty(prefix) ? 'fslogixabc123' : take(toLower(replace(prefix, '-', '')), 13)
+    actual: fslogixNames({ fslogixStoragePrefix: prefix }, 'finance', { subscriptionId: context.subscriptionId, cloud: context.cloud, location: context.location }).fslogixStorageAccountNamePrefix
+    expected: empty(prefix) ? 'fslogix${take(uniqueString(context.subscriptionId, 'rg-avd-finance-storage-use'), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
   })
   shortSeeds: [
     {

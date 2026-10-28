@@ -103,8 +103,11 @@ Describe 'Shared naming and module metadata contracts' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.NamingFunctions) -Raw
         $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var|type) (\w+)")
         @($documentedExports).Count | Should Be ([regex]::Matches($source, '(?m)^@export\(\)').Count)
-        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'resourceNameForType', 'functionAppNames', 'hostPoolNames', 'fslogixNames', 'hostPoolNamingContext', 'hostPoolNamingResult', 'fslogixNamingContext', 'fslogixNamingResult', 'namingContext', 'functionAppNamingResult', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
+        foreach ($name in @('resourceName', 'resourceNameForType', 'functionAppNames', 'hostPoolNames', 'fslogixNames', 'hostPoolNamingContext', 'hostPoolNamingResult', 'fslogixNamingContext', 'fslogixNamingResult', 'namingContext', 'functionAppNamingResult', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should Be 1
+        }
+        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'deploymentVmName', 'scopedUnique', 'privateEndpointVnetToken', 'fslogixStoragePrefix')) {
+            @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should Be 0
         }
     }
 

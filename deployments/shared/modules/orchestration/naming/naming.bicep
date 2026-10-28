@@ -1,6 +1,7 @@
 metadata name = 'FederalAVD centralized naming'
 metadata description = 'Authoritative FederalAVD naming policy implementation. Resource roles, defaults, patterns and limits come from namingPolicy.json; callers supply deployment context and apply explicit existing-resource overrides.'
 
+// Policy data and convention primitives.
 @export()
 @description('Authoritative naming defaults, resource roles, patterns and length limits. Edit the shared data file rather than copying rules into consumers.')
 var namingPolicy object = loadJsonContent('../../../data/namingPolicy.json')
@@ -22,7 +23,6 @@ func resolveComponent(comp string, rtCode string, component string, loc string, 
     : comp == 'workload' ? workload
     : ''
 
-@export()
 @description('Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.')
 func buildCustomName(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   join(
@@ -33,17 +33,14 @@ func buildCustomName(components array, delimiter string, rtCode string, componen
     delimiter
   )
 
-@export()
 @description('Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.')
 func cnv(components array, delimiter string, rtCode string, component string, loc string, ff1 string, env string, ff2 string, workload string) string =>
   buildCustomName(filter(components, s => s != 'none'), delimiter, rtCode, component, loc, ff1, env, ff2, workload)
 
-@export()
 @description('Removes hyphens, underscores, and dots. Callers separately enforce case, length, uniqueness, and the remaining resource naming rules.')
 func stripSeps(s string) string =>
   replace(replace(replace(s, '-', ''), '_', ''), '.', '')
 
-@export()
 @description('Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.')
 func kvSanitize(s string) string =>
   replace(replace(s, '_', '-'), '.', '-')
@@ -110,6 +107,7 @@ func resolvedResourceName(convention object, rule object, region string, identif
 func resourceName(convention object, role string, region string, identifier string, unique string) string =>
   resolvedResourceName(resolveConvention(convention), namingPolicy.resources[role], region, identifier, unique)
 
+// Identifier-based naming for new resources and add-ons.
 @export()
 @description('Actual target scope for identifier-based resource naming. Use the owning subscription/resource group, full Azure location and environment name; resourceGroups accepts an empty resourceGroupName and seeds at subscription scope.')
 type namingContext = {
@@ -233,12 +231,10 @@ func functionAppNames(convention object, identifier string, context namingContex
 func temporaryVmName(raw string) string =>
   take('${raw}${uniqueString(raw)}', namingPolicy.limits.deploymentVm)
 
-@export()
 @description('Names the temporary deployment VM using the existing separator-removal, uniqueness and Windows computer-name length rule.')
 func deploymentVmName(convention object, region string, identifier string) string =>
   temporaryVmName(stripSeps(resourceName(convention, 'deploymentVm', region, identifier, '')))
 
-@export()
 @description('Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.')
 func scopedUnique(convention object, subscriptionId string, resourceGroupName string, region string) string =>
   !contains(resolveConvention(convention).components, 'location')
@@ -258,6 +254,7 @@ func privateEndpointNicPattern(first bool, privateEndpointCode string, networkIn
     endpoint: privateEndpointPattern(first, privateEndpointCode)
   })
 
+// Image, identity and legacy scope recipes.
 @export()
 @description('Validates the Image Management storage prefix and its location budget before constructing either account name.')
 func validateImageStoragePrefix(prefix string, region string) string =>
@@ -301,7 +298,6 @@ func scopeIdUnique(firstScope string, secondScope string) string =>
 func imageBuildRunId(subscriptionId string, deploymentName string, timestamp string) string =>
   uniqueString(subscriptionId, deploymentName, timestamp)
 
-@export()
 @description('Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.')
 func privateEndpointVnetToken(vnetName string) string =>
   length(vnetName) < 37 ? vnetName : uniqueString(vnetName)
@@ -316,12 +312,12 @@ func privateEndpointName(pattern string, resourceName string, subresource string
 func shortScopedUnique(convention object, subscriptionId string, resourceGroupName string, region string) string =>
   take(scopedUnique(convention, subscriptionId, resourceGroupName, region), namingPolicy.limits.uniqueSuffix)
 
-@export()
 @description('Preserves FSLogix domain-compatible storage-prefix normalization and length budgeting, or uses the central default pattern.')
 func fslogixStoragePrefix(prefix string, unique string) string =>
   !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixStoragePrefix)
     : namePattern('fslogixStoragePrefix', { unique: unique })
 
+// FSLogix bundle, shared with host pools.
 @export()
 @description('Explicit subscription, cloud and deployment location for legacy FSLogix naming. Existing resource-group overrides are applied after naming and do not change its uniqueness seed.')
 type fslogixNamingContext = {
@@ -341,7 +337,6 @@ type fslogixNamingResult = {
   resourceGroupStorage: string
   netAppAccountName: string
   netAppCapacityPoolName: string
-  uniqueStringStorage: string
   fslogixStorageAccountNamePrefix: string
   encryptionKeyNameFSLogix: string
   privateEndpointNameConv: string
@@ -351,7 +346,7 @@ type fslogixNamingResult = {
   vmLocationAbbreviation: string
 }
 
-func fslogixNamesWithPrefix(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, unique string, prefix string, helperVmName string) fslogixNamingResult => {
+func fslogixNamesWithPrefix(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, prefix string, helperVmName string) fslogixNamingResult => {
   delimiter: resolveConvention(convention).delimiter
   resourceGroupDeployment: resourceName(convention, 'deploymentResourceGroup', abbreviation, identifier, '')
   depVirtualMachineName: helperVmName
@@ -360,7 +355,6 @@ func fslogixNamesWithPrefix(convention object, identifier string, context fslogi
   resourceGroupStorage: storageGroupName
   netAppAccountName: resourceName(convention, 'netAppAccount', abbreviation, identifier, '')
   netAppCapacityPoolName: resourceName(convention, 'netAppCapacityPool', abbreviation, identifier, '')
-  uniqueStringStorage: unique
   fslogixStorageAccountNamePrefix: prefix
   encryptionKeyNameFSLogix: namePattern('fslogixKey', { identifier: identifier, storagePrefix: prefix })
   privateEndpointNameConv: privateEndpointPattern(resourceTypeFirst(convention), resolveConvention(convention).resourceTypeCodes.privateEndpoints)
@@ -371,7 +365,7 @@ func fslogixNamesWithPrefix(convention object, identifier string, context fslogi
 }
 
 func fslogixNamesWithSeed(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, unique string) fslogixNamingResult =>
-  fslogixNamesWithPrefix(convention, identifier, context, abbreviation, storageGroupName, unique, fslogixStoragePrefix(convention.?fslogixStoragePrefix ?? '', unique), deploymentVmName(convention, abbreviation, identifier))
+  fslogixNamesWithPrefix(convention, identifier, context, abbreviation, storageGroupName, fslogixStoragePrefix(convention.?fslogixStoragePrefix ?? '', unique), deploymentVmName(convention, abbreviation, identifier))
 
 func fslogixNamesForLocation(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string) fslogixNamingResult =>
   fslogixNamesWithSeed(convention, identifier, context, abbreviation, storageGroupName, shortScopedUnique(convention, context.subscriptionId, storageGroupName, context.location))
@@ -384,6 +378,7 @@ func fslogixNamesForAbbreviation(convention object, identifier string, context f
 func fslogixNames(convention object, identifier string, context fslogixNamingContext) fslogixNamingResult =>
   fslogixNamesForAbbreviation(convention, identifier, context, !empty(convention.?vmsLocationAbbreviation ?? '') ? convention.vmsLocationAbbreviation : regionAbbreviation(context.location, context.cloud))
 
+// Host-pool bundle: FSLogix names plus compute and control-plane names.
 @export()
 @description('Parameter-only VM, control-plane, feed and subscription context for host-pool naming. Empty globalFeedLocation disables the feed group; an existing workspace must belong to sharedServicesSubscriptionId.')
 type hostPoolNamingContext = {
@@ -397,7 +392,7 @@ type hostPoolNamingContext = {
 }
 
 @export()
-@description('Complete legacy host-pool naming contract, including the shared FSLogix bundle. Names and uniqueness seeds are preserved for identical context and convention inputs.')
+@description('Host-pool naming contract containing consumed names and the shared FSLogix bundle. Retained names and uniqueness seeds are preserved for identical context and convention inputs.')
 type hostPoolNamingResult = {
   delimiter: string
   resourceGroupDeployment: string
@@ -407,7 +402,6 @@ type hostPoolNamingResult = {
   resourceGroupStorage: string
   netAppAccountName: string
   netAppCapacityPoolName: string
-  uniqueStringStorage: string
   fslogixStorageAccountNamePrefix: string
   encryptionKeyNameFSLogix: string
   privateEndpointNameConv: string
@@ -416,19 +410,13 @@ type hostPoolNamingResult = {
   vmsLocAbbr: string
   vmLocationAbbreviation: string
   resourceGroupOperations: string
-  resourceGroupMonitoring: string
   resourceGroupConsolidated: string
-  uniqueStringOperations: string
-  keyVaultNameSecrets: string
-  keyVaultNameEncryption: string
   sharedResourceGroupOperations: string
   sharedResourceGroupMonitoring: string
   sharedResourceGroupControlPlane: string
   sharedKeyVaultNameSecrets: string
   sharedKeyVaultNameEncryption: string
   sharedRecoveryServicesVaultNameFSLogix: string
-  dataCollectionEndpointName: string
-  logAnalyticsWorkspaceName: string
   sharedDataCollectionEndpointName: string
   sharedLogAnalyticsWorkspaceName: string
   globalFeedResourceGroupName: string
@@ -440,16 +428,13 @@ type hostPoolNamingResult = {
   hostPoolName: string
   scalingPlanName: string
   recoveryServicesVaultNameVMs: string
-  recoveryServicesVaultNameFSLogix: string
   policyRemediationIdentityName: string
-  azureMonitorAgentIdentityName: string
   resourceGroupHosts: string
   availabilitySetNameConv: string
   virtualMachineNameConv: string
   virtualMachineDiskNameConv: string
   virtualMachineNicNameConv: string
   diskAccessName: string
-  diskEncryptionSetNameConv: string
   diskEncryptionSetNameConfidentialVMs: string
   diskEncryptionSetNameCustomerManaged: string
   diskEncryptionSetNamePlatformAndCustomerManaged: string
@@ -473,19 +458,13 @@ func hostPoolVaultName(convention object, role string, abbreviation string, iden
 func hostPoolNamesWithScopes(convention object, identifier string, context hostPoolNamingContext, storage fslogixNamingResult, abbreviation string, operationsGroup string, sharedOperationsGroup string, diskEncryptionPattern string) hostPoolNamingResult =>
   union(storage, {
     resourceGroupOperations: operationsGroup
-    resourceGroupMonitoring: resourceName(convention, 'monitoringResourceGroup', storage.vmLocationAbbreviation, identifier, '')
     resourceGroupConsolidated: resourceName(convention, 'consolidatedResourceGroup', storage.vmLocationAbbreviation, identifier, '')
-    uniqueStringOperations: shortScopedUnique(convention, context.subscriptionId, operationsGroup, context.virtualMachinesLocation)
-    keyVaultNameSecrets: hostPoolVaultName(convention, 'secretsKeyVault', storage.vmLocationAbbreviation, identifier, shortScopedUnique(convention, context.subscriptionId, operationsGroup, context.virtualMachinesLocation))
-    keyVaultNameEncryption: hostPoolVaultName(convention, 'encryptionKeyVault', storage.vmLocationAbbreviation, identifier, shortScopedUnique(convention, context.subscriptionId, operationsGroup, context.virtualMachinesLocation))
     sharedResourceGroupOperations: sharedOperationsGroup
     sharedResourceGroupMonitoring: resourceName(convention, 'monitoringResourceGroup', abbreviation, identifier, '')
     sharedResourceGroupControlPlane: hostPoolControlPlaneGroup(convention, identifier, context, abbreviation)
     sharedKeyVaultNameSecrets: hostPoolVaultName(convention, 'secretsKeyVault', abbreviation, identifier, shortScopedUnique(convention, context.sharedServicesSubscriptionId, sharedOperationsGroup, context.controlPlaneLocation))
     sharedKeyVaultNameEncryption: hostPoolVaultName(convention, 'encryptionKeyVault', abbreviation, identifier, shortScopedUnique(convention, context.sharedServicesSubscriptionId, sharedOperationsGroup, context.controlPlaneLocation))
     sharedRecoveryServicesVaultNameFSLogix: resourceName(convention, 'filesBackupVault', abbreviation, identifier, '')
-    dataCollectionEndpointName: resourceName(convention, 'dataCollectionEndpoint', storage.vmLocationAbbreviation, identifier, '')
-    logAnalyticsWorkspaceName: resourceName(convention, 'logAnalyticsWorkspace', storage.vmLocationAbbreviation, identifier, '')
     sharedDataCollectionEndpointName: resourceName(convention, 'dataCollectionEndpoint', abbreviation, identifier, '')
     sharedLogAnalyticsWorkspaceName: resourceName(convention, 'logAnalyticsWorkspace', abbreviation, identifier, '')
     globalFeedResourceGroupName: !empty(context.globalFeedLocation) ? resourceName(convention, 'globalFeedResourceGroup', '', identifier, '') : ''
@@ -497,16 +476,13 @@ func hostPoolNamesWithScopes(convention object, identifier string, context hostP
     hostPoolName: resourceName(convention, 'hostPool', abbreviation, identifier, '')
     scalingPlanName: resourceName(convention, 'scalingPlan', abbreviation, identifier, '')
     recoveryServicesVaultNameVMs: resourceName(convention, 'vmBackupVault', storage.vmLocationAbbreviation, identifier, '')
-    recoveryServicesVaultNameFSLogix: resourceName(convention, 'filesBackupVault', storage.vmLocationAbbreviation, identifier, '')
     policyRemediationIdentityName: replace(storage.userAssignedIdentityNameConv, 'TOKEN', namePattern('policyIdentityPurpose', { delimiter: storage.delimiter }))
-    azureMonitorAgentIdentityName: replace(storage.userAssignedIdentityNameConv, 'TOKEN', namePattern('monitorIdentityPurpose', {}))
     resourceGroupHosts: resourceName(convention, 'hostsResourceGroup', storage.vmLocationAbbreviation, identifier, '')
     availabilitySetNameConv: namePattern('availabilitySet', { name: resourceName(convention, 'availabilitySet', storage.vmLocationAbbreviation, identifier, ''), delimiter: storage.delimiter })
     virtualMachineNameConv: !empty(convention.?virtualMachineNameConvOverride ?? '') ? convention.virtualMachineNameConvOverride : namingPolicy.patterns.virtualMachine
     virtualMachineDiskNameConv: !empty(convention.?virtualMachineDiskNameConvOverride ?? '') ? convention.virtualMachineDiskNameConvOverride : namingPolicy.patterns.osDisk
     virtualMachineNicNameConv: !empty(convention.?virtualMachineNicNameConvOverride ?? '') ? convention.virtualMachineNicNameConvOverride : namingPolicy.patterns.nic
     diskAccessName: resourceName(convention, 'diskAccess', storage.vmLocationAbbreviation, identifier, '')
-    diskEncryptionSetNameConv: diskEncryptionPattern
     diskEncryptionSetNameConfidentialVMs: replace(diskEncryptionPattern, 'TOKEN', namePattern('confidentialDiskPurpose', { delimiter: storage.delimiter }))
     diskEncryptionSetNameCustomerManaged: replace(diskEncryptionPattern, 'TOKEN', namePattern('customerDiskPurpose', { delimiter: storage.delimiter }))
     diskEncryptionSetNamePlatformAndCustomerManaged: replace(diskEncryptionPattern, 'TOKEN', namePattern('doubleEncryptionDiskPurpose', { delimiter: storage.delimiter }))

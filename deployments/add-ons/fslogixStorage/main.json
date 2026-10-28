@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "16222054121207999801"
+      "templateHash": "2233206273421394730"
     }
   },
   "definitions": {
@@ -55,9 +55,6 @@
           "type": "string"
         },
         "netAppCapacityPoolName": {
-          "type": "string"
-        },
-        "uniqueStringStorage": {
           "type": "string"
         },
         "fslogixStorageAccountNamePrefix": {
@@ -369,10 +366,6 @@
             },
             {
               "type": "string",
-              "name": "unique"
-            },
-            {
-              "type": "string",
               "name": "prefix"
             },
             {
@@ -391,7 +384,6 @@
               "resourceGroupStorage": "[parameters('storageGroupName')]",
               "netAppAccountName": "[_1.resourceName(parameters('convention'), 'netAppAccount', parameters('abbreviation'), parameters('identifier'), '')]",
               "netAppCapacityPoolName": "[_1.resourceName(parameters('convention'), 'netAppCapacityPool', parameters('abbreviation'), parameters('identifier'), '')]",
-              "uniqueStringStorage": "[parameters('unique')]",
               "fslogixStorageAccountNamePrefix": "[parameters('prefix')]",
               "encryptionKeyNameFSLogix": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('prefix')))]",
               "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints)]",
@@ -436,7 +428,7 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.fslogixNamingResult",
-            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), parameters('unique'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
+            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
           },
           "metadata": {
             "__bicep_imported_from!": {

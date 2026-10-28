@@ -358,6 +358,20 @@ would change established behavior.
 
 ## Function contract
 
+The library is organized into convention primitives, identifier-based naming,
+image/scope recipes, the FSLogix bundle, and the host-pool bundle. Import the
+documented entry points; rendering, sanitizing, full scope hashes, helper-VM
+formatting, VNet tokens and storage-prefix normalization are private
+implementation details. Regression tests exercise them through exported
+functions rather than exposing them solely for tests.
+
+The host-pool result contains 47 consumed properties; FSLogix returns 15 shared
+properties. Ten former host-pool fields with no production consumers were
+removed. This removes unused results, not naming calculations required by
+retained resources. With the same effective convention, identifier, locations,
+subscriptions and overrides, retained values remain unchanged. The explicit
+location migration described above still applies.
+
 Import only the functions needed by the caller:
 
 ```bicep
@@ -421,11 +435,14 @@ Azure resource changes and requires no Azure sign-in.
 [NamingBundles.Tests.ps1](../../../../../tests/NamingBundles.Tests.ps1) uses the
 same isolated local runtime to compare both direct bundles against
 [frozen legacy outputs](../../../../../tests/fixtures/naming-bundles-legacy.json).
-The 969 host-pool values were captured from the former adapter at commit
+The 969 host-pool reference values were captured from the former adapter at commit
 `d678af5de46489e921aac4a8def90e5ecce59bb6`, before extraction, across seventeen
 profiles covering all four clouds, split locations, convention/abbreviation
 overrides, existing workspace adoption and separate shared-services subscriptions.
-All sixteen FSLogix properties are checked against the matching host-pool values.
+The fixture remains unchanged after trimming ten unused returned fields: all
+799 retained host-pool values (47 fields across seventeen profiles) must still
+match it. All fifteen FSLogix properties are checked against the matching
+host-pool values. A source guard prevents unused result fields from accumulating.
 The suite also exercises changed policy propagation and rejects cross-subscription
 workspace adoption. These are legacy-preservation vectors, not new naming rules.
 

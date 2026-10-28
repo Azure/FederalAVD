@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "7647590619492081112"
+      "templateHash": "4768534403776590348"
     }
   },
   "definitions": {
@@ -55,9 +55,6 @@
           "type": "string"
         },
         "netAppCapacityPoolName": {
-          "type": "string"
-        },
-        "uniqueStringStorage": {
           "type": "string"
         },
         "fslogixStorageAccountNamePrefix": {
@@ -148,9 +145,6 @@
         "netAppCapacityPoolName": {
           "type": "string"
         },
-        "uniqueStringStorage": {
-          "type": "string"
-        },
         "fslogixStorageAccountNamePrefix": {
           "type": "string"
         },
@@ -175,19 +169,7 @@
         "resourceGroupOperations": {
           "type": "string"
         },
-        "resourceGroupMonitoring": {
-          "type": "string"
-        },
         "resourceGroupConsolidated": {
-          "type": "string"
-        },
-        "uniqueStringOperations": {
-          "type": "string"
-        },
-        "keyVaultNameSecrets": {
-          "type": "string"
-        },
-        "keyVaultNameEncryption": {
           "type": "string"
         },
         "sharedResourceGroupOperations": {
@@ -206,12 +188,6 @@
           "type": "string"
         },
         "sharedRecoveryServicesVaultNameFSLogix": {
-          "type": "string"
-        },
-        "dataCollectionEndpointName": {
-          "type": "string"
-        },
-        "logAnalyticsWorkspaceName": {
           "type": "string"
         },
         "sharedDataCollectionEndpointName": {
@@ -247,13 +223,7 @@
         "recoveryServicesVaultNameVMs": {
           "type": "string"
         },
-        "recoveryServicesVaultNameFSLogix": {
-          "type": "string"
-        },
         "policyRemediationIdentityName": {
-          "type": "string"
-        },
-        "azureMonitorAgentIdentityName": {
           "type": "string"
         },
         "resourceGroupHosts": {
@@ -272,9 +242,6 @@
           "type": "string"
         },
         "diskAccessName": {
-          "type": "string"
-        },
-        "diskEncryptionSetNameConv": {
           "type": "string"
         },
         "diskEncryptionSetNameConfidentialVMs": {
@@ -297,7 +264,7 @@
         }
       },
       "metadata": {
-        "description": "Complete legacy host-pool naming contract, including the shared FSLogix bundle. Names and uniqueness seeds are preserved for identical context and convention inputs.",
+        "description": "Host-pool naming contract containing consumed names and the shared FSLogix bundle. Retained names and uniqueness seeds are preserved for identical context and convention inputs.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
         }
@@ -594,10 +561,6 @@
             },
             {
               "type": "string",
-              "name": "unique"
-            },
-            {
-              "type": "string",
               "name": "prefix"
             },
             {
@@ -616,7 +579,6 @@
               "resourceGroupStorage": "[parameters('storageGroupName')]",
               "netAppAccountName": "[__bicep.resourceName(parameters('convention'), 'netAppAccount', parameters('abbreviation'), parameters('identifier'), '')]",
               "netAppCapacityPoolName": "[__bicep.resourceName(parameters('convention'), 'netAppCapacityPool', parameters('abbreviation'), parameters('identifier'), '')]",
-              "uniqueStringStorage": "[parameters('unique')]",
               "fslogixStorageAccountNamePrefix": "[parameters('prefix')]",
               "encryptionKeyNameFSLogix": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('prefix')))]",
               "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints)]",
@@ -661,7 +623,7 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.fslogixNamingResult",
-            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), parameters('unique'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
+            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -790,7 +752,7 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupMonitoring', __bicep.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'resourceGroupConsolidated', __bicep.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'uniqueStringOperations', _1.shortScopedUnique(parameters('convention'), parameters('context').subscriptionId, parameters('operationsGroup'), parameters('context').virtualMachinesLocation), 'keyVaultNameSecrets', _1.hostPoolVaultName(parameters('convention'), 'secretsKeyVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').subscriptionId, parameters('operationsGroup'), parameters('context').virtualMachinesLocation)), 'keyVaultNameEncryption', _1.hostPoolVaultName(parameters('convention'), 'encryptionKeyVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').subscriptionId, parameters('operationsGroup'), parameters('context').virtualMachinesLocation)), 'sharedResourceGroupOperations', parameters('sharedOperationsGroup'), 'sharedResourceGroupMonitoring', __bicep.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.hostPoolVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedKeyVaultNameEncryption', _1.hostPoolVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedRecoveryServicesVaultNameFSLogix', __bicep.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), parameters('identifier'), ''), 'dataCollectionEndpointName', __bicep.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'logAnalyticsWorkspaceName', __bicep.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedDataCollectionEndpointName', __bicep.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', __bicep.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), __bicep.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', __bicep.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), __bicep.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', __bicep.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', __bicep.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', __bicep.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', __bicep.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', __bicep.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'recoveryServicesVaultNameFSLogix', __bicep.resourceName(parameters('convention'), 'filesBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'azureMonitorAgentIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('monitorIdentityPurpose', createObject())), 'resourceGroupHosts', __bicep.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', __bicep.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('namingPolicy').patterns.nic), 'diskAccessName', __bicep.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConv', parameters('diskEncryptionPattern'), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
+            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', __bicep.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('sharedOperationsGroup'), 'sharedResourceGroupMonitoring', __bicep.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.hostPoolVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedKeyVaultNameEncryption', _1.hostPoolVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedRecoveryServicesVaultNameFSLogix', __bicep.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), parameters('identifier'), ''), 'sharedDataCollectionEndpointName', __bicep.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', __bicep.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), __bicep.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', __bicep.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), __bicep.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', __bicep.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', __bicep.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', __bicep.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', __bicep.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', __bicep.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', __bicep.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', __bicep.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('namingPolicy').patterns.nic), 'diskAccessName', __bicep.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {

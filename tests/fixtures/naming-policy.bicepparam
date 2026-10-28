@@ -1,6 +1,6 @@
 using none
 
-import { resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, scopedUnique, scopeIdUnique, deploymentVmName, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, shortScopedUnique, scopeIdUnique, fslogixNames, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 import { legacyName, legacyScopedUnique, legacyStorage } from './naming-legacy.bicep'
 
 var conventions = [
@@ -47,8 +47,8 @@ param storageParity = flatten(map(conventions, convention => flatten(map(['artif
   expected: legacyStorage(convention, kind, 'use2', subscriptionId, 'rg-avd-image-management-use2', 'eastus2', prefix)
 })))))
 param seedParity = map(conventions, convention => {
-  actual: scopedUnique(convention, subscriptionId, 'rg-avd-operations-use2', 'eastus2')
-  expected: legacyScopedUnique(convention, subscriptionId, 'rg-avd-operations-use2', 'eastus2')
+  actual: shortScopedUnique(convention, subscriptionId, 'rg-avd-operations-use2', 'eastus2')
+  expected: take(legacyScopedUnique(convention, subscriptionId, 'rg-avd-operations-use2', 'eastus2'), 6)
 })
 param defaultConvention = resolveConvention({})
 param partialCodes = resolveConvention({ resourceTypeCodes: { keyVaults: 'vault' } }).resourceTypeCodes
@@ -63,7 +63,7 @@ param shortSeed = scopeIdUnique(subscriptionId, 'rg-hosts')
 param expectedShortSeed = take(uniqueString(subscriptionId, 'rg-hosts'), 6)
 param runId = imageBuildRunId(subscriptionId, 'build-a', '202610181234')
 param expectedRunId = uniqueString(subscriptionId, 'build-a', '202610181234')
-param temporaryVm = deploymentVmName({}, 'use2', 'finance-01')
+param temporaryVm = fslogixNames({}, 'finance-01', { subscriptionId: subscriptionId, cloud: 'AzureCloud', location: 'eastus2' }).depVirtualMachineName
 param expectedTemporaryVm = take('${replace(replace(replace('avd-finance-01-use2', '-', ''), '_', ''), '.', '')}${uniqueString(replace(replace(replace('avd-finance-01-use2', '-', ''), '_', ''), '.', ''))}', 15)
 param endpointFirst = privateEndpointPattern(true, 'pe')
 param endpointLast = privateEndpointNicPattern(false, 'pe', 'nic')
