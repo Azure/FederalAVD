@@ -13,14 +13,15 @@ they retain explicit customer names and existing-resource adoption decisions.
 | Composition, formatting, location lookup and uniqueness recipes | [naming.bicep](./naming.bicep) |
 | Default resource abbreviations | [resourceAbbreviations.json](../../../data/resourceAbbreviations.json) |
 | Region abbreviations | [locations.json](../../../data/locations.json) |
-| Host-pool context, outputs and existing-workspace adoption | [hostPool.bicep](./hostPool.bicep) |
+| Host-pool and FSLogix bundles, explicit location context and existing-workspace adoption | `hostPoolNames` and `fslogixNames` in [naming.bicep](./naming.bicep) |
 | Generated Bicep parameter defaults, Portal UI-default payloads and dropdown defaults | [Sync-NamingPolicy.ps1](../../../../../tools/Sync-NamingPolicy.ps1) |
 | Template Spec publishing using the same policy datasets | [New-TemplateSpecs.ps1](../../../../../tools/New-TemplateSpecs.ps1) |
 
-The host-pool adapter serves standard host pools, automated host pools, the
-dedicated PoC, and the FSLogix Storage add-on. Shared Services, Image Management,
-and Session Host Replacer use the same policy implementation directly or through
-their naming adapters. Networking, PoC networking, Automation add-ons and Image
+Standard host pools, automated host pools and the dedicated PoC call the
+`hostPoolNames` bundle directly. The FSLogix Storage add-on calls the focused
+`fslogixNames` bundle and has no host-pool dependency. Shared Services, Image
+Management and Session Host Replacer use the same policy implementation directly
+or through the Replacer adapter. Networking, PoC networking, Automation add-ons and Image
 Build also consume the shared policy. The publisher reads its defaults and purpose
 catalog from the same datasets.
 
@@ -31,15 +32,16 @@ Shared Services, Image Management, Image Build, networking and add-ons. Import
 the functions needed by the caller; importing functions does not add a nested
 Azure deployment. The optional Function App bundle is not a separate naming engine.
 
-The host-pool and Replacer naming modules remain thin context/output adapters.
-They retain region resolution, existing-resource adoption and public output
-contracts, but use the canonical implementation for composition, suffix lengths,
-storage-prefix budgets and patterns. Private endpoint consumers use the same
+The host-pool naming deployment has been removed. The canonical library owns
+both bundles, including legacy names, scope seeds and workspace adoption checks;
+callers supply explicit locations and subscriptions. Replacer retains its own
+context/output adapter and consumes the same canonical helpers.
+Private endpoint consumers use the same
 `privateEndpointName` resolver, including its legacy 36/37-character VNet boundary.
 
-[functions.bicep](./functions.bicep) is a forwarding-only compatibility facade for
-external consumers of the former import path. No production deployment imports
-it. Do not add rules there or create another solution-local naming engine.
+`naming.bicep` is the only supported naming import path. The former
+`functions.bicep` compatibility facade has been removed. Do not create another
+solution-local naming engine.
 
 ## Naming resources in a new add-on
 
@@ -315,13 +317,44 @@ and [`uniqueString` contract](https://learn.microsoft.com/azure/azure-resource-m
 Provider-required fixed names, RBAC GUIDs, lifecycle operation IDs and explicitly
 supplied resource names are not convention-generated names.
 
-## Why the naming deployment remains
+## Explicit locations and legacy-compatible bundles
 
-The host-pool root resolves VM region from an existing VNet at runtime. Moving
-dependent naming variables into that root previously caused Bicep to inline long
-runtime expressions repeatedly. The naming module still receives the resolved
-region as an input, keeping its own expressions parameter-based. Imported
-functions and policy data add no new deployment resources.
+Use `Location` consistently for new deployment and naming-context inputs.
+The standard host pool accepts `controlPlaneLocation`, defaulting to the
+subscription deployment's location, and `virtualMachinesLocation`, defaulting to
+`controlPlaneLocation`. The form passes its selected VM location explicitly;
+that selector already defaults to the control-plane location and filters VNets
+to the selected location. Scripted callers must verify that the supplied VM
+location matches their subnet's VNet before deployment.
+
+The template no longer reads its VM location from an existing VNet. This removes
+the runtime expression dependency that previously required a separate naming
+deployment to avoid repeated expression expansion. It uses `hostPoolNames`
+directly instead. The automated host pool and PoC use that same function.
+Standalone FSLogix uses `fslogixNames` for storage, private endpoints, identities
+and temporary deployment-VM names; it does not request host-pool names.
+
+Both functions receive a convention, identifier and typed context object.
+`hostPoolNamingContext` includes `subscriptionId`, `cloud`,
+`virtualMachinesLocation`, `controlPlaneLocation`, `globalFeedLocation`,
+`existingFeedWorkspaceResourceId` and `sharedServicesSubscriptionId`; use empty
+strings for absent feed/adopted workspace inputs. `fslogixNamingContext` contains
+only `subscriptionId`, `cloud` and `location`. The host-pool bundle composes the
+FSLogix bundle rather than duplicating its recipes. Existing downstream resource
+modules keep their established public parameter names.
+
+**Migration:** previously, omitting both standard-host-pool locations inferred
+them from the subnet's VNet. They now follow the deployment location. Set both
+locations explicitly in existing automation, especially for split-location
+deployments, to preserve resource placement, generated names and scope hashes.
+An explicit empty location is not a request for VNet inference.
+
+The extraction preserves legacy seeds and location-token distinctions.
+The existing FSLogix default storage prefix uses the generated storage-group name
+in its seed even when the caller selects an existing group. Its SMB location token
+uses the raw region abbreviation, while generated resource names can use the
+convention's VM-location override. Changing either as part of structural cleanup
+would change established behavior.
 
 ## Function contract
 
@@ -376,7 +409,7 @@ deploy resources or require Azure sign-in.
 
 [IdentifierNaming.Tests.ps1](../../../../../tests/IdentifierNaming.Tests.ps1)
 executes the actual identifier-based functions through Bicep's local ARM runtime
-across 504 vectors (36 types, 14 profiles), compatibility imports, endpoint
+across 504 vectors (36 types, 14 profiles), endpoint
 boundaries and legacy adapter recipes, and compiles their wiring into the shared
 Function App module. Production source guards prevent old import paths and local
 copies of the naming engine. This suite was
@@ -385,8 +418,19 @@ It enables experimental local deployment only in an isolated temporary copy,
 evaluates output-only fixtures, and removes that copy afterwards. It makes no
 Azure resource changes and requires no Azure sign-in.
 
+[NamingBundles.Tests.ps1](../../../../../tests/NamingBundles.Tests.ps1) uses the
+same isolated local runtime to compare both direct bundles against
+[frozen legacy outputs](../../../../../tests/fixtures/naming-bundles-legacy.json).
+The 969 host-pool values were captured from the former adapter at commit
+`d678af5de46489e921aac4a8def90e5ecce59bb6`, before extraction, across seventeen
+profiles covering all four clouds, split locations, convention/abbreviation
+overrides, existing workspace adoption and separate shared-services subscriptions.
+All sixteen FSLogix properties are checked against the matching host-pool values.
+The suite also exercises changed policy propagation and rejects cross-subscription
+workspace adoption. These are legacy-preservation vectors, not new naming rules.
+
 ```powershell
-Invoke-Pester -Script tests\Naming.Tests.ps1,tests\IdentifierNaming.Tests.ps1
+Invoke-Pester -Script tests\Naming.Tests.ps1,tests\IdentifierNaming.Tests.ps1,tests\NamingBundles.Tests.ps1
 ```
 
 After changing shared naming, rebuild affected entry-point ARM templates and run

@@ -220,9 +220,13 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 Naming configuration stays in shared JSON so Bicep and PowerShell can consume one
 catalog; the executable deployment naming logic is native Bicep behind the single
 [naming.bicep entry point](../deployments/shared/modules/orchestration/naming/naming.bicep).
-All deployment families consume it. Host-pool and Replacer adapters retain scope,
-region/adoption decisions and output contracts, not separate naming engines.
-The former `functions.bicep` path only forwards external compatibility imports.
+All deployment families consume it. Host pools call its `hostPoolNames` bundle
+directly; standalone FSLogix calls `fslogixNames`, without a host-pool dependency.
+Standard host pools take an explicit `virtualMachinesLocation`, defaulting to
+`controlPlaneLocation`, instead of inferring it from a VNet at runtime. This
+removes the runtime naming dependency and the former host-pool naming deployment.
+The Replacer adapter retains its scope/output contract, not a separate naming engine.
+The former `functions.bicep` compatibility facade has been removed.
 Portal forms
 receive only a generated UI-default projection, not the resource-role catalog or
 uniqueness rules. Adding a deployment naming role must not require unrelated form
@@ -391,4 +395,9 @@ The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) 
 
 ### Implementation location
 
-The host-pool naming engine lives in [deployments/shared/modules/orchestration/naming/hostPool.bicep](../deployments/shared/modules/orchestration/naming/hostPool.bicep) and is shared by standard host pools, automated host pools, and standalone FSLogix storage. AVD Shared Services and Image Management use the same convention shape in their solution-specific naming logic.
+The naming implementation lives in [naming.bicep](../deployments/shared/modules/orchestration/naming/naming.bicep).
+Standard and automated host pools and the dedicated PoC import `hostPoolNames`;
+standalone FSLogix storage imports the focused `fslogixNames` bundle.
+AVD Shared Services, Image Management and other deployment families consume the
+same canonical library and convention. See the
+[explicit-location contract and migration notes](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-legacy-compatible-bundles).

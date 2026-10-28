@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
-import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy, resourceName, hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
 
 @maxLength(16)
 @description('Required. Short name identifying the disposable PoC deployment.')
@@ -51,17 +51,19 @@ var fslogixFileShareNames = [
   'profile-containers'
 ]
 
-module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
-  params: {
-    identifier: hpBaseName
-    virtualMachinesRegion: location
-    controlPlaneRegion: location
-  }
-}
+var naming = hostPoolNames(namingPolicy.defaults, hpBaseName, {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  virtualMachinesLocation: location
+  controlPlaneLocation: location
+  globalFeedLocation: ''
+  existingFeedWorkspaceResourceId: ''
+  sharedServicesSubscriptionId: subscription().subscriptionId
+})
 
-var resourceGroupName = naming.outputs.resourceGroupConsolidated
-var virtualNetworkName = resourceName(namingPolicy.defaults, 'pocVirtualNetwork', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
-var sessionHostSubnetName = resourceName(namingPolicy.defaults, 'pocHostsSubnet', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
+var resourceGroupName = naming.resourceGroupConsolidated
+var virtualNetworkName = resourceName(namingPolicy.defaults, 'pocVirtualNetwork', naming.vmLocationAbbreviation, hpBaseName, '')
+var sessionHostSubnetName = resourceName(namingPolicy.defaults, 'pocHostsSubnet', naming.vmLocationAbbreviation, hpBaseName, '')
 var virtualNetworkResourceId = resourceId(
   subscription().subscriptionId,
   resourceGroupName,
@@ -79,7 +81,7 @@ var hostPoolResourceId = resourceId(
   subscription().subscriptionId,
   resourceGroupName,
   'Microsoft.DesktopVirtualization/hostPools',
-  naming.outputs.hostPoolName
+  naming.hostPoolName
 )
 var vmConfigurationTags = {
   vmIdentityType: 'EntraId'
@@ -98,10 +100,10 @@ var vmConfigurationTags = {
   vmVirtualTPM: true
   vmIntegrityMonitoring: true
   vmSubnetId: sessionHostSubnetResourceId
-  virtualMachineNameConv: naming.outputs.virtualMachineNameConv
-  virtualMachineDiskNameConv: naming.outputs.virtualMachineDiskNameConv
-  virtualMachineNicNameConv: naming.outputs.virtualMachineNicNameConv
-  availabilitySetNameConv: naming.outputs.availabilitySetNameConv
+  virtualMachineNameConv: naming.virtualMachineNameConv
+  virtualMachineDiskNameConv: naming.virtualMachineDiskNameConv
+  virtualMachineNicNameConv: naming.virtualMachineNicNameConv
+  availabilitySetNameConv: naming.availabilitySetNameConv
   vmIntuneEnrollment: false
   vmImagePublisher: 'MicrosoftWindowsDesktop'
   vmImageOffer: 'office-365'
@@ -115,7 +117,7 @@ var fslogixConfigurationTags = deployFSLogixStorage
       fslFileShareNames: string(fslogixFileShareNames)
       fslSharding: 'None'
       fslLocalStorageAccountNames: string([
-        '${naming.outputs.fslogixStorageAccountNamePrefix}01'
+        '${naming.fslogixStorageAccountNamePrefix}01'
       ])
     }
   : {}
@@ -154,10 +156,10 @@ module network '../networking/modules/vnet-sub-module.bicep' = {
     includeAvdBypassRoutes: false
     rdpShortpathManagedNetworks: false
     rdpShortpathPublicNetworks: false
-    natGatewayName: resourceName(namingPolicy.defaults, 'pocNatGateway', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
-    publicIPName: resourceName(namingPolicy.defaults, 'pocPublicIP', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
+    natGatewayName: resourceName(namingPolicy.defaults, 'pocNatGateway', naming.vmLocationAbbreviation, hpBaseName, '')
+    publicIPName: resourceName(namingPolicy.defaults, 'pocPublicIP', naming.vmLocationAbbreviation, hpBaseName, '')
     routeTableName: ''
-    nsgName: resourceName(namingPolicy.defaults, 'pocSecurityGroup', naming.outputs.vmLocationAbbreviation, hpBaseName, '')
+    nsgName: resourceName(namingPolicy.defaults, 'pocSecurityGroup', naming.vmLocationAbbreviation, hpBaseName, '')
     logAnalyticsWorkspaceResourceId: ''
     nvaIPAddress: ''
     customDNSServers: []
@@ -178,9 +180,9 @@ module network '../networking/modules/vnet-sub-module.bicep' = {
 module monitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (enableMonitoring) {
   params: {
     azureMonitorPrivateLinkScopeResourceId: ''
-    dataCollectionEndpointName: naming.outputs.sharedDataCollectionEndpointName
+    dataCollectionEndpointName: naming.sharedDataCollectionEndpointName
     location: location
-    logAnalyticsWorkspaceName: naming.outputs.sharedLogAnalyticsWorkspaceName
+    logAnalyticsWorkspaceName: naming.sharedLogAnalyticsWorkspaceName
     resourceGroupMonitoring: resourceGroupName
     tags: tags
   }
@@ -203,7 +205,7 @@ module workspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bice
   params: {
     workspaceMode: 'Create'
     manageWorkspace: true
-    workspaceName: naming.outputs.workspaceName
+    workspaceName: naming.workspaceName
     workspaceResourceId: ''
     workspaceResourceGroupName: resourceGroupName
     createWorkspaceResourceGroup: false
@@ -220,8 +222,8 @@ module workspace '../shared/modules/orchestration/avdWorkspace/avdWorkspace.bice
     globalWorkspaceResourceGroupName: ''
     globalFeedPrivateEndpointSubnetResourceId: ''
     globalFeedPrivateDnsZoneResourceId: ''
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     tags: tags
   }
   dependsOn: [
@@ -263,7 +265,7 @@ module controlPlane '../hostpools/modules/control-plane/controlPlane.bicep' = {
     deployScalingPlan: false
     deploymentUserAssignedIdentityClientId: ''
     deploymentVirtualMachineName: ''
-    desktopApplicationGroupName: naming.outputs.desktopApplicationGroupName
+    desktopApplicationGroupName: naming.desktopApplicationGroupName
     desktopFriendlyName: ''
     enableMonitoring: enableMonitoring
     existingFeedWorkspaceResourceId: workspace.outputs.workspaceResourceId
@@ -272,7 +274,7 @@ module controlPlane '../hostpools/modules/control-plane/controlPlane.bicep' = {
         hostsResourceGroupId: subscriptionResourceId('Microsoft.Resources/resourceGroups', resourceGroupName)
         hpIdentifier: hpBaseName
         hpNamingConvention: string(union(namingPolicy.defaults, {
-          vmsLocationAbbreviation: naming.outputs.vmLocationAbbreviation
+          vmsLocationAbbreviation: naming.vmLocationAbbreviation
         }))
       },
       deployFSLogixStorage
@@ -285,7 +287,7 @@ module controlPlane '../hostpools/modules/control-plane/controlPlane.bicep' = {
         : {}
     )
     hostPoolMaxSessionLimit: 4
-    hostPoolName: naming.outputs.hostPoolName
+    hostPoolName: naming.hostPoolName
     hostPoolPrivateEndpointSubnetResourceId: ''
     hostPoolPublicNetworkAccess: 'Enabled'
     hostPoolRDPProperties: 'enablerdsaadauth:i:1;'
@@ -294,11 +296,11 @@ module controlPlane '../hostpools/modules/control-plane/controlPlane.bicep' = {
     hostPoolVmTemplate: hostPoolVmTemplate
     virtualMachinesRegion: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     resourceGroupControlPlane: resourceGroupName
     resourceGroupDeployment: ''
-    scalingPlanName: naming.outputs.scalingPlanName
+    scalingPlanName: naming.scalingPlanName
     scalingPlanPooledSchedules: []
     scalingPlanPersonalSchedules: []
     scalingPlanExclusionTag: ''
@@ -323,7 +325,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     domainName: ''
     encryptionKeyVaultUri: ''
     fslogixAdminGroups: []
-    fslogixEncryptionKeyNameConv: naming.outputs.encryptionKeyNameFSLogix
+    fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: 'None'
     fslogixUserGroups: []
@@ -334,18 +336,18 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     netAppVolumesSubnetResourceId: ''
-    netAppAccountName: naming.outputs.netAppAccountName
-    netAppCapacityPoolName: naming.outputs.netAppCapacityPoolName
+    netAppAccountName: naming.netAppAccountName
+    netAppCapacityPoolName: naming.netAppCapacityPoolName
     ouPath: ''
     privateEndpoint: false
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: ''
     resourceGroupDeployment: ''
     resourceGroupStorage: resourceGroupName
     shareSizeInGB: 100
-    smbServerLocation: naming.outputs.vmsLocAbbr
-    storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
+    smbServerLocation: naming.vmsLocAbbr
+    storageAccountNamePrefix: naming.fslogixStorageAccountNamePrefix
     storageCount: 1
     storageIndex: 1
     storageSku: 'Standard'
@@ -372,7 +374,7 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     artifactsUserAssignedIdentityResourceId: ''
     avdInsightsDataCollectionRulesResourceId: avdInsightsDataCollectionRuleResourceId
     availability: 'None'
-    availabilitySetNameConv: naming.outputs.availabilitySetNameConv
+    availabilitySetNameConv: naming.availabilitySetNameConv
     availabilitySetsCount: 1
     availabilitySetsIndex: 0
     availabilityZones: []
@@ -414,9 +416,9 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     integrityMonitoring: true
     intuneEnrollment: false
     location: location
-    virtualMachineDiskNameConv: naming.outputs.virtualMachineDiskNameConv
+    virtualMachineDiskNameConv: naming.virtualMachineDiskNameConv
     ouPath: ''
-    virtualMachineNicNameConv: naming.outputs.virtualMachineNicNameConv
+    virtualMachineNicNameConv: naming.virtualMachineNicNameConv
     securityType: 'TrustedLaunch'
     secureBootEnabled: true
     sessionHostCount: sessionHostCount
@@ -428,7 +430,7 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     timeZone: 'Eastern Standard Time'
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
-    virtualMachineNameConv: naming.outputs.virtualMachineNameConv
+    virtualMachineNameConv: naming.virtualMachineNameConv
     virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
     vTpmEnabled: true
@@ -447,8 +449,8 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     azureBackupPrivateDnsZoneResourceId: ''
     azureBlobPrivateDnsZoneResourceId: ''
     azureQueuePrivateDnsZoneResourceId: ''
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
   }
   dependsOn: [

@@ -1,0 +1,1 @@
+using './naming-bundles.bicep'

@@ -5,6 +5,7 @@ import { artifactCustomizationType } from '../shared/modules/resourceModules/typ
 import { vmApplicationAssignmentType } from '../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
+import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
 
 type scalingTimeType = {
   hour: int
@@ -559,16 +560,15 @@ var effectiveNamingConvention = union(
   !empty(encryptionKeyVaultNameOverride) ? { encryptionKeyVaultNameOverride: encryptionKeyVaultNameOverride } : {}
 )
 
-module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
-  params: {
-    namingConvention: effectiveNamingConvention
-    virtualMachinesRegion: location
-    controlPlaneRegion: controlPlaneLocation
-    identifier: toLower(identifier)
-    globalFeedRegion: avdPrivateLinkPrivateRoutes == 'All' ? controlPlaneLocation : ''
-    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
-  }
-}
+var naming = hostPoolNames(effectiveNamingConvention, toLower(identifier), {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  virtualMachinesLocation: location
+  controlPlaneLocation: controlPlaneLocation
+  globalFeedLocation: avdPrivateLinkPrivateRoutes == 'All' ? controlPlaneLocation : ''
+  existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
+  sharedServicesSubscriptionId: subscription().subscriptionId
+})
 
 var deploySharedMonitoring = enableMonitoring && empty(logAnalyticsWorkspaceResourceId)
 var deploySharedOperationsResourceGroup = deploySharedKeyVaults || deploySharedFilesBackup
@@ -578,9 +578,9 @@ module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.b
   params: {
     location: controlPlaneLocation
     azureMonitorPrivateLinkScopeResourceId: ''
-    dataCollectionEndpointName: naming.outputs.sharedDataCollectionEndpointName
-    logAnalyticsWorkspaceName: naming.outputs.sharedLogAnalyticsWorkspaceName
-    resourceGroupMonitoring: naming.outputs.sharedResourceGroupMonitoring
+    dataCollectionEndpointName: naming.sharedDataCollectionEndpointName
+    logAnalyticsWorkspaceName: naming.sharedLogAnalyticsWorkspaceName
+    resourceGroupMonitoring: naming.sharedResourceGroupMonitoring
     tags: tags
   }
   dependsOn: [sharedMonitoringResourceGroup]
@@ -598,9 +598,9 @@ var effectiveDataCollectionEndpointResourceId = enableMonitoring
 
 module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = if (deploySharedKeyVaults) {
   params: {
-    resourceGroupName: naming.outputs.sharedResourceGroupOperations
+    resourceGroupName: naming.sharedResourceGroupOperations
     deploySecretsKeyVault: deploySharedSecretsKeyVault
-    secretsKeyVaultName: naming.outputs.sharedKeyVaultNameSecrets
+    secretsKeyVaultName: naming.sharedKeyVaultNameSecrets
     secretsKeyVaultEnableSoftDelete: true
     secretsKeyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     secretsKeyVaultRetentionInDays: secretsKeyVaultRetentionInDays
@@ -609,13 +609,13 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
     deployEncryptionKeyVault: deploySharedEncryptionKeyVault
-    encryptionKeyVaultName: naming.outputs.sharedKeyVaultNameEncryption
+    encryptionKeyVaultName: naming.sharedKeyVaultNameEncryption
     encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
     privateEndpoint: sharedPrivateEndpoint
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     permittedIPs: permittedIPs
     paasPublicNetworkAccess: paasPublicNetworkAccess
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
@@ -641,9 +641,9 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
   params: {
     workspaceMode: createFeedWorkspace ? 'Create' : 'Update'
     manageWorkspace: manageFeedWorkspace
-    workspaceName: naming.outputs.sharedWorkspaceName
+    workspaceName: naming.sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
-    workspaceResourceGroupName: naming.outputs.sharedResourceGroupControlPlane
+    workspaceResourceGroupName: naming.sharedResourceGroupControlPlane
     createWorkspaceResourceGroup: true
     workspaceLocation: controlPlaneLocation
     workspaceFriendlyName: workspaceFriendlyName
@@ -655,13 +655,13 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     manageGlobalWorkspace: avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalFeedResourceId)
     globalWorkspaceMode: empty(existingGlobalFeedResourceId) ? 'Create' : 'Update'
-    globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
+    globalWorkspaceName: naming.globalFeedWorkspaceName
     globalWorkspaceResourceId: existingGlobalFeedResourceId
-    globalWorkspaceResourceGroupName: naming.outputs.globalFeedResourceGroupName
+    globalWorkspaceResourceGroupName: naming.globalFeedResourceGroupName
     globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     tags: tags
   }
   dependsOn: [controlPlaneResourceGroup]
@@ -676,8 +676,8 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
   params: {
     createVault: true
     manageBackupPolicy: true
-    vaultName: naming.outputs.sharedRecoveryServicesVaultNameFSLogix
-    resourceGroupOperations: naming.outputs.sharedResourceGroupOperations
+    vaultName: naming.sharedRecoveryServicesVaultNameFSLogix
+    resourceGroupOperations: naming.sharedResourceGroupOperations
     location: controlPlaneLocation
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     privateEndpoint: sharedPrivateEndpoint
@@ -685,8 +685,8 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     tags: tags
     timeZone: 'UTC'
     fileSharePolicyName: existingFilesBackupPolicyName
@@ -840,34 +840,34 @@ var diskEncryptionSetConfigurationIsValid = !deployDiskEncryptionSet || (empty(d
   ? true
   : fail('When deployDiskEncryptionSet is true, encryptionKeyVaultResourceId is required and diskEncryptionSetResourceId must be empty.')
 var effectiveDiskEncryptionSetName = contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
-  ? naming.outputs.diskEncryptionSetNamePlatformAndCustomerManaged
-  : naming.outputs.diskEncryptionSetNameCustomerManaged
+  ? naming.diskEncryptionSetNamePlatformAndCustomerManaged
+  : naming.diskEncryptionSetNameCustomerManaged
 var effectiveDiskEncryptionSetResourceId = deployDiskEncryptionSet
   ? virtualMachinesDiskCmk!.outputs.diskEncryptionSetResourceId
   : diskEncryptionSetResourceId
 
-var hostPoolResourceId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
+var hostPoolResourceId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.resourceGroupControlPlane}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.hostPoolName}'
 var parentResourceTag = { 'cm-resource-parent': hostPoolResourceId }
 var hostPoolCustomTags = union(
   {
-    hostsResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupHosts}'
+    hostsResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.resourceGroupHosts}'
     hostPoolManagementType: 'Automated'
     hpIdentifier: hpBaseName
     hpNamingConvention: string({
       components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
       delimiter: namingConvention.?delimiter ?? '-'
       workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-      vmsLocationAbbreviation: naming.outputs.vmLocationAbbreviation
+      vmsLocationAbbreviation: naming.vmLocationAbbreviation
     })
   },
   deployFSLogixStorage
-    ? { storageResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.outputs.resourceGroupStorage}' }
+    ? { storageResourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${naming.resourceGroupStorage}' }
     : {}
 )
 
 module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createFeedWorkspace) {
   params: {
-    name: naming.outputs.resourceGroupControlPlane
+    name: naming.resourceGroupControlPlane
     location: controlPlaneLocation
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -875,7 +875,7 @@ module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/re
 
 module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup) {
   params: {
-    name: naming.outputs.sharedResourceGroupOperations
+    name: naming.sharedResourceGroupOperations
     location: controlPlaneLocation
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -883,7 +883,7 @@ module sharedOperationsResourceGroup '../shared/modules/resourceModules/resource
 
 module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring) {
   params: {
-    name: naming.outputs.sharedResourceGroupMonitoring
+    name: naming.sharedResourceGroupMonitoring
     location: controlPlaneLocation
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -891,7 +891,7 @@ module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resource
 
 module sessionHostResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
-    name: naming.outputs.resourceGroupHosts
+    name: naming.resourceGroupHosts
     location: commercialCloudIsValid ? location : location
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
   }
@@ -899,8 +899,8 @@ module sessionHostResourceGroup '../shared/modules/resourceModules/resources/res
 
 module availabilitySet 'modules/availabilitySet.bicep' = if (deployAvailabilitySet) {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupHosts
-    nameConvention: naming.outputs.availabilitySetNameConv
+    resourceGroupName: naming.resourceGroupHosts
+    nameConvention: naming.availabilitySetNameConv
     location: location
     tags: union(parentResourceTag, tags[?'Microsoft.Compute/availabilitySets'] ?? {})
   }
@@ -909,7 +909,7 @@ module availabilitySet 'modules/availabilitySet.bicep' = if (deployAvailabilityS
 
 module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   params: {
-    name: naming.outputs.resourceGroupStorage
+    name: naming.resourceGroupStorage
     location: location
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
   }
@@ -917,7 +917,7 @@ module storageResourceGroup '../shared/modules/resourceModules/resources/resourc
 
 module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
-    name: naming.outputs.resourceGroupDeployment
+    name: naming.resourceGroupDeployment
     location: location
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTag)
   }
@@ -935,14 +935,14 @@ module avdServicePrincipalRbac '../shared/modules/orchestration/avdServicePrinci
 
 module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKeys/diskCmk.bicep' = if (deployDiskEncryptionSet) {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupHosts
+    resourceGroupName: naming.resourceGroupHosts
     keyVaultResourceId: diskEncryptionSetConfigurationIsValid ? effectiveDiskEncryptionKeyVaultResourceId : effectiveDiskEncryptionKeyVaultResourceId
     keyManagementType: keyManagementDisks
     keyExpirationInDays: 180
     location: location
     tags: tags
     parentResourceId: hostPoolResourceId
-    keyName: naming.outputs.encryptionKeyNameVMs
+    keyName: naming.encryptionKeyNameVMs
     diskEncryptionSetName: effectiveDiskEncryptionSetName
   }
   dependsOn: [sessionHostResourceGroup]
@@ -967,22 +967,22 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
     encryptionAtHost: true
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
-    hostPoolName: naming.outputs.hostPoolName
+    hostPoolName: naming.hostPoolName
     identitySolution: identitySolution
     keyManagementDisks: 'PlatformManaged'
     keyManagementStorageAccounts: fslogixKeyManagementStorage
     location: location
     ouPath: organizationalUnitPath
-    resourceGroupControlPlane: naming.outputs.resourceGroupControlPlane
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
-    resourceGroupHosts: naming.outputs.resourceGroupHosts
-    resourceGroupSecurity: naming.outputs.resourceGroupHosts
-    resourceGroupStorage: naming.outputs.resourceGroupStorage
+    resourceGroupControlPlane: naming.resourceGroupControlPlane
+    resourceGroupDeployment: naming.resourceGroupDeployment
+    resourceGroupHosts: naming.resourceGroupHosts
+    resourceGroupSecurity: naming.resourceGroupHosts
+    resourceGroupStorage: naming.resourceGroupStorage
     tags: tags
-    userAssignedIdentityNameConv: naming.outputs.userAssignedIdentityNameConv
-    virtualMachineName: naming.outputs.depVirtualMachineName
-    virtualMachineNICName: naming.outputs.depVirtualMachineNicName
-    virtualMachineDiskName: naming.outputs.depVirtualMachineDiskName
+    userAssignedIdentityNameConv: naming.userAssignedIdentityNameConv
+    virtualMachineName: naming.depVirtualMachineName
+    virtualMachineNICName: naming.depVirtualMachineNicName
+    virtualMachineDiskName: naming.depVirtualMachineDiskName
     virtualMachineSubnetResourceId: virtualMachineSubnetResourceId
     manageHostResourcePermissions: false
   }
@@ -995,15 +995,15 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
 
 module controlPlane 'modules/controlPlane.bicep' = {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupControlPlane
+    resourceGroupName: naming.resourceGroupControlPlane
     location: controlPlaneLocation
-    hostPoolName: naming.outputs.hostPoolName
-    applicationGroupName: naming.outputs.desktopApplicationGroupName
+    hostPoolName: naming.hostPoolName
+    applicationGroupName: naming.desktopApplicationGroupName
     existingFeedWorkspaceResourceId: effectiveFeedWorkspaceResourceId
     desktopFriendlyName: desktopFriendlyName
     deploymentVirtualMachineName: deploymentHelper.outputs.virtualMachineName
     deploymentUserAssignedIdentityClientId: deploymentHelper.outputs.deploymentUserAssignedIdentityClientId
-    deploymentResourceGroupName: naming.outputs.resourceGroupDeployment
+    deploymentResourceGroupName: naming.resourceGroupDeployment
     deploymentLocation: location
     appGroupSecurityGroupIds: appGroupSecurityGroupIds
     maxSessionLimit: hostPoolMaxSessionLimit
@@ -1011,7 +1011,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
     customRdpProperty: hostPoolRDPProperties
     validationEnvironment: hostPoolValidationEnvironment
     startVMOnConnect: startVMOnConnect
-    sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
+    sessionHostResourceGroupName: naming.resourceGroupHosts
     subnetResourceId: virtualMachineSubnetResourceId
     customImageResourceId: customImageResourceId
     sessionHostVmApplications: sessionHostVmApplications
@@ -1083,16 +1083,16 @@ module controlPlane 'modules/controlPlane.bicep' = {
       }
       vmLocation: location
       vmNamePrefix: virtualMachineNamePrefix
-      vmResourceGroup: naming.outputs.resourceGroupHosts
+      vmResourceGroup: naming.resourceGroupHosts
       vmSizeId: virtualMachineSize
       vmTags: union(
         tags[?'Microsoft.Compute/virtualMachines'] ?? {},
         {
           'cm-resource-parent': resourceId(
             subscription().subscriptionId,
-            naming.outputs.resourceGroupControlPlane,
+            naming.resourceGroupControlPlane,
             'Microsoft.DesktopVirtualization/hostPools',
-            naming.outputs.hostPoolName
+            naming.hostPoolName
           )
         }
       )
@@ -1108,7 +1108,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
       }
     }
     deployDynamicScalingPlan: deployDynamicScalingPlan
-    scalingPlanName: naming.outputs.scalingPlanName
+    scalingPlanName: naming.scalingPlanName
     scalingPlanTimeZone: avdServicePrincipalIsValid && dynamicScalingLimitsAreValid && dynamicScalingRampDownSettingsAreValid && dynamicScalingSchedulesAreValid
       ? scalingPlanTimeZone
       : scalingPlanTimeZone
@@ -1119,8 +1119,8 @@ module controlPlane 'modules/controlPlane.bicep' = {
     hostPoolPrivateEndpointSubnetResourceId: hostPoolPrivateEndpointSubnetResourceId
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     tags: tags
   }
@@ -1132,7 +1132,7 @@ module controlPlane 'modules/controlPlane.bicep' = {
 
 module fslogixStorageCmk '../shared/modules/orchestration/customerManagedKeys/storageCmk.bicep' = if (deployFslogixStorageCmk && fslogixStorageCmkConfigurationIsValid) {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupStorage
+    resourceGroupName: naming.resourceGroupStorage
     keyVaultResourceId: effectiveFSLogixEncryptionKeyVaultResourceId
     keyManagementType: contains(fslogixKeyManagementStorage, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: fslogixKeyExpirationInDays
@@ -1140,9 +1140,9 @@ module fslogixStorageCmk '../shared/modules/orchestration/customerManagedKeys/st
     tags: tags
     parentResourceId: hostPoolResourceId
     storageKeyNames: [
-      for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
+      for i in range(0, fslogixStorageCount): replace(naming.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
     ]
-    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}cmk')
+    identityName: replace(naming.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.delimiter}cmk')
   }
   dependsOn: [storageResourceGroup]
 }
@@ -1172,7 +1172,7 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
       ? fslogixStorageCmk!.outputs.storageEncryptionIdentityResourceId
       : ''
     fslogixAdminGroups: fslogixAdminGroups
-    fslogixEncryptionKeyNameConv: naming.outputs.encryptionKeyNameFSLogix
+    fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: fslogixShardingConfigurationIsValid ? fslogixShardOptions : fslogixShardOptions
     fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
@@ -1186,21 +1186,21 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
     keyManagementStorageAccounts: fslogixKeyManagementStorage
     location: location
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
-    netAppAccountName: naming.outputs.netAppAccountName
-    netAppCapacityPoolName: naming.outputs.netAppCapacityPoolName
+    netAppAccountName: naming.netAppAccountName
+    netAppCapacityPoolName: naming.netAppCapacityPoolName
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
     ouPath: empty(fslogixOUPath) ? organizationalUnitPath : fslogixOUPath
     permittedIPs: union(fslogixPermittedIPs, permittedIPs)
     paasPublicNetworkAccess: paasPublicNetworkAccess
     privateEndpoint: fslogixPrivateEndpoint
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: fslogixPrivateEndpointSubnetResourceId
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
-    resourceGroupStorage: naming.outputs.resourceGroupStorage
+    resourceGroupDeployment: naming.resourceGroupDeployment
+    resourceGroupStorage: naming.resourceGroupStorage
     shareSizeInGB: fslogixShareSizeInGB
-    smbServerLocation: naming.outputs.vmsLocAbbr
-    storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
+    smbServerLocation: naming.vmsLocAbbr
+    storageAccountNamePrefix: naming.fslogixStorageAccountNamePrefix
     storageCount: fslogixStorageCount
     storageIndex: fslogixStorageIndex
     storageSku: split(fslogixStorageService, ' ')[1]
@@ -1247,9 +1247,9 @@ var deployedFslogixConfiguration = {
 module sessionHostPolicy 'policy/main.bicep' = {
   params: {
     location: location
-    sessionHostResourceGroupName: naming.outputs.resourceGroupHosts
+    sessionHostResourceGroupName: naming.resourceGroupHosts
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
-    policyIdentityName: naming.outputs.policyRemediationIdentityName
+    policyIdentityName: naming.policyRemediationIdentityName
     diskEncryptionSetResourceId: effectiveDiskEncryptionSetResourceId
     availabilitySetResourceId: deployAvailabilitySet ? availabilitySet!.outputs.resourceId : ''
     disableManagedDiskPublicNetworkAccess: disableManagedDiskPublicNetworkAccess
@@ -1278,7 +1278,7 @@ module sessionHostPolicy 'policy/main.bicep' = {
 
 module policyPropagationWait 'modules/waitForPolicyPropagation.bicep' = {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupDeployment
+    resourceGroupName: naming.resourceGroupDeployment
     virtualMachineName: deploymentHelper.outputs.virtualMachineName
     location: location
   }
@@ -1287,8 +1287,8 @@ module policyPropagationWait 'modules/waitForPolicyPropagation.bicep' = {
 
 module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = if (!deployDynamicScalingPlan) {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupControlPlane
-    hostPoolName: naming.outputs.hostPoolName
+    resourceGroupName: naming.resourceGroupControlPlane
+    hostPoolName: naming.hostPoolName
     properties: {
       failedSessionHostCleanupPolicy: failedSessionHostCleanupPolicy
       provisioning: {
@@ -1313,8 +1313,8 @@ module finalSessionHostManagement 'modules/sessionHostManagement.bicep' = if (!d
 
 module activateDynamicScalingPlan 'modules/activateDynamicScalingPlan.bicep' = if (deployDynamicScalingPlan) {
   params: {
-    resourceGroupName: naming.outputs.resourceGroupControlPlane
-    scalingPlanName: naming.outputs.scalingPlanName
+    resourceGroupName: naming.resourceGroupControlPlane
+    scalingPlanName: naming.scalingPlanName
     location: controlPlaneLocation
     tags: tags[?'Microsoft.DesktopVirtualization/scalingPlans'] ?? {}
     scalingPlanTimeZone: scalingPlanTimeZone
@@ -1329,8 +1329,8 @@ module activateDynamicScalingPlan 'modules/activateDynamicScalingPlan.bicep' = i
 module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = {
   params: {
     location: location
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
-    resourceGroupHosts: naming.outputs.resourceGroupHosts
+    resourceGroupDeployment: naming.resourceGroupDeployment
+    resourceGroupHosts: naming.resourceGroupHosts
     userAssignedIdentityClientId: deploymentHelper.outputs.deploymentUserAssignedIdentityClientId
     deploymentVirtualMachineName: deploymentHelper.outputs.virtualMachineName
     roleAssignmentIds: deploymentHelper.outputs.deploymentUserAssignedIdentityRoleAssignmentIds

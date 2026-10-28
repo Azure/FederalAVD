@@ -2,6 +2,7 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
+import { fslogixNames } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string
@@ -247,23 +248,23 @@ var fslogixShareNamesLookup = {
 
 var storageSolution = split(fslogixStorageService, ' ')[0]
 var storageSku = split(fslogixStorageService, ' ')[1]
-var effectiveStorageResourceGroupName = !empty(storageResourceGroupName) ? storageResourceGroupName : naming.outputs.resourceGroupStorage
-var effectiveDeploymentResourceGroupName = !empty(deploymentResourceGroupName) ? deploymentResourceGroupName : naming.outputs.resourceGroupDeployment
-var effectiveDeploymentVirtualMachineName = !empty(deploymentVirtualMachineName) ? deploymentVirtualMachineName : naming.outputs.depVirtualMachineName
-var effectiveDeploymentVirtualMachineDiskName = !empty(deploymentVirtualMachineDiskName) ? deploymentVirtualMachineDiskName : naming.outputs.depVirtualMachineDiskName
-var effectiveDeploymentVirtualMachineNicName = !empty(deploymentVirtualMachineNicName) ? deploymentVirtualMachineNicName : naming.outputs.depVirtualMachineNicName
+var effectiveStorageResourceGroupName = !empty(storageResourceGroupName) ? storageResourceGroupName : naming.resourceGroupStorage
+var effectiveDeploymentResourceGroupName = !empty(deploymentResourceGroupName) ? deploymentResourceGroupName : naming.resourceGroupDeployment
+var effectiveDeploymentVirtualMachineName = !empty(deploymentVirtualMachineName) ? deploymentVirtualMachineName : naming.depVirtualMachineName
+var effectiveDeploymentVirtualMachineDiskName = !empty(deploymentVirtualMachineDiskName) ? deploymentVirtualMachineDiskName : naming.depVirtualMachineDiskName
+var effectiveDeploymentVirtualMachineNicName = !empty(deploymentVirtualMachineNicName) ? deploymentVirtualMachineNicName : naming.depVirtualMachineNicName
 var effectiveDeploymentUserAssignedIdentityName = !empty(deploymentUserAssignedIdentityName)
   ? deploymentUserAssignedIdentityName
-  : replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'deployment')
-var effectiveStorageAccountNamePrefix = !empty(storageAccountNamePrefix) ? storageAccountNamePrefix : naming.outputs.fslogixStorageAccountNamePrefix
-var effectivePrivateEndpointNameConvention = !empty(privateEndpointNameConvention) ? privateEndpointNameConvention : naming.outputs.privateEndpointNameConv
-var effectivePrivateEndpointNicNameConvention = !empty(privateEndpointNicNameConvention) ? privateEndpointNicNameConvention : naming.outputs.privateEndpointNICNameConv
+  : replace(naming.userAssignedIdentityNameConv, 'TOKEN', 'deployment')
+var effectiveStorageAccountNamePrefix = !empty(storageAccountNamePrefix) ? storageAccountNamePrefix : naming.fslogixStorageAccountNamePrefix
+var effectivePrivateEndpointNameConvention = !empty(privateEndpointNameConvention) ? privateEndpointNameConvention : naming.privateEndpointNameConv
+var effectivePrivateEndpointNicNameConvention = !empty(privateEndpointNicNameConvention) ? privateEndpointNicNameConvention : naming.privateEndpointNICNameConv
 var effectiveEncryptionUserAssignedIdentityName = !empty(encryptionUserAssignedIdentityName)
   ? encryptionUserAssignedIdentityName
-  : replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}cmk')
-var effectiveNetAppAccountName = !empty(netAppAccountName) ? netAppAccountName : naming.outputs.netAppAccountName
-var effectiveNetAppCapacityPoolName = !empty(netAppCapacityPoolName) ? netAppCapacityPoolName : naming.outputs.netAppCapacityPoolName
-var effectiveSmbServerLocation = !empty(smbServerLocation) ? smbServerLocation : naming.outputs.vmsLocAbbr
+  : replace(naming.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.delimiter}cmk')
+var effectiveNetAppAccountName = !empty(netAppAccountName) ? netAppAccountName : naming.netAppAccountName
+var effectiveNetAppCapacityPoolName = !empty(netAppCapacityPoolName) ? netAppCapacityPoolName : naming.netAppCapacityPoolName
+var effectiveSmbServerLocation = !empty(smbServerLocation) ? smbServerLocation : naming.vmsLocAbbr
 var fileShareNames = fslogixShareNamesLookup[fslogixContainerType]
 var storageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 var remoteStorageAccountConfigurationIsValid = empty(remoteStorageAccountResourceIds) || length(remoteStorageAccountResourceIds) == storageCount
@@ -295,13 +296,11 @@ var externalDeploymentConfigurationIsValid = !deploymentVirtualMachineRequired |
   ? true
   : fail('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.')
 
-module naming '../../shared/modules/orchestration/naming/hostPool.bicep' = {
-  params: {
-    namingConvention: namingConvention
-    virtualMachinesRegion: location
-    identifier: identifier
-  }
-}
+var naming = fslogixNames(namingConvention, identifier, {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  location: location
+})
 
 resource credentialsKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(credentialsKeyVaultResourceId)) {
   name: last(split(credentialsKeyVaultResourceId, '/'))
@@ -393,7 +392,7 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/storag
     tags: tags
     parentResourceId: parentResourceId
     storageKeyNames: [
-      for i in range(0, storageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + storageIndex, 2, '0'))
+      for i in range(0, storageCount): replace(naming.encryptionKeyNameFSLogix, '##', padLeft(i + storageIndex, 2, '0'))
     ]
     identityName: effectiveEncryptionUserAssignedIdentityName
   }
@@ -439,7 +438,7 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
     fileSharePolicyName: fileSharePolicyName
     fslogixAdminGroups: fslogixAdminGroups
-    fslogixEncryptionKeyNameConv: naming.outputs.encryptionKeyNameFSLogix
+    fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     fslogixFileShares: fileShareNames
     fslogixShardOptions: shardingConfigurationIsValid ? fslogixShardOptions : fslogixShardOptions
     fslogixSoftDeleteRetentionDays: softDeleteRetentionDays

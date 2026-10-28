@@ -68,7 +68,7 @@ $automatedFormPath = Join-Path $repoRoot 'deployments\automatedHostPools\uiFormD
 $automatedBicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
 $standardCorePath = $standardBicepPath
 $automatedCorePath = $automatedBicepPath
-$hostPoolNamingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\hostPool.bicep'
+$hostPoolNamingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
 $standardControlPlanePath = Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
 $automatedControlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
 
@@ -85,13 +85,13 @@ Describe 'AVD workspace ownership contract' {
     }
 
     It 'keeps host-pool-specific workspace naming exclusive to the dedicated PoC' {
-        $namingModule | Should Match "resourceName\(namingConvention, 'hostWorkspace', cnv_cploc, identifier,"
-        $namingModule | Should Match 'var resourceGroupControlPlane = sharedResourceGroupControlPlane'
+        $namingModule | Should Match "resourceName\(convention, 'hostWorkspace', abbreviation, identifier,"
+        $namingModule | Should Match 'resourceGroupControlPlane: hostPoolControlPlaneGroup\(convention, identifier, context, abbreviation\)'
         foreach ($orchestrator in @($standardBicep, $automatedBicep)) {
             $orchestrator | Should Not Match 'workspaceCreationScope'
             $orchestrator | Should Not Match 'createHostPoolSpecificWorkspace'
-            $orchestrator | Should Match 'workspaceName: naming\.outputs\.sharedWorkspaceName'
-            $orchestrator | Should Match 'workspaceResourceGroupName: naming\.outputs\.sharedResourceGroupControlPlane'
+            $orchestrator | Should Match 'workspaceName: naming\.sharedWorkspaceName'
+            $orchestrator | Should Match 'workspaceResourceGroupName: naming\.sharedResourceGroupControlPlane'
             $orchestrator | Should Match 'createWorkspaceResourceGroup: true'
         }
         ((Get-Content -LiteralPath $standardFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.PSObject.Properties.Name -join ',') |
@@ -99,7 +99,7 @@ Describe 'AVD workspace ownership contract' {
         ((Get-Content -LiteralPath $automatedFormPath -Raw | ConvertFrom-Json).view.outputs.parameters.PSObject.Properties.Name -join ',') |
             Should Not Match 'workspaceCreationScope'
         $pocBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.bicep') -Raw
-        $pocBicep | Should Match 'workspaceName: naming\.outputs\.workspaceName'
+        $pocBicep | Should Match 'workspaceName: naming\.workspaceName'
         $pocBicep | Should Match 'workspaceResourceGroupName: resourceGroupName'
         $automatedParameters = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\automatedHostPools\example.automatedHostPool.parameters.json') -Raw |
             ConvertFrom-Json
@@ -107,18 +107,18 @@ Describe 'AVD workspace ownership contract' {
     }
 
     It 'uses one production control-plane resource group across personas' {
-        $namingModule | Should Match 'var resourceGroupControlPlane = sharedResourceGroupControlPlane'
-        $namingModule | Should Match 'var sharedResourceGroupControlPlane = empty\(existingFeedWorkspaceResourceId\)'
-        $namingModule | Should Match "resourceName\(namingConvention, 'controlPlaneResourceGroup', cnv_cploc, identifier,"
+        $namingModule | Should Match 'resourceGroupControlPlane: hostPoolControlPlaneGroup\(convention, identifier, context, abbreviation\)'
+        $namingModule | Should Match 'sharedResourceGroupControlPlane: hostPoolControlPlaneGroup\(convention, identifier, context, abbreviation\)'
+        $namingModule | Should Match "resourceName\(convention, 'controlPlaneResourceGroup', abbreviation, identifier,"
         $namingModule | Should Not Match "'\$\{identifier\}\$\{cnv_delimiter\}control\$\{cnv_delimiter\}plane'"
-        $standardBicep | Should Match 'var effectiveControlPlaneResourceGroup = naming\.outputs\.resourceGroupControlPlane'
-        $automatedBicep | Should Match 'name: naming\.outputs\.resourceGroupControlPlane'
-        $automatedBicep | Should Match 'resourceGroupName: naming\.outputs\.resourceGroupControlPlane'
+        $standardBicep | Should Match 'var effectiveControlPlaneResourceGroup = naming\.resourceGroupControlPlane'
+        $automatedBicep | Should Match 'name: naming\.resourceGroupControlPlane'
+        $automatedBicep | Should Match 'resourceGroupName: naming\.resourceGroupControlPlane'
     }
 
     It 'takes an adopted control-plane resource group from the workspace ID and checks its subscription' {
-        $namingModule | Should Match "toLower\(split\(existingFeedWorkspaceResourceId, '/'\)\[2\]\) == toLower\(sharedServicesSubscriptionId\)"
-        $namingModule | Should Match "\? split\(existingFeedWorkspaceResourceId, '/'\)\[4\]"
+        $namingModule | Should Match "toLower\(split\(context.existingFeedWorkspaceResourceId, '/'\)\[2\]\) == toLower\(context.sharedServicesSubscriptionId\)"
+        $namingModule | Should Match "\? split\(context.existingFeedWorkspaceResourceId, '/'\)\[4\]"
         $namingModule | Should Match "fail\('The existing feed workspace subscription must match the target control-plane subscription\.'\)"
     }
 
@@ -134,18 +134,18 @@ Describe 'AVD workspace ownership contract' {
 
     It 'retains persona-specific resource names and a separate consolidated PoC resource group' {
         foreach ($variable in @('hostPoolName', 'desktopApplicationGroupName', 'scalingPlanName')) {
-            $namingModule | Should Match "var $variable\s*= resourceName\(namingConvention, '[^']+', cnv_cploc, identifier,"
+            $namingModule | Should Match "$($variable): resourceName\(convention, '[^']+', abbreviation, identifier,"
         }
-        $namingModule | Should Match "var resourceGroupConsolidated = resourceName\(namingConvention, 'consolidatedResourceGroup', cnv_vmsloc, identifier,"
-        $namingModule | Should Match "var resourceGroupHosts\s*= resourceName\(namingConvention, 'hostsResourceGroup', cnv_vmsloc, identifier,"
-        $namingModule | Should Match "var resourceGroupStorage\s*= resourceName\(namingConvention, 'storageResourceGroup', cnv_vmsloc, identifier,"
+        $namingModule | Should Match "resourceGroupConsolidated: resourceName\(convention, 'consolidatedResourceGroup', storage.vmLocationAbbreviation, identifier,"
+        $namingModule | Should Match "resourceGroupHosts: resourceName\(convention, 'hostsResourceGroup', storage.vmLocationAbbreviation, identifier,"
+        $namingModule | Should Match "resourceName\(convention, 'storageResourceGroup', abbreviation, identifier,"
         $pocBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpoolPoc\hostpoolPoc.bicep') -Raw
-        $pocBicep | Should Match 'var resourceGroupName = naming\.outputs\.resourceGroupConsolidated'
+        $pocBicep | Should Match 'var resourceGroupName = naming\.resourceGroupConsolidated'
         $pocBicep | Should Match 'workspaceResourceGroupName: resourceGroupName'
-        $pocBicep | Should Not Match 'naming\.outputs\.(resourceGroupControlPlane|sharedResourceGroupControlPlane)'
+        $pocBicep | Should Not Match 'naming\.(resourceGroupControlPlane|sharedResourceGroupControlPlane)'
     }
 
-    It 'embeds the same centralized control-plane naming in every generated consumer' {
+    It 'imports the proper central bundle directly without a nested naming deployment in every generated consumer' {
         foreach ($relativePath in @(
             'deployments\hostpools\hostpool.json'
             'deployments\automatedHostPools\automatedHostPool.json'
@@ -153,10 +153,14 @@ Describe 'AVD workspace ownership contract' {
             'deployments\add-ons\fslogixStorage\main.json'
         )) {
             $template = Get-Content -LiteralPath (Join-Path $repoRoot $relativePath) -Raw | ConvertFrom-Json
-            $namingTemplate = $template.resources.naming.properties.template
-            $namingTemplate.variables.resourceGroupControlPlane | Should Be "[variables('sharedResourceGroupControlPlane')]"
-            $namingTemplate.outputs.resourceGroupControlPlane.value | Should Be "[variables('resourceGroupControlPlane')]"
-            $namingTemplate.outputs.sharedResourceGroupControlPlane.value | Should Be "[variables('sharedResourceGroupControlPlane')]"
+            ($template.resources.PSObject.Properties.Name -contains 'naming') | Should Be $false
+            $bundle = if ($relativePath -like '*fslogixStorage*') { 'fslogixNames' } else { 'hostPoolNames' }
+            $template.variables.naming | Should Match "__bicep\.$bundle\("
+            $members = $template.functions | Where-Object namespace -eq '__bicep'
+            ($members.members.PSObject.Properties.Name -contains $bundle) | Should Be $true
+            if ($bundle -eq 'fslogixNames') {
+                ($members.members.PSObject.Properties.Name -contains 'hostPoolNames') | Should Be $false
+            }
         }
     }
 
@@ -795,11 +799,11 @@ Describe 'Standard host-pool optional session host naming overrides' {
 Describe 'Session host resource naming defaults' {
     It 'uses stable shared defaults independent of resource type abbreviations' {
         $repoRoot = Split-Path -Parent $PSScriptRoot
-        $sharedNaming = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\hostPool.bicep') -Raw
+        $sharedNaming = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep') -Raw
 
-        $sharedNaming | Should Match 'virtualMachineNameConv\s+=.*: namingPolicy.patterns.virtualMachine'
-        $sharedNaming | Should Match 'virtualMachineDiskNameConv\s+=.*: namingPolicy.patterns.osDisk'
-        $sharedNaming | Should Match 'virtualMachineNicNameConv\s+=.*: namingPolicy.patterns.nic'
+        $sharedNaming | Should Match 'virtualMachineNameConv:.*: namingPolicy.patterns.virtualMachine'
+        $sharedNaming | Should Match 'virtualMachineDiskNameConv:.*: namingPolicy.patterns.osDisk'
+        $sharedNaming | Should Match 'virtualMachineNicNameConv:.*: namingPolicy.patterns.nic'
         $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
         $policy.patterns.virtualMachine | Should Be 'SHNAME'
         $policy.patterns.osDisk | Should Be 'SHNAME-osdisk'

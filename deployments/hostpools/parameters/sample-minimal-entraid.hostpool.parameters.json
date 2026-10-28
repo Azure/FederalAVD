@@ -10,6 +10,9 @@
         "controlPlaneLocation": {
             "value": "eastus2"
         },
+        "virtualMachinesLocation": {
+            "value": "eastus2"
+        },
 
         // ── Identity ───────────────────────────────────────────────────────────
         //    EntraId = Entra-joined (cloud-only). No domain join credentials needed.

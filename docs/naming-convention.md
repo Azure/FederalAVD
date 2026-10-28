@@ -385,7 +385,7 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 
 | Solution | Parameter name | Notes |
 | --- | --- | --- |
-| `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
+| `hostpools/hostpool.bicep` | `namingConvention` | Full object; imports `hostPoolNames` from the canonical naming library with explicit VM/control-plane locations |
 | `sharedServices/sharedServices.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
@@ -594,9 +594,15 @@ The authoritative rule catalog is
 is the single public Bicep entry point for composition, resource formatting,
 location lookup, uniqueness and runtime naming patterns. Host pools, Shared
 Services, Image Management, Image Build, networking and add-ons all consume it,
-directly or through context/output adapters. The former `functions.bicep` path is
-a forwarding-only external compatibility facade; production deployments no
-longer import it. Abbreviations and region mappings remain in shared JSON so
+directly or through context/output adapters. The former `functions.bicep`
+compatibility facade has been removed; import `naming.bicep` instead.
+Host pools import `hostPoolNames` directly; standalone FSLogix imports
+`fslogixNames`, not a host-pool module. The standard host pool now accepts
+`virtualMachinesLocation`, defaulting to `controlPlaneLocation` (which defaults
+to the deployment location). Existing automation must supply its intended
+locations explicitly rather than relying on VNet inference; see the
+[bundle and migration contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-legacy-compatible-bundles).
+Abbreviations and region mappings remain in shared JSON so
 PowerShell and Portal-default generation use the same configuration.
 
 For example, both host pools and Shared Services request the

@@ -21,7 +21,6 @@ Describe 'Identifier-based shared resource naming' {
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             'deployments\shared\modules\orchestration\naming\naming.bicep'
-            'deployments\shared\modules\orchestration\naming\functions.bicep'
             'tests\fixtures\naming-types.bicep'
             'tests\fixtures\naming-types.bicepparam'
         )) {
@@ -82,8 +81,7 @@ Describe 'Identifier-based shared resource naming' {
         ($policy.resourceTypes.PSObject.Properties.Name | Sort-Object) -join ',' | Should Be ($expected -join ',')
     }
 
-    It 'preserves compatibility imports endpoint boundaries and adapter-specific naming recipes' {
-        ($values.compatibilityBundle | ConvertTo-Json -Compress) | Should Be ($values.bundle | ConvertTo-Json -Compress)
+    It 'preserves endpoint boundaries and adapter-specific naming recipes' {
         foreach ($case in @($values.endpointTokens) + @($values.endpoints) + @($values.prefixes) + @($values.shortSeeds)) {
             $case.actual | Should Be $case.expected
         }

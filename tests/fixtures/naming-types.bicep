@@ -1,5 +1,4 @@
 import { functionAppNames, resourceNameForType, privateEndpointName, privateEndpointVnetToken, shortScopedUnique, fslogixStoragePrefix } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
-import { functionAppNames as compatibilityNames } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
 
 var policy = loadJsonContent('../../deployments/shared/data/namingPolicy.json')
 var context = {
@@ -89,7 +88,6 @@ output encodedResults string = base64(string({
   longIdentifiers: longIdentifiers
   noLocation: noLocation
   clouds: clouds
-  compatibilityBundle: compatibilityNames({}, 'inventory', context)
   resourceGroups: [
     resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: '' }))
     resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))

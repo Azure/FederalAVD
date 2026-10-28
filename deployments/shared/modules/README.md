@@ -55,7 +55,7 @@ resource operation. They should not depend on standard or automated host-pool en
 | `orchestration/monitoring/monitoring.bicep` | Standard host pool, Shared Services | Composes Log Analytics, Data Collection Endpoint, AVD Insights DCR, and optional Azure Monitor Private Link Scope linkage. |
 | `orchestration/sessionHosts` | Standard host pool, Session Hosts add-on | Composes direct session-host VM deployment, customization, disk, and backup operations. |
 | `orchestration/keyVaults/keyVaults.bicep` | Standard host pool, Shared Services | Composes secrets and encryption Key Vaults and their dependent resources. |
-| `orchestration/naming/hostPool.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Resolves shared host-pool naming conventions. |
+| `orchestration/naming/naming.bicep` | Standard/automated host pools, PoC, FSLogix Storage and other deployment families | Central naming library; host pools import `hostPoolNames`, standalone FSLogix imports `fslogixNames`, and new add-ons use the generic resource-type API. |
 | `orchestration/customerManagedKeys/storageCmk.bicep` | Standard host pool, automated host pool, FSLogix Storage add-on | Composes customer-managed storage-key resources. |
 
 Orchestration modules may call resource modules, but resource modules must not call orchestration

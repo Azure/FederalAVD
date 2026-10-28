@@ -1367,7 +1367,8 @@
                   "toolTip": "Select the region where you want to deploy the virtual machines.",
                   "defaultValue": "[steps('controlPlane').scope.location.displayName]",
                   "constraints": {
-                    "allowedValues": "[steps('hosts').scope.locationsApi.transformed.list]"
+                    "allowedValues": "[steps('hosts').scope.locationsApi.transformed.list]",
+                    "required": true
                   }
                 },
                 {
@@ -5905,6 +5906,7 @@
         "existingCredentialsKeyVaultResourceId": "[if(equals(steps('hosts').identity.source, 'keyVault'), steps('hosts').identity.keyVault.id, '')]",
         "controlPlaneSubscriptionId": "[steps('controlPlane').scope.subscription.subscriptionId]",
         "controlPlaneLocation": "[steps('controlPlane').scope.location.name]",
+        "virtualMachinesLocation": "[steps('hosts').scope.location.name]",
         "existingFeedWorkspaceResourceId": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), steps('controlPlane').workspace.existingWorkspace, '')]",
         "workspaceFriendlyName": "[if(equals(steps('controlPlane').workspace.createOption, 'update'), '', steps('controlPlane').naming.workspaceFriendlyName)]",
         "desktopFriendlyName": "[steps('controlPlane').naming.desktopFriendlyName]",

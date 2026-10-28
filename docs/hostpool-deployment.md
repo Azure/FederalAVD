@@ -23,6 +23,36 @@ Shared Services directly with the pool-specific control-plane, FSLogix, session-
 backup, and monitoring modules. Shared Services owns the workspace, feed/global Private Link,
 monitoring, Key Vaults, and shared FSLogix backup resources.
 
+### Explicit deployment locations
+
+`controlPlaneLocation` defaults to the subscription deployment location.
+`virtualMachinesLocation` defaults to `controlPlaneLocation` and controls session
+hosts, storage, deployment helpers and their centralized names. The Portal passes
+both selected locations; its VM-location selector defaults to the control-plane
+location and filters VNets to that selection. Split-location deployments can
+choose different control-plane and VM locations.
+
+**Migration:** the template no longer infers VM location from an existing VNet.
+Existing automation should explicitly set both locations to preserve placement
+and generated names, particularly when the subnet is in a different location
+from the deployment or control plane. Empty strings are invalid. Before a scripted
+deployment, check that `virtualMachinesLocation` matches the selected subnet's
+VNet location. For example, with `$virtualMachineSubnetResourceId` and
+`$virtualMachinesLocation` set to the intended parameter values:
+
+```powershell
+$vnetResourceId = $virtualMachineSubnetResourceId -replace '/subnets/[^/]+$', ''
+$vnetLocation = az resource show --ids $vnetResourceId --query location --output tsv
+if ($LASTEXITCODE -ne 0) { throw 'Unable to read the session-host VNet location.' }
+if ($vnetLocation -ne $virtualMachinesLocation) {
+    throw "VM location '$virtualMachinesLocation' does not match VNet location '$vnetLocation'."
+}
+```
+
+The check is outside naming; the template uses explicit location inputs and
+imports the central naming bundle directly, without a naming deployment.
+See the [naming contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-legacy-compatible-bundles).
+
 ### What Gets Deployed
 
 A complete host pool deployment includes:

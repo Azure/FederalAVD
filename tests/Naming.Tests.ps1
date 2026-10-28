@@ -7,13 +7,12 @@ Describe 'Shared naming and module metadata contracts' {
         $compiledModules = @{}
         $modulePaths = @{
             NamingFunctions = 'deployments\shared\modules\orchestration\naming\naming.bicep'
-            HostPoolNaming = 'deployments\shared\modules\orchestration\naming\hostPool.bicep'
+            HostPoolNaming = 'tests\fixtures\naming-bundles.bicep'
             ReplacerNaming = 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
             FunctionApp = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
             HostingPlan = 'deployments\shared\modules\resourceModules\functionApp\functionAppHostingPlan.bicep'
             FunctionDefinition = 'deployments\shared\modules\resourceModules\functionApp\function.bicep'
             ScalarPattern = 'tests\fixtures\naming-scalar-import.bicep'
-            CompatibilityScalarPattern = 'tests\fixtures\naming-scalar-compatibility.bicep'
             DeploymentHelper = 'deployments\shared\modules\orchestration\deploymentHelper\deploy.bicep'
             SessionHostVMs = 'deployments\shared\modules\orchestration\sessionHosts\virtualMachines.bicep'
         }
@@ -104,18 +103,16 @@ Describe 'Shared naming and module metadata contracts' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.NamingFunctions) -Raw
         $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var|type) (\w+)")
         @($documentedExports).Count | Should Be ([regex]::Matches($source, '(?m)^@export\(\)').Count)
-        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'resourceNameForType', 'functionAppNames', 'namingContext', 'functionAppNamingResult', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
+        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'resourceNameForType', 'functionAppNames', 'hostPoolNames', 'fslogixNames', 'hostPoolNamingContext', 'hostPoolNamingResult', 'fslogixNamingContext', 'fslogixNamingResult', 'namingContext', 'functionAppNamingResult', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should Be 1
         }
     }
 
     It 'keeps a scalar policy import below 1200 compiled bytes without the policy catalog' {
-        foreach ($name in @('ScalarPattern','CompatibilityScalarPattern')) {
-            (Get-Item -LiteralPath (Join-Path $testOutputDirectory "$name.json")).Length | Should BeLessThan 1200
-            $variables = $compiledModules[$name].variables | ConvertTo-Json -Depth 100 -Compress
-            $variables | Should Match 'SHNAME-osdisk'
-            $variables | Should Not Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
-        }
+        (Get-Item -LiteralPath (Join-Path $testOutputDirectory 'ScalarPattern.json')).Length | Should BeLessThan 1200
+        $variables = $compiledModules.ScalarPattern.variables | ConvertTo-Json -Depth 100 -Compress
+        $variables | Should Match 'SHNAME-osdisk'
+        $variables | Should Not Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
     }
 
     It 'does not embed the policy catalog or generic naming functions in small consumers' {
@@ -132,7 +129,10 @@ Describe 'Shared naming and module metadata contracts' {
     }
 
     It 'imports shared naming without redeclaring helpers in <Path>' -TestCases @(
-        @{ Path = 'deployments\shared\modules\orchestration\naming\hostPool.bicep'; Functions = @('resourceName', 'shortScopedUnique', 'deploymentVmName', 'fslogixStoragePrefix') }
+        @{ Path = 'deployments\hostpools\hostpool.bicep'; Functions = @('hostPoolNames') }
+        @{ Path = 'deployments\automatedHostPools\automatedHostPool.bicep'; Functions = @('hostPoolNames') }
+        @{ Path = 'deployments\hostpoolPoc\hostpoolPoc.bicep'; Functions = @('hostPoolNames') }
+        @{ Path = 'deployments\add-ons\fslogixStorage\main.bicep'; Functions = @('fslogixNames') }
         @{ Path = 'deployments\sharedServices\sharedServices.bicep'; Functions = @('resourceName', 'shortScopedUnique') }
         @{ Path = 'deployments\imageManagement\imageManagement.bicep'; Functions = @('resourceName', 'imageStorageName', 'validateImageStoragePrefix') }
         @{ Path = 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'; Functions = @('resourceName') }
@@ -159,11 +159,11 @@ Describe 'Shared naming and module metadata contracts' {
         $source | Should Not Match '(?m)^func (resolveComponent|buildCustomName|cnv|stripSeps|kvSanitize)\('
     }
 
-    It 'keeps one production naming implementation and no consumers on the compatibility facade' {
+    It 'keeps one naming implementation without obsolete import paths' {
         $canonical = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
-        $compatibility = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\functions.bicep'
+        (Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\functions.bicep')) | Should Be $false
         foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter '*.bicep' -Recurse -File) {
-            if ($file.FullName -in @($canonical,$compatibility)) { continue }
+            if ($file.FullName -eq $canonical) { continue }
             $source = Get-Content -LiteralPath $file.FullName -Raw
             $source | Should Not Match "from '[^']*/naming/functions\.bicep'"
             $source | Should Not Match 'loadJsonContent\([^\r\n]*namingPolicy\.json'
@@ -373,7 +373,6 @@ Describe 'Shared naming and module metadata contracts' {
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             $modulePaths.NamingFunctions
-            $modulePaths.HostPoolNaming
             $modulePaths.ReplacerNaming
             'tools\Sync-NamingPolicy.ps1'
             'deployments\hostpools\uiFormDefinition.json'
@@ -410,7 +409,7 @@ Describe 'Shared naming and module metadata contracts' {
         & $sync | Out-Null
         { & $sync -Check } | Should Not Throw
         $defaultOutput = Join-Path $copyRoot 'hostpool-defaults.json'
-        & az bicep build --file (Join-Path $copyRoot $modulePaths.HostPoolNaming) --outfile $defaultOutput
+        & az bicep build --file (Join-Path $copyRoot $modulePaths.ReplacerNaming) --outfile $defaultOutput
         if ($LASTEXITCODE -ne 0) { throw 'Generated naming defaults did not compile.' }
         $default = (Get-Content -LiteralPath $defaultOutput -Raw | ConvertFrom-Json).parameters.namingConvention.defaultValue
         $default.workload | Should Be 'desktop'
@@ -432,7 +431,6 @@ Describe 'Shared naming and module metadata contracts' {
             'using none'
             "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
             'var namingConvention = {}'
-            "var cnv_vmsloc = 'va'"
             "var cnv_loc = 'va'"
             "var loc = 'va'"
             "var regionAbbr = 'va'"
@@ -449,7 +447,6 @@ Describe 'Shared naming and module metadata contracts' {
             "var userAssignedIdentityNameConv = 'uai-TOKEN-va'"
         )
         $consumers = @(
-            @{ Name = 'hostPool'; Path = $modulePaths.HostPoolNaming; Variable = 'resourceGroupOperations' }
             @{ Name = 'sharedServices'; Path = 'deployments\sharedServices\sharedServices.bicep'; Variable = 'customRgName' }
             @{ Name = 'imageManagement'; Path = 'deployments\imageManagement\imageManagement.bicep'; Variable = 'customResourceGroupName' }
             @{ Name = 'replacer'; Path = $modulePaths.ReplacerNaming; Variable = 'functionAppName' }
@@ -486,8 +483,7 @@ Describe 'Shared naming and module metadata contracts' {
         & az bicep build-params --file $fixture --outfile $output
         if ($LASTEXITCODE -ne 0) { throw 'Changed-policy propagation fixture did not compile.' }
         $names = (Get-Content -LiteralPath $output -Raw | ConvertFrom-Json).parameters
-        $names.hostPool.value | Should Be 'rg-desktop-ops-va'
-        $names.sharedServices.value | Should Be $names.hostPool.value
+        $names.sharedServices.value | Should Be 'rg-desktop-ops-va'
         $names.imageManagement.value | Should Be 'rg-desktop-finance-va'
         $names.replacer.value | Should Be 'fa-desktop-finance-shr-abc123-va'
         $names.networking.value | Should Be 'ng-desktop-va'
@@ -501,15 +497,16 @@ Describe 'Shared naming and module metadata contracts' {
         $names.helperExplicit.value | Should Be 'explicit-helper'
     }
 
-    It 'keeps runtime-derived host-pool naming behind its deployment boundary' {
+    It 'uses explicit host-pool locations and direct central naming without a deployment boundary' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep') -Raw
-        $source | Should Match "module naming '../shared/modules/orchestration/naming/hostPool.bicep'"
-        $source | Should Match 'virtualMachinesRegion: virtualMachinesRegion'
-        $source | Should Match 'var virtualMachinesRegion = vmVirtualNetwork.location'
+        $source | Should Match 'var naming = hostPoolNames\(effectiveNamingConvention, hpBaseName,'
+        $source | Should Match 'virtualMachinesLocation: virtualMachinesLocation'
+        $source | Should Not Match 'vmVirtualNetwork|module naming '
+        Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\hostPool.bicep') | Should Be $false
     }
 
     It 'emits literal naming defaults rather than ARM variable references' {
-        foreach ($name in @('HostPoolNaming', 'ReplacerNaming')) {
+        foreach ($name in @('ReplacerNaming')) {
             $default = $compiledModules[$name].parameters.namingConvention.defaultValue
             ($default -is [string]) | Should Be $false
             $default.workload | Should Be $policy.defaults.workload
@@ -518,12 +515,13 @@ Describe 'Shared naming and module metadata contracts' {
         }
     }
 
-    It 'keeps detailed naming guidance in source comments rather than emitted parameter metadata' {
-        $description = $compiledModules.HostPoolNaming.parameters.namingConvention.metadata.description
+    It 'keeps preservation details in shared guidance rather than emitted library metadata' {
+        $description = $compiledModules.NamingFunctions.metadata.description
         $description | Should Not Match 'Component requirements:'
         $description | Should Not Match 'Key properties:'
-        $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.HostPoolNaming) -Raw
-        $source | Should Match '(?m)^// Component requirements:'
+        $guide = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\README.md') -Raw
+        $guide | Should Match 'generated storage-group name'
+        $guide | Should Match 'raw region abbreviation'
     }
 }
 

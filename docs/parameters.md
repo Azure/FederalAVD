@@ -34,6 +34,26 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 ---
 
+## Standard Host-Pool Locations
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `controlPlaneLocation` | Subscription deployment location | AVD control-plane and shared supporting resources |
+| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers and their naming context |
+
+Both use Azure location names such as `eastus2` or `usgovvirginia`, not display
+labels or naming abbreviations. The Portal passes both selections explicitly.
+New naming-context and deployment inputs consistently use `Location`; existing
+child modules keep their public parameter contracts.
+
+**Migration:** standard host pools no longer infer VM location from the VNet.
+Set both parameters explicitly in existing automation to preserve placement and
+names. Empty locations are invalid, and scripted deployments must check the VM
+location against the subnet's VNet before deployment. See
+[explicit deployment locations](hostpool-deployment.md#explicit-deployment-locations).
+
+---
+
 ## AVD Private Link Portal Defaults
 
 The standard and automated Host Pool forms retain all three private-routing

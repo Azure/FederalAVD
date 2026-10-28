@@ -282,9 +282,20 @@ Subscription
 #### `controlPlaneLocation`
 
 - **Type:** String
-- **Required:** Yes
+- **Default:** Subscription deployment location
 - **Description:** Location for control plane resources
 - **Example:** `eastus2`, `usgovvirginia`
+
+#### `virtualMachinesLocation`
+
+- **Type:** String
+- **Default:** `controlPlaneLocation`
+- **Description:** Location for session hosts, storage, deployment helpers and
+  their centralized names. Must match the session-host subnet's VNet location.
+  The Portal passes its selected VM location explicitly.
+- **Migration:** VNet-based location inference has been removed. Set both
+  locations explicitly in existing automation; empty strings are invalid.
+  See [location validation and migration](../../docs/hostpool-deployment.md#explicit-deployment-locations).
 
 #### `hostPoolType`
 
