@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "17912898031929555953"
+      "templateHash": "18177248020951526884"
     }
   },
   "functions": [
@@ -492,12 +492,37 @@
       "limits": {
         "keyVault": 24,
         "functionApp": 60,
+        "appServicePlan": 60,
+        "applicationInsights": 260,
+        "userAssignedIdentity": 128,
         "storageAccount": 24,
         "deploymentVm": 15,
         "fslogixStoragePrefix": 13,
         "uniqueSuffix": 6,
         "imageManagementStoragePrefix": 5,
         "imageManagementStorageLocation": 4
+      },
+      "resourceTypes": {
+        "functionApps": {
+          "lengthLimit": "functionApp",
+          "format": "hyphen"
+        },
+        "storageAccounts": {
+          "lengthLimit": "storageAccount",
+          "format": "storage"
+        },
+        "applicationInsights": {
+          "lengthLimit": "applicationInsights",
+          "format": "hyphen"
+        },
+        "appServicePlans": {
+          "lengthLimit": "appServicePlan",
+          "format": "hyphen"
+        },
+        "userAssignedIdentities": {
+          "lengthLimit": "userAssignedIdentity",
+          "format": "hyphen"
+        }
       },
       "resources": {
         "operationsResourceGroup": {

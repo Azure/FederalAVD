@@ -217,6 +217,18 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 
 - Naming Convention (`namingConvention`): An optional object parameter that controls how every resource in the deployment is named. The default value produces CAF-aligned names (`resourceType-avd-purpose-location`). The `purpose` component is a FederalAVD addition with no direct CAF equivalent — it disambiguates resources of the same type within a deployment. When customized, the engine assembles names from an ordered array of components (resourceType, purpose, location, workload, environment, freeform1, freeform2). See the **[Naming Convention guide](naming-convention.md)** for the full parameter schema, examples, and cross-solution alignment.
 
+Naming configuration stays in shared JSON so Bicep and PowerShell can consume one
+catalog; the executable deployment naming logic is native Bicep. Portal forms
+receive only a generated UI-default projection, not the resource-role catalog or
+uniqueness rules. Adding a deployment naming role must not require unrelated form
+updates. Existing role recipes, explicit names and adopted-resource identities
+remain unchanged by this boundary. See the
+[shared naming contract and review](../deployments/shared/modules/orchestration/naming/README.md#portal-and-deployment-boundary)
+for ownership, compatibility constraints and the identifier-based API for new
+add-ons. The opt-in API calculates stable scope hashes and preserves their full
+length while budgeting readable identifiers; existing deployments retain their
+legacy role recipes.
+
 The diagram below highlights how the resource groups are created based on the parameters.
 
 ```mermaid

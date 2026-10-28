@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "13898811886054676149"
+      "templateHash": "12652633874104430929"
     }
   },
   "definitions": {
@@ -496,12 +496,37 @@
       "limits": {
         "keyVault": 24,
         "functionApp": 60,
+        "appServicePlan": 60,
+        "applicationInsights": 260,
+        "userAssignedIdentity": 128,
         "storageAccount": 24,
         "deploymentVm": 15,
         "fslogixStoragePrefix": 13,
         "uniqueSuffix": 6,
         "imageManagementStoragePrefix": 5,
         "imageManagementStorageLocation": 4
+      },
+      "resourceTypes": {
+        "functionApps": {
+          "lengthLimit": "functionApp",
+          "format": "hyphen"
+        },
+        "storageAccounts": {
+          "lengthLimit": "storageAccount",
+          "format": "storage"
+        },
+        "applicationInsights": {
+          "lengthLimit": "applicationInsights",
+          "format": "hyphen"
+        },
+        "appServicePlans": {
+          "lengthLimit": "appServicePlan",
+          "format": "hyphen"
+        },
+        "userAssignedIdentities": {
+          "lengthLimit": "userAssignedIdentity",
+          "format": "hyphen"
+        }
       },
       "resources": {
         "operationsResourceGroup": {
@@ -961,7 +986,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "5353004114561930417"
+              "templateHash": "18419936060697236335"
             },
             "name": "Host pool naming",
             "description": "Computes names for standard and automated host pools, the dedicated PoC, and shared FSLogix storage. Deploys no resources; preserves solution-specific seeds, constraints, and adoption rules."
@@ -1645,12 +1670,37 @@
               "limits": {
                 "keyVault": 24,
                 "functionApp": 60,
+                "appServicePlan": 60,
+                "applicationInsights": 260,
+                "userAssignedIdentity": 128,
                 "storageAccount": 24,
                 "deploymentVm": 15,
                 "fslogixStoragePrefix": 13,
                 "uniqueSuffix": 6,
                 "imageManagementStoragePrefix": 5,
                 "imageManagementStorageLocation": 4
+              },
+              "resourceTypes": {
+                "functionApps": {
+                  "lengthLimit": "functionApp",
+                  "format": "hyphen"
+                },
+                "storageAccounts": {
+                  "lengthLimit": "storageAccount",
+                  "format": "storage"
+                },
+                "applicationInsights": {
+                  "lengthLimit": "applicationInsights",
+                  "format": "hyphen"
+                },
+                "appServicePlans": {
+                  "lengthLimit": "appServicePlan",
+                  "format": "hyphen"
+                },
+                "userAssignedIdentities": {
+                  "lengthLimit": "userAssignedIdentity",
+                  "format": "hyphen"
+                }
               },
               "resources": {
                 "operationsResourceGroup": {

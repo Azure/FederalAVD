@@ -39,6 +39,20 @@ Describe 'Shared naming and module metadata contracts' {
         }
         $policyVectors = (Get-Content -LiteralPath $policyVectorsOutput -Raw | ConvertFrom-Json).parameters
         $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $namingForms = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter 'uiFormDefinition.json' -Recurse |
+            ForEach-Object {
+                $source = Get-Content -LiteralPath $_.FullName -Raw
+                $form = $source | ConvertFrom-Json
+                $control = @($form.view.properties.steps[0].elements | Where-Object name -eq 'federalAvdNamingPolicy')
+                if ($control.Count -gt 0) {
+                    [pscustomobject]@{
+                        Path = $_.FullName
+                        Source = $source
+                        Form = $form
+                        Payload = $control[0].defaultValue | ConvertFrom-Json
+                    }
+                }
+            })
     }
 
     AfterAll {
@@ -85,11 +99,11 @@ Describe 'Shared naming and module metadata contracts' {
         }
     }
 
-    It 'documents every exported naming function and policy object' {
+    It 'documents every exported naming function, type and policy object' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.NamingFunctions) -Raw
-        $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var) (\w+)")
+        $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var|type) (\w+)")
         @($documentedExports).Count | Should Be ([regex]::Matches($source, '(?m)^@export\(\)').Count)
-        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
+        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'resourceName', 'resourceNameForType', 'functionAppNames', 'namingContext', 'functionAppNamingResult', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should Be 1
         }
     }
@@ -215,6 +229,83 @@ Describe 'Shared naming and module metadata contracts' {
         { & (Join-Path $repoRoot 'tools\Sync-NamingPolicy.ps1') -Check } | Should Not Throw
     }
 
+    It 'embeds only shared UI defaults rather than the deployment naming catalog' {
+        ($namingForms.Count -gt 0) | Should Be $true
+        $abbreviations = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\resourceAbbreviations.json') -Raw | ConvertFrom-Json
+        foreach ($form in $namingForms) {
+            $payload = $form.Payload
+            ($payload.PSObject.Properties.Name -join ',') | Should Be 'defaults,identifiers,patterns,resourceTypeCodes'
+            ($payload.identifiers.PSObject.Properties.Name -join ',') | Should Be 'sharedFslogix'
+            ($payload.patterns.PSObject.Properties.Name -join ',') | Should Be 'virtualMachine,osDisk,nic,standaloneAvailabilitySet'
+            ($payload.defaults | ConvertTo-Json -Depth 100 -Compress) | Should Be ($policy.defaults | ConvertTo-Json -Depth 100 -Compress)
+            $payload.identifiers.sharedFslogix | Should Be $policy.identifiers.sharedFslogix
+            foreach ($pattern in $payload.patterns.PSObject.Properties) {
+                $pattern.Value | Should Be $policy.patterns.($pattern.Name)
+            }
+            ($payload.resourceTypeCodes | ConvertTo-Json -Depth 100 -Compress) | Should Be ($abbreviations | ConvertTo-Json -Depth 100 -Compress)
+        }
+    }
+
+    It 'resolves every Portal policy reference from the UI-default projection' {
+        foreach ($form in $namingForms) {
+            $references = [regex]::Matches($form.Source, "parse\(steps\('[^']+'\)\.federalAvdNamingPolicy\)\.([A-Za-z0-9_.]+)")
+            ($references.Count -gt 0) | Should Be $true
+            $references.Count | Should Be ([regex]::Matches($form.Source, '\bfederalAvdNamingPolicy\b').Count - 1)
+            foreach ($reference in $references) {
+                $value = $form.Payload
+                foreach ($segment in $reference.Groups[1].Value.Split('.')) {
+                    $value.PSObject.Properties[$segment] | Should Not BeNullOrEmpty
+                    $value = $value.$segment
+                }
+                $value | Should Not BeNullOrEmpty
+            }
+        }
+    }
+
+    It 'keeps naming-form outputs aligned with the deployment parameter contracts' {
+        foreach ($form in $namingForms) {
+            $templates = @(Get-ChildItem -LiteralPath (Split-Path -Parent $form.Path) -Filter '*.json' -File |
+                Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) })
+            $templates.Count | Should Be 1
+            $template = Get-Content -LiteralPath $templates[0].FullName -Raw | ConvertFrom-Json
+            foreach ($parameter in $form.Form.view.outputs.parameters.PSObject.Properties.Name) {
+                ($parameter -in @($template.parameters.PSObject.Properties.Name)) | Should Be $true
+            }
+        }
+    }
+
+    It 'does not regenerate forms or block publication for deployment-only policy changes' {
+        $copyRoot = Join-Path $testOutputDirectory 'portal-isolation'
+        $files = @(
+            'deployments\shared\data\namingPolicy.json'
+            'deployments\shared\data\resourceAbbreviations.json'
+            'tools\Sync-NamingPolicy.ps1'
+        ) + @($namingForms | ForEach-Object { $_.Path.Substring($repoRoot.Length + 1) })
+        foreach ($relative in $files) {
+            $destination = Join-Path $copyRoot $relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $destination
+        }
+        $copiedPolicyPath = Join-Path $copyRoot 'deployments\shared\data\namingPolicy.json'
+        $changedPolicy = Get-Content -LiteralPath $copiedPolicyPath -Raw | ConvertFrom-Json
+        $changedPolicy.resources | Add-Member -NotePropertyName 'inventoryFunctionApp' -NotePropertyValue ([pscustomobject]@{
+            type = 'functionApps'
+            purpose = @('{identifier}', '{unique}')
+        })
+        $changedPolicy.resources.operationsResourceGroup.purpose = @('ops')
+        $changedPolicy.limits.functionApp = 59
+        $changedPolicy.identifiers.replacerFallback = 'replacement'
+        $changedPolicy.patterns.imageBuildVm = '{prefix}image-{unique}'
+        [System.IO.File]::WriteAllText($copiedPolicyPath, (ConvertTo-Json -InputObject $changedPolicy -Depth 100))
+        $sync = Join-Path $copyRoot 'tools\Sync-NamingPolicy.ps1'
+        { & $sync -Check } | Should Not Throw
+        @(& $sync).Count | Should Be 0
+        foreach ($relative in $files | Where-Object { $_ -like '*uiFormDefinition.json' }) {
+            (Get-FileHash -LiteralPath (Join-Path $copyRoot $relative)).Hash |
+                Should Be (Get-FileHash -LiteralPath (Join-Path $repoRoot $relative)).Hash
+        }
+    }
+
     It 'uses generated literal naming defaults in the <Directory> form' -TestCases @(
         @{ Directory = 'hostpools'; DelimiterType = 'Microsoft.Common.DropDown' }
         @{ Directory = 'automatedHostPools'; DelimiterType = 'Microsoft.Common.DropDown' }
@@ -300,7 +391,8 @@ Describe 'Shared naming and module metadata contracts' {
             $form = Get-Content -LiteralPath (Join-Path $copyRoot $relative) -Raw | ConvertFrom-Json
             $payload = ($form.view.properties.steps[0].elements | Where-Object name -eq 'federalAvdNamingPolicy').defaultValue | ConvertFrom-Json
             $payload.defaults.workload | Should Be 'desktop'
-            $payload.purposePatterns.operationsResourceGroup | Should Be 'ops'
+            $payload.PSObject.Properties['purposePatterns'] | Should BeNullOrEmpty
+            $payload.patterns.osDisk | Should Be 'SHNAME-systemdisk'
             $step = $form.view.properties.steps | Where-Object name -eq 'tagsAndNaming'
             $naming = $step.elements | Where-Object name -eq 'naming'
             $workload = $naming.elements | Where-Object name -eq 'workloadValue'

@@ -110,6 +110,116 @@ func resolvedResourceName(convention object, rule object, region string, identif
 func resourceName(convention object, role string, region string, identifier string, unique string) string =>
   resolvedResourceName(resolveConvention(convention), namingPolicy.resources[role], region, identifier, unique)
 
+@export()
+@description('Actual target scope for identifier-based resource naming. Use the owning subscription/resource group, full Azure location and environment name, not the orchestrator scope when they differ.')
+type namingContext = {
+  subscriptionId: string
+  resourceGroupName: string
+  location: string
+  cloud: string
+}
+
+@export()
+@description('Generated Function App infrastructure names and shared private-endpoint patterns. Names are not resource IDs and do not create or adopt resources.')
+type functionAppNamingResult = {
+  functionAppName: string
+  storageAccountName: string
+  applicationInsightsName: string
+  appServicePlanName: string
+  storageEncryptionIdentityName: string
+  privateEndpointNameConv: string
+  privateEndpointNICNameConv: string
+}
+
+func isNamingToken(value string) bool =>
+  !empty(value) && contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(first(value))) && contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(last(value))) && empty(filter(map(range(0, length(value)), i => toLower(substring(value, i, 1))), character => !contains('abcdefghijklmnopqrstuvwxyz0123456789-_.', character)))
+
+func requireNamingToken(value string, label string) string =>
+  isNamingToken(value) ? value : fail('${label} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.')
+
+func validateNamingContext(context namingContext) namingContext =>
+  !empty(filter([context.subscriptionId, context.resourceGroupName, context.location, context.cloud], value => empty(trim(value)) || value != trim(value)))
+    ? fail('Naming context requires nonempty subscriptionId, resourceGroupName, location and cloud values without surrounding whitespace.')
+    : union(context, { cloud: canonicalNamingCloud(context.cloud) })
+
+func validateTypeConvention(convention object) object =>
+  length(filter(convention.components, component => component == 'purpose')) != 1
+    ? fail('Identifier-based naming requires exactly one purpose component so the identifier and uniqueness hash cannot be omitted.')
+    : !empty(filter(convention.components, component => !contains(['resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'], component)))
+      ? fail('Identifier-based naming contains an unsupported naming-convention component.')
+      : length(convention.delimiter) > 3 || !empty(filter(map(range(0, length(convention.delimiter)), i => substring(convention.delimiter, i, 1)), character => !contains('-_.', character)))
+        ? fail('Identifier-based naming delimiter must be empty or contain at most three hyphens, underscores or dots.')
+        : !empty(filter(['workload', 'environment', 'freeform1', 'freeform2'], component => contains(convention.components, component) && !empty(convention[component]) && !isNamingToken(convention[component])))
+          ? fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.')
+          : convention
+
+func canonicalNamingCloud(cloud string) string =>
+  toLower(cloud) == 'azurecloud' ? 'AzureCloud'
+    : toLower(cloud) == 'azureusgovernment' ? 'AzureUSGovernment'
+    : startsWith(toLower(cloud), 'us') ? cloud
+    : fail('Identifier-based naming supports AzureCloud, AzureUSGovernment and US-prefixed air-gapped cloud environments.')
+
+func typeLocationAbbreviation(convention object, context namingContext) string =>
+  requireNamingToken(!empty(convention.?locationAbbreviation ?? '')
+    ? convention.locationAbbreviation
+    : regionAbbreviation(toLower(context.location), context.cloud), 'Location abbreviation')
+
+func formatTypeName(value string, rule object) string =>
+  toLower(rule.format == 'storage' ? stripSeps(value) : kvSanitize(value))
+
+func composeTypeName(convention object, rule object, code string, region string, identifier string, unique string) string =>
+  formatTypeName(cnv(
+    convention.components,
+    convention.delimiter,
+    code,
+    '${identifier}${convention.delimiter}${unique}',
+    region,
+    convention.freeform1,
+    convention.environment,
+    convention.freeform2,
+    convention.workload
+  ), rule)
+
+func budgetedTypeName(convention object, rule object, code string, region string, identifier string, unique string, budget int) string =>
+  budget < 1
+    ? fail('Naming-convention values leave no room for an identifier and the full uniqueness hash. Shorten static values or remove optional components.')
+    : composeTypeName(convention, rule, code, region, take(identifier, budget), unique)
+
+func resolvedTypeName(convention object, rule object, code string, region string, identifier string, unique string) string =>
+  budgetedTypeName(
+    convention, rule, code, region, formatTypeName(identifier, rule), unique,
+    namingPolicy.limits[rule.lengthLimit] - length(composeTypeName(convention, rule, code, region, '', unique))
+  )
+
+func scopedTypeName(convention object, resourceType string, identifier string, context namingContext) string =>
+  !contains(namingPolicy.resourceTypes, resourceType)
+    ? fail('Unsupported identifier-based resource type. Use a resource type registered in namingPolicy.resourceTypes.')
+    : resolvedTypeName(
+      convention,
+      namingPolicy.resourceTypes[resourceType],
+      requireNamingToken(convention.resourceTypeCodes[resourceType], 'Resource type abbreviation'),
+      typeLocationAbbreviation(convention, context),
+      requireNamingToken(identifier, 'Add-on identifier'),
+      uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(identifier), toLower(resourceType))
+    )
+
+@export()
+@description('Names a supported resource type from caller-supplied purpose/identifier and actual target context, with an automatic full stable hash. Only the readable identifier is shortened; selected static components and the hash are preserved. Legacy role names are unchanged.')
+func resourceNameForType(convention object, resourceType string, identifier string, context namingContext) string =>
+  scopedTypeName(validateTypeConvention(resolveConvention(convention)), resourceType, identifier, validateNamingContext(context))
+
+@export()
+@description('Returns Function App, runtime storage, Insights, dedicated plan, storage CMK identity and private-endpoint patterns from one add-on identifier and target context. Does not deploy resources or replace caller-owned explicit overrides.')
+func functionAppNames(convention object, identifier string, context namingContext) functionAppNamingResult => {
+  functionAppName: resourceNameForType(convention, 'functionApps', identifier, context)
+  storageAccountName: resourceNameForType(convention, 'storageAccounts', identifier, context)
+  applicationInsightsName: resourceNameForType(convention, 'applicationInsights', identifier, context)
+  appServicePlanName: resourceNameForType(convention, 'appServicePlans', identifier, context)
+  storageEncryptionIdentityName: resourceNameForType(convention, 'userAssignedIdentities', '${identifier}-storage-cmk', context)
+  privateEndpointNameConv: privateEndpointPattern(resourceTypeFirst(convention), requireNamingToken(resolveConvention(convention).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'))
+  privateEndpointNICNameConv: privateEndpointNicPattern(resourceTypeFirst(convention), requireNamingToken(resolveConvention(convention).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'), requireNamingToken(resolveConvention(convention).resourceTypeCodes.networkInterfaces, 'Network interface abbreviation'))
+}
+
 func temporaryVmName(raw string) string =>
   take('${raw}${uniqueString(raw)}', namingPolicy.limits.deploymentVm)
 

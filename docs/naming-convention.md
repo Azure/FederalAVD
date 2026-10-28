@@ -611,9 +611,17 @@ not independently maintained naming rules. After editing a policy dataset:
 
 The generator updates marked Bicep defaults as literal values, preserving valid
 ARM parameter defaults without file-loading variable references. It also updates
-the Portal policy payloads, component and delimiter dropdown defaults, and literal
-workload/delimiter text-box defaults. Do not edit generated
-defaults manually.
+the Portal UI-default payloads, component and delimiter dropdown defaults, and
+literal workload/delimiter text-box defaults. The hidden form payload contains
+only the shared convention defaults, standalone FSLogix identifier, four
+session-host fallback patterns, and resource abbreviations. Resource-role
+purposes, deployment limits and unrelated patterns stay out of the Portal.
+
+Adding or changing a deployment role does not itself regenerate forms or make
+the publisher's generated-default freshness check fail. Run the sync check after
+policy changes; it verifies whether any UI-consumed or marked Bicep defaults
+actually changed. UI-default changes still require regeneration. Do not edit
+generated defaults manually.
 
 Rebuild affected ARM JSON and run the naming regression and synchronization
 checks. Test the affected steps in a live Azure Portal session after changing
@@ -623,6 +631,19 @@ See the [maintainer reference](../deployments/shared/modules/orchestration/namin
 for implementation boundaries and tests.
 
 ### Compatibility and migration
+
+For new add-ons, use the
+[identifier-based shared interface](../deployments/shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
+instead of adding an application-specific resource role. `functionAppNames`
+returns all Function App infrastructure names and private-endpoint patterns from
+one identifier, convention and actual target context. `resourceNameForType`
+handles individual supported resource types. Neither requires a customer-chosen
+uniqueness suffix or a policy update for each add-on.
+
+The new interface preserves the full deterministic hash and selected static
+components, shortening only the readable identifier to meet resource limits.
+It validates its supported inputs explicitly. It does not replace existing role
+recipes or automatically migrate deployed resources to newly generated names.
 
 The refactor preserves existing valid generated names and explicit overrides,
 with one approved naming correction: Shared Services vault purposes now honor
@@ -643,4 +664,4 @@ specialized image storage and key names, and per-run image-build identities.
 Customer overrides and stored host-pool naming tags still take precedence.
 Changing policy does not migrate or rename existing Azure resources automatically.
 
-Last updated: 2026-10-21
+Last updated: 2026-10-28

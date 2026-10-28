@@ -11,17 +11,18 @@ $abbreviations = Get-Content -LiteralPath (Join-Path $dataPath 'resourceAbbrevia
 if ($policy.defaults.components.Count -gt 6) {
     throw 'Portal naming controls support at most six default components. Update the forms before publishing this policy.'
 }
-$purposePatterns = [ordered]@{}
-foreach ($role in $policy.resources.PSObject.Properties) {
-    $purposePatterns[$role.Name] = $role.Value.purpose -join '{delimiter}'
-}
 $portalPolicy = [ordered]@{
     defaults = $policy.defaults
-    identifiers = $policy.identifiers
-    limits = $policy.limits
-    patterns = $policy.patterns
+    identifiers = [ordered]@{
+        sharedFslogix = $policy.identifiers.sharedFslogix
+    }
+    patterns = [ordered]@{
+        virtualMachine = $policy.patterns.virtualMachine
+        osDisk = $policy.patterns.osDisk
+        nic = $policy.patterns.nic
+        standaloneAvailabilitySet = $policy.patterns.standaloneAvailabilitySet
+    }
     resourceTypeCodes = $abbreviations
-    purposePatterns = $purposePatterns
 }
 $payload = ConvertTo-Json -InputObject $portalPolicy -Depth 100 -Compress
 $stale = @()
