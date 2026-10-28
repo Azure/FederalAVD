@@ -41,7 +41,7 @@ use an object keyed by Azure resource type.
 
 `planPricing` selects the actual tier and SKU, for example `PremiumV3_P0v3`.
 These are Dedicated App Service SKUs, not Functions Elastic Premium `EP` SKUs.
-The legacy `hostingPlanType` input controls `maximumElasticWorkerCount`:
+The `hostingPlanType` input controls `maximumElasticWorkerCount`:
 values containing `Consumption` omit it, `FunctionsPremium` sets it to 20,
 and other values set it to 1. This selector does not change the SKU family.
 

@@ -3,13 +3,13 @@
 This folder implements the authoritative naming policy for convention-generated
 FederalAVD resources. Change a rule in the shared policy, not in each deployment.
 Callers supply context such as identifier, region, subscription and resource group;
-they retain explicit customer names and existing-resource adoption decisions.
+they supply explicit customer names and existing-resource adoption decisions.
 
 ## Where to make a change
 
 | Concern | Owner |
 | --- | --- |
-| Default convention, resource-type rules, legacy role purposes, patterns and resource limits | [namingPolicy.json](../../../data/namingPolicy.json) |
+| Default convention, resource-type rules, role purposes, patterns and resource limits | [namingPolicy.json](../../../data/namingPolicy.json) |
 | Composition, formatting, location lookup and uniqueness recipes | [naming.bicep](./naming.bicep) |
 | Default resource abbreviations | [resourceAbbreviations.json](../../../data/resourceAbbreviations.json) |
 | Region abbreviations | [locations.json](../../../data/locations.json) |
@@ -32,15 +32,14 @@ Shared Services, Image Management, Image Build, networking and add-ons. Import
 the functions needed by the caller; importing functions does not add a nested
 Azure deployment. The optional Function App bundle is not a separate naming engine.
 
-The host-pool naming deployment has been removed. The canonical library owns
-both bundles, including legacy names, scope seeds and workspace adoption checks;
+The canonical library owns both bundles, including role-specific names,
+scope seeds and workspace adoption checks;
 callers supply explicit locations and subscriptions. Replacer retains its own
 context/output adapter and consumes the same canonical helpers.
 Private endpoint consumers use the same
-`privateEndpointName` resolver, including its legacy 36/37-character VNet boundary.
+`privateEndpointName` resolver, including its 36/37-character VNet boundary.
 
-`naming.bicep` is the only supported naming import path. The former
-`functions.bicep` compatibility facade has been removed. Do not create another
+`naming.bicep` is the only supported naming import path. Do not create a
 solution-local naming engine.
 
 ## Naming resources in a new add-on
@@ -64,7 +63,7 @@ var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier
 The import path assumes an entry template in `deployments/add-ons/<name>/`.
 An empty convention object uses the shared defaults. Use a distinct identifier
 for multiple resources of the same type in the same scope. Callers still create
-resources, retain explicit overrides and supply existing-resource IDs.
+resources, apply explicit overrides and supply existing-resource IDs.
 
 To name a resource group, use `resourceGroups` with `resourceGroupName: ''`;
 its hash is subscription-scoped and ignores that field. Do not make a group's
@@ -78,8 +77,8 @@ owns a separate copy of the `operations` purpose. Changing its purpose changes
 both, including the group used to seed associated globally unique names.
 
 Use `resourceNameForType` or `functionAppNames` for new identifier-based add-ons.
-Existing deployments retain `resourceName` and their legacy roles; `namePattern`
-continues to handle purpose-specific runtime patterns. Do not copy convention
+Role-based deployments use `resourceName`; `namePattern` handles
+purpose-specific runtime patterns. Do not copy convention
 defaults or invent local resource formatting/hash recipes in a caller.
 
 After editing a policy dataset:
@@ -93,13 +92,10 @@ After editing a policy dataset:
 4. Render affected Portal steps in a live Portal session. JSON/schema checks do
    not validate Portal expression evaluation or `CustomHtmlField` behavior.
 
-Changing a deployed name is not an automatic rename or resource migration.
-Review affected stateful resources before deploying a policy change.
-
 Bicep defaults are generated as literals deliberately. With the current compiler,
 `loadJsonContent` in a parameter default emits a `variables('$fxv#...')` reference;
-ARM does not permit variables in parameter defaults. Generating literals retains
-the original parameter contract and avoids copying the whole policy into each
+ARM does not permit variables in parameter defaults. Generating literals produces
+valid parameter defaults and avoids copying the whole policy into each
 default. Runtime naming still uses the shared policy functions directly.
 
 ### Portal and deployment boundary
@@ -111,8 +107,8 @@ second handwritten catalog for those non-Bicep consumers.
 
 Portal forms collect convention choices, identifiers, explicit overrides and
 resource selections. They do not need the deployment role catalog or uniqueness
-recipes. Their hidden `federalAvdNamingPolicy` control retains its existing name
-for binding compatibility, but contains only a shared UI-default projection:
+recipes. Their hidden `federalAvdNamingPolicy` control contains only a shared
+UI-default projection:
 
 - The default convention.
 - The standalone FSLogix identifier.
@@ -145,17 +141,15 @@ Azure acceptance test or proof that arbitrary customer conventions are valid.
 | --- | --- |
 | Convention composition | Shared helpers merge defaults and abbreviation overrides; role purposes remain centralized. Missing `purpose` can make same-type resources collide. |
 | Host pools and Shared Services | Scoped subscription/resource-group seeds match for shared vaults; control-plane and VM regions can differ. Existing workspace adoption and explicit names must remain authoritative. |
-| Storage | Image Management has specialized prefix validation and length budgeting. FSLogix and Replacer use different legacy recipes; one generic truncation rule cannot replace them safely. |
+| Storage | Image Management has specialized prefix validation and length budgeting. FSLogix and Replacer use different recipes; one generic truncation rule cannot replace them safely. |
 | Function Apps and Key Vaults | Existing formatters truncate names and are not complete name validators. Long inputs can lose distinguishing tokens; Function App delimiters are not sanitized by `resourceName`. |
-| Networking and Automation | Some roles intentionally omit a purpose or workload. These are compatibility decisions, not safe defaults for every new add-on. |
+| Networking and Automation | Some roles intentionally omit a purpose or workload. These are role-specific rules, not defaults for every add-on. |
 | Runtime patterns and Image Build | `SHNAME`, `TOKEN`, `##`, private-endpoint placeholders, and per-run build identities have different lifecycles from stable service names. |
 | Portal | Only UI defaults are generated. Existing client-side warnings are advisory, not authoritative deployment naming validation. |
 | Publisher | PowerShell composes Template Spec names from the shared data; Bicep cannot execute in the form or directly supply PowerShell values. Keep their convention semantics covered by parity tests. |
 
-New add-ons use the identifier-based interface below. It is opt-in: the legacy
-`resourceName` path and deployed role recipes are unchanged. The new interface
-provides explicit validation and length budgets; do not migrate existing names
-merely to adopt it.
+New add-ons use the identifier-based interface below for explicit validation and
+length budgets. Role-based naming uses `resourceName` and the policy's role recipes.
 
 ## Adding a Function App add-on
 
@@ -231,7 +225,7 @@ A new add-on using these types needs no policy change. Supporting an entirely ne
 Azure resource type still requires defining and testing its rules centrally.
 Workbook resource IDs are provider-required GUIDs, not convention-generated
 display names. DNS zone names, fixed child-resource names, RBAC GUIDs and operation
-IDs also retain their separate contracts.
+IDs follow their own rules.
 
 Both entry points:
 
@@ -249,7 +243,7 @@ Both entry points:
   Resource groups omit the owning-group seed because they are subscription-scoped.
   The reserved hash is 13 characters except for Key Vaults, which use the centrally
   selected six-character suffix so the default convention fits their 24-character
-  budget. The five initially supported types retain their original 13-character hashes.
+  budget.
   Redeployments and case-only input changes are stable. Full regions stay in
   the hash even when the convention omits `location`.
 - Reserve the complete hash and all selected static components within the
@@ -260,8 +254,8 @@ Both entry points:
   one identifier character. Shorten static values or remove optional components.
 
 The Function App bundle uses an additional `-storage-cmk` identifier purpose for
-its dedicated storage identity. Private-endpoint patterns retain the existing
-shared placeholder mechanism; consuming modules resolve them to final names.
+its dedicated storage identity. Private-endpoint patterns use shared placeholders;
+consuming modules resolve them to final names.
 
 Length limits are policy budgets, not a claim that every provider accepts no
 longer name. DCE (44), Disk Access (64), Monitor Private Link Scope (64), and
@@ -286,38 +280,34 @@ References: Microsoft's
 [resource naming restrictions](https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules)
 and [`uniqueString` contract](https://learn.microsoft.com/azure/azure-resource-manager/bicep/bicep-functions-string#uniquestring).
 
-## Preserved behavior and explicit exceptions
+## Naming rules and exceptions
 
 - Explicit names, existing IDs, customer patterns and adopted host-pool naming
   tags remain authoritative.
 - The temporary deployment helper honors explicit resource names and a supplied
   identity name pattern. Its internal identity fallback replaces `TOKEN` with
   the fixed purpose `deployment`; it does not import or evaluate the naming policy.
-  Caller-generated VM, disk and NIC names are unchanged.
-- Quota/route Automation Accounts and two legacy Template Spec publishing
+  VM, disk and NIC names are supplied by the caller.
+- Quota/route Automation Accounts and two Template Spec publishing
   defaults intentionally omit workload. These are centralized role-specific
   rules, not additional naming engines.
-- Standalone session-host/Replacer availability-set defaults remain `avset-##`;
+- Standalone session-host/Replacer availability-set defaults are `avset-##`;
   host-pool generated availability sets include convention context. Their public
-  pattern contracts are retained centrally rather than renamed by this refactor.
-- Image storage, encryption keys and per-run image-build resources retain their
+  pattern contracts are defined centrally.
+- Image storage, encryption keys and per-run image-build resources use
   specialized patterns and uniqueness seeds. Resource types need not have
   identical patterns when their roles differ.
 - Names follow the convention subject to resource-specific restrictions. Vault
   names convert `_` and `.` to `-` after component assembly; an empty delimiter
   remains empty. This formatting is not complete Azure name validation.
-- Shared Services vault purpose separators now use the configured delimiter
-  before Key Vault formatting, matching host pools. Default `-` names are unchanged; custom delimiters,
-  notably an empty delimiter, can change existing Shared Services vault names.
-  Supply explicit vault names to retain those resources in affected configurations.
-- Partial abbreviation overrides merge with defaults. Empty/all-`none` selections
-  no longer fail while determining resource-type placement, and delimiter-free
-  Replacer storage no longer calls ARM `replace` with an empty search string.
+- Shared Services and host-pool vault purpose separators use the configured
+  delimiter before Key Vault formatting.
+- Partial abbreviation overrides merge with defaults.
 
 Provider-required fixed names, RBAC GUIDs, lifecycle operation IDs and explicitly
 supplied resource names are not convention-generated names.
 
-## Explicit locations and legacy-compatible bundles
+## Explicit locations and naming bundles
 
 Use `Location` consistently for new deployment and naming-context inputs.
 The standard host pool accepts `controlPlaneLocation`, defaulting to the
@@ -327,10 +317,8 @@ that selector already defaults to the control-plane location and filters VNets
 to the selected location. Scripted callers must verify that the supplied VM
 location matches their subnet's VNet before deployment.
 
-The template no longer reads its VM location from an existing VNet. This removes
-the runtime expression dependency that previously required a separate naming
-deployment to avoid repeated expression expansion. It uses `hostPoolNames`
-directly instead. The automated host pool and PoC use that same function.
+The standard host pool uses `hostPoolNames` directly. The automated host pool and
+PoC use that same function.
 Standalone FSLogix uses `fslogixNames` for storage, private endpoints, identities
 and temporary deployment-VM names; it does not request host-pool names.
 
@@ -340,21 +328,15 @@ Both functions receive a convention, identifier and typed context object.
 `existingFeedWorkspaceResourceId` and `sharedServicesSubscriptionId`; use empty
 strings for absent feed/adopted workspace inputs. `fslogixNamingContext` contains
 only `subscriptionId`, `cloud` and `location`. The host-pool bundle composes the
-FSLogix bundle rather than duplicating its recipes. Existing downstream resource
-modules keep their established public parameter names.
+FSLogix bundle rather than duplicating its recipes.
 
-**Migration:** previously, omitting both standard-host-pool locations inferred
-them from the subnet's VNet. They now follow the deployment location. Set both
-locations explicitly in existing automation, especially for split-location
-deployments, to preserve resource placement, generated names and scope hashes.
-An explicit empty location is not a request for VNet inference.
+Set both locations explicitly for split-location deployments. Empty locations
+are invalid.
 
-The extraction preserves legacy seeds and location-token distinctions.
-The existing FSLogix default storage prefix uses the generated storage-group name
+The FSLogix default storage prefix uses the generated storage-group name
 in its seed even when the caller selects an existing group. Its SMB location token
 uses the raw region abbreviation, while generated resource names can use the
-convention's VM-location override. Changing either as part of structural cleanup
-would change established behavior.
+convention's VM-location override. These distinctions affect generated names.
 
 ## Function contract
 
@@ -366,11 +348,7 @@ implementation details. Regression tests exercise them through exported
 functions rather than exposing them solely for tests.
 
 The host-pool result contains 47 consumed properties; FSLogix returns 15 shared
-properties. Ten former host-pool fields with no production consumers were
-removed. This removes unused results, not naming calculations required by
-retained resources. With the same effective convention, identifier, locations,
-subscriptions and overrides, retained values remain unchanged. The explicit
-location migration described above still applies.
+properties.
 
 Import only the functions needed by the caller:
 
@@ -415,7 +393,7 @@ resource-specific rules; callers should not duplicate them.
 
 [Naming.Tests.ps1](../../../../../tests/Naming.Tests.ps1) compiles executable
 [naming vectors](../../../../../tests/fixtures/naming.bicepparam) with Azure CLI
-Bicep, compares role/storage/seed recipes against independent legacy fixtures,
+Bicep, compares role/storage/seed recipes against independent reference fixtures,
 changes an isolated policy copy to exercise real consumer expressions and Portal
 generation, verifies imports, and checks module, parameter, and output metadata.
 It requires Azure CLI and its Bicep compiler already installed; it does not
@@ -424,9 +402,9 @@ deploy resources or require Azure sign-in.
 [IdentifierNaming.Tests.ps1](../../../../../tests/IdentifierNaming.Tests.ps1)
 executes the actual identifier-based functions through Bicep's local ARM runtime
 across 504 vectors (36 types, 14 profiles), endpoint
-boundaries and legacy adapter recipes, and compiles their wiring into the shared
-Function App module. Production source guards prevent old import paths and local
-copies of the naming engine. This suite was
+boundaries and adapter recipes, and compiles their wiring into the shared
+Function App module. Production source guards enforce the canonical import path
+and prevent local copies of the naming engine. This suite was
 validated with Bicep CLI 0.48.1 and requires a version supporting `local-deploy`.
 It enables experimental local deployment only in an isolated temporary copy,
 evaluates output-only fixtures, and removes that copy afterwards. It makes no
@@ -434,17 +412,14 @@ Azure resource changes and requires no Azure sign-in.
 
 [NamingBundles.Tests.ps1](../../../../../tests/NamingBundles.Tests.ps1) uses the
 same isolated local runtime to compare both direct bundles against
-[frozen legacy outputs](../../../../../tests/fixtures/naming-bundles-legacy.json).
-The 969 host-pool reference values were captured from the former adapter at commit
-`d678af5de46489e921aac4a8def90e5ecce59bb6`, before extraction, across seventeen
-profiles covering all four clouds, split locations, convention/abbreviation
+[reference outputs](../../../../../tests/fixtures/naming-bundles-legacy.json).
+All 799 host-pool values (47 fields across seventeen profiles) must match the
+fixture, covering all four clouds, split locations, convention/abbreviation
 overrides, existing workspace adoption and separate shared-services subscriptions.
-The fixture remains unchanged after trimming ten unused returned fields: all
-799 retained host-pool values (47 fields across seventeen profiles) must still
-match it. All fifteen FSLogix properties are checked against the matching
+All fifteen FSLogix properties are checked against the matching
 host-pool values. A source guard prevents unused result fields from accumulating.
 The suite also exercises changed policy propagation and rejects cross-subscription
-workspace adoption. These are legacy-preservation vectors, not new naming rules.
+workspace adoption.
 
 ```powershell
 Invoke-Pester -Script tests\Naming.Tests.ps1,tests\IdentifierNaming.Tests.ps1,tests\NamingBundles.Tests.ps1
@@ -452,4 +427,4 @@ Invoke-Pester -Script tests\Naming.Tests.ps1,tests\IdentifierNaming.Tests.ps1,te
 
 After changing shared naming, rebuild affected entry-point ARM templates and run
 their focused naming tests and Bicep/ARM synchronization checks. Successful
-compilation alone does not prove that deployed resource names remain unchanged.
+compilation alone does not validate generated resource names.

@@ -45,11 +45,11 @@ Empty-valued top-level components are removed before joining. Separators inside 
 
 Convention-generated names are driven by the shared naming policy and the `namingConvention` parameter. The policy owns defaults, role purposes, patterns, constraints and uniqueness recipes; the parameter supplies customer overrides. Explicit names, existing-resource IDs, provider-required names and lifecycle identifiers are not automatically rewritten.
 
-Portal forms retain naming controls, validation and explicit overrides but omit live resource-name previews to keep Template Spec packages smaller. Names are resolved at deployment time.
+Portal forms provide naming controls, validation and explicit overrides. Names are resolved at deployment time.
 
 Standard and automated Host Pool and Shared Services forms select the delimiter
 from **Hyphen (-)** or **Underscore (_)**, defaulting to Hyphen. Image Management
-retains its text box supporting one to three hyphens, underscores or dots.
+uses a text box supporting one to three hyphens, underscores or dots.
 All four forms initially populate Workload Value with `avd`. These are generated
 literal defaults from the shared policy, not runtime references to hidden form
 controls; operators can still change the selected delimiter and workload.
@@ -227,9 +227,9 @@ $namingConvention = @{
 
 The publishing script uses `purpose = operations` for its default resource group and a distinct
 purpose for each Template Spec. Its `components` array must include `purpose`; otherwise multiple
-Template Specs would resolve to the same name. Supplying `-ResourceGroupName` continues to override
-resource-group name generation without changing Template Spec names. When `-NamingConvention` is
-omitted, existing default Template Spec names are retained for versioning continuity.
+Template Specs would resolve to the same name. Supplying `-ResourceGroupName` overrides
+resource-group name generation without changing Template Spec names. Omitting
+`-NamingConvention` uses the publisher's default naming configuration.
 
 ---
 
@@ -361,14 +361,14 @@ Virtual machines, OS disks, and network interfaces use a **naming pattern** rath
 
 The actual VM name is `{pattern}` with `SHNAME = {sessionHostNamePrefix}{paddedIndex}`, for example `avdhost001`. These defaults intentionally do not use the virtual machine, OS disk, or network interface resource-type abbreviations or their position in the broader naming convention. This keeps the VM name equal to the session host name and derives the related resources from that stable name.
 
-Explicit `virtualMachineNameConvOverride`, `virtualMachineDiskNameConvOverride`, and `virtualMachineNicNameConvOverride` values continue to take precedence. Existing parameter files and host resource-group tags that specify older patterns are therefore unchanged on redeployment.
+Use `virtualMachineNameConvOverride`, `virtualMachineDiskNameConvOverride`, and `virtualMachineNicNameConvOverride` to override these defaults.
 
 In the standard Host Pool Portal form, the **Tags & Naming** step hides these three
 pattern boxes until **Customize VM, OS disk, and NIC naming** is checked. Leaving
 it unchecked uses the shared defaults above, even if custom values were entered
-before unchecking it. Checking it reveals the existing policy-backed defaults and
-`SHNAME` validation. The add-on forms retain their existing host resource-group
-tag inheritance. Automated host pools do not expose these three overrides because
+before unchecking it. Checking it reveals the policy-backed defaults and
+`SHNAME` validation. The add-on forms inherit patterns from host resource-group
+tags. Automated host pools do not expose these three overrides because
 AVD owns their VM, disk and NIC names.
 
 ### Availability Set — `##` token
@@ -594,14 +594,13 @@ The authoritative rule catalog is
 is the single public Bicep entry point for composition, resource formatting,
 location lookup, uniqueness and runtime naming patterns. Host pools, Shared
 Services, Image Management, Image Build, networking and add-ons all consume it,
-directly or through context/output adapters. The former `functions.bicep`
-compatibility facade has been removed; import `naming.bicep` instead.
+directly or through context/output adapters.
 Host pools import `hostPoolNames` directly; standalone FSLogix imports
-`fslogixNames`, not a host-pool module. The standard host pool now accepts
+`fslogixNames`, not a host-pool module. The standard host pool accepts
 `virtualMachinesLocation`, defaulting to `controlPlaneLocation` (which defaults
-to the deployment location). Existing automation must supply its intended
-locations explicitly rather than relying on VNet inference; see the
-[bundle and migration contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-legacy-compatible-bundles).
+to the deployment location). Supply the intended locations explicitly for
+split-location deployments; see the
+[location and bundle contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-naming-bundles).
 Abbreviations and region mappings remain in shared JSON so
 PowerShell and Portal-default generation use the same configuration.
 
@@ -609,7 +608,7 @@ For example, both host pools and Shared Services request the
 `operationsResourceGroup` role. Change that role's purpose once to affect both;
 do not edit their deployment templates separately. A default workload change
 also reaches Image Management, Replacer, networking and workload-bearing
-Automation Accounts. Roles that intentionally omit workload retain that exception.
+Automation Accounts. Some roles intentionally omit workload.
 
 Bicep parameter defaults and Portal form data are **generated from the policy**,
 not independently maintained naming rules. After editing a policy dataset:
@@ -619,8 +618,8 @@ not independently maintained naming rules. After editing a policy dataset:
 .\tools\Sync-NamingPolicy.ps1 -Check
 ```
 
-The generator updates marked Bicep defaults as literal values, preserving valid
-ARM parameter defaults without file-loading variable references. It also updates
+The generator writes marked Bicep defaults as literal values so ARM parameter
+defaults do not contain file-loading variable references. It also updates
 the Portal UI-default payloads, component and delimiter dropdown defaults, and
 literal workload/delimiter text-box defaults. The hidden form payload contains
 only the shared convention defaults, standalone FSLogix identifier, four
@@ -640,9 +639,9 @@ The Template Spec publisher reads the same datasets at invocation time.
 See the [maintainer reference](../deployments/shared/modules/orchestration/naming/README.md)
 for implementation boundaries and tests.
 
-### Compatibility and migration
+### Resource naming interface
 
-New resources use the same interface regardless of deployment family:
+Use the same interface regardless of deployment family:
 
 ```bicep
 import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
@@ -666,37 +665,18 @@ handles all 36 convention-named types in the abbreviation catalog, not just
 Function App resources. Neither requires a customer-chosen
 uniqueness suffix or a policy update for each add-on.
 
-The new interface preserves the configured deterministic hash and selected static
+The interface includes the configured deterministic hash and selected static
 components, shortening only the readable identifier to meet resource limits.
 Hashes are 13 characters except for Key Vaults, which use a six-character suffix
 to fit the default convention within 24 characters. VM resource names and OS
 computer names are distinct: the generic API supports a 64-character resource
-name, while the existing Windows computer-name patterns retain their 15-character
-contract. Workbook GUIDs and provider-required literal names are not ordinary
+name, while Windows computer-name patterns have a 15-character limit.
+Workbook GUIDs and provider-required literal names are not ordinary
 convention names. See the [complete type coverage and exceptions](../deployments/shared/modules/orchestration/naming/README.md#resource-type-api-and-naming-guarantees).
 
-Existing deployments now import the same entry point but retain their centralized
-compatibility recipes, public parameters, output contracts and adoption behavior.
-They are not switched to new generic hashes. No automatic resource renaming or
-migration is performed.
-
-The refactor preserves existing valid generated names and explicit overrides,
-with one approved naming correction: Shared Services vault purposes now honor
-the configured delimiter, matching host pools. Default `-` deployments are
-unchanged. Existing Shared Services deployments using custom delimiters,
-notably an **empty delimiter**, can generate different vault names; use explicit
-vault-name overrides to retain the existing vaults.
-
-Partial resource abbreviation overrides now merge with defaults across solutions.
-Empty/all-`none` component arrays no longer fail merely while determining
-resource-type placement. Delimiter-free Replacer storage avoids the previously
-invalid ARM `replace(..., '', ...)` call. These fixes enable previously failing
-inputs; they do not rename resources from valid deployments.
-
-Role-specific legacy patterns remain explicit in the policy, including
+Role-specific patterns are explicit in the policy, including
 workload-free quota/route Automation Accounts, standalone `avset-##` patterns,
 specialized image storage and key names, and per-run image-build identities.
-Customer overrides and stored host-pool naming tags still take precedence.
-Changing policy does not migrate or rename existing Azure resources automatically.
+Customer overrides and stored host-pool naming tags take precedence.
 
 Last updated: 2026-10-28

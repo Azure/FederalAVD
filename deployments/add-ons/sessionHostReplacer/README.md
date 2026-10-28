@@ -301,7 +301,7 @@ The Session Host Replacer Function App supports two identity options:
 > Required cleanup failure blocks the entire deployment batch and stops further deletion in that
 > invocation. Saved pending names retry on later runs. See the [safe-name-reuse contract](replacement-flow.md#safe-name-reuse-in-every-mode)
 > for exact checks, ambiguous device records, live-VM collisions, explicit-target requirements,
-> and manual cleanup of legacy failed VMs without ownership tags.
+> and manual cleanup of failed VMs without ownership tags.
 >
 > Configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 >
@@ -501,12 +501,14 @@ Microsoft documents that [PowerShell 7.6 requires .NET 10](https://learn.microso
 #### 4. Network Requirements for Zero Trust Networking
 
 `paasPublicNetworkAccess` independently selects `Disabled`, `EnabledWithRestrictions`, or `Enabled`
-for the Function App and runtime storage. `Auto` preserves historical parameter-file behavior.
+for the Function App and runtime storage. `Auto` derives access from private endpoint selection
+and IP rules.
 The Portal offers the three explicit choices, initially Disabled when Zero Trust networking is
 selected and Enabled otherwise. Public IP rules remain configured when Disabled and do not enable
-access. Restricted mode denies unmatched traffic even with no IPs, but retains the existing
+access. Restricted mode denies unmatched traffic even with no IPs, but includes the
 `AzureCloud` allowance for app/SCM and `AzureServices` bypass for storage. Storage trusted-service
-exceptions can still apply when Disabled. Existing Key Vaults and monitoring access are unchanged.
+exceptions can still apply when Disabled. This setting does not configure adopted Key Vaults or
+monitoring access.
 See the [shared access-mode contract](../../../docs/parameters.md#paas-public-network-access).
 
 These resources are required only when Zero Trust networking (`privateEndpoint: true`) is enabled:
@@ -594,13 +596,13 @@ Bicep, or another tool. It doesn't support automated host pools with Session Hos
 
 Pass the same `namingConvention` and `identifier` values used in the host pool deployment. When deploying from the Portal, these are pre-populated from the `hpNamingConvention` and `hpIdentifier` tags on the host pool resource. Session host naming patterns (`virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv`) are pre-populated from tags on the hosts resource group.
 
-**Critical for brownfield:** Session host naming MUST match your existing VM naming. For example:
+Configure session-host naming patterns with the `SHNAME` token. For example:
 
-- If existing VMs are named `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
-- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
-- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
+- For `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
+- For `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
+- For `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
 
-When naming tags are absent, the defaults are `SHNAME` for VMs, `SHNAME-osdisk` for OS disks, and `SHNAME-nic` for NICs. Existing resource-group tags continue to take precedence so replacement hosts retain the source host pool's naming.
+Resource-group naming tags take precedence over defaults. When those tags are absent, the defaults are `SHNAME` for VMs, `SHNAME-osdisk` for OS disks, and `SHNAME-nic` for NICs.
 
 **Token Reference:**
 
@@ -1880,19 +1882,6 @@ capabilities (similar to AVD Insights). Use the same `workbookLocation` selected
 was first created for that workspace. The deployment identity needs permission to create or update
 workbooks in the workspace resource group, including when it is in a centralized monitoring
 subscription.
-
-> **Upgrade note:** Earlier releases deployed the workbook into each Session Host Replacer
-> Function App resource group. The first deployment of this version creates the workspace-scoped
-> workbook in the selected Log Analytics workspace resource group; ARM does not move or delete an
-> older workbook. Validate the centralized workbook, preserve any intentional customizations, and
-> then remove obsolete per-host workbooks through the approved change process.
-
-> **Application Insights naming upgrade:** This version gives each Function App a corresponding
-> Application Insights resource whose generated name uses the same host-pool identity. Redeploying
-> an environment that used the earlier convention-derived name creates the new component and rewires
-> the Function App to it. ARM does not delete the old component; retain it while historical telemetry
-> is needed, then remove it through the approved change process. Parameter files must remove the
-> retired `applicationInsightsNameOverride` parameter.
 
 This pattern:
 

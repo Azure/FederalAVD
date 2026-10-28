@@ -318,7 +318,7 @@ save it in the matching customer folder:
 | AVD Automated Host Pool | `customer\parameters\automatedHostPools\<hostpool>.automatedHostPool.parameters.json` |
 
 Remove `timeStamp` from downloaded Image Build parameter files so each build generates fresh
-resource and image-version identities. Other deployment templates no longer expose this parameter.
+resource and image-version identities. Only Image Build exposes this parameter.
 Secure values are supplied at deployment time and must not be stored in parameter files.
 The `customer\` folder is git-ignored so customer configuration survives repository updates without
 being committed upstream.

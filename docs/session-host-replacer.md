@@ -92,7 +92,7 @@ for complete sequencing and failure behavior.
   Intune enrolled. Directory cleanup remains optional for AD DS and hybrid-joined machines.
 - Durable pending-name recovery; required cleanup failure blocks the entire batch and retries on
   a later scheduled run. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
-  for permissions, ambiguous records, upgrade behavior, and auto-target limitations.
+  for permissions, ambiguous records, ownership checks, and auto-target limitations.
 - Change-aware predeployment verification: read required records once, poll only requested
   deletions, and finish with the appropriate VM-absence check. Clean allocations avoid repeated
   directory and AVD inventory reads.

@@ -225,7 +225,7 @@ Do not commit secret values to parameter files.
 | `azureBlobPrivateDnsZoneResourceId` | Empty | Blob private DNS zone integration for Azure Backup |
 | `azureQueuePrivateDnsZoneResourceId` | Empty | Queue private DNS zone integration for Azure Backup |
 | `permittedIPs` | `[]` | Public IP/CIDR allowlist applied to both Key Vaults |
-| `paasPublicNetworkAccess` | `Auto` | Explicit Key Vault public-access mode: `Disabled`, `EnabledWithRestrictions`, or `Enabled`; `Auto` preserves existing parameter-file behavior |
+| `paasPublicNetworkAccess` | `Auto` | Key Vault public-access mode: `Disabled`, `EnabledWithRestrictions`, or `Enabled`; `Auto` derives the mode from private endpoint selection and IP rules |
 | `existingLogAnalyticsWorkspaceResourceId` | Empty | Existing workspace used only for Key Vault and backup-vault diagnostics when new monitoring is not deployed |
 
 Select public access independently of private endpoints. Disabled retains supplied IP rules;

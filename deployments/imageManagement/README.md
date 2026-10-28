@@ -152,7 +152,7 @@ The Azure identity running this deployment needs:
 
 #### `paasPublicNetworkAccess`
 
-- **Default:** `Auto` preserves historical private-endpoint/IP/subnet inference for parameter files.
+- **Default:** `Auto` derives public access from private endpoint selection and IP/subnet rules.
 - **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
 - **Description:** Shared public-access mode for artifacts and logs storage. Disabled retains IP
   and subnet rules without enabling public access. Restricted mode denies unmatched traffic even

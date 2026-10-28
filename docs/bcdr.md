@@ -378,8 +378,8 @@ Customer-managed key (CMK) encryption is supported for the vault via `keyManagem
 > resource group. Pass `fslogixBackupVaultResourceId` to `existingFilesBackupVaultResourceId` and
 > `fslogixBackupPolicyName` to `existingFilesBackupPolicyName` on every standard or automated pooled
 > host pool. The host pool then registers its newly deployed Azure Files shares without modifying
-> shared policy settings. Inline vault creation remains available as a standard host-pool
-> compatibility fallback when no existing vault is supplied; automated host pools use an existing
+> shared policy settings. Standard host pools can create a vault when none is supplied;
+> automated host pools use an existing
 > shared vault only.
 >
 > **Why CMK is not applied to this vault (SC-28 rationale):** Azure Files snapshots are stored in the storage account itself — no user data, CUI, or profile content is transmitted to or stored in the vault. This vault holds only backup scheduling metadata (policy assignments, protection container registrations, job history). SC-28 (Protection of Information at Rest) is satisfied for actual FSLogix profile data by the storage account's own encryption, controlled by `keyManagementStorage`. Applying CMK to this metadata-only vault would provide no incremental SC-28 protection for user data and is therefore not implemented. **SSP language:** *"The shared Azure Backup vault used for FSLogix Azure Files snapshot scheduling contains no user data or CUI. Snapshot data at rest is protected by the storage account encryption key (`keyManagementStorage`), satisfying SC-28 at the data-bearing resource. CMK on the scheduling vault is not required and provides no additional protection."*

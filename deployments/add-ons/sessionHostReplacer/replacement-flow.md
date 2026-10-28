@@ -140,7 +140,7 @@ DeleteFirst-specific behavior:
 - New deletions stop while a previously deleted host is not registered.
 - Registration alone does not authorize another destructive batch; the replacement must pass exact-image, AVD availability, health, power-state, and session-acceptance checks.
 - New deletions fail closed when the recovery state cannot be read or the pending-host mapping cannot be saved.
-- Recovery can redeploy exact unresolved names after an externally caused or legacy empty-pool incident, but new cycles do not intentionally create one.
+- Recovery can redeploy exact unresolved names after an externally caused empty-pool incident, but replacement cycles do not intentionally create one.
 - VM and AVD registration deletion are revalidated before hostname reuse even when directory cleanup is disabled.
 - Approved VM deletions are submitted before waiting, allowing Azure deletion operations to overlap.
   One final deployment gate waits for the batch, cleans required device records, and verifies all
@@ -309,7 +309,7 @@ complete approved resource cleanup first.
 Failed-deployment cleanup uses exact VM IDs, never substring matching. New VMs carry
 `AutoReplaceDeploymentName`; cleanup requires matching ownership, rechecks the current VM and
 instance, and confirms VM deletion before removing identities. Failed cleanup preserves ARM
-deployment history. **Upgrade note:** legacy failed hosts without durable VM IDs/ownership
+deployment history. Failed hosts without durable VM IDs/ownership
 inventory, or existing failed VMs without this ownership tag, require manual inspection and cleanup;
 do not add a tag merely to bypass the ownership check.
 

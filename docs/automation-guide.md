@@ -7,8 +7,7 @@ This guide describes how to chain the FederalAVD deployment steps together in an
 Each step maps to an existing script or ARM/Bicep deployment. You can wire them together in whatever automation tool you use (Azure DevOps, GitHub Actions, a shell script, a runbook, etc.).
 
 The standard and automated host-pool entry templates are orchestrators. They compose Shared
-Services directly with their pool-specific modules while preserving the existing published entry
-paths.
+Services directly with their pool-specific modules.
 
 Standalone Step 1 is conditional, not an unconditional prerequisite for a production host pool.
 Deploy it independently when Image Management, policy, an add-on, or another consumer needs its

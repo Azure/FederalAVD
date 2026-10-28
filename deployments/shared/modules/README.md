@@ -19,9 +19,8 @@ adapters remain under their owning deployment directory.
 
 ## Resource Modules
 
-All resource modules are under `resourceModules`. The AVD resource modules are separated from
-session-host workflow composition so the folder name no longer implies that every AVD-related file
-is a resource leaf.
+All resource modules are under `resourceModules`. AVD resource modules and session-host workflow
+composition belong to the resource and orchestration layers, respectively.
 
 | Category | Purpose |
 | --- | --- |

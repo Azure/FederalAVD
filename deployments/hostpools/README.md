@@ -19,8 +19,7 @@ can't be changed later. See the [management decision guide](../../docs/host-pool
 
 `hostpool.bicep` is the standard host-pool entry orchestrator. It calls AVD Shared Services and
 then directly composes the pool-specific control plane, FSLogix, session-host, security, backup,
-and monitoring modules. The published `deployments/hostpools/hostpool.json` entry path remains
-unchanged.
+and monitoring modules. The published entry template is `deployments/hostpools/hostpool.json`.
 
 The orchestrator deploys a complete Azure Virtual Desktop (AVD) environment including host pools,
 session hosts, storage, monitoring, security, and operational automation. It supports multiple
@@ -293,9 +292,9 @@ Subscription
 - **Description:** Location for session hosts, storage, deployment helpers and
   their centralized names. Must match the session-host subnet's VNet location.
   The Portal passes its selected VM location explicitly.
-- **Migration:** VNet-based location inference has been removed. Set both
-  locations explicitly in existing automation; empty strings are invalid.
-  See [location validation and migration](../../docs/hostpool-deployment.md#explicit-deployment-locations).
+- **Validation:** Set both locations explicitly for split-location deployments;
+  empty strings are invalid.
+  See [location validation](../../docs/hostpool-deployment.md#explicit-deployment-locations).
 
 #### `hostPoolType`
 
@@ -529,11 +528,11 @@ submit endpoint flags, subnets, or DNS zone IDs.
 
 #### `paasPublicNetworkAccess`
 
-- **Default:** `Auto` preserves the historical private-endpoint/IP inference for parameter files.
+- **Default:** `Auto` derives public access from private endpoint selection and IP rules.
 - **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
 - **Scope:** One choice for newly deployed Azure Files storage and Key Vaults, independent of
-  private endpoint creation. Existing resources, backup vaults, monitoring and AVD access settings
-  are unchanged. Restricted mode denies unmatched traffic even with an empty IP list.
+  private endpoint creation. It does not configure adopted resources, backup vaults, monitoring or
+  AVD access settings. Restricted mode denies unmatched traffic even with an empty IP list.
 - **Portal:** Exposes the three explicit choices, initially Disabled with private endpoints and
   Enabled otherwise. IP rules can be staged in Disabled mode.
 - **Exceptions:** Existing `AzureServices` bypass remains configured and can still apply when public

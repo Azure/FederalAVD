@@ -220,7 +220,7 @@ See [Update-ImageArtifacts Script Guide](../../docs/update-image-artifacts.md) f
 - **Description:** VM size for both orchestration and image VMs. The default has no local temporary disk; NVMe support applies to the managed OS/data disks and does not require a temporary disk.
 - **Portal selection:** All seven capability filters require the SKU to advertise exactly four vCPUs (`vCPUs: '4'`), including Confidential VM selections; they are not limited by a family-name prefix. They put `Standard_D4as_v6` first when it is compatible and available. The dropdown uses its first available option rather than a fixed default that might not exist in the filtered list. SCSI selections include dual-controller sizes; accelerated networking is required only when selected. An empty list requires changing the features or region, or using a parameter-file deployment with a larger compatible size, not falling back to an incompatible size. The Bicep `vmSize` parameter remains unrestricted by CPU count.
 - **Alternatives:** Select another advertised compatible size, such as `Standard_D4s_v6`. For SCSI builds, explicitly set `imageDefinitionIsHigherStoragePerformanceSupported: false` and choose a SCSI-capable size.
-- **Compatibility:** Parameter-file deployments retain their explicit VM size. Callers that previously omitted the NVMe parameter while selecting a SCSI-only size must now explicitly set it to `false`. Existing image definitions continue to determine the build controller from their stored features.
+- **Parameter-file deployments:** Explicit VM sizes are honored. Existing image definitions determine the build controller from their stored features.
 - **SKU metadata:** Filters require x64 and Generation 2 support because the orchestration VM uses a Generation 2 image. Legacy sizes that omit `DiskControllerTypes` are treated as SCSI; NVMe requires an explicit capability. Subscription/location restrictions are excluded. This does not establish quota, capacity, OS-image support, or successful deployment.
 
 #### `encryptionAtHost`
@@ -316,8 +316,6 @@ portal selects Outlook (Classic) and leaves new Outlook unchecked by default. Wh
 | `NonPersistent-Full` | Full VDI optimization for pooled host pools (VMs replaced on a regular cadence). All optimization sections applied, including update-channel lockdown. |
 | `Persistent` | Full optimization minus update-channel lockdown. Use for personal host pools managed by SCCM, Intune, or similar tooling. |
 
-> **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
-
 #### What Gets Optimized
 
 The script applies up to 11 sections depending on the selected profile. No LGPO.exe required — group policy values are written directly to `Registry.pol` (MS-GPREG format).
@@ -337,8 +335,6 @@ The script applies up to 11 sections depending on the selected profile. No LGPO.
 | **11 — Optional Windows Features** | Full profiles | Removes Windows features unused in VDI: Work Folders, Internet Explorer (legacy), SMB 1.0/CIFS client, Windows Fax and Scan, and XPS Viewer/Services. |
 
 All changes are logged to `C:\Windows\Logs\Optimize-AVDImage.log` with per-item `[OK]`, `[SKIP]`, or `[WARN]` entries. The log is captured in the image build output blob when `deployBuildLogsStorageAccount` is enabled.
-
-> **Replaces:** the former `applyWindowsDesktopOptimizations` (boolean) and `disableSoftwareUpdates` (array) parameters.
 
 For pooled and personal host guidance covering per-machine OneDrive, Known Folder Move (KFM),
 Files On-Demand, Storage Sense, and FSLogix profile containers, see
@@ -574,7 +570,6 @@ hibernation, Portal rendering, quota, capacity, or successful image capture.
 - **Type:** String
 - **Default:** `TrustedLaunch`
 - **Allowed Values:** `Standard`, `TrustedLaunch`, `TrustedLaunchSupported`, `ConfidentialVM`, `ConfidentialVMSupported`, `TrustedLaunchAndConfidentialVmSupported`
-- **Backward Compatibility:** The legacy spelling `TrustedLaunchAndConfidentialVMSupported` remains accepted and is normalized to Azure's canonical `TrustedLaunchAndConfidentialVmSupported` value.
 - **Description:** Security type for the image definition. Only the exact `ConfidentialVM` value requires a Confidential build VM, disables NVMe, Accelerated Networking, and Hibernation in the form, and selects the Confidential-capable SKU list. `TrustedLaunch` uses a Trusted Launch build VM. All `Supported` variants use a Standard-security Gen2 build VM and the managed-image capture path without VM Guest State; their VM-size choices follow the selected controller, networking, and hibernation features for both new and existing definitions. These choices do not change the definition's security type or the build/capture implementation.
 - **Portal dependency direction:** Security type is selected first and is never filtered by the feature controls below it. Selecting `ConfidentialVM` for a new definition hides the editable feature controls and displays an informational explanation listing all three effective values as No. The form submits `false` for all three regardless of any retained previous selections; those stale selections also cannot trigger hibernation warnings or hide the Confidential VM-size picker. Switching back restores the editable controls without changing their allowed values based on security type. Existing definitions still use their stored features and compatibility checks rather than rewriting their metadata. The VM-size selector chooses the new or existing definition path before evaluating that path's feature combinations. Portal behavior must be smoke-tested; changing defaults alone does not reset a retained control value.
 - **Source compatibility:** A `Supported` label does not make an arbitrary OS image compatible with Confidential VM or Trusted Launch deployments. Use an appropriate source image and validate the resulting image in each intended security mode. See Microsoft's [Confidential VM Supported image requirements](https://learn.microsoft.com/azure/confidential-computing/create-confidential-vm-from-compute-gallery#confidential-vm-supported-images) and [Trusted Launch Supported image requirements](https://learn.microsoft.com/azure/virtual-machines/trusted-launch-portal#trusted-launch-vm-supported-images). Offline form tests do not prove successful capture or deployment.
@@ -657,11 +652,9 @@ hibernation, Portal rendering, quota, capacity, or successful image capture.
 ]
 ```
 
-Existing parameter files remain valid when `imageVersionTargetRegions` includes the source/build
-region or omits optional regional properties. The top-level values provide Azure's publishing-profile
+The top-level values provide Azure's publishing-profile
 defaults, while properties on a target-region object override those defaults for that region.
-However, remote-gallery topology has intentionally changed: selecting a remote gallery no longer
-keeps a persistent primary-gallery replica in that gallery's region. Add the remote region explicitly
+Add the remote region explicitly
 to `imageVersionTargetRegions` when both a separate remote-gallery copy and a persistent replica in
 the primary gallery are required.
 

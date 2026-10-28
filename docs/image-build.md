@@ -457,10 +457,9 @@ The primary and remote galleries have independent target lists. Selecting a remo
 > `imageVersionDefaultStorageAccountType`, and `imageVersionExcludeFromLatest` map to Azure's
 > publishing-profile defaults. The source/build region is added to Azure's target list automatically.
 > `imageVersionTargetRegions` contains regional overrides and additional persistent primary-gallery
-> replicas. Existing files that explicitly include the source/build region remain supported. If an
-> existing workflow relied on selecting a remote gallery to also retain a primary-gallery replica in
-> that region, add the remote region explicitly to `imageVersionTargetRegions`. The remote gallery
-> selection now controls only the separate disaster-recovery gallery copy.
+> replicas. To create a primary-gallery replica in the remote region, include that region explicitly
+> in `imageVersionTargetRegions`. The remote gallery selection controls only the separate
+> disaster-recovery gallery copy.
 
 ### Image Management Resource References
 
@@ -574,8 +573,7 @@ resource group, build VM, customization phase, batch, and full customizer name, 
 builds in the same pre-staged build resource group do not share those deployment records. The
 `custom` or `vdi` context is included in the hash rather than appended as a suffix. Only the
 readable prefix is truncated to 50 characters to keep deployment names within Azure's
-64-character limit. Artifact blob names, installer arguments, and per-VM Run Command names
-are unchanged.
+64-character limit.
 
 Use distinct parameter-file prefixes for concurrent launches. When reusing exported parameter
 files, remove a fixed `timeStamp` so each build receives a fresh value. Builds publishing to the

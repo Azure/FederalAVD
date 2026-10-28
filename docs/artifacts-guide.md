@@ -332,7 +332,7 @@ else {
 }
 ```
 
-Keeping `Install` as the default preserves image-build and session-host customization behavior.
+Image-build and session-host customizations use the default `Install` action.
 The VM Application manifest calls the same script with `-DeploymentType 'Install'` or
 `-DeploymentType 'Uninstall'`. Do not add a separate root-level `Uninstall-Application.ps1` because
 `Invoke-Customization.ps1` might select it as the ZIP entry point.

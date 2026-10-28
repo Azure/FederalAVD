@@ -599,7 +599,7 @@ A new image build runs but the resulting image gallery version or temporary buil
 
 ### Problem
 
-The Image Build `timeStamp` parameter is intentionally excluded from example parameter files - it is generated fresh on every build by the calling script or at deploy time. If you export an Image Build parameter file from a Template Spec UI deployment or ARM deployment history, the exported file includes the `timeStamp` value used for that run. Saving and reusing that file causes every subsequent build to supply the same fixed timestamp. Other deployment templates no longer expose this parameter.
+The Image Build `timeStamp` parameter is intentionally excluded from example parameter files - it is generated fresh on every build by the calling script or at deploy time. If you export an Image Build parameter file from a Template Spec UI deployment or ARM deployment history, the exported file includes the `timeStamp` value used for that run. Saving and reusing that file causes every subsequent build to supply the same fixed timestamp. Only Image Build exposes this parameter.
 
 ### Solution
 

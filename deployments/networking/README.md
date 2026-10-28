@@ -211,8 +211,7 @@ required STUN/TURN connectivity.
   - `default` - Use existing/propagated routes; do not create or attach a NAT gateway or route table
 
 Implicit Azure default outbound access is always disabled (`defaultOutboundAccess: false`) on
-created subnets and is not configurable. Remove the former `defaultOutboundAccess` parameter
-from existing parameter files before deploying this version.
+created subnets and is not configurable.
 
 #### `includeAvdBypassRoutes`
 

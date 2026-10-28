@@ -120,8 +120,8 @@ storage accounts and shares as protected items; it does not modify the shared va
 ## Public Network Access
 
 `paasPublicNetworkAccess` selects `Disabled`, `EnabledWithRestrictions`, or `Enabled` for newly
-deployed Azure Files storage independently of `privateEndpoint`. The default `Auto` preserves
-existing parameter-file behavior. The Portal offers only the three explicit choices, initially
+deployed Azure Files storage independently of `privateEndpoint`. The default `Auto` derives access
+from private endpoint selection and IP rules. The Portal offers the three explicit choices, initially
 Disabled with private endpoints and Enabled otherwise. `permittedIPs` can be staged in Disabled
 mode without enabling public access; restricted mode denies unmatched traffic even with an empty
 list. Existing `AzureServices` exceptions for backup/monitoring remain configured and can still

@@ -32,9 +32,7 @@ both selected locations; its VM-location selector defaults to the control-plane
 location and filters VNets to that selection. Split-location deployments can
 choose different control-plane and VM locations.
 
-**Migration:** the template no longer infers VM location from an existing VNet.
-Existing automation should explicitly set both locations to preserve placement
-and generated names, particularly when the subnet is in a different location
+Set both locations explicitly when the subnet is in a different location
 from the deployment or control plane. Empty strings are invalid. Before a scripted
 deployment, check that `virtualMachinesLocation` matches the selected subnet's
 VNet location. For example, with `$virtualMachineSubnetResourceId` and
@@ -51,7 +49,7 @@ if ($vnetLocation -ne $virtualMachinesLocation) {
 
 The check is outside naming; the template uses explicit location inputs and
 imports the central naming bundle directly, without a naming deployment.
-See the [naming contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-legacy-compatible-bundles).
+See the [naming contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-naming-bundles).
 
 ### What Gets Deployed
 

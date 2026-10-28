@@ -382,7 +382,7 @@ Fallback eligibility requires all of the following:
 
 Community-source entries (`WingetSource: "winget"`), dotted package IDs, single-file downloads,
 other architecture overrides, and Secret/Top Secret manifests never invoke this fallback.
-Successful WinGet downloads are unchanged. Both methods failing stops the update instead of
+If both methods fail, the update stops instead of
 packaging a partial fallback download.
 
 The fallback uses an **undocumented, experimental Microsoft interface** and cannot obtain licenses,

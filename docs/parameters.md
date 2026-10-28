@@ -43,12 +43,11 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 Both use Azure location names such as `eastus2` or `usgovvirginia`, not display
 labels or naming abbreviations. The Portal passes both selections explicitly.
-New naming-context and deployment inputs consistently use `Location`; existing
+Naming-context and deployment inputs use `Location`; existing
 child modules keep their public parameter contracts.
 
-**Migration:** standard host pools no longer infer VM location from the VNet.
-Set both parameters explicitly in existing automation to preserve placement and
-names. Empty locations are invalid, and scripted deployments must check the VM
+Set both parameters explicitly for split-location deployments. Empty locations
+are invalid, and scripted deployments must check the VM
 location against the subnet's VNet before deployment. See
 [explicit deployment locations](hostpool-deployment.md#explicit-deployment-locations).
 
@@ -64,10 +63,8 @@ existing feed workspace, routing defaults to remote session connections only
 networking unless the operator explicitly selects a feed-routing option.
 
 For a new feed workspace, routing defaults to feed download and remote session
-connections (`FeedAndHostPool`); the existing remote session public-access default
-remains `Enabled`. These are editable Portal defaults, not restrictions. Existing
-workspace ownership warnings, parameter-file defaults and Private Link-disabled
-behavior are unchanged.
+connections (`FeedAndHostPool`); remote session public access defaults to
+`Enabled`. These are editable Portal defaults, not restrictions.
 
 ---
 
@@ -84,7 +81,7 @@ access, Recovery Services vaults, NetApp Files, or monitoring.
 | `Disabled` | Disabled regardless of IP/subnet rules or private endpoint selection | Deny |
 | `EnabledWithRestrictions` | Enabled alongside any private endpoints | Deny unmatched traffic, including with empty rule lists |
 | `Enabled` | Enabled alongside any private endpoints | Allow all networks, regardless of stored allow rules |
-| `Auto` (parameter-file compatibility default) | Historical private-endpoint/IP/subnet inference | Historical behavior |
+| `Auto` (parameter-file default) | Derived from private endpoint selection and IP/subnet rules | Derived from the selected access rules |
 
 The Portal exposes only the first three choices. Its initial choice is Disabled
 with private endpoints and Enabled otherwise. Image Management's Service Endpoint
@@ -101,18 +98,17 @@ Image Management also retains supplied subnet rules; service endpoints use the
 **public** storage endpoint and do not provide connectivity when public access is
 Disabled.
 
-Existing purpose-specific exceptions are unchanged: Storage/Key Vault retain
-`AzureServices` bypass; restricted Function App and SCM access retain the
+Purpose-specific exceptions apply: Storage/Key Vault use
+`AzureServices` bypass; restricted Function App and SCM access use the
 `AzureCloud` service-tag allowance. Microsoft documents that trusted-service
 exceptions can still apply to Storage and Key Vault when public access is
 Disabled. Disabled is therefore not a universal private-endpoint-only guarantee.
 Authentication and authorization are required in every mode.
 
 Use `permittedIPs` for the shared allowlist (`storagePermittedIPs` in Image
-Management). Automated Host Pools also accept the existing `fslogixPermittedIPs`
-parameter: those entries are combined with `permittedIPs` for Azure Files only,
-preserving the previous contract. Omitted new parameters preserve existing
-parameter-file behavior. A Portal-generated parameter file explicitly selects a mode.
+Management). Automated Host Pools also accept `fslogixPermittedIPs`: those entries
+are combined with `permittedIPs` for Azure Files only. A Portal-generated parameter
+file explicitly selects a mode.
 
 For example, deploy private endpoints while permitting approved public addresses:
 

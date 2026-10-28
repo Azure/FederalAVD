@@ -128,7 +128,7 @@ This is the recommended production path and the **tightest permission model avai
 
 | Parameter | Value | What it eliminates |
 | --- | --- | --- |
-| `imageBuildResourceGroupId` | Existing RG resource ID | Removes `resourceGroups/write` and `roleAssignments/write` at subscription scope — the orchestration VM no longer needs a system identity with a self-assigned Contributor role |
+| `imageBuildResourceGroupId` | Existing RG resource ID | Avoids `resourceGroups/write` and `roleAssignments/write` at subscription scope and a system identity with a self-assigned Contributor role on the orchestration VM |
 | `imageDefinitionResourceId` | Existing image definition resource ID | Removes `Compute/galleries/images/write` on the gallery RG — only new image *versions* are written |
 
 With **both** parameters provided, the operator needs **zero role assignment rights** anywhere. The managed identity's roles on the build RG are pre-staged by the imageManagement deployment (`deployImageBuildResourceGroup = true`), and no new RBAC is written at runtime.

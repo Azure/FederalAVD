@@ -5,8 +5,8 @@ Session Host Configuration (`managementType: Automated`). Azure Virtual Desktop 
 update, and replacement of the session-host virtual machines.
 
 `automatedHostPool.bicep` is the published entry template. It composes AVD Shared Services and
-directly deploys the pool-specific resources in one flattened template. The current
-`deployments/automatedHostPools/automatedHostPool.json` publication path remains unchanged.
+directly deploys the pool-specific resources in one flattened template. The published ARM
+template is `deployments/automatedHostPools/automatedHostPool.json`.
 
 This is not a more automated edition of the standard template; it selects a different, immutable
 Azure Virtual Desktop management approach. Use the
@@ -92,11 +92,9 @@ Host pools, application groups, and scaling plans still have persona-specific na
 and storage resource groups remain persona-specific. Only the dedicated standard PoC deployment
 uses its persona-specific consolidated resource group.
 
-> **Existing deployments:** Earlier templates put host pools and application groups in
-> persona-specific control-plane resource groups. This naming correction does not move those
-> resources. Do not redeploy an existing pool with the corrected template until its migration
-> approach has been planned: changing a resource group changes resource IDs and can create a
-> second host pool instead of updating the original.
+> **Resource group changes:** Changing the target resource group does not relocate existing
+> resources. A different resource group produces different resource IDs and can create a second
+> host pool instead of updating the existing one.
 
 The core updates the existing workspace only to append its application-group reference and
 preserves the workspace location, tags, friendly name, description, public-network setting, and
@@ -482,8 +480,8 @@ with private endpoints, Enabled otherwise. Disabled retains entered IP rules; re
 denies unmatched traffic even with an empty list. Existing trusted-service exceptions remain
 configured and can still apply when public access is Disabled.
 
-Parameter files use `paasPublicNetworkAccess` (default `Auto` preserves historical behavior) and
-`permittedIPs` for the shared allowlist. Existing `fslogixPermittedIPs` remains supported and is
+Parameter files use `paasPublicNetworkAccess` (default `Auto`) and
+`permittedIPs` for the shared allowlist. `fslogixPermittedIPs` is
 combined with the shared list for Azure Files only. These settings do not alter adopted resources,
 AVD Private Link, backup vaults or monitoring. See the
 [shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
