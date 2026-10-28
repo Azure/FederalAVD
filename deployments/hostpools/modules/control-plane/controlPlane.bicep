@@ -51,18 +51,10 @@ resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetwork
 }
 
 var hostPoolVnetName = last(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/'))
-var hostPoolVnetId = length(hostPoolVnetName) < 37 ? hostPoolVnetName : uniqueString(hostPoolVnetName)
+import { privateEndpointName } from '../../../shared/modules/orchestration/naming/naming.bicep'
 
-var hostPoolPrivateEndpointName = replace(
-  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
-  'VNETID',
-  hostPoolVnetId
-)
-var hostPoolPrivateEndpointNICName = replace(
-  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'connection'), 'RESOURCE', hostPoolName),
-  'VNETID',
-  hostPoolVnetId
-)
+var hostPoolPrivateEndpointName = privateEndpointName(privateEndpointNameConv, hostPoolName, 'connection', hostPoolVnetName)
+var hostPoolPrivateEndpointNICName = privateEndpointName(privateEndpointNICNameConv, hostPoolName, 'connection', hostPoolVnetName)
 
 // ─── Host pool type coercion ───────────────────────────────────────────────────
 // hostPoolType arrives as e.g. "Pooled BreadthFirst" or "Personal Automatic"

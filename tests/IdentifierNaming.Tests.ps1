@@ -20,6 +20,7 @@ Describe 'Identifier-based shared resource naming' {
             'deployments\shared\data\namingPolicy.json'
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
+            'deployments\shared\modules\orchestration\naming\naming.bicep'
             'deployments\shared\modules\orchestration\naming\functions.bicep'
             'tests\fixtures\naming-types.bicep'
             'tests\fixtures\naming-types.bicepparam'
@@ -49,21 +50,44 @@ Describe 'Identifier-based shared resource naming' {
         }
     }
 
-    It 'executes seventy real runtime vectors across five resource types and fourteen profiles' {
-        $values.cases.Count | Should Be 70
+    It 'executes 504 real runtime vectors across all 36 convention-named resource types and fourteen profiles' {
+        $values.cases.Count | Should Be 504
         foreach ($case in $values.cases) {
             $limit = $policy.limits.($policy.resourceTypes.($case.type).lengthLimit)
             ($case.actual.Length -le $limit) | Should Be $true
-            $case.hash | Should Match '^[a-z0-9]{13}$'
+            $expectedHashLength = if ($case.type -eq 'keyVaults') { 6 } else { 13 }
+            $case.hash.Length | Should Be $expectedHashLength
+            $case.hash | Should Match '^[a-z0-9]+$'
             $case.actual.Contains($case.hash) | Should Be $true
             $case.actual | Should Be $case.actual.ToLowerInvariant()
             if ($case.type -eq 'storageAccounts') {
                 $case.actual | Should Match '^[a-z0-9]{3,24}$'
             }
+            elseif ($case.type -eq 'computeGalleries') {
+                $case.actual | Should Match '^[a-z0-9][a-z0-9._]*[a-z0-9]$'
+            }
             else {
                 $case.actual | Should Match '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
             }
+            if ($case.type -in @('keyVaults','automationAccounts','recoveryServicesVaults')) {
+                $case.actual | Should Match '^[a-z]'
+            }
+            if ($case.type -eq 'keyVaults') { $case.actual | Should Not Match '--' }
         }
+    }
+
+    It 'covers every convention abbreviation while leaving provider-required workbook GUIDs separate' {
+        $abbreviations = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\resourceAbbreviations.json') -Raw | ConvertFrom-Json
+        $expected = @($abbreviations.PSObject.Properties.Name | Where-Object { $_ -ne 'workbooks' } | Sort-Object)
+        ($policy.resourceTypes.PSObject.Properties.Name | Sort-Object) -join ',' | Should Be ($expected -join ',')
+    }
+
+    It 'preserves compatibility imports endpoint boundaries and adapter-specific naming recipes' {
+        ($values.compatibilityBundle | ConvertTo-Json -Compress) | Should Be ($values.bundle | ConvertTo-Json -Compress)
+        foreach ($case in @($values.endpointTokens) + @($values.endpoints) + @($values.prefixes) + @($values.shortSeeds)) {
+            $case.actual | Should Be $case.expected
+        }
+        $values.resourceGroups[0] | Should Be $values.resourceGroups[1]
     }
 
     It 'preserves default static components and the full hash while budgeting only the identifier' {
@@ -167,6 +191,10 @@ Describe 'Identifier-based shared resource naming' {
         @{ Name = 'surrounding scope whitespace'; Context = "union(context, { resourceGroupName: ' rg-addons ' })" }
         @{ Name = 'unsupported cloud'; Context = "union(context, { cloud: 'UnknownCloud' })" }
         @{ Name = 'unsupported cloud with explicit region abbreviation'; Context = "union(context, { cloud: 'UnknownCloud' })"; Convention = "{ locationAbbreviation: 'e1' }" }
+        @{ Name = 'vault consecutive hyphens'; Type = 'keyVaults'; Convention = "{ delimiter: '--' }" }
+        @{ Name = 'vault numeric first component'; Type = 'keyVaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
+        @{ Name = 'automation numeric first component'; Type = 'automationAccounts'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
+        @{ Name = 'backup vault numeric first component'; Type = 'recoveryServicesVaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
     ) {
         param($Name, $Identifier, $Convention, $Type, $Context)
 
@@ -177,7 +205,7 @@ Describe 'Identifier-based shared resource naming' {
         $fixture = Join-Path $testDirectory 'tests\fixtures\rejected.bicep'
         [IO.File]::WriteAllLines($fixture, @(
             "targetScope = 'local'"
-            "import { resourceNameForType } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'"
+            "import { resourceNameForType } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
             "var context = { subscriptionId: '00000000-1111-2222-3333-444444444444', resourceGroupName: 'rg-addons', location: 'eastus', cloud: 'AzureCloud' }"
             "output rejected string = resourceNameForType($Convention, '$Type', $Identifier, $Context)"
         ))

@@ -1,4 +1,5 @@
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../../orchestration/networking/functions.bicep'
+import { privateEndpointName } from '../../orchestration/naming/naming.bicep'
 
 @description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
@@ -105,12 +106,9 @@ param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 param tags object
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
-// ensure that private endpoint name and nic name are not longer than 80
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
-
-var peVnetId = length(privateEndpointVnetName) < 37 ? privateEndpointVnetName : uniqueString(privateEndpointVnetName)
 
 var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
 var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
@@ -282,25 +280,13 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [
   for subResource in storageSubResources: if (privateEndpoint) {
-    name: replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', subResource), 'RESOURCE', storageAccountName),
-      'VNETID',
-      peVnetId
-    )
+    name: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
     location: location
     properties: {
-      customNetworkInterfaceName: replace(
-        replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', subResource), 'RESOURCE', storageAccountName),
-        'VNETID',
-        peVnetId
-      )
+      customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, storageAccountName, subResource, privateEndpointVnetName)
       privateLinkServiceConnections: [
         {
-          name: replace(
-            replace(replace(privateEndpointNameConv, 'SUBRESOURCE', subResource), 'RESOURCE', storageAccountName),
-            'VNETID',
-            peVnetId
-          )
+          name: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
           properties: {
             privateLinkServiceId: storageAccount.id
             groupIds: [
@@ -517,25 +503,13 @@ resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@20
 }
 
 resource privateEndpoint_functionApp 'Microsoft.Network/privateEndpoints@2023-04-01' = if (privateEndpoint) {
-  name: replace(
-    replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'sites'), 'RESOURCE', functionApp.name),
-    'VNETID',
-    peVnetId
-  )
+  name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', privateEndpointVnetName)
   location: location
   properties: {
-    customNetworkInterfaceName: replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'sites'), 'RESOURCE', functionApp.name),
-      'VNETID',
-      peVnetId
-    )
+    customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, functionApp.name, 'sites', privateEndpointVnetName)
     privateLinkServiceConnections: [
       {
-        name: replace(
-          replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'sites'), 'RESOURCE', functionApp.name),
-          'VNETID',
-          peVnetId
-        )
+        name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', privateEndpointVnetName)
         properties: {
           privateLinkServiceId: functionApp.id
           groupIds: [

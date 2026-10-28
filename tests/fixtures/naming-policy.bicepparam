@@ -1,6 +1,6 @@
 using none
 
-import { resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, scopedUnique, scopeIdUnique, deploymentVmName, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
+import { resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, scopedUnique, scopeIdUnique, deploymentVmName, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 import { legacyName, legacyScopedUnique, legacyStorage } from './naming-legacy.bicep'
 
 var conventions = [

@@ -65,9 +65,7 @@ param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
-var privateEndpointVnetId = length(privateEndpointVnetName) < 37
-  ? privateEndpointVnetName
-  : uniqueString(privateEndpointVnetName)
+import { privateEndpointName } from '../naming/naming.bicep'
 
 var secretList = union(
   !empty(domainJoinUserPassword) ? [{ name: 'DomainJoinUserPassword', value: domainJoinUserPassword }] : [],
@@ -140,16 +138,8 @@ module secretsKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' = if
 module secretsKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (deploySecretsKvPe) {
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
-      'VNETID',
-      privateEndpointVnetId
-    )
-    customNetworkInterfaceName: replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', secretsKeyVaultName),
-      'VNETID',
-      privateEndpointVnetId
-    )
+    name: privateEndpointName(privateEndpointNameConv, secretsKeyVaultName, 'vault', privateEndpointVnetName)
+    customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, secretsKeyVaultName, 'vault', privateEndpointVnetName)
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
     location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId
@@ -194,16 +184,8 @@ module encryptionKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' =
 module encryptionKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (deployEncryptionKvPe) {
   scope: resourceGroup(resourceGroupName)
   params: {
-    name: replace(
-      replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeyVaultName),
-      'VNETID',
-      privateEndpointVnetId
-    )
-    customNetworkInterfaceName: replace(
-      replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'vault'), 'RESOURCE', encryptionKeyVaultName),
-      'VNETID',
-      privateEndpointVnetId
-    )
+    name: privateEndpointName(privateEndpointNameConv, encryptionKeyVaultName, 'vault', privateEndpointVnetName)
+    customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, encryptionKeyVaultName, 'vault', privateEndpointVnetName)
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
     location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId

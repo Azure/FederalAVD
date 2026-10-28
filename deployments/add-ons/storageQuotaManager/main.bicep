@@ -90,7 +90,7 @@ param createJobSchedule bool = true
 var storageSubscriptionId    = split(storageResourceGroupId, '/')[2]
 var storageResourceGroupName = split(storageResourceGroupId, '/')[4]
 
-import { namingPolicy, regionAbbreviation, resourceName } from '../../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, regionAbbreviation, resourceName } from '../../shared/modules/orchestration/naming/naming.bicep'
 var regionAbbr = regionAbbreviation(location, environment().name)
 
 var automationAccountName = !empty(automationAccountNameOverride)

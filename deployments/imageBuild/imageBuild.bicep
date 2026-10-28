@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { artifactCustomizationType, restartableArtifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { namingPolicy, namePattern, regionAbbreviation, imageBuildRunId } from '../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, namePattern, regionAbbreviation, imageBuildRunId } from '../shared/modules/orchestration/naming/naming.bicep'
 
 type imageVersionTargetRegionInputType = {
   name: string

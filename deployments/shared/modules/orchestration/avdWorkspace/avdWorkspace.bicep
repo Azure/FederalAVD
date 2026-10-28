@@ -142,19 +142,10 @@ module workspace '../../resourceModules/desktopVirtualization/workspaces/deploy.
 var workspaceFeedVnetName = !empty(workspaceFeedVirtualNetworkResourceId)
   ? last(split(workspaceFeedVirtualNetworkResourceId, '/'))
   : ''
-var workspaceFeedVnetId = length(workspaceFeedVnetName) < 37
-  ? workspaceFeedVnetName
-  : uniqueString(workspaceFeedVnetName)
-var workspaceFeedPrivateEndpointName = replace(
-  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', effectiveWorkspaceName),
-  'VNETID',
-  workspaceFeedVnetId
-)
-var workspaceFeedPrivateEndpointNICName = replace(
-  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'feed'), 'RESOURCE', effectiveWorkspaceName),
-  'VNETID',
-  workspaceFeedVnetId
-)
+import { privateEndpointName } from '../naming/naming.bicep'
+
+var workspaceFeedPrivateEndpointName = privateEndpointName(privateEndpointNameConv, effectiveWorkspaceName, 'feed', workspaceFeedVnetName)
+var workspaceFeedPrivateEndpointNICName = privateEndpointName(privateEndpointNICNameConv, effectiveWorkspaceName, 'feed', workspaceFeedVnetName)
 
 module workspaceFeedPrivateEndpoint '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (manageWorkspace && !empty(workspaceFeedPrivateEndpointSubnetResourceId)) {
   scope: resourceGroup(effectiveWorkspaceSubscriptionId, effectiveWorkspaceResourceGroupName)
@@ -229,19 +220,8 @@ module globalWorkspace '../../resourceModules/desktopVirtualization/workspaces/d
 var globalFeedVnetName = !empty(globalFeedVirtualNetworkResourceId)
   ? last(split(globalFeedVirtualNetworkResourceId, '/'))
   : ''
-var globalFeedVnetId = length(globalFeedVnetName) < 37
-  ? globalFeedVnetName
-  : uniqueString(globalFeedVnetName)
-var globalFeedPrivateEndpointName = replace(
-  replace(replace(privateEndpointNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', effectiveGlobalWorkspaceName),
-  'VNETID',
-  globalFeedVnetId
-)
-var globalFeedPrivateEndpointNICName = replace(
-  replace(replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'global'), 'RESOURCE', effectiveGlobalWorkspaceName),
-  'VNETID',
-  globalFeedVnetId
-)
+var globalFeedPrivateEndpointName = privateEndpointName(privateEndpointNameConv, effectiveGlobalWorkspaceName, 'global', globalFeedVnetName)
+var globalFeedPrivateEndpointNICName = privateEndpointName(privateEndpointNICNameConv, effectiveGlobalWorkspaceName, 'global', globalFeedVnetName)
 
 module globalFeedPrivateEndpoint '../../resourceModules/network/privateEndpoints/deploy.bicep' = if (manageGlobalWorkspace && !empty(globalFeedPrivateEndpointSubnetResourceId)) {
   scope: resourceGroup(effectiveGlobalWorkspaceSubscriptionId, effectiveGlobalWorkspaceResourceGroupName)

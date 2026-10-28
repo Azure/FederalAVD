@@ -1,4 +1,4 @@
-import { cnv } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
+import { cnv } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
 var abbreviations = loadJsonContent('../../deployments/shared/data/resourceAbbreviations.json')
 

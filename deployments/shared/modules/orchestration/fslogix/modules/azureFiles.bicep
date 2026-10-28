@@ -93,9 +93,7 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
 
-var privateEndpointVnetId = length(privateEndpointVnetName) < 37
-  ? privateEndpointVnetName
-  : uniqueString(privateEndpointVnetName)
+import { privateEndpointName } from '../../naming/naming.bicep'
 
 resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
   name: privateEndpointVnetName
@@ -212,24 +210,8 @@ module shares 'shares.bicep' = [
 module privateEndpoints '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
   for i in range(0, storageCount): if (privateEndpoint) {
     params: {
-      name: replace(
-        replace(
-          replace(privateEndpointNameConv, 'SUBRESOURCE', 'file'),
-          'RESOURCE',
-          '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-        ),
-        'VNETID',
-        privateEndpointVnetId
-      )
-      customNetworkInterfaceName: replace(
-        replace(
-          replace(privateEndpointNICNameConv, 'SUBRESOURCE', 'file'),
-          'RESOURCE',
-          '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-        ),
-        'VNETID',
-        privateEndpointVnetId
-      )
+      name: privateEndpointName(privateEndpointNameConv, '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}', 'file', privateEndpointVnetName)
+      customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}', 'file', privateEndpointVnetName)
       tags: union(parentResourceTags, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
       location: privateEndpointVirtualNetwork!.location
       subnetResourceId: privateEndpointSubnetResourceId

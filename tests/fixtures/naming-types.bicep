@@ -1,12 +1,14 @@
-import { functionAppNames, resourceNameForType } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
+import { functionAppNames, resourceNameForType, privateEndpointName, privateEndpointVnetToken, shortScopedUnique, fslogixStoragePrefix } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames as compatibilityNames } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
 
+var policy = loadJsonContent('../../deployments/shared/data/namingPolicy.json')
 var context = {
   subscriptionId: '00000000-1111-2222-3333-444444444444'
   resourceGroupName: 'rg-addons'
   location: 'eastus'
   cloud: 'AzureCloud'
 }
-var types = ['functionApps', 'storageAccounts', 'applicationInsights', 'appServicePlans', 'userAssignedIdentities']
+var types = map(items(policy.resourceTypes), type => type.key)
 var profiles = [
   { label: 'default', convention: {}, identifier: 'inventory' }
   { label: 'type-last', convention: { components: ['workload', 'purpose', 'location', 'resourceType'] }, identifier: 'inventory' }
@@ -29,7 +31,7 @@ var cases = flatten(map(profiles, profile => map(types, type => {
   type: type
   identifier: profile.identifier
   actual: resourceNameForType(profile.convention, type, profile.identifier, context)
-  hash: uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(profile.identifier), toLower(type))
+  hash: take(uniqueString(toLower(context.subscriptionId), toLower(type) == 'resourcegroups' ? '' : toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(profile.identifier), toLower(type)), policy.resourceTypes[type].?uniqueLength ?? 13)
 })))
 var bundle = functionAppNames({}, 'inventory', context)
 var identityExpected = resourceNameForType({}, 'userAssignedIdentities', 'inventory-storage-cmk', context)
@@ -69,6 +71,7 @@ var clouds = [
   functionAppNames({}, 'inventory', union(context, { location: 'usseceast', cloud: 'USSec' }))
   functionAppNames({}, 'inventory', union(context, { location: 'usnatnorth', cloud: 'USNat' }))
 ]
+var vnetNames = map([0, 4, 36, 37, 80], count => join(map(range(0, count), index => 'v'), ''))
 
 output encodedResults string = base64(string({
   cases: cases
@@ -86,4 +89,31 @@ output encodedResults string = base64(string({
   longIdentifiers: longIdentifiers
   noLocation: noLocation
   clouds: clouds
+  compatibilityBundle: compatibilityNames({}, 'inventory', context)
+  resourceGroups: [
+    resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: '' }))
+    resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))
+  ]
+  endpointTokens: map(vnetNames, vnet => {
+    actual: privateEndpointVnetToken(vnet)
+    expected: length(vnet) < 37 ? vnet : uniqueString(vnet)
+  })
+  endpoints: flatten(map(['pe-RESOURCE-SUBRESOURCE-VNETID', 'VNETID-SUBRESOURCE-RESOURCE-nic'], pattern => map(vnetNames, vnet => {
+    actual: privateEndpointName(pattern, 'sa-inventory', 'file', vnet)
+    expected: replace(replace(replace(pattern, 'SUBRESOURCE', 'file'), 'RESOURCE', 'sa-inventory'), 'VNETID', length(vnet) < 37 ? vnet : uniqueString(vnet))
+  })))
+  prefixes: map(['', 'customer-prefix', 'CUSTOMER-LONG-STORAGE-PREFIX'], prefix => {
+    actual: fslogixStoragePrefix(prefix, 'abc123')
+    expected: empty(prefix) ? 'fslogixabc123' : take(toLower(replace(prefix, '-', '')), 13)
+  })
+  shortSeeds: [
+    {
+      actual: shortScopedUnique({}, context.subscriptionId, context.resourceGroupName, context.location)
+      expected: take(uniqueString(context.subscriptionId, context.resourceGroupName), 6)
+    }
+    {
+      actual: shortScopedUnique({ components: ['resourceType', 'purpose'] }, context.subscriptionId, context.resourceGroupName, context.location)
+      expected: take(uniqueString(context.subscriptionId, context.resourceGroupName, context.location), 6)
+    }
+  ]
 }))

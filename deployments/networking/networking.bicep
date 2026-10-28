@@ -1,5 +1,5 @@
 targetScope = 'subscription'
-import { legacyConvention, regionAbbreviation, resourceName } from '../shared/modules/orchestration/naming/functions.bicep'
+import { legacyConvention, regionAbbreviation, resourceName } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys the core networking infrastructure for Azure Virtual Desktop: Virtual Network, subnets,
 // Network Security Groups, route tables, and optional Azure Firewall or NVA routing configuration.

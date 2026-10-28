@@ -154,11 +154,7 @@ resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetwork
   scope: resourceGroup(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[2], split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[4])
 }
 
-func privateEndpointName(pattern string, resourceName string, subresource string, vnetName string) string => replace(
-  replace(replace(pattern, 'SUBRESOURCE', subresource), 'RESOURCE', resourceName),
-  'VNETID',
-  length(vnetName) < 37 ? vnetName : uniqueString(vnetName)
-)
+import { privateEndpointName } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 module hostPool '../../shared/modules/resourceModules/desktopVirtualization/hostPools/deployAutomated.bicep' = {
   scope: resourceGroup(resourceGroupName)

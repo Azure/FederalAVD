@@ -5,7 +5,7 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { namingPolicy, namePattern, regionAbbreviation, scopeIdUnique } from '../../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, namePattern, regionAbbreviation, scopeIdUnique } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 // ========== //
 // Parameters //

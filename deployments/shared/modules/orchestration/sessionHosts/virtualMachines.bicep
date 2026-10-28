@@ -2,7 +2,7 @@ metadata name = 'Session host VM batch orchestration'
 metadata description = 'Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup.'
 
 import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
-import { osDiskNamePattern } from '../naming/functions.bicep'
+import { osDiskNamePattern } from '../naming/naming.bicep'
 
 @description('Required. AVD Agent Boot Loader installer URL forwarded to initialization; the caller resolves cloud-specific defaults.')
 param agentBootLoaderDownloadUrl string

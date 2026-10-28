@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { functionAppNames } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
+import { functionAppNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
 param identifier string = 'inventory'
 param location string = 'eastus'

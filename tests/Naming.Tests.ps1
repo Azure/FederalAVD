@@ -6,13 +6,14 @@ Describe 'Shared naming and module metadata contracts' {
         New-Item -ItemType Directory -Path $testOutputDirectory -ErrorAction Stop | Out-Null
         $compiledModules = @{}
         $modulePaths = @{
-            NamingFunctions = 'deployments\shared\modules\orchestration\naming\functions.bicep'
+            NamingFunctions = 'deployments\shared\modules\orchestration\naming\naming.bicep'
             HostPoolNaming = 'deployments\shared\modules\orchestration\naming\hostPool.bicep'
             ReplacerNaming = 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
             FunctionApp = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
             HostingPlan = 'deployments\shared\modules\resourceModules\functionApp\functionAppHostingPlan.bicep'
             FunctionDefinition = 'deployments\shared\modules\resourceModules\functionApp\function.bicep'
             ScalarPattern = 'tests\fixtures\naming-scalar-import.bicep'
+            CompatibilityScalarPattern = 'tests\fixtures\naming-scalar-compatibility.bicep'
             DeploymentHelper = 'deployments\shared\modules\orchestration\deploymentHelper\deploy.bicep'
             SessionHostVMs = 'deployments\shared\modules\orchestration\sessionHosts\virtualMachines.bicep'
         }
@@ -109,10 +110,12 @@ Describe 'Shared naming and module metadata contracts' {
     }
 
     It 'keeps a scalar policy import below 1200 compiled bytes without the policy catalog' {
-        (Get-Item -LiteralPath (Join-Path $testOutputDirectory 'ScalarPattern.json')).Length | Should BeLessThan 1200
-        $variables = $compiledModules.ScalarPattern.variables | ConvertTo-Json -Depth 100 -Compress
-        $variables | Should Match 'SHNAME-osdisk'
-        $variables | Should Not Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
+        foreach ($name in @('ScalarPattern','CompatibilityScalarPattern')) {
+            (Get-Item -LiteralPath (Join-Path $testOutputDirectory "$name.json")).Length | Should BeLessThan 1200
+            $variables = $compiledModules[$name].variables | ConvertTo-Json -Depth 100 -Compress
+            $variables | Should Match 'SHNAME-osdisk'
+            $variables | Should Not Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
+        }
     }
 
     It 'does not embed the policy catalog or generic naming functions in small consumers' {
@@ -129,19 +132,44 @@ Describe 'Shared naming and module metadata contracts' {
     }
 
     It 'imports shared naming without redeclaring helpers in <Path>' -TestCases @(
-        @{ Path = 'deployments\shared\modules\orchestration\naming\hostPool.bicep'; Functions = @('resourceName', 'scopedUnique', 'deploymentVmName') }
-        @{ Path = 'deployments\sharedServices\sharedServices.bicep'; Functions = @('resourceName', 'scopedUnique') }
+        @{ Path = 'deployments\shared\modules\orchestration\naming\hostPool.bicep'; Functions = @('resourceName', 'shortScopedUnique', 'deploymentVmName', 'fslogixStoragePrefix') }
+        @{ Path = 'deployments\sharedServices\sharedServices.bicep'; Functions = @('resourceName', 'shortScopedUnique') }
         @{ Path = 'deployments\imageManagement\imageManagement.bicep'; Functions = @('resourceName', 'imageStorageName', 'validateImageStoragePrefix') }
         @{ Path = 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\networking\networking.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\imageBuild\imageBuild.bicep'; Functions = @('imageBuildRunId', 'namePattern') }
+        @{ Path = 'deployments\hostpoolPoc\hostpoolPoc.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\add-ons\avdAlerts\main.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\add-ons\storageQuotaManager\main.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\add-ons\updateRouteTableWithM365Routes\main.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\automatedHostPools\modules\controlPlane.bicep'; Functions = @('privateEndpointName') }
+        @{ Path = 'deployments\hostpools\modules\control-plane\controlPlane.bicep'; Functions = @('privateEndpointName') }
+        @{ Path = 'deployments\shared\modules\orchestration\avdWorkspace\avdWorkspace.bicep'; Functions = @('privateEndpointName') }
+        @{ Path = 'deployments\shared\modules\orchestration\keyVaults\keyVaults.bicep'; Functions = @('privateEndpointName') }
+        @{ Path = 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep'; Functions = @('privateEndpointName') }
+        @{ Path = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'; Functions = @('privateEndpointName') }
     ) {
         param($Path, $Functions)
 
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw
-        $source | Should Match "(?m)^import \{[^}]+\} from '[^']+/functions\.bicep'"
+        $source | Should Match "(?m)^import \{[^}]+\} from '[^']+/naming\.bicep'"
         foreach ($name in $Functions) {
             $source | Should Match "(?m)^import \{[^}\r\n]*\b$name\b"
         }
         $source | Should Not Match '(?m)^func (resolveComponent|buildCustomName|cnv|stripSeps|kvSanitize)\('
+    }
+
+    It 'keeps one production naming implementation and no consumers on the compatibility facade' {
+        $canonical = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
+        $compatibility = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\functions.bicep'
+        foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter '*.bicep' -Recurse -File) {
+            if ($file.FullName -in @($canonical,$compatibility)) { continue }
+            $source = Get-Content -LiteralPath $file.FullName -Raw
+            $source | Should Not Match "from '[^']*/naming/functions\.bicep'"
+            $source | Should Not Match 'loadJsonContent\([^\r\n]*namingPolicy\.json'
+            $source | Should Not Match '(?m)^func (buildCustomName|cnv|resourceName|resourceNameForType|privateEndpointName)\('
+            $source | Should Not Match 'length\([^)]*[Vv]net[^)]*\) < 37|take\(scopedUnique\('
+        }
     }
 
     It 'preserves every resource-role recipe across thirteen convention profiles' {
@@ -402,7 +430,7 @@ Describe 'Shared naming and module metadata contracts' {
         }
         $lines = @(
             'using none'
-            "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'"
+            "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
             'var namingConvention = {}'
             "var cnv_vmsloc = 'va'"
             "var cnv_loc = 'va'"

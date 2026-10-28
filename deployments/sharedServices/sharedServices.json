@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "615288855524131897"
+      "templateHash": "3523172942086300145"
     }
   },
   "definitions": {
@@ -76,7 +76,7 @@
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -126,7 +126,7 @@
           "metadata": {
             "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -151,7 +151,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -169,7 +169,7 @@
           "metadata": {
             "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -191,7 +191,7 @@
           "metadata": {
             "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -212,7 +212,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -257,7 +257,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -290,7 +290,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -319,7 +319,37 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+            }
+          }
+        },
+        "scopedUnique": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "subscriptionId"
+            },
+            {
+              "type": "string",
+              "name": "resourceGroupName"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(not(contains(__bicep.resolveConvention(parameters('convention')).components, 'location')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName')))]"
+          },
+          "metadata": {
+            "description": "Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         }
@@ -350,7 +380,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -372,7 +402,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -394,7 +424,7 @@
           "metadata": {
             "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -412,7 +442,7 @@
           "metadata": {
             "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -446,7 +476,7 @@
           "metadata": {
             "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault, Function App or Replacer-storage formatting rule.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -464,11 +494,11 @@
           "metadata": {
             "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
-        "scopedUnique": {
+        "shortScopedUnique": {
           "parameters": [
             {
               "type": "object",
@@ -489,12 +519,12 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(not(contains(__bicep.resolveConvention(parameters('convention')).components, 'location')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName')))]"
+            "value": "[take(_1.scopedUnique(parameters('convention'), parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), variables('namingPolicy').limits.uniqueSuffix)]"
           },
           "metadata": {
-            "description": "Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.",
+            "description": "Applies the existing six-character scope uniqueness suffix without requiring adapters to own the policy limit.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         }
@@ -953,7 +983,7 @@
     "avdWorkspaceName": "[if(not(empty(parameters('avdWorkspaceNameOverride'))), parameters('avdWorkspaceNameOverride'), variables('generatedAvdWorkspaceName'))]",
     "globalFeedResourceGroupName": "[if(not(empty(parameters('globalFeedResourceGroupNameOverride'))), parameters('globalFeedResourceGroupNameOverride'), variables('generatedGlobalFeedResourceGroupName'))]",
     "globalFeedWorkspaceName": "[if(not(empty(parameters('globalFeedWorkspaceNameOverride'))), parameters('globalFeedWorkspaceNameOverride'), variables('generatedGlobalFeedWorkspaceName'))]",
-    "uniqueStringOperations": "[take(__bicep.scopedUnique(parameters('namingConvention'), subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location')), variables('namingPolicy').limits.uniqueSuffix)]",
+    "uniqueStringOperations": "[__bicep.shortScopedUnique(parameters('namingConvention'), subscription().subscriptionId, variables('operationsResourceGroupName'), parameters('location'))]",
     "effectiveSecretsKeyVaultNameOverride": "[if(not(empty(parameters('secretsKeyVaultNameOverride'))), parameters('secretsKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'secretsKeyVaultNameOverride'), ''))]",
     "effectiveEncryptionKeyVaultNameOverride": "[if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), coalesce(tryGet(parameters('namingConvention'), 'encryptionKeyVaultNameOverride'), ''))]",
     "secretsKeyVaultName": "[if(not(empty(variables('effectiveSecretsKeyVaultNameOverride'))), variables('effectiveSecretsKeyVaultNameOverride'), __bicep.resourceName(parameters('namingConvention'), 'secretsKeyVault', variables('cnv_loc'), variables('identifier'), variables('uniqueStringOperations')))]",
@@ -984,6 +1014,35 @@
         "appServicePlan": 60,
         "applicationInsights": 260,
         "userAssignedIdentity": 128,
+        "automationAccount": 50,
+        "availabilitySet": 80,
+        "computeGallery": 80,
+        "dataCollectionEndpoint": 44,
+        "dataCollectionRule": 64,
+        "applicationGroup": 64,
+        "diskAccess": 64,
+        "diskEncryptionSet": 80,
+        "hostPool": 64,
+        "logAnalyticsWorkspace": 63,
+        "natGateway": 80,
+        "netAppAccount": 128,
+        "netAppCapacityPool": 64,
+        "networkInterface": 80,
+        "networkSecurityGroup": 80,
+        "osDisk": 80,
+        "privateEndpoint": 64,
+        "privateLinkScope": 64,
+        "publicIPAddress": 80,
+        "recoveryServicesVault": 50,
+        "resourceGroup": 90,
+        "routeTable": 80,
+        "scalingPlan": 63,
+        "templateSpec": 90,
+        "virtualMachineResource": 64,
+        "virtualNetwork": 64,
+        "subnet": 80,
+        "workspace": 64,
+        "imageDefinition": 80,
         "storageAccount": 24,
         "deploymentVm": 15,
         "fslogixStoragePrefix": 13,
@@ -1010,6 +1069,135 @@
         },
         "userAssignedIdentities": {
           "lengthLimit": "userAssignedIdentity",
+          "format": "hyphen"
+        },
+        "automationAccounts": {
+          "lengthLimit": "automationAccount",
+          "format": "hyphen",
+          "startWithLetter": true
+        },
+        "availabilitySets": {
+          "lengthLimit": "availabilitySet",
+          "format": "hyphen"
+        },
+        "computeGalleries": {
+          "lengthLimit": "computeGallery",
+          "format": "gallery"
+        },
+        "dataCollectionEndpoints": {
+          "lengthLimit": "dataCollectionEndpoint",
+          "format": "hyphen"
+        },
+        "dataCollectionRules": {
+          "lengthLimit": "dataCollectionRule",
+          "format": "hyphen"
+        },
+        "desktopApplicationGroups": {
+          "lengthLimit": "applicationGroup",
+          "format": "hyphen"
+        },
+        "remoteApplicationGroups": {
+          "lengthLimit": "applicationGroup",
+          "format": "hyphen"
+        },
+        "diskAccesses": {
+          "lengthLimit": "diskAccess",
+          "format": "hyphen"
+        },
+        "diskEncryptionSets": {
+          "lengthLimit": "diskEncryptionSet",
+          "format": "hyphen"
+        },
+        "hostPools": {
+          "lengthLimit": "hostPool",
+          "format": "hyphen"
+        },
+        "keyVaults": {
+          "lengthLimit": "keyVault",
+          "format": "hyphen",
+          "uniqueLength": 6,
+          "startWithLetter": true,
+          "noConsecutiveHyphens": true
+        },
+        "logAnalyticsWorkspaces": {
+          "lengthLimit": "logAnalyticsWorkspace",
+          "format": "hyphen"
+        },
+        "natGateways": {
+          "lengthLimit": "natGateway",
+          "format": "hyphen"
+        },
+        "netAppAccounts": {
+          "lengthLimit": "netAppAccount",
+          "format": "hyphen"
+        },
+        "netAppCapacityPools": {
+          "lengthLimit": "netAppCapacityPool",
+          "format": "hyphen"
+        },
+        "networkInterfaces": {
+          "lengthLimit": "networkInterface",
+          "format": "hyphen"
+        },
+        "networkSecurityGroups": {
+          "lengthLimit": "networkSecurityGroup",
+          "format": "hyphen"
+        },
+        "osdisks": {
+          "lengthLimit": "osDisk",
+          "format": "hyphen"
+        },
+        "privateEndpoints": {
+          "lengthLimit": "privateEndpoint",
+          "format": "hyphen"
+        },
+        "privateLinkScopes": {
+          "lengthLimit": "privateLinkScope",
+          "format": "hyphen"
+        },
+        "publicIPAddresses": {
+          "lengthLimit": "publicIPAddress",
+          "format": "hyphen"
+        },
+        "recoveryServicesVaults": {
+          "lengthLimit": "recoveryServicesVault",
+          "format": "hyphen",
+          "startWithLetter": true
+        },
+        "resourceGroups": {
+          "lengthLimit": "resourceGroup",
+          "format": "hyphen"
+        },
+        "routeTables": {
+          "lengthLimit": "routeTable",
+          "format": "hyphen"
+        },
+        "scalingPlans": {
+          "lengthLimit": "scalingPlan",
+          "format": "hyphen"
+        },
+        "templateSpecs": {
+          "lengthLimit": "templateSpec",
+          "format": "hyphen"
+        },
+        "virtualMachines": {
+          "lengthLimit": "virtualMachineResource",
+          "format": "hyphen"
+        },
+        "virtualNetworks": {
+          "lengthLimit": "virtualNetwork",
+          "format": "hyphen"
+        },
+        "subnets": {
+          "lengthLimit": "subnet",
+          "format": "hyphen"
+        },
+        "workspaces": {
+          "lengthLimit": "workspace",
+          "format": "hyphen"
+        },
+        "imageDefinitions": {
+          "lengthLimit": "imageDefinition",
           "format": "hyphen"
         }
       },
@@ -2732,7 +2920,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "13166458026376910484"
+              "templateHash": "16299680285327182833"
             },
             "name": "AVD workspace orchestration",
             "description": "Creates or updates AVD feed and global workspaces across resource groups with optional private endpoints and diagnostics."
@@ -2751,6 +2939,59 @@
                   "output": {
                     "type": "string",
                     "value": "[if(not(empty(parameters('subnetResourceId'))), join(take(split(parameters('subnetResourceId'), '/'), 9), '/'), '')]"
+                  }
+                },
+                "privateEndpointName": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "pattern"
+                    },
+                    {
+                      "type": "string",
+                      "name": "resourceName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "subresource"
+                    },
+                    {
+                      "type": "string",
+                      "name": "vnetName"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[replace(replace(replace(parameters('pattern'), 'SUBRESOURCE', parameters('subresource')), 'RESOURCE', parameters('resourceName')), 'VNETID', _1.privateEndpointVnetToken(parameters('vnetName')))]"
+                  },
+                  "metadata": {
+                    "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../naming/naming.bicep"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "namespace": "_1",
+              "members": {
+                "privateEndpointVnetToken": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "vnetName"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[if(less(length(parameters('vnetName')), 37), parameters('vnetName'), uniqueString(parameters('vnetName')))]"
+                  },
+                  "metadata": {
+                    "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../naming/naming.bicep"
+                    }
                   }
                 }
               }
@@ -2922,17 +3163,15 @@
             "effectiveWorkspaceResourceGroupName": "[if(variables('updateWorkspace'), split(parameters('workspaceResourceId'), '/')[4], parameters('workspaceResourceGroupName'))]",
             "workspaceDiagnosticSettings": "[if(and(not(variables('updateWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "workspaceFeedVnetName": "[if(not(empty(variables('workspaceFeedVirtualNetworkResourceId'))), last(split(variables('workspaceFeedVirtualNetworkResourceId'), '/')), '')]",
-            "workspaceFeedVnetId": "[if(less(length(variables('workspaceFeedVnetName')), 37), variables('workspaceFeedVnetName'), uniqueString(variables('workspaceFeedVnetName')))]",
-            "workspaceFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
-            "workspaceFeedPrivateEndpointNICName": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'feed'), 'RESOURCE', variables('effectiveWorkspaceName')), 'VNETID', variables('workspaceFeedVnetId'))]",
+            "workspaceFeedPrivateEndpointName": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), variables('effectiveWorkspaceName'), 'feed', variables('workspaceFeedVnetName'))]",
+            "workspaceFeedPrivateEndpointNICName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), variables('effectiveWorkspaceName'), 'feed', variables('workspaceFeedVnetName'))]",
             "effectiveGlobalWorkspaceName": "[if(variables('updateGlobalWorkspace'), last(split(parameters('globalWorkspaceResourceId'), '/')), parameters('globalWorkspaceName'))]",
             "effectiveGlobalWorkspaceSubscriptionId": "[if(variables('updateGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
             "effectiveGlobalWorkspaceResourceGroupName": "[if(variables('updateGlobalWorkspace'), split(parameters('globalWorkspaceResourceId'), '/')[4], parameters('globalWorkspaceResourceGroupName'))]",
             "globalWorkspaceDiagnosticSettings": "[if(and(not(variables('updateGlobalWorkspace')), not(empty(parameters('logAnalyticsWorkspaceResourceId')))), createObject('name', 'WVDInsights', 'workspaceId', parameters('logAnalyticsWorkspaceResourceId')), null())]",
             "globalFeedVnetName": "[if(not(empty(variables('globalFeedVirtualNetworkResourceId'))), last(split(variables('globalFeedVirtualNetworkResourceId'), '/')), '')]",
-            "globalFeedVnetId": "[if(less(length(variables('globalFeedVnetName')), 37), variables('globalFeedVnetName'), uniqueString(variables('globalFeedVnetName')))]",
-            "globalFeedPrivateEndpointName": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'global'), 'RESOURCE', variables('effectiveGlobalWorkspaceName')), 'VNETID', variables('globalFeedVnetId'))]",
-            "globalFeedPrivateEndpointNICName": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'global'), 'RESOURCE', variables('effectiveGlobalWorkspaceName')), 'VNETID', variables('globalFeedVnetId'))]"
+            "globalFeedPrivateEndpointName": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), variables('effectiveGlobalWorkspaceName'), 'global', variables('globalFeedVnetName'))]",
+            "globalFeedPrivateEndpointNICName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), variables('effectiveGlobalWorkspaceName'), 'global', variables('globalFeedVnetName'))]"
           },
           "resources": {
             "existingWorkspace": {
@@ -4145,7 +4384,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "2198958849629625729"
+              "templateHash": "11675223020124370102"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -4171,6 +4410,36 @@
             {
               "namespace": "__bicep",
               "members": {
+                "privateEndpointName": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "pattern"
+                    },
+                    {
+                      "type": "string",
+                      "name": "resourceName"
+                    },
+                    {
+                      "type": "string",
+                      "name": "subresource"
+                    },
+                    {
+                      "type": "string",
+                      "name": "vnetName"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[replace(replace(replace(parameters('pattern'), 'SUBRESOURCE', parameters('subresource')), 'RESOURCE', parameters('resourceName')), 'VNETID', _1.privateEndpointVnetToken(parameters('vnetName')))]"
+                  },
+                  "metadata": {
+                    "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../naming/naming.bicep"
+                    }
+                  }
+                },
                 "resolveNetworkAccess": {
                   "parameters": [
                     {
@@ -4197,6 +4466,29 @@
                     "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
                     "__bicep_imported_from!": {
                       "sourceTemplate": "../networking/functions.bicep"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "namespace": "_1",
+              "members": {
+                "privateEndpointVnetToken": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "vnetName"
+                    }
+                  ],
+                  "output": {
+                    "type": "string",
+                    "value": "[if(less(length(parameters('vnetName')), 37), parameters('vnetName'), uniqueString(parameters('vnetName')))]"
+                  },
+                  "metadata": {
+                    "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../naming/naming.bicep"
                     }
                   }
                 }
@@ -4370,7 +4662,6 @@
               }
             ],
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
-            "privateEndpointVnetId": "[if(less(length(variables('privateEndpointVnetName')), 37), variables('privateEndpointVnetName'), uniqueString(variables('privateEndpointVnetName')))]",
             "secretList": "[union(if(not(empty(parameters('domainJoinUserPassword'))), createArray(createObject('name', 'DomainJoinUserPassword', 'value', parameters('domainJoinUserPassword'))), createArray()), if(not(empty(parameters('domainJoinUserPrincipalName'))), createArray(createObject('name', 'DomainJoinUserPrincipalName', 'value', parameters('domainJoinUserPrincipalName'))), createArray()), if(not(empty(parameters('virtualMachineAdminPassword'))), createArray(createObject('name', 'VirtualMachineAdminPassword', 'value', parameters('virtualMachineAdminPassword'))), createArray()), if(not(empty(parameters('virtualMachineAdminUserName'))), createArray(createObject('name', 'VirtualMachineAdminUserName', 'value', parameters('virtualMachineAdminUserName'))), createArray()))]",
             "deploySecretsKv": "[parameters('deploySecretsKeyVault')]",
             "deploySecretsKvPe": "[and(and(variables('deploySecretsKv'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
@@ -4755,10 +5046,10 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('secretsKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('secretsKeyVaultName'), 'vault', variables('privateEndpointVnetName'))]"
                   },
                   "customNetworkInterfaceName": {
-                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('secretsKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('secretsKeyVaultName'), 'vault', variables('privateEndpointVnetName'))]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
@@ -5378,10 +5669,10 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('encryptionKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('encryptionKeyVaultName'), 'vault', variables('privateEndpointVnetName'))]"
                   },
                   "customNetworkInterfaceName": {
-                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'vault'), 'RESOURCE', parameters('encryptionKeyVaultName')), 'VNETID', variables('privateEndpointVnetId'))]"
+                    "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('encryptionKeyVaultName'), 'vault', variables('privateEndpointVnetName'))]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"

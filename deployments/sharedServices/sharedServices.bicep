@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
-import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, scopedUnique, privateEndpointPattern, privateEndpointNicPattern } from '../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, shortScopedUnique, privateEndpointPattern, privateEndpointNicPattern } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys the AVD Key Vault prerequisites into the operations resource group: a Secrets Key Vault for
 // credentials (domain join, VM admin) and an Encryption Key Vault for Customer Managed Key (CMK) encryption.
@@ -355,7 +355,7 @@ var globalFeedWorkspaceName = !empty(globalFeedWorkspaceNameOverride)
 // Add location to the seed when the convention has no location component,
 // so deployments to different regions don't produce identical Key Vault names.
 // CAF fallback already embeds the location abbreviation in the name itself.
-var uniqueStringOperations = take(scopedUnique(namingConvention, subscription().subscriptionId, operationsResourceGroupName, location), namingPolicy.limits.uniqueSuffix)
+var uniqueStringOperations = shortScopedUnique(namingConvention, subscription().subscriptionId, operationsResourceGroupName, location)
 
 var effectiveSecretsKeyVaultNameOverride = !empty(secretsKeyVaultNameOverride)
   ? secretsKeyVaultNameOverride

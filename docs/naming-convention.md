@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Naming Convention
 
@@ -590,10 +590,14 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 The authoritative rule catalog is
 [`namingPolicy.json`](../deployments/shared/data/namingPolicy.json).
-[`functions.bicep`](../deployments/shared/modules/orchestration/naming/functions.bicep)
-implements composition, resource formatting, location lookup and uniqueness
-recipes. Abbreviations and region mappings remain in their existing shared
-datasets.
+[`naming.bicep`](../deployments/shared/modules/orchestration/naming/naming.bicep)
+is the single public Bicep entry point for composition, resource formatting,
+location lookup, uniqueness and runtime naming patterns. Host pools, Shared
+Services, Image Management, Image Build, networking and add-ons all consume it,
+directly or through context/output adapters. The former `functions.bicep` path is
+a forwarding-only external compatibility facade; production deployments no
+longer import it. Abbreviations and region mappings remain in shared JSON so
+PowerShell and Portal-default generation use the same configuration.
 
 For example, both host pools and Shared Services request the
 `operationsResourceGroup` role. Change that role's purpose once to affect both;
@@ -632,18 +636,43 @@ for implementation boundaries and tests.
 
 ### Compatibility and migration
 
+New resources use the same interface regardless of deployment family:
+
+```bicep
+import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
+
+var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
+var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier}-secrets', context)
+```
+
+The example import is relative to an add-on entry template. `context` supplies
+the actual target subscription, owning resource group, location and cloud. To
+name a subscription-scoped resource group, pass `resourceGroupName: ''`; that
+field is excluded from resource-group hashes to avoid circular naming dependencies.
+Use distinct identifiers for multiple same-type resources in one scope.
+
 For new add-ons, use the
 [identifier-based shared interface](../deployments/shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
 instead of adding an application-specific resource role. `functionAppNames`
 returns all Function App infrastructure names and private-endpoint patterns from
 one identifier, convention and actual target context. `resourceNameForType`
-handles individual supported resource types. Neither requires a customer-chosen
+handles all 36 convention-named types in the abbreviation catalog, not just
+Function App resources. Neither requires a customer-chosen
 uniqueness suffix or a policy update for each add-on.
 
-The new interface preserves the full deterministic hash and selected static
+The new interface preserves the configured deterministic hash and selected static
 components, shortening only the readable identifier to meet resource limits.
-It validates its supported inputs explicitly. It does not replace existing role
-recipes or automatically migrate deployed resources to newly generated names.
+Hashes are 13 characters except for Key Vaults, which use a six-character suffix
+to fit the default convention within 24 characters. VM resource names and OS
+computer names are distinct: the generic API supports a 64-character resource
+name, while the existing Windows computer-name patterns retain their 15-character
+contract. Workbook GUIDs and provider-required literal names are not ordinary
+convention names. See the [complete type coverage and exceptions](../deployments/shared/modules/orchestration/naming/README.md#resource-type-api-and-naming-guarantees).
+
+Existing deployments now import the same entry point but retain their centralized
+compatibility recipes, public parameters, output contracts and adoption behavior.
+They are not switched to new generic hashes. No automatic resource renaming or
+migration is performed.
 
 The refactor preserves existing valid generated names and explicit overrides,
 with one approved naming correction: Shared Services vault purposes now honor

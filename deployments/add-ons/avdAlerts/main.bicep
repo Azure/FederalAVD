@@ -200,7 +200,7 @@ param enableServiceHealthAlerts bool = true
 // Variables  //
 // ========== //
 
-import { namingPolicy, regionAbbreviation, resourceName } from '../../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, regionAbbreviation, resourceName } from '../../shared/modules/orchestration/naming/naming.bicep'
 var regionAbbr = regionAbbreviation(location, az.environment().name)
 
 var automationAccountName = !empty(automationAccountNameOverride)

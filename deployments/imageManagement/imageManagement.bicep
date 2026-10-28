@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, privateEndpointPattern, privateEndpointNicPattern, imageStorageName, validateImageStoragePrefix, namePattern } from '../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, privateEndpointPattern, privateEndpointNicPattern, imageStorageName, validateImageStoragePrefix, namePattern } from '../shared/modules/orchestration/naming/naming.bicep'
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../shared/modules/orchestration/networking/functions.bicep'
 
 // Deploys the Azure Virtual Desktop image management infrastructure: storage account for build artifacts,

@@ -50,7 +50,7 @@ param sharedServicesSubscriptionId string = subscription().subscriptionId
 
 targetScope = 'subscription'
 
-import { namingPolicy, resolveConvention, regionAbbreviation, resourceTypeFirst, resourceName, scopedUnique, deploymentVmName, privateEndpointPattern, privateEndpointNicPattern, namePattern } from './functions.bicep'
+import { namingPolicy, resolveConvention, regionAbbreviation, resourceTypeFirst, resourceName, shortScopedUnique, fslogixStoragePrefix, deploymentVmName, privateEndpointPattern, privateEndpointNicPattern, namePattern } from './naming.bicep'
 
 metadata name = 'Host pool naming'
 metadata description = 'Computes names for standard and automated host pools, the dedicated PoC, and shared FSLogix storage. Deploys no resources; preserves solution-specific seeds, constraints, and adoption rules.'
@@ -88,8 +88,8 @@ var sharedResourceGroupOperations = resourceName(namingConvention, 'operationsRe
 var sharedResourceGroupMonitoring = resourceName(namingConvention, 'monitoringResourceGroup', cnv_cploc, identifier, '')
 
 // Seed matches sharedServices.bicep exactly.
-var uniqueStringOperations = take(scopedUnique(namingConvention, subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion), namingPolicy.limits.uniqueSuffix)
-var sharedUniqueStringOperations = take(scopedUnique(namingConvention, sharedServicesSubscriptionId, sharedResourceGroupOperations, controlPlaneRegion), namingPolicy.limits.uniqueSuffix)
+var uniqueStringOperations = shortScopedUnique(namingConvention, subscription().subscriptionId, resourceGroupOperations, virtualMachinesRegion)
+var sharedUniqueStringOperations = shortScopedUnique(namingConvention, sharedServicesSubscriptionId, sharedResourceGroupOperations, controlPlaneRegion)
 
 // Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
 // kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
@@ -169,10 +169,8 @@ var netAppCapacityPoolName = resourceName(namingConvention, 'netAppCapacityPool'
 // FSLogix storage account naming (max 15 chars for domain-join compatibility)
 // Add location to the seed when it is not in the naming convention components,
 // matching the same logic used for Key Vault unique strings.
-var uniqueStringStorage = take(scopedUnique(namingConvention, subscription().subscriptionId, resourceGroupStorage, virtualMachinesRegion), namingPolicy.limits.uniqueSuffix)
-var fslogixStorageAccountNamePrefix = !empty(namingConvention.?fslogixStoragePrefix ?? '')
-  ? take(toLower(replace(namingConvention.fslogixStoragePrefix, '-', '')), namingPolicy.limits.fslogixStoragePrefix)
-  : namePattern('fslogixStoragePrefix', { unique: uniqueStringStorage })
+var uniqueStringStorage = shortScopedUnique(namingConvention, subscription().subscriptionId, resourceGroupStorage, virtualMachinesRegion)
+var fslogixStorageAccountNamePrefix = fslogixStoragePrefix(namingConvention.?fslogixStoragePrefix ?? '', uniqueStringStorage)
 
 // ── Encryption Key Names ──────────────────────────────────────────────────────
 var encryptionKeyNameFSLogix = namePattern('fslogixKey', { identifier: identifier, storagePrefix: fslogixStorageAccountNamePrefix })

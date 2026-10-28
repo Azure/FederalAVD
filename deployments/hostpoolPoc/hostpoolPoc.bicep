@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
-import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/naming.bicep'
 
 @maxLength(16)
 @description('Required. Short name identifying the disposable PoC deployment.')

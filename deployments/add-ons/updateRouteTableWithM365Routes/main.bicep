@@ -83,7 +83,7 @@ param createJobSchedule bool = true
 
 var routeTableResourceGroupName = split(routeTableResourceId, '/')[4]
 
-import { namingPolicy, regionAbbreviation, resourceName, scopeIdUnique } from '../../shared/modules/orchestration/naming/functions.bicep'
+import { namingPolicy, regionAbbreviation, resourceName, scopeIdUnique } from '../../shared/modules/orchestration/naming/naming.bicep'
 var regionAbbr = regionAbbreviation(location, environment().name)
 
 var uniqueStringUrt = scopeIdUnique(resourceGroup().id, routeTableResourceId)

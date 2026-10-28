@@ -10,7 +10,7 @@ they retain explicit customer names and existing-resource adoption decisions.
 | Concern | Owner |
 | --- | --- |
 | Default convention, resource-type rules, legacy role purposes, patterns and resource limits | [namingPolicy.json](../../../data/namingPolicy.json) |
-| Composition, formatting, location lookup and uniqueness recipes | [functions.bicep](./functions.bicep) |
+| Composition, formatting, location lookup and uniqueness recipes | [naming.bicep](./naming.bicep) |
 | Default resource abbreviations | [resourceAbbreviations.json](../../../data/resourceAbbreviations.json) |
 | Region abbreviations | [locations.json](../../../data/locations.json) |
 | Host-pool context, outputs and existing-workspace adoption | [hostPool.bicep](./hostPool.bicep) |
@@ -23,6 +23,50 @@ and Session Host Replacer use the same policy implementation directly or through
 their naming adapters. Networking, PoC networking, Automation add-ons and Image
 Build also consume the shared policy. The publisher reads its defaults and purpose
 catalog from the same datasets.
+
+## One entry point for every deployment
+
+[naming.bicep](./naming.bicep) is the public Bicep entry point for host pools,
+Shared Services, Image Management, Image Build, networking and add-ons. Import
+the functions needed by the caller; importing functions does not add a nested
+Azure deployment. The optional Function App bundle is not a separate naming engine.
+
+The host-pool and Replacer naming modules remain thin context/output adapters.
+They retain region resolution, existing-resource adoption and public output
+contracts, but use the canonical implementation for composition, suffix lengths,
+storage-prefix budgets and patterns. Private endpoint consumers use the same
+`privateEndpointName` resolver, including its legacy 36/37-character VNet boundary.
+
+[functions.bicep](./functions.bicep) is a forwarding-only compatibility facade for
+external consumers of the former import path. No production deployment imports
+it. Do not add rules there or create another solution-local naming engine.
+
+## Naming resources in a new add-on
+
+Use the same resource-type interface regardless of whether the add-on includes
+a Function App:
+
+```bicep
+import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
+
+var context = {
+  subscriptionId: subscription().subscriptionId
+  resourceGroupName: targetResourceGroupName
+  location: location
+  cloud: environment().name
+}
+var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
+var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier}-secrets', context)
+```
+
+The import path assumes an entry template in `deployments/add-ons/<name>/`.
+An empty convention object uses the shared defaults. Use a distinct identifier
+for multiple resources of the same type in the same scope. Callers still create
+resources, retain explicit overrides and supply existing-resource IDs.
+
+To name a resource group, use `resourceGroups` with `resourceGroupName: ''`;
+its hash is subscription-scoped and ignores that field. Do not make a group's
+generated name depend on itself. For all other types, pass the owning group.
 
 ## Adding or changing a rule
 
@@ -117,7 +161,7 @@ Import one function from the shared layer. In an add-on entry template under
 `deployments/add-ons/<name>/`, the call is:
 
 ```bicep
-import { functionAppNames } from '../../shared/modules/orchestration/naming/functions.bicep'
+import { functionAppNames } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 var names = functionAppNames(namingConvention, identifier, {
   subscriptionId: subscription().subscriptionId
@@ -168,10 +212,24 @@ Do not copy Replacer's `shr` role purposes for an unrelated add-on.
 `resourceNameForType(convention, resourceType, identifier, context)` names an
 individual resource. `context` has the exported `namingContext` type, containing
 `subscriptionId`, `resourceGroupName`, full Azure `location`, and `cloud`.
-The shared `resourceTypes` catalog currently supports `functionApps`,
-`storageAccounts`, `applicationInsights`, `appServicePlans` and
-`userAssignedIdentities`. A new add-on using those types needs no policy change;
-supporting another Azure resource type requires centrally defining its rules.
+The shared `resourceTypes` catalog covers all 36 convention-named types in the
+repository's abbreviation dataset:
+
+| Family | Resource-type keys |
+| --- | --- |
+| AVD | `hostPools`, `workspaces`, `desktopApplicationGroups`, `remoteApplicationGroups`, `scalingPlans` |
+| Compute | `availabilitySets`, `computeGalleries`, `diskAccesses`, `diskEncryptionSets`, `osdisks`, `virtualMachines`, `imageDefinitions` |
+| Networking | `natGateways`, `networkInterfaces`, `networkSecurityGroups`, `privateEndpoints`, `publicIPAddresses`, `routeTables`, `virtualNetworks`, `subnets` |
+| Monitoring | `applicationInsights`, `dataCollectionEndpoints`, `dataCollectionRules`, `logAnalyticsWorkspaces`, `privateLinkScopes` |
+| Apps | `functionApps`, `appServicePlans` |
+| Storage and recovery | `storageAccounts`, `netAppAccounts`, `netAppCapacityPools`, `recoveryServicesVaults` |
+| Shared resources | `automationAccounts`, `keyVaults`, `userAssignedIdentities`, `resourceGroups`, `templateSpecs` |
+
+A new add-on using these types needs no policy change. Supporting an entirely new
+Azure resource type still requires defining and testing its rules centrally.
+Workbook resource IDs are provider-required GUIDs, not convention-generated
+display names. DNS zone names, fixed child-resource names, RBAC GUIDs and operation
+IDs also retain their separate contracts.
 
 Both entry points:
 
@@ -181,13 +239,19 @@ Both entry points:
 - Accept an empty delimiter or up to three `-`, `_`, `.` characters. Values must
   use ASCII alphanumerics and those separators, starting/ending in an alphanumeric.
 - Lowercase generated names. Hyphen-format types translate `_` and `.` to `-`;
-  storage removes all three separator characters.
-- Calculate a full 13-character `uniqueString` from lowercased target subscription,
-  resource group, full region, cloud, identifier and resource type.
+  storage removes all three separator characters, and galleries translate hyphens
+  to underscores. Key Vaults reject consecutive hyphens; vaults and Automation
+  Accounts enforce their required initial letter.
+- Calculate a stable `uniqueString` from lowercased target subscription,
+  owning resource group, full region, cloud, identifier and resource type.
+  Resource groups omit the owning-group seed because they are subscription-scoped.
+  The reserved hash is 13 characters except for Key Vaults, which use the centrally
+  selected six-character suffix so the default convention fits their 24-character
+  budget. The five initially supported types retain their original 13-character hashes.
   Redeployments and case-only input changes are stable. Full regions stay in
   the hash even when the convention omits `location`.
 - Reserve the complete hash and all selected static components within the
-  service's length limit. Only the readable identifier is shortened to fit.
+  configured resource-type budget. Only the readable identifier is shortened to fit.
   The hash still includes the full identifier, distinguishing different inputs
   that normalize or shorten to the same readable prefix.
 - Fail explicitly if the fixed components and hash leave no room for at least
@@ -196,6 +260,16 @@ Both entry points:
 The Function App bundle uses an additional `-storage-cmk` identifier purpose for
 its dedicated storage identity. Private-endpoint patterns retain the existing
 shared placeholder mechanism; consuming modules resolve them to final names.
+
+Length limits are policy budgets, not a claim that every provider accepts no
+longer name. DCE (44), Disk Access (64), Monitor Private Link Scope (64), and
+scaling-plan (63) budgets are conservative. Source references are Microsoft's
+[resource naming restrictions](https://learn.microsoft.com/azure/azure-resource-manager/management/resource-name-rules)
+and the [Azure naming module catalog](https://github.com/Azure/terraform-azurerm-naming/blob/master/resourceDefinition.json).
+The generic VM rule names the Azure resource (up to 64 characters), not the
+Windows computer name (15). Use the existing session-host patterns or
+`deploymentVmName` for their established computer-name contracts; a new VM caller
+must separately provide an OS-valid `computerName` when its resource name is longer.
 
 These are deterministic names, not an availability reservation. Check Azure
 global name availability and reserved-name restrictions. Explicit overrides are
@@ -254,7 +328,7 @@ functions and policy data add no new deployment resources.
 Import only the functions needed by the caller:
 
 ```bicep
-import { resourceName } from './functions.bicep'
+import { resourceName } from './naming.bicep'
 
 var operationsName = resourceName({}, 'operationsResourceGroup', 'va', '', '')
 // rg-avd-operations-va
@@ -302,7 +376,10 @@ deploy resources or require Azure sign-in.
 
 [IdentifierNaming.Tests.ps1](../../../../../tests/IdentifierNaming.Tests.ps1)
 executes the actual identifier-based functions through Bicep's local ARM runtime
-and compiles their wiring into the shared Function App module. This suite was
+across 504 vectors (36 types, 14 profiles), compatibility imports, endpoint
+boundaries and legacy adapter recipes, and compiles their wiring into the shared
+Function App module. Production source guards prevent old import paths and local
+copies of the naming engine. This suite was
 validated with Bicep CLI 0.48.1 and requires a version supporting `local-deploy`.
 It enables experimental local deployment only in an isolated temporary copy,
 evaluates output-only fixtures, and removes that copy afterwards. It makes no

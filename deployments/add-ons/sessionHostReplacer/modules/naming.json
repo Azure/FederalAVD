@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "2221308722447812587"
+      "templateHash": "12115456265093310054"
     },
     "name": "Session Host Replacer naming",
     "description": "Computes Replacer infrastructure names using the shared naming functions and host-pool convention. Deploys no resources; explicit brownfield overrides are applied by the caller."
@@ -61,7 +61,7 @@
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -111,7 +111,7 @@
           "metadata": {
             "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -136,7 +136,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -154,7 +154,7 @@
           "metadata": {
             "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -176,7 +176,7 @@
           "metadata": {
             "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -197,7 +197,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -242,7 +242,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -275,7 +275,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -304,7 +304,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         }
@@ -335,7 +335,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -357,7 +357,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -375,7 +375,7 @@
           "metadata": {
             "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -409,7 +409,7 @@
           "metadata": {
             "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault, Function App or Replacer-storage formatting rule.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         },
@@ -427,7 +427,7 @@
           "metadata": {
             "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/orchestration/naming/functions.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         }
@@ -497,6 +497,35 @@
         "appServicePlan": 60,
         "applicationInsights": 260,
         "userAssignedIdentity": 128,
+        "automationAccount": 50,
+        "availabilitySet": 80,
+        "computeGallery": 80,
+        "dataCollectionEndpoint": 44,
+        "dataCollectionRule": 64,
+        "applicationGroup": 64,
+        "diskAccess": 64,
+        "diskEncryptionSet": 80,
+        "hostPool": 64,
+        "logAnalyticsWorkspace": 63,
+        "natGateway": 80,
+        "netAppAccount": 128,
+        "netAppCapacityPool": 64,
+        "networkInterface": 80,
+        "networkSecurityGroup": 80,
+        "osDisk": 80,
+        "privateEndpoint": 64,
+        "privateLinkScope": 64,
+        "publicIPAddress": 80,
+        "recoveryServicesVault": 50,
+        "resourceGroup": 90,
+        "routeTable": 80,
+        "scalingPlan": 63,
+        "templateSpec": 90,
+        "virtualMachineResource": 64,
+        "virtualNetwork": 64,
+        "subnet": 80,
+        "workspace": 64,
+        "imageDefinition": 80,
         "storageAccount": 24,
         "deploymentVm": 15,
         "fslogixStoragePrefix": 13,
@@ -523,6 +552,135 @@
         },
         "userAssignedIdentities": {
           "lengthLimit": "userAssignedIdentity",
+          "format": "hyphen"
+        },
+        "automationAccounts": {
+          "lengthLimit": "automationAccount",
+          "format": "hyphen",
+          "startWithLetter": true
+        },
+        "availabilitySets": {
+          "lengthLimit": "availabilitySet",
+          "format": "hyphen"
+        },
+        "computeGalleries": {
+          "lengthLimit": "computeGallery",
+          "format": "gallery"
+        },
+        "dataCollectionEndpoints": {
+          "lengthLimit": "dataCollectionEndpoint",
+          "format": "hyphen"
+        },
+        "dataCollectionRules": {
+          "lengthLimit": "dataCollectionRule",
+          "format": "hyphen"
+        },
+        "desktopApplicationGroups": {
+          "lengthLimit": "applicationGroup",
+          "format": "hyphen"
+        },
+        "remoteApplicationGroups": {
+          "lengthLimit": "applicationGroup",
+          "format": "hyphen"
+        },
+        "diskAccesses": {
+          "lengthLimit": "diskAccess",
+          "format": "hyphen"
+        },
+        "diskEncryptionSets": {
+          "lengthLimit": "diskEncryptionSet",
+          "format": "hyphen"
+        },
+        "hostPools": {
+          "lengthLimit": "hostPool",
+          "format": "hyphen"
+        },
+        "keyVaults": {
+          "lengthLimit": "keyVault",
+          "format": "hyphen",
+          "uniqueLength": 6,
+          "startWithLetter": true,
+          "noConsecutiveHyphens": true
+        },
+        "logAnalyticsWorkspaces": {
+          "lengthLimit": "logAnalyticsWorkspace",
+          "format": "hyphen"
+        },
+        "natGateways": {
+          "lengthLimit": "natGateway",
+          "format": "hyphen"
+        },
+        "netAppAccounts": {
+          "lengthLimit": "netAppAccount",
+          "format": "hyphen"
+        },
+        "netAppCapacityPools": {
+          "lengthLimit": "netAppCapacityPool",
+          "format": "hyphen"
+        },
+        "networkInterfaces": {
+          "lengthLimit": "networkInterface",
+          "format": "hyphen"
+        },
+        "networkSecurityGroups": {
+          "lengthLimit": "networkSecurityGroup",
+          "format": "hyphen"
+        },
+        "osdisks": {
+          "lengthLimit": "osDisk",
+          "format": "hyphen"
+        },
+        "privateEndpoints": {
+          "lengthLimit": "privateEndpoint",
+          "format": "hyphen"
+        },
+        "privateLinkScopes": {
+          "lengthLimit": "privateLinkScope",
+          "format": "hyphen"
+        },
+        "publicIPAddresses": {
+          "lengthLimit": "publicIPAddress",
+          "format": "hyphen"
+        },
+        "recoveryServicesVaults": {
+          "lengthLimit": "recoveryServicesVault",
+          "format": "hyphen",
+          "startWithLetter": true
+        },
+        "resourceGroups": {
+          "lengthLimit": "resourceGroup",
+          "format": "hyphen"
+        },
+        "routeTables": {
+          "lengthLimit": "routeTable",
+          "format": "hyphen"
+        },
+        "scalingPlans": {
+          "lengthLimit": "scalingPlan",
+          "format": "hyphen"
+        },
+        "templateSpecs": {
+          "lengthLimit": "templateSpec",
+          "format": "hyphen"
+        },
+        "virtualMachines": {
+          "lengthLimit": "virtualMachineResource",
+          "format": "hyphen"
+        },
+        "virtualNetworks": {
+          "lengthLimit": "virtualNetwork",
+          "format": "hyphen"
+        },
+        "subnets": {
+          "lengthLimit": "subnet",
+          "format": "hyphen"
+        },
+        "workspaces": {
+          "lengthLimit": "workspace",
+          "format": "hyphen"
+        },
+        "imageDefinitions": {
+          "lengthLimit": "imageDefinition",
           "format": "hyphen"
         }
       },

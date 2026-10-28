@@ -1,6 +1,6 @@
 using none
 
-import { buildCustomName, cnv, stripSeps, kvSanitize } from '../../deployments/shared/modules/orchestration/naming/functions.bicep'
+import { buildCustomName, cnv, stripSeps, kvSanitize } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
 param defaultName = cnv(['resourceType', 'workload', 'purpose', 'location'], '-', 'rg', 'desktop', 'eus', '', '', '', 'avd')
 param reversedName = cnv(['workload', 'purpose', 'location', 'resourceType'], '-', 'kv', 'sec-abc123', 'va', '', '', '', 'avd')

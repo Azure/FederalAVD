@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { resolveConvention, resourceTypeFirst, resourceName, privateEndpointPattern, privateEndpointNicPattern } from '../../../shared/modules/orchestration/naming/functions.bicep'
+import { resolveConvention, resourceTypeFirst, resourceName, privateEndpointPattern, privateEndpointNicPattern } from '../../../shared/modules/orchestration/naming/naming.bicep'
 
 metadata name = 'Session Host Replacer naming'
 metadata description = 'Computes Replacer infrastructure names using the shared naming functions and host-pool convention. Deploys no resources; explicit brownfield overrides are applied by the caller.'

@@ -50,7 +50,7 @@ Describe 'Image Management storage account prefix' {
     }
 
     It 'preserves default names and uses deterministic custom-prefix names' {
-        $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\functions.bicep') -Raw
+        $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep') -Raw
         $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
         $bicep | Should Match "namingConvention\.\?imageManagementStoragePrefix"
         $bicep | Should Match "validateImageStoragePrefix\(imageManagementStoragePrefix, cnv_loc\)"

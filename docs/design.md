@@ -218,16 +218,24 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 - Naming Convention (`namingConvention`): An optional object parameter that controls how every resource in the deployment is named. The default value produces CAF-aligned names (`resourceType-avd-purpose-location`). The `purpose` component is a FederalAVD addition with no direct CAF equivalent — it disambiguates resources of the same type within a deployment. When customized, the engine assembles names from an ordered array of components (resourceType, purpose, location, workload, environment, freeform1, freeform2). See the **[Naming Convention guide](naming-convention.md)** for the full parameter schema, examples, and cross-solution alignment.
 
 Naming configuration stays in shared JSON so Bicep and PowerShell can consume one
-catalog; the executable deployment naming logic is native Bicep. Portal forms
+catalog; the executable deployment naming logic is native Bicep behind the single
+[naming.bicep entry point](../deployments/shared/modules/orchestration/naming/naming.bicep).
+All deployment families consume it. Host-pool and Replacer adapters retain scope,
+region/adoption decisions and output contracts, not separate naming engines.
+The former `functions.bicep` path only forwards external compatibility imports.
+Portal forms
 receive only a generated UI-default projection, not the resource-role catalog or
 uniqueness rules. Adding a deployment naming role must not require unrelated form
 updates. Existing role recipes, explicit names and adopted-resource identities
 remain unchanged by this boundary. See the
 [shared naming contract and review](../deployments/shared/modules/orchestration/naming/README.md#portal-and-deployment-boundary)
 for ownership, compatibility constraints and the identifier-based API for new
-add-ons. The opt-in API calculates stable scope hashes and preserves their full
-length while budgeting readable identifiers; existing deployments retain their
-legacy role recipes.
+add-ons. The generic API covers all 36 convention-named abbreviation types and
+budgets readable identifiers around the configured stable suffix (13 characters,
+or six for 24-character Key Vault names). Resource groups use subscription-scoped
+seeds; VM resource names are distinct from Windows computer names. Existing
+deployments use the same entry point but retain their legacy role recipes and
+names instead of adopting new hashes.
 
 The diagram below highlights how the resource groups are created based on the parameters.
 
