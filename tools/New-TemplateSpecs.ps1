@@ -173,6 +173,16 @@ function Remove-TemplateSpecInternalAnnotations {
                     }
                 }
             }
+            foreach ($namespace in $Node['functions']) {
+                $members = $namespace['members']
+                if ($members -is [Newtonsoft.Json.Linq.JObject]) {
+                    foreach ($member in @($members.Properties())) {
+                        if ($member.Value -is [Newtonsoft.Json.Linq.JObject]) {
+                            Remove-TemplateSpecSchemaAnnotations -Schema $member.Value -RemoveDescriptions $false
+                        }
+                    }
+                }
+            }
         }
         foreach ($property in @($Node.Properties())) {
             if ($property.Name -notin @('metadata', 'defaultValue', 'allowedValues', 'parameters', 'outputs', 'definitions')) {

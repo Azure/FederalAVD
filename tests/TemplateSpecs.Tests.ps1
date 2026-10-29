@@ -114,6 +114,16 @@ Describe 'Generated ARM and Template Spec size budgets' {
         $templateHash = (Get-FileHash -LiteralPath $TemplateFile).Hash
         $formHash = (Get-FileHash -LiteralPath $FormFile).Hash
         $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location 'usgovvirginia'
+        foreach ($template in @($package.RootTemplate) + @($package.Artifacts | ForEach-Object { $_.Template })) {
+            foreach ($namespace in $template['functions']) {
+                foreach ($member in $namespace['members'].Properties()) {
+                    $metadata = $member.Value['metadata']
+                    if ($metadata -is [Newtonsoft.Json.Linq.JObject]) {
+                        ($null -eq $metadata['__bicep_imported_from!']) | Should Be $true
+                    }
+                }
+            }
+        }
         $before = $package.RootTemplate.DeepClone()
         Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
         [Newtonsoft.Json.Linq.JToken]::DeepEquals($before, $package.RootTemplate) | Should Be $true
@@ -130,6 +140,69 @@ Describe 'Generated ARM and Template Spec size budgets' {
 }
 
 Describe 'Template Spec annotation filtering boundaries' {
+    It 'removes only function provenance while retaining namespaces, code, help, and literal data' {
+        $template = [Newtonsoft.Json.Linq.JObject]::Parse(@'
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "functions": [{
+    "namespace": "__bicep",
+    "members": {
+      "withHelp": {
+        "parameters": [{"name": "value", "type": "string"}],
+        "output": {"type": "object", "value": {"metadata": {"__bicep_imported_from!": "Literal output"}}},
+        "metadata": {
+          "description": "Function help",
+          "custom": "Keep",
+          "_generator": "Keep",
+          "__bicep_imported_from!": {"sourceTemplate": "naming.bicep"}
+        }
+      },
+      "provenanceOnly": {
+        "parameters": [],
+        "output": {"type": "string", "value": "constant"},
+        "metadata": {"__bicep_imported_from!": {"sourceTemplate": "naming.bicep"}}
+      }
+    }
+  }],
+  "variables": {
+    "data": {
+      "functions": [{"namespace": "Literal namespace", "members": {
+        "literal": {"metadata": {"__bicep_imported_from!": "Literal metadata"}}
+      }}]
+    },
+    "result": "[__bicep.withHelp('input')]"
+  },
+  "resources": {
+    "nested": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "properties": {"template": {
+        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+        "resources": {}
+      }}
+    }
+  }
+}
+'@)
+        $nested = $template['resources']['nested']['properties']['template']
+        $nested['functions'] = $template['functions'].DeepClone()
+        $expectedFunctions = $template['functions'].DeepClone()
+        foreach ($member in $expectedFunctions[0]['members'].Properties()) {
+            $member.Value['metadata'].Remove('__bicep_imported_from!') | Out-Null
+            if (-not $member.Value['metadata'].get_HasValues()) {
+                $member.Value.Remove('metadata') | Out-Null
+            }
+        }
+        $variables = $template['variables'].DeepClone()
+
+        Remove-TemplateSpecInternalAnnotations -Node $template
+
+        foreach ($node in @($template, $nested)) {
+            [Newtonsoft.Json.Linq.JToken]::DeepEquals($expectedFunctions, $node['functions']) | Should Be $true
+        }
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($variables, $template['variables']) | Should Be $true
+    }
+
     It 'retains module summaries, public help, validation, security metadata, and arbitrary data' {
         $template = [Newtonsoft.Json.Linq.JObject]::Parse(@'
 {

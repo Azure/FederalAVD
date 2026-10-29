@@ -74,6 +74,13 @@ resource/policy metadata, and the entire Portal form. Developers and Copilot
 should use the repository sources to understand and reuse module contracts, not
 reconstruct them from a published Template Spec.
 
+Compiler provenance removal includes `__bicep_imported_from!` on ARM function
+definitions. Function namespaces (such as `__bicep`), member names, parameters,
+bodies, descriptions, and call expressions remain intact: they are not disposable
+provenance. Filtering is limited to recognized template/schema locations, not
+similarly named properties in literal application data, and runs before hashing
+and deduplication.
+
 The publisher deduplicates eligible nested templates into linked artifacts in the
 filtered publication copy and publishes the complete package with the Template Spec REST API.
 It does not depend on input minification or change SDK serialization settings.
