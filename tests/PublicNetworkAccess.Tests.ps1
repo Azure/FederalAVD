@@ -275,6 +275,29 @@ Describe 'Expanded service public-access matrix' {
         }
     }
 
+    It 'pairs Function App storage DNS groups with their private endpoints for case <Index>' -TestCases @($matrixCases | Where-Object { $_.Index % 2 -eq 0 }) {
+        param($Index, $PrivateEndpoint)
+
+        $groups = @($resources | Where-Object {
+            $_.type -eq 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups' -and
+            $_.name -like "pe-functionstorage${Index}-*/default"
+        })
+        $services = if ($Index % 4 -eq 0) { @('blob', 'queue', 'table') } else { @('blob', 'table') }
+        $groups.Count | Should Be $(if ($PrivateEndpoint) { $services.Count } else { 0 })
+        if ($PrivateEndpoint) {
+            foreach ($service in $services) {
+                $endpointName = "pe-functionstorage${Index}-$service"
+                @($resources | Where-Object {
+                    $_.type -eq 'Microsoft.Network/privateEndpoints' -and $_.name -eq $endpointName
+                }).Count | Should Be 1
+                $group = @($groups | Where-Object { $_.name -eq "$endpointName/default" })
+                $group.Count | Should Be 1
+                $group[0].properties.privateDnsZoneConfigs[0].properties.privateDnsZoneId |
+                    Should Be "/subscriptions/00000000-1111-2222-3333-444444444444/resourceGroups/network-tests/providers/Microsoft.Network/privateDnsZones/privatelink.$service.example.test"
+            }
+        }
+    }
+
     It 'resolves Function App and SCM rules for case <Index>: <Mode>, PE=<PrivateEndpoint>, IP=<HasIPs>' -TestCases @($matrixCases | Where-Object { $_.Index % 2 -eq 0 }) {
         param($Index, $Mode, $PrivateEndpoint, $HasIPs)
 
@@ -312,7 +335,7 @@ Describe 'Expanded service public-access matrix' {
             @{ Suffix = "/vaults/kv-secrets-$Index"; Count = 1 }
             @{ Suffix = "/vaults/kv-encryption-$Index"; Count = 1 }
             @{ Suffix = "/storageAccounts/files$($Index)01"; Count = 1 }
-            @{ Suffix = "/storageAccounts/functionstorage$Index"; Count = 3 }
+            @{ Suffix = "/storageAccounts/functionstorage$Index"; Count = $(if ($Index % 4 -eq 0) { 3 } else { 2 }) }
             @{ Suffix = "/sites/function-$Index"; Count = 1 }
         )
         foreach ($target in $targets) {

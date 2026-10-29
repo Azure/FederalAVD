@@ -156,6 +156,11 @@ var storageSubResources = union(
   enableTableStorage ? ['table'] : []
 )
 
+// Keep imported calls outside resource-loop names: parent expansion can lose their ARM namespace.
+var storagePrivateEndpointNames = [
+  for subResource in storageSubResources: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
+]
+
 var azureStoragePrivateDnsZoneResourceIds = union(
   [azureBlobPrivateDnsZoneResourceId], // Always required
   enableQueueStorage && !empty(azureQueuePrivateDnsZoneResourceId) ? [azureQueuePrivateDnsZoneResourceId] : [],
@@ -279,14 +284,14 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
 }
 
 resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01' = [
-  for subResource in storageSubResources: if (privateEndpoint) {
-    name: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
+  for (subResource, i) in storageSubResources: if (privateEndpoint) {
+    name: storagePrivateEndpointNames[i]
     location: location
     properties: {
       customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, storageAccountName, subResource, privateEndpointVnetName)
       privateLinkServiceConnections: [
         {
-          name: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
+          name: storagePrivateEndpointNames[i]
           properties: {
             privateLinkServiceId: storageAccount.id
             groupIds: [

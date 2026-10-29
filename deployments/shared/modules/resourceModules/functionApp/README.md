@@ -83,6 +83,11 @@ Private endpoint subnet/DNS connectivity and outbound app VNet integration are
 separate inputs. The caller must provide the appropriate private path and DNS
 zones for the selected cloud.
 
+Storage private-endpoint names are resolved into a shared array before the resource loop.
+The endpoints and their DNS zone groups use that array so Bicep's indexed-parent expansion
+does not emit an unqualified imported naming-function call. This preserves existing names
+and custom patterns; it does not change public access or DNS zone selection.
+
 The explicit modes do not change hosting limits, module boundaries, outbound VNet routing, or
 monitoring access. The caller must establish a usable runtime-storage path before choosing
 Disabled or a restricted configuration. See the

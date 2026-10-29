@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "11733449363716845365"
+      "templateHash": "16080636410982688489"
     }
   },
   "definitions": {
@@ -10615,7 +10615,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "14688177975246088550"
+              "templateHash": "9084229273396319004"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -10962,6 +10962,11 @@
                   "priority": "[add(100, copyIndex('permittedIPRestrictions'))]",
                   "name": "[format('PermittedIP-{0}', copyIndex('permittedIPRestrictions'))]"
                 }
+              },
+              {
+                "name": "storagePrivateEndpointNames",
+                "count": "[length(variables('storageSubResources'))]",
+                "input": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex('storagePrivateEndpointNames')], variables('privateEndpointVnetName'))]"
               }
             ],
             "cloudSuffix": "[replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')]",
@@ -11072,13 +11077,13 @@
               "condition": "[parameters('privateEndpoint')]",
               "type": "Microsoft.Network/privateEndpoints",
               "apiVersion": "2023-04-01",
-              "name": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex()], variables('privateEndpointVnetName'))]",
+              "name": "[variables('storagePrivateEndpointNames')[copyIndex()]]",
               "location": "[parameters('location')]",
               "properties": {
                 "customNetworkInterfaceName": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex()], variables('privateEndpointVnetName'))]",
                 "privateLinkServiceConnections": [
                   {
-                    "name": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex()], variables('privateEndpointVnetName'))]",
+                    "name": "[variables('storagePrivateEndpointNames')[copyIndex()]]",
                     "properties": {
                       "privateLinkServiceId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
                       "groupIds": [
@@ -11104,7 +11109,7 @@
               "condition": "[and(parameters('privateEndpoint'), not(empty(variables('azureStoragePrivateDnsZoneResourceIds')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]])))]",
               "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
               "apiVersion": "2021-08-01",
-              "name": "[format('{0}/{1}', privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]], variables('privateEndpointVnetName')), 'default')]",
+              "name": "[format('{0}/{1}', variables('storagePrivateEndpointNames')[range(0, length(variables('azureStoragePrivateDnsZoneResourceIds')))[copyIndex()]], 'default')]",
               "properties": {
                 "privateDnsZoneConfigs": [
                   {

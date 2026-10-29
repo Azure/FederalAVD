@@ -97,6 +97,30 @@ Describe 'Shared naming and module metadata contracts' {
         }
     }
 
+    It 'preserves qualified private-endpoint naming calls in <Template>' -TestCases @(
+        @{ Template = 'FunctionApp' }
+        @{ Template = 'Replacer' }
+        @{ Template = 'TrackedReplacer' }
+    ) {
+        param($Template)
+
+        $app = switch ($Template) {
+            'FunctionApp' { $compiledModules.FunctionApp }
+            'Replacer' { $compiledModules.Replacer.resources.functionApp.properties.template }
+            'TrackedReplacer' {
+                (Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw |
+                    ConvertFrom-Json).resources.functionApp.properties.template
+            }
+        }
+        $app | Should Not BeNullOrEmpty
+        ($app | ConvertTo-Json -Depth 100) | Should Not Match '(?<![\w.])privateEndpointName\s*\('
+        $names = @($app.variables.copy | Where-Object { $_.name -eq 'storagePrivateEndpointNames' })
+        $names.Count | Should Be 1
+        $names[0].input | Should Match '__bicep\.privateEndpointName\('
+        $app.resources.privateEndpoints_storage.name | Should Match "variables\('storagePrivateEndpointNames'\)"
+        $app.resources.privateDnsZoneGroups_storage.name | Should Match "variables\('storagePrivateEndpointNames'\)"
+    }
+
     It 'documents every exported naming function, type and policy object' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.NamingFunctions) -Raw
         $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var|type) (\w+)")
