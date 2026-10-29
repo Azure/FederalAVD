@@ -1,6 +1,6 @@
 using none
 
-import { resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, shortScopedUnique, scopeIdUnique, fslogixNames, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy, resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, shortScopedUnique, scopeIdUnique, fslogixNames, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 import { legacyName, legacyScopedUnique, legacyStorage } from './naming-legacy.bicep'
 
 var conventions = [
@@ -18,7 +18,7 @@ var conventions = [
   { components: [] }
   { delimiter: '--' }
 ]
-var rules = loadJsonContent('./naming-legacy-rules.json')
+var rules = toObject(filter(items(loadJsonContent('./naming-legacy-rules.json')), role => contains(namingPolicy.resources, role.key)), role => role.key, role => role.value)
 var subscriptionId = '00000000-1111-2222-3333-444444444444'
 
 param roleParity = flatten(map(range(0, length(conventions)), index => map(items(rules), role => {
@@ -33,9 +33,6 @@ param emptyContextParity = flatten(map(conventions, convention => map(filter(ite
   'storageResourceGroup'
   'identityPattern'
   'diskEncryptionSetPattern'
-  'replacerFunctionApp'
-  'replacerStorageIdentity'
-  'replacerInsights'
   'quotaAutomation'
 ], role.key)), role => {
   role: role.key
@@ -74,7 +71,7 @@ param patterns = {
   vm: namePattern('virtualMachine', {})
   disk: namePattern('osDisk', {})
   nic: namePattern('nic', {})
-  key: namePattern('replacerStorageKey', { identifier: 'finance' })
+  key: namePattern('storageCmkKey', { identifier: 'finance-shr' })
   buildGroup: namePattern('imageBuildResourceGroup', { resourceGroups: 'rg', prefix: 'dev-', workload: 'avd', location: 'va', timestamp: '202610181234', unique: 'abc123' })
   definition: namePattern('imageDefinition', { imageDefinitions: 'vmid', publisher: 'MicrosoftWindowsDesktop', offer: 'windows11', sku: 'win1125h2avd' })
 }

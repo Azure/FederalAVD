@@ -3173,7 +3173,7 @@
             {
               "name": "functionApp_checkNameAvailability",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
+              "condition": "[and(steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
               "request": {
                 "method": "POST",
                 "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Web/checkNameAvailability?api-version=2022-03-01')]",
@@ -3186,7 +3186,7 @@
             {
               "name": "functionAppName_rePUT",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
+              "condition": "[and(steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
@@ -3196,7 +3196,7 @@
             {
               "name": "storageAccount_checkNameAvailability",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride)))]",
+              "condition": "[and(steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.storageAccountNameOverride)))]",
               "request": {
                 "method": "POST",
                 "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-05-01')]",
@@ -3351,18 +3351,26 @@
                   }
                 },
                 {
+                  "name": "applicationNamingInfo",
+                  "type": "Microsoft.Common.InfoBox",
+                  "options": {
+                    "style": "Info",
+                    "text": "Per-app names use the host-pool identifier plus shr. Function App and storage names share a six-character hash. Names are not shortened automatically. With default CAF naming in a three-character region, storage leaves seven alphanumeric characters for the host-pool identifier before shr. Use a storage name override when the full generated name would exceed 24 characters. Hosting plans use the shared shr purpose; select an existing plan to reuse it."
+                  }
+                },
+                {
                   "name": "enableCustomNames",
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Override resource names",
-                  "visible": "[empty(steps('basics').hostPoolProps.tags.hpNamingConvention)]",
+                  "visible": true,
                   "defaultValue": false,
-                  "toolTip": "Check to provide explicit names for each infrastructure resource instead of using the CAF-derived defaults."
+                  "toolTip": "Provide explicit resource names for tagged or untagged host pools, including a shorter storage name when generated names exceed Azure limits."
                 },
                 {
                   "name": "functionAppNameOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Function App Name",
-                  "visible": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames)]",
+                  "visible": "[steps('advanced').infrastructureNaming.enableCustomNames]",
                   "placeholder": "func-avdshr-prod-eus2",
                   "toolTip": "Optional. Explicit name for the Function App. Must be globally unique, 2-60 characters, alphanumeric and hyphens.",
                   "constraints": {
@@ -3387,7 +3395,7 @@
                   "name": "storageAccountNameOverride",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage Account Name",
-                  "visible": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames)]",
+                  "visible": "[steps('advanced').infrastructureNaming.enableCustomNames]",
                   "placeholder": "stavdshrprod",
                   "toolTip": "Optional. Explicit name for the Storage Account. Must be globally unique, 3-24 characters, lowercase alphanumeric only.",
                   "constraints": {
@@ -3410,7 +3418,7 @@
                   "label": "Storage Encryption Identity Name",
                   "placeholder": "uai-avdshr-prod-encryption-eus2",
                   "toolTip": "Optional. Explicit name for the user-assigned identity used for storage account CMK encryption.",
-                  "visible": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'))]",
+                  "visible": "[and(steps('advanced').infrastructureNaming.enableCustomNames, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer'))]",
                   "constraints": {
                     "required": false,
                     "validations": [
@@ -3426,7 +3434,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "label": "App Service Plan Name",
                   "placeholder": "asp-avd-eus",
-                  "visible": "[and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), steps('advanced').infrastructureNaming.enableCustomNames, not(steps('infrastructure').useExistingHostingPlan))]",
+                  "visible": "[and(steps('advanced').infrastructureNaming.enableCustomNames, not(steps('infrastructure').useExistingHostingPlan))]",
                   "toolTip": "Optional. Explicit name for the App Service Plan.",
                   "constraints": {
                     "required": false,
@@ -3650,10 +3658,10 @@
         "namingConvention": "[parse(if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), string(parse(steps('basics').federalAvdNamingPolicy).defaults), steps('basics').hostPoolProps.tags.hpNamingConvention))]",
         "namingResourceTypeCodes": "[parse(if(and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations), concat('{\"functionApps\":\"', steps('advanced').infrastructureNaming.functionApps, '\",\"appServicePlans\":\"', steps('advanced').infrastructureNaming.appServicePlans, '\",\"applicationInsights\":\"', steps('advanced').infrastructureNaming.applicationInsights, '\",\"templateSpecs\":\"', steps('advanced').infrastructureNaming.templateSpecs, '\",\"userAssignedIdentities\":\"', steps('advanced').infrastructureNaming.userAssignedIdentities, '\",\"privateEndpoints\":\"', steps('advanced').infrastructureNaming.privateEndpoints, '\",\"networkInterfaces\":\"', steps('advanced').infrastructureNaming.networkInterfaces, '\"}'), '{}'))]",
         "identifier": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.identifier, ''), coalesce(steps('basics').hostPoolProps.tags.hpIdentifier, ''))]",
-        "functionAppNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
-        "storageAccountNameOverride": "[if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
-        "storageEncryptionIdentityNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
-        "appServicePlanNameOverride": "[if(and(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
+        "functionAppNameOverride": "[if(steps('advanced').infrastructureNaming.enableCustomNames, coalesce(steps('advanced').infrastructureNaming.functionAppNameOverride, ''), '')]",
+        "storageAccountNameOverride": "[if(steps('advanced').infrastructureNaming.enableCustomNames, coalesce(steps('advanced').infrastructureNaming.storageAccountNameOverride, ''), '')]",
+        "storageEncryptionIdentityNameOverride": "[if(and(steps('advanced').infrastructureNaming.enableCustomNames, contains(steps('infrastructure').keyManagementStorageAccounts, 'Customer')), coalesce(steps('advanced').infrastructureNaming.storageEncryptionIdentityNameOverride, ''), '')]",
+        "appServicePlanNameOverride": "[if(and(steps('advanced').infrastructureNaming.enableCustomNames, not(steps('infrastructure').useExistingHostingPlan)), coalesce(steps('advanced').infrastructureNaming.appServicePlanNameOverride, ''), '')]",
         "virtualMachineNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv), steps('advanced').sessionHostNaming.virtualMachineNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
         "virtualMachineDiskNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv), steps('advanced').sessionHostNaming.diskNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv)]",
         "virtualMachineNicNameConv": "[if(empty(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv), steps('advanced').sessionHostNaming.networkInterfaceNameConvOverride, steps('basics').hostsRGProps.tags.virtualMachineNicNameConv)]",

@@ -78,15 +78,13 @@ func namePattern(pattern string, context object) string =>
 func resourcePurpose(rule object, delimiter string, identifier string, unique string) string =>
   join(filter(map(rule.purpose, part => render(part, {
     identifier: identifier
-    storageIdentifier: replace(identifier, '-', '')
     unique: unique
   })), part => !(rule.?omitEmptyPurposeParts ?? false) || !empty(part)), delimiter)
 
-func formatName(name string, rule object, delimiter string) string =>
-  rule.type == 'keyVaults' ? take(kvSanitize(name), namingPolicy.limits.keyVault)
+func formatName(name string, rule object) string =>
+  rule.type == 'keyVaults' ? take(kvSanitize(name), namingPolicy.resourceTypes.keyVaults.lengthLimit)
     : rule.type == 'computeGalleries' ? replace(name, '-', '_')
-    : rule.type == 'functionApps' ? take(name, namingPolicy.limits.functionApp)
-    : (rule.?format ?? '') == 'storage' ? take(toLower(empty(delimiter) ? name : replace(name, delimiter, '')), namingPolicy.limits.storageAccount)
+    : rule.type == 'functionApps' ? take(name, namingPolicy.resourceTypes.functionApps.lengthLimit)
     : name
 
 func resolvedResourceName(convention object, rule object, region string, identifier string, unique string) string =>
@@ -100,16 +98,16 @@ func resolvedResourceName(convention object, rule object, region string, identif
     convention.environment,
     convention.freeform2,
     convention.workload
-  ), rule, convention.delimiter)
+  ), rule)
 
 @export()
-@description('Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault, Function App or Replacer-storage formatting rule.')
+@description('Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault or Function App formatting rule.')
 func resourceName(convention object, role string, region string, identifier string, unique string) string =>
   resolvedResourceName(resolveConvention(convention), namingPolicy.resources[role], region, identifier, unique)
 
 // Identifier-based naming for new resources and add-ons.
 @export()
-@description('Actual target scope for identifier-based resource naming. Use the owning subscription/resource group, full Azure location and environment name; resourceGroups accepts an empty resourceGroupName and seeds at subscription scope.')
+@description('Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group, location and cloud. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.')
 type namingContext = {
   subscriptionId: string
   resourceGroupName: string
@@ -118,15 +116,22 @@ type namingContext = {
 }
 
 @export()
-@description('Generated Function App infrastructure names and shared private-endpoint patterns. Names are not resource IDs and do not create or adopt resources.')
+@description('Per-application Function App, storage, Insights, storage-CMK identity names and private-endpoint patterns. Shared hosting plans are named separately by their owner.')
 type functionAppNamingResult = {
   functionAppName: string
   storageAccountName: string
   applicationInsightsName: string
-  appServicePlanName: string
   storageEncryptionIdentityName: string
   privateEndpointNameConv: string
   privateEndpointNICNameConv: string
+}
+
+@export()
+@description('Optional explicit names applied before generating per-application defaults, allowing an override to bypass an overlength generated name. Empty values use the common naming rules.')
+type functionAppNameOverrides = {
+  functionAppName: string?
+  storageAccountName: string?
+  storageEncryptionIdentityName: string?
 }
 
 func isNamingToken(value string) bool =>
@@ -142,7 +147,7 @@ func validateNamingContext(context namingContext, resourceType string) namingCon
 
 func validateTypeConvention(convention object) object =>
   length(filter(convention.components, component => component == 'purpose')) != 1
-    ? fail('Identifier-based naming requires exactly one purpose component so the identifier and uniqueness hash cannot be omitted.')
+    ? fail('Identifier-based naming requires exactly one purpose component so the identifier cannot be omitted.')
     : !empty(filter(convention.components, component => !contains(['resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'], component)))
       ? fail('Identifier-based naming contains an unsupported naming-convention component.')
       : length(convention.delimiter) > 3 || !empty(filter(map(range(0, length(convention.delimiter)), i => substring(convention.delimiter, i, 1)), character => !contains('-_.', character)))
@@ -160,7 +165,9 @@ func canonicalNamingCloud(cloud string) string =>
 func typeLocationAbbreviation(convention object, context namingContext) string =>
   requireNamingToken(!empty(convention.?locationAbbreviation ?? '')
     ? convention.locationAbbreviation
-    : regionAbbreviation(toLower(context.location), context.cloud), 'Location abbreviation')
+    : !empty(convention.?vmsLocationAbbreviation ?? '')
+      ? convention.vmsLocationAbbreviation
+      : regionAbbreviation(toLower(context.location), context.cloud), 'Location abbreviation')
 
 func formatTypeName(value string, rule object) string =>
   toLower(rule.format == 'storage' ? stripSeps(value)
@@ -169,18 +176,20 @@ func formatTypeName(value string, rule object) string =>
     : fail('Unsupported resource-type naming format.'))
 
 func validateTypeName(name string, rule object) string =>
-  (rule.?startWithLetter ?? false) && !contains('abcdefghijklmnopqrstuvwxyz', first(name))
-    ? fail('This resource type requires a name starting with a letter. Change the first selected component.')
-    : (rule.?noConsecutiveHyphens ?? false) && contains(name, '--')
-      ? fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.')
-      : name
+  length(name) > rule.lengthLimit
+    ? fail('Generated name exceeds the ${rule.lengthLimit}-character limit. Shorten the identifier or naming-convention values.')
+    : (rule.?startWithLetter ?? false) && !contains('abcdefghijklmnopqrstuvwxyz', first(name))
+      ? fail('This resource type requires a name starting with a letter. Change the first selected component.')
+      : (rule.?noConsecutiveHyphens ?? false) && contains(name, '--')
+        ? fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.')
+        : name
 
 func composeTypeName(convention object, rule object, code string, region string, identifier string, unique string) string =>
   formatTypeName(cnv(
     convention.components,
     convention.delimiter,
     code,
-    '${identifier}${convention.delimiter}${unique}',
+    empty(unique) ? identifier : '${identifier}${convention.delimiter}${unique}',
     region,
     convention.freeform1,
     convention.environment,
@@ -188,16 +197,8 @@ func composeTypeName(convention object, rule object, code string, region string,
     convention.workload
   ), rule)
 
-func budgetedTypeName(convention object, rule object, code string, region string, identifier string, unique string, budget int) string =>
-  budget < 1
-    ? fail('Naming-convention values leave no room for an identifier and the full uniqueness hash. Shorten static values or remove optional components.')
-    : validateTypeName(composeTypeName(convention, rule, code, region, take(identifier, budget), unique), rule)
-
 func resolvedTypeName(convention object, rule object, code string, region string, identifier string, unique string) string =>
-  budgetedTypeName(
-    convention, rule, code, region, formatTypeName(identifier, rule), unique,
-    namingPolicy.limits[rule.lengthLimit] - length(composeTypeName(convention, rule, code, region, '', unique))
-  )
+  validateTypeName(composeTypeName(convention, rule, code, region, identifier, unique), rule)
 
 func scopedTypeName(convention object, resourceType string, identifier string, context namingContext) string =>
   !contains(namingPolicy.resourceTypes, resourceType)
@@ -208,22 +209,23 @@ func scopedTypeName(convention object, resourceType string, identifier string, c
       requireNamingToken(convention.resourceTypeCodes[resourceType], 'Resource type abbreviation'),
       typeLocationAbbreviation(convention, context),
       requireNamingToken(identifier, 'Add-on identifier'),
-      take(uniqueString(toLower(context.subscriptionId), toLower(resourceType) == 'resourcegroups' ? '' : toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(identifier), toLower(resourceType)), namingPolicy.resourceTypes[resourceType].?uniqueLength ?? 13)
+      (namingPolicy.resourceTypes[resourceType].?globallyUnique ?? false)
+        ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(identifier)), namingPolicy.resourceTypes[resourceType].?uniqueLength ?? namingPolicy.limits.defaultUniqueLength)
+        : ''
     )
 
 @export()
-@description('Names a supported resource type from caller-supplied purpose/identifier and actual target context, with an automatic type-specific stable suffix. Only the readable identifier is shortened; selected static components and the configured suffix are preserved. Legacy role names are unchanged.')
+@description('Names a supported resource type from an identifier and target context. Globally named types share an application-scoped hash; other types have no hash. All retain the full formatted identifier and fail if overlength.')
 func resourceNameForType(convention object, resourceType string, identifier string, context namingContext) string =>
   scopedTypeName(validateTypeConvention(resolveConvention(convention)), resourceType, identifier, validateNamingContext(context, resourceType))
 
 @export()
-@description('Returns Function App, runtime storage, Insights, dedicated plan, storage CMK identity and private-endpoint patterns from one add-on identifier and target context. Does not deploy resources or replace caller-owned explicit overrides.')
-func functionAppNames(convention object, identifier string, context namingContext) functionAppNamingResult => {
-  functionAppName: resourceNameForType(convention, 'functionApps', identifier, context)
-  storageAccountName: resourceNameForType(convention, 'storageAccounts', identifier, context)
+@description('Names per-application Function App infrastructure with common explicit overrides. App and storage share a hash; Insights and the storage-CMK identity retain the purpose and region without a hash. Hosting plans have separate ownership.')
+func functionAppNames(convention object, identifier string, context namingContext, overrides functionAppNameOverrides) functionAppNamingResult => {
+  functionAppName: !empty(overrides.?functionAppName ?? '') ? overrides.?functionAppName ?? '' : resourceNameForType(convention, 'functionApps', identifier, context)
+  storageAccountName: !empty(overrides.?storageAccountName ?? '') ? toLower(overrides.?storageAccountName ?? '') : resourceNameForType(convention, 'storageAccounts', identifier, context)
   applicationInsightsName: resourceNameForType(convention, 'applicationInsights', identifier, context)
-  appServicePlanName: resourceNameForType(convention, 'appServicePlans', identifier, context)
-  storageEncryptionIdentityName: resourceNameForType(convention, 'userAssignedIdentities', '${identifier}-storage-cmk', context)
+  storageEncryptionIdentityName: !empty(overrides.?storageEncryptionIdentityName ?? '') ? overrides.?storageEncryptionIdentityName ?? '' : resourceNameForType(convention, 'userAssignedIdentities', '${identifier}-storage-cmk', context)
   privateEndpointNameConv: privateEndpointPattern(resourceTypeFirst(convention), requireNamingToken(resolveConvention(convention).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'))
   privateEndpointNICNameConv: privateEndpointNicPattern(resourceTypeFirst(convention), requireNamingToken(resolveConvention(convention).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'), requireNamingToken(resolveConvention(convention).resourceTypeCodes.networkInterfaces, 'Network interface abbreviation'))
 }
@@ -272,7 +274,7 @@ func imageStorageNameResolved(convention object, kind string, abbreviation strin
     prefix: prefix
     unique: !empty(prefix)
       ? take(customUnique, namingPolicy.limits.uniqueSuffix)
-      : take(standardUnique, max(namingPolicy.limits.storageAccount - length(convention.resourceTypeCodes.storageAccounts) - length(namingPolicy.imageStoragePurposes.artifacts) - length(abbreviation), 1))
+      : take(standardUnique, max(namingPolicy.resourceTypes.storageAccounts.lengthLimit - length(convention.resourceTypeCodes.storageAccounts) - length(namingPolicy.imageStoragePurposes.artifacts) - length(abbreviation), 1))
   })
 
 @export()

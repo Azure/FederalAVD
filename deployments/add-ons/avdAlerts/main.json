@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "6516655156781072702"
+      "templateHash": "8517013778162033036"
     }
   },
   "functions": [
@@ -122,15 +122,11 @@
             {
               "type": "object",
               "name": "rule"
-            },
-            {
-              "type": "string",
-              "name": "delimiter"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('namingPolicy').limits.keyVault), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('namingPolicy').limits.functionApp), if(equals(coalesce(tryGet(parameters('rule'), 'format'), ''), 'storage'), take(toLower(if(empty(parameters('delimiter')), parameters('name'), replace(parameters('name'), parameters('delimiter'), ''))), variables('namingPolicy').limits.storageAccount), parameters('name')))))]"
+            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('namingPolicy').resourceTypes.keyVaults.lengthLimit), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('namingPolicy').resourceTypes.functionApps.lengthLimit), parameters('name'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -265,7 +261,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'), parameters('convention').delimiter)]"
+            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -294,7 +290,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[join(filter(map(parameters('rule').purpose, lambda('part', _1.render(lambdaVariables('part'), createObject('identifier', parameters('identifier'), 'storageIdentifier', replace(parameters('identifier'), '-', ''), 'unique', parameters('unique'))))), lambda('part', or(not(coalesce(tryGet(parameters('rule'), 'omitEmptyPurposeParts'), false())), not(empty(lambdaVariables('part')))))), parameters('delimiter'))]"
+            "value": "[join(filter(map(parameters('rule').purpose, lambda('part', _1.render(lambdaVariables('part'), createObject('identifier', parameters('identifier'), 'unique', parameters('unique'))))), lambda('part', or(not(coalesce(tryGet(parameters('rule'), 'omitEmptyPurposeParts'), false())), not(empty(lambdaVariables('part')))))), parameters('delimiter'))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -357,7 +353,7 @@
             "value": "[_1.resolvedResourceName(_1.resolveConvention(parameters('convention')), variables('namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
           },
           "metadata": {
-            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault, Function App or Replacer-storage formatting rule.",
+            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault or Function App formatting rule.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
             }
@@ -615,199 +611,168 @@
       },
       "identifiers": {
         "imageManagement": "image-management",
-        "replacerFallback": "replacer",
+        "sessionHostReplacer": "shr",
         "sharedFslogix": "fslogix"
       },
       "limits": {
-        "keyVault": 24,
-        "functionApp": 60,
-        "appServicePlan": 60,
-        "applicationInsights": 260,
-        "userAssignedIdentity": 128,
-        "automationAccount": 50,
-        "availabilitySet": 80,
-        "computeGallery": 80,
-        "dataCollectionEndpoint": 44,
-        "dataCollectionRule": 64,
-        "applicationGroup": 64,
-        "diskAccess": 64,
-        "diskEncryptionSet": 80,
-        "hostPool": 64,
-        "logAnalyticsWorkspace": 63,
-        "natGateway": 80,
-        "netAppAccount": 128,
-        "netAppCapacityPool": 64,
-        "networkInterface": 80,
-        "networkSecurityGroup": 80,
-        "osDisk": 80,
-        "privateEndpoint": 64,
-        "privateLinkScope": 64,
-        "publicIPAddress": 80,
-        "recoveryServicesVault": 50,
-        "resourceGroup": 90,
-        "routeTable": 80,
-        "scalingPlan": 63,
-        "templateSpec": 90,
-        "virtualMachineResource": 64,
-        "virtualNetwork": 64,
-        "subnet": 80,
-        "workspace": 64,
-        "imageDefinition": 80,
-        "storageAccount": 24,
         "deploymentVm": 15,
         "fslogixStoragePrefix": 13,
         "uniqueSuffix": 6,
+        "defaultUniqueLength": 6,
         "imageManagementStoragePrefix": 5,
         "imageManagementStorageLocation": 4
       },
       "resourceTypes": {
         "functionApps": {
-          "lengthLimit": "functionApp",
-          "format": "hyphen"
+          "lengthLimit": 60,
+          "format": "hyphen",
+          "globallyUnique": true
         },
         "storageAccounts": {
-          "lengthLimit": "storageAccount",
-          "format": "storage"
+          "lengthLimit": 24,
+          "format": "storage",
+          "globallyUnique": true
         },
         "applicationInsights": {
-          "lengthLimit": "applicationInsights",
+          "lengthLimit": 260,
           "format": "hyphen"
         },
         "appServicePlans": {
-          "lengthLimit": "appServicePlan",
+          "lengthLimit": 60,
           "format": "hyphen"
         },
         "userAssignedIdentities": {
-          "lengthLimit": "userAssignedIdentity",
+          "lengthLimit": 128,
           "format": "hyphen"
         },
         "automationAccounts": {
-          "lengthLimit": "automationAccount",
+          "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "availabilitySets": {
-          "lengthLimit": "availabilitySet",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "computeGalleries": {
-          "lengthLimit": "computeGallery",
+          "lengthLimit": 80,
           "format": "gallery"
         },
         "dataCollectionEndpoints": {
-          "lengthLimit": "dataCollectionEndpoint",
+          "lengthLimit": 44,
           "format": "hyphen"
         },
         "dataCollectionRules": {
-          "lengthLimit": "dataCollectionRule",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "desktopApplicationGroups": {
-          "lengthLimit": "applicationGroup",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "remoteApplicationGroups": {
-          "lengthLimit": "applicationGroup",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskAccesses": {
-          "lengthLimit": "diskAccess",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskEncryptionSets": {
-          "lengthLimit": "diskEncryptionSet",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "hostPools": {
-          "lengthLimit": "hostPool",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "keyVaults": {
-          "lengthLimit": "keyVault",
+          "lengthLimit": 24,
           "format": "hyphen",
+          "globallyUnique": true,
           "uniqueLength": 6,
           "startWithLetter": true,
           "noConsecutiveHyphens": true
         },
         "logAnalyticsWorkspaces": {
-          "lengthLimit": "logAnalyticsWorkspace",
+          "lengthLimit": 63,
           "format": "hyphen"
         },
         "natGateways": {
-          "lengthLimit": "natGateway",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "netAppAccounts": {
-          "lengthLimit": "netAppAccount",
+          "lengthLimit": 128,
           "format": "hyphen"
         },
         "netAppCapacityPools": {
-          "lengthLimit": "netAppCapacityPool",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "networkInterfaces": {
-          "lengthLimit": "networkInterface",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "networkSecurityGroups": {
-          "lengthLimit": "networkSecurityGroup",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "osdisks": {
-          "lengthLimit": "osDisk",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "privateEndpoints": {
-          "lengthLimit": "privateEndpoint",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "privateLinkScopes": {
-          "lengthLimit": "privateLinkScope",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "publicIPAddresses": {
-          "lengthLimit": "publicIPAddress",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "recoveryServicesVaults": {
-          "lengthLimit": "recoveryServicesVault",
+          "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "resourceGroups": {
-          "lengthLimit": "resourceGroup",
+          "lengthLimit": 90,
           "format": "hyphen"
         },
         "routeTables": {
-          "lengthLimit": "routeTable",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "scalingPlans": {
-          "lengthLimit": "scalingPlan",
+          "lengthLimit": 63,
           "format": "hyphen"
         },
         "templateSpecs": {
-          "lengthLimit": "templateSpec",
+          "lengthLimit": 90,
           "format": "hyphen"
         },
         "virtualMachines": {
-          "lengthLimit": "virtualMachineResource",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "virtualNetworks": {
-          "lengthLimit": "virtualNetwork",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "subnets": {
-          "lengthLimit": "subnet",
+          "lengthLimit": 80,
           "format": "hyphen"
         },
         "workspaces": {
-          "lengthLimit": "workspace",
+          "lengthLimit": 64,
           "format": "hyphen"
         },
         "imageDefinitions": {
-          "lengthLimit": "imageDefinition",
+          "lengthLimit": 80,
           "format": "hyphen"
         }
       },
@@ -1026,48 +991,6 @@
             "{identifier}-confidential-vm"
           ]
         },
-        "replacerFunctionApp": {
-          "type": "functionApps",
-          "purpose": [
-            "{identifier}",
-            "shr",
-            "{unique}"
-          ]
-        },
-        "replacerStorage": {
-          "type": "",
-          "purpose": [
-            "{storageIdentifier}shr{unique}"
-          ],
-          "format": "storage"
-        },
-        "replacerStorageIdentity": {
-          "type": "userAssignedIdentities",
-          "purpose": [
-            "{identifier}",
-            "shr",
-            "storage",
-            "cmk"
-          ]
-        },
-        "replacerHostingPlan": {
-          "type": "appServicePlans",
-          "purpose": []
-        },
-        "replacerInsights": {
-          "type": "applicationInsights",
-          "purpose": [
-            "{identifier}",
-            "shr",
-            "{unique}"
-          ]
-        },
-        "sessionHostsTemplateSpec": {
-          "type": "templateSpecs",
-          "purpose": [
-            "session-hosts"
-          ]
-        },
         "networkNatGateway": {
           "type": "natGateways",
           "purpose": []
@@ -1163,7 +1086,7 @@
         "confidentialVmKey": "{identifier}-cvm-cmk",
         "recoveryServicesKey": "{identifier}-rsv-cmk",
         "imageStorageKey": "{identifier}-storage-cmk",
-        "replacerStorageKey": "{identifier}-shr-storage-cmk",
+        "storageCmkKey": "{identifier}-storage-cmk",
         "imageGalleryKey": "{identifier}-gallery-cmk",
         "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
         "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
@@ -1174,8 +1097,7 @@
         "imageBuildVm": "{prefix}img-{unique}",
         "imageBuildOrchestrationVm": "{prefix}orc-{unique}",
         "deploymentPrefix": "{prefix}-",
-        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}",
-        "functionInsightsOverride": "{name}-insights"
+        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}"
       },
       "imageStoragePurposes": {
         "artifacts": "imgassets",

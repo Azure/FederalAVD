@@ -17,14 +17,17 @@ var names = functionAppNames(namingConvention, identifier, {
   resourceGroupName: targetResourceGroupName
   location: location
   cloud: environment().name
+}, {
+  functionAppName: functionAppNameOverride
+  storageAccountName: storageAccountNameOverride
 })
 
 module app '../../deployments/shared/modules/resourceModules/functionApp/functionApp.bicep' = {
   name: 'function-app'
   scope: resourceGroup(targetSubscriptionId, targetResourceGroupName)
   params: {
-    functionAppName: !empty(functionAppNameOverride) ? functionAppNameOverride : names.functionAppName
-    storageAccountName: !empty(storageAccountNameOverride) ? storageAccountNameOverride : names.storageAccountName
+    functionAppName: names.functionAppName
+    storageAccountName: names.storageAccountName
     applicationInsightsName: names.applicationInsightsName
     privateEndpointNameConv: names.privateEndpointNameConv
     privateEndpointNICNameConv: names.privateEndpointNICNameConv

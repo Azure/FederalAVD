@@ -8,7 +8,7 @@ Describe 'Shared naming and module metadata contracts' {
         $modulePaths = @{
             NamingFunctions = 'deployments\shared\modules\orchestration\naming\naming.bicep'
             HostPoolNaming = 'tests\fixtures\naming-bundles.bicep'
-            ReplacerNaming = 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
+            Replacer = 'deployments\add-ons\sessionHostReplacer\main.bicep'
             FunctionApp = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
             HostingPlan = 'deployments\shared\modules\resourceModules\functionApp\functionAppHostingPlan.bicep'
             FunctionDefinition = 'deployments\shared\modules\resourceModules\functionApp\function.bicep'
@@ -82,7 +82,6 @@ Describe 'Shared naming and module metadata contracts' {
     It 'describes the compiled module and every parameter and output for <Module>' -TestCases @(
         @{ Module = 'NamingFunctions' }
         @{ Module = 'HostPoolNaming' }
-        @{ Module = 'ReplacerNaming' }
         @{ Module = 'FunctionApp' }
         @{ Module = 'HostingPlan' }
         @{ Module = 'FunctionDefinition' }
@@ -138,7 +137,7 @@ Describe 'Shared naming and module metadata contracts' {
         @{ Path = 'deployments\add-ons\fslogixStorage\main.bicep'; Functions = @('fslogixNames') }
         @{ Path = 'deployments\sharedServices\sharedServices.bicep'; Functions = @('resourceName', 'shortScopedUnique') }
         @{ Path = 'deployments\imageManagement\imageManagement.bicep'; Functions = @('resourceName', 'imageStorageName', 'validateImageStoragePrefix') }
-        @{ Path = 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'; Functions = @('resourceName') }
+        @{ Path = 'deployments\add-ons\sessionHostReplacer\main.bicep'; Functions = @('functionAppNames', 'resourceNameForType') }
         @{ Path = 'deployments\networking\networking.bicep'; Functions = @('resourceName') }
         @{ Path = 'deployments\imageBuild\imageBuild.bicep'; Functions = @('imageBuildRunId', 'namePattern') }
         @{ Path = 'deployments\hostpoolPoc\hostpoolPoc.bicep'; Functions = @('resourceName') }
@@ -175,10 +174,14 @@ Describe 'Shared naming and module metadata contracts' {
         }
     }
 
-    It 'preserves every resource-role recipe across thirteen convention profiles' {
+    It 'preserves retained resource-role recipes and retires the separate SHR naming model' {
         $legacy = Get-Content -LiteralPath (Join-Path $repoRoot 'tests\fixtures\naming-legacy-rules.json') -Raw | ConvertFrom-Json
-        @(Compare-Object @($policy.resources.PSObject.Properties.Name) @($legacy.PSObject.Properties.Name)) | Should BeNullOrEmpty
-        $policyVectors.roleParity.value.Count | Should Be (@($legacy.PSObject.Properties).Count * 13)
+        $retired = @('replacerFunctionApp', 'replacerStorage', 'replacerStorageIdentity', 'replacerHostingPlan', 'replacerInsights', 'sessionHostsTemplateSpec')
+        $retained = @($legacy.PSObject.Properties.Name | Where-Object { $_ -notin $retired })
+        @(Compare-Object @($policy.resources.PSObject.Properties.Name) $retained) | Should BeNullOrEmpty
+        $policyVectors.roleParity.value.Count | Should Be ($retained.Count * 13)
+        (Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep')) | Should Be $false
+        (Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.json')) | Should Be $false
         foreach ($case in $policyVectors.roleParity.value) {
             if ($case.actual -cne $case.expected) {
                 throw "Name changed in scenario $($case.scenario), role $($case.role): '$($case.actual)' != '$($case.expected)'."
@@ -201,7 +204,7 @@ Describe 'Shared naming and module metadata contracts' {
     }
 
     It 'preserves internal purpose separators when an identifier is empty' {
-        $policyVectors.emptyContextParity.value.Count | Should Be (13 * 9)
+        $policyVectors.emptyContextParity.value.Count | Should Be (13 * 6)
         foreach ($case in $policyVectors.emptyContextParity.value) {
             $case.actual | Should Be $case.expected
         }
@@ -235,7 +238,7 @@ Describe 'Shared naming and module metadata contracts' {
 
     It 'uses configured delimiters consistently for vaults and permits delimiter-free storage' {
         $policyVectors.emptyDelimiter.value | Should Be 'kvavdsecabc123va'
-        @($policyVectors.roleParity.value | Where-Object { $_.scenario -eq 4 -and $_.role -eq 'replacerStorage' }).Count | Should Be 1
+        @($policyVectors.storageParity.value | Where-Object { $_.actual -match '^[a-z0-9]+$' }).Count | Should Be 52
         $policyVectors.partialCodes.value.keyVaults | Should Be 'vault'
         $policyVectors.partialCodes.value.workspaces | Should Be 'vdws'
         $policyVectors.resourceTypeFlags.value[1] | Should Be $false
@@ -324,8 +327,8 @@ Describe 'Shared naming and module metadata contracts' {
             purpose = @('{identifier}', '{unique}')
         })
         $changedPolicy.resources.operationsResourceGroup.purpose = @('ops')
-        $changedPolicy.limits.functionApp = 59
-        $changedPolicy.identifiers.replacerFallback = 'replacement'
+        $changedPolicy.resourceTypes.functionApps.lengthLimit = 59
+        $changedPolicy.identifiers.sessionHostReplacer = 'replacement'
         $changedPolicy.patterns.imageBuildVm = '{prefix}image-{unique}'
         [System.IO.File]::WriteAllText($copiedPolicyPath, (ConvertTo-Json -InputObject $changedPolicy -Depth 100))
         $sync = Join-Path $copyRoot 'tools\Sync-NamingPolicy.ps1'
@@ -376,7 +379,7 @@ Describe 'Shared naming and module metadata contracts' {
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             $modulePaths.NamingFunctions
-            $modulePaths.ReplacerNaming
+            $modulePaths.Replacer
             'tools\Sync-NamingPolicy.ps1'
             'deployments\hostpools\uiFormDefinition.json'
             'deployments\automatedHostPools\uiFormDefinition.json'
@@ -412,7 +415,14 @@ Describe 'Shared naming and module metadata contracts' {
         & $sync | Out-Null
         { & $sync -Check } | Should Not Throw
         $defaultOutput = Join-Path $copyRoot 'hostpool-defaults.json'
-        & az bicep build --file (Join-Path $copyRoot $modulePaths.ReplacerNaming) --outfile $defaultOutput
+        $defaultDeclaration = [regex]::Match(
+            (Get-Content -LiteralPath (Join-Path $copyRoot $modulePaths.Replacer) -Raw),
+            '(?ms)^param namingConvention object = \{.*?^\}'
+        ).Value
+        $defaultDeclaration | Should Not BeNullOrEmpty
+        $defaultFixture = Join-Path $copyRoot 'deployments\add-ons\sessionHostReplacer\naming-defaults.bicep'
+        [IO.File]::WriteAllText($defaultFixture, $defaultDeclaration + "`noutput convention object = namingConvention")
+        & az bicep build --file $defaultFixture --outfile $defaultOutput
         if ($LASTEXITCODE -ne 0) { throw 'Generated naming defaults did not compile.' }
         $default = (Get-Content -LiteralPath $defaultOutput -Raw | ConvertFrom-Json).parameters.namingConvention.defaultValue
         $default.workload | Should Be 'desktop'
@@ -435,11 +445,9 @@ Describe 'Shared naming and module metadata contracts' {
             "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
             'var namingConvention = {}'
             "var cnv_loc = 'va'"
-            "var loc = 'va'"
             "var regionAbbr = 'va'"
             "var locationAbbreviation = 'va'"
             "var identifier = 'finance'"
-            "var uniqueString = 'abc123'"
             "var uniqueStringUrt = 'abc123'"
             "var depPrefix = 'dev-'"
             "var buildRunId = 'abc123'"
@@ -452,7 +460,6 @@ Describe 'Shared naming and module metadata contracts' {
         $consumers = @(
             @{ Name = 'sharedServices'; Path = 'deployments\sharedServices\sharedServices.bicep'; Variable = 'customRgName' }
             @{ Name = 'imageManagement'; Path = 'deployments\imageManagement\imageManagement.bicep'; Variable = 'customResourceGroupName' }
-            @{ Name = 'replacer'; Path = $modulePaths.ReplacerNaming; Variable = 'functionAppName' }
             @{ Name = 'networking'; Path = 'deployments\networking\networking.bicep'; Variable = 'natGatewayName' }
             @{ Name = 'imageBuild'; Path = 'deployments\imageBuild\imageBuild.bicep'; Variable = 'imageVmName' }
             @{ Name = 'osDisks'; Path = $modulePaths.SessionHostVMs; Variable = 'osDiskNames' }
@@ -488,7 +495,6 @@ Describe 'Shared naming and module metadata contracts' {
         $names = (Get-Content -LiteralPath $output -Raw | ConvertFrom-Json).parameters
         $names.sharedServices.value | Should Be 'rg-desktop-ops-va'
         $names.imageManagement.value | Should Be 'rg-desktop-finance-va'
-        $names.replacer.value | Should Be 'fa-desktop-finance-shr-abc123-va'
         $names.networking.value | Should Be 'ng-desktop-va'
         $names.avdAlerts.value | Should Be 'aa-desktop-alerts-va'
         $names.storageQuotaManager.value | Should Be 'aa-sqm-finance-va'
@@ -509,7 +515,7 @@ Describe 'Shared naming and module metadata contracts' {
     }
 
     It 'emits literal naming defaults rather than ARM variable references' {
-        foreach ($name in @('ReplacerNaming')) {
+        foreach ($name in @('Replacer')) {
             $default = $compiledModules[$name].parameters.namingConvention.defaultValue
             ($default -is [string]) | Should Be $false
             $default.workload | Should Be $policy.defaults.workload

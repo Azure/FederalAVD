@@ -9,20 +9,19 @@ var context = {
 }
 var types = map(items(policy.resourceTypes), type => type.key)
 var profiles = [
-  { label: 'default', convention: {}, identifier: 'inventory' }
-  { label: 'type-last', convention: { components: ['workload', 'purpose', 'location', 'resourceType'] }, identifier: 'inventory' }
-  { label: 'underscore', convention: { delimiter: '_' }, identifier: 'inventory' }
-  { label: 'dot', convention: { delimiter: '.' }, identifier: 'inventory' }
-  { label: 'empty-delimiter', convention: { delimiter: '' }, identifier: 'inventory' }
-  { label: 'no-location', convention: { components: ['resourceType', 'workload', 'purpose', 'none'] }, identifier: 'inventory' }
-  { label: 'purpose-only', convention: { components: ['purpose'] }, identifier: 'inventory' }
-  { label: 'partial-code', convention: { resourceTypeCodes: { functionApps: 'func', storageAccounts: 'st' } }, identifier: 'inventory' }
-  { label: 'repeated-type', convention: { components: ['resourceType', 'resourceType', 'workload', 'purpose', 'location'] }, identifier: 'inventory' }
-  { label: 'long-identifier', convention: {}, identifier: 'inventory-abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz' }
-  { label: 'identifier-separators', convention: {}, identifier: 'Inventory_App.v2' }
-  { label: 'custom-components', convention: { components: ['freeform1', 'environment', 'purpose', 'freeform2', 'resourceType'], freeform1: 'org', environment: 'prod', freeform2: 'x' }, identifier: 'inventory' }
-  { label: 'single-character-budget', convention: { workload: 'avdxx' }, identifier: 'inventory' }
-  { label: 'location-override', convention: { locationAbbreviation: 'e1' }, identifier: 'inventory' }
+  { label: 'default', convention: {}, identifier: 'fin' }
+  { label: 'type-last', convention: { components: ['workload', 'purpose', 'location', 'resourceType'] }, identifier: 'fin' }
+  { label: 'underscore', convention: { delimiter: '_' }, identifier: 'fin' }
+  { label: 'dot', convention: { delimiter: '.' }, identifier: 'fin' }
+  { label: 'empty-delimiter', convention: { delimiter: '' }, identifier: 'fin' }
+  { label: 'no-location', convention: { components: ['resourceType', 'workload', 'purpose', 'none'] }, identifier: 'fin' }
+  { label: 'purpose-only', convention: { components: ['purpose'] }, identifier: 'fin' }
+  { label: 'partial-code', convention: { resourceTypeCodes: { functionApps: 'func', storageAccounts: 'st' } }, identifier: 'fin' }
+  { label: 'repeated-type', convention: { components: ['resourceType', 'resourceType', 'workload', 'purpose', 'location'] }, identifier: 'fin' }
+  { label: 'identifier-separators', convention: {}, identifier: 'Fin_01' }
+  { label: 'custom-components', convention: { components: ['freeform1', 'environment', 'purpose', 'freeform2', 'resourceType'], freeform1: 'org', environment: 'prod', freeform2: 'x' }, identifier: 'fin' }
+  { label: 'expanded-workload', convention: { workload: 'avdxx' }, identifier: 'fin' }
+  { label: 'location-override', convention: { locationAbbreviation: 'e1' }, identifier: 'fin' }
 ]
 
 var cases = flatten(map(profiles, profile => map(types, type => {
@@ -30,9 +29,18 @@ var cases = flatten(map(profiles, profile => map(types, type => {
   type: type
   identifier: profile.identifier
   actual: resourceNameForType(profile.convention, type, profile.identifier, context)
-  hash: take(uniqueString(toLower(context.subscriptionId), toLower(type) == 'resourcegroups' ? '' : toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(profile.identifier), toLower(type)), policy.resourceTypes[type].?uniqueLength ?? 13)
+  hash: (policy.resourceTypes[type].?globallyUnique ?? false)
+    ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(profile.identifier)), policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
+    : ''
 })))
-var bundle = functionAppNames({}, 'inventory', context)
+var abbreviations = loadJsonContent('../../deployments/shared/data/resourceAbbreviations.json')
+var boundaries = map(types, type => {
+  type: type
+  actual: resourceNameForType({}, type, join(map(range(0, policy.resourceTypes[type].lengthLimit - (type == 'storageAccounts'
+    ? length('${abbreviations[type]}avduse') + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
+    : length('${abbreviations[type]}-avd--use') + ((policy.resourceTypes[type].?globallyUnique ?? false) ? 1 + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength) : 0))), index => 'a'), ''), context)
+})
+var bundle = functionAppNames({}, 'inventory', context, {})
 var identityExpected = resourceNameForType({}, 'userAssignedIdentities', 'inventory-storage-cmk', context)
 var seeds = map([
   context
@@ -43,49 +51,62 @@ var seeds = map([
 ], target => {
   name: resourceNameForType({}, 'functionApps', 'inventory', target)
   storage: resourceNameForType({}, 'storageAccounts', 'inventory', target)
-  hash: uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location), toLower(target.cloud), 'inventory', 'functionapps')
+  hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location), toLower(target.cloud), 'inventory'), policy.limits.defaultUniqueLength)
 })
 var caseOnly = functionAppNames({}, 'INVENTORY', {
   subscriptionId: toUpper(context.subscriptionId)
   resourceGroupName: toUpper(context.resourceGroupName)
   location: toUpper(context.location)
   cloud: toLower(context.cloud)
-})
-var redeployment = functionAppNames({}, 'inventory', context)
-var alternateIdentifier = functionAppNames({}, 'cleanup', context)
+}, {})
+var redeployment = functionAppNames({}, 'inventory', context, {})
+var alternateIdentifier = functionAppNames({}, 'cleanup', context, {})
 var normalizationCollision = [
-  functionAppNames({}, 'inventory_app', context)
-  functionAppNames({}, 'inventory-app', context)
+  functionAppNames({}, 'inv_app', context, {})
+  functionAppNames({}, 'inv-app', context, {})
 ]
-var longIdentifiers = [
-  functionAppNames({}, 'inventory-abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz-first', context)
-  functionAppNames({}, 'inventory-abcdefghijklmnopqrstuvwxyz-abcdefghijklmnopqrstuvwxyz-second', context)
-]
+var longOverride = functionAppNames({}, 'finance-long-shr', context, {
+  storageAccountName: 'CUSTOMSHRSTORAGE'
+})
+var overrides = functionAppNames({}, 'finance-shr', context, {
+  functionAppName: 'custom-function'
+  storageAccountName: 'CUSTOMSTORAGE'
+  storageEncryptionIdentityName: 'custom-storage-identity'
+})
 var noLocation = [
-  functionAppNames({ components: ['resourceType', 'workload', 'purpose'] }, 'inventory', context)
-  functionAppNames({ components: ['resourceType', 'workload', 'purpose'] }, 'inventory', union(context, { location: 'westus2' }))
+  functionAppNames({ components: ['resourceType', 'workload', 'purpose'] }, 'inventory', context, {})
+  functionAppNames({ components: ['resourceType', 'workload', 'purpose'] }, 'inventory', union(context, { location: 'westus2' }), {})
 ]
 var clouds = [
-  functionAppNames({}, 'inventory', union(context, { location: 'usgovvirginia', cloud: 'AzureUSGovernment' }))
-  functionAppNames({}, 'inventory', union(context, { location: 'usseceast', cloud: 'USSec' }))
-  functionAppNames({}, 'inventory', union(context, { location: 'usnatnorth', cloud: 'USNat' }))
+  functionAppNames({}, 'inventory', union(context, { location: 'usgovvirginia', cloud: 'AzureUSGovernment' }), {})
+  functionAppNames({}, 'inventory', union(context, { location: 'usseceast', cloud: 'USSec' }), {})
+  functionAppNames({}, 'inventory', union(context, { location: 'usnatnorth', cloud: 'USNat' }), {})
 ]
 var vnetNames = map([0, 4, 36, 37, 80], count => join(map(range(0, count), index => 'v'), ''))
 
 output encodedResults string = base64(string({
   cases: cases
+  boundaries: boundaries
   bundle: bundle
   identityExpected: identityExpected
   seeds: seeds
   caseOnly: caseOnly
   caseOnlyTypes: map(types, type => {
     type: type
-    actual: resourceNameForType({}, toUpper(type), 'INVENTORY', context)
+    actual: resourceNameForType({}, toUpper(type), 'FIN', context)
   })
   redeployment: redeployment
   alternateIdentifier: alternateIdentifier
   normalizationCollision: normalizationCollision
-  longIdentifiers: longIdentifiers
+  longOverride: longOverride
+  overrides: overrides
+  applications: map(['finance-shr', 'hr-shr', 'finance-job'], identifier => {
+    names: functionAppNames({}, identifier, context, {})
+    sharedPlan: resourceNameForType({}, 'appServicePlans', 'shr', context)
+    hash: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), identifier), policy.limits.defaultUniqueLength)
+  })
+  locationTag: functionAppNames({ vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
+  locationPrecedence: functionAppNames({ locationAbbreviation: 'e2', vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
   noLocation: noLocation
   clouds: clouds
   resourceGroups: [

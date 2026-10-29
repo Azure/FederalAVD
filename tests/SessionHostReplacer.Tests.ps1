@@ -1650,7 +1650,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
 $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
-$namingPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
+$namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
 $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
 $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
 $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'
@@ -1877,13 +1877,64 @@ Describe 'Session Host Replacer rollback operator experience' {
 }
 
 Describe 'Session Host Replacer Application Insights isolation' {
-    It 'uses naming-convention parity for standard deployments and follows a custom Function App name' {
+    It 'uses the common purpose-based Insights name independently of Function App overrides' {
         Get-Content -LiteralPath $namingPath -Raw |
-            Should Match "resourceName\(namingConvention, 'replacerInsights', loc, identifier, uniqueString\)"
+            Should Match "applicationInsightsName: resourceNameForType\(convention, 'applicationInsights', identifier, context\)"
         Get-Content -LiteralPath $bicepPath -Raw |
-            Should Match "var appInsightsName\s*= !empty\(functionAppNameOverride\)\s*\? namePattern\('functionInsightsOverride', \{ name: functionAppName \}\)\s*: shrNaming.outputs.appInsightsName"
+            Should Match 'var appInsightsName = naming.applicationInsightsName'
         $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
-        $policy.patterns.functionInsightsOverride | Should Be '{name}-insights'
+        $policy.patterns.functionInsightsOverride | Should BeNullOrEmpty
+    }
+
+    Describe 'Session Host Replacer common infrastructure naming and shared plan ownership' {
+        BeforeAll {
+            $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+            $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+            $advanced = $form.view.properties.steps | Where-Object name -eq 'advanced'
+            $namingControls = ($advanced.elements | Where-Object name -eq 'infrastructureNaming').elements
+        }
+
+        It 'derives the common application identifier from the host pool and shr purpose' {
+            $template.variables.effectiveIdentifier | Should Match "parameters\('identifier'\)"
+            $template.variables.effectiveIdentifier | Should Match "variables\('hostPoolName'\)"
+            $template.variables.applicationIdentifier | Should Match "variables\('effectiveIdentifier'\)"
+            $template.variables.naming | Should Match 'functionAppNames'
+            $template.variables.naming | Should Match "parameters\('functionAppResourceGroupName'\)|variables\('namingContext'\)"
+            $template.variables.naming | Should Match "parameters\('storageAccountNameOverride'\)"
+            $template.variables.namingContext | ConvertTo-Json -Compress | Should Match "parameters\('functionAppResourceGroupName'\)"
+        }
+
+        It 'keeps the existing-plan branch and creates a separately scoped shared plan only when requested' {
+            $template.resources.hostingPlan.condition | Should Be "[empty(parameters('existingAppServicePlanResourceId'))]"
+            $template.resources.hostingPlan.resourceGroup | Should Be "[variables('aspResourceGroupName')]"
+            $template.variables.appServicePlanName | Should Match "parameters\('appServicePlanNameOverride'\)"
+            $template.variables.appServicePlanName | Should Match 'resourceNameForType'
+            $template.variables.appServicePlanName | Should Not Match "variables\('effectiveIdentifier'\)|variables\('applicationIdentifier'\)"
+            $template.resources.functionApp.properties.parameters.serverFarmId |
+                Should Be "[if(not(empty(parameters('existingAppServicePlanResourceId'))), createObject('value', parameters('existingAppServicePlanResourceId')), createObject('value', reference('hostingPlan').outputs.hostingPlanId.value))]"
+        }
+
+        It 'retains the internal deployment prefix independently of the global naming hash' {
+            $template.variables.uniqueStringHosts | Should Match 'scopeIdUnique'
+            $template.variables.naming | Should Not Match 'uniqueStringHosts'
+            Get-Content -LiteralPath $bicepPath -Raw | Should Match "value: 'shr-`\$\{uniqueStringHosts\}'"
+        }
+
+        It 'offers name overrides and availability checks for tagged and untagged pools alike' {
+            ($namingControls | Where-Object name -eq 'enableCustomNames').visible | Should Be $true
+            foreach ($name in @('functionAppNameOverride', 'storageAccountNameOverride', 'storageEncryptionIdentityNameOverride', 'appServicePlanNameOverride')) {
+                $control = $namingControls | Where-Object name -eq $name
+                $control.visible | Should Match 'enableCustomNames'
+                $control.visible | Should Not Match 'hpNamingConvention'
+                $form.view.outputs.parameters.$name | Should Match 'enableCustomNames'
+                $form.view.outputs.parameters.$name | Should Not Match 'hpNamingConvention'
+            }
+            foreach ($api in $advanced.elements | Where-Object type -eq 'Microsoft.Solutions.ArmApiControl') {
+                $api.condition | Should Match 'enableCustomNames'
+                $api.condition | Should Not Match 'hpNamingConvention'
+            }
+            ($namingControls | Where-Object name -eq 'applicationNamingInfo').options.text | Should Not Match '^\['
+        }
     }
 
     It 'deploys Application Insights through the Function App resource-group-scoped module' {

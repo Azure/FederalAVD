@@ -5,7 +5,7 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { namingPolicy, namePattern, regionAbbreviation, scopeIdUnique } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy, namePattern, functionAppNames, resourceNameForType, scopeIdUnique } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 // ========== //
 // Parameters //
@@ -40,7 +40,7 @@ param namingConvention object = {
   workload: 'avd'
 }
 
-@description('Optional. The host pool base name / identifier used for naming (e.g. desktop-01). Pre-populated from the hpIdentifier tag on the host pool resource. When empty, falls back to a generic placeholder.')
+@description('Optional. Host-pool identifier from hpIdentifier; empty uses the host-pool resource name. The shr purpose is appended. Overlength generated names require explicit overrides.')
 param identifier string = ''
 
 // Optional. Overrides for resource type abbreviations used when computing infrastructure resource
@@ -193,7 +193,7 @@ param credentialsKeyVaultResourceId string
 @description('Optional. The resource ID of the Template Spec version for session host deployments. If not provided, a new template spec will be created.')
 param sessionHostTemplateSpecResourceId string = ''
 
-@description('Optional. The name of the Template Spec to create. Defaults to hostpool-based naming.')
+@description('Optional. Complete Template Spec name to create; otherwise uses the shared session-hosts purpose.')
 param templateSpecName string = ''
 
 @description('Optional. The version of the Template Spec. Default is 1.0.0.')
@@ -562,30 +562,23 @@ var templateSpecSubscriptionId = !empty(sessionHostTemplateSpecResourceId)
   ? split(sessionHostTemplateSpecResourceId, '/')[2]
   : subscription().subscriptionId
 
-// ============================================================================
-// Naming Convention
-// Compile-time placeholders — resolved here by Bicep string substitution:
-//   RESOURCETYPE  → resource type abbreviation (e.g., 'asp', 'func', 'uai')
-//   LOCATION      → region abbreviation (e.g., 'eus', 'va')
-//   TOKEN         → per-resource differentiator in HP-scoped names (e.g., 'shr-abc123-')
-// Runtime placeholders — passed as strings to the Function App for substitution:
-//   SHNAME        → session host name prefix + padded index (e.g., 'avd0101')
-//   ##            → availability set numeric index (e.g., '01')
-// ============================================================================
 var cloud = toLower(environment().name)
 // the graph endpoint varies for USGov and other US clouds. The DoD cloud uses a different endpoint. It will be handled within the function app code.
 var graphEndpoint = cloud == 'azureusgovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(cloud, 'us') ? 'https://graph${replace(environment().suffixes.storage, 'core', '')}' : 'https://graph.microsoft.com'
-var functionAppRegionAbbreviation = regionAbbreviation(location, environment().name)
-
-// Generate unique identifier for per-host-pool resource names.
+// Preserve the deployment-operation prefix independently of infrastructure names.
 var uniqueStringHosts = scopeIdUnique(virtualMachinesSubscriptionId, virtualMachinesResourceGroupName)
 
-// Resolve effective identifier: use the provided param or fall back to a safe placeholder.
-// Pre-populated from the hpIdentifier tag on the hosts resource group.
-var effectiveIdentifier = !empty(identifier) ? identifier : namingPolicy.identifiers.replacerFallback
+var effectiveIdentifier = !empty(identifier) ? identifier : hostPoolName
+var applicationIdentifier = '${effectiveIdentifier}-${namingPolicy.identifiers.sessionHostReplacer}'
 var effectiveNamingConvention = !empty(namingResourceTypeCodes) ? union(namingConvention, { resourceTypeCodes: namingResourceTypeCodes }) : namingConvention
+var namingContext = {
+  subscriptionId: subscription().subscriptionId
+  resourceGroupName: functionAppResourceGroupName
+  location: location
+  cloud: environment().name
+}
 var effectiveEnableShutdownRetention = replacementMode == 'SideBySide' && enableShutdownRetention
 var isEntraJoined = contains([
   'EntraId'
@@ -595,19 +588,19 @@ var isEntraJoined = contains([
 var effectiveRemoveEntraDevice = removeEntraDevice || isEntraJoined
 var effectiveRemoveIntuneDevice = removeIntuneDevice || isEntraJoined && intuneEnrollment
 
-// ── Naming module - computes all infrastructure resource names ────────────────
-module shrNaming './modules/naming.bicep' = {
-  params: {
-    namingConvention: effectiveNamingConvention
-    identifier: effectiveIdentifier
-    locationAbbreviation: functionAppRegionAbbreviation
-    uniqueString: uniqueStringHosts
-  }
-}
-
-var appServicePlanName         = !empty(appServicePlanNameOverride) ? appServicePlanNameOverride : shrNaming.outputs.appServicePlanName
-var privateEndpointNameConv    = shrNaming.outputs.privateEndpointNameConv
-var privateEndpointNICNameConv = shrNaming.outputs.privateEndpointNICNameConv
+var naming = functionAppNames(effectiveNamingConvention, applicationIdentifier, namingContext, {
+  functionAppName: functionAppNameOverride
+  storageAccountName: storageAccountNameOverride
+  storageEncryptionIdentityName: storageEncryptionIdentityNameOverride
+})
+var appServicePlanName = !empty(existingAppServicePlanResourceId)
+  ? last(split(existingAppServicePlanResourceId, '/'))
+  : !empty(appServicePlanNameOverride) ? appServicePlanNameOverride
+    : resourceNameForType(effectiveNamingConvention, 'appServicePlans', namingPolicy.identifiers.sessionHostReplacer, union(namingContext, {
+      resourceGroupName: aspResourceGroupName
+    }))
+var privateEndpointNameConv = naming.privateEndpointNameConv
+var privateEndpointNICNameConv = naming.privateEndpointNICNameConv
 
 // Enterprise workbook - one deterministic workbook per selected Log Analytics workspace.
 // The guarded fallbacks keep expressions valid when monitoring and workbook deployment are disabled.
@@ -619,13 +612,14 @@ var workbookResourceGroupName = !empty(logAnalyticsWorkspaceResourceId)
   : functionAppResourceGroupName
 var workbookName = guid(toLower(logAnalyticsWorkspaceResourceId), 'session-host-replacer-workbook')
 
-// Use explicit overrides when provided (brownfield); otherwise use naming module outputs.
-var functionAppName               = !empty(functionAppNameOverride)                 ? functionAppNameOverride                 : shrNaming.outputs.functionAppName
-var appInsightsName               = !empty(functionAppNameOverride)                 ? namePattern('functionInsightsOverride', { name: functionAppName }) : shrNaming.outputs.appInsightsName
-var storageAccountName            = !empty(storageAccountNameOverride)              ? toLower(storageAccountNameOverride)     : shrNaming.outputs.storageAccountName
-var storageEncryptionIdentityName = !empty(storageEncryptionIdentityNameOverride)   ? storageEncryptionIdentityNameOverride   : shrNaming.outputs.storageEncryptionIdentityName
-var templateSpecNameFinal         = !empty(templateSpecName)                        ? templateSpecName                        : shrNaming.outputs.templateSpecName
-var encryptionKeyName             = namePattern('replacerStorageKey', { identifier: effectiveIdentifier })
+var functionAppName = naming.functionAppName
+var appInsightsName = naming.applicationInsightsName
+var storageAccountName = naming.storageAccountName
+var storageEncryptionIdentityName = naming.storageEncryptionIdentityName
+var templateSpecNameFinal = !empty(sessionHostTemplateSpecResourceId)
+  ? last(split(sessionHostTemplateSpecResourceId, '/'))
+  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'templateSpecs', 'session-hosts', namingContext)
+var encryptionKeyName = namePattern('storageCmkKey', { identifier: applicationIdentifier })
 
 // Start storage CMK provisioning before the Function App prerequisites. This gives the
 // key-scoped role assignment time to propagate before the initial CMK-enabled storage PUT.

@@ -596,6 +596,52 @@ Bicep, or another tool. It doesn't support automated host pools with Session Hos
 
 Pass the same `namingConvention` and `identifier` values used in the host pool deployment. When deploying from the Portal, these are pre-populated from the `hpNamingConvention` and `hpIdentifier` tags on the host pool resource. Session host naming patterns (`virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv`) are pre-populated from tags on the hosts resource group.
 
+SHR uses the [common Function App naming bundle](../../shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
+with application identifier `${identifier}-shr`. An empty identifier uses the
+actual host-pool resource name, not a generic placeholder. With identifier
+`finance`, region `use` and illustrative hash `abc123`:
+
+| Resource | Generated name |
+| --- | --- |
+| Function App | `fa-avd-finance-shr-abc123-use` |
+| Runtime storage | `saavdfinanceshrabc123use` |
+| Application Insights (when monitoring is enabled) | `appi-avd-finance-shr-use` |
+| Storage CMK identity (when CMK is enabled) | `uai-avd-finance-shr-storage-cmk-use` |
+| Shared hosting plan | `asp-avd-shr-use` |
+
+Only the app and storage carry the shared six-character hash, seeded by the
+Function App subscription, owning resource group, full region, cloud and full
+application identifier. The VM resource group does not seed infrastructure names.
+The CMK identity retains the application purpose and region independently of
+any explicit storage-name override. Each app still has its own Insights component;
+the Log Analytics workspace can be shared.
+
+Names are not silently shortened. Under default CAF naming with a three-character
+region, storage leaves seven alphanumeric characters for the host-pool identifier
+before `shr`; separators are removed. A longer identifier or convention may need
+`storageAccountNameOverride` to remain within 24 characters. The **Advanced >
+Infrastructure Naming > Override resource names** controls are available for
+tagged and untagged host pools. Explicit app, storage and CMK identity names take
+precedence; changing the app name does not rename its purpose-based Insights.
+`locationAbbreviation` takes precedence over `vmsLocationAbbreviation`, then the
+shared region map supplies a default.
+
+To share a plan, create it in the first deployment, optionally selecting
+`appServicePlanResourceGroupName` and `appServicePlanNameOverride`. Subsequent
+deployments supply `existingAppServicePlanResourceId`; they do not create or
+manage the plan. A common plan name does not automatically adopt an existing
+resource. Coordinate plan ownership and use compatible region, OS and SKU
+settings. Other add-ons can follow the same common-helper/create-or-existing
+pattern, choosing their own application and shared-plan purposes.
+
+**Naming change:** the former SHR-specific adapter and hashed Insights recipe
+are removed. This is not an automatic migration of existing resources. Before
+upgrading an existing deployment, compare resolved names and explicitly retain
+app/storage/identity names or plan IDs where required. The Insights name now
+follows the application identifier; retaining its previous hashed name is not
+supported by a separate compatibility path. The internal deployment-operation
+prefix and session-host VM naming patterns are unchanged.
+
 Configure session-host naming patterns with the `SHNAME` token. For example:
 
 - For `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
@@ -684,7 +730,7 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **User Profiles**: FSLogix settings (optional)
    - **Infrastructure**: App Service Plan, encryption, zero trust networking
    - **Monitoring**: Application Insights, Log Analytics workspace
-   - **Advanced**: Brownfield naming overrides, resource tags (optional)
+   - **Advanced**: Resource-name overrides, session-host naming and resource tags (optional)
 5. Review and click **Create**
 
 Here is a screen shot of the form:
@@ -697,14 +743,13 @@ The form automatically validates inputs and provides helpful descriptions for ea
 
 For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-hostpool-01` instead of `vdpool-avd-prod-eus`), use the **Custom Naming (Advanced)** step:
 
-1. On the **Custom Naming (Advanced)** step, check **Use Custom Naming Overrides**
-2. Fill out the **Function App Infrastructure Naming** section:
-   - **Function App Name**: (Required) Globally unique name, 2-60 chars, alphanumeric and hyphens. Example: `func-avdshr-prod-eus2`
-   - **Storage Account Name**: (Required) Globally unique name, 3-24 chars, lowercase alphanumeric only. Example: `stavdshrprod`
+1. On the **Advanced** step, check **Infrastructure Naming > Override resource names**
+2. Provide only the infrastructure names that need overrides:
+   - **Function App Name**: (Optional) Globally unique name, 2-60 chars, alphanumeric and hyphens. Example: `func-avdshr-prod-eus2`
+   - **Storage Account Name**: (Optional unless the generated name is too long) Globally unique name, 3-24 chars, lowercase alphanumeric only. Example: `stavdshrprod`
    - **Application Insights**: When monitoring is enabled, its name is generated automatically.
-     Standard deployments use the Application Insights resource-type abbreviation with the same
-     host-pool identity components as the Function App. A custom Function App name is followed by
-     `-insights`.
+     It uses the shared convention, host-pool identifier, `shr` purpose and region,
+     without a hash. A custom Function App name does not change it.
 3. Fill out the **Session Host Resource Naming** section:
    - **Virtual Machine Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `vm-SHNAME`
    - **OS Disk Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `disk-SHNAME`

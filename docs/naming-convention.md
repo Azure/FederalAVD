@@ -653,24 +653,44 @@ var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier
 The example import is relative to an add-on entry template. `context` supplies
 the actual target subscription, owning resource group, location and cloud. To
 name a subscription-scoped resource group, pass `resourceGroupName: ''`; that
-field is excluded from resource-group hashes to avoid circular naming dependencies.
+field does not affect its unhashed name, avoiding circular naming dependencies.
 Use distinct identifiers for multiple same-type resources in one scope.
 
 For new add-ons, use the
 [identifier-based shared interface](../deployments/shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
 instead of adding an application-specific resource role. `functionAppNames`
-returns all Function App infrastructure names and private-endpoint patterns from
-one identifier, convention and actual target context. `resourceNameForType`
+returns per-application names and private-endpoint patterns from
+one identifier, convention, actual target context and explicit overrides. Name
+shared hosting plans separately using their owning purpose. `resourceNameForType`
 handles all 36 convention-named types in the abbreviation catalog, not just
 Function App resources. Neither requires a customer-chosen
 uniqueness suffix or a policy update for each add-on.
 
-The interface includes the configured deterministic hash and selected static
-components, shortening only the readable identifier to meet resource limits.
-Hashes are 13 characters except for Key Vaults, which use a six-character suffix
-to fit the default convention within 24 characters. VM resource names and OS
-computer names are distinct: the generic API supports a 64-character resource
-name, while Windows computer-name patterns have a 15-character limit.
+The interface adds a deterministic hash only for globally named Storage accounts,
+Key Vaults and Function Apps (`globallyUnique: true` in the policy). Hashes are
+six characters by default. Their seed includes the full application identifier
+and target scope, not the resource type: Function App and runtime storage share
+one token. Names preserve the full formatted identifier and static components.
+Scope-local types have no automatic hash and retain the full formatted identifier;
+overlength names fail with an instruction to shorten the identifier or convention.
+Callers must distinguish names within their scope, including identifiers that
+normalize identically or conventions that omit location. The generic Function
+App bundle leaves Insights and storage-CMK identity names unhashed. Shared plans
+also have no hash. SHR uses this same bundle with `${hostPoolIdentifier}-shr`,
+not a separate compatibility recipe. Its plan uses the shared `shr` purpose;
+an existing hosting-plan resource ID still bypasses plan creation.
+
+For example, identifier `finance`, region `use` and illustrative hash `abc123`
+produce `fa-avd-finance-shr-abc123-use`, `saavdfinanceshrabc123use`,
+`appi-avd-finance-shr-use`, and `uai-avd-finance-shr-storage-cmk-use`.
+The shared plan is `asp-avd-shr-use`. Generated storage must fit 24 characters;
+provide `storageAccountNameOverride` if the complete name is too long. Bundle
+overrides are applied before default generation, so this escape path does not
+evaluate an invalid default. Other production role-based recipes are unchanged.
+
+VM resource names and OS computer names are distinct: the generic API supports
+a 64-character resource name, while Windows computer-name patterns have a
+15-character limit.
 Workbook GUIDs and provider-required literal names are not ordinary
 convention names. See the [complete type coverage and exceptions](../deployments/shared/modules/orchestration/naming/README.md#resource-type-api-and-naming-guarantees).
 
