@@ -1,11 +1,12 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 
 Describe 'Session Host Replacer Portal initialization' {
     BeforeAll {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
         $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw | ConvertFrom-Json
-        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $policy = Get-TestNamingPolicy
     }
 
     It 'preserves tagged naming without dereferencing an uninitialized policy control in the output' {
@@ -1906,7 +1907,7 @@ Describe 'Session Host Replacer Application Insights isolation' {
             Should Match "applicationInsightsName: resourceNameForType\(convention, 'applicationInsights', identifier, context\)"
         Get-Content -LiteralPath $bicepPath -Raw |
             Should Match 'var appInsightsName = naming.applicationInsightsName'
-        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $policy = Get-TestNamingPolicy
         $policy.patterns.functionInsightsOverride | Should BeNullOrEmpty
     }
 

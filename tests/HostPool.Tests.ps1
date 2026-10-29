@@ -1,4 +1,5 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
 
 $formCases = @(
     @{
@@ -625,6 +626,39 @@ Describe 'Common host-pool UI form behavior' {
     }
 }
 
+Describe 'FSLogix Storage add-on Portal initialization' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json') -Raw |
+            ConvertFrom-Json
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.json') -Raw |
+            ConvertFrom-Json
+        $policy = Get-TestNamingPolicy
+    }
+
+    It 'preserves optional host-pool naming inheritance without reading the policy control during startup' {
+        $form.view.outputs.parameters.namingConvention |
+            Should Be "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse('{}'))]"
+        ($form.view.outputs | ConvertTo-Json -Depth 100) | Should Not Match 'federalAvdNamingPolicy'
+    }
+
+    It 'retains canonical deployment defaults and the object-valued naming parameter' {
+        $template.parameters.namingConvention.type | Should Be 'object'
+        ($template.parameters.namingConvention.defaultValue | ConvertTo-Json -Compress) |
+            Should Be ($policy.defaults | ConvertTo-Json -Compress)
+        foreach ($name in $form.view.outputs.parameters.PSObject.Properties.Name) {
+            ($name -in @($template.parameters.PSObject.Properties.Name)) | Should Be $true
+        }
+    }
+
+    It 'initializes the editable shared-storage identifier with a policy-aligned literal default' {
+        $step = $form.view.properties.steps | Where-Object name -eq 'tagsAndNaming'
+        $naming = $step.elements | Where-Object name -eq 'naming'
+        $identifier = $naming.elements | Where-Object name -eq 'sharedStorageIdentifier'
+        $identifier.defaultValue | Should Be $policy.identifiers.sharedFslogix
+        $identifier.defaultValue | Should Not Match '^\['
+    }
+}
+
 Describe 'FSLogix Storage add-on redundancy behavior' {
     BeforeAll {
         $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json') -Raw |
@@ -804,7 +838,7 @@ Describe 'Session host resource naming defaults' {
         $sharedNaming | Should Match 'virtualMachineNameConv:.*: namingPolicy.patterns.virtualMachine'
         $sharedNaming | Should Match 'virtualMachineDiskNameConv:.*: namingPolicy.patterns.osDisk'
         $sharedNaming | Should Match 'virtualMachineNicNameConv:.*: namingPolicy.patterns.nic'
-        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $policy = Get-TestNamingPolicy
         $policy.patterns.virtualMachine | Should Be 'SHNAME'
         $policy.patterns.osDisk | Should Be 'SHNAME-osdisk'
         $policy.patterns.nic | Should Be 'SHNAME-nic'
@@ -814,18 +848,18 @@ Describe 'Session host resource naming defaults' {
         $repoRoot = Split-Path -Parent $PSScriptRoot
         $sessionHostsBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHosts\main.bicep') -Raw
 
-        $sessionHostsBicep | Should Match "// naming-policy: patterns.virtualMachine\r?\nparam virtualMachineNameConv string = 'SHNAME'"
-        $sessionHostsBicep | Should Match "// naming-policy: patterns.osDisk\r?\nparam virtualMachineDiskNameConv string = 'SHNAME-osdisk'"
-        $sessionHostsBicep | Should Match "// naming-policy: patterns.nic\r?\nparam virtualMachineNicNameConv string = 'SHNAME-nic'"
+        $sessionHostsBicep | Should Match "(?m)^param virtualMachineNameConv string = 'SHNAME'"
+        $sessionHostsBicep | Should Match "(?m)^param virtualMachineDiskNameConv string = 'SHNAME-osdisk'"
+        $sessionHostsBicep | Should Match "(?m)^param virtualMachineNicNameConv string = 'SHNAME-nic'"
     }
 
     It 'uses the same defaults in the Session Host Replacer template' {
         $repoRoot = Split-Path -Parent $PSScriptRoot
         $sessionHostReplacerBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep') -Raw
 
-        $sessionHostReplacerBicep | Should Match "// naming-policy: patterns.virtualMachine\r?\nparam virtualMachineNameConv string = 'SHNAME'"
-        $sessionHostReplacerBicep | Should Match "// naming-policy: patterns.osDisk\r?\nparam virtualMachineDiskNameConv string = 'SHNAME-osdisk'"
-        $sessionHostReplacerBicep | Should Match "// naming-policy: patterns.nic\r?\nparam virtualMachineNicNameConv string = 'SHNAME-nic'"
+        $sessionHostReplacerBicep | Should Match "(?m)^param virtualMachineNameConv string = 'SHNAME'"
+        $sessionHostReplacerBicep | Should Match "(?m)^param virtualMachineDiskNameConv string = 'SHNAME-osdisk'"
+        $sessionHostReplacerBicep | Should Match "(?m)^param virtualMachineNicNameConv string = 'SHNAME-nic'"
     }
 
     It 'uses the same defaults in the standard host pool form' {
@@ -837,9 +871,9 @@ Describe 'Session host resource naming defaults' {
         $diskControl = $standardNamingSection.elements | Where-Object { $_.name -eq 'diskNameConvOverride' }
         $nicControl = $standardNamingSection.elements | Where-Object { $_.name -eq 'nicNameConvOverride' }
 
-        $vmControl.defaultValue | Should Be "[parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine]"
-        $diskControl.defaultValue | Should Be "[parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk]"
-        $nicControl.defaultValue | Should Be "[parse(steps('basics').federalAvdNamingPolicy).patterns.nic]"
+        $vmControl.defaultValue | Should Be 'SHNAME'
+        $diskControl.defaultValue | Should Be 'SHNAME-osdisk'
+        $nicControl.defaultValue | Should Be 'SHNAME-nic'
         $vmControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $diskControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $nicControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
@@ -854,9 +888,9 @@ Describe 'Session host resource naming defaults' {
         $diskControl = $sessionHostsNamingSection.elements | Where-Object { $_.name -eq 'diskNameConvOverride' }
         $nicControl = $sessionHostsNamingSection.elements | Where-Object { $_.name -eq 'networkInterfaceNameConvOverride' }
 
-        $vmControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine)]"
-        $diskControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk)]"
-        $nicControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.nic)]"
+        $vmControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'SHNAME')]"
+        $diskControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'SHNAME-osdisk')]"
+        $nicControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'SHNAME-nic')]"
         $vmControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $diskControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $nicControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
@@ -871,9 +905,9 @@ Describe 'Session host resource naming defaults' {
         $diskControl = $sessionHostReplacerNamingSection.elements | Where-Object { $_.name -eq 'diskNameConvOverride' }
         $nicControl = $sessionHostReplacerNamingSection.elements | Where-Object { $_.name -eq 'networkInterfaceNameConvOverride' }
 
-        $vmControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine)]"
-        $diskControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk)]"
-        $nicControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.nic)]"
+        $vmControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'SHNAME')]"
+        $diskControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'SHNAME-osdisk')]"
+        $nicControl.defaultValue | Should Be "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'SHNAME-nic')]"
         $vmControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $diskControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
         $nicControl.PSObject.Properties['placeholder'] | Should BeNullOrEmpty
@@ -1090,8 +1124,8 @@ Describe 'Standard host-pool PoC form' {
         $publisher = Get-Content -LiteralPath $publisherPath -Raw
 
         $publisher | Should Match '\[bool\]\$createHostPoolPoc = \$false'
-        $publisher | Should Match 'Purpose = \$namingPolicy.templateSpecs.hostPoolPoc'
-        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $publisher | Should Match "Purpose = 'hostpool-poc'"
+        $policy = Get-TestNamingPolicy
         $policy.templateSpecs.hostPoolPoc | Should Be 'hostpool-poc'
         $publisher | Should Match "DisplayName = 'AVD Standard PoC'"
         $publisher | Should Match 'deployments\\hostpoolPoc\\hostpoolPoc\.json'

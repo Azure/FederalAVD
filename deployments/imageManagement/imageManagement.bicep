@@ -135,7 +135,6 @@ param deployImageBuildResourceGroup bool = true
 // This object is produced automatically when deploying via the Azure Portal UI.
 // When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.
 @description('Optional. Shared naming-convention overrides. Keep purpose to distinguish same-type resources; imageManagementStoragePrefix accepts 1-5 lowercase alphanumeric characters when supplied.')
-// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

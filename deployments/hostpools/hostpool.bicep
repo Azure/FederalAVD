@@ -94,7 +94,6 @@ param index int = -1
 // Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the
 // defaults.
 @description('Optional. Shared naming-convention overrides; omitted properties retain defaults. Include purpose to distinguish same-type resources. Abbreviations may be supplied separately.')
-// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

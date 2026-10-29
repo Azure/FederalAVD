@@ -9,7 +9,6 @@ Describe 'Direct centralized naming bundles' {
         $bicep = if ($command) { $command.Source } else { Join-Path (Join-Path $configRoot 'bin') $binaryName }
         if (-not (Test-Path -LiteralPath $bicep)) { throw 'Bicep CLI is required to evaluate naming bundles.' }
         foreach ($relative in @(
-            'deployments\shared\data\namingPolicy.json'
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             'deployments\shared\modules\orchestration\naming\naming.bicep'
@@ -104,11 +103,11 @@ Describe 'Direct centralized naming bundles' {
     }
 
     It 'propagates changed central defaults and role policy through both actual bundle functions' {
-        $policyPath = Join-Path $testDirectory 'deployments\shared\data\namingPolicy.json'
-        $policy = Get-Content -LiteralPath $policyPath -Raw | ConvertFrom-Json
-        $policy.defaults.workload = 'desktop'
-        $policy.resources.operationsResourceGroup.purpose = @('ops')
-        [IO.File]::WriteAllText($policyPath, (ConvertTo-Json -InputObject $policy -Depth 100))
+        $policyPath = Join-Path $testDirectory 'deployments\shared\modules\orchestration\naming\naming.bicep'
+        $policy = Get-Content -LiteralPath $policyPath -Raw
+        $changedPolicy = $policy.Replace("workload: 'avd'", "workload: 'desktop'").Replace("purpose: ['operations']", "purpose: ['ops']")
+        $changedPolicy | Should Not Be $policy
+        [IO.File]::WriteAllText($policyPath, $changedPolicy)
         $raw = @(& $bicep local-deploy $parametersPath --format Json 2>&1)
         if ($LASTEXITCODE -ne 0) { throw 'Changed-policy bundle evaluation failed.' }
         $encoded = ($raw -join [Environment]::NewLine | ConvertFrom-Json).outputs.encodedResults

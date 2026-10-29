@@ -314,9 +314,8 @@ $global:RestCalls = [System.Collections.Generic.List[object]]::new()
 $global:ResourceGroupCreates = 0
 $global:SpecReads = 0
 $root = Split-Path -Parent (Split-Path -Parent $PublisherPath)
-$policy = Get-Content -Raw (Join-Path $root 'deployments\shared\data\namingPolicy.json') | ConvertFrom-Json
 $abbreviations = Get-Content -Raw (Join-Path $root 'deployments\shared\data\resourceAbbreviations.json') | ConvertFrom-Json
-$global:SpecName = "$($abbreviations.templateSpecs)-$($policy.defaults.workload)-$($policy.templateSpecs.hostPool)-va-dedup-test"
+$global:SpecName = "$($abbreviations.templateSpecs)-avd-hostpool-va-dedup-test"
 function global:Get-AzContext {
     [CmdletBinding()]param()
     [pscustomobject]@{

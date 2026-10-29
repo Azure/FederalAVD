@@ -1,14 +1,165 @@
 metadata name = 'FederalAVD centralized naming'
-metadata description = 'Authoritative FederalAVD naming policy implementation. Resource roles, defaults, patterns and limits come from namingPolicy.json; callers supply deployment context and apply explicit existing-resource overrides.'
-
-// Policy data and convention primitives.
-@export()
-@description('Authoritative naming defaults, resource roles, patterns and length limits. Edit the shared data file rather than copying rules into consumers.')
-var namingPolicy object = loadJsonContent('../../../data/namingPolicy.json')
+metadata description = 'Authoritative FederalAVD naming policy implementation. Owns resource roles, defaults, patterns and limits; callers supply deployment context and apply explicit existing-resource overrides.'
 
 @export()
-@description('Default OS disk pattern from the authoritative policy. Import this scalar when no other naming rules are needed.')
-var osDiskNamePattern string = loadJsonContent('../../../data/namingPolicy.json', '$.patterns.osDisk')
+@description('Default OS disk pattern. Import this scalar when no other naming rules are needed.')
+var osDiskNamePattern string = 'SHNAME-osdisk'
+
+@export()
+@description('Authoritative naming defaults, resource roles, patterns and length limits.')
+var namingPolicy object = {
+  defaults: { components: ['resourceType', 'workload', 'purpose', 'location'], delimiter: '-', workload: 'avd' }
+  identifiers: { imageManagement: 'image-management', sessionHostReplacer: 'shr', sharedFslogix: 'fslogix' }
+  limits: {
+    deploymentVm: 15
+    fslogixStoragePrefix: 13
+    uniqueSuffix: 6
+    defaultUniqueLength: 6
+    imageManagementStoragePrefix: 5
+    imageManagementStorageLocation: 4
+  }
+  resourceTypes: {
+    functionApps: { lengthLimit: 60, format: 'hyphen', globallyUnique: true }
+    storageAccounts: { lengthLimit: 24, format: 'storage', globallyUnique: true }
+    applicationInsights: { lengthLimit: 260, format: 'hyphen' }
+    appServicePlans: { lengthLimit: 60, format: 'hyphen' }
+    userAssignedIdentities: { lengthLimit: 128, format: 'hyphen' }
+    automationAccounts: { lengthLimit: 50, format: 'hyphen', startWithLetter: true }
+    availabilitySets: { lengthLimit: 80, format: 'hyphen' }
+    computeGalleries: { lengthLimit: 80, format: 'gallery' }
+    dataCollectionEndpoints: { lengthLimit: 44, format: 'hyphen' }
+    dataCollectionRules: { lengthLimit: 64, format: 'hyphen' }
+    desktopApplicationGroups: { lengthLimit: 64, format: 'hyphen' }
+    remoteApplicationGroups: { lengthLimit: 64, format: 'hyphen' }
+    diskAccesses: { lengthLimit: 64, format: 'hyphen' }
+    diskEncryptionSets: { lengthLimit: 80, format: 'hyphen' }
+    hostPools: { lengthLimit: 64, format: 'hyphen' }
+    keyVaults: { lengthLimit: 24, format: 'hyphen', globallyUnique: true, uniqueLength: 6, startWithLetter: true, noConsecutiveHyphens: true }
+    logAnalyticsWorkspaces: { lengthLimit: 63, format: 'hyphen' }
+    natGateways: { lengthLimit: 80, format: 'hyphen' }
+    netAppAccounts: { lengthLimit: 128, format: 'hyphen' }
+    netAppCapacityPools: { lengthLimit: 64, format: 'hyphen' }
+    networkInterfaces: { lengthLimit: 80, format: 'hyphen' }
+    networkSecurityGroups: { lengthLimit: 80, format: 'hyphen' }
+    osdisks: { lengthLimit: 80, format: 'hyphen' }
+    privateEndpoints: { lengthLimit: 64, format: 'hyphen' }
+    privateLinkScopes: { lengthLimit: 64, format: 'hyphen' }
+    publicIPAddresses: { lengthLimit: 80, format: 'hyphen' }
+    recoveryServicesVaults: { lengthLimit: 50, format: 'hyphen', startWithLetter: true }
+    resourceGroups: { lengthLimit: 90, format: 'hyphen' }
+    routeTables: { lengthLimit: 80, format: 'hyphen' }
+    scalingPlans: { lengthLimit: 63, format: 'hyphen' }
+    templateSpecs: { lengthLimit: 90, format: 'hyphen' }
+    virtualMachines: { lengthLimit: 64, format: 'hyphen' }
+    virtualNetworks: { lengthLimit: 64, format: 'hyphen' }
+    subnets: { lengthLimit: 80, format: 'hyphen' }
+    workspaces: { lengthLimit: 64, format: 'hyphen' }
+    imageDefinitions: { lengthLimit: 80, format: 'hyphen' }
+  }
+  resources: {
+    operationsResourceGroup: { type: 'resourceGroups', purpose: ['operations'] }
+    monitoringResourceGroup: { type: 'resourceGroups', purpose: ['monitoring'] }
+    controlPlaneResourceGroup: { type: 'resourceGroups', purpose: ['control', 'plane'] }
+    globalFeedResourceGroup: { type: 'resourceGroups', purpose: ['global', 'feed'] }
+    globalFeedWorkspace: { type: 'workspaces', purpose: ['global', 'feed'] }
+    workspace: { type: 'workspaces', purpose: [] }
+    hostWorkspace: { type: 'workspaces', purpose: ['{identifier}'] }
+    deploymentResourceGroup: { type: 'resourceGroups', purpose: ['{identifier}', 'deployment'] }
+    deploymentVm: { type: '', purpose: ['{identifier}'] }
+    consolidatedResourceGroup: { type: 'resourceGroups', purpose: ['{identifier}'] }
+    hostsResourceGroup: { type: 'resourceGroups', purpose: ['{identifier}', 'hosts'] }
+    storageResourceGroup: { type: 'resourceGroups', purpose: ['{identifier}', 'storage'] }
+    secretsKeyVault: { type: 'keyVaults', purpose: ['sec', '{unique}'] }
+    encryptionKeyVault: { type: 'keyVaults', purpose: ['enc', '{unique}'] }
+    dataCollectionEndpoint: { type: 'dataCollectionEndpoints', purpose: [] }
+    logAnalyticsWorkspace: { type: 'logAnalyticsWorkspaces', purpose: [] }
+    hostPool: { type: 'hostPools', purpose: ['{identifier}'] }
+    desktopApplicationGroup: { type: 'desktopApplicationGroups', purpose: ['{identifier}'] }
+    scalingPlan: { type: 'scalingPlans', purpose: ['{identifier}'] }
+    vmBackupVault: { type: 'recoveryServicesVaults', purpose: ['{identifier}'] }
+    filesBackupVault: { type: 'recoveryServicesVaults', purpose: ['files'] }
+    identityPattern: { type: 'userAssignedIdentities', purpose: ['{identifier}', 'TOKEN'] }
+    availabilitySet: { type: 'availabilitySets', purpose: ['{identifier}'] }
+    diskAccess: { type: 'diskAccesses', purpose: ['{identifier}'] }
+    diskEncryptionSetPattern: { type: 'diskEncryptionSets', purpose: ['{identifier}', 'TOKEN'] }
+    netAppAccount: { type: 'netAppAccounts', purpose: ['{identifier}'] }
+    netAppCapacityPool: { type: 'netAppCapacityPools', purpose: ['{identifier}'] }
+    imageManagementResourceGroup: { type: 'resourceGroups', purpose: ['{identifier}'] }
+    imageGallery: { type: 'computeGalleries', purpose: ['{identifier}'] }
+    imageBlobIdentity: { type: 'userAssignedIdentities', purpose: ['{identifier}-blob-access'] }
+    imageStorageEncryptionIdentity: { type: 'userAssignedIdentities', purpose: ['{identifier}-storage-cmk'] }
+    imageBuildResourceGroup: { type: 'resourceGroups', purpose: ['image-builds'] }
+    imageGalleryCustomerKeys: { type: 'diskEncryptionSets', purpose: ['{identifier}-customer-keys'] }
+    imageGalleryDoubleEncryptionKeys: { type: 'diskEncryptionSets', purpose: ['{identifier}-platform-and-customer-keys'] }
+    imageGalleryConfidentialKeys: { type: 'diskEncryptionSets', purpose: ['{identifier}-confidential-vm'] }
+    networkNatGateway: { type: 'natGateways', purpose: [] }
+    networkPublicIP: { type: 'publicIPAddresses', purpose: [] }
+    networkRouteTable: { type: 'routeTables', purpose: [] }
+    networkSecurityGroup: { type: 'networkSecurityGroups', purpose: [] }
+    pocVirtualNetwork: { type: 'virtualNetworks', purpose: ['{identifier}'] }
+    pocHostsSubnet: { type: 'subnets', purpose: ['{identifier}', 'hosts'] }
+    pocNatGateway: { type: 'natGateways', purpose: ['{identifier}'] }
+    pocPublicIP: { type: 'publicIPAddresses', purpose: ['{identifier}'] }
+    pocSecurityGroup: { type: 'networkSecurityGroups', purpose: ['{identifier}'] }
+    alertsAutomation: { type: 'automationAccounts', purpose: ['alerts'] }
+    quotaAutomation: { type: 'automationAccounts', purpose: ['sqm', '{identifier}'], omitWorkload: true, omitEmptyPurposeParts: true }
+    routesAutomation: { type: 'automationAccounts', purpose: ['urt', '{unique}'], omitWorkload: true }
+  }
+  patterns: {
+    virtualMachine: 'SHNAME'
+    osDisk: osDiskNamePattern
+    nic: 'SHNAME-nic'
+    standaloneAvailabilitySet: 'avset-##'
+    privateEndpointFirst: '{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID'
+    privateEndpointLast: 'RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}'
+    privateEndpointNicFirst: '{networkInterfaces}-{endpoint}'
+    privateEndpointNicLast: '{endpoint}-{networkInterfaces}'
+    deploymentDisk: '{vm}-{osdisks}'
+    deploymentNic: '{vm}-{networkInterfaces}'
+    availabilitySet: '{name}{delimiter}##'
+    policyIdentityPurpose: 'policy{delimiter}remediation'
+    deploymentIdentityPurpose: 'deployment'
+    monitorIdentityPurpose: 'ama'
+    confidentialDiskPurpose: 'confvm{delimiter}customer{delimiter}keys'
+    customerDiskPurpose: 'customer{delimiter}keys'
+    doubleEncryptionDiskPurpose: 'platform{delimiter}and{delimiter}customer{delimiter}keys'
+    fslogixStoragePrefix: 'fslogix{unique}'
+    fslogixKey: '{identifier}-{storagePrefix}##-cmk'
+    vmKey: '{identifier}-vm-cmk'
+    confidentialVmKey: '{identifier}-cvm-cmk'
+    recoveryServicesKey: '{identifier}-rsv-cmk'
+    imageStorageKey: '{identifier}-storage-cmk'
+    storageCmkKey: '{identifier}-storage-cmk'
+    imageGalleryKey: '{identifier}-gallery-cmk'
+    imageGalleryConfidentialKey: '{identifier}-gallery-cvm-cmk'
+    imageStorageFirst: '{storageAccounts}{purpose}{location}{unique}'
+    imageStorageLast: '{purpose}{location}{unique}{storageAccounts}'
+    imageStorageCustomPrefix: '{prefix}{purpose}{location}{unique}'
+    imageBuildResourceGroup: '{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}'
+    imageBuildCustomResourceGroup: '{name}-{timestamp}-{unique}'
+    imageBuildVm: '{prefix}img-{unique}'
+    imageBuildOrchestrationVm: '{prefix}orc-{unique}'
+    deploymentPrefix: '{prefix}-'
+    imageDefinition: '{imageDefinitions}-{publisher}-{offer}-{sku}'
+  }
+  imageStoragePurposes: { artifacts: 'imgassets', logs: 'imglogs' }
+  templateSpecs: {
+    sharedServices: 'shared-services'
+    networking: 'networking'
+    imageBuild: 'custom-image'
+    hostPool: 'hostpool'
+    hostPoolPoc: 'hostpool-poc'
+    automatedHostPool: 'automated-hostpool'
+    runCommandsOnVms: 'run-commands-on-vms'
+    updateStorageAccountKeyOnSessionHosts: 'update-storage-account-key-on-session-hosts'
+    fslogixStorage: 'fslogix-storage'
+    storageQuotaManager: 'storage-quota-manager'
+    sessionHostReplacer: 'session-host-replacer'
+    sessionHostMaintenance: 'session-host-maintenance'
+    sessionHosts: 'session-hosts'
+    sessionHostPolicy: 'session-host-policy'
+  }
+}
 
 var resourceAbbreviations object = loadJsonContent('../../../data/resourceAbbreviations.json')
 var locationDefinitions object = loadJsonContent('../../../data/locations.json')

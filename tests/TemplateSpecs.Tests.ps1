@@ -402,7 +402,6 @@ Describe 'Template Spec naming conventions' {
     ) {
         param($Delimiter)
 
-        $namingPolicy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
         $catalog = $scriptAst.Find({
             param($node)
             $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$addOns'

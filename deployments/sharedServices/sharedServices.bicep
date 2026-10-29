@@ -260,7 +260,6 @@ param tags object = {}
 // This object is produced automatically when deploying via the Azure Portal UI.
 // When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.
 @description('Optional. Shared naming-convention overrides. Include purpose to distinguish Secrets and Encryption vaults; omitted properties retain shared defaults.')
-// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

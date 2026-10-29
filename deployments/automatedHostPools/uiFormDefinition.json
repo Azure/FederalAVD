@@ -80,16 +80,6 @@
                   }
                 ]
               }
-            },
-            {
-              "name": "federalAvdNamingPolicy",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Generated naming policy",
-              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"sharedFslogix\":\"fslogix\"},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"}}",
-              "visible": false,
-              "constraints": {
-                "required": false
-              }
             }
           ]
         },
@@ -4180,7 +4170,7 @@
                   "name": "rtCodeRg",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Resource Groups abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.resourceGroups]",
+                  "defaultValue": "rg",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
@@ -4192,7 +4182,7 @@
                   "name": "rtCodeHp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Host Pools abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.hostPools]",
+                  "defaultValue": "vdpool",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
@@ -4204,7 +4194,7 @@
                   "name": "rtCodeDag",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Desktop Application Groups abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.desktopApplicationGroups]",
+                  "defaultValue": "vddag",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
@@ -4216,7 +4206,7 @@
                   "name": "rtCodeWs",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Workspaces abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.workspaces]",
+                  "defaultValue": "vdws",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), or(empty(filter(steps('controlPlane').workspacesApi.value, (workspace) => equals(workspace.location, steps('controlPlane').controlPlaneLocation.name))), equals(steps('controlPlane').workspace.createOption, 'new')))]",
                   "constraints": {
                     "required": true,
@@ -4228,7 +4218,7 @@
                   "name": "rtCodeSp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Scaling Plans abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.scalingPlans]",
+                  "defaultValue": "vdscaling",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), steps('controlPlane').dynamicScaling.deploy)]",
                   "constraints": {
                     "required": true,
@@ -4240,7 +4230,7 @@
                   "name": "rtCodeDes",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Disk Encryption Sets abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.diskEncryptionSets]",
+                  "defaultValue": "des",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'))]",
                   "constraints": {
                     "required": true,
@@ -4252,7 +4242,7 @@
                   "name": "rtCodeSa",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage Accounts abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.storageAccounts]",
+                  "defaultValue": "sa",
                   "visible": false,
                   "constraints": {
                     "required": true,
@@ -4264,7 +4254,7 @@
                   "name": "rtCodeNaa",
                   "type": "Microsoft.Common.TextBox",
                   "label": "NetApp Accounts abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.netAppAccounts]",
+                  "defaultValue": "naa",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureNetAppFiles'))]",
                   "constraints": {
                     "required": true,
@@ -4276,7 +4266,7 @@
                   "name": "rtCodeNacp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "NetApp Capacity Pools abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.netAppCapacityPools]",
+                  "defaultValue": "nacp",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureNetAppFiles'))]",
                   "constraints": {
                     "required": true,
@@ -4288,7 +4278,7 @@
                   "name": "rtCodeUai",
                   "type": "Microsoft.Common.TextBox",
                   "label": "User Assigned Identities abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.userAssignedIdentities]",
+                  "defaultValue": "uai",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))))]",
                   "constraints": {
                     "required": true,
@@ -4300,7 +4290,7 @@
                   "name": "rtCodePe",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.privateEndpoints]",
+                  "defaultValue": "pe",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints)]",
                   "constraints": {
                     "required": true,
@@ -4312,7 +4302,7 @@
                   "name": "rtCodeNic",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interfaces abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.networkInterfaces]",
+                  "defaultValue": "nic",
                   "visible": "[and(equals(steps('tagsAndNaming').naming.customizeAbbreviations, true), or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType')))))), steps('profiles').deployStorage)]",
                   "constraints": {
                     "required": true,

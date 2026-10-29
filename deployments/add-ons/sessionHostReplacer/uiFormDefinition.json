@@ -93,16 +93,6 @@
                 "allowedValues": "[steps('basics').locationsApi.transformed.list]",
                 "required": true
               }
-            },
-            {
-              "name": "federalAvdNamingPolicy",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Generated naming policy",
-              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"sharedFslogix\":\"fslogix\"},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"}}",
-              "visible": false,
-              "constraints": {
-                "required": false
-              }
             }
           ]
         },
@@ -3235,7 +3225,7 @@
                   "label": "Function Apps",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "fa",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.functionApps]",
+                  "defaultValue": "fa",
                   "toolTip": "Resource type abbreviation for Function Apps. CAF default: fa",
                   "constraints": {
                     "required": false,
@@ -3249,7 +3239,7 @@
                   "label": "App Service Plans",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "asp",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.appServicePlans]",
+                  "defaultValue": "asp",
                   "toolTip": "Resource type abbreviation for App Service Plans. CAF default: asp",
                   "constraints": {
                     "required": false,
@@ -3263,7 +3253,7 @@
                   "label": "Application Insights",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "appi",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.applicationInsights]",
+                  "defaultValue": "appi",
                   "toolTip": "Resource type abbreviation for Application Insights. CAF default: appi",
                   "constraints": {
                     "required": false,
@@ -3277,7 +3267,7 @@
                   "label": "Template Specs",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "ts",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.templateSpecs]",
+                  "defaultValue": "ts",
                   "toolTip": "Resource type abbreviation for Template Specs. CAF default: ts",
                   "constraints": {
                     "required": false,
@@ -3291,7 +3281,7 @@
                   "label": "User-Assigned Identities",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "uai",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.userAssignedIdentities]",
+                  "defaultValue": "uai",
                   "toolTip": "Resource type abbreviation for User-Assigned Managed Identities. CAF default: uai",
                   "constraints": {
                     "required": false,
@@ -3305,7 +3295,7 @@
                   "label": "Private Endpoints",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "pe",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.privateEndpoints]",
+                  "defaultValue": "pe",
                   "toolTip": "Resource type abbreviation for Private Endpoints. CAF default: pe",
                   "constraints": {
                     "required": false,
@@ -3319,7 +3309,7 @@
                   "label": "Network Interfaces",
                   "visible": "[and(not(empty(steps('basics').hostPoolProps.tags.hpNamingConvention)), steps('advanced').infrastructureNaming.enableCustomAbbreviations)]",
                   "placeholder": "nic",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.networkInterfaces]",
+                  "defaultValue": "nic",
                   "toolTip": "Resource type abbreviation for Network Interfaces. CAF default: nic",
                   "constraints": {
                     "required": false,
@@ -3485,7 +3475,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Virtual Machine Naming Convention",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine)]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'SHNAME')]",
                   "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'SHNAME' becomes 'avdvm-001'). This MUST match your existing VM naming.",
                   "constraints": {
                     "required": true,
@@ -3498,7 +3488,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "OS Disk Naming Convention",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk)]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'SHNAME-osdisk')]",
                   "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'SHNAME-osdisk' becomes 'avdvm-001-osdisk'). Should align with existing disk naming.",
                   "constraints": {
                     "required": true,
@@ -3511,7 +3501,7 @@
                   "type": "Microsoft.Common.TextBox",
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Network Interface Naming Convention",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.nic)]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'SHNAME-nic')]",
                   "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'SHNAME-nic' becomes 'avdvm-001-nic'). Should align with existing NIC naming.",
                   "constraints": {
                     "required": true,
@@ -3525,7 +3515,7 @@
                   "visible": "[empty(steps('basics').hostsRGProps.tags.virtualMachineNameConv)]",
                   "label": "Availability Set Naming Convention",
                   "placeholder": "avset-##",
-                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.standaloneAvailabilitySet)]",
+                  "defaultValue": "[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
                   "toolTip": "Required. Naming pattern for availability sets. Use ## token for index (e.g., 'avset-##' becomes 'avset-01', 'avset-02'). Only used if availability is set to 'AvailabilitySets'.",
                   "constraints": {
                     "required": true,

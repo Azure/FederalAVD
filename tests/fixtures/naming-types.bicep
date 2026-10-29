@@ -1,6 +1,5 @@
-import { functionAppNames, resourceNameForType, privateEndpointName, shortScopedUnique, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy as policy, functionAppNames, resourceNameForType, privateEndpointName, shortScopedUnique, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
-var policy = loadJsonContent('../../deployments/shared/data/namingPolicy.json')
 var context = {
   subscriptionId: '00000000-1111-2222-3333-444444444444'
   resourceGroupName: 'rg-addons'

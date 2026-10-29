@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "17157797094085771877"
+      "templateHash": "11733449363716845365"
     }
   },
   "definitions": {
@@ -1683,7 +1683,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.48.1.52935",
-          "templateHash": "4482491537127498711"
+          "templateHash": "13831775831091836159"
         }
       },
       "definitions": {
@@ -2470,7 +2470,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.48.1.52935",
-                  "templateHash": "2070513515256845102"
+                  "templateHash": "3562857783434377092"
                 },
                 "name": "Session host deployment orchestration",
                 "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
@@ -3448,7 +3448,7 @@
                         "_generator": {
                           "name": "bicep",
                           "version": "0.48.1.52935",
-                          "templateHash": "6594375555689532257"
+                          "templateHash": "4198771185535715484"
                         },
                         "name": "Session host VM batch orchestration",
                         "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
@@ -3963,8 +3963,7 @@
                         "identityType": "[[if(if(or(not(contains(parameters('identitySolution'), 'DomainServices')), parameters('enableMonitoring')), true(), false()), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'SystemAssigned, UserAssigned', 'SystemAssigned'), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'UserAssigned', 'None'))]",
                         "userAssignedIdentities": "[[if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), createObject(format('{0}', parameters('artifactsUserAssignedIdentityResourceId')), createObject()), createObject())]",
                         "identity": "[[if(not(equals(variables('identityType'), 'None')), createObject('type', variables('identityType'), 'userAssignedIdentities', if(not(empty(variables('userAssignedIdentities'))), variables('userAssignedIdentities'), null())), null())]",
-                        "_1._2": "SHNAME-osdisk",
-                        "osDiskNamePattern": "[[variables('_1._2')]"
+                        "osDiskNamePattern": "SHNAME-osdisk"
                       },
                       "resources": {
                         "hostPool": {
@@ -5018,16 +5017,6 @@
                     "transforms": {
                       "lastname": "value[*].name|[0]"
                     }
-                  }
-                },
-                {
-                  "name": "federalAvdNamingPolicy",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Generated naming policy",
-                  "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"sharedFslogix\":\"fslogix\"},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"}}",
-                  "visible": false,
-                  "constraints": {
-                    "required": false
                   }
                 }
               ]
@@ -6926,7 +6915,7 @@
                       "name": "virtualMachineNameConvOverride",
                       "type": "Microsoft.Common.TextBox",
                       "label": "Virtual Machine Naming Convention",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.virtualMachine)]",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNameConv, 'SHNAME')]",
                       "toolTip": "Required. Naming pattern for session host VMs. Use SHNAME token which will be replaced with the session host name (e.g., 'SHNAME' becomes 'avdvm-001'). This MUST match your existing VM naming.",
                       "constraints": {
                         "required": true,
@@ -6938,7 +6927,7 @@
                       "name": "diskNameConvOverride",
                       "type": "Microsoft.Common.TextBox",
                       "label": "OS Disk Naming Convention",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.osDisk)]",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineDiskNameConv, 'SHNAME-osdisk')]",
                       "toolTip": "Required. Naming pattern for OS disks. Use SHNAME token (e.g., 'SHNAME-osdisk' becomes 'avdvm-001-osdisk'). Should align with existing disk naming.",
                       "constraints": {
                         "required": true,
@@ -6950,7 +6939,7 @@
                       "name": "networkInterfaceNameConvOverride",
                       "type": "Microsoft.Common.TextBox",
                       "label": "Network Interface Naming Convention",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.nic)]",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.virtualMachineNicNameConv, 'SHNAME-nic')]",
                       "toolTip": "Required. Naming pattern for NICs. Use SHNAME token (e.g., 'SHNAME-nic' becomes 'avdvm-001-nic'). Should align with existing NIC naming.",
                       "constraints": {
                         "required": true,
@@ -6963,7 +6952,7 @@
                       "type": "Microsoft.Common.TextBox",
                       "label": "Availability Set Naming Convention",
                       "placeholder": "avset-##",
-                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, parse(steps('basics').federalAvdNamingPolicy).patterns.standaloneAvailabilitySet)]",
+                      "defaultValue": "[[coalesce(steps('basics').hostsRGProps.tags.availabilitySetNameConv, 'avset-##')]",
                       "toolTip": "Required. Naming pattern for availability sets. Use ## token for index (e.g., 'avset-##' becomes 'avset-01', 'avset-02'). Only used if availability is set to 'AvailabilitySets'.",
                       "constraints": {
                         "required": true,
@@ -7132,6 +7121,299 @@
     "hostPoolResourceGroupId": "[format('/subscriptions/{0}/resourceGroups/{1}', variables('hostPoolSubscriptionId'), variables('hostPoolResourceGroupName'))]",
     "roleAssignmentsResourceGroups": "[union(createArray(createObject('resourceGroupId', variables('hostPoolResourceGroupId'), 'roleDefinitionId', 'e307426c-f9b6-4e81-87de-d99efb3c32bc', 'roleDescription', 'DVHPCont')), if(not(empty(variables('monitoringResourceGroupId'))), createArray(createObject('resourceGroupId', parameters('virtualMachinesResourceGroupId'), 'roleDefinitionId', '749f88d5-cbae-40b8-bcfc-e573ddc772fa', 'roleDescription', 'MonCont')), createArray()), if(and(not(empty(variables('monitoringResourceGroupId'))), not(equals(variables('monitoringResourceGroupId'), parameters('virtualMachinesResourceGroupId')))), createArray(createObject('resourceGroupId', variables('monitoringResourceGroupId'), 'roleDefinitionId', '749f88d5-cbae-40b8-bcfc-e573ddc772fa', 'roleDescription', 'MonCont')), createArray()))]",
     "_1._2": {
+      "applicationInsights": "appi",
+      "appServicePlans": "asp",
+      "automationAccounts": "aa",
+      "availabilitySets": "as",
+      "computeGalleries": "gal",
+      "dataCollectionEndpoints": "dce",
+      "dataCollectionRules": "dcr",
+      "desktopApplicationGroups": "vddag",
+      "diskAccesses": "da",
+      "remoteApplicationGroups": "vdrag",
+      "diskEncryptionSets": "des",
+      "functionApps": "fa",
+      "hostPools": "vdpool",
+      "keyVaults": "kv",
+      "logAnalyticsWorkspaces": "law",
+      "natGateways": "ng",
+      "netAppAccounts": "naa",
+      "netAppCapacityPools": "nacp",
+      "networkInterfaces": "nic",
+      "networkSecurityGroups": "nsg",
+      "osdisks": "disk",
+      "privateEndpoints": "pe",
+      "privateLinkScopes": "pls",
+      "publicIPAddresses": "pip",
+      "recoveryServicesVaults": "rsv",
+      "resourceGroups": "rg",
+      "routeTables": "rt",
+      "scalingPlans": "vdscaling",
+      "storageAccounts": "sa",
+      "templateSpecs": "ts",
+      "userAssignedIdentities": "uai",
+      "virtualMachines": "vm",
+      "virtualNetworks": "vnet",
+      "subnets": "snet",
+      "workbooks": "wb",
+      "workspaces": "vdws",
+      "imageDefinitions": "vmid"
+    },
+    "_1._3": {
+      "AzureCloud": {
+        "australiacentral": {
+          "abbreviation": "auc",
+          "recoveryServicesGeo": "acl"
+        },
+        "australiacentral2": {
+          "abbreviation": "auc2",
+          "recoveryServicesGeo": "acl2"
+        },
+        "australiaeast": {
+          "abbreviation": "aue",
+          "recoveryServicesGeo": "ae"
+        },
+        "australiasoutheast": {
+          "abbreviation": "ause",
+          "recoveryServicesGeo": "ase"
+        },
+        "brazilsouth": {
+          "abbreviation": "brs",
+          "recoveryServicesGeo": "brs"
+        },
+        "brazilsoutheast": {
+          "abbreviation": "brse",
+          "recoveryServicesGeo": "bse"
+        },
+        "canadacentral": {
+          "abbreviation": "cac",
+          "recoveryServicesGeo": "cnc"
+        },
+        "canadaeast": {
+          "abbreviation": "cae",
+          "recoveryServicesGeo": "cne"
+        },
+        "centralindia": {
+          "abbreviation": "inc",
+          "recoveryServicesGeo": "inc"
+        },
+        "centralus": {
+          "abbreviation": "usc",
+          "recoveryServicesGeo": "cus"
+        },
+        "eastasia": {
+          "abbreviation": "ase",
+          "recoveryServicesGeo": "ea"
+        },
+        "eastus": {
+          "abbreviation": "use",
+          "recoveryServicesGeo": "eus"
+        },
+        "eastus2": {
+          "abbreviation": "use2",
+          "recoveryServicesGeo": "eus2"
+        },
+        "francecentral": {
+          "abbreviation": "frc",
+          "recoveryServicesGeo": "frc"
+        },
+        "francesouth": {
+          "abbreviation": "frs",
+          "recoveryServicesGeo": "frs"
+        },
+        "germanynorth": {
+          "abbreviation": "den",
+          "recoveryServicesGeo": "gn"
+        },
+        "germanywestcentral": {
+          "abbreviation": "dewc",
+          "recoveryServicesGeo": "gwc"
+        },
+        "israelcentral": {
+          "abbreviation": "ilc",
+          "recoveryServicesGeo": "ilc"
+        },
+        "italynorth": {
+          "abbreviation": "itn",
+          "recoveryServicesGeo": "itn"
+        },
+        "japaneast": {
+          "abbreviation": "jpe",
+          "recoveryServicesGeo": "jpe"
+        },
+        "japanwest": {
+          "abbreviation": "jpw",
+          "recoveryServicesGeo": "jpw"
+        },
+        "jioindiacentral": {
+          "abbreviation": "injc",
+          "recoveryServicesGeo": "jic"
+        },
+        "jioindiawest": {
+          "abbreviation": "injw",
+          "recoveryServicesGeo": "jiw"
+        },
+        "koreacentral": {
+          "abbreviation": "krc",
+          "recoveryServicesGeo": "krc"
+        },
+        "koreasouth": {
+          "abbreviation": "krs",
+          "recoveryServicesGeo": "krs"
+        },
+        "northcentralus": {
+          "abbreviation": "usnc",
+          "recoveryServicesGeo": "ncus"
+        },
+        "northeurope": {
+          "abbreviation": "eun",
+          "recoveryServicesGeo": "ne"
+        },
+        "norwayeast": {
+          "abbreviation": "noe",
+          "recoveryServicesGeo": "nwe"
+        },
+        "norwaywest": {
+          "abbreviation": "now",
+          "recoveryServicesGeo": "nww"
+        },
+        "polandcentral": {
+          "abbreviation": "plc",
+          "recoveryServicesGeo": "plc"
+        },
+        "qatarcentral": {
+          "abbreviation": "qac",
+          "recoveryServicesGeo": "qac"
+        },
+        "southafricanorth": {
+          "abbreviation": "zan",
+          "recoveryServicesGeo": "san"
+        },
+        "southafricawest": {
+          "abbreviation": "zaw",
+          "recoveryServicesGeo": "saw"
+        },
+        "southcentralus": {
+          "abbreviation": "ussc",
+          "recoveryServicesGeo": "scus"
+        },
+        "southeastasia": {
+          "abbreviation": "asse",
+          "recoveryServicesGeo": "sea"
+        },
+        "southindia": {
+          "abbreviation": "ins",
+          "recoveryServicesGeo": "ins"
+        },
+        "swedencentral": {
+          "abbreviation": "sec",
+          "recoveryServicesGeo": "sdc"
+        },
+        "switzerlandnorth": {
+          "abbreviation": "chn",
+          "recoveryServicesGeo": "szn"
+        },
+        "switzerlandwest": {
+          "abbreviation": "chw",
+          "recoveryServicesGeo": "szw"
+        },
+        "uaecentral": {
+          "abbreviation": "aec",
+          "recoveryServicesGeo": "uac"
+        },
+        "uaenorth": {
+          "abbreviation": "aen",
+          "recoveryServicesGeo": "uan"
+        },
+        "uksouth": {
+          "abbreviation": "uks",
+          "recoveryServicesGeo": "uks"
+        },
+        "ukwest": {
+          "abbreviation": "ukw",
+          "recoveryServicesGeo": "ukw"
+        },
+        "westcentralus": {
+          "abbreviation": "uswc",
+          "recoveryServicesGeo": "wcus"
+        },
+        "westeurope": {
+          "abbreviation": "euw",
+          "recoveryServicesGeo": "we"
+        },
+        "westindia": {
+          "abbreviation": "inw",
+          "recoveryServicesGeo": "inw"
+        },
+        "westus": {
+          "abbreviation": "usw",
+          "recoveryServicesGeo": "wus"
+        },
+        "westus2": {
+          "abbreviation": "usw2",
+          "recoveryServicesGeo": "wus2"
+        },
+        "westus3": {
+          "abbreviation": "usw3",
+          "recoveryServicesGeo": "wus3"
+        }
+      },
+      "AzureUSGovernment": {
+        "usdodcentral": {
+          "abbreviation": "dodc",
+          "recoveryServicesGeo": "udc"
+        },
+        "usdodeast": {
+          "abbreviation": "dode",
+          "recoveryServicesGeo": "ude"
+        },
+        "usgovarizona": {
+          "abbreviation": "az",
+          "recoveryServicesGeo": "uga"
+        },
+        "usgovtexas": {
+          "abbreviation": "tx",
+          "recoveryServicesGeo": "ugt"
+        },
+        "usgovvirginia": {
+          "abbreviation": "va",
+          "recoveryServicesGeo": "ugv"
+        }
+      },
+      "other": {
+        "north": {
+          "abbreviation": "no"
+        },
+        "east": {
+          "abbreviation": "ea"
+        },
+        "south": {
+          "abbreviation": "so"
+        },
+        "west": {
+          "abbreviation": "we"
+        },
+        "central": {
+          "abbreviation": "ce"
+        },
+        "northcentral": {
+          "abbreviation": "noce"
+        },
+        "eastcentral": {
+          "abbreviation": "wece"
+        },
+        "southcentral": {
+          "abbreviation": "soce"
+        },
+        "westcentral": {
+          "abbreviation": "wece"
+        }
+      }
+    },
+    "_1.locationDefinitions": "[variables('_1._3')]",
+    "_1.osDiskNamePattern": "SHNAME-osdisk",
+    "_1.resourceAbbreviations": "[variables('_1._2')]",
+    "namingPolicy": {
       "defaults": {
         "components": [
           "resourceType",
@@ -7597,7 +7879,7 @@
       },
       "patterns": {
         "virtualMachine": "SHNAME",
-        "osDisk": "SHNAME-osdisk",
+        "osDisk": "[variables('_1.osDiskNamePattern')]",
         "nic": "SHNAME-nic",
         "standaloneAvailabilitySet": "avset-##",
         "privateEndpointFirst": "{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID",
@@ -7652,300 +7934,7 @@
         "sessionHosts": "session-hosts",
         "sessionHostPolicy": "session-host-policy"
       }
-    },
-    "_1._3": {
-      "applicationInsights": "appi",
-      "appServicePlans": "asp",
-      "automationAccounts": "aa",
-      "availabilitySets": "as",
-      "computeGalleries": "gal",
-      "dataCollectionEndpoints": "dce",
-      "dataCollectionRules": "dcr",
-      "desktopApplicationGroups": "vddag",
-      "diskAccesses": "da",
-      "remoteApplicationGroups": "vdrag",
-      "diskEncryptionSets": "des",
-      "functionApps": "fa",
-      "hostPools": "vdpool",
-      "keyVaults": "kv",
-      "logAnalyticsWorkspaces": "law",
-      "natGateways": "ng",
-      "netAppAccounts": "naa",
-      "netAppCapacityPools": "nacp",
-      "networkInterfaces": "nic",
-      "networkSecurityGroups": "nsg",
-      "osdisks": "disk",
-      "privateEndpoints": "pe",
-      "privateLinkScopes": "pls",
-      "publicIPAddresses": "pip",
-      "recoveryServicesVaults": "rsv",
-      "resourceGroups": "rg",
-      "routeTables": "rt",
-      "scalingPlans": "vdscaling",
-      "storageAccounts": "sa",
-      "templateSpecs": "ts",
-      "userAssignedIdentities": "uai",
-      "virtualMachines": "vm",
-      "virtualNetworks": "vnet",
-      "subnets": "snet",
-      "workbooks": "wb",
-      "workspaces": "vdws",
-      "imageDefinitions": "vmid"
-    },
-    "_1._4": {
-      "AzureCloud": {
-        "australiacentral": {
-          "abbreviation": "auc",
-          "recoveryServicesGeo": "acl"
-        },
-        "australiacentral2": {
-          "abbreviation": "auc2",
-          "recoveryServicesGeo": "acl2"
-        },
-        "australiaeast": {
-          "abbreviation": "aue",
-          "recoveryServicesGeo": "ae"
-        },
-        "australiasoutheast": {
-          "abbreviation": "ause",
-          "recoveryServicesGeo": "ase"
-        },
-        "brazilsouth": {
-          "abbreviation": "brs",
-          "recoveryServicesGeo": "brs"
-        },
-        "brazilsoutheast": {
-          "abbreviation": "brse",
-          "recoveryServicesGeo": "bse"
-        },
-        "canadacentral": {
-          "abbreviation": "cac",
-          "recoveryServicesGeo": "cnc"
-        },
-        "canadaeast": {
-          "abbreviation": "cae",
-          "recoveryServicesGeo": "cne"
-        },
-        "centralindia": {
-          "abbreviation": "inc",
-          "recoveryServicesGeo": "inc"
-        },
-        "centralus": {
-          "abbreviation": "usc",
-          "recoveryServicesGeo": "cus"
-        },
-        "eastasia": {
-          "abbreviation": "ase",
-          "recoveryServicesGeo": "ea"
-        },
-        "eastus": {
-          "abbreviation": "use",
-          "recoveryServicesGeo": "eus"
-        },
-        "eastus2": {
-          "abbreviation": "use2",
-          "recoveryServicesGeo": "eus2"
-        },
-        "francecentral": {
-          "abbreviation": "frc",
-          "recoveryServicesGeo": "frc"
-        },
-        "francesouth": {
-          "abbreviation": "frs",
-          "recoveryServicesGeo": "frs"
-        },
-        "germanynorth": {
-          "abbreviation": "den",
-          "recoveryServicesGeo": "gn"
-        },
-        "germanywestcentral": {
-          "abbreviation": "dewc",
-          "recoveryServicesGeo": "gwc"
-        },
-        "israelcentral": {
-          "abbreviation": "ilc",
-          "recoveryServicesGeo": "ilc"
-        },
-        "italynorth": {
-          "abbreviation": "itn",
-          "recoveryServicesGeo": "itn"
-        },
-        "japaneast": {
-          "abbreviation": "jpe",
-          "recoveryServicesGeo": "jpe"
-        },
-        "japanwest": {
-          "abbreviation": "jpw",
-          "recoveryServicesGeo": "jpw"
-        },
-        "jioindiacentral": {
-          "abbreviation": "injc",
-          "recoveryServicesGeo": "jic"
-        },
-        "jioindiawest": {
-          "abbreviation": "injw",
-          "recoveryServicesGeo": "jiw"
-        },
-        "koreacentral": {
-          "abbreviation": "krc",
-          "recoveryServicesGeo": "krc"
-        },
-        "koreasouth": {
-          "abbreviation": "krs",
-          "recoveryServicesGeo": "krs"
-        },
-        "northcentralus": {
-          "abbreviation": "usnc",
-          "recoveryServicesGeo": "ncus"
-        },
-        "northeurope": {
-          "abbreviation": "eun",
-          "recoveryServicesGeo": "ne"
-        },
-        "norwayeast": {
-          "abbreviation": "noe",
-          "recoveryServicesGeo": "nwe"
-        },
-        "norwaywest": {
-          "abbreviation": "now",
-          "recoveryServicesGeo": "nww"
-        },
-        "polandcentral": {
-          "abbreviation": "plc",
-          "recoveryServicesGeo": "plc"
-        },
-        "qatarcentral": {
-          "abbreviation": "qac",
-          "recoveryServicesGeo": "qac"
-        },
-        "southafricanorth": {
-          "abbreviation": "zan",
-          "recoveryServicesGeo": "san"
-        },
-        "southafricawest": {
-          "abbreviation": "zaw",
-          "recoveryServicesGeo": "saw"
-        },
-        "southcentralus": {
-          "abbreviation": "ussc",
-          "recoveryServicesGeo": "scus"
-        },
-        "southeastasia": {
-          "abbreviation": "asse",
-          "recoveryServicesGeo": "sea"
-        },
-        "southindia": {
-          "abbreviation": "ins",
-          "recoveryServicesGeo": "ins"
-        },
-        "swedencentral": {
-          "abbreviation": "sec",
-          "recoveryServicesGeo": "sdc"
-        },
-        "switzerlandnorth": {
-          "abbreviation": "chn",
-          "recoveryServicesGeo": "szn"
-        },
-        "switzerlandwest": {
-          "abbreviation": "chw",
-          "recoveryServicesGeo": "szw"
-        },
-        "uaecentral": {
-          "abbreviation": "aec",
-          "recoveryServicesGeo": "uac"
-        },
-        "uaenorth": {
-          "abbreviation": "aen",
-          "recoveryServicesGeo": "uan"
-        },
-        "uksouth": {
-          "abbreviation": "uks",
-          "recoveryServicesGeo": "uks"
-        },
-        "ukwest": {
-          "abbreviation": "ukw",
-          "recoveryServicesGeo": "ukw"
-        },
-        "westcentralus": {
-          "abbreviation": "uswc",
-          "recoveryServicesGeo": "wcus"
-        },
-        "westeurope": {
-          "abbreviation": "euw",
-          "recoveryServicesGeo": "we"
-        },
-        "westindia": {
-          "abbreviation": "inw",
-          "recoveryServicesGeo": "inw"
-        },
-        "westus": {
-          "abbreviation": "usw",
-          "recoveryServicesGeo": "wus"
-        },
-        "westus2": {
-          "abbreviation": "usw2",
-          "recoveryServicesGeo": "wus2"
-        },
-        "westus3": {
-          "abbreviation": "usw3",
-          "recoveryServicesGeo": "wus3"
-        }
-      },
-      "AzureUSGovernment": {
-        "usdodcentral": {
-          "abbreviation": "dodc",
-          "recoveryServicesGeo": "udc"
-        },
-        "usdodeast": {
-          "abbreviation": "dode",
-          "recoveryServicesGeo": "ude"
-        },
-        "usgovarizona": {
-          "abbreviation": "az",
-          "recoveryServicesGeo": "uga"
-        },
-        "usgovtexas": {
-          "abbreviation": "tx",
-          "recoveryServicesGeo": "ugt"
-        },
-        "usgovvirginia": {
-          "abbreviation": "va",
-          "recoveryServicesGeo": "ugv"
-        }
-      },
-      "other": {
-        "north": {
-          "abbreviation": "no"
-        },
-        "east": {
-          "abbreviation": "ea"
-        },
-        "south": {
-          "abbreviation": "so"
-        },
-        "west": {
-          "abbreviation": "we"
-        },
-        "central": {
-          "abbreviation": "ce"
-        },
-        "northcentral": {
-          "abbreviation": "noce"
-        },
-        "eastcentral": {
-          "abbreviation": "wece"
-        },
-        "southcentral": {
-          "abbreviation": "soce"
-        },
-        "westcentral": {
-          "abbreviation": "wece"
-        }
-      }
-    },
-    "_1.locationDefinitions": "[variables('_1._4')]",
-    "_1.resourceAbbreviations": "[variables('_1._3')]",
-    "namingPolicy": "[variables('_1._2')]"
+    }
   },
   "resources": {
     "storageCmk": {

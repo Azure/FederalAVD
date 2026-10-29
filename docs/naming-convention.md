@@ -597,10 +597,9 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ## Maintaining the shared naming policy
 
-The authoritative rule catalog is
-[`namingPolicy.json`](../deployments/shared/data/namingPolicy.json).
-[`naming.bicep`](../deployments/shared/modules/orchestration/naming/naming.bicep)
-is the single public Bicep entry point for composition, resource formatting,
+The authoritative rule catalog is the exported `namingPolicy` object in
+[`naming.bicep`](../deployments/shared/modules/orchestration/naming/naming.bicep).
+The same file is the single public Bicep entry point for composition, resource formatting,
 location lookup, uniqueness and runtime naming patterns. Host pools, Shared
 Services, Image Management, Image Build, networking and add-ons all consume it,
 directly or through context/output adapters.
@@ -610,8 +609,8 @@ Host pools import `hostPoolNames` directly; standalone FSLogix imports
 to the deployment location). Supply the intended locations explicitly for
 split-location deployments; see the
 [location and bundle contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-naming-bundles).
-Abbreviations and region mappings remain in shared JSON so
-PowerShell and Portal-default generation use the same configuration.
+Abbreviations and region mappings remain in shared JSON so Bicep and PowerShell
+can consume the same configuration.
 
 For example, both host pools and Shared Services request the
 `operationsResourceGroup` role. Change that role's purpose once to affect both;
@@ -619,32 +618,29 @@ do not edit their deployment templates separately. A default workload change
 also reaches Image Management, Replacer, networking and workload-bearing
 Automation Accounts. Some roles intentionally omit workload.
 
-Bicep parameter defaults and Portal form data are **generated from the policy**,
-not independently maintained naming rules. After editing a policy dataset:
+Bicep parameter defaults and Portal controls use **explicit literal defaults**.
+There is no synchronization script or hidden Portal policy snapshot. After changing
+the native policy, update any corresponding literals and run the drift checks:
 
 ```powershell
-.\tools\Sync-NamingPolicy.ps1
-.\tools\Sync-NamingPolicy.ps1 -Check
+Invoke-Pester -Script tests\Naming.Tests.ps1,tests\NamingBundles.Tests.ps1,tests\IdentifierNaming.Tests.ps1
 ```
 
-The generator writes marked Bicep defaults as literal values so ARM parameter
-defaults do not contain file-loading variable references. It also updates
-the Portal UI-default payloads, component and delimiter dropdown defaults, and
-literal workload/delimiter text-box defaults. The hidden form payload contains
-only the shared convention defaults, standalone FSLogix identifier, four
-session-host fallback patterns, and resource abbreviations. Resource-role
-purposes, deployment limits and unrelated patterns stay out of the Portal.
+Tests evaluate the exported policy with Bicep, then check component order,
+delimiter, workload, editable abbreviations, session-host pattern fallbacks,
+the shared FSLogix identifier and Bicep parameter defaults. ARM parameter defaults
+remain literals because they cannot reference variables. Forms retain user choices
+and host-pool inheritance without reading an uninitialized hidden control.
 
-Adding or changing a deployment role does not itself regenerate forms or make
-the publisher's generated-default freshness check fail. Run the sync check after
-policy changes; it verifies whether any UI-consumed or marked Bicep defaults
-actually changed. UI-default changes still require regeneration. Do not edit
-generated defaults manually.
+The Template Spec publisher has explicit naming defaults and purpose tokens,
+validated against the compiled policy by Pester. It does not import the policy or
+run a synchronization gate. Review publisher name changes deliberately: a changed
+name can target a different Template Spec rather than update an existing one.
 
 Rebuild affected ARM JSON and run the naming regression and synchronization
 checks. Test the affected steps in a live Azure Portal session after changing
 form bindings; static validation cannot prove Portal rendering behavior.
-The Template Spec publisher reads the same datasets at invocation time.
+The Template Spec publisher still reads the shared abbreviation and location catalogs.
 See the [maintainer reference](../deployments/shared/modules/orchestration/naming/README.md)
 for implementation boundaries and tests.
 

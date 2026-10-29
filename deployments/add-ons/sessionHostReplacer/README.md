@@ -597,9 +597,9 @@ Bicep, or another tool. It doesn't support automated host pools with Session Hos
 Pass the same `namingConvention` and `identifier` values used in the host pool deployment. When deploying from the Portal, these are pre-populated from the `hpNamingConvention` and `hpIdentifier` tags on the host pool resource. Session host naming patterns (`virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv`) are pre-populated from tags on the hosts resource group.
 
 For an untagged host pool, the Portal emits an empty convention object and the shared
-naming library applies the canonical policy defaults. The output must not dereference
-the hidden naming-policy control during form initialization: it may not have a value
-yet, which can leave the initial page blank and break step navigation.
+naming library applies the canonical policy defaults. Portal defaults and adopted-host
+fallback patterns are literals checked by Pester; there is no hidden naming-policy
+control whose initialization could leave the initial page blank or break navigation.
 
 SHR uses the [common Function App naming bundle](../../shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
 with application identifier `${identifier}-shr`. An empty identifier uses the

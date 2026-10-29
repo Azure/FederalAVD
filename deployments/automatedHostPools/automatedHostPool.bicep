@@ -48,7 +48,6 @@ param location string
 param controlPlaneLocation string = location
 
 @description('Optional. Naming convention shared with the standard host-pool deployment.')
-// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

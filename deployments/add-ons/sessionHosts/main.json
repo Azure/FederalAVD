@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "4482491537127498711"
+      "templateHash": "13831775831091836159"
     }
   },
   "definitions": {
@@ -793,7 +793,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "2070513515256845102"
+              "templateHash": "3562857783434377092"
             },
             "name": "Session host deployment orchestration",
             "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
@@ -1771,7 +1771,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "6594375555689532257"
+                      "templateHash": "4198771185535715484"
                     },
                     "name": "Session host VM batch orchestration",
                     "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
@@ -2286,8 +2286,7 @@
                     "identityType": "[if(if(or(not(contains(parameters('identitySolution'), 'DomainServices')), parameters('enableMonitoring')), true(), false()), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'SystemAssigned, UserAssigned', 'SystemAssigned'), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'UserAssigned', 'None'))]",
                     "userAssignedIdentities": "[if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), createObject(format('{0}', parameters('artifactsUserAssignedIdentityResourceId')), createObject()), createObject())]",
                     "identity": "[if(not(equals(variables('identityType'), 'None')), createObject('type', variables('identityType'), 'userAssignedIdentities', if(not(empty(variables('userAssignedIdentities'))), variables('userAssignedIdentities'), null())), null())]",
-                    "_1._2": "SHNAME-osdisk",
-                    "osDiskNamePattern": "[variables('_1._2')]"
+                    "osDiskNamePattern": "SHNAME-osdisk"
                   },
                   "resources": {
                     "hostPool": {

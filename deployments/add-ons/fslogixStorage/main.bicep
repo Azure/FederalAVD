@@ -8,11 +8,9 @@ import { fslogixNames } from '../../shared/modules/orchestration/naming/naming.b
 param location string
 
 @description('Optional. Identifier used by the shared FederalAVD naming convention.')
-// naming-policy: identifiers.sharedFslogix
 param identifier string = 'fslogix'
 
 @description('Optional. Naming convention used to derive resource names when explicit overrides are not supplied.')
-// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'

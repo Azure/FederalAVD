@@ -1,4 +1,5 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
 
 Describe 'Identifier-based shared resource naming' {
     BeforeAll {
@@ -17,7 +18,6 @@ Describe 'Identifier-based shared resource naming' {
             throw 'Bicep CLI is required. Install it with az bicep install before running identifier naming tests.'
         }
         foreach ($relative in @(
-            'deployments\shared\data\namingPolicy.json'
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             'deployments\shared\modules\orchestration\naming\naming.bicep'
@@ -36,7 +36,7 @@ Describe 'Identifier-based shared resource naming' {
         $encoded = ($raw -join [Environment]::NewLine | ConvertFrom-Json).outputs.encodedResults
         # The CLI renderer wraps long strings; base64 preserves exact values through its console transport.
         $values = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) | ConvertFrom-Json
-        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $policy = Get-TestNamingPolicy
         $integrationPath = Join-Path $testDirectory 'integration.json'
         & $bicep build (Join-Path $repoRoot 'tests\fixtures\naming-function-app.bicep') --outfile $integrationPath
         if ($LASTEXITCODE -ne 0) { throw 'Function App naming/module integration did not compile.' }
@@ -263,13 +263,14 @@ Describe 'Identifier-based shared resource naming' {
     }
 
     It 'propagates numeric type limits and the default hash length without changing type overrides' {
-        $policyPath = Join-Path $testDirectory 'deployments\shared\data\namingPolicy.json'
+        $policyPath = Join-Path $testDirectory 'deployments\shared\modules\orchestration\naming\naming.bicep'
         $original = [IO.File]::ReadAllText($policyPath)
         try {
-            $changedPolicy = $original | ConvertFrom-Json
-            $changedPolicy.resourceTypes.storageAccounts.lengthLimit = 23
-            $changedPolicy.limits.defaultUniqueLength = 5
-            [IO.File]::WriteAllText($policyPath, (ConvertTo-Json -InputObject $changedPolicy -Depth 100))
+            $changedPolicy = $original.Replace(
+                "storageAccounts: { lengthLimit: 24,", "storageAccounts: { lengthLimit: 23,"
+            ).Replace('defaultUniqueLength: 6', 'defaultUniqueLength: 5')
+            $changedPolicy | Should Not Be $original
+            [IO.File]::WriteAllText($policyPath, $changedPolicy)
             $raw = @(& $bicep local-deploy (Join-Path $testDirectory 'tests\fixtures\naming-types.bicepparam') --format Json 2>&1)
             if ($LASTEXITCODE -ne 0) { throw "Changed-policy naming evaluation failed: $($raw -join [Environment]::NewLine)" }
             $encoded = ($raw -join [Environment]::NewLine | ConvertFrom-Json).outputs.encodedResults
@@ -324,7 +325,7 @@ Describe 'Identifier-based shared resource naming' {
         @{ Name = 'automation numeric first component'; Type = 'automationAccounts'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
         @{ Name = 'backup vault numeric first component'; Type = 'recoveryServicesVaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
     ) + @(
-        $discoveryPolicy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $discoveryPolicy = Get-TestNamingPolicy
         $discoveryAbbreviations = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\resourceAbbreviations.json') -Raw | ConvertFrom-Json
         foreach ($type in $discoveryPolicy.resourceTypes.PSObject.Properties) {
             $code = $discoveryAbbreviations.($type.Name)

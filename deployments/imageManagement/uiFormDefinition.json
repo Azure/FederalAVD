@@ -35,16 +35,6 @@
                   "Microsoft.Compute/galleries"
                 ]
               }
-            },
-            {
-              "name": "federalAvdNamingPolicy",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Generated naming policy",
-              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"sharedFslogix\":\"fslogix\"},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"}}",
-              "visible": false,
-              "constraints": {
-                "required": false
-              }
             }
           ]
         },
@@ -1043,7 +1033,7 @@
                   "name": "rtCodeRg",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Resource Groups abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.resourceGroups]",
+                  "defaultValue": "rg",
                   "toolTip": "Abbreviation substituted for the Resource Type component in resource group names.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1056,7 +1046,7 @@
                   "name": "rtCodeGal",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Compute Galleries abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.computeGalleries]",
+                  "defaultValue": "gal",
                   "toolTip": "Abbreviation substituted for the Resource Type component in gallery names. Gallery names replace hyphens with underscores automatically.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1069,7 +1059,7 @@
                   "name": "rtCodeUai",
                   "type": "Microsoft.Common.TextBox",
                   "label": "User Assigned Identities abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.userAssignedIdentities]",
+                  "defaultValue": "uai",
                   "toolTip": "Abbreviation substituted for the Resource Type component in managed identity names.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1082,7 +1072,7 @@
                   "name": "rtCodeSa",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage Accounts abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.storageAccounts]",
+                  "defaultValue": "sa",
                   "toolTip": "Abbreviation substituted for the Resource Type component in storage account names. Storage names strip hyphens and are capped at 24 characters.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1095,7 +1085,7 @@
                   "name": "rtCodePe",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Private Endpoints abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.privateEndpoints]",
+                  "defaultValue": "pe",
                   "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint names.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1108,7 +1098,7 @@
                   "name": "rtCodeNic",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network Interfaces abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.networkInterfaces]",
+                  "defaultValue": "nic",
                   "toolTip": "Abbreviation substituted for the Resource Type component in private endpoint network interface names.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1121,7 +1111,7 @@
                   "name": "rtCodeDes",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Disk Encryption Sets abbreviation",
-                  "defaultValue": "[parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.diskEncryptionSets]",
+                  "defaultValue": "des",
                   "toolTip": "Abbreviation substituted for the Resource Type component in disk encryption set names.",
                   "visible": "[or(equals(steps('tagsAndNaming').naming.component1, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component2, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component3, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component4, 'resourceType'), or(equals(steps('tagsAndNaming').naming.component5, 'resourceType'), equals(steps('tagsAndNaming').naming.component6, 'resourceType'))))))]",
                   "constraints": {
@@ -1182,7 +1172,7 @@
         "createConfidentialVmGalleryDes": "[steps('encryption').cvmDesSection.createConfidentialVmGalleryDes]",
         "confidentialVMOrchestratorObjectId": "[if(steps('encryption').cvmDesSection.createConfidentialVmGalleryDes, steps('encryption').cvmDesSection.confidentialVMOrchestratorObjectId, '')]",
         "deployImageBuildResourceGroup": "[steps('imageBuildRg').deployImageBuildResourceGroup]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', steps('tagsAndNaming').naming.component2, '\",\"', steps('tagsAndNaming').naming.component3, '\",\"', steps('tagsAndNaming').naming.component4, '\",\"', steps('tagsAndNaming').naming.component5, '\",\"', steps('tagsAndNaming').naming.component6, '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"imageManagementStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.imageManagementStoragePrefix),'',steps('tagsAndNaming').naming.imageManagementStoragePrefix), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.resourceGroups,steps('tagsAndNaming').naming.rtCodeRg), '\",\"computeGalleries\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeGal),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.computeGalleries,steps('tagsAndNaming').naming.rtCodeGal), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.userAssignedIdentities,steps('tagsAndNaming').naming.rtCodeUai), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.storageAccounts,steps('tagsAndNaming').naming.rtCodeSa), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.privateEndpoints,steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.networkInterfaces,steps('tagsAndNaming').naming.rtCodeNic), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),parse(steps('basics').federalAvdNamingPolicy).resourceTypeCodes.diskEncryptionSets,steps('tagsAndNaming').naming.rtCodeDes), '\"}}'))]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', steps('tagsAndNaming').naming.component2, '\",\"', steps('tagsAndNaming').naming.component3, '\",\"', steps('tagsAndNaming').naming.component4, '\",\"', steps('tagsAndNaming').naming.component5, '\",\"', steps('tagsAndNaming').naming.component6, '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"imageManagementStoragePrefix\":\"', if(empty(steps('tagsAndNaming').naming.imageManagementStoragePrefix),'',steps('tagsAndNaming').naming.imageManagementStoragePrefix), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"computeGalleries\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal), '\",\"userAssignedIdentities\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeUai),'uai',steps('tagsAndNaming').naming.rtCodeUai), '\",\"storageAccounts\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeSa),'sa',steps('tagsAndNaming').naming.rtCodeSa), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\",\"diskEncryptionSets\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeDes),'des',steps('tagsAndNaming').naming.rtCodeDes), '\"}}'))]",
         "tags": "[steps('tagsAndNaming').tags.resourceTags]"
       }
     }

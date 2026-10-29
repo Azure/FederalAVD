@@ -9,21 +9,21 @@ they supply explicit customer names and existing-resource adoption decisions.
 
 | Concern | Owner |
 | --- | --- |
-| Default convention, resource-type rules, role purposes, patterns and resource limits | [namingPolicy.json](../../../data/namingPolicy.json) |
+| Default convention, resource-type rules, role purposes, patterns and resource limits | Exported `namingPolicy` in [naming.bicep](./naming.bicep) |
 | Composition, formatting, location lookup and uniqueness recipes | [naming.bicep](./naming.bicep) |
 | Default resource abbreviations | [resourceAbbreviations.json](../../../data/resourceAbbreviations.json) |
 | Region abbreviations | [locations.json](../../../data/locations.json) |
 | Host-pool and FSLogix bundles, explicit location context and existing-workspace adoption | `hostPoolNames` and `fslogixNames` in [naming.bicep](./naming.bicep) |
-| Generated Bicep parameter defaults, Portal UI-default payloads and dropdown defaults | [Sync-NamingPolicy.ps1](../../../../../tools/Sync-NamingPolicy.ps1) |
-| Template Spec publishing using the same policy datasets | [New-TemplateSpecs.ps1](../../../../../tools/New-TemplateSpecs.ps1) |
+| Literal Bicep parameter defaults, Portal defaults and drift validation | Deployment entry templates, forms and [Naming.Tests.ps1](../../../../../tests/Naming.Tests.ps1) |
+| Explicit Template Spec publishing defaults and purpose catalog | [New-TemplateSpecs.ps1](../../../../../tools/New-TemplateSpecs.ps1) |
 
 Standard host pools, automated host pools and the dedicated PoC call the
 `hostPoolNames` bundle directly. The FSLogix Storage add-on calls the focused
 `fslogixNames` bundle and has no host-pool dependency. Shared Services, Image
 Management and Session Host Replacer use the same policy implementation directly.
 Networking, PoC networking, Automation add-ons and Image
-Build also consume the shared policy. The publisher reads its defaults and purpose
-catalog from the same datasets.
+Build also consume the shared policy. The publisher maintains explicit defaults and
+purpose tokens; Pester checks their alignment with the compiled Bicep policy.
 
 ## One entry point for every deployment
 
@@ -115,52 +115,46 @@ including build-run identities and private-endpoint VNet shortening. Changing
 an already deployed name requires an explicit resource-lifecycle decision;
 the common helper does not migrate resources automatically.
 
-After editing a policy dataset:
+After editing the native policy or abbreviation catalog:
 
-1. Run `tools\Sync-NamingPolicy.ps1`. It updates Bicep defaults marked with
-   `// naming-policy: <policy.path>` and the generated Portal UI-default controls
-   and component defaults. Do not edit these generated values manually.
+1. Update affected literal Bicep parameter defaults, Portal defaults and publisher
+   catalog values deliberately. Pester reports drift; it does not rewrite files.
 2. Rebuild affected entry-point ARM JSON, including embedded-template dependencies.
-3. Run naming parity/propagation tests, `tools\Sync-NamingPolicy.ps1 -Check`,
-   and Bicep/ARM synchronization checks.
+3. Run `tests\Naming.Tests.ps1`, `tests\NamingBundles.Tests.ps1`,
+   `tests\IdentifierNaming.Tests.ps1`, `tests\TemplateSpecs.Tests.ps1` and the
+   applicable Bicep/ARM synchronization checks.
 4. Render affected Portal steps in a live Portal session. JSON/schema checks do
    not validate Portal expression evaluation or `CustomHtmlField` behavior.
 
-Bicep defaults are generated as literals deliberately. With the current compiler,
-`loadJsonContent` in a parameter default emits a `variables('$fxv#...')` reference;
-ARM does not permit variables in parameter defaults. Generating literals produces
-valid parameter defaults and avoids copying the whole policy into each
-default. Runtime naming still uses the shared policy functions directly.
+Bicep parameter defaults remain literals because ARM defaults cannot reference
+variables. Runtime naming uses the shared functions directly. Tests evaluate the
+exported native policy through a Bicep parameters fixture rather than attempting
+to parse Bicep source as configuration. The separately exported OS disk scalar is
+also used inside the policy, keeping small imports free of the full catalog.
 
 ### Portal and deployment boundary
 
-The JSON files are shared configuration, not Azure Policy definitions. Native
-Bicep functions calculate deployment names; PowerShell reads the same data for
-Template Spec publishing and default generation. Keeping data in JSON avoids a
-second handwritten catalog for those non-Bicep consumers.
+The naming policy is a native exported object in `naming.bicep`, not an Azure
+Policy definition. The separate abbreviation and location catalogs remain JSON.
+There is no policy JSON file, synchronization script or generated Portal snapshot.
 
 Portal forms collect convention choices, identifiers, explicit overrides and
-resource selections. They do not need the deployment role catalog or uniqueness
-recipes. Their hidden `federalAvdNamingPolicy` control contains only a shared
-UI-default projection:
+resource selections. Their editable defaults, adopted-host fallback patterns and
+warning expressions use ordinary literals. Custom convention editors still output
+the selected components, delimiter, workload and abbreviation overrides. Forms
+that request the standard convention emit `{}`, which the Bicep library resolves.
+Existing-host convention tags retain their established precedence.
 
-- The default convention.
-- The standalone FSLogix identifier.
-- Default VM, OS disk, NIC and standalone availability-set patterns.
-- The resource-abbreviation dataset used by editable abbreviation controls.
+Global outputs may evaluate before controls initialize. Avoid hidden-control
+lookups for defaults: that dependency previously caused blank initial pages and
+broken navigation. Pester validates literal defaults and output fallbacks against
+the compiled Bicep policy and abbreviation catalog instead of generating bindings.
 
-This is the union of defaults used across naming forms, not a per-form deployment
-policy. The generator does not include resource-role purposes, deployment length
-limits, unrelated identifiers, or deployment-only patterns. Adding or changing a
-role therefore does not change Portal payloads or fail the publisher's freshness
-gate solely because of that role change. Changes to UI-consumed defaults still
-require synchronization.
-
-Forms cannot import local JSON or Bicep functions at runtime. The generated
-payload supplies defaults for existing expressions, including adopted-host-pool
-fallbacks and Key Vault length warnings; it is not another naming authority.
-The publisher checks generated defaults/forms for freshness before accessing
-Azure. Bicep remains responsible for deployment name composition, formatting and
+The publisher reads the abbreviation and location catalogs, but not the Bicep
+policy. Its explicit defaults and purpose tokens are checked by Pester, not a
+publication-time synchronization gate. Review any publisher naming change as a
+resource-lifecycle decision: a different name targets a different Template Spec.
+Bicep remains responsible for deployment name composition, formatting and
 resource-specific uniqueness; explicit overrides and existing-resource adoption
 remain caller responsibilities.
 
@@ -179,8 +173,8 @@ Azure acceptance test or proof that arbitrary customer conventions are valid.
 | Function Apps and Key Vaults | The identifier-based API validates full generated lengths without truncation. Established role-based `resourceName` formatters retain their existing budgets. |
 | Networking and Automation | Some roles intentionally omit a purpose or workload. These are role-specific rules, not defaults for every add-on. |
 | Runtime patterns and Image Build | `SHNAME`, `TOKEN`, `##`, private-endpoint placeholders, and per-run build identities have different lifecycles from stable service names. |
-| Portal | Only UI defaults are generated. Existing client-side warnings are advisory, not authoritative deployment naming validation. |
-| Publisher | PowerShell composes Template Spec names from the shared data; Bicep cannot execute in the form or directly supply PowerShell values. Keep their convention semantics covered by parity tests. |
+| Portal | Literal defaults and fallbacks are checked for drift. Existing client-side warnings are advisory, not authoritative deployment naming validation. |
+| Publisher | PowerShell composes Template Spec names from explicit defaults/catalog entries and shared abbreviations/locations. Keep defaults and convention semantics covered by parity tests. |
 
 New add-ons use the identifier-based interface below for explicit validation and
 length budgets. Role-based naming uses `resourceName` and the policy's role recipes.

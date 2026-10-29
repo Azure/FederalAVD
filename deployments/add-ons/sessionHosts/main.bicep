@@ -33,7 +33,6 @@ param artifactsUserAssignedIdentityResourceId string = ''
 param availability string = 'None'
 
 @description('Optional. Naming convention for availability sets. Use ## token for the index (e.g., "avset-01"). Defaults to "avset-##".')
-// naming-policy: patterns.standaloneAvailabilitySet
 param availabilitySetNameConv string = 'avset-##'
 
 @description('Optional. Availability zones to spread session hosts across when availability is AvailabilityZones.')
@@ -173,11 +172,9 @@ param intuneEnrollment bool = false
 param location string = resourceGroup().location
 
 @description('Optional. Naming convention for NICs. SHNAME is replaced with the session host name at deploy time. Defaults to "SHNAME-nic".')
-// naming-policy: patterns.nic
 param virtualMachineNicNameConv string = 'SHNAME-nic'
 
 @description('Optional. Naming convention for OS disks. SHNAME is replaced with the session host name at deploy time. Defaults to "SHNAME-osdisk".')
-// naming-policy: patterns.osDisk
 param virtualMachineDiskNameConv string = 'SHNAME-osdisk'
 
 @description('Optional. OU path in Active Directory for session host computer accounts.')
@@ -226,7 +223,6 @@ param tags object = {}
 param timeZone string = 'Eastern Standard Time'
 
 @description('Optional. Naming convention for VM names. SHNAME is replaced with the session host name at deploy time. Defaults to "SHNAME".')
-// naming-policy: patterns.virtualMachine
 param virtualMachineNameConv string = 'SHNAME'
 
 @description('Required. Azure VM size for session hosts.')

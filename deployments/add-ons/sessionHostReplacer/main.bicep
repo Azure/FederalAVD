@@ -33,7 +33,6 @@ param tags object = {}
 // Should match the convention used when deploying the host pool. Pre-populated from the
 // hpNamingConvention tag on the host pool resource.
 @description('Optional. Function App infrastructure naming convention; match the host pool convention. The Portal populates it from the hpNamingConvention tag.')
-// naming-policy: defaults
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -82,19 +81,15 @@ param storageEncryptionIdentityNameOverride string = ''
 // host name at deploy time (e.g., "SHNAME" becomes "avdhost001"). Pre-populated from the
 // virtualMachineNameConv tag on the hosts resource group.
 @description('Required. Session-host VM name pattern; SHNAME is replaced at deployment. The Portal reads the virtualMachineNameConv tag from the hosts resource group.')
-// naming-policy: patterns.virtualMachine
 param virtualMachineNameConv string = 'SHNAME'
 
 @description('Required. Naming convention for session host OS disks. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineDiskNameConv tag on the hosts resource group.')
-// naming-policy: patterns.osDisk
 param virtualMachineDiskNameConv string = 'SHNAME-osdisk'
 
 @description('Required. Naming convention for session host network interfaces. SHNAME is replaced with the session host name at deploy time. Pre-populated from the virtualMachineNicNameConv tag on the hosts resource group.')
-// naming-policy: patterns.nic
 param virtualMachineNicNameConv string = 'SHNAME-nic'
 
 @description('Required. Naming convention for availability sets. ## is replaced with the set index (e.g., "avset-##" becomes "avset-01"). Pre-populated from the availabilitySetNameConv tag on the hosts resource group.')
-// naming-policy: patterns.standaloneAvailabilitySet
 param availabilitySetNameConv string = 'avset-##'
 
 // Optional. Explicit name for the App Service Plan. If not provided, name is derived from the naming

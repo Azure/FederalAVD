@@ -200,16 +200,6 @@
                   }
                 }
               ]
-            },
-            {
-              "name": "federalAvdNamingPolicy",
-              "type": "Microsoft.Common.TextBox",
-              "label": "Generated naming policy",
-              "defaultValue": "{\"defaults\":{\"components\":[\"resourceType\",\"workload\",\"purpose\",\"location\"],\"delimiter\":\"-\",\"workload\":\"avd\"},\"identifiers\":{\"sharedFslogix\":\"fslogix\"},\"patterns\":{\"virtualMachine\":\"SHNAME\",\"osDisk\":\"SHNAME-osdisk\",\"nic\":\"SHNAME-nic\",\"standaloneAvailabilitySet\":\"avset-##\"},\"resourceTypeCodes\":{\"applicationInsights\":\"appi\",\"appServicePlans\":\"asp\",\"automationAccounts\":\"aa\",\"availabilitySets\":\"as\",\"computeGalleries\":\"gal\",\"dataCollectionEndpoints\":\"dce\",\"dataCollectionRules\":\"dcr\",\"desktopApplicationGroups\":\"vddag\",\"diskAccesses\":\"da\",\"remoteApplicationGroups\":\"vdrag\",\"diskEncryptionSets\":\"des\",\"functionApps\":\"fa\",\"hostPools\":\"vdpool\",\"keyVaults\":\"kv\",\"logAnalyticsWorkspaces\":\"law\",\"natGateways\":\"ng\",\"netAppAccounts\":\"naa\",\"netAppCapacityPools\":\"nacp\",\"networkInterfaces\":\"nic\",\"networkSecurityGroups\":\"nsg\",\"osdisks\":\"disk\",\"privateEndpoints\":\"pe\",\"privateLinkScopes\":\"pls\",\"publicIPAddresses\":\"pip\",\"recoveryServicesVaults\":\"rsv\",\"resourceGroups\":\"rg\",\"routeTables\":\"rt\",\"scalingPlans\":\"vdscaling\",\"storageAccounts\":\"sa\",\"templateSpecs\":\"ts\",\"userAssignedIdentities\":\"uai\",\"virtualMachines\":\"vm\",\"virtualNetworks\":\"vnet\",\"subnets\":\"snet\",\"workbooks\":\"wb\",\"workspaces\":\"vdws\",\"imageDefinitions\":\"vmid\"}}",
-              "visible": false,
-              "constraints": {
-                "required": false
-              }
             }
           ]
         },
@@ -1164,9 +1154,18 @@
                   "constraints": {
                     "required": true,
                     "allowedValues": [
-                      { "label": "Disabled", "value": "Disabled" },
-                      { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
-                      { "label": "Enabled", "value": "Enabled" }
+                      {
+                        "label": "Disabled",
+                        "value": "Disabled"
+                      },
+                      {
+                        "label": "Enabled with restrictions",
+                        "value": "EnabledWithRestrictions"
+                      },
+                      {
+                        "label": "Enabled",
+                        "value": "Enabled"
+                      }
                     ]
                   }
                 },
@@ -1415,7 +1414,7 @@
                   "name": "sharedStorageIdentifier",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Shared Storage Identifier",
-                  "defaultValue": "[parse(steps('scope').federalAvdNamingPolicy).identifiers.sharedFslogix]",
+                  "defaultValue": "fslogix",
                   "toolTip": "The default fslogix identifier follows the fixed purpose-token pattern used by shared monitoring, operations, control-plane, and image-management resources. Change it only to distinguish multiple shared FSLogix storage scopes.",
                   "visible": "[equals(steps('scope').storagePurpose.storageAssociation, 'Shared')]",
                   "constraints": {
@@ -1654,7 +1653,7 @@
       "parameters": {
         "location": "[steps('scope').resourceScope.location.name]",
         "identifier": "[if(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), steps('tagsAndNaming').naming.existingHostPoolPersona, if(equals(steps('scope').storagePurpose.storageAssociation, 'FutureHostPool'), steps('tagsAndNaming').naming.futureHostPoolPersona, steps('tagsAndNaming').naming.sharedStorageIdentifier))]",
-        "namingConvention": "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse(string(parse(steps('scope').federalAvdNamingPolicy).defaults)))]",
+        "namingConvention": "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse('{}'))]",
         "storageResourceGroupName": "[if(steps('scope').createStorageResourceGroup, if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.storageResourceGroupNameOverride, ''), ''), steps('scope').storageResourceGroup)]",
         "createStorageResourceGroup": "[steps('scope').createStorageResourceGroup]",
         "deploymentResourceGroupName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentResourceGroupNameOverride, ''), '')]",

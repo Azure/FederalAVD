@@ -59,6 +59,12 @@ the fixed purpose-token pattern used by shared `operations`, `monitoring`, `cont
 `image-management` resources. With the standard convention, the shared storage resource group uses
 the `fslogix-storage` purpose value. Change the identifier only when separate shared FSLogix storage
 scopes must coexist in the same region.
+When host-pool naming is not selected or no naming tag is available, the Portal emits an empty
+convention object and the shared naming library applies the canonical defaults. The output must
+not read defaults from the hidden naming-policy control before it initializes; doing so can leave
+the initial form page blank and break step navigation.
+The editable shared-storage identifier uses a literal default checked against the canonical
+policy by Pester, rather than a runtime hidden-control lookup.
 When an existing host pool is selected, its resource ID is applied as the `cm-resource-parent` tag
 to newly created storage resource groups, temporary deployment resources, storage accounts, private
 endpoints, NetApp resources, backup registrations, encryption keys, and the storage encryption
