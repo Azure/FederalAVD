@@ -231,6 +231,15 @@ Template Specs would resolve to the same name. Supplying `-ResourceGroupName` ov
 resource-group name generation without changing Template Spec names. Omitting
 `-NamingConvention` uses the publisher's default naming configuration.
 
+Publishing a new add-on requires registration as well as infrastructure naming:
+add its publishing purpose under `templateSpecs` in the shared naming policy and
+an entry in the publisher's `$addOns` catalog using that purpose and the add-on's
+folder name. The publisher expects the compiled `main.json` and
+`uiFormDefinition.json` in that folder. This publishing metadata is separate from
+resource-role recipes; supported resource types still need no add-on-specific
+naming role. A missing publishing purpose is an error, not an empty name or a
+fallback. The standalone Session Hosts package uses `templateSpecs.sessionHosts`.
+
 ---
 
 ## The eight naming components

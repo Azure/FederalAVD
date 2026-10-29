@@ -323,6 +323,48 @@ Describe 'Networking Template Spec form parameter contract' {
 }
 
 Describe 'Template Spec naming conventions' {
+    It 'resolves every registered add-on purpose with delimiter <Delimiter>' -TestCases @(
+        @{ Delimiter = '-' }
+        @{ Delimiter = '_' }
+    ) {
+        param($Delimiter)
+
+        $namingPolicy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+        $catalog = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$addOns'
+        }, $true)
+        $catalog | Should Not BeNullOrEmpty
+        $addOns = @(Invoke-Expression $catalog.Right.Extent.Text)
+        ($addOns.Count -gt 0) | Should Be $true
+        foreach ($addOn in $addOns) {
+            [string]::IsNullOrWhiteSpace([string]$addOn.Purpose) | Should Be $false
+            $name = New-ConventionName -Components @('resourceType', 'workload', 'purpose', 'location') `
+                -Delimiter $Delimiter -ResourceTypeCode 'ts' -Purpose $addOn.Purpose `
+                -LocationAbbreviation 'use' -Workload 'avd'
+            [string]::IsNullOrWhiteSpace($name) | Should Be $false
+        }
+        ($addOns | Where-Object FolderName -eq 'sessionHosts').Purpose | Should Be 'session-hosts'
+    }
+
+    It 'reports a missing publishing purpose explicitly: <Name>' -TestCases @(
+        @{ Name = 'missing'; Purpose = $null }
+        @{ Name = 'empty'; Purpose = '' }
+        @{ Name = 'whitespace'; Purpose = '   ' }
+    ) {
+        param($Name, $Purpose)
+
+        $guard = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+                $node.Extent.Text.StartsWith('if ([string]::IsNullOrWhiteSpace([string]$templateSpec.Purpose))')
+        }, $true)
+        $guard | Should Not BeNullOrEmpty
+        $templateSpec = @{ DisplayName = 'AVD Session Hosts'; Purpose = $Purpose }
+        { & ([scriptblock]::Create($guard.Extent.Text)) } |
+            Should Throw "Template Spec 'AVD Session Hosts' has no publishing purpose."
+    }
+
     It 'uses the CAF-aligned default convention' {
         $name = New-ConventionName `
             -Components @('resourceType', 'workload', 'purpose', 'location') `

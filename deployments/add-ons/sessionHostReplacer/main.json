@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "2450466079785317506"
+      "templateHash": "17157797094085771877"
     }
   },
   "definitions": {
@@ -7101,7 +7101,7 @@
     "appInsightsName": "[variables('naming').applicationInsightsName]",
     "storageAccountName": "[variables('naming').storageAccountName]",
     "storageEncryptionIdentityName": "[variables('naming').storageEncryptionIdentityName]",
-    "templateSpecNameFinal": "[if(not(empty(parameters('sessionHostTemplateSpecResourceId'))), last(split(parameters('sessionHostTemplateSpecResourceId'), '/')), if(not(empty(parameters('templateSpecName'))), parameters('templateSpecName'), __bicep.resourceNameForType(variables('effectiveNamingConvention'), 'templateSpecs', 'session-hosts', variables('namingContext'))))]",
+    "templateSpecNameFinal": "[if(not(empty(parameters('sessionHostTemplateSpecResourceId'))), last(split(parameters('sessionHostTemplateSpecResourceId'), '/')), if(not(empty(parameters('templateSpecName'))), parameters('templateSpecName'), __bicep.resourceNameForType(variables('effectiveNamingConvention'), 'templateSpecs', variables('namingPolicy').templateSpecs.sessionHosts, variables('namingContext'))))]",
     "encryptionKeyName": "[__bicep.namePattern('storageCmkKey', createObject('identifier', variables('applicationIdentifier')))]",
     "computeGalleryResourceId": "[if(contains(parameters('imageReference'), 'id'), join(take(split(parameters('imageReference').id, '/'), 9), '/'), '')]",
     "paramAgentDownloadUrl": "[if(not(empty(parameters('agentDownloadUrl'))), createObject('agentDownloadUrl', parameters('agentDownloadUrl')), createObject())]",
@@ -7649,6 +7649,7 @@
         "storageQuotaManager": "storage-quota-manager",
         "sessionHostReplacer": "session-host-replacer",
         "sessionHostMaintenance": "session-host-maintenance",
+        "sessionHosts": "session-hosts",
         "sessionHostPolicy": "session-host-policy"
       }
     },

@@ -533,7 +533,7 @@ if ($CreateAddOns) {
         @{ Purpose = $namingPolicy.templateSpecs.storageQuotaManager; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
         @{ Purpose = $namingPolicy.templateSpecs.sessionHostReplacer; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
         @{ Purpose = $namingPolicy.templateSpecs.sessionHostMaintenance; DisplayName = 'Schedule AVD Session Host Maintenance'; Description = 'Schedules a guarded one-time maintenance replacement on an existing DeleteFirst Session Host Replacer'; FolderName = 'sessionHostMaintenance' }
-        @{ Purpose = $namingPolicy.resources.sessionHostsTemplateSpec.purpose -join $delimiter; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
+        @{ Purpose = $namingPolicy.templateSpecs.sessionHosts; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
         @{ Purpose = $namingPolicy.templateSpecs.sessionHostPolicy; DisplayName = 'AVD Session Host Policy'; Description = 'Assigns reusable Azure Policy capabilities, including VM Applications, to a dedicated session-host resource group'; FolderName = 'sessionHostPolicy' }
         @{ Purpose = $namingPolicy.resources.alertsAutomation.purpose -join $delimiter; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
     )
@@ -552,6 +552,9 @@ if ($CreateAddOns) {
 
 # Serialize and check every complete request before any Azure writes.
 foreach ($templateSpec in $templateSpecs) {
+    if ([string]::IsNullOrWhiteSpace([string]$templateSpec.Purpose)) {
+        throw "Template Spec '$($templateSpec.DisplayName)' has no publishing purpose. Check its catalog entry in tools\New-TemplateSpecs.ps1 and deployments\shared\data\namingPolicy.json. Nothing has been published."
+    }
     $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateSpec.TemplateFile -FormFile $templateSpec.UiFormDefinition -Location $Location
     $templateSpec.PublicationPayload = Get-DeduplicatedTemplateSpecPayload -Package $package -Location $Location
     $budgetedBytes = $package.PayloadBytes + 16384

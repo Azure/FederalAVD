@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "1918290066512194715"
+      "templateHash": "12884897266387082907"
     }
   },
   "functions": [
@@ -1769,6 +1769,7 @@
         "storageQuotaManager": "storage-quota-manager",
         "sessionHostReplacer": "session-host-replacer",
         "sessionHostMaintenance": "session-host-maintenance",
+        "sessionHosts": "session-hosts",
         "sessionHostPolicy": "session-host-policy"
       }
     },

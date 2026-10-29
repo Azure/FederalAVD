@@ -618,7 +618,7 @@ var storageAccountName = naming.storageAccountName
 var storageEncryptionIdentityName = naming.storageEncryptionIdentityName
 var templateSpecNameFinal = !empty(sessionHostTemplateSpecResourceId)
   ? last(split(sessionHostTemplateSpecResourceId, '/'))
-  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'templateSpecs', 'session-hosts', namingContext)
+  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'templateSpecs', namingPolicy.templateSpecs.sessionHosts, namingContext)
 var encryptionKeyName = namePattern('storageCmkKey', { identifier: applicationIdentifier })
 
 // Start storage CMK provisioning before the Function App prerequisites. This gives the
