@@ -1,6 +1,30 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 
+Describe 'Session Host Replacer Portal initialization' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw | ConvertFrom-Json
+        $policy = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\namingPolicy.json') -Raw | ConvertFrom-Json
+    }
+
+    It 'preserves tagged naming without dereferencing an uninitialized policy control in the output' {
+        $form.view.outputs.parameters.namingConvention |
+            Should Be "[parse(if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), '{}', steps('basics').hostPoolProps.tags.hpNamingConvention))]"
+        $form.view.outputs.parameters.namingConvention | Should Not Match 'federalAvdNamingPolicy'
+        ($template.parameters.namingConvention.defaultValue | ConvertTo-Json -Compress) |
+            Should Be ($policy.defaults | ConvertTo-Json -Compress)
+    }
+
+    It 'keeps public access bound to the required selection instead of masking an uninitialized form' {
+        $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
+        $mode = $infrastructure.elements | Where-Object name -eq 'paasPublicNetworkAccess'
+        $mode.constraints.required | Should Be $true
+        $form.view.outputs.parameters.paasPublicNetworkAccess |
+            Should Be "[steps('infrastructure').paasPublicNetworkAccess]"
+    }
+}
+
 Describe 'Session Host Replacer PowerShell runtime alignment' {
     BeforeAll {
         $entryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
