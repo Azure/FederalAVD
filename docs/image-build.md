@@ -297,7 +297,7 @@ Key parameters in `<prefix>.imageBuild.parameters.json`:
 | **mpOffer** | Base marketplace image offer | `office-365` |
 | **mpSku** | Base marketplace image SKU | `win11-23h2-avd-m365` |
 | **imageVersionName** | Version number for the image | Leave blank for automatic timestamp-based versioning (e.g., `2026.0210.1435`), or specify custom version (e.g., `1.0.0`) |
-| **excludeFromLatest** | Exclude this version from 'latest' | `false` |
+| **imageVersionExcludeFromLatest** | Exclude the primary gallery version from 'latest'; does not configure regional exclusions | `false` |
 | **replicaCount** | Number of replicas per region | `1` |
 | **replicationRegions** | Regions to replicate image to | `["usgovvirginia", "usgovarizona"]` |
 
@@ -461,6 +461,14 @@ The primary and remote galleries have independent target lists. Selecting a remo
 > existing workflow relied on selecting a remote gallery to also retain a primary-gallery replica in
 > that region, add the remote region explicitly to `imageVersionTargetRegions`. The remote gallery
 > selection now controls only the separate disaster-recovery gallery copy.
+
+Image Build omits `excludeFromLatest` from all target-region objects, including remote-gallery
+replicas. Use `imageVersionExcludeFromLatest` for the primary version and
+`remoteImageVersionExcludeFromLatest` for the remote version. Remove legacy
+`imageVersionTargetRegions[].excludeFromLatest` inputs; they are no longer accepted. Existing gallery
+versions may still have regional exclusions that must be inspected and corrected separately.
+See the [publishing parameter contract](../deployments/imageBuild/README.md#imageversiontargetregions)
+for migration details.
 
 ### Image Management Resource References
 

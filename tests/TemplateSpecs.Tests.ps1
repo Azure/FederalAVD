@@ -205,10 +205,23 @@ Describe 'FSLogix Storage Template Spec deployment VM contract' {
     }
 }
 
-Describe 'Session Host Replacer Template Spec size budgets' {
-    It 'fits serialized ARM and the complete form/package with envelope allowance' {
-        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw | ConvertFrom-Json
-        $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json') -Raw | ConvertFrom-Json
+Describe 'Image Build and Session Host Replacer Template Spec size budgets' {
+    It 'fits <Name> serialized ARM and the complete form/package with envelope allowance' -TestCases @(
+        @{
+            Name = 'Image Build'
+            TemplateFile = 'deployments\imageBuild\imageBuild.json'
+            FormFile = 'deployments\imageBuild\uiFormDefinition.json'
+        }
+        @{
+            Name = 'SHR'
+            TemplateFile = 'deployments\add-ons\sessionHostReplacer\main.json'
+            FormFile = 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
+        }
+    ) {
+        param($Name, $TemplateFile, $FormFile)
+
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot $TemplateFile) -Raw | ConvertFrom-Json
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot $FormFile) -Raw | ConvertFrom-Json
         $templateBytes = [Text.Encoding]::UTF8.GetByteCount(($template | ConvertTo-Json -Depth 100 -Compress))
         $payload = @{
             location = 'eastus'
@@ -224,8 +237,8 @@ Describe 'Session Host Replacer Template Spec size budgets' {
         $templateSpecBudget = 2000000
         $templateBytes | Should BeLessThan $armBudget
         ($payloadBytes + $envelopeAllowance) | Should BeLessThan $templateSpecBudget
-        Write-Host "SHR ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
-        Write-Host "SHR Template Spec with form and 64 KiB envelope allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
+        Write-Host "$Name ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
+        Write-Host "$Name Template Spec with form and 64 KiB envelope allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
     }
 }
 

@@ -611,7 +611,7 @@ hibernation, Portal rendering, quota, capacity, or successful image capture.
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Image-version-wide default that determines whether deployments using `latest` can select this version. A target-region object can override it with `excludeFromLatest`.
+- **Description:** Version-level exclusion for the primary gallery image version. Image Build does not configure `excludeFromLatest` on individual target regions.
 
 #### `imageVersionDefaultReplicaCount`
 
@@ -634,7 +634,6 @@ hibernation, Portal rendering, quota, capacity, or successful image capture.
   - `name` (required): Region name
   - `storageAccountType`: Storage type for this region
   - `regionalReplicaCount`: Replica count for this region
-  - `excludeFromLatest`: Exclude from latest in this region
   - `diskEncryptionSetResourceId`: Standard DES in this region. Required for every non-primary region when customer-managed or double encryption is enabled, and its encryption type must match the primary DES.
   - `confidentialVMDiskEncryptionSetResourceId`: Confidential VM DES in this region. Required for every non-primary region when guest-state encryption uses CMK.
 
@@ -646,7 +645,6 @@ hibernation, Portal rendering, quota, capacity, or successful image capture.
     "name": "westus2",
     "storageAccountType": "Standard_ZRS",
     "regionalReplicaCount": 2,
-    "excludeFromLatest": false,
     "diskEncryptionSetResourceId": "/subscriptions/{sub-id}/resourceGroups/{west-rg}/providers/Microsoft.Compute/diskEncryptionSets/{west-des}"
   },
   {
@@ -658,8 +656,21 @@ hibernation, Portal rendering, quota, capacity, or successful image capture.
 ```
 
 Existing parameter files remain valid when `imageVersionTargetRegions` includes the source/build
-region or omits optional regional properties. The top-level values provide Azure's publishing-profile
-defaults, while properties on a target-region object override those defaults for that region.
+region or omits supported optional regional properties. Regional storage and replica-count properties
+override their top-level defaults.
+
+Image Build deliberately omits `excludeFromLatest` from every local and remote target-region object.
+Use `imageVersionExcludeFromLatest` and `remoteImageVersionExcludeFromLatest` to manage the
+version-level release gates instead. This avoids creating separate regional exclusions that cannot
+be managed through the version-level Portal checkbox, particularly in air-gapped clouds. Remove any
+legacy `imageVersionTargetRegions[].excludeFromLatest` property from parameter files; regional
+exclusion inputs are no longer supported and are rejected by the input schema.
+
+This change applies to newly published versions. It does not repair regional flags already stored on
+existing versions. Inspect those versions through the target cloud's approved CLI, PowerShell, or
+ARM API workflow and clear any unintended regional exclusions separately. Do not assume that omitting
+the property during an update clears an existing `true` value.
+
 However, remote-gallery topology has intentionally changed: selecting a remote gallery no longer
 keeps a persistent primary-gallery replica in that gallery's region. Add the remote region explicitly
 to `imageVersionTargetRegions` when both a separate remote-gallery copy and a persistent replica in
@@ -677,7 +688,7 @@ the primary gallery are required.
 
 - **Type:** Boolean
 - **Default:** `false`
-- **Description:** Exclude remote image version from latest
+- **Description:** Version-level exclusion for the remote gallery image version. Image Build does not configure exclusions on its source/build-region or remote-region replicas.
 
 #### `remoteImageVersionDefaultReplicaCount`
 
