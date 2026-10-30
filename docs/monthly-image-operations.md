@@ -355,7 +355,9 @@ let a delay expiring, a successful image build, or an infrastructure-health tag 
 ## 6. Monitor SHR on Production Host Pools
 
 After approval, promote the **same tested version** in Compute Gallery: clear **Exclude from latest**
-globally and clear any exclusions in the production regions being released. Confirm that it is the
+globally. Current Image Build templates do not configure exclusions on target-region replicas.
+For versions created by older templates or other publishers, also inspect and clear any regional
+exclusions in the production regions being released. Confirm that it is the
 highest numeric eligible version, replication is complete, and every production SHR keeps
 `IncludeExcludedImageVersions=false`. Do not change production SHR to pilot mode.
 

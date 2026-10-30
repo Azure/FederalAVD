@@ -3,11 +3,11 @@ targetScope = 'subscription'
 import { artifactCustomizationType, restartableArtifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { namingPolicy, namePattern, regionAbbreviation, imageBuildRunId } from '../shared/modules/orchestration/naming/naming.bicep'
 
+@sealed()
 type imageVersionTargetRegionInputType = {
   name: string
   storageAccountType: ('Standard_LRS' | 'Standard_ZRS' | 'Premium_LRS' | 'PremiumV2_LRS')?
   regionalReplicaCount: int?
-  excludeFromLatest: bool?
   diskEncryptionSetResourceId: string?
   confidentialVMDiskEncryptionSetResourceId: string?
 }
@@ -314,7 +314,7 @@ param imageVersionDefaultReplicaCount int = 1
 ])
 param imageVersionDefaultStorageAccountType string = 'Standard_LRS'
 
-@description('Optional. Exclude this image version from latest by default. A target region can override this with excludeFromLatest.')
+@description('Optional. Exclude the primary gallery image version from latest. Regional exclusion flags are not configured.')
 param imageVersionExcludeFromLatest bool = false
 
 @description('Optional. Primary gallery image-version target-region overrides and additional replica regions. The source/build region is added automatically using the top-level defaults when omitted. Each additional CMK region must specify its matching regional Disk Encryption Set resource IDs.')
@@ -323,7 +323,7 @@ param imageVersionTargetRegions imageVersionTargetRegionInputType[] = []
 @description('Optional. The resource Id of the remote compute gallery.')
 param remoteComputeGalleryResourceId string = ''
 
-@description('Optional. Exclude this image version from the latest in the remote region.')
+@description('Optional. Exclude the remote gallery image version from latest. Regional exclusion flags are not configured.')
 param remoteImageVersionExcludeFromLatest bool = false
 
 @description('Optional. The default image version replica count in the remote region.')
@@ -467,7 +467,6 @@ var imageVersionName = imageMajorVersion != -1 && imageMajorVersion != -1 && ima
 
 var defaultLocalImageVersionTargetRegions = [
   {
-    excludeFromLatest: imageVersionExcludeFromLatest
     name: computeLocation
     regionalReplicaCount: imageVersionDefaultReplicaCount
     storageAccountType: imageVersionDefaultStorageAccountType
@@ -480,7 +479,6 @@ var defaultLocalImageVersionTargetRegions = [
 
 var defaultRemoteImageVersionTargetRegions = [
   {
-    excludeFromLatest: remoteImageVersionExcludeFromLatest
     name: computeLocation
     regionalReplicaCount: remoteImageVersionDefaultReplicaCount
     storageAccountType: remoteImageVersionStorageAccountType
@@ -490,7 +488,6 @@ var defaultRemoteImageVersionTargetRegions = [
       : ''
   }
   {
-    excludeFromLatest: remoteImageVersionExcludeFromLatest
     name: remoteLocation
     regionalReplicaCount: remoteImageVersionDefaultReplicaCount
     storageAccountType: remoteImageVersionStorageAccountType
@@ -501,7 +498,6 @@ var defaultRemoteImageVersionTargetRegions = [
 
 var normalizedImageVersionTargetRegions = map(imageVersionTargetRegions, region => {
   name: toLower(region.name) == toLower(computeLocation) ? computeLocation : region.name
-  excludeFromLatest: region.?excludeFromLatest ?? imageVersionExcludeFromLatest
   regionalReplicaCount: region.?regionalReplicaCount ?? imageVersionDefaultReplicaCount
   storageAccountType: region.?storageAccountType ?? imageVersionDefaultStorageAccountType
   diskEncryptionSetResourceId: region.?diskEncryptionSetResourceId ?? (toLower(region.name) == toLower(computeLocation) ? diskEncryptionSetResourceId : '')
@@ -529,7 +525,6 @@ var effectiveConfidentialVmDiskEncryptionSetResourceId = galleryImageVersionConf
 var localImageVersionTargetRegionsWithEncryption = map(validatedLocalImageVersionTargetRegions, region => union(
   {
     name: region.name
-    excludeFromLatest: region.excludeFromLatest
     regionalReplicaCount: region.regionalReplicaCount
     storageAccountType: region.storageAccountType
   },
@@ -561,7 +556,6 @@ var localImageVersionTargetRegionsWithEncryption = map(validatedLocalImageVersio
 var remoteImageVersionTargetRegions = map(defaultRemoteImageVersionTargetRegions, region => union(
     {
       name: region.name
-      excludeFromLatest: remoteImageVersionExcludeFromLatest
       regionalReplicaCount: remoteImageVersionDefaultReplicaCount
       storageAccountType: remoteImageVersionStorageAccountType
     },

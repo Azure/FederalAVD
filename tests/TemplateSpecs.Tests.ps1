@@ -507,10 +507,23 @@ Describe 'FSLogix Storage Template Spec deployment VM contract' {
     }
 }
 
-Describe 'Session Host Replacer Template Spec size budgets' {
-    It 'fits serialized ARM and the complete form/package with envelope allowance' {
-        $templateFile = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
-        $formFile = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
+Describe 'Image Build and Session Host Replacer Template Spec size budgets' {
+    It 'fits <Name> serialized ARM and the complete form/package with envelope allowance' -TestCases @(
+        @{
+            Name = 'Image Build'
+            TemplateFile = 'deployments\imageBuild\imageBuild.json'
+            FormFile = 'deployments\imageBuild\uiFormDefinition.json'
+        }
+        @{
+            Name = 'SHR'
+            TemplateFile = 'deployments\add-ons\sessionHostReplacer\main.json'
+            FormFile = 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
+        }
+    ) {
+        param($Name, $TemplateFile, $FormFile)
+
+        $templateFile = Join-Path $repoRoot $TemplateFile
+        $formFile = Join-Path $repoRoot $FormFile
         $templateBytes = (Get-Item -LiteralPath $templateFile).Length
         $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateFile -FormFile $formFile -Location 'usgovvirginia'
         $payloadBytes = $package.PayloadBytes
@@ -519,8 +532,8 @@ Describe 'Session Host Replacer Template Spec size budgets' {
         $templateSpecBudget = 2000000
         $templateBytes | Should BeLessThan $armBudget
         ($payloadBytes + $envelopeAllowance) | Should BeLessThan $templateSpecBudget
-        Write-Host "SHR ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
-        Write-Host "SHR Template Spec with form and 16 KiB metadata allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
+        Write-Host "$Name ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
+        Write-Host "$Name Template Spec with form and 16 KiB metadata allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
     }
 }
 

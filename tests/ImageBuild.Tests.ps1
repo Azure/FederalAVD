@@ -368,6 +368,68 @@ Describe 'OneDrive organization policy configuration' {
 }
 
 Describe 'Image Build regional replication behavior' {
+    It 'rejects regional exclusion inputs instead of silently ignoring them' {
+        $arm = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $regionType = $arm.definitions.imageVersionTargetRegionInputType
+
+        $arm.parameters.imageVersionTargetRegions.items.'$ref' |
+            Should Be '#/definitions/imageVersionTargetRegionInputType'
+        $regionType.additionalProperties | Should Be $false
+        @($regionType.properties.PSObject.Properties.Name) -contains 'excludeFromLatest' | Should Be $false
+        @($regionType.properties.PSObject.Properties.Name | Sort-Object) | Should Be @(
+            'confidentialVMDiskEncryptionSetResourceId'
+            'diskEncryptionSetResourceId'
+            'name'
+            'regionalReplicaCount'
+            'storageAccountType'
+        )
+    }
+
+    It 'omits regional exclusions from compiled <Destination> publishing inputs' -TestCases @(
+        @{ Destination = 'primary' }
+        @{ Destination = 'remote' }
+    ) {
+        param($Destination)
+
+        $arm = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $regions = if ($Destination -eq 'primary') {
+            $arm.resources.captureImage.properties.parameters.imageVersionReplicationRegions
+        }
+        else {
+            $arm.resources.remoteImageVersion.properties.parameters.targetRegions
+        }
+        $regions | Should Not BeNullOrEmpty
+        $serializedRegions = $regions | ConvertTo-Json -Depth 100 -Compress
+        $serializedRegions | Should Not Match 'excludeFromLatest'
+        $serializedRegions | Should Match 'regionalReplicaCount'
+        $serializedRegions | Should Match 'storageAccountType'
+        $serializedRegions | Should Match 'encryption'
+    }
+
+    It 'preserves configurable version-level exclusions in both galleries' {
+        $arm = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $capture = $arm.resources.captureImage
+        $primaryVersion = $capture.properties.template.resources.imageVersion
+        $remoteVersion = $arm.resources.remoteImageVersion
+
+        $arm.parameters.imageVersionExcludeFromLatest.defaultValue | Should Be $false
+        $arm.parameters.remoteImageVersionExcludeFromLatest.defaultValue | Should Be $false
+        $capture.properties.parameters.imageVersionExcludeFromLatest.value |
+            Should Be "[parameters('imageVersionExcludeFromLatest')]"
+        $primaryVersion.properties.parameters.excludeFromLatest.value |
+            Should Be "[parameters('imageVersionExcludeFromLatest')]"
+        $remoteVersion.properties.parameters.excludeFromLatest.value |
+            Should Be "[parameters('remoteImageVersionExcludeFromLatest')]"
+        foreach ($version in @($primaryVersion, $remoteVersion)) {
+            $version.properties.template.resources.version.properties.publishingProfile.excludeFromLatest |
+                Should Be "[parameters('excludeFromLatest')]"
+            $version.properties.template.resources.version.properties.publishingProfile.targetRegions |
+                Should Not Match 'excludeFromLatest'
+            $version.properties.template.variables | ConvertTo-Json -Depth 100 -Compress |
+                Should Not Match 'excludeFromLatest'
+        }
+    }
+
     It 'limits the primary Compute Gallery to the deployment subscription and region' {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
         $prereqs = $form.view.properties.steps | Where-Object { $_.name -eq 'prereqs' }
@@ -547,6 +609,7 @@ Describe 'Image Build regional replication behavior' {
         $targetRegionsOutput | Should Not Match "steps\('basics'\)\.scope\.location\.name"
         $targetRegionsOutput | Should Match "steps\('imageDest'\)\.imageVersion\.replicaCount"
         $targetRegionsOutput | Should Match "steps\('imageDest'\)\.imageVersion\.storageAccountType"
+        $targetRegionsOutput | Should Not Match 'excludeFromLatest'
         @($outputs.PSObject.Properties.Name) -contains 'imageVersionDefaultReplicaCount' | Should Be $true
         @($outputs.PSObject.Properties.Name) -contains 'imageVersionDefaultStorageAccountType' | Should Be $true
         @($outputs.PSObject.Properties.Name) -contains 'imageVersionExcludeFromLatest' | Should Be $true
