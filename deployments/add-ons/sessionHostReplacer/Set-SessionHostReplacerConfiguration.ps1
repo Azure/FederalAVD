@@ -62,6 +62,10 @@
 .PARAMETER AllowImageVersionRollback
     Allows replacement with an image version older than the currently deployed version.
 
+.PARAMETER IncludeExcludedImageVersions
+    Pilot pools only: includes gallery versions excluded from latest globally or in the target region.
+    Does not bypass replication, publication-age delay, rollback protection, or health/capacity checks.
+
 .PARAMETER PassThru
     Returns the interpreted configuration object after review or update.
 
@@ -137,6 +141,8 @@ param(
     [Nullable[int]]$ReplaceSessionHostOnNewImageVersionDelayDays,
 
     [Nullable[bool]]$AllowImageVersionRollback,
+
+    [Nullable[bool]]$IncludeExcludedImageVersions,
 
     [switch]$PassThru
 )
@@ -249,6 +255,7 @@ function Get-InterpretedConfiguration {
         }
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
+        IncludeExcludedImageVersions = Get-SettingValue -Settings $Settings -Name 'IncludeExcludedImageVersions' -Default 'false'
         MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(
             (Get-SettingValue -Settings $Settings -Name 'MaintenanceRequest')
         )) {
@@ -298,6 +305,7 @@ $settingParameters = [ordered]@{
     SuccessfulRunsBeforeScaleUp = 'SuccessfulRunsBeforeScaleUp'
     ReplaceSessionHostOnNewImageVersionDelayDays = 'ReplaceSessionHostOnNewImageVersionDelayDays'
     AllowImageVersionRollback = 'AllowImageVersionRollback'
+    IncludeExcludedImageVersions = 'IncludeExcludedImageVersions'
 }
 
 $requestedChanges = [ordered]@{}

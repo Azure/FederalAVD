@@ -17,6 +17,10 @@ services and authorized dependencies differ. See
 [Secure Endpoint Architecture](secure-endpoint-architecture.md#cloud-boundary-portability) for the
 conceptual model.
 
+For an already deployed image-managed fleet, follow the
+[Monthly Image Operations operator's guide](monthly-image-operations.md) for low-to-high transfer,
+artifact refresh, builds, pilot validation, and an approval-gated production SHR rollout.
+
 ## Choose the Image Path
 
 A custom image is not universally required. Choose the smallest path that meets the workload:

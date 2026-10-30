@@ -36,6 +36,11 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 ## Add-Ons
 
+For Session Host Replacer gallery-image pilots, `includeExcludedImageVersions` defaults to `false`.
+Enable it only on pilot pools to test excluded candidates before promotion. See
+[pilot selection and promotion](../deployments/add-ons/sessionHostReplacer/README.md#pilot-image-selection-and-promotion)
+for numeric version ordering, safeguards, and the upgrade requirement.
+
 | Add-On | Parameters |
 | --- | --- |
 | 🔄 **Session Host Replacer** | [sessionHostReplacer/README.md](../deployments/add-ons/sessionHostReplacer/README.md) |

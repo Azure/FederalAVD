@@ -89,7 +89,10 @@ function Get-LatestImageVersion {
         [hashtable] $ImageReference,
 
         [Parameter()]
-        [string] $Location
+        [string] $Location,
+
+        [Parameter()]
+        [bool] $IncludeExcludedImageVersions = $false
     )
 
     # Initialize variables
@@ -169,12 +172,15 @@ function Get-LatestImageVersion {
             }
             
             Write-LogEntry -Message "Found $($imageVersions.Count) total image versions in gallery" -Level Trace
+            Write-LogEntry -Message "IMAGE_SELECTION | Ordering: Numeric major.minor.patch | IncludeExcludedImageVersions: $IncludeExcludedImageVersions"
+            if ($IncludeExcludedImageVersions) {
+                Write-LogEntry -Message 'Pilot image selection is enabled: global and regional excludeFromLatest flags are ignored. Replication and rollout safeguards still apply.' -Level Warning
+            }
             
             # Normalize location for comparison (Azure returns full names like "East US 2")
             $normalizedLocation = $Location -replace '\s', ''
             
-            # Filter candidate versions (exclude flag check and published date check only)
-            # We'll check replication status afterwards for the selected candidate
+            # Publication time still drives rollout delay, but not version ordering.
             $candidateVersions = $imageVersions |
             Where-Object { 
                 $globalExclude = $_.properties.publishingProfile.excludeFromLatest
@@ -188,23 +194,25 @@ function Get-LatestImageVersion {
                     $regionalExclude = $targetRegion.excludeFromLatest
                 }
                 
-                # Include only if NOT excluded globally AND NOT excluded regionally AND has published date
-                -not $globalExclude -and -not $regionalExclude -and $_.properties.publishingProfile.publishedDate
+                ($IncludeExcludedImageVersions -or (-not $globalExclude -and -not $regionalExclude)) -and
+                    $_.properties.publishingProfile.publishedDate
             }
             
             if (-not $candidateVersions -or $candidateVersions.Count -eq 0) {
-                # Fallback: if no valid candidates, get first non-excluded version
-                $candidateVersions = $imageVersions |
-                Where-Object { -not $_.properties.publishingProfile.excludeFromLatest }
+                throw "No eligible image versions found in gallery '$imageGalleryName' for image '$imageDefinitionName'. Check global/regional exclusions and published dates."
+            }
+
+            foreach ($candidate in $candidateVersions) {
+                $numericVersion = $null
+                if ($candidate.name -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$' -or
+                    -not [version]::TryParse([string]$candidate.name, [ref]$numericVersion)) {
+                    throw "Gallery image version '$($candidate.name)' is not a valid numeric major.minor.patch version."
+                }
             }
             
-            if (-not $candidateVersions -or $candidateVersions.Count -eq 0) {
-                throw "No available image versions found (all versions are marked as excluded from latest)."
-            }
-            
-            # Sort candidates by published date and check replication status for each until we find a replicated one
+            # Azure gallery versions are numeric major.minor.patch, not publication-date ordered.
             $sortedCandidates = $candidateVersions |
-            Sort-Object -Property { [DateTime]$_.properties.publishingProfile.publishedDate } -Descending
+            Sort-Object -Property { [version]$_.name } -Descending -ErrorAction Stop
             
             $latestImageVersion = $null
             foreach ($candidate in $sortedCandidates) {

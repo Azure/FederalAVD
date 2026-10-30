@@ -156,6 +156,12 @@ Use the resulting operating model to select the deployment path:
 Do not leave the replacement method undecided for an image-managed production fleet. Building a new
 image does not update existing session hosts by itself.
 
+For an image-managed production fleet, validate each exact candidate version in a **dedicated pilot
+host pool** with representative configuration, users, and workloads before broad release.
+With Session Host Replacer, a rollout delay alone is not an approval gate. See the
+[Monthly Image Operations operator's guide](monthly-image-operations.md) for the pilot-first
+air-gapped release workflow.
+
 ## Capability Comparison
 
 | Decision area | Standard host pool | Automated host pool |

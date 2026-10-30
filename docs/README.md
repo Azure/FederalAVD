@@ -70,6 +70,7 @@ Use the nav bar above for the primary workflow pages. This index organizes all d
 
 | Page | Description |
 | --- | --- |
+| [Monthly Image Operations (Air-Gapped)](monthly-image-operations.md) | Operator runbook: low-to-high transfer, artifact refresh, image builds, pilot validation, approval-gated SHR production rollout, visual workflows, and troubleshooting. |
 | [BCDR — Business Continuity & Disaster Recovery](bcdr.md) | Availability zones, cross-region replication, FSLogix Cloud Cache, image gallery replication, VM backup, session host replacer rollback, and RTO/RPO reference. |
 | [Chargeback for Shared Resources](chargeback-shared-resources.md) | Cost attribution strategies for shared infrastructure (RSV, storage, networking) using existing deployment tags — no code changes required. |
 

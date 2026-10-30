@@ -205,6 +205,30 @@ Describe 'FSLogix Storage Template Spec deployment VM contract' {
     }
 }
 
+Describe 'Session Host Replacer Template Spec size budgets' {
+    It 'fits serialized ARM and the complete form/package with envelope allowance' {
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw | ConvertFrom-Json
+        $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json') -Raw | ConvertFrom-Json
+        $templateBytes = [Text.Encoding]::UTF8.GetByteCount(($template | ConvertTo-Json -Depth 100 -Compress))
+        $payload = @{
+            location = 'eastus'
+            properties = @{
+                mainTemplate = $template
+                uiFormDefinition = $form
+                linkedTemplates = @()
+            }
+        }
+        $payloadBytes = [Text.Encoding]::UTF8.GetByteCount(($payload | ConvertTo-Json -Depth 100 -Compress))
+        $envelopeAllowance = 64KB
+        $armBudget = 4000000
+        $templateSpecBudget = 2000000
+        $templateBytes | Should BeLessThan $armBudget
+        ($payloadBytes + $envelopeAllowance) | Should BeLessThan $templateSpecBudget
+        Write-Host "SHR ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
+        Write-Host "SHR Template Spec with form and 64 KiB envelope allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
+    }
+}
+
 $functionDefinitions = $scriptAst.FindAll(
     { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] },
     $true

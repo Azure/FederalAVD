@@ -423,17 +423,29 @@ customer/
 
 Steps 1–5 above are a **one-time setup**. Once a host pool is deployed and the Session Host Replacer is running, you do not redeploy the host pool to roll out new images. The repeating lifecycle looks like this:
 
+**Pilot-first production release:** On upgraded SHR instances, enable
+`includeExcludedImageVersions` only for the dedicated pilot pool. Build the candidate with
+`imageVersionExcludeFromLatest=true`; production keeps honoring exclusions. Validate pilot user
+workflows, explicitly approve that exact version, then clear its exclusion to promote it.
+Use production Function App holds when releasing pools one at a time; clearing a global exclusion
+otherwise releases it to every eligible consumer. A rollout delay is not an approval gate. Use the
+[Monthly Image Operations operator's guide](monthly-image-operations.md) for the complete
+air-gapped runbook and release checks.
+
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph REFRESH["Recurring Image Refresh (triggered by schedule, patch cycle, or software change)"]
-        direction LR
+        direction TB
+        PRE["Pilot includes excluded versions;\nproduction honors exclusions"] --> A
         A["1. Update artifacts\n(Update-ImageArtifacts.ps1)"] -->
         B["2. Build new image\n(Invoke-ImageBuilds.ps1)"] -->
-        C["3. New version published\nto Compute Gallery"] -->
-        D["4. Session Host Replacer\ndetects version mismatch"]
-        D --> E["5. Drain active sessions\n(configurable grace period)"]
+        C["3. Candidate published excluded\nfrom latest to Compute Gallery"] -->
+        D["4. Pilot SHR adopts image;\nvalidate user workloads"]
+        D --> G{"Exact version\napproved?"}
+        G -- No --> H["Keep candidate excluded;\ncorrect and retest"]
+        G -- Yes --> E["5. Clear candidate exclusion;\nrelease production SHR"]
         E --> F["6. Replace fleet with\nnew-image hosts"]
-        F -.->|next cycle| A
+        F --> N["Next cycle: publish next candidate\nexcluded from latest"]
     end
 ```
 
@@ -441,7 +453,9 @@ flowchart LR
 
 ### Automated approach: Session Host Replacer
 
-The Session Host Replacer is an Azure Function add-on that monitors the Compute Gallery and manages the entire replacement cycle without human intervention.
+The Session Host Replacer is an Azure Function add-on that monitors the Compute Gallery and
+automates the replacement mechanics. Pilot acceptance and authorization to release a candidate to
+production remain operator/change-control responsibilities.
 
 **What triggers a new replacement cycle:**
 
@@ -462,7 +476,8 @@ The Session Host Replacer is an Azure Function add-on that monitors the Compute 
   sign-out without changing the configured mode
 - Restores selected SideBySide shutdown-retention hosts through the guarded
   `Invoke-SessionHostRollback.ps1` operator workflow
-- Ringed rollout delay — configurable per-host-pool delay after a new image is detected, enabling validation before fleet-wide rollout
+- Ringed rollout delay — configurable per-host-pool delay based on image publication time, useful
+  for staging adoption but not a substitute for pilot approval or an explicit production hold
 
 **Setup:** Deploy the add-on once per host pool. The `hostPoolResourceId` output from Step 5 is the primary input.
 
@@ -492,6 +507,10 @@ This is appropriate for environments with strict change control windows or when 
 ### Pipeline integration
 
 A typical image refresh pipeline stage (after initial setup) runs only Steps 3–4:
+
+This upload/build snippet is not a complete release pipeline: publish candidates excluded from latest,
+then require pilot validation and approval before clearing the exclusion. Use production holds when
+per-pool release sequencing is required.
 
 ```powershell
 # Step 3 — refresh artifacts (skip if no software changes this cycle)
