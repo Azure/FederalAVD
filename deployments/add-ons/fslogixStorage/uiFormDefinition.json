@@ -89,18 +89,6 @@
               }
             },
             {
-              "name": "resourceSkusApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(not(empty(steps('scope').resourceScope.subscription.id)), not(empty(steps('scope').resourceScope.location)))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('scope').resourceScope.location.name, decodeUriComponent('%27'))]",
-                "transforms": {
-                  "deploymentVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'vCPUs'].value | [0] == '2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] |[*].{label:name, value:name}"
-                }
-              }
-            },
-            {
               "name": "storageSkusApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "condition": "[and(not(empty(steps('scope').resourceScope.subscription.id)), not(empty(steps('scope').resourceScope.location)))]",
@@ -1275,9 +1263,31 @@
             {
               "name": "deploymentInfo",
               "type": "Microsoft.Common.InfoBox",
+              "visible": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
               "options": {
                 "style": "Info",
-                "text": "A temporary virtual machine and managed identity are required to initialize root NTFS permissions for every storage option. Domain-backed and Entra Kerberos configurations also use the VM for identity setup. Cleanup removes external role assignments and deletes the temporary resource group after configuration completes."
+                "text": "A temporary virtual machine and managed identity initialize root NTFS permissions for identity-based storage authentication. Domain-backed and Entra Kerberos configurations also use the VM for applicable identity setup. Cleanup removes external role assignments and deletes the temporary resource group after configuration completes."
+              }
+            },
+            {
+              "name": "deploymentNotRequiredInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))]",
+              "options": {
+                "style": "Info",
+                "text": "No temporary deployment VM, deployment managed identity, or temporary resource group is deployed when Microsoft Entra-joined session hosts use storage account key authentication. Storage identity setup and the deployment VM's NTFS permission configuration are skipped. No deployment VM settings are required; continue to the next step."
+              }
+            },
+            {
+              "name": "resourceSkusApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), not(empty(steps('scope').resourceScope.subscription.id)), not(empty(steps('scope').resourceScope.location)))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq ', decodeUriComponent('%27'), steps('scope').resourceScope.location.name, decodeUriComponent('%27'))]",
+                "transforms": {
+                  "deploymentVMSizes": "value[?resourceType == 'virtualMachines' && capabilities[?name == 'vCPUs'].value | [0] == '2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location'] | [?capabilities[?name == 'CpuArchitectureType'].value | [0] != 'Arm64'] |[*].{label:name, value:name}"
+                }
               }
             },
             {
@@ -1287,15 +1297,16 @@
               "defaultValue": "",
               "multiLine": true,
               "toolTip": "Select the virtual network for the temporary deployment VM.",
+              "visible": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
               "constraints": {
-                "required": true,
+                "required": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
                 "allowedValues": "[map(filter(steps('scope').virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('scope').resourceScope.location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Location: ', vnet.location, ' Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
               }
             },
             {
               "name": "deploymentSubnetsApi",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('deployment').deploymentVirtualNetwork))]",
+              "condition": "[and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), not(empty(steps('deployment').deploymentVirtualNetwork.id)))]",
               "request": {
                 "method": "GET",
                 "path": "[concat(steps('deployment').deploymentVirtualNetwork.id, '/subnets?api-version=2022-05-01')]"
@@ -1307,9 +1318,10 @@
               "label": "Temporary Deployment VM Subnet",
               "defaultValue": "",
               "toolTip": "Select a subnet with network line of sight to domain controllers and private storage endpoints when required.",
+              "visible": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
               "constraints": {
-                "required": true,
-                "allowedValues": "[map(steps('deployment').deploymentSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}')))]"
+                "required": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
+                "allowedValues": "[if(and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), not(empty(steps('deployment').deploymentVirtualNetwork.id))), map(steps('deployment').deploymentSubnetsApi.value, (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":{\"name\":\"', snet.name, '\",\"id\":\"', snet.id, '\"}}'))), parse('[]'))]"
               }
             },
             {
@@ -1319,9 +1331,9 @@
               "toolTip": "Enter the distinguished name of the organizational unit where the temporary Azure NetApp Files deployment VM is joined.",
               "placeholder": "Example: OU=deployment,OU=avd,DC=contoso,DC=com",
               "defaultValue": "",
-              "visible": "[startsWith(steps('storage').storageService, 'AzureNetAppFiles')]",
+              "visible": "[and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), startsWith(steps('storage').storageService, 'AzureNetAppFiles'))]",
               "constraints": {
-                "required": true,
+                "required": "[and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), startsWith(steps('storage').storageService, 'AzureNetAppFiles'))]",
                 "regex": "^(?:\\s*[Oo][Uu]\\s*=\\s*[^,]+\\s*,\\s*)+[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*(?:,\\s*[Dd][Cc]\\s*=\\s*[A-Za-z0-9-]+\\s*)+$",
                 "validationMessage": "Provide a valid OU path in distinguished name format."
               }
@@ -1333,9 +1345,10 @@
               "filter": true,
               "toolTip": "Select the size of the temporary deployment virtual machine (2 vCPUs, available in your subscription). This VM is automatically deleted after deployment completes.",
               "defaultValue": "Standard_D2ads_v5",
+              "visible": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
               "constraints": {
-                "allowedValues": "[steps('scope').resourceSkusApi.transformed.deploymentVMSizes]",
-                "required": true
+                "allowedValues": "[if(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), steps('deployment').resourceSkusApi.transformed.deploymentVMSizes, parse('[]'))]",
+                "required": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]"
               }
             }
           ]
@@ -1482,7 +1495,7 @@
                   "label": "Temporary Deployment Resource Group Name",
                   "placeholder": "rg-avd-{identifier}-deployment-{location}",
                   "toolTip": "Optional. Explicit temporary deployment resource group name. The placeholder previews the standard convention; leave blank to generate the name.",
-                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))))]",
                   "constraints": {
                     "required": false,
                     "regex": "^$|^[a-zA-Z0-9._()\\-]{1,90}$",
@@ -1495,7 +1508,7 @@
                   "label": "Temporary Deployment VM Name",
                   "placeholder": "avd{identifier}{location}{unique}",
                   "toolTip": "Optional. Explicit temporary deployment VM name. The generated name removes separators, adds a unique suffix, and is truncated to 15 characters; leave blank to generate it.",
-                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))))]",
                   "constraints": {
                     "required": false,
                     "regex": "^$|^[A-Za-z0-9-]{1,15}$",
@@ -1508,7 +1521,7 @@
                   "label": "Temporary Deployment VM OS Disk Name",
                   "placeholder": "{vmName}-disk",
                   "toolTip": "Optional. Explicit OS disk name. Replace {vmName} with the temporary deployment VM name, or leave blank to derive the disk name from the generated VM name.",
-                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))))]",
                   "constraints": {
                     "required": false
                   }
@@ -1519,7 +1532,7 @@
                   "label": "Temporary Deployment VM NIC Name",
                   "placeholder": "{vmName}-nic",
                   "toolTip": "Optional. Explicit network interface name. Replace {vmName} with the temporary deployment VM name, or leave blank to derive the NIC name from the generated VM name.",
-                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))))]",
                   "constraints": {
                     "required": false
                   }
@@ -1530,7 +1543,7 @@
                   "label": "Temporary Deployment Identity Name",
                   "placeholder": "uai-avd-{identifier}-deployment-{location}",
                   "toolTip": "Optional. Explicit name for the temporary deployment user-assigned identity. The placeholder previews the standard convention; leave blank to generate the name.",
-                  "visible": "[steps('tagsAndNaming').naming.enableNameOverrides]",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))))]",
                   "constraints": {
                     "required": false,
                     "regex": "^$|^[A-Za-z0-9-_]{3,128}$",
@@ -1656,20 +1669,20 @@
         "namingConvention": "[if(and(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), not(empty(coalesce(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention, ''))), steps('tagsAndNaming').naming.useHostPoolNamingConvention), parse(steps('scope').storagePurpose.hostPoolProps.tags.hpNamingConvention), parse('{}'))]",
         "storageResourceGroupName": "[if(steps('scope').createStorageResourceGroup, if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.storageResourceGroupNameOverride, ''), ''), steps('scope').storageResourceGroup)]",
         "createStorageResourceGroup": "[steps('scope').createStorageResourceGroup]",
-        "deploymentResourceGroupName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentResourceGroupNameOverride, ''), '')]",
-        "deploymentVirtualMachineName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNameOverride, ''), '')]",
-        "deploymentVirtualMachineDiskName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineDiskNameOverride, ''), '')]",
-        "deploymentVirtualMachineNicName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNicNameOverride, ''), '')]",
-        "deploymentVirtualMachineSize": "[steps('deployment').deploymentVirtualMachineSize]",
-        "deploymentVirtualMachineSubnetResourceId": "[steps('deployment').deploymentVirtualMachineSubnet.id]",
-        "deploymentUserAssignedIdentityName": "[if(steps('tagsAndNaming').naming.enableNameOverrides, coalesce(steps('tagsAndNaming').naming.deploymentUserAssignedIdentityNameOverride, ''), '')]",
+        "deploymentResourceGroupName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentResourceGroupNameOverride, ''), '')]",
+        "deploymentVirtualMachineName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNameOverride, ''), '')]",
+        "deploymentVirtualMachineDiskName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineDiskNameOverride, ''), '')]",
+        "deploymentVirtualMachineNicName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNicNameOverride, ''), '')]",
+        "deploymentVirtualMachineSize": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), 'Standard_B2s', steps('deployment').deploymentVirtualMachineSize)]",
+        "deploymentVirtualMachineSubnetResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), '', steps('deployment').deploymentVirtualMachineSubnet.id)]",
+        "deploymentUserAssignedIdentityName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentUserAssignedIdentityNameOverride, ''), '')]",
         "identitySolution": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').machineIdentity, steps('identity').identitySolution)]",
         "credentialsKeyVaultResourceId": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault')), steps('identity').credentialsKeyVault.id, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'keyVault')), steps('storage').hybridCredentialsKeyVault.id, ''))]",
         "domainJoinUserPrincipalName": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPrincipalName, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupUserPrincipalName, ''))]",
         "domainJoinUserPassword": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPassword, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupPassword, ''))]",
         "domainName": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').domainName, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms'))), steps('storage').hybridDomainName, ''))]",
         "organizationalUnitPath": "[if(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), steps('identity').organizationalUnitPath, '')]",
-        "deploymentVirtualMachineOrganizationalUnitPath": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('deployment').deploymentVirtualMachineOrganizationalUnitPath, '')]",
+        "deploymentVirtualMachineOrganizationalUnitPath": "[if(and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), startsWith(steps('storage').storageService, 'AzureNetAppFiles')), steps('deployment').deploymentVirtualMachineOrganizationalUnitPath, '')]",
         "appUpdateUserAssignedIdentityResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'), steps('identity').automateEntraKerberosTasks), steps('identity').appUpdateIdentity, '')]",
         "fslogixStorageService": "[steps('storage').storageService]",
         "fslogixStorageRedundancy": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').storageRedundancy, 'LocallyRedundant')]",

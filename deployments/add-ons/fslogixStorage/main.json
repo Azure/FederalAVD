@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "3394419863080869070"
+      "templateHash": "13991650485455873392"
     }
   },
   "definitions": {
@@ -972,8 +972,9 @@
     },
     "deploymentVirtualMachineSubnetResourceId": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "Required. Resource ID of the subnet used by the temporary deployment VM. The subnet must have network line of sight to domain controllers and private storage endpoints when required."
+        "description": "Conditional. Subnet resource ID required when this add-on creates a temporary deployment VM. Not used for Entra ID storage-account-key authentication or an externally managed deployment VM."
       }
     },
     "deploymentUserAssignedIdentityName": {
@@ -2492,9 +2493,7 @@
           "virtualMachineDiskName": {
             "value": "[variables('effectiveDeploymentVirtualMachineDiskName')]"
           },
-          "virtualMachineSubnetResourceId": {
-            "value": "[parameters('deploymentVirtualMachineSubnetResourceId')]"
-          },
+          "virtualMachineSubnetResourceId": "[if(or(not(variables('deployDeploymentVirtualMachine')), not(empty(parameters('deploymentVirtualMachineSubnetResourceId')))), createObject('value', parameters('deploymentVirtualMachineSubnetResourceId')), createObject('value', fail('deploymentVirtualMachineSubnetResourceId is required when the add-on creates a temporary deployment VM.')))]",
           "manageHostResourcePermissions": {
             "value": false
           }
