@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "8523803168291985989"
+      "templateHash": "4590090175041206823"
     }
   },
   "definitions": {
@@ -114,8 +114,9 @@
     },
     "deploymentVirtualMachineSubnetResourceId": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "Required. Resource ID of the subnet used by the temporary deployment VM. The subnet must have network line of sight to domain controllers and private storage endpoints when required."
+        "description": "Conditional. Subnet resource ID required when this add-on creates a temporary deployment VM. Not used for Entra ID storage-account-key authentication or an externally managed deployment VM."
       }
     },
     "deploymentUserAssignedIdentityName": {
@@ -1607,9 +1608,7 @@
           "virtualMachineName": "[if(not(empty(parameters('deploymentVirtualMachineName'))), createObject('value', parameters('deploymentVirtualMachineName')), createObject('value', reference('naming').outputs.depVirtualMachineName.value))]",
           "virtualMachineNICName": "[if(not(empty(parameters('deploymentVirtualMachineNicName'))), createObject('value', parameters('deploymentVirtualMachineNicName')), createObject('value', reference('naming').outputs.depVirtualMachineNicName.value))]",
           "virtualMachineDiskName": "[if(not(empty(parameters('deploymentVirtualMachineDiskName'))), createObject('value', parameters('deploymentVirtualMachineDiskName')), createObject('value', reference('naming').outputs.depVirtualMachineDiskName.value))]",
-          "virtualMachineSubnetResourceId": {
-            "value": "[parameters('deploymentVirtualMachineSubnetResourceId')]"
-          },
+          "virtualMachineSubnetResourceId": "[if(or(not(variables('deployDeploymentVirtualMachine')), not(empty(parameters('deploymentVirtualMachineSubnetResourceId')))), createObject('value', parameters('deploymentVirtualMachineSubnetResourceId')), createObject('value', fail('deploymentVirtualMachineSubnetResourceId is required when the add-on creates a temporary deployment VM.')))]",
           "manageHostResourcePermissions": {
             "value": false
           }

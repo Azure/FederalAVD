@@ -7,9 +7,11 @@ also composed by the automated host-pool deployment before policy and session-ho
 ## Boundary
 
 The add-on owns profile storage configuration and the temporary resources needed to initialize it.
-It creates a temporary resource group, deployment VM, user-assigned identity, and role assignments.
-After storage configuration completes, the VM removes its external role assignments and deletes the
-temporary resource group, including itself and its identity. The add-on does not create a host pool,
+For identity-based storage authentication, it creates a temporary resource group, deployment VM,
+user-assigned identity, and role assignments. After storage configuration completes, the VM removes
+its external role assignments and deletes the temporary resource group, including itself and its
+identity. Entra ID storage-account-key authentication skips these temporary resources and the
+deployment VM's NTFS configuration. The add-on does not create a host pool,
 session host, policy assignment, Key Vault, Log Analytics workspace, Recovery Services vault, or
 backup policy. Those shared resources are supplied by resource ID or name. AVD Shared Services can
 create the regional FSLogix vault and policy before this add-on is deployed.
@@ -82,12 +84,27 @@ session hosts use Azure Files with Entra Domain Services authentication. Microso
 session hosts use Azure Files and then choose storage account keys, Microsoft Entra Kerberos for
 cloud-only identities, or Microsoft Entra Kerberos for hybrid identities.
 
-Every storage option uses a temporary deployment VM and identity. Azure Files uses the VM to set the
-root NTFS security descriptor through the Azure Files REST API, including storage-account-key mode.
-Domain-backed and Entra Kerberos options also use it for identity configuration, and Azure NetApp
-Files uses it to set volume permissions. The form collects these temporary-resource settings near
-the end, after the durable storage configuration. Cleanup removes the external role assignments and
-deletes the temporary resource group after configuration.
+Identity-based storage authentication uses a temporary deployment VM and identity. Azure Files uses
+the VM to set the root NTFS security descriptor through the Azure Files REST API. Domain-backed and
+Entra Kerberos options also use it for applicable identity configuration, and Azure NetApp Files
+uses it to set volume permissions. Cleanup removes the external role assignments and deletes the
+temporary resource group after configuration.
+
+The **Temporary Deployment Resources** step remains visible for all authentication methods. When
+**Microsoft Entra joined** and **Storage account key** are selected, the step shows an information
+box explaining that no deployment VM is created. VM network, subnet, size, and OU controls are
+hidden and not required; temporary-resource naming overrides are also hidden. The subnet output is
+an empty string, and the unused VM size uses the template default. Other authentication methods
+retain the deployment VM controls and requirements. Direct template deployments can omit
+`deploymentVirtualMachineSubnetResourceId` for storage-account-key authentication or when reusing an
+externally managed deployment VM; the subnet is required when this add-on creates the VM.
+
+After publishing an updated Template Spec, smoke-test the form in Azure Portal. Confirm that the
+storage-key path can advance past this step without VM selections, then switch to AD DS, Entra
+Domain Services, and both Entra Kerberos options and verify the VM controls are required. Also test
+switching back to storage keys after filling the controls: downloaded parameters must not retain
+the hidden subnet or temporary-resource overrides. For Azure NetApp Files, verify the VM OU control
+is still shown and required.
 
 Create the dedicated session-host VM resource group first because Session Host Configuration can
 only target an existing resource group. Then create the pooled automated host pool and Session Host
@@ -164,11 +181,11 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
 
 ### Baseline Environment
 
-- The temporary deployment resource group must be dedicated to this deployment and must differ from
+- When a deployment VM is required, its temporary resource group must be dedicated to this deployment and must differ from
    the storage resource group. Cleanup deletes the entire temporary resource group. A resource group
    left by a failed run may be reused to resume that same deployment, but it must not contain unrelated
    resources.
-- An existing virtual network and subnet must be available for the temporary deployment VM. The
+- When a deployment VM is required, an existing virtual network and subnet must be available for it. The
    subnet must resolve and reach every service selected later in the form, including private storage
    endpoints, domain controllers, Key Vault private endpoints, and Azure NetApp Files volumes.
 - Azure Policy assignments must permit the template's resources, managed identities, role

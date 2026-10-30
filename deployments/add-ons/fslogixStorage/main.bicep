@@ -36,8 +36,8 @@ param deploymentVirtualMachineNicName string = ''
 @description('Optional. Size of the temporary deployment VM.')
 param deploymentVirtualMachineSize string = 'Standard_B2s'
 
-@description('Required. Resource ID of the subnet used by the temporary deployment VM. The subnet must have network line of sight to domain controllers and private storage endpoints when required.')
-param deploymentVirtualMachineSubnetResourceId string
+@description('Conditional. Subnet resource ID required when this add-on creates a temporary deployment VM. Not used for Entra ID storage-account-key authentication or an externally managed deployment VM.')
+param deploymentVirtualMachineSubnetResourceId string = ''
 
 @description('Optional. Name override for the temporary user-assigned identity used by storage configuration and cleanup scripts.')
 param deploymentUserAssignedIdentityName string = ''
@@ -368,7 +368,9 @@ module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/dep
     virtualMachineName: effectiveDeploymentVirtualMachineName
     virtualMachineNICName: effectiveDeploymentVirtualMachineNicName
     virtualMachineDiskName: effectiveDeploymentVirtualMachineDiskName
-    virtualMachineSubnetResourceId: deploymentVirtualMachineSubnetResourceId
+    virtualMachineSubnetResourceId: !deployDeploymentVirtualMachine || !empty(deploymentVirtualMachineSubnetResourceId)
+      ? deploymentVirtualMachineSubnetResourceId
+      : fail('deploymentVirtualMachineSubnetResourceId is required when the add-on creates a temporary deployment VM.')
     manageHostResourcePermissions: false
   }
   dependsOn: [
