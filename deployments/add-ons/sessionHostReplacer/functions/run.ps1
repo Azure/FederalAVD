@@ -26,6 +26,7 @@ $targetSessionHostCount = Read-FunctionAppSetting TargetSessionHostCount
 $enableProgressiveScaleUp = Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean
 $removeEntraDevice = Read-FunctionAppSetting RemoveEntraDevice -AsBoolean
 $removeIntuneDevice = Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean
+$includeExcludedImageVersions = Read-FunctionAppSetting IncludeExcludedImageVersions -AsBoolean
 $sessionHostParameters = [hashtable]::new([System.StringComparer]::InvariantCultureIgnoreCase)
 $sessionHostParameters += (Read-FunctionAppSetting SessionHostParameters)
 $maintenanceRequestSetting = Read-FunctionAppSetting MaintenanceRequest
@@ -130,7 +131,7 @@ $settingsLog = @{
     DynamicCapacityEnabled      = if ($replacementMode -eq 'DeleteFirst') { 'Yes' } else { 'N/A' }
 }
 
-Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14} | FunctionAppResourceId: {15}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled, $functionAppResourceId
+Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14} | IncludeExcludedImageVersions: {16} | FunctionAppResourceId: {15}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled, $functionAppResourceId, $includeExcludedImageVersions
 if ($replacementMode -eq 'MaintenanceWindow') {
     Write-LogEntry -Message "Effective replacement behavior: MaintenanceWindow override (configured mode: $configuredReplacementMode)."
 }
@@ -533,7 +534,7 @@ if ($maintenanceRequestScheduled -and $replacementMode -eq 'SideBySide') {
 # Get latest version of session host image
 Write-LogEntry -Message "Getting latest image version using Image Reference."
 try {
-    $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location
+    $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location -IncludeExcludedImageVersions $includeExcludedImageVersions
 }
 catch {
     Write-LogEntry -Message "CRITICAL ERROR: Failed to get latest image version: $($_.Exception.Message)" -Level Error

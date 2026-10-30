@@ -507,6 +507,23 @@ Describe 'FSLogix Storage Template Spec deployment VM contract' {
     }
 }
 
+Describe 'Session Host Replacer Template Spec size budgets' {
+    It 'fits serialized ARM and the complete form/package with envelope allowance' {
+        $templateFile = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
+        $formFile = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
+        $templateBytes = (Get-Item -LiteralPath $templateFile).Length
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateFile -FormFile $formFile -Location 'usgovvirginia'
+        $payloadBytes = $package.PayloadBytes
+        $envelopeAllowance = 16384
+        $armBudget = 4000000
+        $templateSpecBudget = 2000000
+        $templateBytes | Should BeLessThan $armBudget
+        ($payloadBytes + $envelopeAllowance) | Should BeLessThan $templateSpecBudget
+        Write-Host "SHR ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
+        Write-Host "SHR Template Spec with form and 16 KiB metadata allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
+    }
+}
+
 Describe 'Template Spec naming conventions' {
     It 'resolves every registered add-on purpose with delimiter <Delimiter>' -TestCases @(
         @{ Delimiter = '-' }

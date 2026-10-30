@@ -223,6 +223,23 @@
       "name": "config-table"
     },
     {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "traces\n| where timestamp {TimeRange}\n| where message contains \"SETTINGS |\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where '{HostPool}' == '*' or HostPoolName == '{HostPool}'\n| extend IncludeExcludedImageVersions = extract(@\"IncludeExcludedImageVersions: ([A-Za-z]+)\", 1, message)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project ['Host Pool'] = HostPoolName, ['Gallery Selection Policy'] = case(IncludeExcludedImageVersions =~ 'true', 'Pilot: includes globally and regionally excluded versions', IncludeExcludedImageVersions =~ 'false', 'Production: honors global and regional exclusions', 'Unknown: requires upgraded runtime and a fresh execution'), ['Last Execution'] = timestamp",
+        "size": 1,
+        "title": "Pilot Image Selection Policy",
+        "timeContextFromParameter": "TimeRange",
+        "crossComponentResources": [
+          "{ApplicationInsights}"
+        ],
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "pilot-image-selection-policy"
+    },
+    {
       "type": 1,
       "content": {
         "json": "> **Change configuration safely:** use `Set-SessionHostReplacerConfiguration.ps1` to review current operational settings, preview validated changes, and preserve unrelated Function App settings. Replacement mode, timer schedule, identity, networking, and deployment resources remain managed by the Template Spec.\n\n> **Schedule maintenance:** publish the **Schedule AVD Session Host Maintenance** Template Spec, select it from the **Maintenance Scheduler** parameter, and use the action below. The operation schedules an existing DeleteFirst replacer without redeploying it."

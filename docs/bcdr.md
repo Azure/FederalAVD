@@ -408,7 +408,12 @@ known-good Compute Gallery version, remove the bad-image generation, explicitly 
 hosts back into automation, and restart the Function App. See the
 [complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
-The **Ringed Rollout** setting (0-30 day delay) further limits blast radius by staging new image adoption across the fleet progressively, allowing validation in a subset of hosts before fleet-wide rollout.
+The **Ringed Rollout** setting (0-30 day delay based on image publication time) stages image
+adoption, but does not enforce approval. Validate the exact excluded candidate in a dedicated pilot
+pool with `includeExcludedImageVersions=true`; upgraded production SHR must keep this option false.
+Clear the candidate's exclusion only after approval, using production holds for per-pool sequencing.
+See the
+[Monthly Image Operations operator's guide](monthly-image-operations.md) for the release gate.
 
 See [Session Host Replacer documentation](session-host-replacer.md) for configuration details.
 

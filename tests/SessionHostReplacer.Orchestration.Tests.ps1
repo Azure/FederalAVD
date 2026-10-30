@@ -146,6 +146,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             HostPoolName = 'hp-test'
             ReplaceSessionHostOnNewImageVersionDelayDays = 0
             AllowImageVersionRollback = $false
+            IncludeExcludedImageVersions = $false
             Tag_ScalingPlanExclusionTag = 'ScalingPlanExclusion'
             Tag_ShutdownTimestamp = 'AutoReplaceShutdownTimestamp'
             SessionHostParameters = @{
@@ -511,6 +512,21 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.DeploymentCalls.Count | Should Be 0
         $global:shrSimulation.DeletionCalls.Count | Should Be 0
         $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 0
+    }
+
+    It 'passes the default production exclusion policy to image selection' {
+        Invoke-OrchestrationCycle -RunNumber 1
+        Assert-MockCalled Get-LatestImageVersion -Times 1 -Exactly -Scope It -ParameterFilter {
+            $IncludeExcludedImageVersions -eq $false
+        }
+    }
+
+    It 'passes an explicitly enabled pilot exclusion policy to image selection' {
+        $global:shrSettings.IncludeExcludedImageVersions = $true
+        Invoke-OrchestrationCycle -RunNumber 1
+        Assert-MockCalled Get-LatestImageVersion -Times 1 -Exactly -Scope It -ParameterFilter {
+            $IncludeExcludedImageVersions -eq $true
+        }
     }
 
     It 'SideBySide retries a failed deployment and never removes old hosts before replacements are ready' {

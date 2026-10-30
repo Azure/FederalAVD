@@ -347,13 +347,19 @@ param maxDeploymentBatchSize int = 100
 @maxValue(5)
 param successfulRunsBeforeScaleUp int = 1
 
-@description('Optional. Delay in days before replacing session hosts after a new image version is detected. Only used when replacementMode is ImageVersion. Default is 0 days.')
+@description('Optional. Minimum image publication age in days before image-based replacement. Applies to both replacement modes, including pilot pools. Default is 0.')
 @minValue(0)
 @maxValue(30)
 param replaceSessionHostOnNewImageVersionDelayDays int = 0
 
-@description('Optional. Allow replacement of session hosts even if their current image version is newer than the latest available version. When false (default), session hosts with newer versions will not be replaced to prevent unintended rollbacks. Only used when replacementMode is ImageVersion.')
+@description('Optional. Allow replacement with an older image version. False prevents unintended rollbacks, including in pilot pools.')
 param allowImageVersionRollback bool = false
+
+// Use only on dedicated pilot pools. Publish candidates excluded from latest, validate the
+// exact version in pilot, then clear the exclusion to release it to production. This does not
+// bypass replication, publication-age delay, rollback protection, or host readiness checks.
+@description('Optional. Pilot pools only: include gallery versions excluded from latest globally or regionally. Selects the highest numeric replicated version. Default is false; pinned and marketplace references are unchanged.')
+param includeExcludedImageVersions bool = false
 
 // ================================================================================================
 // Session Host Configuration Parameters
@@ -1026,6 +1032,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         {
           name: 'AllowImageVersionRollback'
           value: string(allowImageVersionRollback)
+        }
+        {
+          name: 'IncludeExcludedImageVersions'
+          value: string(includeExcludedImageVersions)
         }
         {
           name: 'ScaleUpIncrementPercentage'

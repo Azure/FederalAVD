@@ -113,6 +113,14 @@ and
 
 ## Operations
 
+For recurring image releases, use a **dedicated, representative pilot host pool** before production.
+Enable `includeExcludedImageVersions` only on the upgraded pilot SHR and publish candidates with
+`imageVersionExcludeFromLatest=true`. Keep the option disabled in production, then clear the same
+version's exclusion only after pilot approval. Use production Function App holds for sequential
+per-pool release; rollout delay and infrastructure-health validation are not approval gates.
+Follow the [Monthly Image Operations operator's guide](monthly-image-operations.md) for the
+air-gapped transfer-to-production workflow, acceptance checklist, and troubleshooting.
+
 Use the centralized workbook to review replacement progress, effective scaling behavior, current
 configuration, warnings, and errors. Use the guarded configuration command to review or update
 supported operational settings without displaying secrets:

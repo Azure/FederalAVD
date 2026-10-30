@@ -915,8 +915,69 @@ The Session Host Replacer operates in **Image-Version-Based Replacement** mode:
 - Replaces session hosts when their image version differs from the latest available version
 - Use this to ensure all hosts run the latest OS/application patches
 - Replacement happens whenever a new image is published (subject to optional delay)
-- **Ringed Roll-out Support**: Use `replaceSessionHostOnNewImageVersionDelayDays` to delay replacement after a new image is detected (0-30 days). This emulates a staged deployment strategy similar to Windows Update rings, allowing you to validate a new image in production before rolling it out fleet-wide
+- **Ringed Roll-out Support**: Use `replaceSessionHostOnNewImageVersionDelayDays` to stage adoption
+  based on image publication time (0-30 days). Validate the exact candidate in a dedicated,
+  representative pilot host pool before production. A delay is not an approval gate: use the
+  excluded-candidate promotion workflow below, or hold production SHR until explicit pilot approval.
+  Follow the [Monthly Image Operations operator's guide](../../../docs/monthly-image-operations.md)
+  for the air-gapped release workflow, exact-version checks, and troubleshooting.
 - **Rollback Protection**: By default, the function will not replace hosts if their current image version is newer than the latest available version. Set `allowImageVersionRollback` to true to override this behavior
+
+### Pilot Image Selection and Promotion
+
+`includeExcludedImageVersions` is an opt-in **per-SHR** setting for dedicated pilot/validation
+pools. It defaults to `false` and becomes the Function App setting `IncludeExcludedImageVersions`.
+The Portal checkbox is **Pilot Pool: Include Images Excluded from Latest**.
+
+| Gallery definition reference | Selection |
+| --- | --- |
+| Production: `includeExcludedImageVersions=false` | Highest numeric `major.minor.patch` version not excluded globally or in the target region, with completed regional replication |
+| Pilot: `includeExcludedImageVersions=true` | Highest numeric `major.minor.patch` version regardless of global/regional exclusion flags, with completed regional replication |
+| Specific gallery version reference | Stays pinned; the pilot option does not retarget it |
+| Marketplace reference | Existing marketplace selection is unchanged |
+
+Gallery ordering is numeric, not creation/publication-date or lexical order: `1.0.10` is newer
+than `1.0.9`, even if `1.0.9` was published more recently. Publication date still controls the
+configured rollout delay. Pilot selection does not bypass that delay, rollback protection,
+regional replication, drain rules, health validation, or capacity safeguards.
+
+**Upgrade note:** Earlier SHR releases sorted gallery versions by publication date and could fall
+back past regional exclusions when no normal candidates existed. Upgrade both pilot and production
+SHR code before relying on this release gate. Review the numeric target before resuming automation;
+it can differ from the previously selected target. With pilot selection disabled, no eligible
+version now means no image-based replacement, not an exclusion-bypassing fallback.
+
+Use the same image definition in pilot and production:
+
+1. Deploy the updated SHR code and persist `includeExcludedImageVersions=true` only in the pilot's
+   deployment parameters. Keep it `false` for every production consumer. A runtime-only setting
+   change does not install updated code and can be overwritten by template redeployment.
+2. Build a higher numeric candidate with Image Build's `imageVersionExcludeFromLatest=true`.
+   Set this **before publication**, not afterward; otherwise production might adopt it first.
+3. Let pilot SHR adopt the excluded candidate. Validate the exact version's user/application
+   behavior and record approval. SHR health checks are not business acceptance.
+4. After approval, clear **Exclude from latest** on that same gallery version and any applicable
+   regional exclusions. Confirm it is the highest eligible replicated version for production;
+   do not rebuild or publish a different "production" image.
+5. Monitor production adoption. Clearing a global exclusion releases the version to **all**
+   eligible consumers, not one pool at a time. Use explicit Function App holds when per-pool
+   release windows or sequential approval are required.
+
+For an existing, already upgraded pilot Function App, preview the operational setting change:
+
+```powershell
+.\Set-SessionHostReplacerConfiguration.ps1 `
+    -FunctionAppName '<pilot-shr-name>' `
+    -ResourceGroupName '<operations-resource-group>' `
+    -IncludeExcludedImageVersions $true `
+    -WhatIf
+```
+
+Remove `-WhatIf` only after review. Keep the corresponding deployment parameter in sync.
+The helper review, `SETTINGS`/`IMAGE_SELECTION` traces, and workbook **Pilot Image Selection Policy**
+table expose the configured policy. Do not promote another candidate during validation.
+See the [monthly operator guide](../../../docs/monthly-image-operations.md) and Microsoft's
+[gallery version guidance](https://learn.microsoft.com/en-us/azure/virtual-machines/image-version).
 
 ### Target Session Host Count
 
@@ -1154,8 +1215,9 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `replaceSessionHostOnNewImageVersionDelayDays` | `0` | Days to wait after new image detection before starting replacements (0-30). Enables ringed rollouts for image validation |
+| `replaceSessionHostOnNewImageVersionDelayDays` | `0` | Delay based on image publication time (0-30 days). Stages adoption; does not enforce pilot approval |
 | `allowImageVersionRollback` | `false` | Allow replacement even if current version is newer than latest available. Prevents accidental downgrades by default |
+| `includeExcludedImageVersions` | `false` | Pilot pools only: include globally/regionally excluded gallery versions in numeric selection. Replication and all other safeguards remain enforced |
 
 ### Tagging & Automation Parameters
 
@@ -1259,7 +1321,7 @@ removeIntuneDevice: true    // Recommended before hostname reuse
 ```bicep
 replacementMode: 'SideBySide'
 targetSessionHostCount: 500
-replaceSessionHostOnNewImageVersionDelayDays: 7  // Wait 7 days to validate new image
+replaceSessionHostOnNewImageVersionDelayDays: 7  // Stage adoption; pilot approval still required
 enableProgressiveScaleUp: true
 initialDeploymentPercentage: 5   // Very conservative start (5% = 25 hosts)
 scaleUpIncrementPercentage: 10   // Gradual increases

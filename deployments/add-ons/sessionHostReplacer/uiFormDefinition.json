@@ -420,6 +420,15 @@
               }
             },
             {
+              "name": "includeExcludedImageVersions",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Pilot Pool: Include Images Excluded from Latest",
+              "toolTip": "Pilot/validation pools only. Select the highest numeric gallery version even when excluded from latest globally or in this region. Regional replication, image-age delay, rollback protection, and host health/capacity checks still apply. Leave unchecked for production. Pinned versions and marketplace selection are unchanged.",
+              "constraints": {
+                "required": false
+              }
+            },
+            {
               "name": "allowImageVersionRollback",
               "type": "Microsoft.Common.CheckBox",
               "defaultValue": false,
@@ -3559,6 +3568,7 @@
         "timerSchedule": "[concat('0 ', string(steps('replacerConfig').scheduleMinuteOffset), ',', string(add(steps('replacerConfig').scheduleMinuteOffset, 30)), ' ', if(equals(length(steps('replacerConfig').scheduleHours), 24), '*', replace(replace(replace(string(steps('replacerConfig').scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('replacerConfig').scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('replacerConfig').scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
         "replaceSessionHostOnNewImageVersionDelayDays": "[steps('replacerConfig').replaceSessionHostOnNewImageVersionDelayDays]",
         "allowImageVersionRollback": "[steps('replacerConfig').allowImageVersionRollback]",
+        "includeExcludedImageVersions": "[steps('replacerConfig').includeExcludedImageVersions]",
         "replacementMode": "[steps('replacerConfig').replacementMode]",
         "drainGracePeriodHours": "[steps('replacerConfig').drainGracePeriodHours]",
         "minimumDrainMinutes": "[if(equals(steps('replacerConfig').replacementMode, 'DeleteFirst'), steps('replacerConfig').minimumDrainMinutes, 0)]",
