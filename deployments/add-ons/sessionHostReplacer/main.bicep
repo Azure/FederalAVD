@@ -153,6 +153,9 @@ param azureBlobPrivateDnsZoneResourceId string = ''
 param azureFunctionAppPrivateDnsZoneResourceId string = ''
 param azureTablePrivateDnsZoneResourceId string = ''
 
+@description('Optional. Existing target-cloud queue private DNS zone. Used with private endpoints and queue continuation; leave empty only when DNS is managed externally.')
+param azureQueuePrivateDnsZoneResourceId string = ''
+
 @description('Optional. The resource ID of the Key Vault for encryption. Required if keyManagementStorageAccounts is set to Customer.')
 param encryptionKeyVaultResourceId string = ''
 
@@ -202,6 +205,19 @@ param templateSpecVersion string = '1.0.0'
 // minute.
 @description('Optional. Six-field NCRONTAB timer schedule including seconds. Default runs at minutes 0 and 30 each hour; the Portal can generate this value.')
 param timerSchedule string = '0 0,30 * * * *'
+
+// Opt-in scheduler/worker execution shares the existing identity, state, and lifecycle engine.
+// InitiationEnabled is an operator hold for new cycles, not a worker drain/repair kill switch.
+@description('Optional. Use a timer scheduler and queue worker for bounded continuation cycles. Default false preserves timer-only execution.')
+param enableQueueContinuation bool = false
+
+@description('Optional. Allow new replacement cycles to begin. False holds initiation while an active continuation cycle can still drain or repair. Default true.')
+param initiationEnabled bool = true
+
+@description('Optional. Maximum continuation cycle age in hours before intervention is required. Default 72 hours.')
+@minValue(1)
+@maxValue(720)
+param continuationTimeoutHours int = 72
 
 @description('Optional. Whether to deploy the Azure Monitor Workbook dashboard into the selected Log Analytics workspace resource group. Deployments that use the same workspace converge on the same workbook. Default is true.')
 param deployWorkbook bool = true
@@ -915,13 +931,49 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     applicationInsightsName: appInsightsName
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
     azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
-    enableQueueStorage: false
+    enableFunctionAppDiagnosticSettings: false
+    enableQueueStorage: enableQueueContinuation
     enableTableStorage: true
     encryptionKeyName: encryptionKeyName
     encryptionKeyVaultResourceId: encryptionKeyVaultResourceId
     functionAppAppSettings: union(
+      [
+        {
+          name: 'TimerSchedule'
+          value: !empty(trim(timerSchedule)) ? timerSchedule : fail('A timerTrigger requires a nonempty schedule.')
+        }
+        {
+          name: 'EnableQueueContinuation'
+          value: string(enableQueueContinuation)
+        }
+        {
+          name: 'InitiationEnabled'
+          value: string(initiationEnabled)
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer-worker.Disabled'
+          value: string(!enableQueueContinuation)
+        }
+      ],
+      enableQueueContinuation
+        ? [
+            {
+              name: 'ContinuationTimeoutHours'
+              value: string(continuationTimeoutHours)
+            }
+            {
+              name: 'AzureFunctionsJobHost__functionTimeout'
+              value: '00:10:00'
+            }
+            {
+              name: 'AzureFunctionsJobHost__extensions__queues__visibilityTimeout'
+              value: '00:02:00'
+            }
+          ]
+        : [],
       [
         {
           name: 'DeploymentPrefix'
@@ -1134,14 +1186,27 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
   dependsOn: [storageCmk]
 }
 
+// Deploy shared files once; the worker depends on this deployment to avoid concurrent writes.
+var sharedFunctionFiles = {
+  '../shr-cycle.ps1': loadTextContent('functions/run.ps1')
+  '../host.json': string({
+    version: '2.0'
+    extensionBundle: {
+      id: 'Microsoft.Azure.Functions.ExtensionBundle'
+      version: '[4.0.0, 5.0.0)'
+    }
+  })
+}
+
 module functionCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
-    files: {
-      'run.ps1': loadTextContent('functions/run.ps1')
+    files: union({
+      'run.ps1': enableQueueContinuation ? loadTextContent('functions/scheduler.ps1') : loadTextContent('functions/run.ps1')
       '../profile.ps1': loadTextContent('functions/profile.ps1')
       '../requirements.psd1': loadTextContent('functions/requirements.psd1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Core.psm1')
+      '../Modules/SessionHostReplacer/SessionHostReplacer.Continuation.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Continuation.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Deployment.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.Maintenance.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Maintenance.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.ImageManagement.psm1')
@@ -1151,11 +1216,26 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
       '../Modules/SessionHostReplacer/SessionHostReplacer.Monitoring.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.Monitoring.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psm1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psm1')
       '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
-    }
+    }, enableQueueContinuation ? sharedFunctionFiles : {})
     functionAppName: functionApp.outputs.functionAppName
     functionName: 'session-host-replacer'
-    schedule: timerSchedule
+    schedule: '%TimerSchedule%'
   }
+}
+
+module workerCode '../../shared/modules/resourceModules/functionApp/function.bicep' = if (enableQueueContinuation) {
+  scope: resourceGroup(functionAppResourceGroupName)
+  params: {
+    files: {
+      'run.ps1': loadTextContent('functions/worker.ps1')
+    }
+    functionAppName: functionApp.outputs.functionAppName
+    functionName: 'session-host-replacer-worker'
+    triggerType: 'queueTrigger'
+    queueName: 'shr-continuation'
+    connection: 'AzureWebJobsStorage'
+  }
+  dependsOn: [functionCode]
 }
 
 module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty(logAnalyticsWorkspaceResourceId)) {

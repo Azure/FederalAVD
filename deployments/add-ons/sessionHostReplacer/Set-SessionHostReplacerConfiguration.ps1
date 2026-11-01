@@ -66,6 +66,13 @@
     Pilot pools only: includes gallery versions excluded from latest globally or in the target region.
     Does not bypass replication, publication-age delay, rollback protection, or health/capacity checks.
 
+.PARAMETER InitiationEnabled
+    Allows the timer to initiate a new queue-continuation batch. Existing work continues while false.
+    Requires a deployment with queue continuation enabled.
+
+.PARAMETER ContinuationTimeoutHours
+    Deadline for newly initiated queue operations, in hours. Does not extend an existing operation.
+
 .PARAMETER PassThru
     Returns the interpreted configuration object after review or update.
 
@@ -143,6 +150,11 @@ param(
     [Nullable[bool]]$AllowImageVersionRollback,
 
     [Nullable[bool]]$IncludeExcludedImageVersions,
+
+    [Nullable[bool]]$InitiationEnabled,
+
+    [ValidateRange(1, 720)]
+    [Nullable[int]]$ContinuationTimeoutHours,
 
     [switch]$PassThru
 )
@@ -256,6 +268,9 @@ function Get-InterpretedConfiguration {
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
         IncludeExcludedImageVersions = Get-SettingValue -Settings $Settings -Name 'IncludeExcludedImageVersions' -Default 'false'
+        QueueContinuationEnabled = Get-SettingValue -Settings $Settings -Name 'EnableQueueContinuation' -Default 'false'
+        InitiationEnabled = Get-SettingValue -Settings $Settings -Name 'InitiationEnabled' -Default 'true'
+        ContinuationTimeoutHours = Get-SettingValue -Settings $Settings -Name 'ContinuationTimeoutHours' -Default '72'
         MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(
             (Get-SettingValue -Settings $Settings -Name 'MaintenanceRequest')
         )) {
@@ -306,6 +321,8 @@ $settingParameters = [ordered]@{
     ReplaceSessionHostOnNewImageVersionDelayDays = 'ReplaceSessionHostOnNewImageVersionDelayDays'
     AllowImageVersionRollback = 'AllowImageVersionRollback'
     IncludeExcludedImageVersions = 'IncludeExcludedImageVersions'
+    InitiationEnabled = 'InitiationEnabled'
+    ContinuationTimeoutHours = 'ContinuationTimeoutHours'
 }
 
 $requestedChanges = [ordered]@{}
@@ -316,6 +333,10 @@ foreach ($parameterName in $settingParameters.Keys) {
 }
 
 $replacementMode = Get-SettingValue -Settings $settings -Name 'ReplacementMode'
+if (($requestedChanges.Contains('InitiationEnabled') -or $requestedChanges.Contains('ContinuationTimeoutHours')) -and
+    -not [bool]::Parse((Get-SettingValue -Settings $settings -Name 'EnableQueueContinuation' -Default 'false'))) {
+    throw 'InitiationEnabled and ContinuationTimeoutHours require queue continuation infrastructure. Enable it through the SHR deployment first.'
+}
 if ($replacementMode -ne 'DeleteFirst' -and
     ($requestedChanges.Contains('MinimumCapacityPercentage') -or $requestedChanges.Contains('MaxDeletionsPerCycle'))) {
     throw 'MinimumCapacityPercentage and MaxDeletionsPerCycle apply only to DeleteFirst mode.'

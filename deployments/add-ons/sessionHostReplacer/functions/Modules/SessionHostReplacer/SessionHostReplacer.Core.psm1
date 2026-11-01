@@ -463,6 +463,10 @@ function Invoke-AzureRestMethod {
         [hashtable]$AdditionalHeaders
     )
 
+    if ($Method -ne 'GET' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+        Assert-ShrWorkerLease
+    }
+
     # Check if authentication was successful.
     if ($ARMToken) {
         # Format headers.
@@ -642,6 +646,10 @@ function Invoke-GraphRestMethod {
         [string] $Body
     )
     
+    if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+        Assert-ShrWorkerLease
+    }
+
     $headers = @{
         'Authorization' = "Bearer $GraphToken"
         'Content-Type'  = 'application/json'

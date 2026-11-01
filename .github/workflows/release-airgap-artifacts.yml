@@ -1,0 +1,106 @@
+name: Build approved air-gapped artifact bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published FederalAVD release to build and attach assets to
+        required: true
+        type: string
+      winget_release_tag:
+        description: Exact stable microsoft/winget-cli tag (empty selects latest stable)
+        type: string
+      include_webrtc:
+        description: Include WebRTC (required by the current air-gapped Teams path)
+        type: boolean
+        default: true
+      app_store_ids:
+        description: Optional comma-separated subset of built-in app Store IDs
+        type: string
+      redistribution_approved:
+        description: All selected payloads have approval for public redistribution
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    environment: airgap-artifact-publication
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Require redistribution approval and resolve released commit
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REDISTRIBUTION_APPROVED: ${{ inputs.redistribution_approved }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:REDISTRIBUTION_APPROVED -ne 'true') {
+            throw 'Public redistribution approval is required. This checkbox does not grant a license.'
+          }
+          $releaseJson = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,tagName
+          if ($LASTEXITCODE -ne 0) { throw 'Published release lookup failed.' }
+          $release = $releaseJson | ConvertFrom-Json
+          if ($release.isDraft -or $release.tagName -ne $env:RELEASE_TAG) { throw 'Select an existing published release.' }
+          $tag = [uri]::EscapeDataString($env:RELEASE_TAG)
+          $sha = gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq '.sha'
+          if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw 'Released commit lookup failed.' }
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+      - name: Check out the released commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+      - name: Ensure WinGet is available on the connected runner
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Install-Module Microsoft.WinGet.Client -Repository PSGallery -Scope CurrentUser -Force
+            Import-Module Microsoft.WinGet.Client -ErrorAction Stop
+            Repair-WinGetPackageManager -AllUsers
+          }
+          winget --version
+          if ($LASTEXITCODE -ne 0) { throw 'WinGet bootstrap failed.' }
+      - name: Build the transfer ZIP, checksum, and release parts
+        env:
+          SOURCE_REVISION: ${{ steps.release.outputs.sha }}
+          WINGET_RELEASE_TAG: ${{ inputs.winget_release_tag }}
+          INCLUDE_WEBRTC: ${{ inputs.include_webrtc }}
+          APP_STORE_IDS: ${{ inputs.app_store_ids }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $arguments = @{
+            OutputPath = Join-Path $env:RUNNER_TEMP 'FederalAVD-AirGapPrerequisites.zip'
+            SourceRevision = $env:SOURCE_REVISION
+            IncludeWebRtc = $env:INCLUDE_WEBRTC -eq 'true'
+          }
+          if ($env:WINGET_RELEASE_TAG) { $arguments.WinGetReleaseTag = $env:WINGET_RELEASE_TAG }
+          if ($env:APP_STORE_IDS) { $arguments.AppStoreIds = @($env:APP_STORE_IDS.Split(',').Trim()) }
+          $result = & .\tools\New-AirGappedArtifactPackage.ps1 @arguments
+          $result.ReleaseFiles | ConvertTo-Json |
+            Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'airgap-release-files.json')
+      - name: Attach approved transfer assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assets = @(Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'airgap-release-files.json') -Raw | ConvertFrom-Json)
+          if ($assets.Count -lt 2) { throw 'Transfer release file list is incomplete.' }
+          foreach ($asset in $assets) {
+            if ((Get-Item -LiteralPath $asset -ErrorAction Stop).Length -ge 2GB) {
+              throw 'Transfer asset reaches the 2 GiB release limit.'
+            }
+          }
+          gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Transfer asset upload failed. Existing assets are not overwritten.' }

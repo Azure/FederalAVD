@@ -2,11 +2,88 @@
 
 # Canonical Session Host Replacer Flow
 
-These diagrams describe one timer invocation. A replacement cycle can span multiple invocations while deployments complete, users drain, or safety checks block further work.
+These diagrams describe one lifecycle-engine invocation. By default the timer invokes the engine.
+With opt-in queue continuation, the timer authorizes a batch and a queue-triggered worker invokes
+the same engine until that batch finishes. A replacement cycle can span multiple batches.
 
 > **Canonical lifecycle reference:** This document owns the detailed replacement, readiness,
 > scaling-phase, and recovery behavior. The [add-on README](README.md) owns deployment,
 > configuration, monitoring, and troubleshooting guidance.
+
+## Queue Continuation
+
+Set `enableQueueContinuation=true` to separate initiation from progress. Both functions run in the
+same Function App; there is no additional VM or Function App.
+
+```mermaid
+flowchart TD
+    T[Scheduled timer] --> A{Active operation?}
+    A -- Yes --> Q[Enqueue existing operation ID]
+    A -- No --> H{Initiation enabled?}
+    H -- No --> X[Finish without new work]
+    H -- Yes --> I[Select exact image and persist authorization]
+    I --> Q
+    Q --> W[Queue worker acquires conditional per-pool lease]
+    W --> B[Checkpoint approved batch and deployment intent]
+    B --> E[Run bounded lifecycle step]
+    E --> C{Health, scaling handoff and cleanup complete?}
+    C -- No --> D[Enqueue delayed continuation and exit]
+    D --> W
+    C -- Yes --> F[Complete batch; next batch requires timer]
+```
+
+The timer selects the image using the existing replication, exclusion, rollback and publication-age
+policies; age is enforced again by planning. The worker does not switch to a newer publication.
+Initial authorization expires after five minutes if no batch checkpoint has been established.
+This prevents a stale queued initiation from starting a replacement hours later. Once a batch has
+started, its progress is independent of the initiation schedule.
+
+The first worker step checkpoints the selected old-host names, deployment ceiling and pool target.
+Subsequent planning uses the full inventory for capacity safety but restricts replacement candidates
+to that batch. Unselected old hosts remain for a later timer-authorized batch; metrics still report
+the fleet's outstanding replacements. Existing drain/session timing, scaling-phase restrictions,
+fresh-state deletion checks, exact-name recovery and shutdown retention remain in force.
+Maintenance requests are not marked complete merely because one of their batches has finished.
+
+### Coordination and Recovery Boundaries
+
+- The `shrContinuation` table stores one entity per fully qualified host pool, separate from the
+  existing `sessionHostDeploymentState` recovery table. State updates use the returned ETag, never
+  wildcard replacement. Deploy only one SHR Function App per pool; separate storage accounts cannot
+  coordinate ownership.
+- Timer retries and duplicate queue messages resume the same operation. The worker acquires a
+  30-minute lease using a conditional entity update. Mutating ARM/Graph calls and recovery-state
+  writes check ownership and deadlines. The host timeout is ten minutes; the engine yields before
+  further mutations at its eight-minute budget. A crash can delay recovery until lease expiry.
+- Cleanup checkpoints retain exact hostnames, VM resource IDs, authorized VM-deletion waits and
+  directory-removal flags. A worker performs one verification pass without a polling sleep,
+  then yields if deletion is still pending. The next generation replays that cleanup before
+  inventory/planning, even when a deleted VM has disappeared from inventory. Names remain
+  blocked until VM, registration and required directory absence is verified. Initial batch
+  authorization is not extended by completing previously authorized cleanup.
+  Timer-only mode retains its bounded ten-minute, thirty-second polling behavior.
+- A persisted generation counter makes already-processed messages and their watchdogs obsolete.
+  The successor is enqueued before advancing its generation; an early successor waits for the
+  prior checkpoint. Duplicate delivery therefore does not multiply long-lived continuation chains.
+- A delayed ten-minute watchdog is enqueued before lifecycle side effects. Normal waiting queues
+  another message with a two-minute visibility delay and returns successfully. Provisioning, health
+  and drain waits therefore do not consume poison retries. Polling, platform restarts and leases
+  mean these are delays, not completion-time guarantees.
+- The deployment intent is saved before ARM submission. Its deterministic `shr_<operation-id>`
+  name, exact hostnames, Template Spec version and request body are reused after an interruption.
+  An already accepted deployment is observed rather than submitted under a new name.
+  After partial failure, a checkpointed `_rN` retry includes only unresolved names and their aligned
+  per-host placement settings; already registered hosts are not redeployed.
+  Pending host mappings preserve planner priority through checkpoint serialization and reload;
+  placement remains keyed by exact hostname. Invalid ARM deployment collection envelopes fail
+  closed rather than being interpreted as an empty deployment list.
+- The deadline is established once (`continuationTimeoutHours`, default 72, range 1-720); new
+  messages do not reset it. Unexpected failures, changed initiating configuration and expired
+  deadlines stop in `NeedsAttention`, retaining the batch, pins and recovery information.
+  See the [operator recovery procedure](README.md#queue-continuation-operations).
+- Operation state contains deployment parameters. Protect Table data access as carefully as
+  Function App configuration; do not copy entity contents into public diagnostics. Oversized
+  checkpoints fail explicitly. Reduce batch size rather than discarding state.
 
 ## Shared Evaluation
 
@@ -15,10 +92,10 @@ and validation steps.
 
 ```mermaid
 flowchart TD
-    A[Timer invocation] --> B["Load configured mode,<br/>request, and durable state"]
+    A[Lifecycle invocation: timer or worker] --> B["Load configured mode,<br/>request, and durable state"]
     B --> R{"Active maintenance<br/>request?"}
     R -- Yes --> MW[Maintenance override flow]
-    R -- No --> C["Get latest<br/>image version"]
+    R -- No --> C["Resolve selected image:<br/>pinned for queue operation"]
     C --> D["Inventory session hosts<br/>and active deployments"]
     D --> E["Evaluate enabled scaling plan<br/>and active schedule"]
     E --> F["Build replacement<br/>plan"]
@@ -33,6 +110,16 @@ flowchart TD
 ```
 
 Exact-image evidence is written whenever a latest-image host has AVD status `Available` and no failed AVD health checks. Drain mode does not prevent evidence from being written.
+
+Every scaling-exclusion cleanup path additionally requires an online, non-draining, automation-enabled
+host on the exact image with the matching validation token. Shutdown-retention hosts and
+administrator-owned exclusions are preserved. A cached token alone never authorizes release of an
+unhealthy host. With an evaluable scaling plan, healthy hosts can be handed back individually while
+other hosts are still warming up; old-capacity removal still waits for the full readiness gate.
+Hosts in shutdown retention are excluded from active replacement-host readiness even when they use
+the same image; retention expiration is not a prerequisite for completing a healthy replacement batch.
+SHR releases its per-VM exclusion tag, not the scaling plan itself. AVD infrastructure health is not
+proof that customer applications or the image's functional acceptance tests passed.
 
 Readiness then treats a latest-image host as either:
 

@@ -1,5 +1,5 @@
 ﻿# Input bindings are passed in via param block.
-param($Timer)
+param($Timer, [hashtable] $ContinuationContext, [hashtable] $CycleResult)
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
@@ -534,7 +534,30 @@ if ($maintenanceRequestScheduled -and $replacementMode -eq 'SideBySide') {
 # Get latest version of session host image
 Write-LogEntry -Message "Getting latest image version using Image Reference."
 try {
-    $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location -IncludeExcludedImageVersions $includeExcludedImageVersions
+    if ($ContinuationContext -and $ContinuationContext.Image) {
+        $latestImageVersion = [PSCustomObject]$ContinuationContext.Image
+    }
+    else {
+        $latestImageVersion = Get-LatestImageVersion -ARMToken $ARMToken -ImageReference $sessionHostParameters.ImageReference -Location $sessionHostParameters.Location -IncludeExcludedImageVersions $includeExcludedImageVersions
+        if ($ContinuationContext) {
+            $ContinuationContext.Image = @{
+                Definition = $latestImageVersion.Definition
+                Version = $latestImageVersion.Version
+                Date = ([DateTimeOffset]$latestImageVersion.Date).ToString('o')
+            }
+            Save-ShrContinuationCheckpoint
+        }
+    }
+    if ($ContinuationContext) {
+        if ($latestImageVersion.Definition -like 'marketplace:*') {
+            $sessionHostParameters.ImageReference.version = $latestImageVersion.Version
+        }
+        else {
+            $sessionHostParameters.ImageReference = @{
+                id = "$($latestImageVersion.Definition)/versions/$($latestImageVersion.Version)"
+            }
+        }
+    }
 }
 catch {
     Write-LogEntry -Message "CRITICAL ERROR: Failed to get latest image version: $($_.Exception.Message)" -Level Error
@@ -612,7 +635,7 @@ $replaceSessionHostOnNewImageVersionDelayDays = (Read-FunctionAppSetting Replace
 $latestImageAge = (New-TimeSpan -Start $latestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
 
 # Check for work in progress that requires full processing
-$skipLightweightCheck = $false
+$skipLightweightCheck = [bool]$ContinuationContext
 
 # Delete-before-deploy modes: Check for pending host mappings or hosts in drain mode
 if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
@@ -779,6 +802,12 @@ if ($destructiveOperationsFrozen) {
         "scaling phase '$($scalingPlanTarget.Phase)'"
     }
     Write-LogEntry -Message "DeleteFirst destructive replacement is frozen because $freezeReason. Deployment recovery and host validation will continue." -Level Warning
+    if ($ContinuationContext -and $null -eq $ContinuationContext.BatchHostNames -and
+        (-not $initialDeploymentState.PendingHostMappings -or $initialDeploymentState.PendingHostMappings -eq '{}')) {
+        Write-LogEntry -Message 'CONTINUATION | No new destructive batch is authorized during this initiation window.'
+        $CycleResult.Completed = $true
+        return
+    }
 }
 
 # If up to date, skip replacement planning and go straight to the early exit path.
@@ -815,6 +844,50 @@ else {
         -RemoveIntuneDevice $removeIntuneDevice
 }
 
+if ($ContinuationContext) {
+    if ($null -eq $ContinuationContext.BatchHostNames) {
+        if ([DateTimeOffset]$ContinuationContext.InitiationExpiresUtc -le [DateTimeOffset]::UtcNow) {
+            Write-LogEntry -Message 'CONTINUATION | Initiation authorization expired before the batch checkpoint; no new replacement is started.' -Level Warning
+            $CycleResult.Completed = $true
+            return
+        }
+        $limit = [Math]::Max($hostPoolReplacementPlan.PossibleDeploymentsCount,
+            $hostPoolReplacementPlan.PossibleSessionHostDeleteCount)
+        if ($limit -eq 0 -and $hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
+            Write-LogEntry -Message 'CONTINUATION | No replacement batch is permitted by the current capacity policy; awaiting the next initiation schedule.' -Level Warning
+            $CycleResult.Completed = $true
+            return
+        }
+        $candidates = @($hostPoolReplacementPlan.ReplacementCandidates)
+        if ($hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+            $candidates = @($hostPoolReplacementPlan.SessionHostsPendingDelete)
+        }
+        $ContinuationContext.BatchHostNames = @($candidates |
+            Select-Object -First ([Math]::Max(0, $limit)) |
+            ForEach-Object { $_.SessionHostName })
+        $ContinuationContext.BatchDeploymentLimit = [int]$hostPoolReplacementPlan.PossibleDeploymentsCount
+        $ContinuationContext.TargetCount = [int]$hostPoolReplacementPlan.TargetSessionHostCount
+        $parameterBytes = [Text.Encoding]::Unicode.GetByteCount(
+            ($sessionHostParameters | ConvertTo-Json -Depth 20 -Compress)
+        )
+        $stateBytes = [Text.Encoding]::Unicode.GetByteCount(
+            ($ContinuationContext | ConvertTo-Json -Depth 40 -Compress)
+        )
+        if (2 * $parameterBytes + $stateBytes + 100 * $ContinuationContext.BatchDeploymentLimit + 8000 -gt 60000) {
+            throw 'SHR batch is too large to safely checkpoint its deployment intent. Reduce the deployment batch size before deleting hosts.'
+        }
+        Save-ShrContinuationCheckpoint
+    }
+    $hostPoolReplacementPlan.SessionHostsPendingDelete = @(
+        $hostPoolReplacementPlan.SessionHostsPendingDelete |
+            Where-Object { $_.SessionHostName -in $ContinuationContext.BatchHostNames }
+    )
+    $hostPoolReplacementPlan.PossibleSessionHostDeleteCount = $hostPoolReplacementPlan.SessionHostsPendingDelete.Count
+    $hostPoolReplacementPlan.PossibleDeploymentsCount = [Math]::Min(
+        $hostPoolReplacementPlan.PossibleDeploymentsCount, $ContinuationContext.BatchDeploymentLimit
+    )
+}
+
 if ($replacementMode -eq 'MaintenanceWindow' -and -not $maintenanceCanStartNewBatch) {
     $deploymentState = Get-DeploymentState
     $hasPendingMaintenanceMappings = $deploymentState.PendingHostMappings -and
@@ -832,6 +905,7 @@ if ($replacementMode -eq 'MaintenanceWindow' -and -not $maintenanceCanStartNewBa
         $deploymentState.LastStatus = 'MaintenanceWindowExpiredIncomplete'
         Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
         Write-LogEntry -Message "Maintenance window closed before all hosts were replaced. No batch is in flight, so the request is closed without starting another destructive batch." -Level Warning
+        if ($CycleResult) { $CycleResult.Failure = 'Maintenance window expired before the approved batch completed.' }
         return
     }
 
@@ -855,7 +929,11 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     $runningDeployments.Count -eq 0 -and
     $failedDeployments.Count -eq 0) {
     
-    Write-LogEntry -Message "Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed."
+    Write-LogEntry -Message $(if ($ContinuationContext) {
+        'The approved replacement batch has no remaining deployments or removals; checking readiness and scaling handoff.'
+    } else {
+        'Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed.'
+    })
 
     $upToDateHostReadiness = Test-NewSessionHostsAvailable `
         -ARMToken $ARMToken `
@@ -864,6 +942,16 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         -ScalingPlanTarget $scalingPlanTarget
 
     Write-LogEntry -Message "Up-to-date host validation: {0}" -StringValues $upToDateHostReadiness.Message -Level Trace
+    if (-not $upToDateHostReadiness.SafeToProceed) {
+        if ($ContinuationContext -and -not $ContinuationContext.DeploymentIntent -and
+            $upToDateHostReadiness.TotalNewHosts -eq 0) {
+            Write-LogEntry -Message 'CONTINUATION | No replacement work is due for the selected image.'
+            $CycleResult.Completed = $true
+            return
+        }
+        Write-LogEntry -Message 'Replacement is not complete: latest-image readiness has not been established. Scaling exclusions remain protected.' -Level Warning
+        return
+    }
     
     # Update cycle state now that replacement is complete.
     if ((Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) -or
@@ -881,7 +969,8 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
             $deploymentState.TargetSessionHostCount = 0
             Write-LogEntry -Message "Cycle complete - clearing the auto-detected target so the next cycle can detect intentional pool-size changes" -Level Trace
         }
-        if ($replacementMode -eq 'MaintenanceWindow') {
+        if ($replacementMode -eq 'MaintenanceWindow' -and
+            (-not $ContinuationContext -or $hostPoolReplacementPlan.TotalFleetSessionHostsToReplace -eq 0)) {
             $deploymentState.CompletedMaintenanceRequestId = $maintenanceRequest.RequestId
             $deploymentState.ActiveMaintenanceRequestId = ''
             $deploymentState.MaintenanceWindowEndUtc = ''
@@ -937,6 +1026,10 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
                         Write-LogEntry -Message "Preserving scaling exclusion tag on shutdown retention VM: $vmName" -Level Trace
                         continue
                     }
+                    if (-not (Test-SessionHostScalingRelease -SessionHost $sessionHost -LatestImageVersion $latestImageVersion)) {
+                        Write-LogEntry -Message "Preserving scaling exclusion on $($sessionHost.SessionHostName): exact-image health, drain or retention gate is not satisfied." -Level Trace
+                        continue
+                    }
                     
                     # Check if exclusion tag exists with SessionHostReplacer value
                     $vmTags = $sessionHost.Tags
@@ -952,6 +1045,7 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
                         }
                         
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        $sessionHost.Tags.Remove($tagScalingPlanExclusionTag)
                         $hostsWithExclusionTag++
                     }
                 }
@@ -966,13 +1060,25 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         }
     }
     
+    if ($CycleResult) {
+        $pendingScalingHandoffs = @($sessionHostsFiltered | Where-Object {
+            $_.ImageVersion -eq $latestImageVersion.Version -and
+            $_.ImageDefinition -eq $latestImageVersion.Definition -and
+            $_.SessionHostName -notin $shutdownRetentionVMs -and
+            $tagScalingPlanExclusionTag -and $_.Tags[$tagScalingPlanExclusionTag] -eq 'SessionHostReplacer'
+        })
+        $CycleResult.Completed = $cycleComplete -and $pendingScalingHandoffs.Count -eq 0
+    }
+
     # Log basic metrics for monitoring dashboard
     $metricsLog = @{
         TotalSessionHosts    = $sessionHosts.Count
         EnabledForAutomation = $sessionHostsFiltered.Count
         TargetCount          = if ($hostPoolReplacementPlan.TargetSessionHostCount) { $hostPoolReplacementPlan.TargetSessionHostCount } else { 0 }
-        ToReplace            = 0
-        ToReplacePercentage  = 0
+        ToReplace            = if ($ContinuationContext) { $hostPoolReplacementPlan.TotalFleetSessionHostsToReplace } else { 0 }
+        ToReplacePercentage  = if ($ContinuationContext -and $hostPoolReplacementPlan.TargetSessionHostCount -gt 0) {
+            [Math]::Round(100 * $hostPoolReplacementPlan.TotalFleetSessionHostsToReplace / $hostPoolReplacementPlan.TargetSessionHostCount, 1)
+        } else { 0 }
         InDrain              = $hostsInDrainMode
         PendingDelete        = 0
         ShutdownRetention    = $shutdownRetentionCount
@@ -980,7 +1086,9 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         RunningDeployments   = 0
         LatestImageVersion   = if ($latestImageVersion.Version) { $latestImageVersion.Version } else { "N/A" }
         LatestImageDate      = $latestImageVersion.Date
-        Status               = if ($cycleComplete) { "UpToDate" } else { "Draining" }
+        Status               = if ($ContinuationContext -and $hostPoolReplacementPlan.TotalFleetSessionHostsToReplace -gt 0) {
+            'BatchComplete'
+        } elseif ($cycleComplete) { "UpToDate" } else { "Draining" }
     }
     
     # Log image metadata for workbook visibility
@@ -1007,7 +1115,7 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
             -SessionHosts $sessionHostsFiltered `
             -RunningDeployments 0 `
             -FailedDeployments @() `
-            -HostsToReplace 0 `
+            -HostsToReplace $metricsLog.ToReplace `
             -CachedVMs $cachedVMs
     }
     catch {
@@ -1066,7 +1174,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     
     # STEP 1: Delete session hosts first
     $deletedSessionHostNames = @()
-    $hostPropertyMapping = @{}
+    $hostPropertyMapping = [ordered]@{}
     $deletionResults = $null
     $GraphToken = $null
     $waitForVMDeletion = $false
@@ -1094,7 +1202,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
                 Write-LogEntry -Message "All pending hosts are now registered - clearing mappings" -Level Trace
                 $deploymentState.PendingHostMappings = '{}'
                 Save-DeploymentState -DeploymentState $deploymentState
-                $hostPropertyMapping = @{}
+                $hostPropertyMapping = [ordered]@{}
             }
         }
         catch {
@@ -1176,7 +1284,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
             # This ensures we track which hosts need deployment even if deployment fails
             foreach ($sessionHost in $hostPoolReplacementPlan.SessionHostsPendingDelete) {
                 # Only add if not already in mapping (preserve previous mappings)
-                if (-not $hostPropertyMapping.ContainsKey($sessionHost.SessionHostName)) {
+                if (-not $hostPropertyMapping.Contains($sessionHost.SessionHostName)) {
                     $hostPropertyMapping[$sessionHost.SessionHostName] = @{
                         HostId      = $sessionHost.HostId
                         HostGroupId = $sessionHost.HostGroupId
@@ -1341,7 +1449,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
                 foreach ($vmName in $deploymentResult.SessionHostNames) {
                     if (-not $savedMappings.ContainsKey($vmName)) {
                         $resourceId = Get-SessionHostVMResourceId -Name $vmName -SessionHostParameters $sessionHostParameters
-                        $savedMappings[$vmName] = if ($hostPropertyMapping.ContainsKey($vmName)) {
+                        $savedMappings[$vmName] = if ($hostPropertyMapping.Contains($vmName)) {
                             $hostPropertyMapping[$vmName]
                         } else {
                             @{ VMName = $resourceId.Split('/')[-1]; ResourceId = $resourceId }
@@ -1356,6 +1464,10 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
             Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
         }
         catch {
+            if ($_.Exception -is [TimeoutException] -and (Get-ShrWorkerState)) {
+                Write-LogEntry -Message "Deployment is waiting for continuation: $($_.Exception.Message)" -Level Warning
+                throw
+            }
             if ($deploymentAccepted) {
                 Write-LogEntry -Message "Deployment was accepted but its tracking state could not be saved: $_" -Level Error
                 throw
@@ -1391,7 +1503,10 @@ else {
         $existingSessionHostNames = (@($sessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName }) + @($hostPoolReplacementPlan.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
         
         try {
-            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount -ExistingSessionHostNames $existingSessionHostNames
+            $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken `
+                -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount `
+                -ExistingSessionHostNames $existingSessionHostNames `
+                -SessionHostParameters $sessionHostParameters
             
             # Log deployment submission immediately for workbook visibility
             Write-LogEntry -Message "Deployment submitted: {0} VMs requested, deployment name: {1}" -StringValues $deploymentResult.SessionHostCount, $deploymentResult.DeploymentName
@@ -1565,9 +1680,11 @@ $currentEnabledCount = $sessionHostsFiltered.Count - $completedDeletionsCount
 # DeleteFirst: Deletes first, then deploys replacements with name reuse
 # SideBySide: Deploys first, then deletes/shuts down old hosts (both reduce ToReplace count)
 $totalReplacementOperations = $completedDeletionsCount + $completedShutdownsCount
-$remainingToReplace = $hostPoolReplacementPlan.TotalSessionHostsToReplace
+$remainingToReplace = if ($ContinuationContext) {
+    $hostPoolReplacementPlan.TotalFleetSessionHostsToReplace
+} else { $hostPoolReplacementPlan.TotalSessionHostsToReplace }
 if ($totalReplacementOperations -gt 0) {
-    $remainingToReplace = [Math]::Max(0, $hostPoolReplacementPlan.TotalSessionHostsToReplace - $totalReplacementOperations)
+    $remainingToReplace = [Math]::Max(0, $remainingToReplace - $totalReplacementOperations)
 }
 
 $metricsLog = @{
@@ -1652,6 +1769,10 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
                     Write-LogEntry -Message "Preserving scaling exclusion tag on shutdown retention VM: $vmName" -Level Trace
                     continue
                 }
+                if (-not (Test-SessionHostScalingRelease -SessionHost $sessionHost -LatestImageVersion $latestImageVersion)) {
+                    Write-LogEntry -Message "Preserving scaling exclusion on $($sessionHost.SessionHostName): exact-image health, drain or retention gate is not satisfied." -Level Trace
+                    continue
+                }
                 
                 # Use cached tags from session host object (already fetched in Get-SessionHosts)
                 $vmTags = $sessionHost.Tags
@@ -1675,6 +1796,7 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
                         }
                         
                         Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                        $sessionHost.Tags.Remove($tagScalingPlanExclusionTag)
                         $hostsWithExclusionTag++
                         
                         Write-LogEntry -Message "Successfully removed scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Trace

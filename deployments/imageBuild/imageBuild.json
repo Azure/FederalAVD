@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "13993992540772860631"
+      "templateHash": "10256676626316115610"
     }
   },
   "definitions": {
@@ -910,8 +910,8 @@
         "DestinationFileName": "MSTeams-x64.msix"
       },
       "WebView2Runtime": {
-        "Description": "Required: Microsoft Edge WebView2 Runtime",
-        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124703",
+        "Description": "Required: Microsoft Edge WebView2 Runtime Evergreen Standalone x64 (offline installer)",
+        "DownloadUrl": "https://go.microsoft.com/fwlink/?linkid=2124701",
         "DestinationFileName": "WebView2.exe"
       },
       "RemoteDesktopWebRTCRedirectorService": {

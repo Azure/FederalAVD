@@ -256,6 +256,7 @@ function Save-DeploymentState {
         [switch] $RequireSuccess
     )
     
+    if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
     try {
         # Parse storage account name from AzureWebJobsStorage if not provided
         $storageUri = $env:AzureWebJobsStorage__blobServiceUri
@@ -504,6 +505,11 @@ function Deploy-SessionHosts {
         }
     }
     
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation -and $continuation.DeploymentIntent) {
+        return Invoke-ShrDeploymentIntent -ARMToken $ARMToken -RegisteredSessionHostNames $ExistingSessionHostNames
+    }
+
     # Calculate Session Host Names
     Write-LogEntry -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',')
     
@@ -630,6 +636,9 @@ function Deploy-SessionHosts {
     
     $deploymentTimestamp = Get-Date -AsUTC -Format 'yyyyMMddHHmmss'
     $deploymentName = "{0}_Count_{1}_VMs_{2}" -f $DeploymentPrefix, $sessionHostNames.count, $deploymentTimestamp
+    if ($continuation) {
+        $deploymentName = "shr_$($continuation.Id)"
+    }
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines']['AutoReplaceDeploymentName'] = $deploymentName
     
     Write-LogEntry -Message "Deployment name: $deploymentName"
@@ -675,6 +684,16 @@ function Deploy-SessionHosts {
         -SessionHosts $deploymentHosts -SessionHostParameters $SessionHostParameters `
         -WaitForVMDeletion:$WaitForVMDeletion -ResourceManagerUri $ResourceManagerUri `
         -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName
+    if ($continuation) {
+        $continuation.DeploymentIntent = @{
+            Name = $deploymentName
+            Uri = $Uri
+            Body = ($Body | ConvertTo-Json -Depth 20 -Compress)
+            HostNames = @($sessionHostNames)
+            Timestamp = $deploymentTimestamp
+        }
+        Save-ShrContinuationCheckpoint
+    }
     $DeploymentJob = Invoke-AzureRestMethod `
         -ARMToken $ARMToken `
         -Body ($Body | ConvertTo-Json -depth 20) `
@@ -725,7 +744,7 @@ function Get-Deployments {
 
     Write-LogEntry -Message "Getting deployments for resource group '$ResourceGroupName'"
     $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/?api-version=2021-04-01"
-    $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri -RequireCollection
     
     # Filter by deployment prefix
     $deployments = $deployments | Where-Object { $_.name -like "$DeploymentPrefix*" }

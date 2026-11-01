@@ -574,6 +574,14 @@ function Get-SessionHostReplacementPlan {
     }
     
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
+    $totalFleetHostsToReplace = $sessionHostsToReplace.Count
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation -and $null -ne $continuation.BatchHostNames) {
+        $sessionHostsToReplace = @($sessionHostsToReplace | Where-Object {
+            $_.SessionHostName -in $continuation.BatchHostNames
+        })
+        $TargetSessionHostCount = $continuation.TargetCount
+    }
 
     # Up-to-date hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable) AND not unavailable (VM deleted)
     $goodSessionHosts = $SessionHosts | Where-Object { 
@@ -910,6 +918,8 @@ function Get-SessionHostReplacementPlan {
         ExistingSessionHostNames       = (@($SessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName }) + [array]$runningDeploymentVMNames) | Select-Object -Unique
         TargetSessionHostCount         = $TargetSessionHostCount
         TotalSessionHostsToReplace     = $sessionHostsToReplace.Count
+        ReplacementCandidates         = @($sessionHostsToReplace | Sort-Object AllowNewSession, Sessions, SessionHostName)
+        TotalFleetSessionHostsToReplace = $totalFleetHostsToReplace
     }
 }
 

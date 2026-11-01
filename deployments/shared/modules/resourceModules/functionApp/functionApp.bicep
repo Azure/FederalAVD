@@ -19,6 +19,11 @@ param azureTablePrivateDnsZoneResourceId string = ''
 @description('Optional. Enables creation and wiring of Application Insights for the Function App.')
 param enableApplicationInsights bool = false
 
+// Resource logs are a separate collection path from Application Insights invocation telemetry.
+// Incremental deployments do not delete a previously created diagnostic setting when disabled.
+@description('Optional. Forward FunctionAppLogs to the workspace. Independent of Application Insights; default true preserves existing module callers.')
+param enableFunctionAppDiagnosticSettings bool = true
+
 @description('Optional. Enables queue endpoint configuration for AzureWebJobsStorage and queue private endpoint DNS integration.')
 param enableQueueStorage bool = true
 
@@ -161,10 +166,11 @@ var storagePrivateEndpointNames = [
   for subResource in storageSubResources: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
 ]
 
-var azureStoragePrivateDnsZoneResourceIds = union(
+var azureStoragePrivateDnsZoneResourceIds = concat(
   [azureBlobPrivateDnsZoneResourceId], // Always required
-  enableQueueStorage && !empty(azureQueuePrivateDnsZoneResourceId) ? [azureQueuePrivateDnsZoneResourceId] : [],
-  enableTableStorage && !empty(azureTablePrivateDnsZoneResourceId) ? [azureTablePrivateDnsZoneResourceId] : []
+  // Keep empty slots aligned with storageSubResources when DNS is managed externally.
+  enableQueueStorage ? [azureQueuePrivateDnsZoneResourceId] : [],
+  enableTableStorage ? [azureTablePrivateDnsZoneResourceId] : []
 )
 
 resource functionAppUAI 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = if (!empty(functionAppUserAssignedIdentityResourceId)) {
@@ -493,7 +499,7 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   }
 }
 
-resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (!empty(logAnalyticsWorkspaceResourceId)) {
+resource functionAppDiagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableFunctionAppDiagnosticSettings && !empty(logAnalyticsWorkspaceResourceId)) {
   name: 'diag-${functionAppName}'
   scope: functionApp
   properties: {

@@ -773,6 +773,31 @@ function Remove-SessionHostUserSessions {
     }
 }
 
+function Test-SessionHostScalingRelease {
+    param(
+        $SessionHost,
+        $LatestImageVersion,
+        [string] $TagValidatedImage = (Read-FunctionAppSetting Tag_ValidatedImage),
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp)
+    )
+
+    $hostReady = $SessionHost.Status -eq 'Available' -and $SessionHost.AllowNewSession -and
+        $SessionHost.ImageVersion -eq $LatestImageVersion.Version -and
+        $SessionHost.ImageDefinition -eq $LatestImageVersion.Definition -and
+        $SessionHost.IncludeInAutomation -ne $false -and
+        -not $SessionHost.ShutdownTimestamp -and
+        -not ($TagShutdownTimestamp -and $SessionHost.Tags.ContainsKey($TagShutdownTimestamp)) -and
+        @($SessionHost.SessionHostHealthCheckResults | Where-Object {
+            $_.healthCheckResult -eq 'HealthCheckFailed'
+        }).Count -eq 0
+    if (-not $hostReady -or -not $TagValidatedImage) { return $false }
+    $identity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
+    $token = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($identity)
+    )).ToLowerInvariant()
+    return $SessionHost.Tags[$TagValidatedImage] -eq $token
+}
+
 function Test-NewSessionHostsAvailable {
     <#
     .SYNOPSIS
@@ -825,6 +850,8 @@ function Test-NewSessionHostsAvailable {
         [Parameter()]
         [string] $TagValidatedImage = (Read-FunctionAppSetting Tag_ValidatedImage),
         [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
@@ -833,7 +860,9 @@ function Test-NewSessionHostsAvailable {
     # Identify new hosts (hosts on the latest image version)
     $newHosts = $SessionHosts | Where-Object { 
         $_.ImageVersion -eq $LatestImageVersion.Version -and 
-        $_.ImageDefinition -eq $LatestImageVersion.Definition 
+        $_.ImageDefinition -eq $LatestImageVersion.Definition -and
+        -not $_.ShutdownTimestamp -and
+        -not ($TagShutdownTimestamp -and $_.Tags.ContainsKey($TagShutdownTimestamp))
     }
     
     if (-not $newHosts -or $newHosts.Count -eq 0) {
@@ -920,7 +949,7 @@ function Test-NewSessionHostsAvailable {
             $isOnlineHealthy = $isHealthValidated -and $newHost.AllowNewSession
 
             if ($isHealthValidated) {
-                if ($newHost.Tags[$TagValidatedImage] -eq $validatedImageToken -and
+                if ((Test-SessionHostScalingRelease -SessionHost $newHost -LatestImageVersion $LatestImageVersion -TagValidatedImage $TagValidatedImage) -and
                     $TagScalingPlanExclusionTag -and
                     $newHost.Tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
                     try {
@@ -1085,4 +1114,4 @@ function Test-NewSessionHostsAvailable {
 #EndRegion Session Host Lifecycle
 
 # Export functions
-Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable
+Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable, Test-SessionHostScalingRelease

@@ -1093,6 +1093,76 @@ After restoration:
 The script intentionally does not drain or delete the bad-image generation, alter gallery versions,
 re-enable host automation, or restart the Function App.
 
+## Queue Continuation
+
+Queue continuation is **opt-in** (`enableQueueContinuation=false` by default). Enable it through
+a complete SHR deployment, not by changing only an app setting or uploading a script.
+See the [standard timer versus queue comparison](../../../docs/session-host-replacer.md#execution-approaches).
+
+The existing `session-host-replacer` timer authorizes a replacement batch and selects an exact image.
+The `session-host-replacer-worker` queue function then monitors deployment, validates health, releases
+eligible hosts to autoscale and safely removes the approved old hosts without waiting for the next
+timer tick. It uses the same Function App, identity, storage account and lifecycle engine. Another
+batch still requires the initiation schedule. This is not a new image-validation add-on.
+
+See [queue sequencing and coordination](replacement-flow.md#queue-continuation) for operation scope,
+duplicate/crash handling, deadlines and lease behavior.
+
+### Queue Continuation Operations
+
+The normal deployment uses Microsoft's Functions extension bundle. Where that mechanism is not
+available, an optional [prebuilt extension package](deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
+can be built outside the enclave and transferred with SHR. Use it only when needed; enclave-local
+bundle endpoints may already be available, and target-cloud runtime support remains unverified.
+
+For rollout, first allow existing deployments, recovery and draining work to settle. Stop the app
+for the upgrade; redeploy the full SHR template with queue continuation enabled, then verify both
+functions load, the queue binding uses managed identity, and private queue connectivity works before
+resuming production. Do not switch between legacy and queue modes while a batch is active.
+
+To hold **new batches** while allowing an active batch to finish, use the configuration helper:
+
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1 `
+    -FunctionAppName '<shr-name>' `
+    -ResourceGroupName '<shr-resource-group>' `
+    -InitiationEnabled $false
+```
+
+Use `$true` to resume initiation. App-setting changes restart the app, so an interrupted worker may
+wait for its lease to expire before continuing. Persist the matching `initiationEnabled` parameter
+for later redeployments. **Stopping the Function App stops both functions**; it does not cancel ARM
+deployments, undo drain/deletion or disable autoscale.
+
+Monitor `CONTINUATION |` logs, the operation's status/deadline, the `shr-continuation` queue and
+`shr-continuation-poison`. An expired deadline or unexpected failure leaves `NeedsAttention`; the
+timer does not silently start a replacement operation over it. Queue-function failures still use the
+Functions retry/poison mechanism; a persisted stopped operation must be recovered explicitly.
+
+For operator recovery:
+
+1. Hold initiation, inspect the logged error, ARM deployment, AVD health/sessions and both state
+   tables. Correct connectivity, permissions or configuration first. Do not change image, mode,
+   target, cleanup or identity settings during a batch; those configuration changes stop it.
+2. Before editing state, stop the app and confirm the worker is no longer executing and its
+   `LockExpiresUtc` has passed. Preserve a restricted-access copy of the operation and deployment
+   recovery records. Check for ARM work still running.
+3. If continuing the same approved operation is safe, restore its initiating configuration. Use
+   an authorized Table client and the current ETag to change only the JSON state's `Status` to
+   `Running`, clear `LastError`/`LockOwner`, and, if necessary, set a newly approved future
+   `DeadlineUtc`. Preserve its ID, pinned image, batch names, deployment intent and recovery mappings.
+   Do not delete state or clear exclusions to bypass readiness.
+4. Restart the app, then invoke its existing timer through the approved operator procedure or wait
+   for the next tick to enqueue the same operation. Confirm progress and scaling handoff before
+   releasing initiation. If the operation cannot safely continue, use the established manual
+   recovery process rather than marking it complete.
+
+Before production use, exercise a sparse initiation schedule, slow/unhealthy registration,
+duplicate messages, a worker crash after ARM acceptance, drain periods, scaling-phase changes,
+retention, an initiation hold and maintenance-window expiry in an isolated pool. Live queue identity,
+private DNS, Portal rendering and target-cloud extension availability require separate verification;
+offline tests do not establish deployment success.
+
 ## Configuration
 
 ### Function App Runtime
@@ -1229,7 +1299,7 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 | `tagDeployTimestamp` | `AutoReplaceDeployTimestamp` | Tag name for deployment timestamp (ISO 8601 format) |
 | `tagPendingDrainTimestamp` | `AutoReplacePendingDrainTimestamp` | Tag name for drain start timestamp |
 | `tagShutdownTimestamp` | `AutoReplaceShutdownTimestamp` | Tag name for shutdown timestamp (SideBySide with retention) |
-| `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag name for excluding hosts from scaling plans. Applied to newly deployed hosts, hosts in drain, and shutdown retention VMs. Removed when cycle completes (or when new capacity is active in SideBySide+retention) |
+| `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Protects new, draining and retained hosts from autoscale. Only SHR-owned values are released, after exact-image health validation on non-draining, non-retained hosts. Cycle completion alone does not authorize removal |
 | `tagValidatedImage` | `AutoReplaceValidatedImage` | Tag name for exact-image AVD health validation evidence. Allows a confirmed stopped, unexcluded host to count as scaling-plan-managed ready capacity. |
 
 ### Device Cleanup Parameters
@@ -1243,7 +1313,11 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `timerSchedule` | `0 0,30 * * * *` | NCrontab format: `{second} {minute} {hour} {day} {month} {day-of-week}`. Default runs every 30 minutes at :00 and :30. Stagger across deployments by varying minutes |
+| `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB including seconds, stored in the `TimerSchedule` app setting used by both normal and prebuilt timer bindings. Default runs at :00 and :30. Changing the setting does not require rebuilding the ZIP; keep deployment parameters synchronized |
+| `enableQueueContinuation` | `false` | Opt into timer initiation plus a queue worker that completes the approved batch independently of the next timer tick. Requires queue storage connectivity |
+| `initiationEnabled` | `true` | With queue continuation, allow new timer-authorized batches. False still permits active-operation recovery and completion |
+| `continuationTimeoutHours` | `72` | Deadline for each newly initiated queue operation (1-720 hours). Set longer than the approved drain and provisioning horizon; does not extend an existing operation |
+| `azureQueuePrivateDnsZoneResourceId` | Empty | Existing cloud-appropriate Queue private DNS zone; follow the shared Function App zone-creation/reuse contract when private queue storage is enabled |
 
 **Timer Schedule Examples**:
 
@@ -1963,6 +2037,38 @@ The workbook is fully customizable. You can:
 > Application Insights resource in the Function App resource group. Those Application Insights
 > resources can send telemetry to the same Log Analytics workspace. Use the **Host Pool** parameter
 > to filter the dashboard to a specific host pool or view aggregate data across all pools.
+
+### Function App Log Collection
+
+When monitoring is enabled, SHR keeps workspace-based Application Insights and
+the `APPLICATIONINSIGHTS_CONNECTION_STRING` app setting for invocation telemetry,
+traces and the workbook. It no longer creates the separate Function App diagnostic
+setting that forwards `FunctionAppLogs` to Log Analytics. Storage diagnostics and
+Application Insights private-link configuration are unchanged.
+
+Removing this separate collection path can reduce duplicate collection, but is
+not proof that all duplicate entries are resolved in Government or air-gapped
+clouds. Verify new invocation telemetry, traces and the workbook in the target
+cloud after the change; existing ingested entries remain in the workspace.
+Function Monitor views still depend on working Application Insights ingestion.
+
+**Existing deployments:** redeploying the updated template in incremental mode
+does **not** delete the existing `diag-<FunctionAppName>` diagnostic setting.
+After selecting the correct cloud and subscription, inspect the settings on the
+SHR Function App and remove only this deployment-owned setting through the
+approved operator process. For example, in Azure CLI:
+
+```powershell
+$shrFunctionAppResourceId = '/subscriptions/<subscription>/resourceGroups/<function-app-rg>/providers/Microsoft.Web/sites/<shr-function-app>'
+$diagnosticSettingName = "diag-$(($shrFunctionAppResourceId -split '/')[-1])"
+az monitor diagnostic-settings list --resource $shrFunctionAppResourceId
+# After confirming this is the SHR-owned FunctionAppLogs setting:
+az monitor diagnostic-settings delete --resource $shrFunctionAppResourceId --name $diagnosticSettingName
+```
+
+Do not remove unrelated diagnostic settings or use complete-mode deployment as
+the migration mechanism. A centrally assigned diagnostic-settings policy may
+recreate the setting; coordinate any required change with its owner.
 
 ### Enterprise Workbook Architecture
 

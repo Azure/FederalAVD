@@ -252,6 +252,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 $ExistingSessionHostNames,
                 $PreferredSessionHostNames,
                 $PreferredHostProperties,
+                $SessionHostParameters,
                 [switch]$WaitForVMDeletion
             )
             $names = if ($PreferredSessionHostNames) { @($PreferredSessionHostNames) }
@@ -271,6 +272,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 Count = $NewSessionHostsCount
                 PreferredNames = $names
                 WaitForVMDeletion = [bool]$WaitForVMDeletion
+                ImageReference = Copy-OrchestrationValue $SessionHostParameters.ImageReference
             }
             if ($global:shrSimulation.RunNumber -in $global:shrSimulation.FailDeploymentRuns) {
                 throw 'simulated deployment submission failure'
@@ -380,6 +382,126 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Remove-Variable shrSimulation -Scope Global -ErrorAction SilentlyContinue
         Remove-Variable shrSettings -Scope Global -ErrorAction SilentlyContinue
         Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'captures one scheduled continuation batch and pins its deployment to the selected exact image' {
+        Mock Save-ShrContinuationCheckpoint {}
+        $global:shrSimulation.AllocatedNames = @('avd-new-01')
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            ExistingSessionHostNames = @($global:shrSimulation.Hosts.SessionHostName)
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 2
+            TotalFleetSessionHostsToReplace = 2
+            ReplacementCandidates = @($global:shrSimulation.Hosts)
+        }
+        $context = @{
+            Id = 'operation'; Image = $null; BatchHostNames = $null
+            InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+        }
+        $result = @{ Completed = $false }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult $result
+        $context.BatchHostNames.Count | Should Be 1
+        $context.BatchHostNames[0] | Should Be 'avd-01'
+        $context.BatchDeploymentLimit | Should Be 1
+        $context.Image.Version | Should Be '2.0.0'
+        $global:shrSimulation.DeploymentCalls[0].Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].ImageReference.id | Should Match '/versions/2\.0\.0$'
+        $result.Completed | Should Be $false
+    }
+
+    It 'does not select a newly published image while completing a previously approved batch' {
+        Mock Get-LatestImageVersion { throw 'must not select another image' }
+        $global:shrSimulation.Hosts[0].ImageVersion = '2.0.0'
+        $global:shrSimulation.Readiness.SafeToProceed = $true
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 0
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 0
+            TotalFleetSessionHostsToReplace = 1
+        }
+        $context = @{
+            Image = @{ Definition = $global:shrSimulation.LatestImage.Definition; Version = '2.0.0'; Date = '2026-09-01T00:00:00Z' }
+            BatchHostNames = @('avd-01')
+            BatchDeploymentLimit = 1
+        }
+        $result = @{ Completed = $false }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult $result
+        $result.Completed | Should Be $true
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        Assert-MockCalled Get-LatestImageVersion -Times 0 -Exactly -Scope It
+        Assert-MockCalled Update-HostPoolStatus -Times 1 -Exactly -Scope It -ParameterFilter {
+            $HostsToReplace -eq 1
+        }
+    }
+
+    It 'does not release unhealthy up-to-date hosts or mark their continuation complete' {
+        $global:shrSimulation.Readiness.TotalNewHosts = 2
+        $global:shrSimulation.Hosts | ForEach-Object {
+            $_.ImageVersion = '2.0.0'
+            $_.Status = 'Unavailable'
+            $_.Tags.ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 0; PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @(); TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 0; TotalFleetSessionHostsToReplace = 0
+        }
+        $context = @{
+            Image = @{ Definition = $global:shrSimulation.LatestImage.Definition; Version = '2.0.0'; Date = '2026-09-01T00:00:00Z' }
+            BatchHostNames = @('avd-01'); BatchDeploymentLimit = 1
+        }
+        $result = @{ Completed = $false }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult $result
+        $result.Completed | Should Be $false
+        $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PATCH' }
+    }
+
+    It 'does not report completion when exact-image validation prevents scaling handoff' {
+        Mock Test-SessionHostScalingRelease { $false }
+        $global:shrSimulation.Hosts | ForEach-Object {
+            $_.ImageVersion = '2.0.0'
+            $_.Tags.ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+        $global:shrSimulation.Readiness.SafeToProceed = $true
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 0; PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @(); TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 0; TotalFleetSessionHostsToReplace = 0
+        }
+        $context = @{
+            Image = @{ Definition = $global:shrSimulation.LatestImage.Definition; Version = '2.0.0'; Date = '2026-09-01T00:00:00Z' }
+            BatchHostNames = @('avd-01'); BatchDeploymentLimit = 1
+        }
+        $result = @{ Completed = $false }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult $result
+        $result.Completed | Should Be $false
+        $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+    }
+
+    It 'does not start a new queued DeleteFirst batch during Peak' {
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSimulation.ScalingPlanTarget = [PSCustomObject]@{
+            Source = 'ScalingPlan'; Phase = 'Peak'; ScalingPlanName = 'scaling'; CapacityPercentage = 50
+        }
+        $context = @{ Id = 'operation'; Image = $null; BatchHostNames = $null }
+        Mock Save-ShrContinuationCheckpoint {}
+        $result = @{ Completed = $false }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult $result
+        $result.Completed | Should Be $true
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $context.BatchHostNames | Should BeNullOrEmpty
     }
 
     It 'SideBySide recovers a ghost despite image cooldown and retries the same name after cleanup failure' {
@@ -836,6 +958,53 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $caughtError.Exception.Message | Should Match 'shutdown-retention VMs exist'
         $global:shrSimulation.DeletionCalls.Count | Should Be 0
         $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+    }
+
+    It 'preserves nonalphabetical planner priority through pending-mapping serialization and reload' {
+        $global:shrSimulation.Mode = 'DeleteFirst'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSettings.MaxDeletionsPerCycle = 5
+        $global:shrSettings.MaxDeploymentBatchSize = 5
+        $global:shrSettings.TargetSessionHostCount = 5
+        $priority = @('avd-05', 'avd-02', 'avd-04', 'avd-01', 'avd-03')
+        $global:shrSimulation.Hosts = @($priority | ForEach-Object { New-OrchestrationTestHost -Name $_ })
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 5; PossibleSessionHostDeleteCount = 5
+            SessionHostsPendingDelete = $global:shrSimulation.Hosts
+            ExistingSessionHostNames = $priority; TargetSessionHostCount = 5; TotalSessionHostsToReplace = 5
+        }
+        $global:shrSimulation.FailDeploymentRuns = @(1)
+        { Invoke-OrchestrationCycle -RunNumber 1 } | Should Throw
+        @((($global:shrSimulation.DeploymentState.PendingHostMappings |
+            ConvertFrom-Json -AsHashtable).Keys)) | Should Be $priority
+        $global:shrSimulation.Plan.PossibleSessionHostDeleteCount = 0
+        $global:shrSimulation.Plan.SessionHostsPendingDelete = @()
+        $global:shrSimulation.Plan.ExistingSessionHostNames = @()
+        Invoke-OrchestrationCycle -RunNumber 2
+        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should Be $priority
+        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+    }
+
+    It 'does not record a normal cleanup continuation yield as a progressive deployment failure' {
+        $global:shrSimulation.Mode = 'DeleteFirst'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSettings.EnableProgressiveScaleUp = $true
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 2; PossibleSessionHostDeleteCount = 2
+            SessionHostsPendingDelete = $global:shrSimulation.Hosts
+            ExistingSessionHostNames = @('avd-01', 'avd-02')
+            TargetSessionHostCount = 2; TotalSessionHostsToReplace = 2
+        }
+        Mock Get-ShrWorkerState { @{ Id = 'cleanup-test' } }
+        Mock Deploy-SessionHosts {
+            $global:shrSimulation.BeforeYield = $global:shrSimulation.DeploymentState |
+                ConvertTo-Json -Depth 20 | ConvertFrom-Json
+            throw [TimeoutException]::new('VM cleanup is pending')
+        }
+        { Invoke-OrchestrationCycle -RunNumber 1 } | Should Throw 'VM cleanup is pending'
+        foreach ($field in @('ConsecutiveSuccesses', 'CurrentPercentage', 'LastStatus', 'LastDeploymentName')) {
+            $global:shrSimulation.DeploymentState.$field | Should Be $global:shrSimulation.BeforeYield.$field
+        }
     }
 
     It 'DeleteFirst recovers an empty pool, retries only unresolved names, and performs no further deletion' {

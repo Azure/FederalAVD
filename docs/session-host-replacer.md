@@ -24,7 +24,40 @@ Each document has one purpose:
 The canonical flow document is authoritative when a lifecycle summary elsewhere conflicts with
 detailed replacement behavior.
 
+## Execution Approaches
+
+Choose how SHR progresses work independently of the replacement mode:
+
+| | Standard timer | Queue continuation |
+| --- | --- | --- |
+| Execution | Timer invokes the lifecycle engine directly | Timer initiates; queue worker progresses the approved batch |
+| Pending deployment, health or cleanup work | Follow-up may wait for the next timer invocation | Worker schedules follow-up independently of the timer |
+| Schedule controls | Lifecycle invocations | New batch initiation; approved work can continue between ticks |
+| Further batches | Evaluated on timer invocations | Require another timer initiation |
+| Dependencies | Existing timer infrastructure | Adds queue binding, connectivity and extension requirements |
+| Default | Enabled | Opt-in with `enableQueueContinuation=true` |
+
+Both approaches use the same health, capacity, drain and scaling safeguards. A timer schedule is
+not a hard execution window: it does not terminate work already running.
+
+### Optional Queue Continuation
+
+Set `enableQueueContinuation=true` to let the scheduled function hand an approved replacement batch
+to a queue-triggered function in the same app. Deployment monitoring, health validation, autoscale
+handoff and safe cleanup then continue without another timer tick. The worker pins the operation's
+image and batch; it does not authorize further batches or newer images outside the initiation
+schedule. Existing deployments remain timer-only unless explicitly opted in.
+
+Use `initiationEnabled=false` to hold new queue batches without stopping active work. Stopping the
+entire app stops the worker too. See [operations and recovery](../deployments/add-ons/sessionHostReplacer/README.md#queue-continuation-operations)
+and the [coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#queue-continuation).
+
+The optional [prebuilt extension package](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
+is a code-delivery option for queue continuation, not a third execution approach or replacement mode.
+
 ## Replacement Modes
+
+Both execution approaches support SideBySide and DeleteFirst.
 
 ### SideBySide
 
@@ -72,8 +105,9 @@ window.
 - Does not use shutdown retention.
 - Fails closed if any shutdown-retention VM remains from a prior configuration.
 
-Notification delay is timer-driven. With the default 30-minute schedule, forced sign-out can begin
-up to approximately 30 minutes after the configured delay elapses.
+Notification delay is checked by lifecycle invocations. In timer-only mode, the default 30-minute
+schedule can delay forced sign-out by approximately another 30 minutes. Queue continuation checks
+an active batch independently; it does not shorten the configured notification/drain intervals.
 
 See the [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
 for complete sequencing and failure behavior.
@@ -90,8 +124,8 @@ for complete sequencing and failure behavior.
   SideBySide recovery of names vacated by manual VM deletion.
 - Mandatory Entra cleanup for native Entra joined hosts and Intune cleanup when those hosts are
   Intune enrolled. Directory cleanup remains optional for AD DS and hybrid-joined machines.
-- Durable pending-name recovery; required cleanup failure blocks the entire batch and retries on
-  a later scheduled run. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
+- Durable pending-name recovery; required cleanup failure blocks the entire batch and is rechecked
+  by a later lifecycle invocation. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
   for permissions, ambiguous records, ownership checks, and auto-target limitations.
 - Change-aware predeployment verification: read required records once, poll only requested
   deletions, and finish with the appropriate VM-absence check. Clean allocations avoid repeated

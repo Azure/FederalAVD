@@ -38,6 +38,13 @@
         'Invoke-GraphApiWithRetry'
         'ConvertTo-CaseInsensitiveHashtable'
         'Get-VMPowerStates'
+        'Start-ShrContinuation'
+        'Invoke-ShrContinuation'
+        'Get-ShrWorkerState'
+        'Assert-ShrWorkerLease'
+        'Save-ShrContinuationCheckpoint'
+        'Request-ShrWorkerYield'
+        'Invoke-ShrDeploymentIntent'
         
         # Deployment functions (from SessionHostReplacer.Deployment.psm1)
         'Get-DeploymentState'
@@ -70,6 +77,7 @@
         'Send-DrainNotification'
         'Remove-SessionHostUserSessions'
         'Test-NewSessionHostsAvailable'
+        'Test-SessionHostScalingRelease'
         
         # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)
         'Get-SessionHostVMResourceId'

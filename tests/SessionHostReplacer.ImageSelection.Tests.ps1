@@ -282,6 +282,22 @@ Describe 'Session Host Replacer pilot configuration updates' {
         Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
     }
 
+    It 'holds new initiation without disabling queue continuation or overwriting unrelated settings' {
+        $global:shrPilotConfigurationSettings | Add-Member -NotePropertyName EnableQueueContinuation -NotePropertyValue 'true'
+        $result = & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+            -InitiationEnabled $false -ContinuationTimeoutHours 96 -Confirm:$false
+        $global:shrPilotUpdatedSettings.InitiationEnabled | Should Be 'false'
+        $global:shrPilotUpdatedSettings.EnableQueueContinuation | Should Be 'true'
+        $global:shrPilotUpdatedSettings.UnrelatedSetting | Should Be 'preserve-this-value'
+        $result.ContinuationTimeoutHours | Should Be '96'
+    }
+
+    It 'rejects continuation controls when queue infrastructure has not been enabled' {
+        { & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+            -InitiationEnabled $false -Confirm:$false } | Should Throw 'require queue continuation infrastructure'
+        Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
+    }
+
     AfterAll {
         Remove-Variable -Name shrPilotConfigurationSettings,shrPilotUpdatedSettings -Scope Global
     }

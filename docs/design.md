@@ -8,7 +8,40 @@ This page describes the Azure resource topology. See [Secure Endpoint Architectu
 for the control-layer, shared-responsibility, lifecycle, evidence, and AI access model implemented
 through that topology.
 
+## Air-gapped prerequisite packaging
+
+The [combined transfer bundle](air-gapped-clouds.md#combined-prerequisite-transfer-zip)
+is a connected-side transport envelope, not another customization or deployment mode. It preserves
+independent WinGet/UWP ZIPs and loose Teams prerequisite filenames consumed by existing deployments.
+The builder reuses the artifact-local builders, records resolved payload identities and hashes,
+and excludes public target-cloud application payloads. Publication is manually triggered and
+gated on redistribution approval; it is independent of SHR releases and Azure deployments.
+Large bundles are byte-split for release transport and hash-verified during reassembly.
+Inner packages and their offline dependencies remain unchanged; size limits must not be met
+by silently removing runtime requirements.
+WebRTC is included by default for the current Secret/Top Secret Teams path while Windows App
+support awaits product-group confirmation. Explicit omission requires an approved alternative;
+it does not migrate the existing Teams installation. The linked transfer guide owns this
+operating assumption and its target-cloud validation requirements.
+The UWP runtime defaults to upgrading existing image-provisioned apps; adding missing apps
+requires an explicit `-InstallMissing` opt-in. This does not implement per-user update selection.
+Package availability does not prove classified-cloud service support or offline application UX.
+
 ## Shared module contracts
+
+Session Host Replacer can opt into a timer-to-queue continuation design in the same Function App.
+The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#queue-continuation)
+defines initiation authorization, immutable image/batch scope, conditional state ownership,
+idempotent deployment intent, deadlines and operator recovery. This is separate from application
+or image acceptance testing. The optional
+[prebuilt extension package](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
+keeps binary packaging outside ARM/Template Specs and leaves normal bundle deployment unchanged.
+Its `%TimerSchedule%` binding uses the same deployment-owned app setting as the normal timer,
+allowing a tagged release ZIP to be reused across deployments. The
+[release workflow](../.github/workflows/release-shr-package.yml) attaches that ZIP and its checksum
+without deploying Azure resources or overwriting existing assets.
+Use it only when approved target-cloud bundle endpoints are unavailable; enclave support must
+still be verified.
 
 Shared Bicep files under `deployments/shared/modules/` describe their purpose with
 `metadata name` and `metadata description`. Parameter and output descriptions

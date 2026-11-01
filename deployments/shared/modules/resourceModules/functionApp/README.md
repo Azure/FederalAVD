@@ -9,7 +9,7 @@ that every deployment create all three resource types.
 | --- | --- | --- |
 | [functionAppHostingPlan.bicep](./functionAppHostingPlan.bicep) | App Service plan | Name, region, operating-system selector, SKU, zone setting, and resource-type-keyed tags |
 | [functionApp.bicep](./functionApp.bicep) | Windows PowerShell Function App, runtime storage, storage data-role assignments, optional Application Insights and private endpoints | Compatible plan ID, networking/DNS, monitoring IDs when selected, optional app identity, and pre-provisioned storage CMK dependencies when selected |
-| [function.bicep](./function.bicep) | Timer-triggered child function and its function-level code files | Existing parent app name in the deployment resource group, child name, schedule, and file-name/content mapping |
+| [function.bicep](./function.bicep) | Timer- or queue-triggered child function and its function-level code files | Existing parent app name in the deployment resource group, child name, trigger configuration, and file-name/content mapping |
 
 The module and parameter descriptions are the detailed input contracts. A
 parameter without a default is a required Bicep input even if its feature is
@@ -33,9 +33,61 @@ allows that.
    parent.
 
 The function module deploys a child function, not an app-level package or
-`host.json`. The caller owns code contents, dependency availability, and the
-timer schedule. Application settings use an array of name/value objects; tags
+`host.json` by itself. A caller can include shared files in the supplied mapping,
+but must own their contents and sequence multiple function deployments that write
+to the same shared paths. The caller owns dependency availability and trigger
+configuration. Application settings use an array of name/value objects; tags
 use an object keyed by Azure resource type.
+
+Application Insights and resource-log forwarding are independent. When
+`enableApplicationInsights` is true, the app receives its Application Insights
+connection string for invocation telemetry. `enableFunctionAppDiagnosticSettings`
+defaults to true and forwards `FunctionAppLogs` when a workspace is provided.
+Session Host Replacer passes false to avoid this additional log collection path.
+Disabling this option does not remove an existing `diag-<functionAppName>`
+setting during incremental deployment. See the
+[SHR logging migration procedure](../../../../add-ons/sessionHostReplacer/README.md#function-app-log-collection).
+
+## Function binding contract
+
+`triggerType` defaults to `timerTrigger`, preserving existing timer callers.
+Only the selected binding's fields are emitted:
+
+| Trigger | Input binding name | Required trigger input | Other binding fields |
+| --- | --- | --- | --- |
+| `timerTrigger` | `Timer` | Nonempty `schedule` | `type`, `direction: in`, `name`, `schedule` |
+| `queueTrigger` | `WorkItem` | Nonempty `queueName` | `type`, `direction: in`, `name`, `queueName`, `connection` |
+
+`schedule` and `queueName` default to empty strings so a caller need not supply
+the other trigger's input. The selected trigger fails template evaluation with
+ARM `fail()` if its required input is empty or whitespace. The Functions runtime
+still validates the NCRONTAB schedule (or supported setting reference) and Azure
+Storage validates queue naming rules. PowerShell entry-point parameters must
+match `Timer` or `WorkItem`, respectively.
+
+`connection` defaults to `AzureWebJobsStorage` and is a setting prefix, not a
+secret value. For identity-based queue access with the app module:
+
+- Set `enableQueueStorage: true`. It adds the cloud-specific
+  `AzureWebJobsStorage__queueServiceUri` alongside the existing managed-identity
+  credential and optional user-assigned identity client ID. The app identity
+  receives Storage Queue Data Contributor on its runtime storage account.
+- Supply `azureQueuePrivateDnsZoneResourceId` when private endpoints and
+  deployment-managed private DNS integration are selected. An empty zone ID
+  leaves queue DNS registration externally managed without shifting a table
+  zone onto the queue endpoint. Outbound VNet integration and working DNS are
+  still caller prerequisites.
+- Provision a supported queue binding extension. For PowerShell, Microsoft
+  documents a root `host.json` with `version: "2.0"` and extension bundle
+  `Microsoft.Azure.Functions.ExtensionBundle`, version `[4.0.0, 5.0.0)`.
+  The function module does not automatically install extensions or create a
+  queue resource. Restricted-network deployments must make the extension
+  available through their approved staging/connectivity process.
+
+See Microsoft's [queue trigger configuration and identity connections](https://learn.microsoft.com/azure/azure-functions/functions-bindings-storage-queue-trigger)
+and [queue extension bundle requirements](https://learn.microsoft.com/azure/azure-functions/functions-bindings-storage-queue).
+Compilation does not prove that the deployed host can load the extension,
+resolve private endpoints, authenticate, or process queue messages.
 
 ## Hosting behavior
 

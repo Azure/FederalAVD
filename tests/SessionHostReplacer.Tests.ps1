@@ -693,6 +693,7 @@ Describe 'Session Host Replacer scaling-aware readiness' {
                 $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
                     AutoReplaceValidatedImage = $validatedImageToken
                 }
+
                 $global:sessionHostReplacerTestPowerStates[$sessionHost.ResourceId] = $true
                 $sessionHost
             }
@@ -708,6 +709,19 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.ScalableStandbyCount | Should Be 6
         $result.ReadyCount | Should Be 10
         $result.RequiredOnlineCount | Should Be 4
+    }
+
+    It 'does not wait for same-image shutdown retention to expire before finishing active-host readiness' {
+        $retainedHost = New-ReadinessHost -Index 2 -Status Shutdown -Tags @{
+            ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+        $retainedHost | Add-Member -NotePropertyName ShutdownTimestamp -NotePropertyValue '2026-01-01T00:00:00Z'
+        $result = Invoke-ReadinessCheck -SessionHosts @(
+            (New-ReadinessHost -Index 1), $retainedHost
+        ) -ScalingPlanTarget $null
+        $result.SafeToProceed | Should Be $true
+        $result.TotalNewHosts | Should Be 1
+        $retainedHost.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
     }
 
     It 'counts a validated powered-off host as scalable standby when AVD reports Unavailable' {
@@ -994,12 +1008,13 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         function Invoke-TenHostReplacementPlan {
             param (
                 [string] $ReplacementMode,
-                $ScalingPlanTarget
+                $ScalingPlanTarget,
+                [array] $SessionHosts = $oldHosts
             )
 
             Get-SessionHostReplacementPlan `
                 -ARMToken 'test-token' `
-                -SessionHosts $oldHosts `
+                -SessionHosts $SessionHosts `
                 -RunningDeployments @() `
                 -HostPoolName 'hp-test' `
                 -TargetSessionHostCount 10 `
@@ -1021,6 +1036,7 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
 
     BeforeEach {
         Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning { $null }
         Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning { 10 }
         Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Planning {
             $states = @{}
@@ -1055,6 +1071,37 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.PossibleDeploymentsCount | Should Be 10
         $plan.PossibleSessionHostDeleteCount | Should Be 0
         $plan.TotalSessionHostsToReplace | Should Be 10
+    }
+
+    It 'continues only the approved queued batch without treating the whole fleet as current' {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('avd-02', 'avd-03'); TargetCount = 10 }
+        }
+        $initial = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide
+        $initial.PossibleDeploymentsCount | Should Be 2
+        $initial.TotalSessionHostsToReplace | Should Be 2
+        $initial.TotalFleetSessionHostsToReplace | Should Be 10
+
+        $newHosts = 1..2 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "new-$_"; VMName = "new-$_"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/new-$_"
+                ImageDefinition = $latestImage.Definition; ImageVersion = '2.0.0'
+                Status = 'Available'; AllowNewSession = $true; Sessions = 0
+                ShutdownTimestamp = $null; PendingDrainTimeStamp = $null; IsUnavailable = $false
+            }
+        }
+        $ready = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -SessionHosts @($oldHosts + $newHosts)
+        $ready.PossibleDeploymentsCount | Should Be 0
+        $ready.SessionHostsPendingDelete.Count | Should Be 2
+        @($ready.SessionHostsPendingDelete | Where-Object SessionHostName -notin @('avd-02', 'avd-03')).Count | Should Be 0
+
+        $remaining = @($oldHosts | Where-Object SessionHostName -notin @('avd-02', 'avd-03')) + $newHosts
+        $finished = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -SessionHosts $remaining
+        $finished.TotalSessionHostsToReplace | Should Be 0
+        $finished.TotalFleetSessionHostsToReplace | Should Be 8
+        $finished.PossibleDeploymentsCount | Should Be 0
+        $finished.PossibleSessionHostDeleteCount | Should Be 0
     }
 
     It 'SideBySide grows an up-to-date pool to an explicit target without an image update' {
@@ -1709,6 +1756,22 @@ Describe 'Session Host Replacer storage CMK propagation sequencing' {
 }
 
 Describe 'Session Host Replacer centralized workbook placement' {
+    It 'disables resource-log forwarding without disabling Application Insights invocation telemetry' {
+        $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+        $appModule = $template.resources.functionApp
+        $appModule.properties.parameters.enableFunctionAppDiagnosticSettings.value | Should Be $false
+        $appModule.properties.parameters.enableApplicationInsights.value |
+            Should Be "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
+        $app = $appModule.properties.template
+        $app.parameters.enableFunctionAppDiagnosticSettings.defaultValue | Should Be $true
+        $app.resources.functionAppDiagnosticSettings.condition |
+            Should Be "[and(parameters('enableFunctionAppDiagnosticSettings'), not(empty(parameters('logAnalyticsWorkspaceResourceId'))))]"
+        ($app.resources.functionApp.properties.siteConfig.appSettings | ConvertTo-Json -Depth 30) |
+            Should Match 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+        $app.resources.applicationInsights.properties.WorkspaceResourceId |
+            Should Be "[parameters('logAnalyticsWorkspaceResourceId')]"
+    }
+
     It 'derives workbook scope from the selected Log Analytics workspace' {
         Get-Content -LiteralPath $bicepPath -Raw |
             Should Match "var workbookSubscriptionId = !empty\(logAnalyticsWorkspaceResourceId\)"

@@ -137,6 +137,16 @@ Enable it only on pilot pools to test excluded candidates before promotion. See
 [pilot selection and promotion](../deployments/add-ons/sessionHostReplacer/README.md#pilot-image-selection-and-promotion)
 for numeric version ordering, safeguards, and the upgrade requirement.
 
+For queue-driven SHR progress, `enableQueueContinuation` defaults to `false`. Opted-in deployments
+use `initiationEnabled` (default `true`) to gate new batches and `continuationTimeoutHours` (default
+`72`) for the operation deadline. Queue private DNS can reuse `azureQueuePrivateDnsZoneResourceId`.
+See [queue continuation](../deployments/add-ons/sessionHostReplacer/README.md#queue-continuation).
+
+SHR's existing `timerSchedule` parameter populates the `TimerSchedule` app setting referenced by
+both normal and prebuilt timer bindings. Schedule changes do not require rebuilding a package;
+keep deployment parameters synchronized with direct app-setting changes. See
+[portable release packages](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#download-a-release-package).
+
 | Add-On | Parameters |
 | --- | --- |
 | 🔄 **Session Host Replacer** | [sessionHostReplacer/README.md](../deployments/add-ons/sessionHostReplacer/README.md) |

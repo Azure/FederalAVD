@@ -31,6 +31,12 @@ mechanism.
 
 ### Standalone transfer builder
 
+For a combined WinGet/UWP/Teams-prerequisite transfer ZIP, see the
+[connected builder and gated release workflow](../../../docs/air-gapped-clouds.md#combined-prerequisite-transfer-zip).
+It reuses this builder and keeps `Microsoft-WinGet.zip` unchanged inside the outer envelope.
+Large combined releases use hash-verified transport parts; reassemble them before extracting
+the envelope. App Installer's matching dependencies and license remain inside this artifact.
+
 The `_build` folder contains a connected-workstation builder that resolves all four assets from one
 stable official release, verifies GitHub-published SHA256 digests when available, copies the runtime
 installer, and creates a transfer-ready artifact:
