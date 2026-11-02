@@ -1,151 +1,157 @@
-﻿# Deploying Session Host Replacer Updates
+# Deploying Session Host Replacer Updates
 
-> **Note:** For comprehensive deployment instructions, prerequisites, permissions setup, and troubleshooting, see [README.md](README.md).
-
-This document provides quick reference for deploying updates to an existing Session Host Replacer function and guidance for choosing deployment options.
+For first-deployment prerequisites, permissions and parameters, see [README.md](README.md).
+The [canonical replacement flow](replacement-flow.md) owns lifecycle behavior.
 
 ## Scope
 
-This guide covers updating an existing Function App deployment and reviewing its operational
-settings. It does not redefine replacement behavior or duplicate the full first-deployment
-parameter reference.
+SHR has one execution model, regardless of SideBySide or DeleteFirst replacement mode:
 
-- Choose a mode and review parameters in [README.md](README.md#replacement-modes).
-- Review execution, scaling-phase, readiness, and recovery behavior in the
-  [canonical replacement flow](replacement-flow.md).
+| Function | Trigger | Responsibility |
+| --- | --- | --- |
+| `session-host-replacer` | Configurable `%TimerSchedule%` | Assess work and authorize new batches |
+| `session-host-replacer-worker` | `0 * * * * *` | Reconcile the current authorized operation every minute |
+
+Both use the same lifecycle engine, managed identity, Blob host storage and Table state.
+The reconciler never independently selects a newer image or authorizes another batch.
+Native timer triggers need no queue extension bundle or prebuilt extension package.
 
 ## Timer Schedule Guidance
 
-**Default** (Every 30 minutes):
+`timerSchedule` controls **new batch authorization**, not deployment, health or cleanup checks.
+Approved work continues outside the initiation hours. The schedule is not a hard maintenance-window
+boundary and does not terminate running invocations or submitted ARM deployments.
 
 ```bicep
-timerSchedule: '0 0,30 * * * *'  // Runs at :00 and :30
+timerSchedule: '0 0,30 * * * *'   // Default: :00 and :30 each hour
+// '0 0 * * * *'                // Hourly
+// '0 0 8-17 * * 1-5'           // Weekday business hours
+// '0 15,45 * * * *'            // Stagger initiation across pools
 ```
 
-**Hourly** (Lower overhead):
-
-```bicep
-timerSchedule: '0 0 * * * *'  // Every hour on the hour
-```
-
-**Business Hours Only** (Cost optimization):
-
-```bicep
-timerSchedule: '0 0 8-17 * * 1-5'  // 8 AM - 5 PM, Mon-Fri
-```
-
-**Staggered Across Multiple Deployments**:
-
-- Deployment 1: `'0 0,30 * * * *'` (runs at :00 and :30)
-- Deployment 2: `'0 15,45 * * * *'` (runs at :15 and :45)
-- Avoids concurrent ARM API load
+The existing time-zone setting applies. The reconciliation interval is fixed at one minute;
+long invocations, a stopped host or a live operation lease can delay progress.
 
 ## Quick Deployment Steps
 
-### Option 1: Update via Azure Portal (Fastest)
+Use the complete SHR Bicep or published Template Spec release. A single-file Portal editor upload
+cannot safely upgrade the function bindings, shared code and settings together.
 
-1. Navigate to your Function App in Azure Portal
-2. Go to **Development Tools** → **App Service Editor**
-3. Navigate to `Modules\SessionHostReplacer\SessionHostReplacer.psm1`
-4. Replace the entire file content with your updated local version
-5. Save the file
-6. **Restart the Function App**
+Preserve deployment-specific parameters, including `initiationEnabled` and `continuationTimeoutHours`.
+Follow [verification](#verify-deployment) before enabling production initiation.
 
-### Option 2: Deploy via PowerShell
+## Upgrading an Existing Deployment
 
-From the repository root:
+This is a breaking contract change: remove `enableQueueContinuation` and the SHR-specific
+`azureQueuePrivateDnsZoneResourceId` from existing SHR parameter files. Do not remove similarly named
+parameters from other solutions. There is no supported switch back to direct timer execution.
 
-```powershell
-# Compress the function app
-$sourcePath = ".\deployments\add-ons\sessionHostReplacer\functions"
-$zipPath = ".\SessionHostReplacer.zip"
+1. Hold new batches with `InitiationEnabled=false` and persist `initiationEnabled=false` in the
+   upgrade parameters. Record the current operation ID, image, deadline, accepted deployments and
+   outstanding cleanup. Protect this information; saved operation state can contain credentials.
+2. Stop the Function App using the approved operator process. Verify it is stopped and no live
+   operation lease remains before updating code. An interrupted invocation may retain its lease
+   for up to 30 minutes. Do not clear the lease or delete state to accelerate an upgrade.
+3. If the previous app used a prebuilt ZIP, remove any run-from-package mount and obsolete SHR
+   queue-extension binaries/registration through the approved code-deployment process first.
+   Use the previous package manifest to identify its files. Do not broadly delete app content,
+   host-storage blobs or Table entities.
+4. Deploy the complete template and shared code while the app is stopped. The existing
+   `session-host-replacer-worker` function is updated **in place** from queue to timer; a second
+   worker name is not created. Its disabled setting is explicitly reset to `false`.
+5. Before starting the app, verify both bindings, the shared engine/modules and the new native-timer
+   host configuration are installed. Check that the app remained stopped throughout the update.
+   Start it only after the code deployment is complete.
+6. With initiation still held, verify the minute timer resumes any authorized operation with the
+   same ID, pinned image, intent, target and deadline. Existing `shrContinuation` rows, companion
+   authorizations and recovery tables remain valid; obsolete generation metadata is ignored.
+   A `NeedsAttention` operation remains stopped until checked recovery.
+7. Complete the live checks below, then resume initiation and persist the matching parameter value.
 
-Compress-Archive -Path "$sourcePath\*" -DestinationPath $zipPath -Force
+A former direct-timer app has no durable operation row. The reconciler does not invent an
+authorization; the next enabled initiation tick assesses inventory and persisted deployment recovery
+state before authorizing work. Previously accepted deployments and name mappings are not discarded.
 
-# Deploy to Azure Function
-$functionAppName = "your-function-app-name"
-$resourceGroup = "your-resource-group"
-
-Publish-AzWebApp -ResourceGroupName $resourceGroup -Name $functionAppName -ArchivePath $zipPath -Force
-
-# Restart to reload modules
-Restart-AzFunctionApp -ResourceGroupName $resourceGroup -Name $functionAppName -Force
-```
-
-### Option 3: Deploy via Azure CLI
-
-```bash
-# Zip the function folder
-cd deployments/add-ons/sessionHostReplacer
-zip -r SessionHostReplacer.zip functions/*
-
-# Deploy
-az functionapp deployment source config-zip \
-  --resource-group <resource-group> \
-  --name <function-app-name> \
-  --src SessionHostReplacer.zip
-
-# Restart
-az functionapp restart \
-  --resource-group <resource-group> \
-  --name <function-app-name>
-```
-
-## Important: Restart Function App
-
-After deploying, **always restart the Function App** to:
-
-1. Clear any cached modules
-2. Reload updated PowerShell modules
-3. Clear token caches (if token acquisition logic changed)
+**Historical queue cleanup is separate and explicit.** Incremental ARM deployment does not delete
+old queue private endpoints, DNS zone groups, queue-only role assignments, queues or queued messages
+merely because their declarations were removed. The new worker does not consume those messages.
+After a successful pilot, inventory dependencies and use the approved cleanup process for resources
+owned exclusively by the retired SHR queue transport. Never remove shared DNS zones, generic storage
+roles, Blob/Table endpoints or durable operation state indiscriminately.
 
 ## Verify Deployment
 
-Check Application Insights for recent execution:
+### Offline validation
 
-```kusto
-traces
-| where customDimensions.Category == "Function.session-host-replacer"
-| where timestamp > ago(10m)
-| order by timestamp desc
-| take 20
+From the repository root, use a compatible Pester version (validated with 4.10.1):
+
+```powershell
+az bicep build --file deployments\add-ons\sessionHosts\main.bicep `
+    --outfile deployments\add-ons\sessionHosts\main.json
+az bicep build --file deployments\add-ons\sessionHostReplacer\main.bicep `
+    --outfile deployments\add-ons\sessionHostReplacer\main.json
+& .github\skills\federalavd-bicep-maintenance\scripts\Test-BicepArmSync.ps1 `
+    -BicepPath deployments\add-ons\sessionHostReplacer\main.bicep
+
+$files = @(
+    'tests\SessionHostReplacer.Tests.ps1'
+    'tests\SessionHostReplacer.Continuation.Tests.ps1'
+    'tests\SessionHostReplacer.Replan.Tests.ps1'
+    'tests\SessionHostReplacer.Recovery.Tests.ps1'
+    'tests\SessionHostReplacer.Idle.Tests.ps1'
+    'tests\SessionHostReplacer.ImageSelection.Tests.ps1'
+    'tests\SessionHostReplacer.Timers.Tests.ps1'
+    'tests\SessionHostReplacer.Observability.Tests.ps1'
+    'tests\SessionHostReplacer.Predeployment.Tests.ps1'
+    'tests\TemplateSpecs.Tests.ps1'
+)
+Invoke-Pester -Script $files -PassThru -Show Failed,Summary
+git diff --check
 ```
 
-Look for:
+### Live pilot
 
-- ✅ Function execution started
-- ✅ No module load errors
-- ✅ Expected configuration values loaded
-- ✅ No authentication failures
+Offline tests prove contracts, not Functions indexing or Azure deployment success. In an isolated
+pilot, including each intended target cloud:
+
+- Confirm exactly the two expected functions load as timer triggers, with the intended initiation
+  schedule and fixed minute reconciliation schedule. Confirm there is no queue listener or bundle
+  download requirement after a cold restart.
+- Verify managed identity, private DNS/routing, Blob host locks and Table reads/conditional writes.
+- Use a sparse initiation schedule. Verify an accepted deployment progresses through health,
+  autoscale handoff and safe cleanup between initiation ticks, without an extra deployment batch.
+- Verify an idle pool creates no operation and the minute timer performs only the operation lookup.
+- Verify a held initiation schedule still permits authorized progress and rejects new batch authority.
+- Interrupt an active invocation, retain its state and confirm safe lease-expiry recovery without a
+  duplicate accepted deployment. Test concurrent initiation/reconciliation and expired authorization.
+- Confirm deadline/configuration failures stay stopped, checked rejected-template recovery works,
+  and the Portal configuration/networking steps render successfully with correct output types.
+- Update both the runtime and workbook. Render the Operations page, select a host pool and cycle,
+  and verify the summary/timeline retain that cycle across both timer roles and multiple batches.
+  Run the workbook KQL against the target Application Insights resources; offline contracts and
+  parser checks are not proof of query execution, permissions or cloud availability.
+- Verify native invocation drill-down includes host exceptions without inventing invocation IDs.
+  Check no-cycle idle ticks, held initiation, lease waits/expiry, a waiting deployment, completion
+  and a stopped cycle. Check last-reported inventory age and sampling/no-data cases. Confirm
+  deployment links open the existing resource in the target cloud without a deployment action.
+- At normal Information logging, confirm actual actions, timer health and final cycle snapshots
+  remain visible without repeated setup/per-host narration. Verify a stopped cycle stays visible
+  without replaying its saved exception as a fresh Error on every minute tick. Temporarily enable
+  PowerShell verbose emission and host Trace ingestion to check detailed diagnostics, then restore
+  normal logging. Confirm all existing workbook configuration/inventory/action panels still populate.
 
 ## Review or Update Existing Operational Settings
 
-Use the repository-provided configuration command instead of editing unlabelled Function App
-environment variables directly:
+Use [Set-SessionHostReplacerConfiguration.ps1](Set-SessionHostReplacerConfiguration.ps1) to preview
+changes and hold or resume initiation. App-setting changes restart the app; retain the corresponding
+deployment parameters so a later redeployment does not undo the hold.
 
-```powershell
-.\Set-SessionHostReplacerConfiguration.ps1 `
-    -FunctionAppName <function-app-name> `
-    -ResourceGroupName <function-app-resource-group>
-```
-
-Supply supported setting parameters and `-WhatIf` to preview a change. The command validates
-mode-specific settings, displays a diff, and preserves unrelated app settings. Replacement mode,
-timer schedule, identity, networking, device-cleanup permissions, and infrastructure changes must
-still be made through the Template Spec. Keep its parameter source synchronized because a later
-redeployment can overwrite direct operational changes.
+Stopping the app stops both timers, not external ARM work or autoscale.
+See [operations and recovery](README.md#two-timer-operations) and the
+[preview-first recovery command](README.md#recover-a-stopped-operation).
 
 ## For Complete Documentation
 
-See [README.md](README.md) for:
-
-- Prerequisites and permissions setup
-- Full configuration reference
-- Troubleshooting guide
-- Monitoring best practices
-
-### Module not reloading?
-
-- Azure Functions cache PowerShell modules
-- Restart is required to reload
-- Consider adding version number to module manifest for tracking
+- [Configuration and troubleshooting](README.md)
+- [Lifecycle and coordination](replacement-flow.md)
+- [Air-gapped platform prerequisites](../../../docs/air-gapped-clouds.md#shr-two-timer-prerequisites)

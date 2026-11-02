@@ -131,9 +131,9 @@ Other differences to be aware of:
   private endpoint (VNet-joined, peered, or connected via VPN/ExpressRoute) plus correct private DNS
   resolution, and its calling identity needs data-plane access (an RBAC role or access-policy entry
   granting certificate/secret get+set). Without that, expect a `Forbidden: Client address is not
-  authorized` error from Key Vault — this is a real, previously reported failure mode
-  ([packer-plugin-azure#384](https://github.com/hashicorp/packer-plugin-azure/issues/384)), not a
-  hypothetical one. In short: a private Key Vault removes the *ephemeral public-network* vault, but
+  authorized` error from Key Vault
+  ([packer-plugin-azure#384](https://github.com/hashicorp/packer-plugin-azure/issues/384)).
+  A private Key Vault removes the *ephemeral public-network* vault, but
   adds the same "control host needs private network access" burden this README already calls out
   for WinRM above — it does not avoid that burden.
 - **Sysprep `AdminPassword`.** `software-install/`'s `Invoke-Sysprep.ps1` step performs a
@@ -187,4 +187,3 @@ Other differences to be aware of:
 - The `winrm_password` you set is expected to become the actual local admin password used by
   `Invoke-Sysprep.ps1`'s pre-flight check; this has not been confirmed against a real build.
   If sysprep's `LogonUser` check fails, this is the first thing to investigate.
-

@@ -19,8 +19,7 @@ can't be changed later. See the [management decision guide](../../docs/host-pool
 
 `hostpool.bicep` is the standard host-pool entry orchestrator. It calls AVD Shared Services and
 then directly composes the pool-specific control plane, FSLogix, session-host, security, backup,
-and monitoring modules. The published `deployments/hostpools/hostpool.json` entry path remains
-unchanged.
+and monitoring modules. The published entry template is `deployments/hostpools/hostpool.json`.
 
 The orchestrator deploys a complete Azure Virtual Desktop (AVD) environment including host pools,
 session hosts, storage, monitoring, security, and operational automation. It supports multiple
@@ -51,6 +50,14 @@ deployment with the complete form and production parameters.
 > **Shared workspace deployment concurrency:** Deploy host pools that register application groups
 > to the same workspace serially. Registration is a read-modify-write update of the workspace
 > application-group reference list, so concurrent deployments can overwrite one another.
+
+## Desktop and application-group friendly names
+
+When `desktopFriendlyName` is supplied, the standard deployment uses it for both
+the desktop application group's friendly name and the published `SessionDesktop`
+friendly name, matching the automated host-pool behavior. This does not change
+the application group's Azure resource name or ID. An empty value leaves the
+application-group friendly name unset and skips the desktop-name update.
 
 ## Purpose
 
@@ -274,9 +281,20 @@ Subscription
 #### `controlPlaneLocation`
 
 - **Type:** String
-- **Required:** Yes
+- **Default:** Subscription deployment location
 - **Description:** Location for control plane resources
 - **Example:** `eastus2`, `usgovvirginia`
+
+#### `virtualMachinesLocation`
+
+- **Type:** String
+- **Default:** `controlPlaneLocation`
+- **Description:** Location for session hosts, storage, deployment helpers and
+  their centralized names. Must match the session-host subnet's VNet location.
+  The Portal passes its selected VM location explicitly.
+- **Validation:** Set both locations explicitly for split-location deployments;
+  empty strings are invalid.
+  See [location validation](../../docs/hostpool-deployment.md#explicit-deployment-locations).
 
 #### `hostPoolType`
 
@@ -503,11 +521,22 @@ submit endpoint flags, subnets, or DNS zone IDs.
 
 - **Type:** Array
 - **Optional**
-- **Description:** IP addresses or CIDR blocks permitted on the firewall of all PaaS resources (storage accounts, Key Vaults). Behavior depends on `deployPrivateEndpoints`:
-  - **Private endpoints ON, no IPs:** public access **disabled** — all traffic must use the private endpoint.
-  - **Private endpoints ON, IPs specified:** public access **enabled but restricted** to those ranges — the private endpoint handles internal traffic and the IP allowlist covers management access from known external addresses.
-  - **Private endpoints OFF:** public access enabled; if IPs are specified only those ranges are permitted, otherwise the resource is open to all traffic.
+- **Description:** Public IP/CIDR allowlist for newly deployed Azure Files storage and Key Vaults.
+  Rules are retained when public access is Disabled and do not enable it. Existing trusted-service
+  exceptions remain configured.
 - **Example:** `["203.0.113.10", "198.51.100.0/24"]`
+
+#### `paasPublicNetworkAccess`
+
+- **Default:** `Auto` derives public access from private endpoint selection and IP rules.
+- **Explicit values:** `Disabled`, `EnabledWithRestrictions`, `Enabled`.
+- **Scope:** One choice for newly deployed Azure Files storage and Key Vaults, independent of
+  private endpoint creation. It does not configure adopted resources, backup vaults, monitoring or
+  AVD access settings. Restricted mode denies unmatched traffic even with an empty IP list.
+- **Portal:** Exposes the three explicit choices, initially Disabled with private endpoints and
+  Enabled otherwise. IP rules can be staged in Disabled mode.
+- **Exceptions:** Existing `AzureServices` bypass remains configured and can still apply when public
+  access is Disabled; see the [shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
 
 ### Security & Encryption
 

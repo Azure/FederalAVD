@@ -56,7 +56,7 @@ function Remove-ExpiredShutdownVMs {
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
-    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days"
+    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days" -Level Trace
     
     # Use cached VMs if provided, otherwise fetch
     if ($CachedVMs -and $CachedVMs.Count -gt 0) {
@@ -79,11 +79,12 @@ function Remove-ExpiredShutdownVMs {
         }
     }
     
-    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate"
+    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate" -Level Trace
     
     $cleanedUpCount = 0
     $retainedCount = 0
     $deletedVMNames = @()
+    $deletedHosts = @()
     $currentTime = (Get-Date).ToUniversalTime()
     $shutdownVMPowerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds @($shutdownVMs.id)
     
@@ -115,7 +116,7 @@ function Remove-ExpiredShutdownVMs {
                 
                 try {
                     # Use helper function to delete VM and clean up resources
-                    Remove-VirtualMachine `
+                    $deletedHosts += Remove-VirtualMachine `
                         -VMName $vmName `
                         -VMId $vmId `
                         -ARMToken $ARMToken `
@@ -125,13 +126,16 @@ function Remove-ExpiredShutdownVMs {
                         -HostPoolSubscriptionId $HostPoolSubscriptionId `
                         -HostPoolResourceGroupName $HostPoolResourceGroupName `
                         -HostPoolName $HostPoolName `
-                        -ClientId $ClientId
+                        -ClientId $ClientId `
+                        -ResourceManagerUri $ResourceManagerUri `
+                        -DeferCleanup
                     
                     $cleanedUpCount++
                     $deletedVMNames += $vmName
                 }
                 catch {
                     Write-LogEntry -Message "Failed to delete shutdown VM $vmName : $($_.Exception.Message)" -Level Error
+                    throw
                 }
             }
             else {
@@ -141,15 +145,27 @@ function Remove-ExpiredShutdownVMs {
             }
         }
         catch {
-            Write-LogEntry -Message "Failed to parse shutdown timestamp for VM $vmName : $($_.Exception.Message)" -Level Warning
+            Write-LogEntry -Message "Failed to clean up shutdown VM $vmName : $($_.Exception.Message)" -Level Error
+            $worker = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+            if ($deletedHosts.Count -gt 0 -and -not $worker) {
+                Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
+                    -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
+                    -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
+                    -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
+            }
+            throw
         }
     }
     
     if ($cleanedUpCount -gt 0) {
+        Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
+            -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
+            -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
+            -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
         Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
     }
     else {
-        Write-LogEntry -Message "No shutdown VMs exceeded retention period"
+        Write-LogEntry -Message "No shutdown VMs exceeded retention period" -Level Trace
     }
     
     return [PSCustomObject]@{
@@ -192,6 +208,8 @@ function Remove-SessionHosts {
         [bool] $RemoveEntraDevice,
         [Parameter()]
         [bool] $RemoveIntuneDevice,
+        [Parameter(HelpMessage = 'Defer directory cleanup to Deploy-SessionHosts after a durable DeleteFirst checkpoint. SuccessfulDeletions then identifies accepted deletion requests, not verified absence.')]
+        [switch] $DeferDeviceCleanup,
         [Parameter()]
         [bool] $EnableShutdownRetention = (Read-FunctionAppSetting EnableShutdownRetention -AsBoolean),
         [Parameter()]
@@ -205,11 +223,15 @@ function Remove-SessionHosts {
     )
 
     $EnableShutdownRetention = $ReplacementMode -eq 'SideBySide' -and $EnableShutdownRetention
+    if ($DeferDeviceCleanup -and $ReplacementMode -notin @('DeleteFirst', 'MaintenanceWindow')) {
+        throw 'Only a checkpointed delete-before-deploy batch may defer device cleanup to deployment.'
+    }
 
     # Initialize results tracking
     $successfulDeletions = @()
     $successfulShutdowns = @()
     $failedDeletions = @()
+    $deletedHosts = @()
 
     foreach ($sessionHost in $SessionHostsPendingDelete) {
         $drainSessionHost = $false
@@ -218,20 +240,20 @@ function Remove-SessionHosts {
         Write-LogEntry -Message "Evaluating session host $($sessionHost.SessionHostName): Sessions=$($sessionHost.Sessions), AllowNewSession=$($sessionHost.AllowNewSession), PendingDrainTimeStamp=$($sessionHost.PendingDrainTimeStamp)" -Level Trace
 
         if ($sessionHost.Sessions -eq 0) {
-            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions."
+            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions." -Level Trace
             
             # Optimization: If VM is already powered off, skip draining and delete immediately (no point draining an offline VM)
             if ($sessionHost.PoweredOff) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - marking for immediate deletion without drain period (VM already shutdown)"
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - marking for immediate deletion without drain period (VM already shutdown)" -Level Trace
                 $deleteSessionHost = $true
             }
             # Optimization: If MinimumDrainMinutes = 0, skip draining entirely and delete immediately
             elseif ($MinimumDrainMinutes -eq 0) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - marking for immediate removal without drain period"
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - marking for immediate removal without drain period" -Level Trace
                 $deleteSessionHost = $true
             }
             elseif (-Not $sessionHost.AllowNewSession) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions."
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions." -Level Trace
                 if ($sessionHost.PendingDrainTimeStamp) {                    
                     # In SideBySide mode, skip minimum drain time check since new capacity is already deployed
                     if ($ReplacementMode -eq 'SideBySide') {
@@ -239,38 +261,38 @@ function Remove-SessionHosts {
                     }
                     # If VM is powered off, skip minimum drain time check - no race condition possible
                     elseif ($sessionHost.PoweredOff) {
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - skipping minimum drain time check (no race condition possible)"
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - skipping minimum drain time check (no race condition possible)" -Level Trace
                         $deleteSessionHost = $true
                     }
                     else {
                         $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
                   
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)"
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)" -Level Trace
                         if ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts."
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts." -Level Trace
                             $deleteSessionHost = $true
                         }
                         else {
-                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time."
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time." -Level Trace
                         }
                     }
                 }
                 else {
-                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp."
+                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp." -Level Trace
                     $drainSessionHost = $true
                 }
             }
             else {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode."
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode." -Level Trace
                 $drainSessionHost = $true
             }
         }
         else {
-            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." 
+            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." -Level Trace
             if (-Not $sessionHost.AllowNewSession) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode."
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode." -Level Trace
                 if ($sessionHost.PendingDrainTimeStamp) {
-                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)"
+                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)" -Level Trace
                     if ($ReplacementMode -eq 'MaintenanceWindow') {
                         $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
                         if ($elapsedMinutes -ge $MaintenanceLogOffDelayMinutes) {
@@ -311,7 +333,7 @@ function Remove-SessionHosts {
                 }
             }
             else {
-                Write-LogEntry -Message "Session host $($sessionHost.Name) in not in drain mode. Turning on drain mode."
+                Write-LogEntry -Message "Session host $($sessionHost.Name) in not in drain mode. Turning on drain mode." -Level Trace
                 $drainSessionHost = $true
             }
         }
@@ -325,7 +347,7 @@ function Remove-SessionHosts {
                 Write-LogEntry -Message "Drain mode enabled for $($sessionHost.SessionHostName)" -Level Trace
                 
                 $drainTimestamp = (Get-Date).ToUniversalTime().ToString('o')
-                Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp"
+                Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp" -Level Trace
                 $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                 $Body = @{
                     properties = @{
@@ -335,7 +357,7 @@ function Remove-SessionHosts {
                 }
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
                 
-                Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp"
+                Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp" -Level Trace
                 
                 # Update in-memory session host object so timestamp is available for deletion check in same run
                 $sessionHost.PendingDrainTimeStamp = [DateTime]::Parse($drainTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
@@ -347,24 +369,24 @@ function Remove-SessionHosts {
                     
                     # HIGHEST PRIORITY: If VM is already powered off, delete immediately (no point waiting - it's already offline)
                     if ($sessionHost.PoweredOff) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is powered off - marking for immediate deletion (VM already shutdown)"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is powered off - marking for immediate deletion (VM already shutdown)" -Level Trace
                         $deleteSessionHost = $true
                     }
                     # In SideBySide mode, allow immediate deletion since new capacity is already deployed
                     elseif ($ReplacementMode -eq 'SideBySide') {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is in SideBySide mode - marking for immediate deletion (new capacity already deployed)"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is in SideBySide mode - marking for immediate deletion (new capacity already deployed)" -Level Trace
                         $deleteSessionHost = $true
                     }
                     elseif ($MinimumDrainMinutes -eq 0) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) has MinimumDrainMinutes=0 - marking for immediate deletion"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) has MinimumDrainMinutes=0 - marking for immediate deletion" -Level Trace
                         $deleteSessionHost = $true
                     }
                     elseif ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed >= $MinimumDrainMinutes required) - marking for deletion"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed >= $MinimumDrainMinutes required) - marking for deletion" -Level Trace
                         $deleteSessionHost = $true
                     }
                     else {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) must wait $([Math]::Round($MinimumDrainMinutes - $elapsedMinutes, 1)) more minutes before deletion (minimum drain time: $MinimumDrainMinutes minutes)"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) must wait $([Math]::Round($MinimumDrainMinutes - $elapsedMinutes, 1)) more minutes before deletion (minimum drain time: $MinimumDrainMinutes minutes)" -Level Trace
                     }
                 }
                 
@@ -453,7 +475,7 @@ function Remove-SessionHosts {
                     # Standard delete flow - use helper function
                     Write-LogEntry -Message "Deleting session host $($SessionHost.SessionHostName)..."
                     
-                    Remove-VirtualMachine `
+                    $deletedHosts += Remove-VirtualMachine `
                         -VMName $sessionHost.SessionHostName `
                         -VMId $sessionHost.ResourceId `
                         -FQDN $sessionHost.FQDN `
@@ -464,7 +486,9 @@ function Remove-SessionHosts {
                         -HostPoolSubscriptionId $HostPoolSubscriptionId `
                         -HostPoolResourceGroupName $ResourceGroupName `
                         -HostPoolName $HostPoolName `
-                        -ClientId $ClientId
+                        -ClientId $ClientId `
+                        -ResourceManagerUri $ResourceManagerUri `
+                        -DeferCleanup
                     
                     # Track successful deletion
                     $successfulDeletions += $sessionHost.SessionHostName
@@ -476,9 +500,24 @@ function Remove-SessionHosts {
                     SessionHostName = $sessionHost.SessionHostName
                     Reason          = $_.Exception.Message
                 }
-                Write-Error "Failed to delete session host $($sessionHost.SessionHostName): $($_.Exception.Message)"
+                Write-LogEntry -Message "Failed to delete session host $($sessionHost.SessionHostName): $($_.Exception.Message); batch is blocked." -Level Error
+                $worker = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+                if (-not $DeferDeviceCleanup -and $deletedHosts.Count -gt 0 -and -not $worker) {
+                    Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
+                        -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
+                        -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $ResourceGroupName `
+                        -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
+                }
+                throw
             }
         }
+    }
+
+    if (-not $DeferDeviceCleanup -and $deletedHosts.Count -gt 0) {
+        Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
+            -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
+            -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $ResourceGroupName `
+            -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
     }
 
     # Return results object
@@ -512,6 +551,10 @@ function Remove-VirtualMachine {
     
     .PARAMETER GraphToken
     Graph access token for device cleanup
+
+    .PARAMETER DeferCleanup
+    Submit deletion and return the hostname/resource mapping without waiting or removing directories.
+    The batch caller must complete cleanup through the shared safety gate.
     #>
     [CmdletBinding()]
     param (
@@ -529,6 +572,8 @@ function Remove-VirtualMachine {
         [bool] $RemoveEntraDevice = $false,
         [Parameter()]
         [bool] $RemoveIntuneDevice = $false,
+        [Parameter()]
+        [switch] $DeferCleanup,
         [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
         [Parameter()]
@@ -560,30 +605,66 @@ function Remove-VirtualMachine {
         }
     }
     
-    # Remove from host pool if FQDN is known
-    if (-not [string]::IsNullOrEmpty($FQDN)) {
-        Write-LogEntry -Message "Removing session host $FQDN from host pool $HostPoolName" -Level Trace
-        $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$FQDN`?api-version=2024-04-03"
-        [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)
-        Write-LogEntry -Message "Removed $VMName from host pool" -Level Trace
-    }
-    
     # Extract hostname from FQDN for device cleanup (Entra ID/Intune use hostname, not VM resource name)
     $deviceName = if (-not [string]::IsNullOrEmpty($FQDN)) {
         $FQDN.Split('.')[0]  # Get hostname from FQDN (e.g., "avdtest29use207" from "avdtest29use207.domain.com")
     } else {
-        $VMName  # Fallback to VM name if FQDN not available
+        $vm = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri "$ResourceManagerUri$VMId`?api-version=2024-07-01"
+        if ([string]::IsNullOrWhiteSpace($vm.properties.osProfile.computerName)) {
+            throw "Cannot establish the computer name for VM '$VMName'; cleanup is blocked."
+        }
+        $vm.properties.osProfile.computerName
     }
     
     Write-LogEntry -Message "Using device name '$deviceName' for Entra ID/Intune cleanup" -Level Trace
-    
-    # Remove from identity directories
-    Remove-DeviceFromDirectories -DeviceName $deviceName -GraphToken $GraphToken -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -ClientId $ClientId
-    
+
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation) {
+        $pending = $continuation.CleanupIntent
+        $hosts = @($pending.Hosts | Where-Object { $_ })
+        $existing = @($hosts | Where-Object { $_.ResourceId -ieq $VMId })
+        if ($existing.Count -gt 0 -and $existing[0].SessionHostName -ine $deviceName) {
+            throw "Retirement computer name changed for '$VMId'; cleanup is blocked."
+        }
+        if ($existing.Count -eq 0) {
+            $hosts += @{ SessionHostName = $deviceName; ResourceId = $VMId }
+        }
+        $continuation.CleanupIntent = @{
+            Hosts = $hosts
+            VMDeletions = @(@($pending.VMDeletions | Where-Object { $_ }) + $VMId | Select-Object -Unique)
+            WaitForVMDeletion = $true
+            RemoveEntraDevice = $RemoveEntraDevice -or [bool]$pending.RemoveEntraDevice
+            RemoveIntuneDevice = $RemoveIntuneDevice -or [bool]$pending.RemoveIntuneDevice
+        }
+        Save-ShrContinuationCheckpoint
+    }
+
+    # Persist retirement before removing the registration that makes this VM discoverable.
+    if (-not [string]::IsNullOrEmpty($FQDN)) {
+        Write-LogEntry -Message "Removing session host $FQDN from host pool $HostPoolName" -Level Trace
+        $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$FQDN`?api-version=2024-04-03"
+        try {
+            [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)
+        } catch {
+            if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+        }
+        Write-LogEntry -Message "Removed $VMName from host pool" -Level Trace
+    }
+
     # Delete the VM
     Write-LogEntry -Message "Deleting VM: $VMId" -Level Trace
     $Uri = "$ResourceManagerUri$VMId`?forceDeletion=true&api-version=2024-07-01"
-    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
+    try {
+        [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
+    } catch {
+        if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+    }
+    $deletedHost = [PSCustomObject]@{ SessionHostName = $deviceName; ResourceId = $VMId }
+    if ($DeferCleanup) { return $deletedHost }
+    Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts @($deletedHost) -WaitForVMDeletion `
+        -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice `
+        -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
+        -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
     
     Write-LogEntry -Message "Successfully deleted VM $VMName"
 }
@@ -620,7 +701,7 @@ function Send-DrainNotification {
     )
     
     try {       
-        Write-LogEntry -Message "Getting user sessions for session host $SessionHostName"
+        Write-LogEntry -Message "Getting user sessions for session host $SessionHostName" -Level Trace
         $SessionsUri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$SessionHostName/userSessions?api-version=2024-04-03"
         
         $sessionsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $SessionsUri
@@ -632,11 +713,11 @@ function Send-DrainNotification {
         $sessions = $sessions | Where-Object { $_ -and $_.name }
         
         if ($sessions.Count -eq 0) {
-            Write-LogEntry -Message "No active sessions found on session host $SessionHostName"
+            Write-LogEntry -Message "No active sessions found on session host $SessionHostName" -Level Trace
             return
         }
         
-        Write-LogEntry -Message "Found $($sessions.Count) active session(s) on session host $SessionHostName"
+        Write-LogEntry -Message "Found $($sessions.Count) active session(s) on session host $SessionHostName" -Level Trace
         
         foreach ($session in $sessions) {
             $sessionId = $session.name -replace '.+\/.+\/(.+)', '$1'
@@ -723,6 +804,31 @@ function Remove-SessionHostUserSessions {
     }
 }
 
+function Test-SessionHostScalingRelease {
+    param(
+        $SessionHost,
+        $LatestImageVersion,
+        [string] $TagValidatedImage = (Read-FunctionAppSetting Tag_ValidatedImage),
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp)
+    )
+
+    $hostReady = $SessionHost.Status -eq 'Available' -and $SessionHost.AllowNewSession -and
+        $SessionHost.ImageVersion -eq $LatestImageVersion.Version -and
+        $SessionHost.ImageDefinition -eq $LatestImageVersion.Definition -and
+        $SessionHost.IncludeInAutomation -ne $false -and
+        -not $SessionHost.ShutdownTimestamp -and
+        -not ($TagShutdownTimestamp -and $SessionHost.Tags.ContainsKey($TagShutdownTimestamp)) -and
+        @($SessionHost.SessionHostHealthCheckResults | Where-Object {
+            $_.healthCheckResult -eq 'HealthCheckFailed'
+        }).Count -eq 0
+    if (-not $hostReady -or -not $TagValidatedImage) { return $false }
+    $identity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
+    $token = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($identity)
+    )).ToLowerInvariant()
+    return $SessionHost.Tags[$TagValidatedImage] -eq $token
+}
+
 function Test-NewSessionHostsAvailable {
     <#
     .SYNOPSIS
@@ -775,15 +881,21 @@ function Test-NewSessionHostsAvailable {
         [Parameter()]
         [string] $TagValidatedImage = (Read-FunctionAppSetting Tag_ValidatedImage),
         [Parameter()]
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [Parameter()]
+        [switch] $ReadOnly,
+        [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
-    Write-LogEntry -Message "Verifying latest-image session host readiness before proceeding with old host removal"
+    Write-LogEntry -Message "Verifying latest-image session host readiness before proceeding with old host removal" -Level Trace
     
     # Identify new hosts (hosts on the latest image version)
     $newHosts = $SessionHosts | Where-Object { 
         $_.ImageVersion -eq $LatestImageVersion.Version -and 
-        $_.ImageDefinition -eq $LatestImageVersion.Definition 
+        $_.ImageDefinition -eq $LatestImageVersion.Definition -and
+        -not $_.ShutdownTimestamp -and
+        -not ($TagShutdownTimestamp -and $_.Tags.ContainsKey($TagShutdownTimestamp))
     }
     
     if (-not $newHosts -or $newHosts.Count -eq 0) {
@@ -795,11 +907,12 @@ function Test-NewSessionHostsAvailable {
             TotalNewHosts      = 0
             UnavailableHosts   = @()
             SafeToProceed      = $false
+            ValidationUpdatesRequired = $false
             Message            = "No latest-image hosts are available to verify"
         }
     }
     
-    Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
+    Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version -Level Trace
 
     $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
     $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
@@ -812,8 +925,10 @@ function Test-NewSessionHostsAvailable {
         $hashAlgorithm.Dispose()
     }
 
+    $validationUpdatesRequired = $false
     if ([string]::IsNullOrWhiteSpace($TagValidatedImage)) {
         Write-LogEntry -Message "Tag_ValidatedImage is not configured - exact-image validation evidence cannot be recorded" -Level Warning
+        $validationUpdatesRequired = $true
     }
     else {
         foreach ($newHost in $newHosts) {
@@ -824,6 +939,10 @@ function Test-NewSessionHostsAvailable {
                 $failedHealthChecks.Count -eq 0
 
             if ($isHealthValidated -and $newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
+                if ($ReadOnly) {
+                    $validationUpdatesRequired = $true
+                    continue
+                }
                 try {
                     $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                     $body = @{
@@ -870,7 +989,7 @@ function Test-NewSessionHostsAvailable {
             $isOnlineHealthy = $isHealthValidated -and $newHost.AllowNewSession
 
             if ($isHealthValidated) {
-                if ($newHost.Tags[$TagValidatedImage] -eq $validatedImageToken -and
+                if (-not $ReadOnly -and (Test-SessionHostScalingRelease -SessionHost $newHost -LatestImageVersion $LatestImageVersion -TagValidatedImage $TagValidatedImage) -and
                     $TagScalingPlanExclusionTag -and
                     $newHost.Tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
                     try {
@@ -923,7 +1042,7 @@ function Test-NewSessionHostsAvailable {
                     ValidatedForImage = [bool]$isValidatedForImage
                 }
                 $unreadyHosts += $unreadyHost
-                Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
+                Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Trace
             }
         }
 
@@ -954,6 +1073,7 @@ function Test-NewSessionHostsAvailable {
             TotalNewHosts = $newHosts.Count
             UnavailableHosts = $unreadyHosts
             SafeToProceed = $safeToProceed
+            ValidationUpdatesRequired = $validationUpdatesRequired
             Message = $message
         }
     }
@@ -987,7 +1107,7 @@ function Test-NewSessionHostsAvailable {
                 FailedHealthCheckCount = $failedHealthChecks.Count
             }
             $unavailableHosts += $unavailableHost
-            Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
+            Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Trace
         }
     }
     
@@ -1015,9 +1135,9 @@ function Test-NewSessionHostsAvailable {
     Write-LogEntry -Message "NEW_HOST_VERIFICATION | Available: {0}/{1} ({2}%) | SafeToProceed: {3}" -StringValues $availableCount, $totalNewHosts, $availablePercentage, $safeToProceed
     
     if (-not $safeToProceed) {
-        Write-LogEntry -Message "WARNING: New session hosts are not ready - will skip removal of old hosts to preserve capacity" -Level Warning
+        Write-LogEntry -Message "New session hosts are not ready - removal of old hosts remains blocked to preserve capacity" -Level Trace
         foreach ($unavailable in $unavailableHosts) {
-            Write-LogEntry -Message "  - {0}: Status={1}" -StringValues $unavailable.SessionHostName, $unavailable.Status -Level Warning
+            Write-LogEntry -Message "  - {0}: Status={1}" -StringValues $unavailable.SessionHostName, $unavailable.Status -Level Trace
         }
     }
     
@@ -1028,6 +1148,7 @@ function Test-NewSessionHostsAvailable {
         AvailablePercentage  = $availablePercentage
         UnavailableHosts     = $unavailableHosts
         SafeToProceed        = $safeToProceed
+        ValidationUpdatesRequired = $validationUpdatesRequired
         Message              = $message
     }
 }
@@ -1035,4 +1156,4 @@ function Test-NewSessionHostsAvailable {
 #EndRegion Session Host Lifecycle
 
 # Export functions
-Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable
+Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable, Test-SessionHostScalingRelease

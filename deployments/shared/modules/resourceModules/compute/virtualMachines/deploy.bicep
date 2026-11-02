@@ -1,25 +1,41 @@
+metadata name = 'Windows virtual machine'
+metadata description = 'Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations.'
+
 import { extensionType } from '../../types/computeTypes.bicep'
 
+@description('Required. Name of the windows virtual machine to deploy.')
 param name string
+@description('Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the windows virtual machine.')
 param tags object = {}
 
+@description('Optional. Azure VM size; must support the selected image, security settings and networking capabilities.')
 param vmSize string = 'Standard_D4ads_v6'
+@description('Required. Local administrator account name for the Windows VM.')
 param adminUsername string
 @secure()
+@description('Required. Local administrator password for the Windows VM, passed as a secure value.')
 param adminPassword string
 
+@description('Required. Resource ID of the existing subnet used by the VM NIC.')
 param subnetResourceId string
+@description('Required. Name of the private network interface created for the VM.')
 param nicName string
+@description('Required. Name of the managed OS disk created from the selected image.')
 param osDiskName string
 
 @description('Optional. Custom image resource ID. Overrides imagePublisher/imageOffer/imageSku when provided.')
 param customImageResourceId string = ''
+@description('Optional. Marketplace image publisher, used only when no custom image resource ID is supplied.')
 param imagePublisher string = 'MicrosoftWindowsDesktop'
+@description('Optional. Marketplace image offer, used only when no custom image resource ID is supplied.')
 param imageOffer string = 'windows-11'
+@description('Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied.')
 param imageSku string = 'win11-25h2-avd'
 
 @allowed(['Premium_LRS', 'StandardSSD_LRS', 'Standard_LRS', 'UltraSSD_LRS'])
+@description('Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image.')
 param osDiskSku string = 'Premium_LRS'
 
 @description('OS disk size in GB. 0 uses the image default.')
@@ -35,13 +51,19 @@ param diskAccessId string = ''
 @description('Disk encryption set resource ID for customer-managed key encryption.')
 param diskEncryptionSetResourceId string = ''
 
+@description('Optional. Enable accelerated networking on the NIC; the consuming VM size and OS must support it.')
 param enableAcceleratedNetworking bool = true
+@description('Optional. Enable host-level VM encryption; the selected VM size must support it.')
 param encryptionAtHost bool = true
+@description('Optional. Enable VM hibernation capability; the selected VM size and image must support it.')
 param hibernationEnabled bool = false
 
 @allowed(['Standard', 'TrustedLaunch', 'ConfidentialVM'])
+@description('Optional. VM security model; the image and VM size must support the selected model.')
 param securityType string = 'TrustedLaunch'
+@description('Optional. Enable Secure Boot when the VM security type is not Standard.')
 param secureBootEnabled bool = true
+@description('Optional. Enable the virtual TPM when the VM security type is not Standard.')
 param vTpmEnabled bool = true
 
 @description('Availability set resource ID. Empty = no availability set.')
@@ -201,6 +223,9 @@ resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' 
   }
 ]
 
+@description('Resource ID of the windows virtual machine.')
 output resourceId string = virtualMachine.id
+@description('Azure resource name of the windows virtual machine.')
 output name string = virtualMachine.name
+@description('VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string.')
 output principalId string = (systemAssignedIdentity || empty(userAssignedIdentityResourceIds)) ? virtualMachine.identity.principalId : ''

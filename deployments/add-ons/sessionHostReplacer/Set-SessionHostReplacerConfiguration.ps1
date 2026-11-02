@@ -66,6 +66,13 @@
     Pilot pools only: includes gallery versions excluded from latest globally or in the target region.
     Does not bypass replication, publication-age delay, rollback protection, or health/capacity checks.
 
+.PARAMETER InitiationEnabled
+    Allows the initiation timer to authorize new batches. The reconciliation timer
+    continues existing work while false.
+
+.PARAMETER ContinuationTimeoutHours
+    Deadline for newly initiated operations, in hours. Does not extend an existing operation.
+
 .PARAMETER PassThru
     Returns the interpreted configuration object after review or update.
 
@@ -143,6 +150,11 @@ param(
     [Nullable[bool]]$AllowImageVersionRollback,
 
     [Nullable[bool]]$IncludeExcludedImageVersions,
+
+    [Nullable[bool]]$InitiationEnabled,
+
+    [ValidateRange(1, 720)]
+    [Nullable[int]]$ContinuationTimeoutHours,
 
     [switch]$PassThru
 )
@@ -256,6 +268,9 @@ function Get-InterpretedConfiguration {
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
         IncludeExcludedImageVersions = Get-SettingValue -Settings $Settings -Name 'IncludeExcludedImageVersions' -Default 'false'
+        ExecutionModel = 'Initiation timer and one-minute reconciliation timer'
+        InitiationEnabled = Get-SettingValue -Settings $Settings -Name 'InitiationEnabled' -Default 'true'
+        ContinuationTimeoutHours = Get-SettingValue -Settings $Settings -Name 'ContinuationTimeoutHours' -Default '72'
         MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(
             (Get-SettingValue -Settings $Settings -Name 'MaintenanceRequest')
         )) {
@@ -306,6 +321,8 @@ $settingParameters = [ordered]@{
     ReplaceSessionHostOnNewImageVersionDelayDays = 'ReplaceSessionHostOnNewImageVersionDelayDays'
     AllowImageVersionRollback = 'AllowImageVersionRollback'
     IncludeExcludedImageVersions = 'IncludeExcludedImageVersions'
+    InitiationEnabled = 'InitiationEnabled'
+    ContinuationTimeoutHours = 'ContinuationTimeoutHours'
 }
 
 $requestedChanges = [ordered]@{}

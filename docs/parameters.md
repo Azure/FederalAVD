@@ -34,12 +34,119 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 
 ---
 
+## Standard Host-Pool Locations
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `controlPlaneLocation` | Subscription deployment location | AVD control-plane and shared supporting resources |
+| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers and their naming context |
+
+Both use Azure location names such as `eastus2` or `usgovvirginia`, not display
+labels or naming abbreviations. The Portal passes both selections explicitly.
+Naming-context and deployment inputs use `Location`; existing
+child modules keep their public parameter contracts.
+
+Set both parameters explicitly for split-location deployments. Empty locations
+are invalid, and scripted deployments must check the VM
+location against the subnet's VNet before deployment. See
+[explicit deployment locations](hostpool-deployment.md#explicit-deployment-locations).
+
+---
+
+## AVD Private Link Portal Defaults
+
+The standard and automated Host Pool forms retain all three private-routing
+choices. When AVD Private Link is enabled and the Control Plane step selects an
+existing feed workspace, routing defaults to remote session connections only
+(`HostPool`) and remote session public access defaults to clients only
+(`EnabledForClientsOnly`). This avoids managing the existing workspace's feed
+networking unless the operator explicitly selects a feed-routing option.
+
+For a new feed workspace, routing defaults to feed download and remote session
+connections (`FeedAndHostPool`); remote session public access defaults to
+`Enabled`. These are editable Portal defaults, not restrictions.
+
+---
+
+## PaaS Public Network Access
+
+Shared Services, Image Management, standard/automated Host Pools, FSLogix Storage,
+and Session Host Replacer accept `paasPublicNetworkAccess`. One choice applies to
+the Storage accounts, Key Vaults, or Function App infrastructure that the selected
+deployment creates; it does not reconfigure adopted resources, AVD connection/feed
+access, Recovery Services vaults, NetApp Files, or monitoring.
+
+| Value | Public endpoint | Firewall default action |
+| --- | --- | --- |
+| `Disabled` | Disabled regardless of IP/subnet rules or private endpoint selection | Deny |
+| `EnabledWithRestrictions` | Enabled alongside any private endpoints | Deny unmatched traffic, including with empty rule lists |
+| `Enabled` | Enabled alongside any private endpoints | Allow all networks, regardless of stored allow rules |
+| `Auto` (parameter-file default) | Derived from private endpoint selection and IP/subnet rules | Derived from the selected access rules |
+
+The Portal exposes only the first three choices. Its initial choice is Disabled
+with private endpoints and Enabled otherwise. Image Management's Service Endpoint
+option initially selects Enabled with restrictions so subnet restrictions remain
+effective. These are defaults, not constraints linking public access to private
+endpoint creation.
+
+IP rules remain configured in Disabled mode and do not turn public access back on.
+The Portal shows IP-rule entry only for **Enabled with restrictions**, with a short
+explanation for the selected mode. Switching to Disabled or Enabled hides the grid
+without explicitly clearing entered rules; the rule outputs are not gated on the
+access mode. Parameter files can still supply rules in any mode.
+Image Management also retains supplied subnet rules; service endpoints use the
+**public** storage endpoint and do not provide connectivity when public access is
+Disabled.
+
+Purpose-specific exceptions apply: Storage/Key Vault use
+`AzureServices` bypass; restricted Function App and SCM access use the
+`AzureCloud` service-tag allowance. Microsoft documents that trusted-service
+exceptions can still apply to Storage and Key Vault when public access is
+Disabled. Disabled is therefore not a universal private-endpoint-only guarantee.
+Authentication and authorization are required in every mode.
+
+Use `permittedIPs` for the shared allowlist (`storagePermittedIPs` in Image
+Management). Automated Host Pools also accept `fslogixPermittedIPs`: those entries
+are combined with `permittedIPs` for Azure Files only. A Portal-generated parameter
+file explicitly selects a mode.
+
+For example, deploy private endpoints while permitting approved public addresses:
+
+```json
+"paasPublicNetworkAccess": { "value": "EnabledWithRestrictions" },
+"permittedIPs": { "value": ["203.0.113.10", "198.51.100.0/24"] }
+```
+
+Select `Disabled` with the same IP list to retain the rules without enabling the
+public endpoint. Before disabling access, provide and validate the private
+connectivity/DNS path for session hosts, image builders, deployment workstations,
+and Function App runtime storage as applicable.
+
+Authoritative service behavior:
+[Storage default access](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security-set-default-access),
+[Storage exceptions and limitations](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security-limitations),
+[Key Vault networking](https://learn.microsoft.com/en-us/azure/key-vault/general/network-security),
+and [App Service access restrictions](https://learn.microsoft.com/en-us/azure/app-service/overview-access-restrictions).
+
+---
+
 ## Add-Ons
 
 For Session Host Replacer gallery-image pilots, `includeExcludedImageVersions` defaults to `false`.
 Enable it only on pilot pools to test excluded candidates before promotion. See
 [pilot selection and promotion](../deployments/add-ons/sessionHostReplacer/README.md#pilot-image-selection-and-promotion)
 for numeric version ordering, safeguards, and the upgrade requirement.
+
+SHR always uses an initiation timer and a one-minute reconciliation timer. `initiationEnabled`
+(default `true`) gates new batches and `continuationTimeoutHours` (default `72`, range `1-720`)
+sets the fixed operation deadline. There is no execution-mode selector or SHR queue DNS parameter.
+See [two-timer execution](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-execution).
+
+SHR's existing `timerSchedule` parameter populates the `TimerSchedule` app setting referenced by
+the initiation binding. The reconciler uses the fixed `0 * * * * *` schedule. Schedule changes do not
+require changing code;
+keep deployment parameters synchronized with direct app-setting changes. See
+[deployment updates](../deployments/add-ons/sessionHostReplacer/deployment-guide.md).
 
 | Add-On | Parameters |
 | --- | --- |

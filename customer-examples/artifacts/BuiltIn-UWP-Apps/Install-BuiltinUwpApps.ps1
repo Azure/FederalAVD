@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-    Provisions built-in UWP apps from offline MSIX packages for all users on the system.
+    Upgrades image-provisioned UWP apps from offline MSIX packages.
 
 .DESCRIPTION
     Iterates through each app subfolder inside the builtin-uwp-apps artifact directory
-    and provisions the main bundle with Add-AppxProvisionedPackage so the app is
-    available to every user who signs in after imaging.
+    and upgrades apps already provisioned in the image with Add-AppxProvisionedPackage.
+    Apps absent from the provisioned image are skipped unless InstallMissing is specified.
+    This is image-wide provisioning, not a per-user update or uninstall-preservation tool.
 
     Expected folder structure (produced by Update-ImageArtifacts.ps1 via winget download
     followed by Optimize-SharedDependencies, which deduplicates all per-app dependency
@@ -46,6 +47,10 @@
     Reference: Microsoft internal support article (June 2026) -- "Windows Store apps are not
     retained after sysprep".
 
+.PARAMETER InstallMissing
+    Also provisions staged apps that are absent from the image. By default only
+    existing provisioned apps are upgraded; equal or newer versions are always skipped.
+
 .NOTES
     - Requires Windows PowerShell 5.1 or PowerShell 7+ running on Windows.
     - Must be run as Administrator or from a SYSTEM context (e.g., Azure VM Run Command).
@@ -58,7 +63,9 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [switch]$InstallMissing
+)
 
 $Script:Name = 'Install-BuiltinUwpApps'
 $ErrorActionPreference = 'Stop'
@@ -156,12 +163,13 @@ function Repair-MislabeledBundleExtension {
 New-Log (Join-Path $Env:SystemRoot 'Logs')
 Write-Log "Install-BuiltinUwpApps: Starting"
 Write-Log "Script location : $PSScriptRoot"
+Write-Log "Install missing apps: $($InstallMissing.IsPresent)"
 
 # Snapshot all currently provisioned packages before we change anything.
 # Keyed by the package name family (publisher prefix before the first version segment)
 # so we can look up the pre-run version regardless of installed version number.
 $SnapshotBefore = @{}
-Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | ForEach-Object {
+Get-AppxProvisionedPackage -Online -ErrorAction Stop | ForEach-Object {
     # Strip from the first version segment onward to get the stable family key.
     # e.g. Microsoft.WindowsCalculator_11.2404.0.0_neutral_~_8wekyb3d8bbwe
     #   -> Microsoft.WindowsCalculator
@@ -265,14 +273,20 @@ foreach ($AppFolder in $AppFolders) {
     if ([string]::IsNullOrWhiteSpace($PackageNamePrefix)) {
         $PackageNamePrefix = [System.IO.Path]::GetFileNameWithoutExtension($MainPackage.Name) -replace '_[0-9]+(?:\.[0-9]+)+.*$', ''
     }
-    $ExistingProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-        Where-Object { $_.PackageName -like "*$PackageNamePrefix*" } |
+    $ExistingProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction Stop |
+        Where-Object { ($_.PackageName -replace '_[0-9]+(?:\.[0-9]+)+.*$', '') -eq $PackageNamePrefix } |
         Select-Object -First 1
+    if ($null -eq $ExistingProvisioned -and -not $InstallMissing) {
+        Write-Log "SKIP: '$($AppFolder.Name)' is not provisioned in this image. Use -InstallMissing to add it intentionally."
+        $SkipCount++
+        $ChangeLog.Add([PSCustomObject]@{ App = $AppFolder.Name; Before = '(not present)'; After = '-'; Change = 'not provisioned' })
+        continue
+    }
     # Use the snapshot for the before-version (captured before any provisioning ran).
     $VersionBefore = if ($SnapshotBefore.ContainsKey($PackageNamePrefix)) { $SnapshotBefore[$PackageNamePrefix] } else { $null }
     if ($null -ne $ExistingProvisioned) {
         # Extract version from the full provisioned package name (same _ delimited format).
-        $ProvisionedVersion = $VersionBefore
+        $ProvisionedVersion = Get-PackageFileVersion $ExistingProvisioned.PackageName
         Write-Log "Provisioned  : $($ExistingProvisioned.PackageName)"
         Write-Log "Prov. ver    : $ProvisionedVersion"
         if ($ProvisionedVersion -ge $PackageVersion) {
@@ -327,8 +341,8 @@ foreach ($AppFolder in $AppFolders) {
         Add-AppxProvisionedPackage @BaseParams | Out-Null
         # Verify the new version is actually in the provisioned store -- Add-AppxProvisionedPackage
         # can return without throwing while still failing to register the package for new users.
-        $VerifyProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-            Where-Object { $_.PackageName -like "*$PackageNamePrefix*" } |
+        $VerifyProvisioned = Get-AppxProvisionedPackage -Online -ErrorAction Stop |
+            Where-Object { ($_.PackageName -replace '_[0-9]+(?:\.[0-9]+)+.*$', '') -eq $PackageNamePrefix } |
             Select-Object -First 1
         if ($null -ne $VerifyProvisioned) {
             Write-Log "Provisioned  : $($AppFolder.Name) - OK"
@@ -371,8 +385,8 @@ foreach ($AppFolder in $AppFolders) {
                 $ParamsWithDeps = $BaseParams.Clone()
                 $ParamsWithDeps['DependencyPackagePath'] = $DepPackages | Select-Object -ExpandProperty FullName
                 Add-AppxProvisionedPackage @ParamsWithDeps | Out-Null
-                $VerifyProvisioned2 = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
-                    Where-Object { $_.PackageName -like "*$PackageNamePrefix*" } |
+                $VerifyProvisioned2 = Get-AppxProvisionedPackage -Online -ErrorAction Stop |
+                    Where-Object { ($_.PackageName -replace '_[0-9]+(?:\.[0-9]+)+.*$', '') -eq $PackageNamePrefix } |
                     Select-Object -First 1
                 if ($null -ne $VerifyProvisioned2) {
                     Write-Log "Provisioned  : $($AppFolder.Name) - OK (with explicit dependencies)"
@@ -432,7 +446,7 @@ Write-Log $Divider
 Write-Log ""
 Write-Log "=== Summary ==="
 Write-Log "Provisioned  : $SuccessCount"
-Write-Log "Skipped      : $SkipCount (already up-to-date or no package found)"
+Write-Log "Skipped      : $SkipCount (up-to-date, not provisioned, or no package found)"
 Write-Log "Errors       : $ErrorCount"
 Write-Log "Install-BuiltinUwpApps: Complete"
 
@@ -440,7 +454,7 @@ Write-Log "Install-BuiltinUwpApps: Complete"
 # Image health check.
 # Runs after all provisioning to verify the provisioned store is in
 # the expected state. Three things are checked:
-#   1. Every app folder that was processed (and did not error) has a
+#   1. Every app selected for provisioning (and did not error) has a
 #      corresponding entry in Get-AppxProvisionedPackage.
 #   2. No provisioned app has a lingering Deprovisioned registry entry
 #      that would silently remove it at the next user logon.
@@ -451,13 +465,13 @@ Write-Log "Install-BuiltinUwpApps: Complete"
 Write-Log ""
 Write-Log "=== Image Health Check ==="
 $HealthIssues     = [System.Collections.Generic.List[string]]::new()
-$FinalPkgs        = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+$FinalPkgs        = Get-AppxProvisionedPackage -Online -ErrorAction Stop
 $PkgExtensions2   = @('.msixbundle', '.appxbundle', '.msix', '.appx')
 
 Write-Log ""
 Write-Log "-- App packages --"
 foreach ($Row in ($ChangeLog | Sort-Object App)) {
-    if ($Row.Change -eq 'no package') { continue }
+    if ($Row.Change -in @('no package', 'not provisioned')) { continue }
 
     if ($Row.Change -eq 'ERROR') {
         Write-Log ("  FAIL  {0,-30} provisioning error (see log above)" -f $Row.App)
@@ -480,7 +494,9 @@ foreach ($Row in ($ChangeLog | Sort-Object App)) {
         continue
     }
 
-    $CheckFound = $FinalPkgs | Where-Object { $_.PackageName -like "*$CheckPrefix*" } | Select-Object -First 1
+    $CheckFound = $FinalPkgs |
+        Where-Object { ($_.PackageName -replace '_[0-9]+(?:\.[0-9]+)+.*$', '') -eq $CheckPrefix } |
+        Select-Object -First 1
     if ($null -eq $CheckFound) {
         Write-Log ("  FAIL  {0,-30} not found in provisioned store" -f $Row.App)
         $HealthIssues.Add("$($Row.App): not found in provisioned store")

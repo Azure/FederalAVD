@@ -4,16 +4,24 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "5763277511451240335"
-    }
+      "version": "0.48.1.52935",
+      "templateHash": "12688311346943431116"
+    },
+    "name": "Azure Monitor Agent remediation template",
+    "description": "Deploys the Azure Monitor Windows Agent extension on an existing VM in the deployment resource group for Azure Policy remediation."
   },
   "parameters": {
     "location": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for the resources deployed by this module."
+      }
     },
     "virtualMachineName": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the existing VM in the deployment resource group."
+      }
     }
   },
   "resources": [

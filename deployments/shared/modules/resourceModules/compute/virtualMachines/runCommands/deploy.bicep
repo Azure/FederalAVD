@@ -1,7 +1,13 @@
+metadata name = 'Virtual machine Run Command'
+metadata description = 'Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity.'
+
 import { runCommandParameterType } from '../../../types/customizationTypes.bicep'
 
+@description('Required. Name of the existing virtual machine in the deployment resource group.')
 param virtualMachineName string
+@description('Required. Name of the virtual machine Run Command to deploy.')
 param name string
+@description('Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
 
 @description('PowerShell script content to execute. Provide either script or scriptUri, not both.')
@@ -72,5 +78,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
   }
 }
 
+@description('Resource ID of the virtual machine Run Command.')
 output resourceId string = runCommand.id
+@description('Azure resource name of the virtual machine Run Command.')
 output name string = runCommand.name

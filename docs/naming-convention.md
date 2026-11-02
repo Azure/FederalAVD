@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Naming Convention
 
@@ -17,6 +17,7 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 7. [Aligning naming across solutions](#aligning-naming-across-solutions)
 8. [Add-on naming](#add-on-naming)
 9. [Examples](#examples)
+10. [Maintaining the shared naming policy](#maintaining-the-shared-naming-policy)
 
 ---
 
@@ -40,9 +41,23 @@ For each resource, the engine substitutes:
 | `freeform1` / `freeform2` | Static free-text slots (e.g., organisation name, team) |
 | `none` | Ignored — removed from the output entirely |
 
-Empty-valued components are automatically removed before joining, so there are no leading, trailing, or doubled delimiters.
+Empty-valued top-level components are removed before joining. Separators inside component values are not removed by this step.
 
-**Naming is driven by a single parameter**, `namingConvention`, passed to each solution. The default value produces CAF-aligned names. When it is supplied with custom values, all resource names across the deployment are assembled from the same ordered component array — giving you a fully consistent naming convention in one place.
+Convention-generated names are driven by the shared naming policy and the `namingConvention` parameter. The policy owns defaults, role purposes, patterns, constraints and uniqueness recipes; the parameter supplies customer overrides. Explicit names, existing-resource IDs, provider-required names and lifecycle identifiers are not automatically rewritten.
+
+Portal forms provide naming controls, validation and explicit overrides. Names are resolved at deployment time.
+
+Standard and automated Host Pool and Shared Services forms select the delimiter
+from **Hyphen (-)** or **Underscore (_)**, defaulting to Hyphen. Image Management
+uses a text box supporting one to three hyphens, underscores or dots.
+All four forms initially populate Workload Value with `avd`. These are generated
+literal defaults from the shared policy, not runtime references to hidden form
+controls; operators can still change the selected delimiter and workload.
+
+**Names follow the naming convention subject to resource-specific restrictions.**
+The delimiter controls component assembly, but it is not necessarily preserved in
+the final resource name. For example, Key Vault formatting converts underscores
+and dots to hyphens, while storage account formatting removes separators.
 
 ---
 
@@ -212,9 +227,18 @@ $namingConvention = @{
 
 The publishing script uses `purpose = operations` for its default resource group and a distinct
 purpose for each Template Spec. Its `components` array must include `purpose`; otherwise multiple
-Template Specs would resolve to the same name. Supplying `-ResourceGroupName` continues to override
-resource-group name generation without changing Template Spec names. When `-NamingConvention` is
-omitted, existing default Template Spec names are retained for versioning continuity.
+Template Specs would resolve to the same name. Supplying `-ResourceGroupName` overrides
+resource-group name generation without changing Template Spec names. Omitting
+`-NamingConvention` uses the publisher's default naming configuration.
+
+Publishing a new add-on requires registration as well as infrastructure naming:
+add its publishing purpose under `templateSpecs` in the shared naming policy and
+an entry in the publisher's `$addOns` catalog using that purpose and the add-on's
+folder name. The publisher expects the compiled `main.json` and
+`uiFormDefinition.json` in that folder. This publishing metadata is separate from
+resource-role recipes; supported resource types still need no add-on-specific
+naming role. A missing publishing purpose is an error, not an empty name or a
+fallback. The standalone Session Hosts package uses `templateSpecs.sessionHosts`.
 
 ---
 
@@ -299,14 +323,27 @@ You never set `purpose` manually. The Bicep engine assigns the correct purpose s
 
 Some Azure resource types impose naming constraints that override the standard component assembly:
 
-### Key Vault — 24-character limit
+### Key Vault — permitted characters and 24-character limit
+
+[Azure Key Vault naming rules](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftkeyvault)
+require globally unique names of 3–24 alphanumeric or hyphen characters, starting
+with a letter and ending with a letter or number, without consecutive hyphens.
+Hyphens are the only permitted punctuation; using no delimiter is also valid.
+
+The shared engine first assembles components and purpose parts using the
+configured delimiter, then converts `_` and `.` to `-` and applies the length
+limit. Thus `-`, `_`, and `.` conventions produce hyphen-separated vault names;
+an empty delimiter produces joined components without inserted separators.
+This formatting is not complete name validation: arbitrary delimiters such as
+`--`, invalid component characters, or truncation can still produce invalid names.
+Complete name overrides must independently satisfy Azure's rules.
 
 Key Vault names are capped at **24 characters**. The unique suffix is **embedded in the `purpose` slot** rather than appended after assembly. This guarantees a consistent position for the unique token in the final name regardless of the component ordering:
 
 - RT-first default: `kv-avd-sec-d527e9-use` (unique is the 3rd component, before location)
 - RT-last: `avd-sec-d527e9-use2-kv` (unique is part of the 2nd component, before location and RT)
 
-The full name is assembled from `purpose = 'sec-{unique}'` or `'enc-{unique}'`, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
+The purpose joins `sec` or `enc` with the unique token using the configured delimiter (`sec-{unique}` or `enc-{unique}` with the default `-`). The full name is assembled, normalized for Key Vault, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
 
 The `uniqueString()` seed is:
 
@@ -333,7 +370,15 @@ Virtual machines, OS disks, and network interfaces use a **naming pattern** rath
 
 The actual VM name is `{pattern}` with `SHNAME = {sessionHostNamePrefix}{paddedIndex}`, for example `avdhost001`. These defaults intentionally do not use the virtual machine, OS disk, or network interface resource-type abbreviations or their position in the broader naming convention. This keeps the VM name equal to the session host name and derives the related resources from that stable name.
 
-Explicit `virtualMachineNameConvOverride`, `virtualMachineDiskNameConvOverride`, and `virtualMachineNicNameConvOverride` values continue to take precedence. Existing parameter files and host resource-group tags that specify older patterns are therefore unchanged on redeployment.
+Use `virtualMachineNameConvOverride`, `virtualMachineDiskNameConvOverride`, and `virtualMachineNicNameConvOverride` to override these defaults.
+
+In the standard Host Pool Portal form, the **Tags & Naming** step hides these three
+pattern boxes until **Customize VM, OS disk, and NIC naming** is checked. Leaving
+it unchecked uses the shared defaults above, even if custom values were entered
+before unchecking it. Checking it reveals the policy-backed defaults and
+`SHNAME` validation. The add-on forms inherit patterns from host resource-group
+tags. Automated host pools do not expose these three overrides because
+AVD owns their VM, disk and NIC names.
 
 ### Availability Set — `##` token
 
@@ -349,7 +394,7 @@ To produce a **consistent naming convention** across all solutions, pass the **s
 
 | Solution | Parameter name | Notes |
 | --- | --- | --- |
-| `hostpools/hostpool.bicep` | `namingConvention` | Full object; naming resolved in `modules/naming.bicep` |
+| `hostpools/hostpool.bicep` | `namingConvention` | Full object; imports `hostPoolNames` from the canonical naming library with explicit VM/control-plane locations |
 | `sharedServices/sharedServices.bicep` | `namingConvention` | Inline naming; fixed identifiers `operations` (Key Vaults) and `monitoring` (Log Analytics Workspace) |
 | `imageManagement/imageManagement.bicep` | `namingConvention` | Inline naming; fixed identifier `image-management` |
 | `imageBuild/imageBuild.bicep` | `namingConvention` | Shared gallery/identity names only |
@@ -408,7 +453,7 @@ The add-ons are deployed **after** the host pool exists. Session Host Replacer a
 
 ### Portal deployments
 
-When deploying from the Portal, the *Advanced* step pre-populates `namingConvention` and `identifier` from tags on the host pool and its resource group (`hpNamingConvention`, `hpIdentifier`). The derived resource names are shown in a live preview. If the host pool tag is absent, the *Advanced* step surfaces override fields so you can provide explicit names.
+When deploying from the Portal, the *Advanced* step pre-populates `namingConvention` and `identifier` from tags on the host pool and its resource group (`hpNamingConvention`, `hpIdentifier`). If the host pool tag is absent, the *Advanced* step surfaces override fields so you can provide explicit names.
 
 ### Parameter file / CLI deployments
 
@@ -504,7 +549,7 @@ SHNAME  →  avdhost001
 
 > **Note:** The generated KV name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). Portal deployments require complete Key Vault name overrides so meaningful trailing components are not silently lost.
 
-### Example 5 — Underscore delimiter (no hyphens in names)
+### Example 5 — Underscore delimiter with resource-specific exceptions
 
 ```json
 {
@@ -524,7 +569,7 @@ kv-avd-prod-sec-f0485a-u
 SHNAME, SHNAME-osdisk, SHNAME-nic
 ```
 
-> **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names, so the generated KV name always uses `-` regardless of the convention delimiter. Complete overrides must independently satisfy Azure Key Vault naming rules.
+> **Note:** `kvSanitize()` converts underscores and dots to hyphens in generated Key Vault names. An empty convention delimiter remains empty. Complete overrides must independently satisfy Azure Key Vault naming rules.
 
 ### Example 6 — Abbreviation override
 
@@ -550,4 +595,113 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ---
 
-Last updated: 2026-06-17
+## Maintaining the shared naming policy
+
+The authoritative rule catalog is the exported `namingPolicy` object in
+[`naming.bicep`](../deployments/shared/modules/orchestration/naming/naming.bicep).
+The same file is the single public Bicep entry point for composition, resource formatting,
+location lookup, uniqueness and runtime naming patterns. Host pools, Shared
+Services, Image Management, Image Build, networking and add-ons all consume it,
+directly or through context/output adapters.
+Host pools import `hostPoolNames` directly; standalone FSLogix imports
+`fslogixNames`, not a host-pool module. The standard host pool accepts
+`virtualMachinesLocation`, defaulting to `controlPlaneLocation` (which defaults
+to the deployment location). Supply the intended locations explicitly for
+split-location deployments; see the
+[location and bundle contract](../deployments/shared/modules/orchestration/naming/README.md#explicit-locations-and-naming-bundles).
+Abbreviations and region mappings remain in shared JSON so Bicep and PowerShell
+can consume the same configuration.
+
+For example, both host pools and Shared Services request the
+`operationsResourceGroup` role. Change that role's purpose once to affect both;
+do not edit their deployment templates separately. A default workload change
+also reaches Image Management, Replacer, networking and workload-bearing
+Automation Accounts. Some roles intentionally omit workload.
+
+Bicep parameter defaults and Portal controls use **explicit literal defaults**.
+There is no synchronization script or hidden Portal policy snapshot. After changing
+the native policy, update any corresponding literals and run the drift checks:
+
+```powershell
+Invoke-Pester -Script tests\Naming.Tests.ps1,tests\NamingBundles.Tests.ps1,tests\IdentifierNaming.Tests.ps1
+```
+
+Tests evaluate the exported policy with Bicep, then check component order,
+delimiter, workload, editable abbreviations, session-host pattern fallbacks,
+the shared FSLogix identifier and Bicep parameter defaults. ARM parameter defaults
+remain literals because they cannot reference variables. Forms retain user choices
+and host-pool inheritance without reading an uninitialized hidden control.
+
+The Template Spec publisher has explicit naming defaults and purpose tokens,
+validated against the compiled policy by Pester. It does not import the policy or
+run a synchronization gate. Review publisher name changes deliberately: a changed
+name can target a different Template Spec rather than update an existing one.
+
+Rebuild affected ARM JSON and run the naming regression and synchronization
+checks. Test the affected steps in a live Azure Portal session after changing
+form bindings; static validation cannot prove Portal rendering behavior.
+The Template Spec publisher still reads the shared abbreviation and location catalogs.
+See the [maintainer reference](../deployments/shared/modules/orchestration/naming/README.md)
+for implementation boundaries and tests.
+
+### Resource naming interface
+
+Use the same interface regardless of deployment family:
+
+```bicep
+import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
+
+var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
+var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier}-secrets', context)
+```
+
+The example import is relative to an add-on entry template. `context` supplies
+the actual target subscription, owning resource group, location and cloud. To
+name a subscription-scoped resource group, pass `resourceGroupName: ''`; that
+field does not affect its unhashed name, avoiding circular naming dependencies.
+Use distinct identifiers for multiple same-type resources in one scope.
+
+For new add-ons, use the
+[identifier-based shared interface](../deployments/shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
+instead of adding an application-specific resource role. `functionAppNames`
+returns per-application names and private-endpoint patterns from
+one identifier, convention, actual target context and explicit overrides. Name
+shared hosting plans separately using their owning purpose. `resourceNameForType`
+handles all 36 convention-named types in the abbreviation catalog, not just
+Function App resources. Neither requires a customer-chosen
+uniqueness suffix or a policy update for each add-on.
+
+The interface adds a deterministic hash only for globally named Storage accounts,
+Key Vaults and Function Apps (`globallyUnique: true` in the policy). Hashes are
+six characters by default. Their seed includes the full application identifier
+and target scope, not the resource type: Function App and runtime storage share
+one token. Names preserve the full formatted identifier and static components.
+Scope-local types have no automatic hash and retain the full formatted identifier;
+overlength names fail with an instruction to shorten the identifier or convention.
+Callers must distinguish names within their scope, including identifiers that
+normalize identically or conventions that omit location. The generic Function
+App bundle leaves Insights and storage-CMK identity names unhashed. Shared plans
+also have no hash. SHR uses this same bundle with `${hostPoolIdentifier}-shr`,
+not a separate compatibility recipe. Its plan uses the shared `shr` purpose;
+an existing hosting-plan resource ID still bypasses plan creation.
+
+For example, identifier `finance`, region `use` and illustrative hash `abc123`
+produce `fa-avd-finance-shr-abc123-use`, `saavdfinanceshrabc123use`,
+`appi-avd-finance-shr-use`, and `uai-avd-finance-shr-storage-cmk-use`.
+The shared plan is `asp-avd-shr-use`. Generated storage must fit 24 characters;
+provide `storageAccountNameOverride` if the complete name is too long. Bundle
+overrides are applied before default generation, so this escape path does not
+evaluate an invalid default. Other production role-based recipes are unchanged.
+
+VM resource names and OS computer names are distinct: the generic API supports
+a 64-character resource name, while Windows computer-name patterns have a
+15-character limit.
+Workbook GUIDs and provider-required literal names are not ordinary
+convention names. See the [complete type coverage and exceptions](../deployments/shared/modules/orchestration/naming/README.md#resource-type-api-and-naming-guarantees).
+
+Role-specific patterns are explicit in the policy, including
+workload-free quota/route Automation Accounts, standalone `avset-##` patterns,
+specialized image storage and key names, and per-run image-build identities.
+Customer overrides and stored host-pool naming tags take precedence.
+
+Last updated: 2026-10-28

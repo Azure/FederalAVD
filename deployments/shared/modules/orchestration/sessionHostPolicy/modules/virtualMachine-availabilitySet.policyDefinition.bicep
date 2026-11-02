@@ -1,7 +1,13 @@
+metadata name = 'Availability set policy definition'
+metadata description = 'Defines a subscription Modify policy for a selected VM availability set with deny-on-conflict behavior; the caller owns creation-time assignment within a dedicated session-host resource group.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostAvailabilitySet-Modify'
+@description('Optional. Display name stored on the subscription policy definition.')
 param policyDefinitionDisplayName string = 'Assign AVD session hosts to managed availability sets'
+@description('Optional. Description stored on the subscription policy definition; does not change its policy rule.')
 param policyDefinitionDescription string = 'Assigns AVD session hosts to one managed Availability Set during virtual machine creation.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -68,4 +74,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

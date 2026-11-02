@@ -225,12 +225,17 @@ Do not commit secret values to parameter files.
 | `azureBlobPrivateDnsZoneResourceId` | Empty | Blob private DNS zone integration for Azure Backup |
 | `azureQueuePrivateDnsZoneResourceId` | Empty | Queue private DNS zone integration for Azure Backup |
 | `permittedIPs` | `[]` | Public IP/CIDR allowlist applied to both Key Vaults |
+| `paasPublicNetworkAccess` | `Auto` | Key Vault public-access mode: `Disabled`, `EnabledWithRestrictions`, or `Enabled`; `Auto` derives the mode from private endpoint selection and IP rules |
 | `existingLogAnalyticsWorkspaceResourceId` | Empty | Existing workspace used only for Key Vault and backup-vault diagnostics when new monitoring is not deployed |
 
-If private endpoints are enabled and `permittedIPs` is empty, public access is disabled on the Key
-Vaults. If permitted IPs are also supplied, the Key Vault public endpoint remains enabled but its
-firewall defaults to deny and permits only the supplied addresses. The Recovery Services vault
-disables public access whenever its private endpoint option is enabled.
+Select public access independently of private endpoints. Disabled retains supplied IP rules;
+restricted mode denies unmatched traffic even with an empty list; Enabled allows all networks.
+The existing trusted-service bypass remains configured and can still apply when public access is
+Disabled. With `Auto`, private endpoints without IPs disable public access; IPs enable restricted
+access; without either, all networks are allowed. See the
+[shared access-mode contract](../../docs/parameters.md#paas-public-network-access).
+The Recovery Services vault retains its separate behavior: its private endpoint option disables
+public access.
 
 ### Central Monitoring
 
@@ -382,6 +387,12 @@ resource-group name, and FSLogix backup policy resource ID.
 - The AVD Insights DCR collects the supported performance and event data documented for FederalAVD.
   It does not collect the Windows Security event log; add a supplemental DCR or SIEM agent when
   Security events are required.
+- Newly deployed monitoring explicitly provisions the workspace's built-in `Perf` and `Event`
+  tables before creating the DCR. No custom table schemas, table plan/retention overrides,
+  deployment scripts or fixed sleeps are introduced. A deployment identity with a restricted
+  custom role also needs `Microsoft.OperationalInsights/workspaces/tables/write` at the workspace
+  scope (or higher). Existing monitoring IDs are consumed without table provisioning.
+  See [monitoring table prerequisites](../../docs/design.md#monitoring-table-prerequisites).
 - A Recovery Services vault and policy do not protect shares until a consuming deployment registers
   the Azure Files storage account and protected items.
 - Shared Services owns workspace-level settings and its deterministically named feed endpoints.

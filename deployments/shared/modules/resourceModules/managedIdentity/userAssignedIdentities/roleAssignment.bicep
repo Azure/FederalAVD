@@ -1,5 +1,9 @@
+metadata name = 'Managed identity resource role assignments'
+metadata description = 'Applies role assignments scoped to an existing user-assigned identity resource; these authorize principals over the identity rather than granting the identity access to other resources.'
+
 import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
 
+@description('Required. Name of the existing user-assigned identity in the deployment resource group.')
 param identityName string
 
 @description('Role assignments to apply to this user-assigned identity.')
@@ -28,4 +32,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   }
 ]
 
+@description('Array of role assignment resource IDs in the same order as the assignments input.')
 output resourceIds array = [for (assignment, i) in formattedAssignments: roleAssignment[i].id]

@@ -1,0 +1,1 @@
+using './naming-types.bicep'

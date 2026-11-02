@@ -1,5 +1,9 @@
+metadata name = 'Guest Attestation policy definition'
+metadata description = 'Defines a subscription DeployIfNotExists policy for a successfully provisioned Guest Attestation extension on Trusted Launch and Confidential VMs; the caller owns assignment and permissions.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostGuestAttestation-DeployIfNotExists'
 var deploymentTemplate = loadJsonContent('templates/Extensions/GuestAttestation.json')
 
@@ -48,4 +52,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

@@ -1,3 +1,6 @@
+metadata name = 'Cross-scope Azure Monitor resource links'
+metadata description = 'Uses subscription scope to route linked-resource deployment to the subscription and resource group parsed from an existing Azure Monitor Private Link Scope ID.'
+
 targetScope = 'subscription'
 
 @description('Required. Resource ID of the Azure Monitor Private Link Scope (AMPLS) to update.')

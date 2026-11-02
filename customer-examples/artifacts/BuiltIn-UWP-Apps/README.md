@@ -2,10 +2,14 @@
 
 ## Overview
 
-This artifact provisions built-in Windows UWP applications and codec extensions for all users on
-an AVD image. Apps are downloaded offline via `winget` during the artifact update phase, then
-provisioned into the image using `Add-AppxProvisionedPackage` so every user who signs in after
-imaging has the apps available without needing a Store connection.
+This artifact **upgrades existing image-provisioned** Windows UWP applications and codec extensions
+by default. Staged apps absent from the provisioned image are skipped; use `-InstallMissing` to
+add them intentionally. Apps are downloaded via `winget` on the connected preparation system,
+then provisioned into the image using local packages without requiring a Store connection.
+
+Presence is determined by `Get-AppxProvisionedPackage`, not each user's installed apps.
+This respects apps removed from the image baseline, but does **not** enforce an individual user's
+uninstall choice for an app that remains provisioned. It is not a per-user updater.
 
 ## Why offline provisioning?
 
@@ -131,6 +135,13 @@ file.
 
 #### Standalone transfer builder
 
+For a combined UWP/WinGet/Teams-prerequisite transfer ZIP, see the
+[connected builder and gated release workflow](../../../docs/air-gapped-clouds.md#combined-prerequisite-transfer-zip).
+It reuses this builder, supports a subset of the existing app selection, excludes HEVC, and keeps
+`BuiltIn-UWP-Apps.zip` as a separate inner artifact.
+Large combined releases use hash-verified transport parts that must be reassembled before
+extracting the outer ZIP. Shared framework dependencies remain included for offline provisioning.
+
 The `_build` folder contains a connected-workstation builder that does not depend on
 `Update-ImageArtifacts.ps1` or `downloads.json`. By default it includes every Store ID in the table
 above except the separately licensed HEVC extension. The standalone builder is WinGet-only;
@@ -208,7 +219,7 @@ The storage-backed command runs the same packaging pipeline, then uploads the zi
 ### 4. Add the artifact to your image build customizations
 
 In your image build parameter file, add `BuiltIn-UWP-Apps` to the `customizations` array.
-No special arguments are needed — the script handles prerequisites automatically:
+No arguments are needed for the default upgrade-only behavior:
 
 ```json
 {
@@ -217,6 +228,26 @@ No special arguments are needed — the script handles prerequisites automatical
 }
 ```
 
+To intentionally provision staged apps that are missing from the image, opt in:
+
+```json
+{
+    "name": "BuiltIn-UWP-Apps",
+    "uri": "BuiltIn-UWP-Apps.zip",
+    "arguments": "-InstallMissing"
+}
+```
+
+For direct execution from a copied, populated customer artifact folder:
+
+```powershell
+.\Install-BuiltinUwpApps.ps1                 # Upgrade existing provisioned apps only
+.\Install-BuiltinUwpApps.ps1 -InstallMissing # Also add missing staged apps
+```
+
+This changes the previous install-or-update default. Existing prebuilt ZIPs keep their embedded
+installer's behavior; rebuild and re-upload the artifact to adopt the new default.
+
 ## What Install-BuiltinUwpApps.ps1 does
 
 1. **Snapshots** all currently provisioned packages before any changes are made (used for
@@ -224,7 +255,8 @@ No special arguments are needed — the script handles prerequisites automatical
 2. **Iterates** each app subfolder (skipping `SharedDependencies\`).
 3. **Selects** the best main package: highest version first, then bundle format preferred over
    single-arch package, then largest file as a tiebreaker.
-4. **Skips** the app if an equal or newer version is already provisioned.
+4. **Checks the exact app identity** against the current provisioned image. Skips absent apps
+   unless `-InstallMissing` is supplied, and always skips equal or newer versions.
 5. **Resolves dependencies** from the `SharedDependencies\` folder at the artifact root;
    deduplicates by package family, keeping the highest version.
 6. **Provisions** via `Add-AppxProvisionedPackage -Online -SkipLicense -Regions all`.
@@ -237,6 +269,12 @@ No special arguments are needed — the script handles prerequisites automatical
         - If the first attempt fails and staged dependencies are available, retries with explicit
             `-DependencyPackagePath`.
 7. **Logs a change summary** table at the end showing before/after versions for each app.
+   Intentionally skipped absent apps do not fail the image health check. Inventory lookup errors
+   stop execution rather than being treated as an empty image.
+
+The existing remove-before-add update sequence remains unchanged. If provisioning fails after
+removing an old entry, the script reports failure; do not publish that image. Restore the approved
+package or explicitly use `-InstallMissing` when retrying an app that is now absent.
 
 ## Troubleshooting
 
@@ -245,6 +283,7 @@ No special arguments are needed — the script handles prerequisites automatical
 | App folder skipped with "No package file found" | `winget download` failed or the Store ID is wrong | Check winget output in `Update-ImageArtifacts.ps1` log; verify the WingetId in `downloads.json` |
 | `0xc1570118 APPX_E_PREREQUISITE_NOT_MET` | Explicit dependencies conflict with OS-registered versions | The two-attempt provisioning handles this automatically; if it persists, the staged dependency version may be older than what the OS has -- update your artifacts |
 | App shows "up-to-date" unexpectedly | A newer version was already provisioned from a previous build | This is correct behavior; the script never downgrades |
-| Before-version shows "(not present)" | The app was genuinely new on this image | Correct; on subsequent runs the before-version will reflect the previously provisioned version |
+| App is skipped as "not provisioned" | The app is absent from the image-wide provisioned baseline | Intentional default; use `-InstallMissing` only if you want to add it |
+| Before-version shows "(not present)" | The app was absent from the image | It is skipped by default, or installed intentionally with `-InstallMissing` |
 | App installs but does not appear for users (image build or live host) | `-Regions all` not passed to `Add-AppxProvisionedPackage`; sysprep removes the package (event ID 472) | Confirmed fixed in this script version. Re-upload the artifact (`Update-ImageArtifacts.ps1`) and rebuild the image |
 | App installs but does not appear for users (live host) | App was provisioned after user profiles were created | `Add-AppxProvisionedPackage` only applies to new user sessions. Existing profiles need `Add-AppxPackage` per user |

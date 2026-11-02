@@ -282,6 +282,20 @@ Describe 'Session Host Replacer pilot configuration updates' {
         Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
     }
 
+    It 'holds new initiation without disabling reconciliation or overwriting unrelated settings' {
+        $result = & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+            -InitiationEnabled $false -ContinuationTimeoutHours 96 -Confirm:$false
+        $global:shrPilotUpdatedSettings.InitiationEnabled | Should Be 'false'
+        $global:shrPilotUpdatedSettings.UnrelatedSetting | Should Be 'preserve-this-value'
+        $result.ContinuationTimeoutHours | Should Be '96'
+    }
+
+    It 'supports operation controls without an execution-model selector' {
+        & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+            -ContinuationTimeoutHours 120 -Confirm:$false
+        $global:shrPilotUpdatedSettings.ContinuationTimeoutHours | Should Be '120'
+    }
+
     AfterAll {
         Remove-Variable -Name shrPilotConfigurationSettings,shrPilotUpdatedSettings -Scope Global
     }

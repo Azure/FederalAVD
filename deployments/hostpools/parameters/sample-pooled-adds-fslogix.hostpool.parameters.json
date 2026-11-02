@@ -10,6 +10,9 @@
         "controlPlaneLocation": {
             "value": "eastus2"
         },
+        "virtualMachinesLocation": {
+            "value": "eastus2"
+        },
 
         // ── Naming Convention (optional) ───────────────────────────────────────
         //    Omit this parameter to use the CAF default: resourceType-avd-purpose-location

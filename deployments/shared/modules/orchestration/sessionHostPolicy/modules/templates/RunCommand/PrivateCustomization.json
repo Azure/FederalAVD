@@ -6,8 +6,10 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "4180066699878529872"
-    }
+      "templateHash": "4762152804128293954"
+    },
+    "name": "Private customization remediation orchestration",
+    "description": "Attaches an artifact identity to an existing VM and serializes the supplied customization Run Commands in input order for policy remediation."
   },
   "definitions": {
     "resolvedPolicyCustomizationType": {
@@ -35,16 +37,28 @@
       "type": "array",
       "items": {
         "$ref": "#/definitions/resolvedPolicyCustomizationType"
+      },
+      "metadata": {
+        "description": "Required. Ordered objects with name and artifactUri, plus optional arguments and comma-separated successExitCodes; names become VM Run Command names."
       }
     },
     "location": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for the resources deployed by this module."
+      }
     },
     "userAssignedIdentityResourceId": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the existing artifact identity attached to the VM and authorized to read the private artifacts."
+      }
     },
     "virtualMachineName": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the existing VM in the deployment resource group."
+      }
     }
   },
   "resources": {
@@ -75,18 +89,29 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "4903297315144767795"
-            }
+              "templateHash": "5264021254888971356"
+            },
+            "name": "Artifact identity attachment orchestration",
+            "description": "Reads an existing VM identity map, unions in the artifact identity, and updates the VM with system-assigned and user-assigned identity types before customization remediation."
           },
           "parameters": {
             "userAssignedIdentityResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing artifact identity attached to the VM and authorized to read the private artifacts."
+              }
             },
             "vmName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing VM in the deployment resource group."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             }
           },
           "variables": {
@@ -114,22 +139,33 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "12168228573837044952"
-                    }
+                      "templateHash": "12606458513283727279"
+                    },
+                    "name": "VM identity lookup",
+                    "description": "Reads identity type and the user-assigned identity map from an existing VM in the deployment resource group for identity-preserving remediation."
                   },
                   "parameters": {
                     "vmname": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the existing VM in the deployment resource group."
+                      }
                     }
                   },
                   "resources": [],
                   "outputs": {
                     "identityType": {
                       "type": "string",
+                      "metadata": {
+                        "description": "Existing VM identity type, or None when the VM has no identity."
+                      },
                       "value": "[coalesce(tryGet(tryGet(reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmname')), '2024-03-01', 'full'), 'identity'), 'type'), 'None')]"
                     },
                     "userAssignedIdentities": {
                       "type": "object",
+                      "metadata": {
+                        "description": "Existing user-assigned identity map keyed by identity resource ID, or an empty object when none are attached."
+                      },
                       "value": "[coalesce(tryGet(tryGet(reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmname')), '2024-03-01', 'full'), 'identity'), 'userAssignedIdentities'), createObject())]"
                     }
                   }
@@ -166,21 +202,35 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "11006854750502580629"
-                    }
+                      "templateHash": "17245590649180069392"
+                    },
+                    "name": "VM identity remediation update",
+                    "description": "Updates the identity type and user-assigned identity map of a named VM in the deployment resource group using the supplied location and complete identity map."
                   },
                   "parameters": {
                     "vmName": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the existing VM in the deployment resource group."
+                      }
                     },
                     "location": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Azure region for the resources deployed by this module."
+                      }
                     },
                     "identityType": {
-                      "type": "string"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Complete VM identity type value to apply, such as SystemAssigned, UserAssigned, or their combined value."
+                      }
                     },
                     "userAssignedIdentities": {
-                      "type": "object"
+                      "type": "object",
+                      "metadata": {
+                        "description": "Required. Complete VM user-assigned identity map keyed by identity resource ID, with an empty object per entry."
+                      }
                     }
                   },
                   "resources": [
@@ -250,32 +300,55 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "897668284026558582"
-            }
+              "templateHash": "10970190162788173748"
+            },
+            "name": "Private customization remediation command",
+            "description": "Deploys one named customization Run Command on an existing VM, resolving the attached artifact identity client ID for private artifact access."
           },
           "parameters": {
             "artifactUri": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. URI of the customization artifact read using the VM artifact identity."
+              }
             },
             "arguments": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Argument string forwarded to the customization script; empty omits the Arguments parameter."
+              }
             },
             "location": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resources deployed by this module."
+              }
             },
             "runCommandName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the Run Command child resource created on the existing VM."
+              }
             },
             "successExitCodes": {
               "type": "string",
-              "defaultValue": ""
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Comma-separated exit codes forwarded as successful results; empty leaves the customization script default."
+              }
             },
             "userAssignedIdentityResourceId": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing artifact identity attached to the VM and authorized to read the private artifacts."
+              }
             },
             "virtualMachineName": {
-              "type": "string"
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing VM in the deployment resource group."
+              }
             }
           },
           "variables": {

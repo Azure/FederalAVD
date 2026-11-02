@@ -198,14 +198,6 @@
                                     }
                                 },
                                 {
-                                    "name": "defaultNamePreview",
-                                    "type": "Microsoft.Common.TextBlock",
-                                    "visible": true,
-                                    "options": {
-                                        "text": "[concat('Default Automation Account name: ', if(empty(steps('advanced').namingSection.identifier), 'aa-sqm-{regionAbbr}', concat('aa-sqm-', steps('advanced').namingSection.identifier, '-{regionAbbr}')))]"
-                                    }
-                                },
-                                {
                                     "name": "enableNameOverride",
                                     "type": "Microsoft.Common.CheckBox",
                                     "label": "Override Automation Account Name",

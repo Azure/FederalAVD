@@ -107,7 +107,7 @@ These tools also require an existing Microsoft Graph context:
 
 - `tools/Enable-AVDSSO.ps1` requires delegated `Application.ReadWrite.All`. Pass one or more
   objects containing `id` and `displayName` for the target device groups.
-- `tools/Enable-RDPAADAuth.ps1` is a single-group compatibility wrapper for
+- `tools/Enable-RDPAADAuth.ps1` is a single-group wrapper for
   `tools/Enable-AVDSSO.ps1` and uses the same active context and permission.
 - `tools/Remove-IntuneDevicesByPrefix.ps1` requires delegated
   `DeviceManagementManagedDevices.ReadWrite.All`. Do not use it in Azure Government Secret or

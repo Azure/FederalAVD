@@ -12,6 +12,7 @@ $script:ResourceManagerUri = $null
 
 # Cached and normalized GraphEndpoint without trailing slash
 $script:GraphEndpoint = $null
+$script:ShrLogContext = $null
 
 #EndRegion Module-Level Variables
 
@@ -351,6 +352,114 @@ function Assert-DeviceCleanupConfiguration {
 
 #Region Logging and Error Handling
 
+function Set-ShrLogContext {
+    param([ValidateSet('Initiation', 'Reconciliation')][string] $Trigger,
+        [AllowNull()][System.Collections.IDictionary] $Operation)
+
+    if ($Trigger -or -not $script:ShrLogContext) {
+        $script:ShrLogContext = @{ Trigger = $Trigger; CycleId = ''; Batch = 0; Metrics = @{} }
+    }
+    if ($PSBoundParameters.ContainsKey('Operation')) {
+        $id = if ($Operation) { [string]$Operation['Id'] } else { '' }
+        if ($id -ne $script:ShrLogContext.CycleId) { $script:ShrLogContext.Metrics = @{} }
+        $script:ShrLogContext.CycleId = $id
+        $script:ShrLogContext.Batch = if ($Operation) { [int]$Operation['BatchNumber'] } else { 0 }
+    }
+}
+
+function Clear-ShrLogContext {
+    $script:ShrLogContext = $null
+}
+
+function Write-ShrEvent {
+    param(
+        [ValidateSet('SHR_TIMER', 'SHR_EVENT')][string] $Category = 'SHR_EVENT',
+        [Parameter(Mandatory)][string] $Event,
+        [System.Collections.IDictionary] $State,
+        [System.Collections.IDictionary] $Metrics
+    )
+
+    if ($PSBoundParameters.ContainsKey('State')) { Set-ShrLogContext -Operation $State }
+    if (-not $script:ShrLogContext) { Set-ShrLogContext }
+    if ($Metrics) {
+        $script:ShrLogContext.Metrics = @{}
+        foreach ($key in @('TotalSessionHosts', 'InDrain', 'RunningDeployments', 'NewHostsTotal', 'NewHostsAvailable')) {
+            if ($Metrics.Contains($key)) { $script:ShrLogContext.Metrics[$key] = [int]$Metrics[$key] }
+        }
+        if ($Metrics.Contains('NewHostsSafeToProceed')) {
+            $script:ShrLogContext.Metrics.NewHostsSafeToProceed = [bool]$Metrics['NewHostsSafeToProceed']
+        }
+    }
+    $counts = $script:ShrLogContext.Metrics
+    $phase = $Event
+    if ($Event -eq 'AuthorizationExpired') {
+        $phase = 'AuthorizationExpired'
+    } elseif ($State -and $State['Status'] -in @('Completed', 'NeedsAttention', 'Superseded')) {
+        $phase = [string]$State['Status']
+    } elseif ($Event -in @('Progress', 'Waiting')) {
+        $phase = if ($State['CleanupIntent']) { 'WaitingForCleanup' }
+        elseif ($counts['RunningDeployments'] -gt 0) { 'WaitingForDeployment' }
+        elseif ($counts.ContainsKey('NewHostsSafeToProceed') -and -not $counts['NewHostsSafeToProceed']) { 'WaitingForHealth' }
+        elseif ($State['DeploymentBatchReady'] -and $State['MoreDeploymentsAllowed']) { 'WaitingForScheduledAuthorization' }
+        elseif ($counts['InDrain'] -gt 0) { 'Draining' }
+        else { 'WaitingForProgress' }
+    }
+    $deploymentResourceId = ''
+    $uri = $null
+    if ($State -and $State['DeploymentIntent'] -and
+        [uri]::TryCreate([string]$State['DeploymentIntent']['Uri'], [UriKind]::Absolute, [ref]$uri) -and
+        $uri.AbsolutePath -match '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Resources/deployments/[^/]+$') {
+        $deploymentResourceId = $uri.AbsolutePath
+    }
+    # Emit only this allowlist; operation state and deployment bodies can contain credentials.
+    $data = [ordered]@{
+        SchemaVersion = 1
+        Event = $Event
+        Trigger = $script:ShrLogContext.Trigger
+        CycleId = $script:ShrLogContext.CycleId
+        Batch = $script:ShrLogContext.Batch
+        FunctionApp = $env:WEBSITE_SITE_NAME
+        Phase = $phase
+        InitiationEnabled = (Read-FunctionAppSetting InitiationEnabled -AsBoolean)
+    }
+    $data.Reason = switch ($phase) {
+        'WaitingForLease' { 'Another invocation owns this cycle; wait for release or lease expiry.' }
+        'WaitingForCleanup' { 'Exact-resource cleanup must finish before names can be reused.' }
+        'WaitingForDeployment' { 'An ARM deployment is still running.' }
+        'WaitingForHealth' { 'Replacement hosts have not met the configured availability gate.' }
+        'WaitingForScheduledAuthorization' { 'Another batch needs initiation authority; authorized retirement can continue.' }
+        'Draining' { 'Authorized old hosts are still draining.' }
+        'WaitingForProgress' { 'Awaiting capacity, readiness, scaling handoff or retirement checks; inspect cycle logs.' }
+        'AuthorizationExpired' { 'Initial authority expired before a batch started; a new initiation tick is required.' }
+        'NeedsAttention' {
+            switch -Regex ([string]$State['LastError']) {
+                '^SHR operation deadline expired' { 'Operation deadline expired; checked recovery is required.'; break }
+                '^SHR operation configuration changed' { 'Protected configuration changed; restore it or use checked recovery.'; break }
+                '^SHR operation lease is no longer' { 'Invocation lost ownership; inspect cycle and invocation logs.'; break }
+                default { 'Operation stopped; inspect the correlated invocation logs before recovery.' }
+            }
+        }
+        default { '' }
+    }
+    if ($State) {
+        $data.Status = [string]$State['Status']
+        $data.StartedUtc = $State['CreatedUtc']
+        $data.DeadlineUtc = $State['DeadlineUtc']
+        $data.LeaseExpiresUtc = $State['LockExpiresUtc']
+        $data.LeaseHeld = -not [string]::IsNullOrEmpty([string]$State['LockOwner'])
+        $data.ImageVersion = if ($State['Image']) { [string]$State['Image']['Version'] } else { $null }
+        $data.ImageDefinition = if ($State['Image']) { [string]$State['Image']['Definition'] } else { $null }
+        $data.Target = if ($null -ne $State['TargetCount']) { [int]$State['TargetCount'] } else { $null }
+        $data.DeploymentName = if ($State['DeploymentIntent']) { [string]$State['DeploymentIntent']['Name'] } else { $null }
+        $data.DeploymentResourceId = $deploymentResourceId
+        $data.SupersedesCycleId = [string]$State['SupersedesOperationId']
+        $data.InDrain = $counts['InDrain']
+        $data.RunningDeployments = $counts['RunningDeployments']
+    }
+    $level = if ($Event -in @('Checkpoint', 'Reconciling', 'Progress', 'DeploymentObserved')) { 'Trace' } else { 'Information' }
+    Write-LogEntry -Message "$Category | $($data | ConvertTo-Json -Depth 4 -Compress)" -Level $level
+}
+
 function Write-LogEntry {
     <#
     .SYNOPSIS
@@ -397,7 +506,13 @@ function Write-LogEntry {
     }
     
     # Build output message (Azure Functions already adds timestamp and level)
-    $output = if ($hostPoolName) { "[$hostPoolName] $formattedMessage".Trim() } else { $formattedMessage.Trim() }
+    $correlation = if ($script:ShrLogContext) {
+        $cycle = if ($script:ShrLogContext.CycleId) {
+            "[Cycle:$($script:ShrLogContext.CycleId)] [Batch:$($script:ShrLogContext.Batch)] "
+        } else { '' }
+        "$cycle[Trigger:$($script:ShrLogContext.Trigger)] "
+    } else { '' }
+    $output = if ($hostPoolName) { "[$hostPoolName] $correlation$formattedMessage".Trim() } else { "$correlation$formattedMessage".Trim() }
     
     # Output based on level
     switch ($Level) {
@@ -438,6 +553,8 @@ function Invoke-AzureRestMethod {
             The request body of the REST call. This is often used with methods like POST, PUT and PATCH.
         .PARAMETER AdditionalHeaders
             Optional additional headers to include in the request.
+        .PARAMETER RequireCollection
+            Reject missing or malformed collection envelopes, including subsequent pages.
         .EXAMPLE
             Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'GET' -Uri 'https://management.azure.com/...'
     #>
@@ -449,6 +566,8 @@ function Invoke-AzureRestMethod {
         [parameter(Mandatory = $false)]
         [string]$Method = 'GET',
 
+        [switch]$RequireCollection,
+
         [parameter(Mandatory = $true)]
         [string]$Uri,
 
@@ -458,6 +577,10 @@ function Invoke-AzureRestMethod {
         [parameter(Mandatory = $false)]
         [hashtable]$AdditionalHeaders
     )
+
+    if ($Method -ne 'GET' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+        Assert-ShrWorkerLease
+    }
 
     # Check if authentication was successful.
     if ($ARMToken) {
@@ -473,6 +596,13 @@ function Invoke-AzureRestMethod {
         # Create an empty array to store the result.
         $QueryRequest = @()
         $dataToUpload = @()
+        $validateCollection = {
+            param($Response)
+            if ($RequireCollection -and ($null -eq $Response -or
+                $Response.value -isnot [System.Collections.IList])) {
+                throw "Invalid collection response from '$Uri'; resource absence cannot be established."
+            }
+        }
 
         # Run the first query.
         if ($Method -eq 'GET') {
@@ -482,12 +612,13 @@ function Invoke-AzureRestMethod {
             $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
         }
         
+        & $validateCollection $QueryRequest
         # Check if response is a direct array or has a value property
         if ($QueryRequest -is [array]) {
             # Direct array response (e.g., marketplace images API)
             $dataToUpload += $QueryRequest
         }
-        elseif ($QueryRequest.value) {
+        elseif ($null -ne $QueryRequest -and $QueryRequest.PSObject.Properties.Name -contains 'value') {
             # Paged response with value property
             $dataToUpload += $QueryRequest.value
         }
@@ -500,10 +631,12 @@ function Invoke-AzureRestMethod {
         if ($Uri -notlike "*`$top*") {
             while ($QueryRequest.'@odata.nextLink' -and $QueryRequest.'@odata.nextLink' -is [string]) {
                 $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -Method $Method -Verbose:$false
+                & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.nextLink -and $QueryRequest.nextLink -is [string]) {
                 $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -Method $Method -Verbose:$false
+                & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.'$skipToken' -and $QueryRequest.'$skipToken' -is [string] -and $Body -ne '') {
@@ -511,6 +644,7 @@ function Invoke-AzureRestMethod {
                 $JsonBody | Add-Member -Type NoteProperty -Name '$skipToken' -Value $QueryRequest.'$skipToken' -Force
                 $Body = $JsonBody | ConvertTo-Json -Depth 10
                 $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
+                & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
         }
@@ -627,6 +761,10 @@ function Invoke-GraphRestMethod {
         [string] $Body
     )
     
+    if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+        Assert-ShrWorkerLease
+    }
+
     $headers = @{
         'Authorization' = "Bearer $GraphToken"
         'Content-Type'  = 'application/json'
@@ -663,6 +801,9 @@ function Invoke-GraphRestMethod {
                 $params['Uri'] = $dodUri
                 $params['Headers'] = $headers
                 
+                if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+                    Assert-ShrWorkerLease
+                }
                 $result = Invoke-RestMethod @params -ErrorAction Stop
                 return $result
             }
@@ -768,6 +909,10 @@ function Invoke-GraphApiWithRetry {
             }
         }
         
+        if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+            Assert-ShrWorkerLease
+        }
+
         try {
             $currentUri = "$endpoint$uriPath"
             
@@ -895,4 +1040,4 @@ function Get-VMPowerStates {
 #EndRegion VM Helper Functions
 
 # Export functions
-Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Assert-DeviceCleanupConfiguration, Write-LogEntry, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Assert-DeviceCleanupConfiguration, Write-LogEntry, Set-ShrLogContext, Clear-ShrLogContext, Write-ShrEvent, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates

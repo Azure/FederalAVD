@@ -1,5 +1,11 @@
+metadata name = 'Disk encryption set'
+metadata description = 'Deploys a disk encryption set referencing an existing Key Vault key, optionally resolving its current version. Key access permissions are managed separately.'
+
+@description('Required. Name of the disk encryption set to deploy.')
 param name string
+@description('Optional. Azure region for the disk encryption set; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the disk encryption set.')
 param tags object = {}
 
 @description('Key Vault resource ID containing the encryption key.')
@@ -56,6 +62,9 @@ resource diskEncryptionSet 'Microsoft.Compute/diskEncryptionSets@2023-04-02' = {
   }
 }
 
+@description('Resource ID of the disk encryption set.')
 output resourceId string = diskEncryptionSet.id
+@description('Azure resource name of the disk encryption set.')
 output name string = diskEncryptionSet.name
+@description('System-assigned identity principal ID of the disk encryption set, or an empty string when that identity is disabled.')
 output principalId string = systemAssignedIdentity ? diskEncryptionSet.identity.principalId : ''

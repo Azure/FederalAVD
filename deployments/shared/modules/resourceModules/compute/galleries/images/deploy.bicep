@@ -1,6 +1,13 @@
+metadata name = 'Gallery image definition'
+metadata description = 'Deploys an image definition under an existing compute gallery in the deployment resource group; image versions are published separately.'
+
+@description('Required. Name of the existing parent compute gallery in the deployment resource group.')
 param galleryName string
+@description('Required. Name of the gallery image definition within its parent resource.')
 param name string
+@description('Optional. Azure region for the gallery image definition; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the gallery image definition.')
 param tags object = {}
 
 @description('Architecture of the image definition. Required if HyperVGeneration is V2.')
@@ -58,5 +65,7 @@ resource imageDefinition 'Microsoft.Compute/galleries/images@2022-03-03' = {
   }
 }
 
+@description('Resource ID of the gallery image definition.')
 output resourceId string = imageDefinition.id
+@description('Azure resource name of the gallery image definition.')
 output name string = imageDefinition.name

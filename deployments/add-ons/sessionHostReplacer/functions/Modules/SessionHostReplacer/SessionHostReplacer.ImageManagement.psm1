@@ -106,13 +106,13 @@ function Get-LatestImageVersion {
         $azImageDefinition = "marketplace:$($ImageReference.publisher)/$($ImageReference.offer)/$($ImageReference.sku)"
         
         if ($null -ne $ImageReference.version -and $ImageReference.version -ne 'latest') {
-            Write-LogEntry  "Image version is not set to latest. Returning version '$($ImageReference.version)'"
+            Write-LogEntry  "Image version is not set to latest. Returning version '$($ImageReference.version)'" -Level Trace
             $azImageVersion = $ImageReference.version
             # For specific marketplace versions, use current date as fallback since we can't determine actual publish date
             $azImageDate = Get-Date -AsUTC
         }
         else {
-            Write-LogEntry -Message "Getting latest version of image publisher: $($ImageReference.publisher), offer: $($ImageReference.offer), sku: $($ImageReference.sku) in region: $($Location)"
+            Write-LogEntry -Message "Getting latest version of image publisher: $($ImageReference.publisher), offer: $($ImageReference.offer), sku: $($ImageReference.sku) in region: $($Location)" -Level Trace
                       
             $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/providers/Microsoft.Compute/locations/$Location/publishers/$($ImageReference.publisher)/artifacttypes/vmimage/offers/$($ImageReference.offer)/skus/$($ImageReference.sku)/versions?api-version=2024-07-01"
             
@@ -123,7 +123,7 @@ function Get-LatestImageVersion {
                 throw "No image versions found for publisher: $($ImageReference.publisher), offer: $($ImageReference.offer), sku: $($ImageReference.sku)"
             }
             
-            Write-LogEntry -Message "Found $($Versions.Count) image versions"
+            Write-LogEntry -Message "Found $($Versions.Count) image versions" -Level Trace
             
             # Sort versions and get the latest (sort by name as string since version format may have 4 components)
             $latestVersion = $Versions | Sort-Object -Property name -Descending | Select-Object -First 1
@@ -142,7 +142,7 @@ function Get-LatestImageVersion {
 
             if ($azImageVersion -match "\d+\.\d+\.(?<Year>\d{2})(?<Month>\d{2})(?<Day>\d{2})") {
                 $azImageDate = Get-Date -Date ("20{0}-{1}-{2}" -f $Matches.Year, $Matches.Month, $Matches.Day)
-                Write-LogEntry  "Image date is $azImageDate"
+                Write-LogEntry  "Image date is $azImageDate" -Level Trace
             }
             else {
                 throw "Image version does not match expected format. Could not extract image date."
@@ -153,12 +153,12 @@ function Get-LatestImageVersion {
         $imageDefinitionResourceIdPattern = '^\/subscriptions\/(?<subscription>[a-z0-9\-]+)\/resourceGroups\/(?<resourceGroup>[^\/]+)\/providers\/Microsoft\.Compute\/galleries\/(?<gallery>[^\/]+)\/images\/(?<image>[^\/]+)$'
         $imageVersionResourceIdPattern = '^\/subscriptions\/(?<subscription>[a-z0-9\-]+)\/resourceGroups\/(?<resourceGroup>[^\/]+)\/providers\/Microsoft\.Compute\/galleries\/(?<gallery>[^\/]+)\/images\/(?<image>[^\/]+)\/versions\/(?<version>[^\/]+)$'
         if ($ImageReference.id -match $imageDefinitionResourceIdPattern) {
-            Write-LogEntry 'Image reference is an Image Definition resource.'
+            Write-LogEntry 'Image reference is an Image Definition resource.' -Level Trace
             $imageSubscriptionId = $Matches.subscription
             $imageResourceGroup = $Matches.resourceGroup
             $imageGalleryName = $Matches.gallery
             $imageDefinitionName = $Matches.image
-            Write-LogEntry -Message "Fetching image versions for gallery '$imageGalleryName', image definition '$imageDefinitionName' in resource group '$imageResourceGroup' and subscription '$imageSubscriptionId'."
+            Write-LogEntry -Message "Fetching image versions for gallery '$imageGalleryName', image definition '$imageDefinitionName' in resource group '$imageResourceGroup' and subscription '$imageSubscriptionId'." -Level Trace
             
             # Store the image definition resource ID for tracking
             $azImageDefinition = $ImageReference.id
@@ -172,7 +172,7 @@ function Get-LatestImageVersion {
             }
             
             Write-LogEntry -Message "Found $($imageVersions.Count) total image versions in gallery" -Level Trace
-            Write-LogEntry -Message "IMAGE_SELECTION | Ordering: Numeric major.minor.patch | IncludeExcludedImageVersions: $IncludeExcludedImageVersions"
+            Write-LogEntry -Message "IMAGE_SELECTION | Ordering: Numeric major.minor.patch | IncludeExcludedImageVersions: $IncludeExcludedImageVersions" -Level Trace
             if ($IncludeExcludedImageVersions) {
                 Write-LogEntry -Message 'Pilot image selection is enabled: global and regional excludeFromLatest flags are ignored. Replication and rollout safeguards still apply.' -Level Warning
             }
@@ -261,10 +261,10 @@ function Get-LatestImageVersion {
             
             $azImageVersion = $latestImageVersion.name
             $azImageDate = [DateTime]$latestImageVersion.properties.publishingProfile.publishedDate
-            Write-LogEntry -Message "Select image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
+            Write-LogEntry -Message "Select image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o') -Level Trace
         }
         elseif ($ImageReference.id -match $imageVersionResourceIdPattern ) {
-            Write-LogEntry 'Image reference is an Image Version resource.'
+            Write-LogEntry 'Image reference is an Image Version resource.' -Level Trace
             # Extract image definition path (without version)
             if ($ImageReference.id -match '^(?<definition>.+)/versions/[^/]+$') {
                 $azImageDefinition = $Matches['definition']
@@ -276,7 +276,7 @@ function Get-LatestImageVersion {
             # Parse published date with null check
             if ($imageVersion.properties.publishingProfile.publishedDate) {
                 $azImageDate = [DateTime]$imageVersion.properties.publishingProfile.publishedDate
-                Write-LogEntry -Message "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o')
+                Write-LogEntry -Message "Image version is {0} and date is {1}" -StringValues $azImageVersion, $azImageDate.ToString('o') -Level Trace
             } else {
                 # Fallback to current date if published date not available
                 $azImageDate = Get-Date -AsUTC

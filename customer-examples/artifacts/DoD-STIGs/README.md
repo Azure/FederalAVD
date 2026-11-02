@@ -30,7 +30,6 @@ This PowerShell script automates the application of Defense Information Systems 
 - **Type:** Switch
 - **Description:** When specified, permits eligible local accounts to log on through Remote Desktop Services by removing the local-account deny SIDs (`*S-1-5-113` and `*S-1-5-114`) from the STIG-defined Remote Desktop Services deny right. It does not modify local console `SeInteractiveLogonRight` or `SeDenyInteractiveLogonRight`. It does not create a user-right assignment that the STIG omits. Guests and all other deny principals remain.
 - **RDS membership:** A local account must still belong to either the local **Administrators** or **Remote Desktop Users** group to receive the Remote Desktop Services allow right.
-- **Compatibility alias:** The former `AllowLocalUserLogon` parameter name remains available as an alias with the same RDS-only behavior.
 
 ### `ExecutionProfile`
 
@@ -298,8 +297,7 @@ When adopting a different STIG release, build and validate a clean image, then r
 session hosts through the normal image lifecycle. Re-running this script applies the current package
 incrementally, but it does not guarantee that settings removed from a newer STIG release are deleted.
 Destructive in-place policy reset is not supported because it can remove unrelated non-STIG Local
-Group Policy and Local Security Policy settings. The script removes the legacy package-level
-`Version` value after all individual release values are stamped successfully.
+Group Policy and Local Security Policy settings.
 
 ## Functions
 

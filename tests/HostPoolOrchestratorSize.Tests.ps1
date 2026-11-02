@@ -1,5 +1,16 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$maximumKnownGoodPayloadBytes = 1243608
+Import-Module Az.Resources -ErrorAction Stop
+$publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
+$parseErrors = $null
+$publisherAst = [System.Management.Automation.Language.Parser]::ParseFile($publisherPath, [ref]$null, [ref]$parseErrors)
+if ($parseErrors.Count -gt 0) {
+    throw "New-TemplateSpecs.ps1 has $($parseErrors.Count) PowerShell parse error(s)."
+}
+foreach ($function in $publisherAst.FindAll(
+    { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true
+)) {
+    Invoke-Expression $function.Extent.Text
+}
 
 $orchestratorCases = @(
     @{
@@ -65,25 +76,27 @@ function Get-DeploymentDepth {
 
 Describe 'Published host-pool orchestrator payload sizes' {
     foreach ($orchestratorCase in $orchestratorCases) {
-        It "keeps the $($orchestratorCase.Name) and form below the previous known-good payload" {
-            $template = Get-Content -LiteralPath $orchestratorCase.TemplatePath -Raw | ConvertFrom-Json
-            $minifiedTemplate = $template | ConvertTo-Json -Depth 100 -Compress
-            $form = Get-Content -LiteralPath $orchestratorCase.FormPath -Raw | ConvertFrom-Json
-            $minifiedForm = $form | ConvertTo-Json -Depth 100 -Compress
-            $payloadSize = [System.Text.Encoding]::UTF8.GetByteCount($minifiedTemplate) +
-                [System.Text.Encoding]::UTF8.GetByteCount($minifiedForm)
+        It "keeps the $($orchestratorCase.Name) and form within the native SDK publication budget" {
+            $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $orchestratorCase.TemplatePath -FormFile $orchestratorCase.FormPath -Location 'usgovvirginia'
+            $payloadSize = $package.PayloadBytes
 
-            $payloadSize | Should BeLessThan $maximumKnownGoodPayloadBytes
+            ($payloadSize + 16384) | Should BeLessThan 2000000
+            if ($orchestratorCase.Name -eq 'standard host-pool orchestrator') {
+                $payloadSize | Should BeLessThan 1820000
+            }
         }
+
     }
 
-    It 'publishes the tracked template and form files' {
+    It 'publishes complete deduplicated requests using the cloud-aware REST API' {
         $publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
         $publisher = Get-Content -LiteralPath $publisherPath -Raw
 
-        $publisher | Should Match '-TemplateFile \$templateSpec\.TemplateFile'
-        $publisher | Should Match '-UiFormDefinitionFile \$templateSpec\.UiFormDefinition'
+        $publisher | Should Match 'Publish-DeduplicatedTemplateSpec -ResourceId'
+        $publisher | Should Match '-VersionPayload \$templateSpec\.PublicationPayload'
+        $publisher | Should Match 'Invoke-AzRestMethod -Path'
         $publisher | Should Not Match 'ConvertTo-MinifiedJson'
+        $publisher | Should Not Match 'SerializationSettings\.Formatting\s*='
     }
 
     foreach ($orchestratorCase in @($orchestratorCases | Where-Object { $_.Name -match 'host-pool' })) {
@@ -92,5 +105,61 @@ Describe 'Published host-pool orchestrator payload sizes' {
 
             (Get-DeploymentDepth -Node $template) | Should BeLessThan 6
         }
+    }
+}
+
+Describe 'Template Spec publication size messages' {
+    $preflight = $publisherAst.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.ForEachStatementAst] -and
+        $node.Body.Extent.Text.Contains('$budgetedBytes = $package.PayloadBytes + 16384')
+    }, $true)
+    $body = $preflight.Body.Extent.Text
+    $start = $body.IndexOf('$budgetedBytes =')
+    $end = $body.IndexOf('$templateSpecWorkload =')
+    $sizeCheck = [scriptblock]::Create($body.Substring($start, $end - $start))
+
+    It 'separates measured bytes, the reserved margin, and remaining headroom for <Bytes> bytes' -TestCases @(
+        @{ Bytes = 0 }
+        @{ Bytes = 1895575 }
+        @{ Bytes = 1983616 }
+    ) {
+        param($Bytes)
+
+        $package = @{ PayloadBytes = $Bytes; OriginalPayloadBytes = $Bytes; Artifacts = @() }
+        $templateSpec = @{ DisplayName = 'Test template' }
+        $messages = @(& $sizeCheck)
+        $messages.Count | Should Be 5
+        $messages[0] | Should Be 'Test template publication size check:'
+        $messages[1] | Should Be ("  Before deduplication: {0:N0} bytes; after: {0:N0} bytes; saved: 0 bytes." -f $Bytes)
+        $messages[2] | Should Be '  Packaged linked artifacts: 0; the measured request includes every artifact and the Portal form.'
+        $messages[3] | Should Be '  Reserved safety margin: 16,384 bytes (16 KiB; not appended to the template).'
+        $messages[4] | Should Be ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f ($Bytes + 16384), (2000000 - $Bytes - 16384))
+    }
+
+    It 'warns only at or below 200,000 bytes of headroom for <Headroom> bytes remaining' -TestCases @(
+        @{ Headroom = 200001; ExpectedWarnings = 0 }
+        @{ Headroom = 200000; ExpectedWarnings = 1 }
+        @{ Headroom = 199999; ExpectedWarnings = 1 }
+        @{ Headroom = 0; ExpectedWarnings = 1 }
+    ) {
+        param($Headroom, $ExpectedWarnings)
+
+        $bytes = 2000000 - 16384 - $Headroom
+        $package = @{ PayloadBytes = $bytes; OriginalPayloadBytes = $bytes; Artifacts = @() }
+        $templateSpec = @{ DisplayName = 'Test template' }
+        $records = @(& $sizeCheck 3>&1)
+        $warnings = @($records | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        $warnings.Count | Should Be $ExpectedWarnings
+        if ($ExpectedWarnings -gt 0) {
+            $warnings[0].Message | Should Be ("Test template is approaching the Template Spec size limit: {0:N0} / 2,000,000 bytes checked; {1:N0} bytes remaining ({2:N1}%). Includes the 16,384-byte safety reserve." -f (2000000 - $Headroom), $Headroom, ($Headroom / 2000000 * 100))
+        }
+    }
+
+    It 'rejects content one byte over budget and explains the excess' {
+        $package = @{ PayloadBytes = 1983617; OriginalPayloadBytes = 1983617; Artifacts = @() }
+        $templateSpec = @{ DisplayName = 'Test template' }
+        { & $sizeCheck } | Should Throw 'exceeding'
+        { & $sizeCheck } | Should Throw 'Nothing has been published'
     }
 }

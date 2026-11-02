@@ -1,5 +1,64 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
+
+Describe 'Session Host Replacer Portal initialization' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw | ConvertFrom-Json
+        $policy = Get-TestNamingPolicy
+    }
+
+    It 'preserves tagged naming without dereferencing an uninitialized policy control in the output' {
+        $form.view.outputs.parameters.namingConvention |
+            Should Be "[parse(if(empty(steps('basics').hostPoolProps.tags.hpNamingConvention), '{}', steps('basics').hostPoolProps.tags.hpNamingConvention))]"
+        $form.view.outputs.parameters.namingConvention | Should Not Match 'federalAvdNamingPolicy'
+        ($template.parameters.namingConvention.defaultValue | ConvertTo-Json -Compress) |
+            Should Be ($policy.defaults | ConvertTo-Json -Compress)
+    }
+
+    It 'keeps public access bound to the required selection instead of masking an uninitialized form' {
+        $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
+        $mode = $infrastructure.elements | Where-Object name -eq 'paasPublicNetworkAccess'
+        $mode.constraints.required | Should Be $true
+        $form.view.outputs.parameters.paasPublicNetworkAccess |
+            Should Be "[steps('infrastructure').paasPublicNetworkAccess]"
+    }
+}
+
+Describe 'Session Host Replacer PowerShell runtime alignment' {
+    BeforeAll {
+        $entryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
+        $entrySource = Get-Content -LiteralPath $entryPath -Raw
+        $arm = Get-Content -LiteralPath ([IO.Path]::ChangeExtension($entryPath, '.json')) -Raw | ConvertFrom-Json
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
+        $versionControl = $infrastructure.elements | Where-Object name -eq 'powerShellVersion'
+        $functionApp = $arm.resources.functionApp.properties.template
+    }
+
+    It 'aligns entry and shared runtime defaults to PowerShell 7.6' {
+        $entrySource | Should Match "param powerShellVersion string = '7\.6'"
+        $arm.parameters.powerShellVersion.defaultValue | Should Be '7.6'
+        $functionApp.parameters.powerShellVersion.defaultValue | Should Be '7.6'
+        $arm.resources.functionApp.properties.parameters.powerShellVersion.value |
+            Should Be "[parameters('powerShellVersion')]"
+    }
+
+    It 'pairs the configured PowerShell worker with .NET 10' {
+        $functionApp.resources.functionApp.properties.siteConfig.netFrameworkVersion | Should Be 'v10.0'
+        $functionApp.resources.functionApp.properties.siteConfig.powerShellVersion |
+            Should Be "[parameters('powerShellVersion')]"
+    }
+
+    It 'defaults the Portal to PowerShell 7.6 while retaining regional discovery and explicit version selection' {
+        $versionControl.defaultValue | Should Be 'PowerShell 7.6'
+        $versionControl.constraints.allowedValues | Should Match 'functionAppStacksApi'
+        $versionControl.constraints.allowedValues | Should Match 'supportedFunctionsExtensionVersions'
+        $versionControl.constraints.required | Should Be $true
+        $form.view.outputs.parameters.powerShellVersion | Should Be "[steps('infrastructure').powerShellVersion]"
+    }
+}
 
 Describe 'Session Host Replacer App Service Plan resource-group selection' {
     BeforeAll {
@@ -424,24 +483,27 @@ Describe 'Session Host Replacer device cleanup requirements' {
         Import-Module $modulePath -Force
     }
 
-    It 'requires Entra cleanup in the form for configured DeleteFirst replacement' {
-        $removeEntraDevice.constraints.required | Should Match "DeleteFirst"
-        $removeEntraDevice.constraints.required | Should Not Match "MaintenanceWindow"
-        $entraCleanupInfo.visible | Should Match "DeleteFirst"
-        $outputs.removeEntraDevice | Should Not Match "MaintenanceWindow"
+    It 'requires native Entra cleanup in every mode including SideBySide vacant slots' {
+        $removeEntraDevice.constraints.required | Should Be "[equals(steps('hosts').identity.machineIdentity, 'EntraID')]"
+        $entraCleanupInfo.visible | Should Be "[equals(steps('hosts').identity.machineIdentity, 'EntraID')]"
+        $outputs.removeEntraDevice | Should Not Match 'DeleteFirst|MaintenanceWindow'
     }
 
-    It 'shows recommendation-only Intune warnings for Entra and hybrid join' {
+    It 'requires native Intune cleanup when enrolled but keeps hybrid cleanup optional' {
         $entraIntuneWarning.visible | Should Match "steps\('hosts'\)\.management\.intune"
         $entraIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
         $hybridIntuneWarning.visible | Should Match "ActiveDirectoryDomainServices"
         $hybridIntuneWarning.visible | Should Match "not\(steps\('replacerConfig'\)\.removeIntuneDevice\)"
+        $intuneControl = $configStep.elements | Where-Object { $_.name -eq 'removeIntuneDevice' }
+        $intuneControl.constraints.required | Should Be "[and(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('hosts').management.intune)]"
+        $outputs.removeIntuneDevice | Should Match "steps\('hosts'\)\.management\.intune"
     }
 
     It 'forces the effective Entra cleanup setting in Bicep for exact-name Entra join' {
-        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| replacementMode == 'DeleteFirst' && isEntraJoined"
+        $bicep | Should Match "var effectiveRemoveEntraDevice = removeEntraDevice \|\| isEntraJoined"
+        $bicep | Should Match "var effectiveRemoveIntuneDevice = removeIntuneDevice \|\| isEntraJoined && intuneEnrollment"
         $bicep | Should Match "name: 'RemoveEntraDevice'\s+value: string\(effectiveRemoveEntraDevice\)"
-        $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(removeIntuneDevice\)"
+        $bicep | Should Match "name: 'RemoveIntuneDevice'\s+value: string\(effectiveRemoveIntuneDevice\)"
     }
 
     It 'fails closed at runtime if the required setting is manually disabled' {
@@ -589,7 +651,8 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         function Invoke-ReadinessCheck {
             param (
                 [array] $SessionHosts,
-                $ScalingPlanTarget
+                $ScalingPlanTarget,
+                [switch] $ReadOnly
             )
 
             Test-NewSessionHostsAvailable `
@@ -599,6 +662,7 @@ Describe 'Session Host Replacer scaling-aware readiness' {
                 -ScalingPlanTarget $ScalingPlanTarget `
                 -TagScalingPlanExclusionTag 'ScalingPlanExclusion' `
                 -TagValidatedImage 'AutoReplaceValidatedImage' `
+                -ReadOnly:$ReadOnly `
                 -ResourceManagerUri 'https://management.azure.com'
         }
     }
@@ -624,6 +688,27 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.Message | Should Be 'No latest-image hosts are available to verify'
     }
 
+    It 'reports missing validation evidence without writing tags during read-only assessment' {
+        $hostEntry = New-ReadinessHost -Index 1
+        $result = Invoke-ReadinessCheck -SessionHosts @($hostEntry) -ReadOnly
+        $result.SafeToProceed | Should Be $true
+        $result.ValidationUpdatesRequired | Should Be $true
+        $hostEntry.Tags.Count | Should Be 0
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
+    }
+
+    It 'does not release scaling exclusions during read-only assessment' {
+        $hostEntry = New-ReadinessHost -Index 1 -Tags @{
+            AutoReplaceValidatedImage = $validatedImageToken
+            ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+        $result = Invoke-ReadinessCheck -SessionHosts @($hostEntry) -ReadOnly `
+            -ScalingPlanTarget ([PSCustomObject]@{ Source = 'ScalingPlan'; CapacityPercentage = 100 })
+        $result.SafeToProceed | Should Be $false
+        $hostEntry.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
+    }
+
     It 'counts validated stopped hosts as scalable standby for the shared mode-independent check' {
         $hosts = @(
             1..4 | ForEach-Object { New-ReadinessHost -Index $_ }
@@ -631,6 +716,7 @@ Describe 'Session Host Replacer scaling-aware readiness' {
                 $sessionHost = New-ReadinessHost -Index $_ -Status 'Shutdown' -AllowNewSession $false -Tags @{
                     AutoReplaceValidatedImage = $validatedImageToken
                 }
+
                 $global:sessionHostReplacerTestPowerStates[$sessionHost.ResourceId] = $true
                 $sessionHost
             }
@@ -646,6 +732,19 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.ScalableStandbyCount | Should Be 6
         $result.ReadyCount | Should Be 10
         $result.RequiredOnlineCount | Should Be 4
+    }
+
+    It 'does not wait for same-image shutdown retention to expire before finishing active-host readiness' {
+        $retainedHost = New-ReadinessHost -Index 2 -Status Shutdown -Tags @{
+            ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+        $retainedHost | Add-Member -NotePropertyName ShutdownTimestamp -NotePropertyValue '2026-01-01T00:00:00Z'
+        $result = Invoke-ReadinessCheck -SessionHosts @(
+            (New-ReadinessHost -Index 1), $retainedHost
+        ) -ScalingPlanTarget $null
+        $result.SafeToProceed | Should Be $true
+        $result.TotalNewHosts | Should Be 1
+        $retainedHost.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
     }
 
     It 'counts a validated powered-off host as scalable standby when AVD reports Unavailable' {
@@ -932,12 +1031,16 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         function Invoke-TenHostReplacementPlan {
             param (
                 [string] $ReplacementMode,
-                $ScalingPlanTarget
+                $ScalingPlanTarget,
+                [array] $SessionHosts = $oldHosts,
+                [int] $MaxDeploymentBatchSize = 100,
+                [bool] $EnableProgressiveScaleUp = $false,
+                [int] $InitialDeploymentPercentage = 20
             )
 
             Get-SessionHostReplacementPlan `
                 -ARMToken 'test-token' `
-                -SessionHosts $oldHosts `
+                -SessionHosts $SessionHosts `
                 -RunningDeployments @() `
                 -HostPoolName 'hp-test' `
                 -TargetSessionHostCount 10 `
@@ -947,7 +1050,10 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
                 -DrainGracePeriodHours 24 `
                 -MinimumCapacityPercentage 80 `
                 -MaxDeletionsPerCycle 50 `
-                -EnableProgressiveScaleUp $false `
+                -EnableProgressiveScaleUp $EnableProgressiveScaleUp `
+                -MaxDeploymentBatchSize $MaxDeploymentBatchSize `
+                -InitialDeploymentPercentage $InitialDeploymentPercentage `
+                -SuccessfulRunsBeforeScaleUp 1 `
                 -ScalingPlanTarget $ScalingPlanTarget `
                 -RemoveEntraDevice $false `
                 -RemoveIntuneDevice $false `
@@ -959,6 +1065,7 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
 
     BeforeEach {
         Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning { $null }
         Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning { 10 }
         Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Planning {
             $states = @{}
@@ -993,6 +1100,81 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.PossibleDeploymentsCount | Should Be 10
         $plan.PossibleSessionHostDeleteCount | Should Be 0
         $plan.TotalSessionHostsToReplace | Should Be 10
+    }
+
+    It 'continues only the approved queued batch without treating the whole fleet as current' {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('avd-02', 'avd-03'); TargetCount = 10 }
+        }
+        $initial = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide
+        $initial.PossibleDeploymentsCount | Should Be 2
+        $initial.TotalSessionHostsToReplace | Should Be 2
+        $initial.TotalFleetSessionHostsToReplace | Should Be 10
+
+        $newHosts = 1..2 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "new-$_"; VMName = "new-$_"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/new-$_"
+                ImageDefinition = $latestImage.Definition; ImageVersion = '2.0.0'
+                Status = 'Available'; AllowNewSession = $true; Sessions = 0
+                ShutdownTimestamp = $null; PendingDrainTimeStamp = $null; IsUnavailable = $false
+            }
+        }
+        $ready = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -SessionHosts @($oldHosts + $newHosts)
+        $ready.PossibleDeploymentsCount | Should Be 0
+        $ready.SessionHostsPendingDelete.Count | Should Be 2
+        @($ready.SessionHostsPendingDelete | Where-Object SessionHostName -notin @('avd-02', 'avd-03')).Count | Should Be 0
+
+        $remaining = @($oldHosts | Where-Object SessionHostName -notin @('avd-02', 'avd-03')) + $newHosts
+        $finished = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -SessionHosts $remaining
+        $finished.TotalSessionHostsToReplace | Should Be 0
+        $finished.TotalFleetSessionHostsToReplace | Should Be 8
+        $finished.PossibleDeploymentsCount | Should Be 0
+        $finished.PossibleSessionHostDeleteCount | Should Be 0
+    }
+
+    It 'honors the SideBySide deployment ceiling with progressive batching <Progressive>' -TestCases @(
+        @{ Progressive = $false }
+        @{ Progressive = $true }
+    ) {
+        param($Progressive)
+        Mock Get-DeploymentState -ModuleName SessionHostReplacer.Planning { [PSCustomObject]@{ ConsecutiveSuccesses = 0 } }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide `
+            -MaxDeploymentBatchSize 3 -EnableProgressiveScaleUp $Progressive -InitialDeploymentPercentage 50
+        $plan.PossibleDeploymentsCount | Should Be 3
+    }
+
+    It 'preserves the original target between authorized batches while unselected old hosts remain' {
+        Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning { 0 }
+        Mock Get-DeploymentState -ModuleName SessionHostReplacer.Planning {
+            [PSCustomObject]@{ TargetSessionHostCount = 10 }
+        }
+        Mock Save-DeploymentState -ModuleName SessionHostReplacer.Planning {}
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('already-retired'); TargetCount = 10 }
+        }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide
+        $plan.TotalFleetSessionHostsToReplace | Should Be 10
+        $plan.TotalSessionHostsToReplace | Should Be 0
+        Assert-MockCalled Save-DeploymentState -ModuleName SessionHostReplacer.Planning -Times 0 -Exactly -Scope It
+    }
+
+    It 'does not exceed the twice-target SideBySide capacity ceiling when a later batch is authorized' {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('avd-01'); TargetCount = 10; NextBatchAuthorized = $true }
+        }
+        $moreOldHosts = 11..20 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "avd-$_"; VMName = "avd-$_"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$_"
+                ImageDefinition = $latestImage.Definition; ImageVersion = '1.0.0'
+                Status = 'Available'; AllowNewSession = $true; Sessions = 0
+                ShutdownTimestamp = $null; PendingDrainTimeStamp = $null; IsUnavailable = $false
+            }
+        }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -SessionHosts @($oldHosts + $moreOldHosts)
+        $plan.PossibleDeploymentsCount | Should Be 0
+        $plan.TargetSessionHostCount | Should Be 10
     }
 
     It 'SideBySide grows an up-to-date pool to an explicit target without an image update' {
@@ -1588,8 +1770,8 @@ Describe 'Session Host Replacer DeleteFirst recovery contracts' {
     }
 
     It 'fails closed when recovery state cannot be read' {
-        $runScript | Should Match ([regex]::Escape("if (`$replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and `$deploymentState.LastStatus -eq 'Error')"))
-        $runScript | Should Match 'Delete-before-deploy mode cannot continue because deployment recovery state could not be read'
+        $runScript | Should Match ([regex]::Escape("if (`$deploymentState.LastStatus -eq 'Error')"))
+        $runScript | Should Match 'Replacement cannot continue because deployment recovery state could not be read'
     }
 
     It 'requires the pending-host checkpoint to persist before deletion' {
@@ -1613,7 +1795,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
 $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
-$namingPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep'
+$namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
 $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
 $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
 $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'
@@ -1647,6 +1829,22 @@ Describe 'Session Host Replacer storage CMK propagation sequencing' {
 }
 
 Describe 'Session Host Replacer centralized workbook placement' {
+    It 'disables resource-log forwarding without disabling Application Insights invocation telemetry' {
+        $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+        $appModule = $template.resources.functionApp
+        $appModule.properties.parameters.enableFunctionAppDiagnosticSettings.value | Should Be $false
+        $appModule.properties.parameters.enableApplicationInsights.value |
+            Should Be "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
+        $app = $appModule.properties.template
+        $app.parameters.enableFunctionAppDiagnosticSettings.defaultValue | Should Be $true
+        $app.resources.functionAppDiagnosticSettings.condition |
+            Should Be "[and(parameters('enableFunctionAppDiagnosticSettings'), not(empty(parameters('logAnalyticsWorkspaceResourceId'))))]"
+        ($app.resources.functionApp.properties.siteConfig.appSettings | ConvertTo-Json -Depth 30) |
+            Should Match 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+        $app.resources.applicationInsights.properties.WorkspaceResourceId |
+            Should Be "[parameters('logAnalyticsWorkspaceResourceId')]"
+    }
+
     It 'derives workbook scope from the selected Log Analytics workspace' {
         Get-Content -LiteralPath $bicepPath -Raw |
             Should Match "var workbookSubscriptionId = !empty\(logAnalyticsWorkspaceResourceId\)"
@@ -1840,11 +2038,64 @@ Describe 'Session Host Replacer rollback operator experience' {
 }
 
 Describe 'Session Host Replacer Application Insights isolation' {
-    It 'uses naming-convention parity for standard deployments and follows a custom Function App name' {
+    It 'uses the common purpose-based Insights name independently of Function App overrides' {
         Get-Content -LiteralPath $namingPath -Raw |
-            Should Match 'cnv_rtCodes.applicationInsights,\s*hpPurpose'
+            Should Match "applicationInsightsName: resourceNameForType\(convention, 'applicationInsights', identifier, context\)"
         Get-Content -LiteralPath $bicepPath -Raw |
-            Should Match "var appInsightsName\s*= !empty\(functionAppNameOverride\)\s*\? '\$\{functionAppName\}-insights'\s*: shrNaming.outputs.appInsightsName"
+            Should Match 'var appInsightsName = naming.applicationInsightsName'
+        $policy = Get-TestNamingPolicy
+        $policy.patterns.functionInsightsOverride | Should BeNullOrEmpty
+    }
+
+    Describe 'Session Host Replacer common infrastructure naming and shared plan ownership' {
+        BeforeAll {
+            $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+            $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+            $advanced = $form.view.properties.steps | Where-Object name -eq 'advanced'
+            $namingControls = ($advanced.elements | Where-Object name -eq 'infrastructureNaming').elements
+        }
+
+        It 'derives the common application identifier from the host pool and shr purpose' {
+            $template.variables.effectiveIdentifier | Should Match "parameters\('identifier'\)"
+            $template.variables.effectiveIdentifier | Should Match "variables\('hostPoolName'\)"
+            $template.variables.applicationIdentifier | Should Match "variables\('effectiveIdentifier'\)"
+            $template.variables.naming | Should Match 'functionAppNames'
+            $template.variables.naming | Should Match "parameters\('functionAppResourceGroupName'\)|variables\('namingContext'\)"
+            $template.variables.naming | Should Match "parameters\('storageAccountNameOverride'\)"
+            $template.variables.namingContext | ConvertTo-Json -Compress | Should Match "parameters\('functionAppResourceGroupName'\)"
+        }
+
+        It 'keeps the existing-plan branch and creates a separately scoped shared plan only when requested' {
+            $template.resources.hostingPlan.condition | Should Be "[empty(parameters('existingAppServicePlanResourceId'))]"
+            $template.resources.hostingPlan.resourceGroup | Should Be "[variables('aspResourceGroupName')]"
+            $template.variables.appServicePlanName | Should Match "parameters\('appServicePlanNameOverride'\)"
+            $template.variables.appServicePlanName | Should Match 'resourceNameForType'
+            $template.variables.appServicePlanName | Should Not Match "variables\('effectiveIdentifier'\)|variables\('applicationIdentifier'\)"
+            $template.resources.functionApp.properties.parameters.serverFarmId |
+                Should Be "[if(not(empty(parameters('existingAppServicePlanResourceId'))), createObject('value', parameters('existingAppServicePlanResourceId')), createObject('value', reference('hostingPlan').outputs.hostingPlanId.value))]"
+        }
+
+        It 'retains the internal deployment prefix independently of the global naming hash' {
+            $template.variables.uniqueStringHosts | Should Match 'scopeIdUnique'
+            $template.variables.naming | Should Not Match 'uniqueStringHosts'
+            Get-Content -LiteralPath $bicepPath -Raw | Should Match "value: 'shr-`\$\{uniqueStringHosts\}'"
+        }
+
+        It 'offers name overrides and availability checks for tagged and untagged pools alike' {
+            ($namingControls | Where-Object name -eq 'enableCustomNames').visible | Should Be $true
+            foreach ($name in @('functionAppNameOverride', 'storageAccountNameOverride', 'storageEncryptionIdentityNameOverride', 'appServicePlanNameOverride')) {
+                $control = $namingControls | Where-Object name -eq $name
+                $control.visible | Should Match 'enableCustomNames'
+                $control.visible | Should Not Match 'hpNamingConvention'
+                $form.view.outputs.parameters.$name | Should Match 'enableCustomNames'
+                $form.view.outputs.parameters.$name | Should Not Match 'hpNamingConvention'
+            }
+            foreach ($api in $advanced.elements | Where-Object type -eq 'Microsoft.Solutions.ArmApiControl') {
+                $api.condition | Should Match 'enableCustomNames'
+                $api.condition | Should Not Match 'hpNamingConvention'
+            }
+            ($namingControls | Where-Object name -eq 'applicationNamingInfo').options.text | Should Not Match '^\['
+        }
     }
 
     It 'deploys Application Insights through the Function App resource-group-scoped module' {

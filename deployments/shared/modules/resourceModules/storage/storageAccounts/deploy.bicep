@@ -1,38 +1,60 @@
+metadata name = 'Storage account'
+metadata description = 'Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics.'
+
+// CMK requires an existing authorized user-assigned identity and key.
+// Services and private endpoints are managed separately.
+
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
 
+@description('Required. Name of the storage account to deploy.')
 param name string
+@description('Optional. Azure region for the storage account; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the storage account.')
 param tags object = {}
 
 @allowed(['StorageV2', 'Storage', 'BlobStorage', 'BlockBlobStorage', 'FileStorage'])
+@description('Optional. Storage account kind; determines which data services and settings are supported.')
 param kind string = 'StorageV2'
 
 @description('SKU/replication type.')
 param skuName string = 'Standard_GRS'
 
 @allowed(['Hot', 'Cool'])
+@description('Optional. Default Blob access tier; applied only to StorageV2 and BlobStorage accounts.')
 param accessTier string = 'Hot'
 
+@description('Optional. Permit containers to enable anonymous Blob access; individual container access is configured separately.')
 param allowBlobPublicAccess bool = false
+@description('Optional. Permit object replication across Microsoft Entra tenants.')
 param allowCrossTenantReplication bool = false
+@description('Optional. Permit storage requests authenticated with account keys.')
 param allowSharedKeyAccess bool = true
+@description('Optional. Make Microsoft Entra OAuth the default authentication method in the Azure portal.')
 param defaultToOAuthAuthentication bool = false
+@description('Optional. Require HTTPS for storage service requests.')
 param supportsHttpsTrafficOnly bool = true
+@description('Optional. Enable infrastructure encryption for account kinds other than legacy Storage.')
 param requireInfrastructureEncryption bool = true
 
 @allowed(['TLS1_0', 'TLS1_1', 'TLS1_2'])
+@description('Optional. Minimum TLS version accepted by the storage account.')
 param minimumTlsVersion string = 'TLS1_2'
 
 @allowed(['Standard', 'AzureDnsZone', ''])
+@description('Optional. Storage endpoint DNS format; empty omits the property.')
 param dnsEndpointType string = 'Standard'
 
+@description('Optional. Large file share capability state; empty leaves the property unspecified.')
 param largeFileSharesState string = ''
 
-@description('Optional. Public network access setting for this storage account. Caller is responsible for resolving the correct value based on private endpoint topology, permitted IPs, and service endpoints.')
+// Resolve this value from the private endpoint topology, permitted IPs and service endpoints.
+@description('Optional. Public network access setting for this storage account.')
 @allowed(['Enabled', 'Disabled'])
 param publicNetworkAccess string = 'Enabled'
 
-@description('Network ACLs for the storage account. Caller is responsible for setting bypass, defaultAction, ipRules, and virtualNetworkRules appropriate to the deployment topology.')
+// The caller sets bypass, defaultAction, ipRules and virtualNetworkRules to match the deployment topology.
+@description('Optional. Storage network ACL object with bypass, defaultAction, ipRules and virtualNetworkRules.')
 param networkAcls object = {
   bypass: 'AzureServices'
   defaultAction: 'Deny'
@@ -55,6 +77,8 @@ param cmkKeyUri string = ''
 @description('Optional. User-assigned identity resource ID used for CMK access.')
 param cmkUserAssignedIdentityResourceId string = ''
 
+// Referenced diagnostic destination resources must already exist.
+@description('Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings.')
 param diagnosticSettings diagnosticSettingsType?
 
 var supportsBlobService = kind == 'BlockBlobStorage' || kind == 'BlobStorage' || kind == 'StorageV2' || kind == 'Storage'
@@ -177,5 +201,7 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
   }
 }
 
+@description('Resource ID of the storage account.')
 output resourceId string = storageAccount.id
+@description('Azure resource name of the storage account.')
 output name string = storageAccount.name

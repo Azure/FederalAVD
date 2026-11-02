@@ -12,6 +12,313 @@ if ($parseErrors.Count -gt 0) {
     throw "New-TemplateSpecs.ps1 has $($parseErrors.Count) PowerShell parse error(s)."
 }
 
+Import-Module Az.Resources -ErrorAction Stop
+$functionDefinitions = $scriptAst.FindAll(
+    { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] },
+    $true
+)
+foreach ($functionDefinition in $functionDefinitions) {
+    Invoke-Expression $functionDefinition.Extent.Text
+}
+
+$sizeCases = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter 'uiFormDefinition.json' -File -Recurse |
+    ForEach-Object {
+        $formFile = $_.FullName
+        Get-ChildItem -LiteralPath $_.DirectoryName -Filter '*.json' -File |
+            Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) } |
+            ForEach-Object {
+                @{
+                    Name = $_.FullName.Substring($repoRoot.Length + 1)
+                    TemplateFile = $_.FullName
+                    FormFile = $formFile
+                }
+            }
+    })
+
+Describe 'Generated ARM and Template Spec size budgets' {
+    It 'discovers published template and form pairs' {
+        ($sizeCases.Count -gt 0) | Should Be $true
+    }
+
+    It 'keeps <Name> within conservative offline size budgets' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $armBytes = (Get-Item -LiteralPath $TemplateFile).Length
+        if ($armBytes -gt 4000000) {
+            throw "$Name is $armBytes bytes, exceeding the conservative 4,000,000-byte ARM file budget."
+        }
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location 'usgovvirginia'
+        $payloadBytes = $package.PayloadBytes
+        if ($payloadBytes + 16384 -gt 2000000) {
+            throw "$Name and its Portal form serialize to $payloadBytes bytes using the normal SDK serializer, exceeding the 2,000,000-byte budget including a 16,384-byte metadata allowance."
+        }
+    }
+
+    It 'preserves all non-annotation content in <Name>' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $original = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Pack($TemplateFile)
+        $package = [pscustomobject]@{
+            RootTemplate = $original.RootTemplate.DeepClone()
+            UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $FormFile -Raw))
+        }
+        Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
+        $restored = $package.RootTemplate.DeepClone()
+        foreach ($metadata in @($original.RootTemplate.SelectTokens('$..metadata'))) {
+            $published = $restored.SelectToken($metadata.get_Path())
+            if ($metadata -isnot [Newtonsoft.Json.Linq.JObject]) {
+                [Newtonsoft.Json.Linq.JToken]::DeepEquals($metadata, $published) | Should Be $true
+                continue
+            }
+            foreach ($property in $metadata.Properties()) {
+                if ($null -eq $published -or $null -eq $published[$property.Name]) {
+                    ($property.Name -in @('description', '_generator', '__bicep_imported_from!')) | Should Be $true
+                }
+                else {
+                    [Newtonsoft.Json.Linq.JToken]::DeepEquals($property.Value, $published[$property.Name]) | Should Be $true
+                }
+            }
+            $parent = $restored.SelectToken($metadata.get_Parent().get_Parent().get_Path())
+            $parent['metadata'] = $metadata.DeepClone()
+        }
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($original.RootTemplate, $restored) | Should Be $true
+        foreach ($interfaceName in @('parameters', 'outputs', 'definitions')) {
+            if ($null -eq $original.RootTemplate[$interfaceName]) {
+                continue
+            }
+            foreach ($metadata in @($original.RootTemplate[$interfaceName].SelectTokens('$..metadata'))) {
+                if ($null -ne $metadata['description']) {
+                    [string]$package.RootTemplate.SelectToken($metadata.get_Path())['description'] |
+                        Should Be ([string]$metadata['description'])
+                }
+            }
+        }
+        $expectedForm = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $FormFile -Raw))
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($expectedForm, $package.UIFormDefinition) | Should Be $true
+    }
+
+    It 'keeps extended examples out of emitted <Name> parameter descriptions' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $template = Get-Content -LiteralPath $TemplateFile -Raw | ConvertFrom-Json
+        foreach ($parameter in $template.parameters.PSObject.Properties) {
+            if ($parameter.Value.metadata.description -match '(?im)^\s*(?:JSON\s+)?example:\s*$') {
+                throw "$Name parameter $($parameter.Name) embeds an extended example; keep it in Bicep source comments instead."
+            }
+        }
+    }
+
+    It 'filters annotations idempotently without changing the source of <Name>' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $templateHash = (Get-FileHash -LiteralPath $TemplateFile).Hash
+        $formHash = (Get-FileHash -LiteralPath $FormFile).Hash
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location 'usgovvirginia'
+        foreach ($template in @($package.RootTemplate) + @($package.Artifacts | ForEach-Object { $_.Template })) {
+            foreach ($namespace in $template['functions']) {
+                foreach ($member in $namespace['members'].Properties()) {
+                    $metadata = $member.Value['metadata']
+                    if ($metadata -is [Newtonsoft.Json.Linq.JObject]) {
+                        ($null -eq $metadata['__bicep_imported_from!']) | Should Be $true
+                    }
+                }
+            }
+        }
+        $before = $package.RootTemplate.DeepClone()
+        Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($before, $package.RootTemplate) | Should Be $true
+        foreach ($artifact in $package.Artifacts) {
+            $before = $artifact.Template.DeepClone()
+            Remove-TemplateSpecInternalAnnotations -Node $artifact.Template
+            [Newtonsoft.Json.Linq.JToken]::DeepEquals($before, $artifact.Template) | Should Be $true
+        }
+        [Text.Encoding]::UTF8.GetByteCount((Get-DeduplicatedTemplateSpecPayload -Package $package -Location 'usgovvirginia')) |
+            Should Be $package.PayloadBytes
+        (Get-FileHash -LiteralPath $TemplateFile).Hash | Should Be $templateHash
+        (Get-FileHash -LiteralPath $FormFile).Hash | Should Be $formHash
+    }
+}
+
+Describe 'Template Spec annotation filtering boundaries' {
+    It 'removes only function provenance while retaining namespaces, code, help, and literal data' {
+        $template = [Newtonsoft.Json.Linq.JObject]::Parse(@'
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "functions": [{
+    "namespace": "__bicep",
+    "members": {
+      "withHelp": {
+        "parameters": [{"name": "value", "type": "string"}],
+        "output": {"type": "object", "value": {"metadata": {"__bicep_imported_from!": "Literal output"}}},
+        "metadata": {
+          "description": "Function help",
+          "custom": "Keep",
+          "_generator": "Keep",
+          "__bicep_imported_from!": {"sourceTemplate": "naming.bicep"}
+        }
+      },
+      "provenanceOnly": {
+        "parameters": [],
+        "output": {"type": "string", "value": "constant"},
+        "metadata": {"__bicep_imported_from!": {"sourceTemplate": "naming.bicep"}}
+      }
+    }
+  }],
+  "variables": {
+    "data": {
+      "functions": [{"namespace": "Literal namespace", "members": {
+        "literal": {"metadata": {"__bicep_imported_from!": "Literal metadata"}}
+      }}]
+    },
+    "result": "[__bicep.withHelp('input')]"
+  },
+  "resources": {
+    "nested": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "properties": {"template": {
+        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+        "resources": {}
+      }}
+    }
+  }
+}
+'@)
+        $nested = $template['resources']['nested']['properties']['template']
+        $nested['functions'] = $template['functions'].DeepClone()
+        $expectedFunctions = $template['functions'].DeepClone()
+        foreach ($member in $expectedFunctions[0]['members'].Properties()) {
+            $member.Value['metadata'].Remove('__bicep_imported_from!') | Out-Null
+            if (-not $member.Value['metadata'].get_HasValues()) {
+                $member.Value.Remove('metadata') | Out-Null
+            }
+        }
+        $variables = $template['variables'].DeepClone()
+
+        Remove-TemplateSpecInternalAnnotations -Node $template
+
+        foreach ($node in @($template, $nested)) {
+            [Newtonsoft.Json.Linq.JToken]::DeepEquals($expectedFunctions, $node['functions']) | Should Be $true
+        }
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($variables, $template['variables']) | Should Be $true
+    }
+
+    It 'retains module summaries, public help, validation, security metadata, and arbitrary data' {
+        $template = [Newtonsoft.Json.Linq.JObject]::Parse(@'
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "metadata": {"_generator": {"name": "bicep"}, "name": "Root", "description": "Root purpose"},
+  "parameters": {
+    "input": {
+      "type": "object",
+      "metadata": {"description": "Public help", "strongType": "location"},
+      "defaultValue": {"metadata": {"description": "Literal data", "_generator": "Keep"}}
+    }
+  },
+  "resources": {
+    "nested": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "metadata": {"description": "Resource metadata", "_generator": "Not compiler metadata"},
+      "properties": {
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "metadata": {"_generator": {"name": "bicep"}, "name": "Nested", "description": "Nested purpose"},
+          "parameters": {
+            "secret": {"type": "secureString", "minLength": 1, "metadata": {"description": "Internal help", "custom": "Keep"}},
+            "choice": {"type": "object", "allowedValues": [{"metadata": {"description": "Literal allowed value"}}]}
+          },
+          "definitions": {
+            "input": {
+              "type": "object",
+              "metadata": {"description": "Type help", "__bicep_imported_from!": {"source": "types.bicep"}},
+              "properties": {"child": {"type": "string", "metadata": {"description": "Child help"}, "minLength": 2}},
+              "additionalProperties": false
+            }
+          },
+          "outputs": {"result": {"type": "string", "value": "[parameters('secret')]", "metadata": {"description": "Output help"}}},
+          "resources": {
+            "policy": {
+              "type": "Microsoft.Authorization/policyDefinitions",
+              "properties": {"metadata": {"description": "Policy help", "category": "Keep"}}
+            }
+          }
+        }
+      }
+    }
+  }
+}
+'@)
+        $before = $template.DeepClone()
+        Remove-TemplateSpecInternalAnnotations -Node $template
+        [string]$template['metadata']['description'] | Should Be 'Root purpose'
+        [string]$template['metadata']['name'] | Should Be 'Root'
+        ($null -eq $template['metadata']['_generator']) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($before['parameters'], $template['parameters']) | Should Be $true
+        $nested = $template['resources']['nested']['properties']['template']
+        [string]$nested['metadata']['description'] | Should Be 'Nested purpose'
+        [string]$nested['metadata']['name'] | Should Be 'Nested'
+        ($null -eq $nested['metadata']['_generator']) | Should Be $true
+        [string]$nested['parameters']['secret']['type'] | Should Be 'secureString'
+        [int]$nested['parameters']['secret']['minLength'] | Should Be 1
+        [string]$nested['parameters']['secret']['metadata']['custom'] | Should Be 'Keep'
+        ($null -eq $nested['parameters']['secret']['metadata']['description']) | Should Be $true
+        ($null -eq $nested['definitions']['input']['metadata']) | Should Be $true
+        ($null -eq $nested['definitions']['input']['properties']['child']['metadata']) | Should Be $true
+        [int]$nested['definitions']['input']['properties']['child']['minLength'] | Should Be 2
+        [string]$nested['parameters']['choice']['allowedValues'][0]['metadata']['description'] | Should Be 'Literal allowed value'
+        [string]$nested['outputs']['result']['value'] | Should Be "[parameters('secret')]"
+        ($null -eq $nested['outputs']['result']['metadata']) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals(
+            $before['resources']['nested']['metadata'], $template['resources']['nested']['metadata']
+        ) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals(
+            $before['resources']['nested']['properties']['template']['resources'], $nested['resources']
+        ) | Should Be $true
+    }
+
+    It 'rejects pre-existing relative links instead of publishing an incomplete package' {
+        $source = Join-Path $TestDrive 'linked-source'
+        New-Item -ItemType Directory -Path $source | Out-Null
+        @'
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [{
+    "type": "Microsoft.Resources/deployments",
+    "apiVersion": "2022-09-01",
+    "name": "linked",
+    "properties": {"mode": "Incremental", "templateLink": {"relativePath": "child.json"}}
+  }]
+}
+'@ | Set-Content -LiteralPath (Join-Path $source 'main.json')
+        @'
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {"_generator": {"name": "bicep"}, "name": "Linked", "description": "Linked purpose"},
+  "parameters": {"input": {"type": "string", "metadata": {"description": "Linked public help"}}},
+  "resources": []
+}
+'@ | Set-Content -LiteralPath (Join-Path $source 'child.json')
+        '{}' | Set-Content -LiteralPath (Join-Path $source 'form.json')
+        {
+            New-DeduplicatedTemplateSpecPackage -TemplateFile (Join-Path $source 'main.json') -FormFile (Join-Path $source 'form.json') -Location 'usgovvirginia'
+        } | Should Throw 'Pre-existing relativePath template links are not supported'
+    }
+
+    It 'reduces the host-pool request using the normal SDK serializer' {
+        $templateFile = Join-Path $repoRoot 'deployments\hostpools\hostpool.json'
+        $formFile = Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json'
+        $original = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.Components.TemplateSpecPackagingEngine]::Pack($templateFile)
+        $original.UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $formFile -Raw))
+        $filtered = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateFile -FormFile $formFile -Location 'usgovvirginia'
+        $filteredBytes = $filtered.PayloadBytes
+        $filtered.OriginalPayloadBytes | Should BeGreaterThan $filteredBytes
+        $filteredBytes | Should BeLessThan 1900000
+    }
+}
+
 Describe 'Networking Template Spec form parameter contract' {
     $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\networking\networking.json') -Raw | ConvertFrom-Json
     $form = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\networking\uiFormDefinition.json') -Raw | ConvertFrom-Json
@@ -187,21 +494,16 @@ Describe 'FSLogix Storage Template Spec deployment VM contract' {
     }
 
     It 'fits the ARM and Template Spec UTF-8 size budgets including the form and envelope' {
-        $templateBytes = [Text.Encoding]::UTF8.GetByteCount(($template | ConvertTo-Json -Depth 100 -Compress))
-        $payload = @{
-            location = 'eastus'
-            properties = @{
-                mainTemplate = $template
-                uiFormDefinition = $form
-                linkedTemplates = @()
-            }
-        }
-        $payloadBytes = [Text.Encoding]::UTF8.GetByteCount(($payload | ConvertTo-Json -Depth 100 -Compress))
-        $envelopeAllowance = 64KB
-        $templateBytes | Should BeLessThan 4MB
-        ($payloadBytes + $envelopeAllowance) | Should BeLessThan 2MB
-        Write-Host "FSLogix ARM: $templateBytes bytes; headroom: $(4MB - $templateBytes) bytes."
-        Write-Host "FSLogix Template Spec with form and 64 KiB envelope allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $(2MB - $payloadBytes - $envelopeAllowance) bytes."
+        $templateFile = Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.json'
+        $formFile = Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json'
+        $templateBytes = (Get-Item -LiteralPath $templateFile).Length
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateFile -FormFile $formFile -Location 'usgovvirginia'
+        $payloadBytes = $package.PayloadBytes
+        $envelopeAllowance = 16384
+        $templateBytes | Should BeLessThan 4000000
+        ($payloadBytes + $envelopeAllowance) | Should BeLessThan 2000000
+        Write-Host "FSLogix ARM: $templateBytes bytes; headroom: $(4000000 - $templateBytes) bytes."
+        Write-Host "FSLogix Template Spec with form and 16 KiB metadata allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $(2000000 - $payloadBytes - $envelopeAllowance) bytes."
     }
 }
 
@@ -220,37 +522,63 @@ Describe 'Image Build and Session Host Replacer Template Spec size budgets' {
     ) {
         param($Name, $TemplateFile, $FormFile)
 
-        $template = Get-Content -LiteralPath (Join-Path $repoRoot $TemplateFile) -Raw | ConvertFrom-Json
-        $form = Get-Content -LiteralPath (Join-Path $repoRoot $FormFile) -Raw | ConvertFrom-Json
-        $templateBytes = [Text.Encoding]::UTF8.GetByteCount(($template | ConvertTo-Json -Depth 100 -Compress))
-        $payload = @{
-            location = 'eastus'
-            properties = @{
-                mainTemplate = $template
-                uiFormDefinition = $form
-                linkedTemplates = @()
-            }
-        }
-        $payloadBytes = [Text.Encoding]::UTF8.GetByteCount(($payload | ConvertTo-Json -Depth 100 -Compress))
-        $envelopeAllowance = 64KB
+        $templateFile = Join-Path $repoRoot $TemplateFile
+        $formFile = Join-Path $repoRoot $FormFile
+        $templateBytes = (Get-Item -LiteralPath $templateFile).Length
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateFile -FormFile $formFile -Location 'usgovvirginia'
+        $payloadBytes = $package.PayloadBytes
+        $envelopeAllowance = 16384
         $armBudget = 4000000
         $templateSpecBudget = 2000000
         $templateBytes | Should BeLessThan $armBudget
         ($payloadBytes + $envelopeAllowance) | Should BeLessThan $templateSpecBudget
         Write-Host "$Name ARM: $templateBytes bytes; headroom: $($armBudget - $templateBytes) bytes."
-        Write-Host "$Name Template Spec with form and 64 KiB envelope allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
+        Write-Host "$Name Template Spec with form and 16 KiB metadata allowance: $($payloadBytes + $envelopeAllowance) bytes; headroom: $($templateSpecBudget - $payloadBytes - $envelopeAllowance) bytes."
     }
 }
 
-$functionDefinitions = $scriptAst.FindAll(
-    { param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] },
-    $true
-)
-foreach ($functionDefinition in $functionDefinitions) {
-    Invoke-Expression $functionDefinition.Extent.Text
-}
-
 Describe 'Template Spec naming conventions' {
+    It 'resolves every registered add-on purpose with delimiter <Delimiter>' -TestCases @(
+        @{ Delimiter = '-' }
+        @{ Delimiter = '_' }
+    ) {
+        param($Delimiter)
+
+        $catalog = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$addOns'
+        }, $true)
+        $catalog | Should Not BeNullOrEmpty
+        $addOns = @(Invoke-Expression $catalog.Right.Extent.Text)
+        ($addOns.Count -gt 0) | Should Be $true
+        foreach ($addOn in $addOns) {
+            [string]::IsNullOrWhiteSpace([string]$addOn.Purpose) | Should Be $false
+            $name = New-ConventionName -Components @('resourceType', 'workload', 'purpose', 'location') `
+                -Delimiter $Delimiter -ResourceTypeCode 'ts' -Purpose $addOn.Purpose `
+                -LocationAbbreviation 'use' -Workload 'avd'
+            [string]::IsNullOrWhiteSpace($name) | Should Be $false
+        }
+        ($addOns | Where-Object FolderName -eq 'sessionHosts').Purpose | Should Be 'session-hosts'
+    }
+
+    It 'reports a missing publishing purpose explicitly: <Name>' -TestCases @(
+        @{ Name = 'missing'; Purpose = $null }
+        @{ Name = 'empty'; Purpose = '' }
+        @{ Name = 'whitespace'; Purpose = '   ' }
+    ) {
+        param($Name, $Purpose)
+
+        $guard = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+                $node.Extent.Text.StartsWith('if ([string]::IsNullOrWhiteSpace([string]$templateSpec.Purpose))')
+        }, $true)
+        $guard | Should Not BeNullOrEmpty
+        $templateSpec = @{ DisplayName = 'AVD Session Hosts'; Purpose = $Purpose }
+        { & ([scriptblock]::Create($guard.Extent.Text)) } |
+            Should Throw "Template Spec 'AVD Session Hosts' has no publishing purpose."
+    }
+
     It 'uses the CAF-aligned default convention' {
         $name = New-ConventionName `
             -Components @('resourceType', 'workload', 'purpose', 'location') `

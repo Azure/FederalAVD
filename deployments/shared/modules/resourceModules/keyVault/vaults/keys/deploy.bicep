@@ -1,4 +1,9 @@
+metadata name = 'Key Vault key'
+metadata description = 'Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type.'
+
+@description('Required. Name of the existing parent Key Vault in the deployment resource group.')
 param keyVaultName string
+@description('Required. Name of the key Vault key within its parent resource.')
 param name string
 
 @description('Key type.')
@@ -48,5 +53,7 @@ resource key 'Microsoft.KeyVault/vaults/keys@2023-07-01' = {
   }
 }
 
+@description('Resource ID of the key Vault key.')
 output resourceId string = key.id
+@description('Azure resource name of the key Vault key.')
 output name string = key.name

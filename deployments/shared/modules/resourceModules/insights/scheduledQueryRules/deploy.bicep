@@ -1,5 +1,11 @@
+metadata name = 'Scheduled query alert rule'
+metadata description = 'Deploys an Azure Monitor log alert with caller-supplied scopes and query criteria; referenced data sources and optional action groups must already exist.'
+
+@sys.description('Required. Name of the scheduled query alert rule to deploy.')
 param name string
+@sys.description('Optional. Azure region for the scheduled query alert rule; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@sys.description('Optional. Tags applied to the scheduled query alert rule.')
 param tags object = {}
 
 @sys.description('Resource IDs of the resources to evaluate.')
@@ -44,5 +50,7 @@ resource scheduledQueryRule 'Microsoft.Insights/scheduledQueryRules@2023-03-15-p
   }
 }
 
+@sys.description('Resource ID of the scheduled query alert rule.')
 output resourceId string = scheduledQueryRule.id
+@sys.description('Azure resource name of the scheduled query alert rule.')
 output name string = scheduledQueryRule.name

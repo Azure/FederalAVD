@@ -223,6 +223,42 @@ remediation. If the identity is absent, correct the policy or deployment paramet
 
 Customization logs are written to `C:\Windows\Logs\<customization-name>.log` on the VM.
 
+## AVD Insights DCR reports missing Perf or Event tables
+
+### Symptom
+
+An initial monitoring deployment fails because the destination Log Analytics workspace lacks
+`Perf`, `Event`, or both tables, but the same deployment succeeds when rerun.
+
+### Cause and deployment behavior
+
+Workspace creation alone is not the same prerequisite as destination-table provisioning.
+FederalAVD's shared monitoring path explicitly provisions both built-in tables inside the workspace
+module. The DCR depends on that entire module completing. This applies to newly deployed monitoring
+from Shared Services, standard and automated host pools, and the PoC.
+
+Use rebuilt templates containing the [monitoring table prerequisites](design.md#monitoring-table-prerequisites).
+The table resources use Microsoft's standard schemas, without supplying custom columns or table
+plan/retention overrides. Do not substitute `Perf_CL`/`Event_CL` or enable a legacy monitoring
+solution merely to initialize tables. No deployment script or arbitrary wait is required by this
+resource graph.
+
+### Verification
+
+1. In deployment operations, confirm the workspace and both `Microsoft.OperationalInsights/workspaces/tables`
+   resources completed before the DCR deployment. An `AuthorizationFailed` on a table requires
+   `Microsoft.OperationalInsights/workspaces/tables/write` at the workspace scope or higher.
+2. Verify the tables through the workspace's management-plane **Tables** view/API, not merely a
+   query returning no records. No ingested rows is not evidence that a table is missing.
+3. If consuming an existing workspace/DCR instead, their owner must verify table readiness; the
+   consuming host-pool deployment does not bootstrap adopted monitoring resources.
+4. Validate the fix using a genuinely new workspace in the affected cloud. Also redeploy against
+   an existing workspace and check its schemas, custom columns, plan and retention settings.
+5. If the DCR still reports missing tables after both table resources succeeded, retain the exact
+   error, deployment timestamps, correlation ID and target cloud/region for investigation of
+   service propagation or API availability. Resource ordering is not proof of cross-service
+   readiness; do not hide a recurring failure with an unbounded retry or fixed sleep.
+
 ## LinkedAuthorizationFailed for DES, DCR, or DCE
 
 ### Symptom
@@ -599,7 +635,7 @@ A new image build runs but the resulting image gallery version or temporary buil
 
 ### Problem
 
-The Image Build `timeStamp` parameter is intentionally excluded from example parameter files - it is generated fresh on every build by the calling script or at deploy time. If you export an Image Build parameter file from a Template Spec UI deployment or ARM deployment history, the exported file includes the `timeStamp` value used for that run. Saving and reusing that file causes every subsequent build to supply the same fixed timestamp. Other deployment templates no longer expose this parameter.
+The Image Build `timeStamp` parameter is intentionally excluded from example parameter files - it is generated fresh on every build by the calling script or at deploy time. If you export an Image Build parameter file from a Template Spec UI deployment or ARM deployment history, the exported file includes the `timeStamp` value used for that run. Saving and reusing that file causes every subsequent build to supply the same fixed timestamp. Only Image Build exposes this parameter.
 
 ### Solution
 

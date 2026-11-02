@@ -74,8 +74,8 @@
                   "name": "storageNetworkAccess",
                   "type": "Microsoft.Common.DropDown",
                   "label": "Network Access",
-                  "defaultValue": "PublicEndpoint",
-                  "toolTip": "Network access configuration applied to both storage accounts. Private Endpoint disables public access and routes traffic over the Microsoft backbone. Service Endpoint restricts access to specific subnets — this template configures the storage network ACL rules but does NOT deploy service endpoints to the subnets.",
+                  "defaultValue": "Public Endpoint",
+                  "toolTip": "Connectivity configuration for both storage accounts. Public access is selected separately below. Private Endpoint creates private endpoints. Service Endpoint configures storage subnet ACL rules but does not enable service endpoints on the subnets.",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
@@ -95,25 +95,58 @@
                   }
                 },
                 {
+                  "name": "paasPublicNetworkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Public network access",
+                  "defaultValue": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), 'Disabled', if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), 'Enabled with restrictions', 'Enabled'))]",
+                  "toolTip": "Shared by artifacts and logs storage, independently of private endpoints. Service endpoints require Enabled with restrictions for subnet rules to limit public access.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Disabled", "value": "Disabled" },
+                      { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
+                      { "label": "Enabled", "value": "Enabled" }
+                    ]
+                  }
+                },
+                {
                   "name": "permittedIPsInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "options": {
                     "text": "Permitted IP Addresses / CIDR Ranges (optional)",
                     "style": "Heading"
                   }
                 },
                 {
-                  "name": "permittedIPsDescription",
+                  "name": "permittedIPsDisabledInfo",
                   "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Disabled')]",
                   "options": {
-                    "text": "Restrict public access to specific IP addresses or CIDR ranges. Leave empty to allow all public traffic (or fully disable it via Private Endpoint with no IPs). When Private Endpoint is selected alongside IP rules, the private endpoint handles internal traffic while those IPs are permitted over the public endpoint. Has no effect on service endpoint subnet rules."
+                    "text": "Public network access is disabled. Ensure private connectivity is available. Existing trusted-service exceptions may still apply."
+                  }
+                },
+                {
+                  "name": "permittedIPsRestrictedInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
+                  "options": {
+                    "text": "Allow the public IPv4 addresses or CIDR ranges below and configured subnet rules. Other public traffic is denied, subject to existing trusted-service exceptions."
+                  }
+                },
+                {
+                  "name": "permittedIPsEnabledInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Enabled')]",
+                  "options": {
+                    "text": "Public network access is allowed from all networks. Authentication and authorization still apply."
                   }
                 },
                 {
                   "name": "storagePermittedIPs",
                   "type": "Microsoft.Common.EditableGrid",
                   "label": "Permitted IP Addresses / CIDR Ranges",
-                  "visible": true,
+                  "visible": "[equals(steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'EnabledWithRestrictions')]",
                   "toolTip": "",
                   "ariaLabel": "Permitted IP Addresses or CIDR Ranges",
                   "constraints": {
@@ -1090,42 +1123,6 @@
               ]
             },
             {
-              "name": "namingPreview",
-              "type": "Microsoft.Common.Section",
-              "label": "Name Preview",
-              "elements": [
-                {
-                  "name": "previewConvention",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Naming convention: ',concat(steps('tagsAndNaming').naming.component1,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(' ',steps('tagsAndNaming').naming.delimiter,' ',steps('tagsAndNaming').naming.component2),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(' ',steps('tagsAndNaming').naming.delimiter,' ',steps('tagsAndNaming').naming.component3),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(' ',steps('tagsAndNaming').naming.delimiter,' ',steps('tagsAndNaming').naming.component4),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(' ',steps('tagsAndNaming').naming.delimiter,' ',steps('tagsAndNaming').naming.component5),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(' ',steps('tagsAndNaming').naming.delimiter,' ',steps('tagsAndNaming').naming.component6),''),if(equals(if(not(equals(steps('tagsAndNaming').naming.component6,'none')),steps('tagsAndNaming').naming.component6,if(not(equals(steps('tagsAndNaming').naming.component5,'none')),steps('tagsAndNaming').naming.component5,if(not(equals(steps('tagsAndNaming').naming.component4,'none')),steps('tagsAndNaming').naming.component4,if(not(equals(steps('tagsAndNaming').naming.component3,'none')),steps('tagsAndNaming').naming.component3,if(not(equals(steps('tagsAndNaming').naming.component2,'none')),steps('tagsAndNaming').naming.component2,steps('tagsAndNaming').naming.component1))))),'resourceType'),' (RT-last)',' (RT-first)')))]"
-                  }
-                },
-                {
-                  "name": "previewRg",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Resource Group: ',concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')))]"
-                  }
-                },
-                {
-                  "name": "previewGallery",
-                  "type": "Microsoft.Common.TextBlock",
-                  "options": {
-                    "text": "[concat('Compute Gallery: ',concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue))))))),if(not(equals(steps('tagsAndNaming').naming.component2,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component3,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component4,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component5,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(not(equals(steps('tagsAndNaming').naming.component6,'none')),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeGal),'gal',steps('tagsAndNaming').naming.rtCodeGal),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'image-management',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'{loc}'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'(ff1)',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'(env)',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'(ff2)',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'avd',steps('tagsAndNaming').naming.workloadValue)))))))),'')))]"
-                  }
-                },
-                {
-                  "name": "previewNote",
-                  "type": "Microsoft.Common.InfoBox",
-                  "options": {
-                    "style": "Info",
-                    "text": "{loc} is resolved from the selected region at deployment time. Gallery names replace all hyphens with underscores. Storage account names strip all delimiters (alphanumeric only) and always include a uniqueString suffix truncated to 24 characters."
-                  }
-                }
-              ]
-            },
-            {
               "name": "tags",
               "type": "Microsoft.Common.Section",
               "label": "Resource Tags",
@@ -1167,6 +1164,7 @@
         "azureBlobPrivateDnsZoneResourceId": "[if(and(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'PrivateEndpoint'), steps('storageAccounts').privateDnsSection.enablePrivateDNSIntegration), steps('storageAccounts').privateDnsSection.blobPrivateDnsZone, '')]",
         "storageServiceEndpointSubnetResourceIds": "[if(equals(steps('storageAccounts').storageSettings.storageNetworkAccess, 'ServiceEndpoint'), steps('storageAccounts').serviceEndpointSection.serviceEndpointSubnets, parse('[]'))]",
         "storagePermittedIPs": "[filter(map(steps('storageAccounts').storageSettings.storagePermittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
+        "paasPublicNetworkAccess": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('storageAccounts').storageSettings.paasPublicNetworkAccess, 'Auto')]",
         "keyManagementStorageAccounts": "[if(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), steps('encryption').storage.keyManagement, 'PlatformManaged')]",
         "keyManagementGalleryImageVersions": "[steps('encryption').gallery.keyManagement]",
         "encryptionKeyVaultResourceId": "[if(or(and(or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount), not(equals(steps('encryption').storage.keyManagement, 'PlatformManaged'))), not(equals(steps('encryption').gallery.keyManagement, 'PlatformManaged'))), steps('encryption').keyVaultSection.encryptionKeyVault, '')]",

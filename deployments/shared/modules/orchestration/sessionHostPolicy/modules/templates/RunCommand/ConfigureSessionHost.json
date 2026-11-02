@@ -4,55 +4,102 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "13495899233616445704"
-    }
+      "version": "0.48.1.52935",
+      "templateHash": "10733571590885996997"
+    },
+    "name": "Session host configuration remediation template",
+    "description": "Deploys automated session-host initialization as a named Run Command on an existing VM for policy remediation."
   },
   "parameters": {
     "configureFSLogix": {
-      "type": "bool"
+      "type": "bool",
+      "metadata": {
+        "description": "Required. Whether to forward enabled FSLogix configuration to the embedded initialization script."
+      }
     },
     "fslogixContainerType": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. FSLogix container selection forwarded to initialization; names containing CloudCache select its CloudCache argument."
+      }
     },
     "fslogixFileShareNames": {
-      "type": "array"
+      "type": "array",
+      "metadata": {
+        "description": "Required. Ordered share name strings for initialization, with profile before Office when both are present."
+      }
     },
     "fslogixLocalStorageAccountResourceIds": {
-      "type": "array"
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization."
+      }
     },
     "fslogixLocalNetAppServerFqdns": {
-      "type": "array"
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of local NetApp SMB server FQDN strings aligned with the ordered share names."
+      }
     },
     "fslogixOSSGroups": {
-      "type": "array"
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of group name strings forwarded as the initialization script OSSGroups argument."
+      }
     },
     "fslogixRemoteStorageAccountResourceIds": {
-      "type": "array"
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization."
+      }
     },
     "fslogixRemoteNetAppServerFqdns": {
-      "type": "array"
+      "type": "array",
+      "metadata": {
+        "description": "Required. Array of remote NetApp SMB server FQDN strings aligned with the ordered share names."
+      }
     },
     "fslogixStorageService": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Storage backend name forwarded to initialization, AzureFiles or AzureNetAppFiles."
+      }
     },
     "identitySolution": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths."
+      }
     },
     "location": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for the resources deployed by this module."
+      }
     },
     "runCommandName": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the Run Command child resource created on the existing VM."
+      }
     },
     "timeZone": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Windows time zone identifier forwarded to the initialization script."
+      }
     },
     "profileSizeInMBs": {
-      "type": "int"
+      "type": "int",
+      "metadata": {
+        "description": "Required. Profile container size in MB forwarded to the embedded initialization script."
+      }
     },
     "virtualMachineName": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the existing VM in the deployment resource group."
+      }
     }
   },
   "variables": {

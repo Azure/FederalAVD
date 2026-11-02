@@ -1,3 +1,6 @@
+metadata name = 'Role assignment input type'
+metadata description = 'Exports the role, principal and optional assignment details accepted by resource-scoped RBAC modules; does not assign permissions itself.'
+
 // Shared type definitions for resource-scoped role assignments.
 // Import in role assignment modules with:
 //   import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
@@ -5,7 +8,8 @@
 @export()
 @description('A single role assignment to apply to a specific resource.')
 type roleAssignmentType = {
-  @description('Role definition GUID or fully-qualified resource ID (e.g. "b24988ac-..." or "/providers/Microsoft.Authorization/roleDefinitions/...").')
+  // Examples: "b24988ac-..." or "/providers/Microsoft.Authorization/roleDefinitions/...".
+  @description('Role definition GUID or fully-qualified resource ID.')
   roleDefinitionId: string
 
   @description('Object (principal) ID of the identity receiving the role.')

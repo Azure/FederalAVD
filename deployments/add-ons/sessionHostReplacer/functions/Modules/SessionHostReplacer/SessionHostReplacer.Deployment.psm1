@@ -21,7 +21,9 @@ function Get-DeploymentState {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
 
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+
+        [switch] $ReadOnly
     )
     
     try {
@@ -52,21 +54,23 @@ function Get-DeploymentState {
             'x-ms-date'     = [DateTime]::UtcNow.ToString('R')
         }
         
-        # Check if table exists, create if not
-        $tablesUri = "$tableEndpoint/Tables"
-        try {
-            $existingTables = Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Get -ContentType 'application/json' -ErrorAction SilentlyContinue
-            $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
-            
-            if (-not $tableExists) {
-                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
-                $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
-                $headers['Content-Type'] = 'application/json'
-                Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
+        # A scheduler preflight must not initialize storage while checking for idle work.
+        if (-not $ReadOnly) {
+            $tablesUri = "$tableEndpoint/Tables"
+            try {
+                $existingTables = Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Get -ContentType 'application/json' -ErrorAction SilentlyContinue
+                $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
+
+                if (-not $tableExists) {
+                    Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
+                    $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
+                    $headers['Content-Type'] = 'application/json'
+                    Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
+                }
             }
-        }
-        catch {
-            Write-LogEntry -Message "Error checking/creating table: $_" -Level Warning
+            catch {
+                Write-LogEntry -Message "Error checking/creating table: $_" -Level Warning
+            }
         }
         
         # Query entity
@@ -122,6 +126,7 @@ function Get-DeploymentState {
     }
     catch {
         Write-LogEntry -Message "Failed to retrieve deployment state: $_" -Level Error
+        if ($ReadOnly) { throw }
         # Return default state on error
         return [PSCustomObject]@{
             LastDeploymentName       = ''
@@ -183,7 +188,7 @@ function Get-LastDeploymentStatus {
     )
 
     if ([string]::IsNullOrEmpty($DeploymentName)) {
-        Write-LogEntry -Message "No previous deployment name provided"
+        Write-LogEntry -Message "No previous deployment name provided" -Level Trace
         return $null
     }
 
@@ -211,7 +216,7 @@ function Get-LastDeploymentStatus {
                 Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Warning
             }
             elseif ($result.Running) {
-                Write-LogEntry -Message "Previous deployment is still running" -Level Warning
+                Write-LogEntry -Message "Previous deployment is still running" -Level Trace
             }
             
             return $result
@@ -256,6 +261,7 @@ function Save-DeploymentState {
         [switch] $RequireSuccess
     )
     
+    if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
     try {
         # Parse storage account name from AzureWebJobsStorage if not provided
         $storageUri = $env:AzureWebJobsStorage__blobServiceUri
@@ -293,6 +299,7 @@ function Save-DeploymentState {
             if (-not $tableExists) {
                 Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
                 $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
+                if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
                 Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
             }
         }
@@ -340,18 +347,24 @@ function Save-DeploymentState {
             $updateHeaders = $headers.Clone()
             $updateHeaders['If-Match'] = '*'
             $body = $entityData | ConvertTo-Json
+            if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
             Invoke-RestMethod -Uri $entityUri -Headers $updateHeaders -Method Merge -Body $body -ErrorAction Stop | Out-Null
         }
         else {
             # Insert new entity
             $insertUri = "$tableEndpoint/$tableName"
             $body = $entityData | ConvertTo-Json
+            if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
             Invoke-RestMethod -Uri $insertUri -Headers $headers -Method Post -Body $body -ErrorAction Stop | Out-Null
         }
         
         Write-LogEntry -Message "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%" -Level Trace
     }
     catch {
+        if ($_.Exception -is [TimeoutException] -and (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) -and (Get-ShrWorkerState)) {
+            Write-LogEntry -Message "Deployment state save yielded: $($_.Exception.Message)" -Level Trace
+            throw
+        }
         Write-LogEntry -Message "Failed to save deployment state: $_" -Level Error
         if ($RequireSuccess) {
             throw
@@ -368,6 +381,12 @@ function Deploy-SessionHosts {
     param (
         [Parameter(Mandatory = $true)]
         [string] $ARMToken,
+
+        [Parameter()]
+        [string] $GraphToken,
+
+        [Parameter()]
+        [switch] $WaitForVMDeletion,
 
         [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
@@ -453,7 +472,7 @@ function Deploy-SessionHosts {
             $hoursRemaining = ($tokenExpiration - $currentTimeUtc).TotalHours
             
             if ($hoursRemaining -ge 2) {
-                Write-LogEntry -Message "Existing registration token is valid for {0:F1} more hours - reusing token" -StringValues $hoursRemaining
+                Write-LogEntry -Message "Existing registration token is valid for {0:F1} more hours - reusing token" -StringValues $hoursRemaining -Level Trace
                 $skipTokenGeneration = $true
             }
             else {
@@ -473,7 +492,7 @@ function Deploy-SessionHosts {
     
     # Generate new token if needed
     if (-not $skipTokenGeneration) {
-        Write-LogEntry -Message "Generating new registration token for host pool $HostPoolName in Resource Group $HostPoolResourceGroupName"
+        Write-LogEntry -Message "Generating new registration token for host pool $HostPoolName in Resource Group $HostPoolResourceGroupName" -Level Trace
         $Body = @{
             properties = @{
                 registrationInfo = @{
@@ -498,14 +517,26 @@ function Deploy-SessionHosts {
         }
     }
     
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation -and $continuation.DeploymentIntent) {
+        return Invoke-ShrDeploymentIntent -ARMToken $ARMToken -RegisteredSessionHostNames $ExistingSessionHostNames
+    }
+
     # Calculate Session Host Names
-    Write-LogEntry -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',')
+    Write-LogEntry -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',') -Level Trace
     
     if ($PreferredSessionHostNames -and $PreferredSessionHostNames.Count -gt 0) {
-        Write-LogEntry -Message "Preferred session host names for reuse: {0}" -StringValues ($PreferredSessionHostNames -join ',')
+        Write-LogEntry -Message "Preferred session host names for reuse: {0}" -StringValues ($PreferredSessionHostNames -join ',') -Level Trace
     }
     
     [array] $sessionHostNames = @()
+    $deploymentState = Get-DeploymentState
+    if ($deploymentState.LastStatus -eq 'Error') { throw 'Deployment recovery state cannot be read; deployment batch is blocked.' }
+    $pendingMappings = ConvertFrom-Json -InputObject $deploymentState.PendingHostMappings -AsHashtable -ErrorAction Stop
+    if ($pendingMappings -isnot [System.Collections.IDictionary]) { throw 'PendingHostMappings must be a JSON object.' }
+    if (-not $PreferredSessionHostNames) {
+        $PreferredSessionHostNames = @($pendingMappings.Keys | Sort-Object)
+    }
     [array] $remainingPreferredNames = $PreferredSessionHostNames | Where-Object { $_ -notin $ExistingSessionHostNames }
     
     for ($i = 0; $i -lt $NewSessionHostsCount; $i++) {
@@ -529,13 +560,34 @@ function Deploy-SessionHosts {
     
     Write-LogEntry -Message "Creating session host(s) $($sessionHostNames -join ', ')"
 
+    $deploymentHosts = @(
+        foreach ($name in $sessionHostNames) {
+            $resourceId = Get-SessionHostVMResourceId -Name $name -SessionHostParameters $SessionHostParameters `
+                -SubscriptionId $VirtualMachinesSubscriptionId -ResourceGroupName $VirtualMachinesResourceGroupName
+            if ($pendingMappings.ContainsKey($name) -and $pendingMappings[$name].ResourceId -and
+                $pendingMappings[$name].ResourceId -ine $resourceId) {
+                throw "VM naming changed for pending host '$name'; resolve its recovery mapping before deployment."
+            }
+            if ($pendingMappings.ContainsKey($name) -and -not $pendingMappings[$name].ResourceId -and
+                $pendingMappings[$name].VMName -and $pendingMappings[$name].VMName -ine $resourceId.Split('/')[-1]) {
+                throw "VM naming changed for pending host '$name'; resolve its legacy VM name before deployment."
+            }
+            if (-not $pendingMappings.ContainsKey($name)) { $pendingMappings[$name] = @{} }
+            $pendingMappings[$name].VMName = $resourceId.Split('/')[-1]
+            $pendingMappings[$name].ResourceId = $resourceId
+            [PSCustomObject]@{ SessionHostName = $name; ResourceId = $resourceId }
+        }
+    )
+    $deploymentState.PendingHostMappings = $pendingMappings | ConvertTo-Json -Depth 20 -Compress
+    Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
+
     # Update Session Host Parameters
     $sessionHostParameters['sessionHostNames'] = $sessionHostNames
     
     # Apply per-VM dedicated host properties if provided
     # Build arrays for dedicatedHostResourceId and dedicatedHostGroupResourceId indexed by VM
     if ($PreferredHostProperties.Count -gt 0) {
-        Write-LogEntry -Message "Applying per-VM dedicated host properties from mapping"
+        Write-LogEntry -Message "Applying per-VM dedicated host properties from mapping" -Level Trace
         
         $dedicatedHostIds = @()
         $dedicatedHostGroupIds = @()
@@ -596,9 +648,16 @@ function Deploy-SessionHosts {
     
     $deploymentTimestamp = Get-Date -AsUTC -Format 'yyyyMMddHHmmss'
     $deploymentName = "{0}_Count_{1}_VMs_{2}" -f $DeploymentPrefix, $sessionHostNames.count, $deploymentTimestamp
+    if ($continuation) {
+        $deploymentName = "shr_$($continuation.Id)"
+        if ([int]$continuation.BatchNumber -gt 1) {
+            $deploymentName += "_b$($continuation.BatchNumber)"
+        }
+    }
+    $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines']['AutoReplaceDeploymentName'] = $deploymentName
     
-    Write-LogEntry -Message "Deployment name: $deploymentName"
-    Write-LogEntry -Message "Deploying using Template Spec: $sessionHostTemplate"
+    Write-LogEntry -Message "Deployment name: $deploymentName" -Level Trace
+    Write-LogEntry -Message "Deploying using Template Spec: $sessionHostTemplate" -Level Trace
     $templateSpecVersionResourceId = Get-TemplateSpecVersionResourceId -ARMToken $ARMToken -ResourceId $SessionHostTemplate
 
     Write-LogEntry -Message "Deploying $NewSessionHostsCount session host(s) to resource group $VirtualMachinesResourceGroupName" 
@@ -636,6 +695,21 @@ function Deploy-SessionHosts {
         }
     }
     $Uri = "$ResourceManagerUri/subscriptions/$VirtualMachinesSubscriptionId/resourceGroups/$VirtualMachinesResourceGroupName/providers/Microsoft.Resources/deployments/$($deploymentName)?api-version=2021-04-01"
+    Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken `
+        -SessionHosts $deploymentHosts -SessionHostParameters $SessionHostParameters `
+        -WaitForVMDeletion:$WaitForVMDeletion -ResourceManagerUri $ResourceManagerUri `
+        -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName
+    if ($continuation) {
+        $continuation.DeploymentHostNames = @($sessionHostNames)
+        $continuation.DeploymentIntent = @{
+            Name = $deploymentName
+            Uri = $Uri
+            Body = ($Body | ConvertTo-Json -Depth 20 -Compress)
+            HostNames = @($sessionHostNames)
+            Timestamp = $deploymentTimestamp
+        }
+        Save-ShrContinuationCheckpoint
+    }
     $DeploymentJob = Invoke-AzureRestMethod `
         -ARMToken $ARMToken `
         -Body ($Body | ConvertTo-Json -depth 20) `
@@ -645,14 +719,7 @@ function Deploy-SessionHosts {
     # Check if deployment submission was accepted
     if ($deploymentJob.Error) {
         Write-LogEntry -Message "Deployment submission failed: $($deploymentJob.Error)" -Level Error
-        return [PSCustomObject]@{
-            DeploymentName   = $deploymentName
-            SessionHostNames = $sessionHostNames
-            SessionHostCount = $NewSessionHostsCount
-            Succeeded        = $false
-            Timestamp        = $deploymentTimestamp
-            ErrorMessage     = $deploymentJob.Error
-        }
+        throw "Deployment submission failed: $($deploymentJob.Error)"
     }
     
     Write-LogEntry -Message "Deployment submitted successfully. Deployment name: $deploymentName" -Level Trace
@@ -691,19 +758,45 @@ function Get-Deployments {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName)
     )
 
-    Write-LogEntry -Message "Getting deployments for resource group '$ResourceGroupName'"
+    Write-LogEntry -Message "Getting deployments for resource group '$ResourceGroupName'" -Level Trace
     $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/?api-version=2021-04-01"
-    $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri -RequireCollection
     
     # Filter by deployment prefix
     $deployments = $deployments | Where-Object { $_.name -like "$DeploymentPrefix*" }
+
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation.DeploymentIntent) {
+        $intent = $continuation.DeploymentIntent
+        $intentUri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/$($intent.Name)?api-version=2021-04-01"
+        if ($intent.Uri -ine $intentUri) {
+            throw 'Checkpointed deployment is outside the configured deployment scope.'
+        }
+        try {
+            $currentDeployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET -Uri $intentUri
+            if (-not $currentDeployment -or $currentDeployment.name -ine $intent.Name -or
+                $currentDeployment.properties.provisioningState -notin @(
+                    'Accepted', 'Running', 'Ready', 'Creating', 'Updating', 'Deleting',
+                    'Succeeded', 'Failed', 'Canceled'
+                )) {
+                throw 'Checkpointed deployment lookup returned an invalid response.'
+            }
+        } catch {
+            if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+            $currentDeployment = $null
+        }
+        $deployments = @($deployments | Where-Object { $_.name -ine $intent.Name })
+        if ($currentDeployment) {
+            $deployments += $currentDeployment
+        }
+    }
     
     if ($deployments) {
         Write-LogEntry -Message "Deployment names: $($deployments.name -join ', ')" -Level Trace
     }
     
     # Handle failed deployments - don't block automation, but return info for cleanup
-    $failedDeployments = $deployments | Where-Object { $_.properties.provisioningState -eq 'Failed' }
+    $failedDeployments = $deployments | Where-Object { $_.properties.provisioningState -in @('Failed', 'Canceled') }
     if ($failedDeployments) {
         Write-LogEntry -Message "Found $($failedDeployments.Count) failed deployments. VMs from these deployments will be marked for cleanup." -Level Warning
         foreach ($failedDeploy in $failedDeployments) {
@@ -715,7 +808,7 @@ function Get-Deployments {
         }
     }
     
-    $runningDeployments = $deployments | Where-Object { $_.properties.provisioningState -eq 'Running' }
+    $runningDeployments = $deployments | Where-Object { $_.properties.provisioningState -in @('Accepted', 'Running', 'Ready', 'Creating', 'Updating', 'Deleting') }
     
     $warningThreshold = (Get-Date -AsUTC).AddHours(-2)
     $longRunningDeployments = $runningDeployments | Where-Object { 
@@ -824,13 +917,13 @@ function Get-TemplateSpecVersionResourceId {
             if ($versionsWithTime -and $versionsWithTime.Count -gt 0) {
                 # Sort by last modified time (most recent first)
                 $latestVersion = $versionsWithTime | Sort-Object -Property { [DateTime]$_.systemData.lastModifiedAt } -Descending | Select-Object -First 1
-                Write-LogEntry -Message "Latest version: $($latestVersion.name) Last modified at $($latestVersion.systemData.lastModifiedAt) - Returning Resource Id $($latestVersion.id)"
+                Write-LogEntry -Message "Latest version: $($latestVersion.name) Last modified at $($latestVersion.systemData.lastModifiedAt) - Returning Resource Id $($latestVersion.id)" -Level Trace
             }
             else {
                 # Fallback: if no versions have lastModifiedAt, use version name sorting (assumes semantic versioning)
                 Write-LogEntry -Message "No versions with systemData.lastModifiedAt found, sorting by version name" -Level Warning
                 $latestVersion = $templateSpecVersions | Sort-Object -Property name -Descending | Select-Object -First 1
-                Write-LogEntry -Message "Latest version: $($latestVersion.name) (sorted by name) - Returning Resource Id $($latestVersion.id)"
+                Write-LogEntry -Message "Latest version: $($latestVersion.name) (sorted by name) - Returning Resource Id $($latestVersion.id)" -Level Trace
             }
             
             return $latestVersion.id
@@ -926,37 +1019,46 @@ function Remove-FailedDeploymentArtifacts {
     }
     
     $orphanedVMs = @()
+    $cleanupHosts = @()
     $failedDeploymentNames = @()
+    $recoveryState = Get-DeploymentState
+    if ($recoveryState.LastStatus -eq 'Error') { throw 'Failed-deployment cleanup requires readable recovery state.' }
+    $pendingMappings = ConvertFrom-Json -InputObject $recoveryState.PendingHostMappings -AsHashtable -ErrorAction Stop
+    if ($pendingMappings -isnot [System.Collections.IDictionary]) { throw 'PendingHostMappings must be a JSON object.' }
     
     foreach ($deployment in $FailedDeployments) {
         $failedDeploymentNames += $deployment.DeploymentName
         
         # Handle case where SessionHostNames may not be present (e.g., when called from deployment state tracking)
         if (-not $deployment.SessionHostNames -or $deployment.SessionHostNames.Count -eq 0) {
-            Write-LogEntry -Message "Deployment '$($deployment.DeploymentName)' has no session host names to check for cleanup" -Level Trace
-            continue
+            throw "Failed deployment '$($deployment.DeploymentName)' has no host inventory; inspect it before removing tracking."
         }
         
         foreach ($sessionHostName in $deployment.SessionHostNames) {
-            # Session host name is like 'avdtest01use201', but actual VM could be:
-            # - avdtest01use201 (no CAF naming)
-            # - vm-avdtest01use201 (CAF prefix)
-            # - avdtest01use201-vm (CAF suffix)
-            # 
-            # Strategy: Find VMs where the session host name is contained in the VM name
-            
-            $matchingVMs = $allVMs | Where-Object { $_.name -like "*$sessionHostName*" }
+            $savedResourceId = $pendingMappings[$sessionHostName].ResourceId
+            $expectedResourceId = if ($savedResourceId) { $savedResourceId } else { Get-SessionHostVMResourceId -Name $sessionHostName }
+            $matchingVMs = @($allVMs | Where-Object { $_.id -ieq $expectedResourceId })
+            if ($sessionHostName -notin $RegisteredSessionHostNames) {
+                if (-not $savedResourceId -and $matchingVMs.Count -eq 0) {
+                    throw "Failed host '$sessionHostName' has no durable VM ID or owned VM inventory. Inspect legacy resources and tracking before directory cleanup."
+                }
+                $cleanupHosts += [PSCustomObject]@{ SessionHostName = $sessionHostName; ResourceId = $expectedResourceId }
+            }
             
             foreach ($vm in $matchingVMs) {
                 # Check if this VM is registered as a session host
-                $isRegistered = $RegisteredSessionHostNames | Where-Object { $_ -like "$sessionHostName*" }
+                $isRegistered = $sessionHostName -in $RegisteredSessionHostNames
                 
                 if (-not $isRegistered) {
+                    if ($vm.tags.AutoReplaceDeploymentName -ne $deployment.DeploymentName) {
+                        throw "Cannot prove ownership of failed VM '$($vm.name)' for '$($deployment.DeploymentName)'. Tracking is retained; inspect and remove legacy or unexpected resources manually."
+                    }
                     Write-LogEntry -Message "Found orphaned VM from failed deployment: $($vm.name) (matches session host name $sessionHostName but not registered)" -Level Warning
                     $orphanedVMs += [PSCustomObject]@{
                         Name            = $vm.name
                         ResourceId      = $vm.id
                         DeploymentName  = $deployment.DeploymentName
+                        VMInstanceId    = $vm.properties.vmId
                         SessionHostName = $sessionHostName
                     }
                 }
@@ -977,58 +1079,25 @@ function Remove-FailedDeploymentArtifacts {
         
         foreach ($orphanedVM in $orphanedVMs) {
             try {
-                # Delete Entra device if enabled
-                if ($RemoveEntraDevice -and $GraphToken) {
-                    try {
-                        $graphEndpoint = Get-GraphEndpoint
-                        $deviceUri = "$graphEndpoint/v1.0/devices?`$filter=displayName eq '$($orphanedVM.SessionHostName)'"
-                        $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
-                        
-                        if ($device.value -and $device.value.Count -gt 0) {
-                            $deviceId = $device.value[0].id
-                            $deleteDeviceUri = "$graphEndpoint/v1.0/devices/$deviceId"
-                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri | Out-Null
-                            Write-LogEntry -Message "Successfully deleted Entra device for orphaned VM: $($orphanedVM.SessionHostName)"
-                        }
-                        else {
-                            Write-LogEntry -Message "No Entra device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Trace
-                        }
-                    }
-                    catch {
-                        Write-LogEntry -Message "Failed to delete Entra device for $($orphanedVM.SessionHostName): $_" -Level Warning
-                    }
-                }
-                
-                # Delete Intune device if enabled
-                if ($RemoveIntuneDevice -and $GraphToken) {
-                    try {
-                        $graphEndpoint = Get-GraphEndpoint
-                        $deviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($orphanedVM.SessionHostName)'"
-                        $device = Invoke-GraphRestMethod -GraphToken $GraphToken -Method Get -Uri $deviceUri
-                        
-                        if ($device.value -and $device.value.Count -gt 0) {
-                            $deviceId = $device.value[0].id
-                            $deleteDeviceUri = "$graphEndpoint/v1.0/deviceManagement/managedDevices/$deviceId"
-                            Invoke-GraphRestMethod -GraphToken $GraphToken -Method DELETE -Uri $deleteDeviceUri | Out-Null
-                            Write-LogEntry -Message "Successfully deleted Intune device for orphaned VM: $($orphanedVM.SessionHostName)"
-                        }
-                        else {
-                            Write-LogEntry -Message "No Intune device found for orphaned VM: $($orphanedVM.SessionHostName)" -Level Trace
-                        }
-                    }
-                    catch {
-                        Write-LogEntry -Message "Failed to delete Intune device for $($orphanedVM.SessionHostName): $_" -Level Warning
-                    }
-                }
-                
                 # Delete the VM
                 Write-LogEntry -Message "Deleting orphaned VM: $($orphanedVM.Name) (session host: $($orphanedVM.SessionHostName), from deployment: $($orphanedVM.DeploymentName))" -Level Warning
+                if (Test-ReplacerResourceAbsent -ARMToken $ARMToken -ResourceId $orphanedVM.ResourceId -ResourceManagerUri $ResourceManagerUri) {
+                    continue
+                }
+                $currentVM = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get `
+                    -Uri "$ResourceManagerUri$($orphanedVM.ResourceId)?api-version=2024-07-01" -ErrorAction Stop
+                if ($currentVM.id -ine $orphanedVM.ResourceId -or
+                    $currentVM.tags.AutoReplaceDeploymentName -ne $orphanedVM.DeploymentName -or
+                    ($orphanedVM.VMInstanceId -and $currentVM.properties.vmId -ne $orphanedVM.VMInstanceId)) {
+                    throw "Failed VM '$($orphanedVM.Name)' changed ownership or instance; tracking is retained for operator review."
+                }
                 $Uri = "$ResourceManagerUri$($orphanedVM.ResourceId)?forceDeletion=true&api-version=2024-07-01"
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri | Out-Null
                 Write-LogEntry -Message "Successfully deleted orphaned VM: $($orphanedVM.Name)"
             }
             catch {
                 Write-LogEntry -Message "Failed to delete orphaned VM $($orphanedVM.Name): $_" -Level Error
+                throw
             }
         }
     }
@@ -1036,7 +1105,14 @@ function Remove-FailedDeploymentArtifacts {
         Write-LogEntry -Message "No orphaned VMs found from failed deployments" -Level Trace
     }
     
-    # Clean up failed deployment records from ARM (including nested deployments)
+    if ($cleanupHosts.Count -gt 0) {
+        $cleanupHosts = @($cleanupHosts | Sort-Object SessionHostName -Unique)
+        Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $cleanupHosts `
+            -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice `
+            -WaitForVMDeletion -ResourceManagerUri $ResourceManagerUri
+    }
+
+    # Clear history only after resource and identity cleanup have been verified.
     Write-LogEntry -Message "Cleaning up $($failedDeploymentNames.Count) failed deployment records from ARM history"
     
     foreach ($deploymentName in $failedDeploymentNames) {
@@ -1078,6 +1154,7 @@ function Remove-FailedDeploymentArtifacts {
                 }
                 catch {
                     Write-LogEntry -Message "Warning: Could not retrieve nested deployments for $DeploymentName : $_" -Level Warning
+                    throw
                 }
                 
                 return $allNested
@@ -1101,6 +1178,7 @@ function Remove-FailedDeploymentArtifacts {
                     }
                     catch {
                         Write-LogEntry -Message "Failed to delete nested deployment record $nestedDeploymentName`: $_" -Level Warning
+                        throw
                     }
                 }
             }
@@ -1116,6 +1194,7 @@ function Remove-FailedDeploymentArtifacts {
         }
         catch {
             Write-LogEntry -Message "Failed to delete deployment record $deploymentName`: $_" -Level Warning
+            throw
         }
     }
     

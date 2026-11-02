@@ -33,27 +33,29 @@ param deploymentTime string
 @description('Optional. Log Analytics Workspace resource ID for diagnostic settings.')
 param logAnalyticsWorkspaceResourceId string = ''
 
-@description('''Optional. URI of the runbook PS1 file to publish at deployment time.
-
-Leave empty for air-gapped or internet-restricted environments. When empty the runbook
-resource is created in New (unpublished) state. The schedule and job schedule link are
-still created so the account is fully configured; the runbook just needs to be published
-manually before the first scheduled run. See README.md for portal and PowerShell steps.''')
+// Optional. URI of the runbook PS1 file to publish at deployment time.
+//
+// Leave empty for air-gapped or internet-restricted environments. When empty the runbook
+// resource is created in New (unpublished) state. The schedule and job schedule link are
+// still created so the account is fully configured; the runbook just needs to be published
+// manually before the first scheduled run. See README.md for portal and PowerShell steps.
+@description('Optional. Runbook PS1 URI. Empty creates an unpublished runbook; publish it manually before the first scheduled run. Schedule links are still configured.')
 param runbookContentUri string = ''
 
-@description('''Optional. Controls whether ARM creates the job schedule link between the runbook and
-schedule. Leave true for normal deployments - ARM handles idempotent redeployment correctly when
-the automation account already exists.
-
-Set to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.
-This error occurs specifically when the automation account was previously DELETED from ARM and is
-being recreated with the same name. Azure Automation caches the runbook/schedule association by
-account name; that cache persists through ARM deletion and is restored the moment an account with
-the same name exists again, causing ARM's create call to conflict with the cached association.
-
-When set to false, the existing job schedule link is preserved and the runbook continues to run
-on schedule. To clear the conflict manually from Azure Cloud Shell (required before setting back
-to true), see the snippet in the comment above the jobSchedule resource below.''')
+// Optional. Controls whether ARM creates the job schedule link between the runbook and
+// schedule. Leave true for normal deployments - ARM handles idempotent redeployment correctly when
+// the automation account already exists.
+//
+// Set to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.
+// This error occurs specifically when the automation account was previously DELETED from ARM and is
+// being recreated with the same name. Azure Automation caches the runbook/schedule association by
+// account name; that cache persists through ARM deletion and is restored the moment an account with
+// the same name exists again, causing ARM's create call to conflict with the cached association.
+//
+// When set to false, the existing job schedule link is preserved and the runbook continues to run
+// on schedule. To clear the conflict manually from Azure Cloud Shell (required before setting back
+// to true), see the snippet in the comment above the jobSchedule resource below.
+@description('Optional. Create the runbook/schedule link. Set false to preserve a cached link when recreating a deleted Automation Account with the same name.')
 param createJobSchedule bool = true
 
 // ========== //

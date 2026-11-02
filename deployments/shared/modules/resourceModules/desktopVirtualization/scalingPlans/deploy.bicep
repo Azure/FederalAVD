@@ -1,10 +1,17 @@
+metadata name = 'AVD scaling plan'
+metadata description = 'Deploys a pooled or personal scaling plan, its matching schedules and optional diagnostics. Referenced host pools and autoscale permissions must already be available.'
+
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
 import { personalScalingScheduleType, pooledScalingScheduleType, scalingHostPoolReferenceType } from '../../types/scalingTypes.bicep'
 
+@description('Required. Name of the AVD scaling plan to deploy.')
 param name string
+@description('Optional. Azure region for the AVD scaling plan; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the AVD scaling plan.')
 param tags object = {}
 
+@description('Optional. Windows time zone ID used to interpret the scaling schedule times.')
 param timeZone string = 'Eastern Standard Time'
 
 @description('Tag name used to exclude session hosts from scaling plan.')
@@ -26,6 +33,8 @@ param pooledSchedules pooledScalingScheduleType[] = []
 @description('Personal host pool scaling schedules.')
 param personalSchedules personalScalingScheduleType[] = []
 
+// Referenced diagnostic destination resources must already exist.
+@description('Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings.')
 param diagnosticSettings diagnosticSettingsType?
 
 resource scalingPlan 'Microsoft.DesktopVirtualization/scalingPlans@2023-09-05' = {
@@ -104,5 +113,7 @@ resource diagnosticSetting 'Microsoft.Insights/diagnosticSettings@2021-05-01-pre
   }
 }
 
+@description('Resource ID of the AVD scaling plan.')
 output resourceId string = scalingPlan.id
+@description('Azure resource name of the AVD scaling plan.')
 output name string = scalingPlan.name

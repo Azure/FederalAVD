@@ -1,4 +1,9 @@
+metadata name = 'Data collection endpoint policy permissions'
+metadata description = 'Grants Monitoring Contributor on an existing data collection endpoint in the deployment resource group to the supplied policy identity principal.'
+
+@description('Required. Name of the data collection endpoint in the deployment resource group.')
 param dataCollectionEndpointName string
+@description('Required. Principal object ID of the policy managed identity receiving the scoped role assignment.')
 param principalId string
 
 resource dataCollectionEndpoint 'Microsoft.Insights/dataCollectionEndpoints@2023-03-11' existing = {

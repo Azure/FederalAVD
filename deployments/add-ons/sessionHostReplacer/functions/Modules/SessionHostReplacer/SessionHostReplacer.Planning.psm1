@@ -104,14 +104,14 @@ function Get-ScalingPlanCurrentTarget {
     )
     
     try {
-        Write-LogEntry -Message "Querying scaling plan assigned to host pool" -Level Information
+        Write-LogEntry -Message "Querying scaling plan assigned to host pool" -Level Trace
         
         # Query scaling plans assigned to this host pool - returns scaling plan details directly
         $scalingPlansUri = "$ResourceManagerUri$HostPoolResourceId/scalingPlans?api-version=2024-04-03"
         $scalingPlansResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $scalingPlansUri
         
         if (-not $scalingPlansResponse -or $scalingPlansResponse.Count -eq 0) {
-            Write-LogEntry -Message "No scaling plan assigned to this host pool" -Level Information
+            Write-LogEntry -Message "No scaling plan assigned to this host pool" -Level Trace
             return [PSCustomObject]@{
                 CapacityPercentage = $null
                 ScalingPlanName = $null
@@ -131,7 +131,7 @@ function Get-ScalingPlanCurrentTarget {
         } | Select-Object -First 1
         
         if (-not $hostPoolReference -or $hostPoolReference.scalingPlanEnabled -ne $true) {
-            Write-LogEntry -Message "Scaling plan '$scalingPlanName' is assigned but NOT enabled for this host pool (scalingPlanEnabled: $($hostPoolReference.scalingPlanEnabled))" -Level Information
+            Write-LogEntry -Message "Scaling plan '$scalingPlanName' is assigned but NOT enabled for this host pool (scalingPlanEnabled: $($hostPoolReference.scalingPlanEnabled))" -Level Trace
             return [PSCustomObject]@{
                 CapacityPercentage = $null
                 ScalingPlanName = $scalingPlanName
@@ -141,7 +141,7 @@ function Get-ScalingPlanCurrentTarget {
             }
         }
         
-        Write-LogEntry -Message "Found enabled scaling plan: $scalingPlanName" -Level Information
+        Write-LogEntry -Message "Found enabled scaling plan: $scalingPlanName" -Level Trace
         
         # Get scaling plan time zone and convert current time from UTC
         $scalingPlanTimeZone = $scalingPlan.properties.timeZone
@@ -156,13 +156,13 @@ function Get-ScalingPlanCurrentTarget {
             }
         }
         
-        Write-LogEntry -Message "Scaling plan time zone: $scalingPlanTimeZone" -Level Information
+        Write-LogEntry -Message "Scaling plan time zone: $scalingPlanTimeZone" -Level Trace
         
         # Convert current UTC time to scaling plan's time zone
         try {
             $timeZoneInfo = [System.TimeZoneInfo]::FindSystemTimeZoneById($scalingPlanTimeZone)
             $currentLocalTime = [System.TimeZoneInfo]::ConvertTimeFromUtc($CurrentDateTime, $timeZoneInfo)
-            Write-LogEntry -Message "Current time: UTC=$($CurrentDateTime.ToString('yyyy-MM-dd HH:mm:ss')), Local($scalingPlanTimeZone)=$($currentLocalTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Information
+            Write-LogEntry -Message "Current time: UTC=$($CurrentDateTime.ToString('yyyy-MM-dd HH:mm:ss')), Local($scalingPlanTimeZone)=$($currentLocalTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Trace
         }
         catch {
             Write-LogEntry -Message "Failed to convert time zone '$scalingPlanTimeZone': $($_.Exception.Message)" -Level Warning
@@ -446,6 +446,8 @@ function Get-SessionHostReplacementPlan {
         [Parameter()]
         [PSCustomObject] $ScalingPlanTarget = $null,
         [Parameter()]
+        [switch] $ReadOnly,
+        [Parameter()]
         [string] $GraphToken,
         [Parameter()]
         [bool] $RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
@@ -460,18 +462,18 @@ function Get-SessionHostReplacementPlan {
     )
     
     $isDeleteBeforeDeployMode = $ReplacementMode -in @('DeleteFirst', 'MaintenanceWindow')
-    Write-LogEntry -Message "We have $($SessionHosts.Count) session hosts (included in Automation)"
+    Write-LogEntry -Message "We have $($SessionHosts.Count) session hosts (included in Automation)" -Level Trace
     
     # Auto-detect target count if not specified (TargetSessionHostCount = 0)
     if ($TargetSessionHostCount -eq 0) {
         # Get deployment state to check for stored target
         try {
-            $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName
+            $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName -ReadOnly:$ReadOnly
             
             if ($deploymentState.TargetSessionHostCount -gt 0) {
                 # Use previously stored target from ongoing replacement cycle
                 $TargetSessionHostCount = $deploymentState.TargetSessionHostCount
-                Write-LogEntry -Message "Auto-detect mode: Using stored target count of $TargetSessionHostCount from current replacement cycle"
+                Write-LogEntry -Message "Auto-detect mode: Using stored target count of $TargetSessionHostCount from current replacement cycle" -Level Trace
             } else {
                 $pendingHostNames = @()
                 if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
@@ -479,17 +481,19 @@ function Get-SessionHostReplacementPlan {
                     $pendingHostNames = @($pendingMappings.Keys)
                 }
 
-                $registeredHostNames = @($SessionHosts.SessionHostName)
+                $registeredHostNames = @($SessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName })
                 $unresolvedPendingCount = @($pendingHostNames | Where-Object { $_ -notin $registeredHostNames }).Count
-                $TargetSessionHostCount = $SessionHosts.Count + $unresolvedPendingCount
+                $TargetSessionHostCount = $registeredHostNames.Count + $unresolvedPendingCount
                 if ($TargetSessionHostCount -le 0) {
                     throw "Auto-detect mode cannot establish a positive target from an empty host pool"
                 }
 
                 # First run of a new replacement cycle - store current and recoverable count as target
                 $deploymentState.TargetSessionHostCount = $TargetSessionHostCount
-                Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName -RequireSuccess
-                Write-LogEntry -Message "Auto-detect mode: Detected target of $TargetSessionHostCount session hosts, including $unresolvedPendingCount unresolved recovery host(s)"
+                if (-not $ReadOnly) {
+                    Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName -RequireSuccess
+                }
+                Write-LogEntry -Message "Auto-detect mode: Detected target of $TargetSessionHostCount session hosts, including $unresolvedPendingCount unresolved recovery host(s); read-only assessment: $ReadOnly"
             }
         }
         catch {
@@ -502,9 +506,9 @@ function Get-SessionHostReplacementPlan {
     [array] $sessionHostsOldVersion = @()
     
     $latestImageAge = (New-TimeSpan -Start $LatestImageVersion.Date -End (Get-Date -AsUTC)).TotalDays
-    Write-LogEntry -Message "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old."
+    Write-LogEntry -Message "Latest Image $($LatestImageVersion.Version) is $latestImageAge days old." -Level Trace
     if ($latestImageAge -ge $ReplaceSessionHostOnNewImageVersionDelayDays) {
-            Write-LogEntry -Message "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays"
+            Write-LogEntry -Message "Latest Image age is older than (or equal) New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays" -Level Trace
             
             # Log each session host's image version for debugging
             foreach ($sh in $sessionHosts) {
@@ -559,10 +563,10 @@ function Get-SessionHostReplacementPlan {
                 }
             }
             
-            Write-LogEntry -Message "Found $($sessionHostsOldVersion.Count) session hosts to replace due to image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')"
+            Write-LogEntry -Message "Found $($sessionHostsOldVersion.Count) session hosts to replace due to image version. $($($sessionHostsOldVersion.SessionHostName) -Join ',')" -Level Trace
     }
     else {
-        Write-LogEntry -Message "Latest Image age is less than New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays - no session hosts will be replaced based on image version"
+        Write-LogEntry -Message "Latest Image age is less than New Image Delay value $ReplaceSessionHostOnNewImageVersionDelayDays - no session hosts will be replaced based on image version" -Level Trace
     }
 
     # Detect and handle unavailable session hosts (VMs deleted but host pool registration remains)
@@ -570,43 +574,20 @@ function Get-SessionHostReplacementPlan {
     if ($unavailableHosts.Count -gt 0) {
         $unavailableHostNames = $unavailableHosts.SessionHostName -join ','
         Write-LogEntry -Message "CRITICAL: Detected $($unavailableHosts.Count) unavailable session hosts (VMs deleted): $unavailableHostNames" -Level Error
-        Write-LogEntry -Message "Cleaning up device records and host pool registrations before redeployment..." -Level Warning
-        
-        # Clean up device records for each unavailable host
-        foreach ($unavailableHost in $unavailableHosts) {
-            # Remove from Entra ID and Intune if configured
-            if ($GraphToken -and ($RemoveEntraDevice -or $RemoveIntuneDevice)) {
-                try {
-                    Remove-DeviceFromDirectories `
-                        -DeviceName $unavailableHost.SessionHostName `
-                        -GraphToken $GraphToken `
-                        -RemoveEntraDevice $RemoveEntraDevice `
-                        -RemoveIntuneDevice $RemoveIntuneDevice
-                    Write-LogEntry -Message "Cleaned up device records for ghost host: $($unavailableHost.SessionHostName)" -Level Information
-                }
-                catch {
-                    Write-LogEntry -Message "Failed to clean up device records for $($unavailableHost.SessionHostName): $($_.Exception.Message)" -Level Warning
-                }
-            }
-            
-            # Remove stale host pool registration
-            try {
-                $hostPoolPath = "/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName"
-                $sessionHostPath = "$hostPoolPath/sessionHosts/$($unavailableHost.FQDN)"
-                $deleteUri = "$ResourceManagerUri$sessionHostPath`?api-version=2024-04-03&force=true"
-                
-                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Delete -Uri $deleteUri | Out-Null
-                Write-LogEntry -Message "Removed stale host pool registration: $($unavailableHost.FQDN)" -Level Information
-            }
-            catch {
-                Write-LogEntry -Message "Failed to remove host pool registration for $($unavailableHost.FQDN): $($_.Exception.Message)" -Level Warning
-            }
-        }
-        
-        Write-LogEntry -Message "Ghost host cleanup complete. These hosts will be excluded from deletion candidates and counted as needing replacement." -Level Warning
+        Write-LogEntry -Message "Missing hosts require verified predeployment cleanup; planning will not remove identities or registrations." -Level Warning
     }
     
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
+    $totalFleetHostsToReplace = $sessionHostsToReplace.Count
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation -and $null -ne $continuation.BatchHostNames) {
+        if (-not ($ReplacementMode -eq 'SideBySide' -and $continuation.NextBatchAuthorized)) {
+            $sessionHostsToReplace = @($sessionHostsToReplace | Where-Object {
+                $_.SessionHostName -in $continuation.BatchHostNames
+            })
+        }
+        $TargetSessionHostCount = $continuation.TargetCount
+    }
 
     # Up-to-date hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable) AND not unavailable (VM deleted)
     $goodSessionHosts = $SessionHosts | Where-Object { 
@@ -637,12 +618,12 @@ function Get-SessionHostReplacementPlan {
     }
     
     $sessionHostsCurrentTotal = ([array]$goodSessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
-    Write-LogEntry -Message "We have $($sessionHostsCurrentTotal.Count) up-to-date session hosts including $runningDeploymentVMCount session hosts being deployed"
-    Write-LogEntry -Message "We target having $TargetSessionHostCount up-to-date session hosts"
+    Write-LogEntry -Message "We have $($sessionHostsCurrentTotal.Count) up-to-date session hosts including $runningDeploymentVMCount session hosts being deployed" -Level Trace
+    Write-LogEntry -Message "We target having $TargetSessionHostCount up-to-date session hosts" -Level Trace
     
     # Check if there are any running or recently submitted deployments - if so, skip deployment and capacity calculations
     if ($runningDeployments -and $runningDeployments.Count -gt 0) {
-        Write-LogEntry -Message "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Warning
+        Write-LogEntry -Message "Found $($runningDeployments.Count) running or recently submitted deployment(s). Will not submit new deployments until these complete." -Level Trace
         $canDeploy = 0
         # In DeleteFirst mode, deletions are aligned with deployments (1:1), so also skip deletion calculations
         $canDelete = if ($isDeleteBeforeDeployMode) { 0 } else { $SessionHosts.Count - $TargetSessionHostCount }
@@ -657,13 +638,13 @@ function Get-SessionHostReplacementPlan {
             $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
             
             if ($weNeedToDeploy -gt 0) {
-                Write-LogEntry -Message "We need to deploy $weNeedToDeploy new session hosts"
+                Write-LogEntry -Message "We need to deploy $weNeedToDeploy new session hosts" -Level Trace
                 $canDeploy = $weNeedToDeploy
-                Write-LogEntry -Message "DeleteFirst mode allows deploying $canDeploy session hosts (will delete first to make room)"
+                Write-LogEntry -Message "DeleteFirst mode allows deploying $canDeploy session hosts (will delete first to make room)" -Level Trace
             }
             else {
                 $canDeploy = 0
-                Write-LogEntry -Message "We have enough up-to-date session hosts."
+                Write-LogEntry -Message "We have enough up-to-date session hosts." -Level Trace
             }
         }
         else {
@@ -671,34 +652,34 @@ function Get-SessionHostReplacementPlan {
             # Note: Unavailable hosts are already excluded from $sessionHostsCurrentTotal.Count,
             # so they will naturally be counted as needing replacement without special handling
             $effectiveBuffer = $TargetSessionHostCount
-            Write-LogEntry -Message "Automatic buffer: $effectiveBuffer session hosts (allows pool to double during rolling updates)"
+            Write-LogEntry -Message "Automatic buffer: $effectiveBuffer session hosts (allows pool to double during rolling updates)" -Level Trace
             
             $canDeployUpTo = $TargetSessionHostCount + $effectiveBuffer - $SessionHosts.count - $runningDeploymentVMCount
             
             if ($canDeployUpTo -ge 0) {
-                Write-LogEntry -Message "We can deploy up to $canDeployUpTo session hosts" 
+                Write-LogEntry -Message "We can deploy up to $canDeployUpTo session hosts" -Level Trace
                 $weNeedToDeploy = $TargetSessionHostCount - $sessionHostsCurrentTotal.Count
                 
                 if ($weNeedToDeploy -gt 0) {
-                    Write-LogEntry -Message "We need to deploy $weNeedToDeploy new session hosts"
+                    Write-LogEntry -Message "We need to deploy $weNeedToDeploy new session hosts" -Level Trace
                     $canDeploy = if ($weNeedToDeploy -gt $canDeployUpTo) { $canDeployUpTo } else { $weNeedToDeploy }
-                    Write-LogEntry -Message "Buffer allows deploying $canDeploy session hosts"
+                    Write-LogEntry -Message "Buffer allows deploying $canDeploy session hosts" -Level Trace
                 }
                 else {
                     $canDeploy = 0
-                    Write-LogEntry -Message "We have enough up-to-date session hosts."
+                    Write-LogEntry -Message "We have enough up-to-date session hosts." -Level Trace
                 }
             }
             else {
-                Write-LogEntry -Message "Buffer is full. We can not deploy more session hosts"
+                Write-LogEntry -Message "Buffer is full. We can not deploy more session hosts" -Level Trace
                 $canDeploy = 0
             }
         }
             
         # Apply progressive scale-up to both modes (if enabled)
         if ($EnableProgressiveScaleUp -and $canDeploy -gt 0) {
-            Write-LogEntry -Message "Progressive scale-up is enabled"
-            $deploymentState = Get-DeploymentState
+            Write-LogEntry -Message "Progressive scale-up is enabled" -Level Trace
+            $deploymentState = Get-DeploymentState -ReadOnly:$ReadOnly
             $currentPercentage = $InitialDeploymentPercentage
             
             if ($deploymentState.ConsecutiveSuccesses -ge $SuccessfulRunsBeforeScaleUp) {
@@ -722,6 +703,9 @@ function Get-SessionHostReplacementPlan {
             
             Write-LogEntry -Message "Progressive scale-up: Using $currentPercentage% of $canDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $batchSizeLimit)"
             $canDeploy = $actualDeployCount
+        }
+        if ($ReplacementMode -eq 'SideBySide') {
+            $canDeploy = [Math]::Min($canDeploy, $MaxDeploymentBatchSize)
         }
     }
         
@@ -747,7 +731,7 @@ function Get-SessionHostReplacementPlan {
             -ScalingPlanTarget $ScalingPlanTarget
         $effectiveMinimumCapacityPct = $capacityPolicy.EffectiveMinimumCapacityPercentage
         $capacitySource = $capacityPolicy.CapacitySource
-        Write-LogEntry -Message "Replacement capacity policy: minimum online healthy hosts=$($capacityPolicy.MinimumOnlineHealthyHosts), effective percentage=$effectiveMinimumCapacityPct%, destructive freeze=$($capacityPolicy.DestructiveOperationsFrozen) [Source: $capacitySource]"
+        Write-LogEntry -Message "Replacement capacity policy: minimum online healthy hosts=$($capacityPolicy.MinimumOnlineHealthyHosts), effective percentage=$effectiveMinimumCapacityPct%, destructive freeze=$($capacityPolicy.DestructiveOperationsFrozen) [Source: $capacitySource]" -Level Trace
         
         # Safety floor: Ensure that after deletion, we maintain minimum capacity relative to target
         # The minimum is calculated as a percentage of the TARGET pool size
@@ -772,7 +756,7 @@ function Get-SessionHostReplacementPlan {
         
         $canDelete = [Math]::Max($canDelete, 0)  # Ensure non-negative
         
-        Write-LogEntry -Message "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, available capacity: $availableHostsCount, minimum: $minimumAbsoluteHosts at $effectiveMinimumCapacityPct%, draining: $drainingHostsCount, max per cycle: $MaxDeletionsPerCycle) [Capacity source: $capacitySource]"
+        Write-LogEntry -Message "Delete-First mode: Will delete $canDelete hosts (aligned with $canDeploy deployments, available capacity: $availableHostsCount, minimum: $minimumAbsoluteHosts at $effectiveMinimumCapacityPct%, draining: $drainingHostsCount, max per cycle: $MaxDeletionsPerCycle) [Capacity source: $capacitySource]" -Level Trace
         }
         else {
             # SideBySide mode: Only delete when overpopulated (more hosts than target)
@@ -781,11 +765,11 @@ function Get-SessionHostReplacementPlan {
     }
     
     if ($canDelete -gt 0) {
-        Write-LogEntry -Message "We need to delete $canDelete session hosts"
+        Write-LogEntry -Message "We need to delete $canDelete session hosts" -Level Trace
         if ($canDelete -gt $sessionHostsToReplace.Count) {
-            Write-LogEntry -Message "Host pool is over populated"
+            Write-LogEntry -Message "Host pool is over populated" -Level Trace
             $goodSessionHostsToDeleteCount = $canDelete - $sessionHostsToReplace.Count
-            Write-LogEntry -Message "We will delete $goodSessionHostsToDeleteCount up-to-date session hosts (pool is over-populated)"
+            Write-LogEntry -Message "We will delete $goodSessionHostsToDeleteCount up-to-date session hosts (pool is over-populated)" -Level Trace
             
             # Lazy load power states for up-to-date hosts being considered for deletion
             $goodHostResourceIds = $goodSessionHosts | ForEach-Object { $_.ResourceId }
@@ -798,11 +782,11 @@ function Get-SessionHostReplacementPlan {
             
             # Sort by power state (prioritize powered-off VMs), then session count (idle hosts), then drain status, then name
             $selectedGoodHostsTotDelete = [array] ($goodSessionHosts | Sort-Object -Property @{Expression={-not $_.PoweredOff}; Ascending=$true}, @{Expression={$_.Sessions}; Ascending=$true}, @{Expression={$_.AllowNewSession}; Ascending=$true}, SessionHostName | Select-Object -First $goodSessionHostsToDeleteCount)
-            Write-LogEntry -Message "Selected the following up-to-date session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')"
+            Write-LogEntry -Message "Selected the following up-to-date session hosts to delete: $($($selectedGoodHostsTotDelete.VMName) -join ',')" -Level Trace
         }
         else {
             $selectedGoodHostsTotDelete = @()
-            Write-LogEntry -Message "Host pool is not over populated"
+            Write-LogEntry -Message "Host pool is not over populated" -Level Trace
         }
         
         # Lazy load power states for hosts to replace being considered for deletion
@@ -817,7 +801,7 @@ function Get-SessionHostReplacementPlan {
         }
         
         $replaceHostResourceIds = $sessionHostsAvailableForReplace | ForEach-Object { $_.ResourceId }
-        Write-LogEntry -Message "Querying power state for $($replaceHostResourceIds.Count) replacement candidate(s): $($sessionHostsAvailableForReplace.VMName -join ',')"
+        Write-LogEntry -Message "Querying power state for $($replaceHostResourceIds.Count) replacement candidate(s): $($sessionHostsAvailableForReplace.VMName -join ',')" -Level Trace
         $powerStates = Get-VMPowerStates -ARMToken $ARMToken -VMResourceIds $replaceHostResourceIds
         
         # Enrich hosts to replace with power state
@@ -828,7 +812,7 @@ function Get-SessionHostReplacementPlan {
         # Log power state results for visibility
         $poweredOffHosts = $sessionHostsAvailableForReplace | Where-Object { $_.PoweredOff }
         if ($poweredOffHosts) {
-            Write-LogEntry -Message "Found $($poweredOffHosts.Count) powered-off host(s) among replacement candidates: $($poweredOffHosts.VMName -join ',')"
+            Write-LogEntry -Message "Found $($poweredOffHosts.Count) powered-off host(s) among replacement candidates: $($poweredOffHosts.VMName -join ',')" -Level Trace
         }
         
         # Prioritize hosts for deletion: powered-off first, then idle, then draining, then fewest sessions
@@ -886,8 +870,8 @@ function Get-SessionHostReplacementPlan {
         # In SideBySide mode, apply progressive scale-up to deletions
         # In DeleteFirst mode, skip this - deletions are already controlled by deployment progressive scale-up (they're aligned 1:1)
         if ($ReplacementMode -ne 'DeleteFirst' -and $EnableProgressiveScaleUp -and $sessionHostsPendingDelete.Count -gt 0) {
-            Write-LogEntry -Message "Progressive scale-up is enabled for deletions"
-            $deploymentState = Get-DeploymentState
+            Write-LogEntry -Message "Progressive scale-up is enabled for deletions" -Level Trace
+            $deploymentState = Get-DeploymentState -ReadOnly:$ReadOnly
             $currentPercentage = $InitialDeploymentPercentage
             
             if ($deploymentState.ConsecutiveSuccesses -ge $SuccessfulRunsBeforeScaleUp) {
@@ -906,22 +890,22 @@ function Get-SessionHostReplacementPlan {
         }
         
         if ($enableShutdownRetention) {
-            Write-LogEntry -Message "The following session hosts will be shut down for $shutdownRetentionDays day(s) before deletion: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
+            Write-LogEntry -Message "The following session hosts will be shut down for $shutdownRetentionDays day(s) before deletion: $($($SessionHostsPendingDelete.SessionHostName) -join ',')" -Level Trace
         }
         else {
-            Write-LogEntry -Message "The following session hosts are pending deletion: $($($SessionHostsPendingDelete.SessionHostName) -join ',')"
+            Write-LogEntry -Message "The following session hosts are pending deletion: $($($SessionHostsPendingDelete.SessionHostName) -join ',')" -Level Trace
         }
     }
     elseif ($sessionHostsToReplace.Count -gt 0) {
-        Write-LogEntry -Message "$($sessionHostsToReplace.Count) session host(s) still require replacement, but none can be removed this cycle until replacement capacity is available."
+        Write-LogEntry -Message "$($sessionHostsToReplace.Count) session host(s) still require replacement, but none can be removed this cycle until replacement capacity is available." -Level Trace
     }
     else {
-        Write-LogEntry -Message "We do not need to delete any session hosts"
+        Write-LogEntry -Message "We do not need to delete any session hosts" -Level Trace
     }
     
     # Auto-detect mode: Clear stored target when replacement cycle is complete
     $configuredTarget = Read-FunctionAppSetting TargetSessionHostCount
-    if ($configuredTarget -eq 0 -and $sessionHostsToReplace.Count -eq 0 -and $sessionHostsPendingDelete.Count -eq 0) {
+    if (-not $ReadOnly -and $configuredTarget -eq 0 -and $canDeploy -eq 0 -and $unavailableHosts.Count -eq 0 -and $totalFleetHostsToReplace -eq 0 -and $sessionHostsPendingDelete.Count -eq 0) {
         # All hosts are up to date and nothing pending - clear stored target for next cycle
         try {
             $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName
@@ -940,9 +924,11 @@ function Get-SessionHostReplacementPlan {
         PossibleDeploymentsCount       = $canDeploy
         PossibleSessionHostDeleteCount = $canDelete
         SessionHostsPendingDelete      = $sessionHostsPendingDelete
-        ExistingSessionHostNames       = ([array]$SessionHosts.SessionHostName + [array]$runningDeploymentVMNames) | Select-Object -Unique
+        ExistingSessionHostNames       = (@($SessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName }) + [array]$runningDeploymentVMNames) | Select-Object -Unique
         TargetSessionHostCount         = $TargetSessionHostCount
         TotalSessionHostsToReplace     = $sessionHostsToReplace.Count
+        ReplacementCandidates         = @($sessionHostsToReplace | Sort-Object AllowNewSession, Sessions, SessionHostName)
+        TotalFleetSessionHostsToReplace = $totalFleetHostsToReplace
     }
 }
 
@@ -1107,9 +1093,9 @@ function Get-SessionHosts {
         [bool] $IncludePreExistingSessionHosts = (Read-FunctionAppSetting IncludePreExistingSessionHosts -AsBoolean)
     )
     
-    Write-LogEntry -Message "Getting current session hosts in host pool $HostPoolName"
+    Write-LogEntry -Message "Getting current session hosts in host pool $HostPoolName" -Level Trace
     $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts?api-version=2024-04-03"
-    $sessionHostsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
+    $sessionHostsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri -RequireCollection
     
     # Extract properties from nested structure
     $sessionHosts = $sessionHostsResponse | ForEach-Object {
@@ -1126,6 +1112,7 @@ function Get-SessionHosts {
     }
     
     $result = foreach ($sh in $sessionHosts) {
+        if ([string]::IsNullOrWhiteSpace($sh.ResourceId)) { throw "AVD registration '$($sh.Name)' has no VM resource ID." }
         # Look up VM from cache by resource ID
         $vmResponse = $null
         if ($CachedVMs -and $CachedVMs.Count -gt 0) {
@@ -1137,14 +1124,28 @@ function Get-SessionHosts {
         
         # Fall back to individual query if not in cache (without instanceView - we'll get power state lazily if needed)
         if (-not $vmResponse) {
+            $vmAbsent = $false
             Write-LogEntry -Message "VM not found in cache, querying individually: $($sh.ResourceId)" -Level Trace
             $Uri = "$ResourceManagerUri$($sh.ResourceId)?api-version=2024-07-01"
             try {
                 $vmResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
             }
             catch {
-                Write-LogEntry -Message "Failed to query VM $($sh.ResourceId): $($_.Exception.Message). VM may have been deleted." -Level Warning
-                $vmResponse = $null
+                if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+                    $vmResponse = $null
+                    $vmAbsent = $true
+                }
+                else {
+                    Write-LogEntry -Message "Unable to determine VM existence for $($sh.ResourceId): $($_.Exception.Message)" -Level Error
+                    throw
+                }
+            }
+            if ($vmResponse.error) {
+                if ($vmResponse.error.code -eq 'ResourceNotFound') { $vmResponse = $null; $vmAbsent = $true }
+                else { throw "VM lookup failed for '$($sh.ResourceId)': $($vmResponse.error.code)" }
+            }
+            if ($null -eq $vmResponse -and -not $vmAbsent -and -not (Test-ReplacerResourceAbsent -ARMToken $ARMToken -ResourceId $sh.ResourceId)) {
+                throw "Unable to establish VM absence for '$($sh.ResourceId)'."
             }
         }
         

@@ -16,6 +16,10 @@ applications.
 
 ## Notes
 
+- For one explicitly selected WinGet/UWP/Teams-prerequisite transfer envelope, use the
+  [combined prerequisite builder](air-gapped-clouds.md#combined-prerequisite-transfer-zip).
+  Extract its outer ZIP before staging; this uploader does not unpack a transfer envelope.
+
 - In air-gapped clouds (Secret/Top Secret), the script selects the target-cloud base manifest and downloads from its endpoints when reachable. The standard high-side workflow needs **no customer `downloads.json`**; use `-CustomerDownloadsMode None` to ignore customer download overlays without disabling base downloads or customer artifacts. Pre-stage manual prerequisites and complete selected customer packages under `customer/artifacts/` (or `<CustomerRootPath>\artifacts\`). See [Prepare the Low-to-High Transfer Bundle](air-gapped-clouds.md#prepare-the-low-to-high-transfer-bundle).
 - `-PackageOnly` output is a **low-side working directory**, not a transfer bundle. It uses the public base manifest and can include public OneDrive, Teams, Office Deployment Tool, AVD Agent/Boot Loader, and FSLogix outputs. Do not transfer the entire directory or use `*.zip`; explicitly select approved customer packages and manual prerequisites, leaving public base Microsoft files on low.
 - Use `-DeleteExistingBlobs` for a clean upload when removing old packages.
@@ -382,7 +386,7 @@ Fallback eligibility requires all of the following:
 
 Community-source entries (`WingetSource: "winget"`), dotted package IDs, single-file downloads,
 other architecture overrides, and Secret/Top Secret manifests never invoke this fallback.
-Successful WinGet downloads are unchanged. Both methods failing stops the update instead of
+If both methods fail, the update stops instead of
 packaging a partial fallback download.
 
 The fallback uses an **undocumented, experimental Microsoft interface** and cannot obtain licenses,

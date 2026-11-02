@@ -4,16 +4,24 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "18041353220687360778"
-    }
+      "version": "0.48.1.52935",
+      "templateHash": "18052079899844170519"
+    },
+    "name": "Guest Attestation remediation template",
+    "description": "Deploys the Guest Attestation extension on an existing VM in the deployment resource group for Azure Policy remediation."
   },
   "parameters": {
     "location": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Azure region for the resources deployed by this module."
+      }
     },
     "virtualMachineName": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the existing VM in the deployment resource group."
+      }
     }
   },
   "resources": [

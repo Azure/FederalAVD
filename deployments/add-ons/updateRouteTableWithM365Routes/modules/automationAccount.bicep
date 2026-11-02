@@ -35,19 +35,20 @@ param logAnalyticsWorkspaceResourceId string = ''
 @description('Required. URI of the runbook PS1 file to publish.')
 param runbookContentUri string
 
-@description('''Optional. Controls whether ARM creates the job schedule link between the runbook and
-schedule. Leave true for normal deployments - ARM handles idempotent redeployment correctly when
-the automation account already exists.
-
-Set to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.
-This error occurs specifically when the automation account was previously DELETED from ARM and is
-being recreated with the same name. Azure Automation caches the runbook/schedule association by
-account name; that cache persists through ARM deletion and is restored the moment an account with
-the same name exists again, causing ARM\'s create call to conflict with the cached association.
-
-When set to false, the existing job schedule link is preserved and the runbook continues to run
-on schedule. To clear the conflict manually from Azure Cloud Shell (required before setting back
-to true), see the snippet in the comment above the jobSchedule resource below.''')
+// Optional. Controls whether ARM creates the job schedule link between the runbook and
+// schedule. Leave true for normal deployments - ARM handles idempotent redeployment correctly when
+// the automation account already exists.
+//
+// Set to false ONLY if you receive: Code: Conflict / A jobSchedule with same id already exists.
+// This error occurs specifically when the automation account was previously DELETED from ARM and is
+// being recreated with the same name. Azure Automation caches the runbook/schedule association by
+// account name; that cache persists through ARM deletion and is restored the moment an account with
+// the same name exists again, causing ARM\'s create call to conflict with the cached association.
+//
+// When set to false, the existing job schedule link is preserved and the runbook continues to run
+// on schedule. To clear the conflict manually from Azure Cloud Shell (required before setting back
+// to true), see the snippet in the comment above the jobSchedule resource below.
+@description('Optional. Create the runbook/schedule link. Set false to preserve a cached link when recreating a deleted Automation Account with the same name.')
 param createJobSchedule bool = true
 
 // ========== //

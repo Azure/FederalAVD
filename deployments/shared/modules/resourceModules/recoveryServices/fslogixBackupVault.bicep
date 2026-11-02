@@ -1,9 +1,15 @@
+metadata name = 'FSLogix Azure Files backup vault'
+metadata description = 'Creates or adopts a Recovery Services vault and optionally manages a daily Azure Files snapshot policy.'
+
+// New vaults can receive diagnostics and a conditional private endpoint.
+// Storage registration and protection are managed separately.
+
 targetScope = 'subscription'
 
 @description('Required. Whether to create a new Recovery Services Vault.')
 param createVault bool
 
-@description('Required. Whether to create or update the Azure Files snapshot backup policy.')
+@description('Optional. Whether to create or update the Azure Files snapshot backup policy.')
 param manageBackupPolicy bool = true
 
 @description('Conditional. Resource ID of an existing Recovery Services Vault. Required when createVault is false.')
@@ -148,10 +154,13 @@ module vaultPrivateEndpoint '../network/privateEndpoints/deploy.bicep' = if (cre
   }
 }
 
+@description('Resource ID of the newly deployed vault or the caller-supplied existing vault.')
 output recoveryServicesVaultResourceId string = createVault
   ? recoveryServicesVault!.outputs.resourceId
   : existingRecoveryServicesVaultResourceId
 
+@description('Selected Azure Files backup policy name, returned whether or not this module manages the policy.')
 output fileShareBackupPolicyName string = fileSharePolicyName
 
+@description('Constructed policy resource ID in the selected vault; when manageBackupPolicy is false, existence is the caller responsibility.')
 output fileShareBackupPolicyResourceId string = '/subscriptions/${effectiveVaultSubscriptionId}/resourceGroups/${effectiveVaultResourceGroupName}/providers/Microsoft.RecoveryServices/vaults/${effectiveVaultName}/backupPolicies/${fileSharePolicyName}'

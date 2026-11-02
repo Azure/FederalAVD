@@ -1,7 +1,13 @@
+metadata name = 'VM Applications policy definition'
+metadata description = 'Defines a subscription Modify policy maintaining the authoritative ordered Gallery application references, including latest-version matching, on VMs; the caller owns assignment and permissions.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostVmApplication-Modify'
+@description('Optional. Display name stored on the subscription policy definition.')
 param policyDefinitionDisplayName string = 'Configure VM Applications on AVD session hosts'
+@description('Optional. Description stored on the subscription policy definition; does not change its policy rule.')
 param policyDefinitionDescription string = 'Configures an authoritative ordered list of Azure Compute Gallery application version references on AVD session host virtual machines during resource creation or update.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -117,4 +123,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

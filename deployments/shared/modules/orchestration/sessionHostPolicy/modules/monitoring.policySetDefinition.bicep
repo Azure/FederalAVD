@@ -1,7 +1,13 @@
+metadata name = 'Session host monitoring initiative'
+metadata description = 'Creates a subscription initiative combining supplied Agent and association definitions for Azure Monitor Agent, a data collection rule, and an optional data collection endpoint.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription monitoring initiative to create or update.')
 param policySetDefinitionName string = 'avdSessionHostMonitoring'
+@description('Required. Resource ID of the existing Azure Monitor Agent DeployIfNotExists definition included in the initiative.')
 param azureMonitorAgentPolicyDefinitionResourceId string
+@description('Required. Resource ID of the existing monitoring association definition reused for the DCR and optional DCE initiative members.')
 param monitoringAssociationPolicyDefinitionResourceId string
 
 resource policySetDefinition 'Microsoft.Authorization/policySetDefinitions@2024-05-01' = {
@@ -44,4 +50,5 @@ resource policySetDefinition 'Microsoft.Authorization/policySetDefinitions@2024-
   }
 }
 
+@description('Resource ID of the subscription monitoring initiative created by this module.')
 output policySetDefinitionResourceId string = policySetDefinition.id

@@ -1,8 +1,10 @@
 targetScope = 'subscription'
 
+import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
+import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -69,25 +71,29 @@ param identifier string
 #disable-next-line no-unused-params
 param index int = -1
 
-@description('''Optional. Naming convention controlling how all resources in this deployment are named.
-The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention: resourceType-workload-purpose-location.
-Note: purpose is a FederalAVD addition with no direct CAF equivalent — it provides per-resource uniqueness within a deployment.
-All properties are optional when using the default convention; override only what needs to change.
-Key properties:
-  components               — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
-  delimiter                — character inserted between components, e.g. "-"
-  workload                 — solution identifier inserted into names, e.g. "avd"
-  environment              — optional environment token, e.g. "prod"
-  freeform1                — static text slot before the workload
-  freeform2                — static text slot after the environment
-  vmsLocationAbbreviation  — override for the auto-resolved VMs region abbreviation
-  cpLocationAbbreviation   — override for the auto-resolved control plane region abbreviation
-  fslogixStoragePrefix              — custom prefix for FSLogix storage accounts (max 13 lowercase alphanumeric)
-  virtualMachineNameConvOverride    — optional SHNAME pattern for VMs (default "SHNAME")
-  virtualMachineDiskNameConvOverride  — optional SHNAME pattern for VM OS disks (default "SHNAME-osdisk")
-  virtualMachineNicNameConvOverride   — optional SHNAME pattern for VM NICs (default "SHNAME-nic")
-Resource type abbreviations are provided separately via namingResourceTypeCodes.
-Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the defaults.''')
+// Optional. Naming convention controlling how all resources in this deployment are named.
+// The default value produces names aligned with the Cloud Adoption Framework (CAF) naming convention:
+// resourceType-workload-purpose-location.
+// Note: purpose is a FederalAVD addition with no direct CAF equivalent — it provides per-resource
+// uniqueness within a deployment.
+// All properties are optional when using the default convention; override only what needs to change.
+// Key properties:
+//   components               — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
+//   delimiter                — character inserted between components, e.g. "-"
+//   workload                 — solution identifier inserted into names, e.g. "avd"
+//   environment              — optional environment token, e.g. "prod"
+//   freeform1                — static text slot before the workload
+//   freeform2                — static text slot after the environment
+//   vmsLocationAbbreviation  — override for the auto-resolved VMs region abbreviation
+//   cpLocationAbbreviation   — override for the auto-resolved control plane region abbreviation
+//   fslogixStoragePrefix              — custom prefix for FSLogix storage accounts (max 13 lowercase alphanumeric)
+//   virtualMachineNameConvOverride    — optional SHNAME pattern for VMs (default "SHNAME")
+//   virtualMachineDiskNameConvOverride  — optional SHNAME pattern for VM OS disks (default "SHNAME-osdisk")
+//   virtualMachineNicNameConvOverride   — optional SHNAME pattern for VM NICs (default "SHNAME-nic")
+// Resource type abbreviations are provided separately via namingResourceTypeCodes.
+// Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the
+// defaults.
+@description('Optional. Shared naming-convention overrides; omitted properties retain defaults. Include purpose to distinguish same-type resources. Abbreviations may be supplied separately.')
 param namingConvention object = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
@@ -103,18 +109,20 @@ param secretsKeyVaultNameOverride string = ''
 @maxLength(24)
 param encryptionKeyVaultNameOverride string = ''
 
-@description('''Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding
-default from deployments/shared/data/resourceAbbreviations.json. Omit any key to keep the standard abbreviation.
-Produced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.
-CLI deployments: pass only the keys you want to change, e.g. { virtualMachines: "win" }.
-Standard Cloud Adoption Framework defaults:
-  resourceGroups: "rg"          hostPools: "vdpool"         desktopApplicationGroups: "vddag"
-  workspaces: "vdws"            scalingPlans: "vdscaling"   virtualMachines: "vm"
-  osdisks: "disk"               diskEncryptionSets: "des"   diskAccesses: "da"
-  availabilitySets: "as"        storageAccounts: "sa"       netAppAccounts: "naa"
-  netAppCapacityPools: "nacp"   keyVaults: "kv"             userAssignedIdentities: "uai"
-  privateEndpoints: "pe"        networkInterfaces: "nic"    logAnalyticsWorkspaces: "law"
-  dataCollectionEndpoints: "dce"  recoveryServicesVaults: "rsv"''')
+// Optional. Resource type abbreviation overrides. Any key present here overrides the corresponding
+// default from deployments/shared/data/resourceAbbreviations.json. Omit any key to keep the standard
+// abbreviation.
+// Produced automatically by the Portal UI from the abbreviation fields on the Tags and Naming step.
+// CLI deployments: pass only the keys you want to change, e.g. { virtualMachines: "win" }.
+// Standard Cloud Adoption Framework defaults:
+//   resourceGroups: "rg"          hostPools: "vdpool"         desktopApplicationGroups: "vddag"
+//   workspaces: "vdws"            scalingPlans: "vdscaling"   virtualMachines: "vm"
+//   osdisks: "disk"               diskEncryptionSets: "des"   diskAccesses: "da"
+//   availabilitySets: "as"        storageAccounts: "sa"       netAppAccounts: "naa"
+//   netAppCapacityPools: "nacp"   keyVaults: "kv"             userAssignedIdentities: "uai"
+//   privateEndpoints: "pe"        networkInterfaces: "nic"    logAnalyticsWorkspaces: "law"
+//   dataCollectionEndpoints: "dce"  recoveryServicesVaults: "rsv"
+@description('Optional. Partial resource-type abbreviation overrides. Unspecified keys retain shared defaults; the Portal supplies these from Tags and Naming.')
 param namingResourceTypeCodes object = {}
 
 // Identity
@@ -161,8 +169,13 @@ param vmOUPath string = ''
 
 // Control Plane
 
-@description('Optional. The deployment location for the AVD Control Plane resources. When not provided, defaults to the virtual machines region.')
-param controlPlaneLocation string = ''
+@minLength(1)
+@description('Optional. Azure location for AVD control-plane resources. Defaults to the subscription deployment location.')
+param controlPlaneLocation string = deployment().location
+
+@minLength(1)
+@description('Optional. Azure location for session hosts and supporting resources. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location.')
+param virtualMachinesLocation string = controlPlaneLocation
 
 @description('Optional. The subscription Id where the AVD Control Plane resources are deployed. If not provided, the deployment subscription will be used.')
 param controlPlaneSubscriptionId string = ''
@@ -199,13 +212,15 @@ param hostPoolValidationEnvironment bool = false
 @description('Optional. Determines if the Start VM on Connect Feature is enabled for the Host Pool.')
 param startVMOnConnect bool = true
 
-@description('''Optional.
-An array of objects, defining the security groups that are assigned permissions to the desktop application group created by this solution.
-Each object must contain the following properties from the Entra Id group:
-  id: Id
-  name: DisplayName
-If the 'fslogixShardGroups' is not defined, the value of this parameter is used to determine the number of storage accounts and permissions for each.
-''')
+// Optional.
+// An array of objects, defining the security groups that are assigned permissions to the desktop
+// application group created by this solution.
+// Each object must contain the following properties from the Entra Id group:
+//   id: Id
+//   name: DisplayName
+// If the 'fslogixShardGroups' is not defined, the value of this parameter is used to determine the
+// number of storage accounts and permissions for each.
+@description('Optional. Desktop application group security groups as objects with id and name. Also supplies FSLogix shard groups when fslogixShardGroups is omitted.')
 param appGroupSecurityGroups entraGroupType[] = []
 
 @description('Optional. Determines if the scaling plan is deployed to the host pool.')
@@ -217,11 +232,13 @@ param scalingPlanPooledSchedules pooledScalingScheduleInputType[] = []
 @description('Required for a Personal host pool when deployScalingPlan is true. Complete Personal scaling plan schedules.')
 param scalingPlanPersonalSchedules personalScalingScheduleInputType[] = []
 
-@description('''Optional.
-The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.
-The Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Entra Id.
-When Start VM On Connect is selected or you deploy a scaling plan, this object ID is assigned the proper role on the subscription.
-''')
+// Optional.
+// The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.
+// The Object ID can found by selecting Microsoft Applications using the Application type filter in the
+// Enterprise Applications blade of Entra Id.
+// When Start VM On Connect is selected or you deploy a scaling plan, this object ID is assigned the
+// proper role on the subscription.
+@description('Optional. AVD enterprise application\'s object ID, used for subscription role assignments when start VM on connect or scaling is selected.')
 param avdObjectId string = ''
 
 @description('Optional. The tag used to exclude virtual machines from the scaling plan.')
@@ -271,9 +288,11 @@ param vTpmEnabled bool = true
 @description('Optional. Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM did not boot because attestation failed with the defined baseline.')
 param integrityMonitoring bool = true
 
-@description('''Optional. Encryption at host encrypts temporary disks and ephemeral OS disks with platform-managed keys,
-OS and data disk caches with the key specified in the "keyManagementDisks" parameter, and flows encrypted to the Storage service.
-''')
+// Optional. Encryption at host encrypts temporary disks and ephemeral OS disks with platform-managed
+// keys,
+// OS and data disk caches with the key specified in the "keyManagementDisks" parameter, and flows
+// encrypted to the Storage service.
+@description('Optional. Enable host-level encryption for temporary/ephemeral disks and disk caches, using the applicable platform or configured disk encryption keys.')
 param encryptionAtHost bool = true
 
 @allowed([
@@ -283,14 +302,22 @@ param encryptionAtHost bool = true
   'PlatformManagedAndCustomerManaged'
   'PlatformManagedAndCustomerManagedHSM'
 ])
-@description('''Optional. The type of encryption key management used for the storage. (Default: "PlatformManaged")
-- Platform-managed keys (PMKs) are key encryption keys that are generated, stored, and managed entirely by Azure. Choose Platform Managed for the best balance of security and ease of use.
-- Customer-managed keys (CMKs) are key encryption keys that are generated, stored, and managed by you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific compliance requirements.
-- Customer-managed keys (CMKs) storage in a premium KeyVault backed by a Hardware Security Module (HSM). The Hardware Security Module is FIPS 140 Level 3 validated.
-- Double encryption is 2 layers of encryption: an infrastructure encryption layer with platform managed keys and a disk encryption layer with customer managed keys defined by disk encryption sets.
-Choose Platform Managed and Customer Managed if you need double encryption. This option does not apply to confidential VMs.
-- Choose Platform Managed and Customer Managed with HSM if you must incorporate double encryption and protect the customer managed key with the Hardware Security Module. This option does not apply to confidential VMs.
-''')
+// Optional. The type of encryption key management used for the storage. (Default: "PlatformManaged")
+// - Platform-managed keys (PMKs) are key encryption keys that are generated, stored, and managed
+// entirely by Azure. Choose Platform Managed for the best balance of security and ease of use.
+// - Customer-managed keys (CMKs) are key encryption keys that are generated, stored, and managed by
+// you, the customer, in your Azure Key Vault. Choose Customer Managed if you need to meet specific
+// compliance requirements.
+// - Customer-managed keys (CMKs) storage in a premium KeyVault backed by a Hardware Security Module
+// (HSM). The Hardware Security Module is FIPS 140 Level 3 validated.
+// - Double encryption is 2 layers of encryption: an infrastructure encryption layer with platform
+// managed keys and a disk encryption layer with customer managed keys defined by disk encryption sets.
+// Choose Platform Managed and Customer Managed if you need double encryption. This option does not
+// apply to confidential VMs.
+// - Choose Platform Managed and Customer Managed with HSM if you must incorporate double encryption
+// and protect the customer managed key with the Hardware Security Module. This option does not apply
+// to confidential VMs.
+@description('Optional. Disk key-management mode: platform-managed, customer-managed, or supported double-encryption variants. Double encryption is not applicable to confidential VMs.')
 param keyManagementDisks string = 'PlatformManaged'
 
 @description('Optional. The rotation period for the customer-managed keys in the Azure Key Vault.')
@@ -299,9 +326,12 @@ param keyExpirationInDays int = 180
 @description('Optional. Confidential disk encryption is an additional layer of encryption which binds the disk encryption keys to the virtual machine TPM and makes the disk content accessible only to the VM.')
 param confidentialVMOSDiskEncryption bool = false
 
-@description('''Optional. The object ID of the Confidential VM Orchestrator enterprise application with application ID "bf7b6499-ff71-4aa2-97a4-f372087be7f0".
-This is required when "confidentialVMOSDiskEncryption" is set to "true". Create the enterprise application in your tenant before deployment by following the environment-specific Microsoft Graph procedure in docs/hostpool-deployment.md.
-''')
+// Optional. The object ID of the Confidential VM Orchestrator enterprise application with application
+// ID "bf7b6499-ff71-4aa2-97a4-f372087be7f0".
+// This is required when "confidentialVMOSDiskEncryption" is set to "true". Create the enterprise
+// application in your tenant before deployment by following the environment-specific Microsoft Graph
+// procedure in docs/hostpool-deployment.md.
+@description('Conditional. Existing Confidential VM Orchestrator service principal object ID. Required when confidentialVMOSDiskEncryption is true; provision it before deployment.')
 param confidentialVMOrchestratorObjectId string = ''
 
 @description('Optional. The resource Id of the Dedicated Host on which to deploy the Virtual Machines.')
@@ -343,7 +373,10 @@ param memoryGB int = 0
 @description('Optional. Determines whether or not to enable accelerated networking for the session host VMs.')
 param enableAcceleratedNetworking bool = true
 
-@description('Optional. Determines whether or not to enable IPv6 for the session host VMs. This is an edge case scenario and is not recommended for most deployments. WARNING: Without specific route table entries configured for IPv6 traffic, outbound communication will not work properly.')
+// Optional. Determines whether or not to enable IPv6 for the session host VMs. This is an edge case
+// scenario and is not recommended for most deployments. WARNING: Without specific route table entries
+// configured for IPv6 traffic, outbound communication will not work properly.
+@description('Optional. Enable IPv6 for session hosts. Requires explicit IPv6 routing; without it, outbound IPv6 communication will not work properly.')
 param enableIPv6 bool = false
 
 @description('Optional. Determines whether or not to enable hibernation for the session host VMs.')
@@ -388,30 +421,31 @@ Required when accessing artifacts from the storage account when they do not enab
 ''')
 param artifactsUserAssignedIdentityResourceId string = ''
 
-@description('''Optional.
-Array of objects containing the following properties
--name: The name of the script or application that is running minus extension
--blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file to download.
--arguments: Arguments required by the installer or script being ran.
-
-JSON example:
-[
-  {
-    "name": "FSLogix",
-    "blobNameOrUri": "https://aka.ms/fslogix_download"
-  },
-  {
-    "name": "VSCode",
-    "blobNameOrUri": "VSCode.zip",
-    "arguments": "/verysilent /mergetasks=!runcode"
-  },
-  {
-    "name": "ConfigurePolicy",
-    "blobNameOrUri": "ConfigurePolicy.ps1",
-    "arguments": "-Environment Production"
-  }
-]
-''')
+// Optional.
+// Array of objects containing the following properties
+// -name: The name of the script or application that is running minus extension
+// -blobNameOrUri: The blob name when used with the artifactsContainerUri or the full URI of the file
+// to download.
+// -arguments: Arguments required by the installer or script being ran.
+//
+// JSON example:
+// [
+//   {
+//     "name": "FSLogix",
+//     "blobNameOrUri": "https://aka.ms/fslogix_download"
+//   },
+//   {
+//     "name": "VSCode",
+//     "blobNameOrUri": "VSCode.zip",
+//     "arguments": "/verysilent /mergetasks=!runcode"
+//   },
+//   {
+//     "name": "ConfigurePolicy",
+//     "blobNameOrUri": "ConfigurePolicy.ps1",
+//     "arguments": "-Environment Production"
+//   }
+// ]
+@description('Optional. Session-host customization objects with name, blobNameOrUri, and installer/script arguments. See source examples.')
 param sessionHostCustomizations artifactCustomizationType[] = []
 
 @description('Optional. The URL to download the AVD Agent Boot Loader. If not provided, the URL is determined based on the cloud environment.')
@@ -440,12 +474,16 @@ param fslogixContainerType string = 'ProfileContainer'
 @description('Optional. The size of the FSLogix containers in MB. This value is used to set the SizeInMBs registry key on the session hosts.')
 param fslogixSizeInMBs int = 30000
 
-@description('''Optional.
-Determines whether or not to Shard Azure Files Storage by deploying more than one storage account, and if so how the Session Hosts are Configured.
-- If 'None' is selected, then no sharding is performed and only 1 storage account is deployed when deploying storage accounts.
-- If 'ShardOSS' is selected, then the fslogixShardGroups are used to assign share permissions and configure the session hosts with Object Specific Settings.
-- If 'ShardPerms' is selected, then storage account permissions are assigned based on the groups defined in "appGroupSecurityGroups" or "fslogixShardPrincpals".
-''')
+// Optional.
+// Determines whether or not to Shard Azure Files Storage by deploying more than one storage account,
+// and if so how the Session Hosts are Configured.
+// - If 'None' is selected, then no sharding is performed and only 1 storage account is deployed when
+// deploying storage accounts.
+// - If 'ShardOSS' is selected, then the fslogixShardGroups are used to assign share permissions and
+// configure the session hosts with Object Specific Settings.
+// - If 'ShardPerms' is selected, then storage account permissions are assigned based on the groups
+// defined in "appGroupSecurityGroups" or "fslogixShardPrincpals".
+@description('Optional. None creates one account; ShardOSS uses fslogixShardGroups for object-specific settings; ShardPerms uses configured group/principal share permissions.')
 @allowed([
   'None'
   'ShardOSS'
@@ -453,12 +491,13 @@ Determines whether or not to Shard Azure Files Storage by deploying more than on
 ])
 param fslogixShardOptions string = 'None'
 
-@description('''Optional.
-An array of objects, defining the administrator groups who will be granted full control access to the FSLogix share.
-Each object must contain the following properties from the Entra Id group:
-  id: Id
-  name: DisplayName
-''')
+// Optional.
+// An array of objects, defining the administrator groups who will be granted full control access to
+// the FSLogix share.
+// Each object must contain the following properties from the Entra Id group:
+//   id: Id
+//   name: DisplayName
+@description('Optional. FSLogix share administrator groups as objects with id and name; these groups receive full control.')
 param fslogixAdminGroups entraGroupType[] = []
 
 @description('''Optional.
@@ -482,7 +521,10 @@ param fslogixAppUpdateUserAssignedIdentityResourceId string = ''
   'AzureFiles Premium' // Azure files Premium with a Service Endpoint, 100,000 IOPs
   'AzureFiles Standard' // Azure files Standard with the Large File Share option and the default public endpoint, 20,000 IOPS
 ])
-@description('Optional. The storage service to use for storing FSLogix containers. The service & SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements')
+// Optional. The storage service to use for storing FSLogix containers. The service & SKU should
+// provide sufficient IOPS for all of your users.
+// https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements
+@description('Optional. Storage service for FSLogix containers. Select a service and SKU with sufficient IOPS for the expected users.')
 param fslogixStorageService string = 'AzureFiles Standard'
 
 @allowed([
@@ -562,6 +604,9 @@ param keyManagementRecoveryServicesVault string = 'PlatformManaged'
 
 @description('Optional. Array of permitted IP addresses or CIDR blocks allowed through the firewall of all PaaS components (storage accounts, Key Vaults). Use when managing the deployment from a trusted workstation outside the Azure network boundary.')
 param permittedIPs string[] = []
+
+@description('Optional. Public-access mode shared by newly deployed Key Vaults and Azure Files storage. Auto preserves legacy behavior; existing resources and backup/monitoring access are unchanged.')
+param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
 @description('Optional. Enable Azure Backup. Personal host pools protect session host VMs. Pooled host pools protect newly deployed FSLogix Azure Files shares through a shared Recovery Services vault and snapshot policy.')
 param recoveryServices bool = false
@@ -672,11 +717,12 @@ param avdPrivateDnsZoneResourceId string = ''
   'Enabled'
   'EnabledForClientsOnly'
 ])
-@description('''Optional. Allow public access to the hostpool through the control plane. Applicable only when "avdPrivateLinkPrivateRoutes" is not equal to "None". 
-  "Enabled" allows this resource to be accessed from both public and private networks.
-  "Disabled" allows this resource to only be accessed via private endpoints.
-  "EnabledForClientsOnly" allows this resource to be accessed only when the session hosts are configured to use private routes.
-''')
+// Optional. Allow public access to the hostpool through the control plane. Applicable only when
+// "avdPrivateLinkPrivateRoutes" is not equal to "None".
+//   "Enabled" allows this resource to be accessed from both public and private networks.
+//   "Disabled" allows this resource to only be accessed via private endpoints.
+//   "EnabledForClientsOnly" allows this resource to be accessed only when the session hosts are configured to use private routes.
+@description('Optional. Host-pool public access mode, applied when AVD Private Link routes are selected. Values distinguish full public, private-only, and client-only public access.')
 param hostPoolPublicNetworkAccess string = 'Enabled'
 
 @description('Conditional. The resource Id of the subnet where the workspace feed private endpoint will be attached. Required when "avdPrivateLinkPrivateRoutes" is set to "FeedAndHostPool" or "All".')
@@ -686,10 +732,11 @@ param workspaceFeedPrivateEndpointSubnetResourceId string = ''
   'Disabled'
   'Enabled'
 ])
-@description('''Optional. Defines the public access configuration for the workspace feed. Applicable when "avdPrivateLinkPrivateRoutes" is "FeedAndHostPool" or "All".
-  "Enabled" allows the AVD workspace to be accessed from both public and private networks.
-  "Disabled" allows this resource to only be accessed via private endpoints.
-''')
+// Optional. Defines the public access configuration for the workspace feed. Applicable when
+// "avdPrivateLinkPrivateRoutes" is "FeedAndHostPool" or "All".
+//   "Enabled" allows the AVD workspace to be accessed from both public and private networks.
+//   "Disabled" allows this resource to only be accessed via private endpoints.
+@description('Optional. Workspace feed public access mode. Applies when avdPrivateLinkPrivateRoutes is FeedAndHostPool or All; Disabled requires private endpoints.')
 param workspaceFeedPublicNetworkAccess string = 'Enabled'
 
 @description('Optional. The resource Id of the existing global feed workspace. If provided, then the global feed will not be deployed regardless of other AVD Private Link settings.')
@@ -725,17 +772,17 @@ var createFeedWorkspace = empty(existingFeedWorkspaceResourceId)
 var manageFeedWorkspace = createFeedWorkspace || contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
 var deploySharedMonitoring = enableMonitoring && empty(existingLogAnalyticsWorkspaceResourceId)
 var deploySharedOperationsResourceGroup = deploySharedKeyVaults || deploySharedFilesBackup
-var sharedOperationsResourceGroupName = naming.outputs.sharedResourceGroupOperations
-var sharedMonitoringResourceGroupName = naming.outputs.sharedResourceGroupMonitoring
+var sharedOperationsResourceGroupName = naming.sharedResourceGroupOperations
+var sharedMonitoringResourceGroupName = naming.sharedResourceGroupMonitoring
 var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedKeyVaults || deploySharedFilesBackup)
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
     azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
-    dataCollectionEndpointName: naming.outputs.sharedDataCollectionEndpointName
-    location: effectiveControlPlaneRegion
-    logAnalyticsWorkspaceName: naming.outputs.sharedLogAnalyticsWorkspaceName
+    dataCollectionEndpointName: naming.sharedDataCollectionEndpointName
+    location: controlPlaneLocation
+    logAnalyticsWorkspaceName: naming.sharedLogAnalyticsWorkspaceName
     resourceGroupMonitoring: sharedMonitoringResourceGroupName
     tags: tags
   }
@@ -763,7 +810,7 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
   params: {
     resourceGroupName: sharedOperationsResourceGroupName
     deploySecretsKeyVault: deploySecretsKeyVault
-    secretsKeyVaultName: naming.outputs.sharedKeyVaultNameSecrets
+    secretsKeyVaultName: naming.sharedKeyVaultNameSecrets
     secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
     secretsKeyVaultEnablePurgeProtection: secretsKeyVaultEnablePurgeProtection
     secretsKeyVaultRetentionInDays: secretsKeyVaultRetentionInDays
@@ -772,14 +819,15 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
     virtualMachineAdminPassword: virtualMachineAdminPassword
     virtualMachineAdminUserName: virtualMachineAdminUserName
     deployEncryptionKeyVault: deploySharedEncryptionKeyVault
-    encryptionKeyVaultName: naming.outputs.sharedKeyVaultNameEncryption
+    encryptionKeyVaultName: naming.sharedKeyVaultNameEncryption
     encryptionKeyVaultRetentionInDays: encryptionKeyVaultRetentionInDays
     privateEndpoint: sharedPrivateEndpoint
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     azureKeyVaultPrivateDnsZoneResourceId: azureKeyVaultPrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     permittedIPs: permittedIPs
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     tags: tags
   }
@@ -800,11 +848,11 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
   params: {
     workspaceMode: createFeedWorkspace ? 'Create' : 'Update'
     manageWorkspace: manageFeedWorkspace
-    workspaceName: naming.outputs.sharedWorkspaceName
+    workspaceName: naming.sharedWorkspaceName
     workspaceResourceId: existingFeedWorkspaceResourceId
-    workspaceResourceGroupName: naming.outputs.sharedResourceGroupControlPlane
+    workspaceResourceGroupName: naming.sharedResourceGroupControlPlane
     createWorkspaceResourceGroup: true
-    workspaceLocation: effectiveControlPlaneRegion
+    workspaceLocation: controlPlaneLocation
     workspaceFriendlyName: workspaceFriendlyName
     workspacePublicNetworkAccess: workspaceFeedPublicNetworkAccess
     workspaceFeedPrivateEndpointSubnetResourceId: contains(['FeedAndHostPool', 'All'], avdPrivateLinkPrivateRoutes)
@@ -814,13 +862,13 @@ module sharedAvdWorkspace '../shared/modules/orchestration/avdWorkspace/avdWorks
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     manageGlobalWorkspace: avdPrivateLinkPrivateRoutes == 'All' && empty(existingGlobalFeedResourceId)
     globalWorkspaceMode: empty(existingGlobalFeedResourceId) ? 'Create' : 'Update'
-    globalWorkspaceName: naming.outputs.globalFeedWorkspaceName
+    globalWorkspaceName: naming.globalFeedWorkspaceName
     globalWorkspaceResourceId: existingGlobalFeedResourceId
-    globalWorkspaceResourceGroupName: naming.outputs.globalFeedResourceGroupName
+    globalWorkspaceResourceGroupName: naming.globalFeedResourceGroupName
     globalFeedPrivateEndpointSubnetResourceId: globalFeedPrivateEndpointSubnetResourceId
     globalFeedPrivateDnsZoneResourceId: globalFeedPrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     tags: tags
   }
   dependsOn: [
@@ -837,17 +885,17 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
   params: {
     createVault: true
     manageBackupPolicy: true
-    vaultName: naming.outputs.sharedRecoveryServicesVaultNameFSLogix
+    vaultName: naming.sharedRecoveryServicesVaultNameFSLogix
     resourceGroupOperations: sharedOperationsResourceGroupName
-    location: effectiveControlPlaneRegion
+    location: controlPlaneLocation
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     privateEndpoint: sharedPrivateEndpoint
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     tags: tags
     timeZone: 'UTC'
     fileSharePolicyName: existingFilesBackupPolicyName
@@ -873,8 +921,6 @@ var effectiveMonitoringSubscription = empty(monitoringSubscriptionId)
   : monitoringSubscriptionId
 var rbacSubs = union([effectiveControlPlaneSubscription], [subscription().subscriptionId])
 
-var virtualMachinesRegion = vmVirtualNetwork.location
-var effectiveControlPlaneRegion = empty(controlPlaneLocation) ? virtualMachinesRegion : controlPlaneLocation
 var createDeploymentVm = (deployFSLogixStorage && identitySolution != 'EntraId') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
 var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups)
 
@@ -1080,12 +1126,6 @@ var beginAvSetRange = sessionHostIndex / maxAvSetMembers // This determines the 
 var endAvSetRange = (sessionHostCount + sessionHostIndex) / maxAvSetMembers // This determines the availability set to end with.
 var availabilitySetsCount = length(range(beginAvSetRange, (endAvSetRange - beginAvSetRange) + 1))
 
-// Existing Session Host Virtual Network location
-resource vmVirtualNetwork 'Microsoft.Network/virtualNetworks@2023-04-01' existing = {
-  name: split(virtualMachineSubnetResourceId, '/')[8]
-  scope: resourceGroup(split(virtualMachineSubnetResourceId, '/')[2], split(virtualMachineSubnetResourceId, '/')[4])
-}
-
 // Existing Key Vaults for secrets (only used for UI deployments since you can specify references in Parameter files.)
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(existingCredentialsKeyVaultResourceId)) {
   name: last(split(existingCredentialsKeyVaultResourceId, '/'))
@@ -1102,10 +1142,7 @@ resource kvEncryption 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!emp
 
 var hpBaseName = toLower(identifier)
 
-// ── Naming module ─────────────────────────────────────────────────────────────
-// All resource names for this host pool are resolved by the naming module.
-// References below use naming.outputs.<name> instead of local vars.
-// Merge namingResourceTypeCodes into namingConvention before passing to the naming module.
+// Explicit location inputs keep centralized naming independent of runtime resource lookups.
 var effectiveNamingConvention = union(
   namingConvention,
   !empty(namingResourceTypeCodes) ? { resourceTypeCodes: namingResourceTypeCodes } : {},
@@ -1113,23 +1150,20 @@ var effectiveNamingConvention = union(
   !empty(encryptionKeyVaultNameOverride) ? { encryptionKeyVaultNameOverride: encryptionKeyVaultNameOverride } : {}
 )
 
-module naming '../shared/modules/orchestration/naming/hostPool.bicep' = {
-  scope: subscription()
-  params: {
-    namingConvention: effectiveNamingConvention
-    virtualMachinesRegion: virtualMachinesRegion
-    controlPlaneRegion: effectiveControlPlaneRegion
-    identifier: hpBaseName
-    globalFeedRegion: avdPrivateLinkPrivateRoutes == 'All' ? effectiveControlPlaneRegion : ''
-    existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
-    sharedServicesSubscriptionId: effectiveControlPlaneSubscription
-  }
-}
+var naming = hostPoolNames(effectiveNamingConvention, hpBaseName, {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  virtualMachinesLocation: virtualMachinesLocation
+  controlPlaneLocation: controlPlaneLocation
+  globalFeedLocation: avdPrivateLinkPrivateRoutes == 'All' ? controlPlaneLocation : ''
+  existingFeedWorkspaceResourceId: existingFeedWorkspaceResourceId
+  sharedServicesSubscriptionId: effectiveControlPlaneSubscription
+})
 
-var effectiveControlPlaneResourceGroup = naming.outputs.resourceGroupControlPlane
-var effectiveHostsResourceGroup = naming.outputs.resourceGroupHosts
-var effectiveStorageResourceGroup = naming.outputs.resourceGroupStorage
-var effectiveOperationsResourceGroup = naming.outputs.resourceGroupOperations
+var effectiveControlPlaneResourceGroup = naming.resourceGroupControlPlane
+var effectiveHostsResourceGroup = naming.resourceGroupHosts
+var effectiveStorageResourceGroup = naming.resourceGroupStorage
+var effectiveOperationsResourceGroup = naming.resourceGroupOperations
 
 var fslogixShareNamesLookup = {
   CloudCacheProfileContainer: [
@@ -1194,7 +1228,7 @@ var fslLocalStorageAccountNames = deployFSLogixStorage && startsWith(fslogixStor
   ? {
       fslLocalStorageAccountNames: string(map(
         range(0, fslogixStorageCount),
-        i => '${naming.outputs.fslogixStorageAccountNamePrefix}${padLeft(i + fslogixStorageIndex, 2, '0')}'
+        i => '${naming.fslogixStorageAccountNamePrefix}${padLeft(i + fslogixStorageIndex, 2, '0')}'
       ))
     }
   : !empty(effectiveFslogixExistingLocalStorageAccountResourceIds)
@@ -1219,7 +1253,7 @@ var fslLocalNetAppVolumeResourceIds = deployFSLogixStorage && startsWith(fslogix
       fslLocalNetAppVolumeResourceIds: string(map(
         fslogixShareNamesLookup[fslogixContainerType],
         share =>
-          '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveStorageResourceGroup}/providers/Microsoft.NetApp/netAppAccounts/${naming.outputs.netAppAccountName}/capacityPools/${naming.outputs.netAppCapacityPoolName}/volumes/${share}'
+          '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveStorageResourceGroup}/providers/Microsoft.NetApp/netAppAccounts/${naming.netAppAccountName}/capacityPools/${naming.netAppCapacityPoolName}/volumes/${share}'
       ))
     }
   : !empty(fslogixExistingLocalNetAppVolumeResourceIds)
@@ -1249,11 +1283,11 @@ var fslogixConfigurationTags = hasAssociatedFslStorage
 
 // Disk encryption set name — selects the right DES convention based on key management settings
 var diskEncryptionSetName = confidentialVMOSDiskEncryption
-  ? naming.outputs.diskEncryptionSetNameConfidentialVMs
+  ? naming.diskEncryptionSetNameConfidentialVMs
   : startsWith(keyManagementDisks, 'CustomerManaged')
-      ? naming.outputs.diskEncryptionSetNameCustomerManaged
+      ? naming.diskEncryptionSetNameCustomerManaged
       : contains(keyManagementDisks, 'PlatformManagedAndCustomerManaged')
-          ? naming.outputs.diskEncryptionSetNamePlatformAndCustomerManaged
+          ? naming.diskEncryptionSetNamePlatformAndCustomerManaged
           : null
 
 // VM configuration tags — stamped on the hosts RG for operational reference
@@ -1287,10 +1321,10 @@ var vmConfigurationTags = union(
     vmVirtualTPM: vTpmEnabled
     vmIntegrityMonitoring: integrityMonitoring
     vmSubnetId: virtualMachineSubnetResourceId
-    virtualMachineNameConv: naming.outputs.virtualMachineNameConv
-    virtualMachineDiskNameConv: naming.outputs.virtualMachineDiskNameConv
-    virtualMachineNicNameConv: naming.outputs.virtualMachineNicNameConv
-    availabilitySetNameConv: naming.outputs.availabilitySetNameConv
+    virtualMachineNameConv: naming.virtualMachineNameConv
+    virtualMachineDiskNameConv: naming.virtualMachineDiskNameConv
+    virtualMachineNicNameConv: naming.virtualMachineNicNameConv
+    availabilitySetNameConv: naming.availabilitySetNameConv
   },
   vmDomain,
   vmOU,
@@ -1306,7 +1340,7 @@ var vmConfigurationTags = union(
 module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
-    location: effectiveControlPlaneRegion
+    location: controlPlaneLocation
     name: sharedOperationsResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -1315,7 +1349,7 @@ module sharedOperationsResourceGroup '../shared/modules/resourceModules/resource
 module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
-    location: effectiveControlPlaneRegion
+    location: controlPlaneLocation
     name: sharedMonitoringResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -1323,10 +1357,10 @@ module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resource
 
 module deploymentResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createDeploymentVm) {
   params: {
-    location: virtualMachinesRegion
-    name: naming.outputs.resourceGroupDeployment
+    location: virtualMachinesLocation
+    name: naming.resourceGroupDeployment
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
-      'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.outputs.hostPoolName}'
+      'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.hostPoolName}'
     })
   }
 }
@@ -1334,7 +1368,7 @@ module deploymentResourceGroup '../shared/modules/resourceModules/resources/reso
 module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createFeedWorkspace) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
-    location: effectiveControlPlaneRegion
+    location: controlPlaneLocation
     name: effectiveControlPlaneResourceGroup
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -1342,20 +1376,20 @@ module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/re
 
 module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     name: effectiveHostsResourceGroup
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, vmConfigurationTags, fslogixConfigurationTags, {
-      'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.outputs.hostPoolName}'
+      'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.hostPoolName}'
     })
   }
 }
 
 module storageResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deployFSLogixStorage) {
   params: {
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     name: effectiveStorageResourceGroup
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, {
-      'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.outputs.hostPoolName}'
+      'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.hostPoolName}'
     })
   }
 }
@@ -1407,14 +1441,14 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
-    hostPoolName: naming.outputs.hostPoolName
+    hostPoolName: naming.hostPoolName
     identitySolution: identitySolution
     keyManagementDisks: keyManagementDisks
     keyManagementStorageAccounts: keyManagementStorage
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     ouPath: vmOUPath
     resourceGroupControlPlane: effectiveControlPlaneResourceGroup
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    resourceGroupDeployment: naming.resourceGroupDeployment
     resourceGroupHosts: effectiveHostsResourceGroup
     // When an existing KV is provided it lives in a pre-existing RG; use that RG for the
     // KeyVaultCryptoOfficer / RBACAdmin role assignments instead of the calculated operations
@@ -1424,10 +1458,10 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
       : effectiveOperationsResourceGroup
     resourceGroupStorage: effectiveStorageResourceGroup
     tags: tags
-    userAssignedIdentityNameConv: naming.outputs.userAssignedIdentityNameConv
-    virtualMachineName: naming.outputs.depVirtualMachineName
-    virtualMachineNICName: naming.outputs.depVirtualMachineNicName
-    virtualMachineDiskName: naming.outputs.depVirtualMachineDiskName
+    userAssignedIdentityNameConv: naming.userAssignedIdentityNameConv
+    virtualMachineName: naming.depVirtualMachineName
+    virtualMachineNICName: naming.depVirtualMachineNicName
+    virtualMachineDiskName: naming.depVirtualMachineDiskName
     virtualMachineSubnetResourceId: virtualMachineSubnetResourceId
   }
   dependsOn: [
@@ -1453,13 +1487,13 @@ module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKe
       ? (contains(keyManagementDisks, 'Platform') ? 'PlatformManagedAndCustomerManagedHSM' : 'CustomerManagedHSM')
       : (contains(keyManagementDisks, 'Platform') ? 'PlatformManagedAndCustomerManaged' : 'CustomerManaged')
     keyExpirationInDays: keyExpirationInDays
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     tags: tags
-    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
-    keyName: naming.outputs.encryptionKeyNameVMs
+    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.hostPoolName}'
+    keyName: naming.encryptionKeyNameVMs
     diskEncryptionSetName: !contains(keyManagementDisks, 'Platform')
-      ? naming.outputs.diskEncryptionSetNameCustomerManaged
-      : naming.outputs.diskEncryptionSetNamePlatformAndCustomerManaged
+      ? naming.diskEncryptionSetNameCustomerManaged
+      : naming.diskEncryptionSetNamePlatformAndCustomerManaged
   }
   dependsOn: [
     hostsResourceGroup
@@ -1473,17 +1507,17 @@ module virtualMachinesDiskCmk '../shared/modules/orchestration/customerManagedKe
 module cvmDiskCmk 'modules/cmk/cvmDiskCmk.bicep' = if (deployCvmDiskCmk) {
   params: {
     resourceGroupHosts: effectiveHostsResourceGroup
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    resourceGroupDeployment: naming.resourceGroupDeployment
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     keyVaultUri: effectiveEncryptionKeyVaultUri
-    keyName: naming.outputs.encryptionKeyNameConfidentialVMs
-    diskEncryptionSetName: naming.outputs.diskEncryptionSetNameConfidentialVMs
+    keyName: naming.encryptionKeyNameConfidentialVMs
+    diskEncryptionSetName: naming.diskEncryptionSetNameConfidentialVMs
     confidentialVMOrchestratorObjectId: confidentialVMOrchestratorObjectId
     deploymentVirtualMachineName: deploymentHelper!.outputs.virtualMachineName
     deploymentUserAssignedIdentityClientId: deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     tags: tags
-    hostPoolResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
+    hostPoolResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.hostPoolName}'
   }
   dependsOn: [
     hostsResourceGroup
@@ -1503,13 +1537,13 @@ module storageCmk '../shared/modules/orchestration/customerManagedKeys/storageCm
     keyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     keyManagementType: contains(keyManagementStorage, 'HSM') ? 'CustomerManagedHSM' : 'CustomerManaged'
     keyExpirationInDays: keyExpirationInDays
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     tags: tags
-    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.outputs.hostPoolName}'
+    parentResourceId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostPools/${naming.hostPoolName}'
     storageKeyNames: [
-      for i in range(0, fslogixStorageCount): replace(naming.outputs.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
+      for i in range(0, fslogixStorageCount): replace(naming.encryptionKeyNameFSLogix, '##', padLeft(i + fslogixStorageIndex, 2, '0'))
     ]
-    identityName: replace(naming.outputs.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.outputs.delimiter}cmk')
+    identityName: replace(naming.userAssignedIdentityNameConv, 'TOKEN', 'storage${naming.delimiter}cmk')
   }
   dependsOn: [
     storageResourceGroup
@@ -1527,13 +1561,13 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
     appGroupSecurityGroups: map(appGroupSecurityGroups, group => group.id)
     avdPrivateDnsZoneResourceId: avdPrivateDnsZoneResourceId
     avdPrivateLinkPrivateRoutes: hostPoolPrivateLinkPrivateRoutes
-    controlPlaneRegion: effectiveControlPlaneRegion
+    controlPlaneRegion: controlPlaneLocation
     deployScalingPlan: deployScalingPlan
     deploymentUserAssignedIdentityClientId: createDeploymentVm
       ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId
       : ''
     deploymentVirtualMachineName: createDeploymentVm ? deploymentHelper!.outputs.virtualMachineName : ''
-    desktopApplicationGroupName: naming.outputs.desktopApplicationGroupName
+    desktopApplicationGroupName: naming.desktopApplicationGroupName
     desktopFriendlyName: desktopFriendlyName
     enableMonitoring: enableMonitoring
     existingFeedWorkspaceResourceId: sharedWorkspaceResourceId
@@ -1543,24 +1577,24 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
         components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
         delimiter: namingConvention.?delimiter ?? '-'
         workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
-        vmsLocationAbbreviation: naming.outputs.vmLocationAbbreviation
+        vmsLocationAbbreviation: naming.vmLocationAbbreviation
       })
     })
     hostPoolMaxSessionLimit: hostPoolMaxSessionLimit
-    hostPoolName: naming.outputs.hostPoolName
+    hostPoolName: naming.hostPoolName
     hostPoolPrivateEndpointSubnetResourceId: hostpoolPrivateEndpointSubnetResourceId
     hostPoolPublicNetworkAccess: hostPoolPublicNetworkAccess
     hostPoolRDPProperties: hostPoolRDPProperties
     hostPoolType: hostPoolType
     hostPoolValidationEnvironment: hostPoolValidationEnvironment
     hostPoolVmTemplate: hostPoolVmTemplate
-    virtualMachinesRegion: virtualMachinesRegion
+    virtualMachinesRegion: virtualMachinesLocation
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     resourceGroupControlPlane: effectiveControlPlaneResourceGroup
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
-    scalingPlanName: naming.outputs.scalingPlanName
+    resourceGroupDeployment: naming.resourceGroupDeployment
+    scalingPlanName: naming.scalingPlanName
     scalingPlanPooledSchedules: scalingPlanSchedules
     scalingPlanPersonalSchedules: scalingPlanPersonalSchedulesCustom
     scalingPlanExclusionTag: scalingPlanExclusionTag
@@ -1610,7 +1644,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     domainName: domainName
     encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
     fslogixAdminGroups: fslogixAdminGroups
-    fslogixEncryptionKeyNameConv: naming.outputs.encryptionKeyNameFSLogix
+    fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: fslogixShardOptions
     fslogixUserGroups: fslogixUserGroups
@@ -1618,27 +1652,28 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     identitySolution: identitySolution
     kerberosEncryptionType: fslogixStorageKerberosEncryptionType
     keyManagementStorageAccounts: keyManagementStorage
-    location: virtualMachinesRegion
+    location: virtualMachinesLocation
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     netAppVolumesSubnetResourceId: netAppVolumesSubnetResourceId
-    netAppAccountName: naming.outputs.netAppAccountName
-    netAppCapacityPoolName: naming.outputs.netAppCapacityPoolName
+    netAppAccountName: naming.netAppAccountName
+    netAppCapacityPoolName: naming.netAppCapacityPoolName
     ouPath: empty(fslogixOUPath) ? vmOUPath : fslogixOUPath
     privateEndpoint: deployPrivateEndpoints
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    resourceGroupDeployment: naming.resourceGroupDeployment
     resourceGroupStorage: effectiveStorageResourceGroup
     shareSizeInGB: fslogixShareSizeInGB
-    smbServerLocation: naming.outputs.vmsLocAbbr
-    storageAccountNamePrefix: naming.outputs.fslogixStorageAccountNamePrefix
+    smbServerLocation: naming.vmsLocAbbr
+    storageAccountNamePrefix: naming.fslogixStorageAccountNamePrefix
     storageCount: fslogixShardingConfigurationIsValid ? fslogixStorageCount : fslogixStorageCount
     storageIndex: fslogixStorageIndex
     storageSku: fslogixStorageService == 'None' ? 'None' : split(fslogixStorageService, ' ')[1]
     fslogixStorageRedundancy: fslogixStorageRedundancy
     storageSolution: split(fslogixStorageService, ' ')[0]
     permittedIPs: permittedIPs
+    paasPublicNetworkAccess: paasPublicNetworkAccess
     tags: tags
     encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
     fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
@@ -1654,14 +1689,14 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
 module diskAccess 'modules/hosts/modules/diskAccess.bicep' = if (deployDiskAccessResource) {
   params: {
     resourceGroupHosts: effectiveHostsResourceGroup
-    diskAccessName: naming.outputs.diskAccessName
-    location: virtualMachinesRegion
+    diskAccessName: naming.diskAccessName
+    location: virtualMachinesLocation
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
     tags: tags
     deployPrivateEndpoint: deployPrivateEndpoints
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
   }
 }
@@ -1675,7 +1710,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     artifactsUserAssignedIdentityResourceId: artifactsUserAssignedIdentityResourceId
     avdInsightsDataCollectionRulesResourceId: effectiveAvdInsightsDataCollectionRuleResourceId
     availability: availability
-    availabilitySetNameConv: naming.outputs.availabilitySetNameConv
+    availabilitySetNameConv: naming.availabilitySetNameConv
     availabilitySetsCount: availabilitySetsCount
     availabilitySetsIndex: beginAvSetRange
     availabilityZones: availabilityZones
@@ -1730,10 +1765,10 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     imageSku: imageSku
     integrityMonitoring: integrityMonitoring
     intuneEnrollment: intuneEnrollment
-    location: virtualMachinesRegion
-    virtualMachineDiskNameConv: naming.outputs.virtualMachineDiskNameConv
+    location: virtualMachinesLocation
+    virtualMachineDiskNameConv: naming.virtualMachineDiskNameConv
     ouPath: vmOUPath
-    virtualMachineNicNameConv: naming.outputs.virtualMachineNicNameConv
+    virtualMachineNicNameConv: naming.virtualMachineNicNameConv
     securityType: securityType
     secureBootEnabled: secureBootEnabled
     sessionHostCount: sessionHostCount
@@ -1751,7 +1786,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     virtualMachineAdminUserName: !empty(existingCredentialsKeyVaultResourceId)
       ? kvCredentials!.getSecret('VirtualMachineAdminUserName')
       : virtualMachineAdminUserName
-    virtualMachineNameConv: naming.outputs.virtualMachineNameConv
+    virtualMachineNameConv: naming.virtualMachineNameConv
     virtualMachineNamePrefix: virtualMachineNamePrefix
     virtualMachineSize: virtualMachineSize
     vTpmEnabled: vTpmEnabled
@@ -1759,21 +1794,21 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     deployRecoveryServices: deployRecoveryServices
     createVault: empty(existingVmBackupVaultResourceId)
     existingVmBackupVaultResourceId: existingVmBackupVaultResourceId
-    vaultName: naming.outputs.recoveryServicesVaultNameVMs
+    vaultName: naming.recoveryServicesVaultNameVMs
     vaultStorageRedundancy: recoveryServicesVaultStorageRedundancy
     backupRetentionDays: backupRetentionDays
     keyManagementType: keyManagementRecoveryServicesVault
     keyExpirationInDays: keyExpirationInDays
     encryptionKeyVaultResourceId: effectiveEncryptionKeyVaultResourceId
     encryptionKeyVaultUri: effectiveEncryptionKeyVaultUri
-    encryptionKeyName: naming.outputs.encryptionKeyNameRecoveryServices
+    encryptionKeyName: naming.encryptionKeyNameRecoveryServices
     deployPrivateEndpoints: deployPrivateEndpoints
     vaultPrivateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     azureBackupPrivateDnsZoneResourceId: azureBackupPrivateDnsZoneResourceId
     azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
     azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
-    privateEndpointNameConv: naming.outputs.privateEndpointNameConv
-    privateEndpointNICNameConv: naming.outputs.privateEndpointNICNameConv
+    privateEndpointNameConv: naming.privateEndpointNameConv
+    privateEndpointNICNameConv: naming.privateEndpointNICNameConv
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
   }
   dependsOn: [
@@ -1784,8 +1819,8 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
 // Clean Up Deployment VM and Role Assignments
 module cleanupDeploymentHelper '../shared/modules/orchestration/deploymentHelper/cleanup.bicep' = if (createDeploymentVm) {
   params: {
-    location: virtualMachinesRegion
-    resourceGroupDeployment: naming.outputs.resourceGroupDeployment
+    location: virtualMachinesLocation
+    resourceGroupDeployment: naming.resourceGroupDeployment
     resourceGroupHosts: effectiveHostsResourceGroup
     userAssignedIdentityClientId: createDeploymentVm
       ? deploymentHelper!.outputs.deploymentUserAssignedIdentityClientId

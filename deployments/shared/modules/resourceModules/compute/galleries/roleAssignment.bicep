@@ -1,3 +1,6 @@
+metadata name = 'Compute gallery role assignments'
+metadata description = 'Applies deterministic role assignments at an existing compute gallery in the deployment resource group.'
+
 import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
 
 @description('Name of the existing compute gallery.')
@@ -29,4 +32,5 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   }
 ]
 
+@description('Array of role assignment resource IDs in the same order as the assignments input.')
 output resourceIds array = [for (assignment, i) in formattedAssignments: roleAssignment[i].id]

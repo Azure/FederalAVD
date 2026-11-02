@@ -143,7 +143,7 @@ The Session Host Replacer supports three distinct replacement strategies to acco
 - ✅ **Hostname reuse** - leverages deleted names for new hosts
 - ✅ **Dedicated host preservation** - maintains host group assignments
 - ❌ **Temporary capacity reduction** - some hosts unavailable during replacement
-- ⚠️ **Directory cleanup is identity-aware** - VM absence is always verified; Entra cleanup is required for Entra-joined hosts, optional for domain/hybrid join, and Intune cleanup is highly recommended for enrolled Entra/hybrid hosts
+- ⚠️ **Directory cleanup is identity-aware** - VM and AVD absence are always verified. Native Entra join requires Entra cleanup and, when Intune enrolled, Intune cleanup. Directory cleanup remains optional for AD DS and hybrid-joined machines.
 - ❌ **Slower rollouts** - limited by max deletions per cycle
 
 **Configuration parameters**:
@@ -152,8 +152,8 @@ The Session Host Replacer supports three distinct replacement strategies to acco
 - `targetSessionHostCount`: 0 (auto-detect) or Specific number
 - `maxDeletionsPerCycle`: Absolute replacement ceiling per cycle (default: 50)
 - `minimumCapacityPercentage`: Safety floor for available capacity (default: 80%)
-- `removeEntraDevice`: Optionally remove Entra ID records before hostname reuse (default: `true`)
-- `removeIntuneDevice`: Optionally remove Intune records before hostname reuse (default: `true`)
+- `removeEntraDevice`: Remove Entra records; always enabled for native Entra join in every mode (default: `true`)
+- `removeIntuneDevice`: Remove Intune records; always enabled for Intune-enrolled native Entra join (default: `true`)
 
 **Use cases**:
 
@@ -276,7 +276,7 @@ The Session Host Replacer Function App supports two identity options:
 
 - **Pre-created** before deployment
 - **Regional requirement**: Must be in the same Azure region as the Function App because Microsoft.Web cannot attach a user-assigned identity across regional isolation boundaries
-- **Best for**: Pre-authorizing required or optional device cleanup before the first DeleteFirst run
+- **Best for**: Pre-authorizing required or optional device cleanup before the first replacer run
 - **Best for**: Environments with a large number of host pools
 - **Benefit**: Graph permissions can be granted before deployment
 
@@ -293,7 +293,15 @@ The Session Host Replacer Function App supports two identity options:
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
 > [!IMPORTANT]
-> **DeleteFirst mode:** Entra device cleanup is required for Microsoft Entra joined session hosts because their exact names are reused. It remains optional for domain-joined and Microsoft Entra hybrid joined hosts. Intune cleanup is optional but highly recommended for Intune-enrolled Entra-joined or hybrid-joined hosts to prevent stale or duplicate managed-device records.
+> **Every replacement mode:** Native Entra joined hosts require Entra cleanup and, when Intune
+> enrolled, Intune cleanup. SideBySide can reuse vacant names after manual VM deletion, so the same
+> predeployment safety gate applies. AD DS and hybrid-joined machines retain optional directory
+> cleanup; Intune cleanup remains recommended when enrolled.
+>
+> Required cleanup failure blocks the entire deployment batch and stops further deletion in that
+> invocation. Saved pending names retry on later runs. See the [safe-name-reuse contract](replacement-flow.md#safe-name-reuse-in-every-mode)
+> for exact checks, ambiguous device records, live-VM collisions, explicit-target requirements,
+> and manual cleanup of failed VMs without ownership tags.
 >
 > Configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 >
@@ -302,7 +310,7 @@ The Session Host Replacer Function App supports two identity options:
 > scheduling.
 >
 > Intune is not currently available in Azure Government Secret or Azure Government Top Secret.
-> Leave Intune cleanup disabled unless your environment support team confirms availability. Grant
+> Disable Intune enrollment and cleanup unless your environment support team confirms availability. Grant
 > only `Device.ReadWrite.All` for Entra cleanup.
 
 #### 2. Grant Graph API Permissions to Managed Identity
@@ -481,10 +489,27 @@ The deployment creates or uses an existing Function App:
 - **Required Features**:
   - Always On (enabled by deployment)
   - VNet Integration support (if using private endpoints)
-  - PowerShell 7.4 runtime
+  - PowerShell 7.6 runtime with .NET 10 (the template and Portal defaults)
 - 💡 **Cost Tip**: P0v3 is the most cost-effective option and fully supports all required features
 
+The Portal lists runtime versions advertised by the selected region's Functions
+stack API. Confirm that PowerShell 7.6 is available in the target cloud and region
+before deployment. Updating the publisher alone does not upgrade an existing
+Function App; redeploy the Replacer with the intended `powerShellVersion`.
+Microsoft documents that [PowerShell 7.6 requires .NET 10](https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell#running-local-on-a-specific-version).
+
 #### 4. Network Requirements for Zero Trust Networking
+
+`paasPublicNetworkAccess` independently selects `Disabled`, `EnabledWithRestrictions`, or `Enabled`
+for the Function App and runtime storage. `Auto` derives access from private endpoint selection
+and IP rules.
+The Portal offers the three explicit choices, initially Disabled when Zero Trust networking is
+selected and Enabled otherwise. Public IP rules remain configured when Disabled and do not enable
+access. Restricted mode denies unmatched traffic even with no IPs, but includes the
+`AzureCloud` allowance for app/SCM and `AzureServices` bypass for storage. Storage trusted-service
+exceptions can still apply when Disabled. This setting does not configure adopted Key Vaults or
+monitoring access.
+See the [shared access-mode contract](../../../docs/parameters.md#paas-public-network-access).
 
 These resources are required only when Zero Trust networking (`privateEndpoint: true`) is enabled:
 
@@ -571,13 +596,64 @@ Bicep, or another tool. It doesn't support automated host pools with Session Hos
 
 Pass the same `namingConvention` and `identifier` values used in the host pool deployment. When deploying from the Portal, these are pre-populated from the `hpNamingConvention` and `hpIdentifier` tags on the host pool resource. Session host naming patterns (`virtualMachineNameConv`, `virtualMachineDiskNameConv`, `virtualMachineNicNameConv`, `availabilitySetNameConv`) are pre-populated from tags on the hosts resource group.
 
-**Critical for brownfield:** Session host naming MUST match your existing VM naming. For example:
+For an untagged host pool, the Portal emits an empty convention object and the shared
+naming library applies the canonical policy defaults. Portal defaults and adopted-host
+fallback patterns are literals checked by Pester; there is no hidden naming-policy
+control whose initialization could leave the initial page blank or break navigation.
 
-- If existing VMs are named `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
-- If existing VMs are named `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
-- If existing VMs are named `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
+SHR uses the [common Function App naming bundle](../../shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
+with application identifier `${identifier}-shr`. An empty identifier uses the
+actual host-pool resource name, not a generic placeholder. With identifier
+`finance`, region `use` and illustrative hash `abc123`:
 
-When naming tags are absent, the defaults are `SHNAME` for VMs, `SHNAME-osdisk` for OS disks, and `SHNAME-nic` for NICs. Existing resource-group tags continue to take precedence so replacement hosts retain the source host pool's naming.
+| Resource | Generated name |
+| --- | --- |
+| Function App | `fa-avd-finance-shr-abc123-use` |
+| Runtime storage | `saavdfinanceshrabc123use` |
+| Application Insights (when monitoring is enabled) | `appi-avd-finance-shr-use` |
+| Storage CMK identity (when CMK is enabled) | `uai-avd-finance-shr-storage-cmk-use` |
+| Shared hosting plan | `asp-avd-shr-use` |
+
+Only the app and storage carry the shared six-character hash, seeded by the
+Function App subscription, owning resource group, full region, cloud and full
+application identifier. The VM resource group does not seed infrastructure names.
+The CMK identity retains the application purpose and region independently of
+any explicit storage-name override. Each app still has its own Insights component;
+the Log Analytics workspace can be shared.
+
+Names are not silently shortened. Under default CAF naming with a three-character
+region, storage leaves seven alphanumeric characters for the host-pool identifier
+before `shr`; separators are removed. A longer identifier or convention may need
+`storageAccountNameOverride` to remain within 24 characters. The **Advanced >
+Infrastructure Naming > Override resource names** controls are available for
+tagged and untagged host pools. Explicit app, storage and CMK identity names take
+precedence; changing the app name does not rename its purpose-based Insights.
+`locationAbbreviation` takes precedence over `vmsLocationAbbreviation`, then the
+shared region map supplies a default.
+
+To share a plan, create it in the first deployment, optionally selecting
+`appServicePlanResourceGroupName` and `appServicePlanNameOverride`. Subsequent
+deployments supply `existingAppServicePlanResourceId`; they do not create or
+manage the plan. A common plan name does not automatically adopt an existing
+resource. Coordinate plan ownership and use compatible region, OS and SKU
+settings. Other add-ons can follow the same common-helper/create-or-existing
+pattern, choosing their own application and shared-plan purposes.
+
+**Naming change:** the former SHR-specific adapter and hashed Insights recipe
+are removed. This is not an automatic migration of existing resources. Before
+upgrading an existing deployment, compare resolved names and explicitly retain
+app/storage/identity names or plan IDs where required. The Insights name now
+follows the application identifier; retaining its previous hashed name is not
+supported by a separate compatibility path. The internal deployment-operation
+prefix and session-host VM naming patterns are unchanged.
+
+Configure session-host naming patterns with the `SHNAME` token. For example:
+
+- For `avdvm-001`, use `virtualMachineNameConv: 'SHNAME'` (no prefix/suffix)
+- For `vm-avdvm-001`, use `virtualMachineNameConv: 'vm-SHNAME'`
+- For `avdvm-001-vm`, use `virtualMachineNameConv: 'SHNAME-vm'`
+
+Resource-group naming tags take precedence over defaults. When those tags are absent, the defaults are `SHNAME` for VMs, `SHNAME-osdisk` for OS disks, and `SHNAME-nic` for NICs.
 
 **Token Reference:**
 
@@ -659,7 +735,7 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **User Profiles**: FSLogix settings (optional)
    - **Infrastructure**: App Service Plan, encryption, zero trust networking
    - **Monitoring**: Application Insights, Log Analytics workspace
-   - **Advanced**: Brownfield naming overrides, resource tags (optional)
+   - **Advanced**: Resource-name overrides, session-host naming and resource tags (optional)
 5. Review and click **Create**
 
 Here is a screen shot of the form:
@@ -672,14 +748,13 @@ The form automatically validates inputs and provides helpful descriptions for ea
 
 For brownfield deployments with non-standard host pool naming (e.g., `prod-avd-hostpool-01` instead of `vdpool-avd-prod-eus`), use the **Custom Naming (Advanced)** step:
 
-1. On the **Custom Naming (Advanced)** step, check **Use Custom Naming Overrides**
-2. Fill out the **Function App Infrastructure Naming** section:
-   - **Function App Name**: (Required) Globally unique name, 2-60 chars, alphanumeric and hyphens. Example: `func-avdshr-prod-eus2`
-   - **Storage Account Name**: (Required) Globally unique name, 3-24 chars, lowercase alphanumeric only. Example: `stavdshrprod`
+1. On the **Advanced** step, check **Infrastructure Naming > Override resource names**
+2. Provide only the infrastructure names that need overrides:
+   - **Function App Name**: (Optional) Globally unique name, 2-60 chars, alphanumeric and hyphens. Example: `func-avdshr-prod-eus2`
+   - **Storage Account Name**: (Optional unless the generated name is too long) Globally unique name, 3-24 chars, lowercase alphanumeric only. Example: `stavdshrprod`
    - **Application Insights**: When monitoring is enabled, its name is generated automatically.
-     Standard deployments use the Application Insights resource-type abbreviation with the same
-     host-pool identity components as the Function App. A custom Function App name is followed by
-     `-insights`.
+     It uses the shared convention, host-pool identifier, `shr` purpose and region,
+     without a hash. A custom Function App name does not change it.
 3. Fill out the **Session Host Resource Naming** section:
    - **Virtual Machine Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `vm-SHNAME`
    - **OS Disk Naming Convention**: (Required) Pattern with `SHNAME` token. Example: `disk-SHNAME`
@@ -718,7 +793,7 @@ $params = @{
     resourceGroupName = "rg-avd-management-use2"
     location = "eastus2"
     hostPoolResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.DesktopVirtualization/hostpools/vdpool-prod"
-    # Optional: Only required if device cleanup is needed from first run (DeleteFirst mode).
+    # Optional: Pre-authorize Graph cleanup before the first run, required for native Entra join.
     # The identity must be in the same Azure region as the Function App.
     sessionHostReplacerUserAssignedIdentityResourceId = "/subscriptions/.../resourceGroups/.../providers/Microsoft.ManagedIdentity/userAssignedIdentities/mi-sessionhostreplacer"
     # ... other parameters
@@ -1018,6 +1093,208 @@ After restoration:
 The script intentionally does not drain or delete the bad-image generation, alter gallery versions,
 re-enable host automation, or restart the Function App.
 
+## Two-Timer Execution
+
+SHR has one execution model: an initiation timer and a one-minute reconciliation timer.
+Deploy the complete SHR template; changing only an app setting or uploading one script does not
+install this model. See the [execution overview](../../../docs/session-host-replacer.md#execution-model).
+
+The existing `session-host-replacer` timer authorizes a replacement batch and selects an exact image.
+The `session-host-replacer-worker` reconciliation timer then monitors deployment, validates health, releases
+eligible hosts to autoscale and safely removes the approved old hosts without waiting for the next
+initiation tick. It uses the same Function App, identity, storage account and lifecycle engine. Another
+batch still requires the initiation schedule. This is not a new image-validation add-on.
+
+When no operation is active, the timer first performs a read-only work assessment using the shared
+planner and readiness gates. An idle, healthy pool creates no operation.
+The minute reconciler performs only the operation lookup when no active work exists; it does not
+inventory the pool, select images or run the lifecycle engine. Pending capacity, validation,
+handoff, deployment or recovery work still reaches the worker.
+Maintenance requests and shutdown-retention inventory conservatively retain worker processing.
+Existing authorized operations resume on reconciliation ticks, independently of the initiation schedule.
+After deploying this behavior, verify a scheduled tick against an idle, validated pool logs
+`Host pool is idle` without a new operation. Then verify due capacity/image work
+starts a durable operation and active deployment/drain work continues between initiation ticks.
+
+In **SideBySide**, that next scheduled batch does not have to wait for the previous old hosts to
+finish draining. Once the previous replacements are healthy, registered and handed back to
+autoscale, a later tick can authorize another deployment batch within the same pinned operation.
+The worker continues retiring all previously authorized old hosts safely. A target of 20 and batch
+ceiling of 10 can therefore deploy two batches while old hosts remain occupied, temporarily reaching
+40 VMs. Batch-size and temporary-capacity ceilings still apply; quota and subnet capacity must allow
+the surge. **DeleteFirst** still completes the current retirement/redeployment batch first.
+See the [canonical deployment and retirement gates](replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+
+See [timer sequencing and coordination](replacement-flow.md#two-timer-execution) for operation scope,
+duplicate/crash handling, deadlines and lease behavior.
+
+### Two-Timer Operations
+
+Timer triggers are native to the Functions runtime. SHR no longer uses a queue binding, extension
+bundle, prebuilt queue-extension package, queue endpoint or queue data-plane role.
+Blob host storage and Table state access remain required, including managed identity and private
+connectivity. Target-cloud runtime support still requires a live pilot.
+
+Use the [upgrade procedure](deployment-guide.md#upgrading-an-existing-deployment) for existing apps.
+It preserves active durable operations rather than clearing them. The existing worker function name
+is retained and its binding is changed to a timer, so an old queue listener is not left alongside it.
+
+To hold **new batches** while allowing an active batch to finish, use the configuration helper:
+
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1 `
+    -FunctionAppName '<shr-name>' `
+    -ResourceGroupName '<shr-resource-group>' `
+    -InitiationEnabled $false
+```
+
+Use `$true` to resume initiation. App-setting changes restart the app, so an interrupted worker may
+wait for its lease to expire before continuing. Persist the matching `initiationEnabled` parameter
+for later redeployments. **Stopping the Function App stops both functions**; it does not cancel ARM
+deployments, undo drain/deletion or disable autoscale.
+
+Monitor `CONTINUATION |` logs and the operation's status/deadline. An expired deadline or unexpected
+failure leaves `NeedsAttention`.
+Partially executed or ambiguous work still requires explicit recovery. A corrected template reference
+can take the checked automatic path below; the timer never silently discards an active batch.
+Timer invocations do not use queue retries or poison handling. A transient failure before state
+ownership is acquired is retried by the next timer tick. An interrupted owner may delay progress
+until its 30-minute lease expires. Polling, restarts and leases mean one minute is a reconciliation
+cadence, not a completion-time guarantee.
+
+### Automatic recovery of a rejected template submission
+
+After deploying the updated SHR code, a wrong `SessionHostTemplate` reference does not normally
+require Table edits or a recovery script:
+
+1. In the Function App's **Environment variables** (app settings), correct `SessionHostTemplate` to
+   the **session-host VM Template Spec** resource ID, not the SHR infrastructure Template Spec.
+   Save the change. App-setting changes restart the app; another restart is not a state reset.
+2. Keep `InitiationEnabled=true` and wait for the next configured initiation invocation.
+   The minute reconciler does not authorize automatic supersession.
+3. Check Application Insights for `Superseded rejected operation` followed by a fresh operation
+   initiation (or the idle message if nothing remains to do).
+
+Persist the matching `sessionHostTemplateSpecResourceId` deployment parameter so a redeployment
+does not undo the correction. This is not a new Portal button or an HTTP recovery endpoint.
+
+The timer automatically replans only a **rejected first SideBySide deployment** with a saved
+validation/HTTP 400 failure, an expired worker lease, and proof that **only the template reference
+changed** among the protected settings. It checks both ARM's deployment inventory and the exact
+deployment lookup. It also verifies the original pinned template predates the attempt and could
+not accept the saved parameters; a generic HTTP 400 alone is not proof of submission rejection.
+It verifies that no planned replacement VM or AVD registration exists, and refuses
+missing/unhealthy/draining old batch hosts, pending cleanup/maintenance, and drain/retention/SHR-owned
+scaling-exclusion tags. Read failures and malformed inventory or recovery mappings fail closed.
+Accepted deployments, even failed ones, later batches, unchanged bad configuration, DeleteFirst,
+and other protected-setting changes still require explicit recovery.
+
+Name reservations are written before deployment submission. Reservations matching only the rejected
+request's target names and VM IDs are preserved for fresh planning; they are not erased or mistaken
+for proof that VMs were created. Other pending mappings block automatic replanning.
+
+Before replacing the active operation, SHR saves its complete failed state in the existing
+`shrContinuation` table under `<pool-key>-superseded-<operation-id>`, then conditionally marks the
+active row `Superseded` using its ETag. The next operation records `SupersedesOperationId` and uses
+fresh image selection, current settings, and a new initiation deadline. The old attempt is **not**
+marked completed. Crashes or conditional-write conflicts cannot authorize duplicate operations;
+the reconciler cannot resume a superseded attempt, even before the fresh operation is created.
+The archive contains deployment parameters and must receive the same restricted Table access as
+the active operation. The automatic supersession check never changes VM/AVD resources or clears recovery mappings;
+the fresh worker still applies the normal readiness, capacity and cleanup gates.
+
+### Recover a stopped operation
+
+For cases outside the automatic path, use
+[Repair-SessionHostReplacerOperation.ps1](Repair-SessionHostReplacerOperation.ps1) instead of
+editing Table entities by hand. Run it from the repository root in PowerShell **7.4 or later**,
+signed in through `Connect-AzAccount` to the Function App subscription. The operator needs Function
+App read/config-list/stop/start, deployment/VM/AVD/Template Spec read permissions, **Storage Table
+Data Contributor**, and network/DNS access to the private Table endpoint. A storage firewall or
+403 is a prerequisite failure, not a reason to enable public access or use account keys.
+
+**1. Preview.** Fix the original connectivity/permission problem or restore the initiating settings,
+then run:
+
+```powershell
+$recovery = @{
+    FunctionAppName = '<shr-name>'
+    ResourceGroupName = '<shr-resource-group>'
+}
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery
+```
+
+**2. Apply after reviewing the preview.** The command prompts before changing Azure:
+
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -Apply
+```
+
+Apply stops the app, rechecks the settings/operation/lease/deployments, backs up both state records
+to a new restricted-access folder under `customer/shr-recovery/`, conditionally updates the same
+operation using its ETag, verifies the exact saved state, and requests app startup. It does not
+delete state, create a different operation, or directly invoke either function.
+**The next minute reconciliation tick can resume work after startup**, independently of the
+initiation schedule.
+Normal health, capacity, image and cleanup gates remain in force. Confirm host startup, worker
+progress and scaling handoff in Application Insights; a successful state update is not proof of
+replacement completion.
+
+Backups include the saved deployment request and can contain credentials and registration tokens.
+Keep them private; do not attach them to issues, copy them into tracked folders, or commit them.
+Use `-BackupDirectory` to choose another approved local parent directory. `-WhatIf -Apply` performs
+the read-only checks without stopping the app, writing backups or changing state.
+
+#### Correcting a wrong session-host Template Spec
+
+If `SessionHostTemplate` pointed to the SHR infrastructure template instead of the **session-host
+VM template**, correct `sessionHostTemplateSpecResourceId` in the deployment parameters and the
+resulting app setting first. Prefer the
+[automatic timer reconciliation](#automatic-recovery-of-a-rejected-template-submission) above.
+The following explicit command remains available when a reviewed same-operation repair is needed;
+a restart alone does not clear the failed operation.
+
+Add **`-RepairTemplateReference` to both commands**:
+
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference -Apply
+```
+
+This narrow repair requires the first SideBySide deployment, a saved validation/HTTP 400 failure,
+no ARM deployment record, no target VM or AVD registration, and proof that **only the template
+reference changed** among the fingerprinted settings. It resolves the corrected Template Spec using
+SHR's existing version-selection helper and checks that its parameter contract accepts the saved
+request. It changes only the saved template link and configuration fingerprint in addition to
+normal recovery fields. The pinned image, host names, request parameters, generation and progress
+remain intact. Expired credentials or registration tokens in the saved request need separate review.
+
+If the deadline expired, explicitly approve `-ExtendDeadlineHours 24` on both preview and apply.
+The command never extends a deadline silently.
+
+If any check fails, stop and inspect the error; do not delete the Table rows or mark the operation
+complete. Cleanup intents, unstarted batches, other configuration changes, and template repairs
+after deployment acceptance require manual recovery. After an apply failure, verify the app is
+stopped and inspect the backup/current state before retrying; successful writes are not rolled back.
+For manual recovery, hold initiation, stop the app, wait for the lease to expire, preserve restricted
+copies of both state records, and review ARM work, AVD health/sessions and the initiating configuration.
+Only resume the same approved operation with an ETag-conditional update after that review; preserve
+its ID, image, batch names, deployment intent and recovery mappings. Never clear exclusions to bypass
+readiness.
+
+Before production use, exercise a sparse initiation schedule, slow/unhealthy registration,
+concurrent timers, a worker crash after ARM acceptance, drain periods, scaling-phase changes,
+retention, an initiation hold and maintenance-window expiry in an isolated pool. Live managed identity,
+private Blob/Table DNS, Portal rendering and target-cloud runtime availability require separate verification;
+offline tests do not establish deployment success.
+
+For the SideBySide pilot, also keep users on the first old-host batch and verify that the next
+scheduled tick can deploy another batch after replacement health and scaling handoff, without
+waiting for those users' grace period. Confirm that worker-only wake-ups never add a batch,
+an initiation hold prevents further authorizations, unhealthy replacements block advancement, and
+the configured batch and twice-target capacity ceilings hold. Test a restart with an unconsumed
+authorization and verify that it cannot be reused for a different operation or batch.
+
 ## Configuration
 
 ### Function App Runtime
@@ -1154,21 +1431,23 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 | `tagDeployTimestamp` | `AutoReplaceDeployTimestamp` | Tag name for deployment timestamp (ISO 8601 format) |
 | `tagPendingDrainTimestamp` | `AutoReplacePendingDrainTimestamp` | Tag name for drain start timestamp |
 | `tagShutdownTimestamp` | `AutoReplaceShutdownTimestamp` | Tag name for shutdown timestamp (SideBySide with retention) |
-| `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Tag name for excluding hosts from scaling plans. Applied to newly deployed hosts, hosts in drain, and shutdown retention VMs. Removed when cycle completes (or when new capacity is active in SideBySide+retention) |
+| `tagScalingPlanExclusionTag` | `ScalingPlanExclusion` | Protects new, draining and retained hosts from autoscale. Only SHR-owned values are released, after exact-image health validation on non-draining, non-retained hosts. Cycle completion alone does not authorize removal |
 | `tagValidatedImage` | `AutoReplaceValidatedImage` | Tag name for exact-image AVD health validation evidence. Allows a confirmed stopped, unexcluded host to count as scaling-plan-managed ready capacity. |
 
 ### Device Cleanup Parameters
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `removeEntraDevice` | `true` | Remove Entra ID device records when deleting session hosts. Required for DeleteFirst replacement of Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts. Requires `Device.ReadWrite.All` when enabled. |
-| `removeIntuneDevice` | `true` | Remove Intune device records when deleting session hosts. Optional but highly recommended before DeleteFirst hostname reuse for Intune-enrolled Entra-joined or hybrid-joined hosts. Requires `DeviceManagementManagedDevices.ReadWrite.All` when enabled. Intune is not currently available in Azure Government Secret and Top Secret; set to `false` unless availability is confirmed for the target environment. |
+| `removeEntraDevice` | `true` | Always enabled for native Entra joined hosts in every mode, including SideBySide vacant-name recovery; optional for AD DS and hybrid-joined machines. Requires `Device.ReadWrite.All` when required or enabled. |
+| `removeIntuneDevice` | `true` | Always enabled for Intune-enrolled native Entra joined hosts; optional and recommended for enrolled hybrid-joined machines. Requires `DeviceManagementManagedDevices.ReadWrite.All` when required or enabled. Intune is unavailable in Secret and Top Secret: disable enrollment and cleanup unless availability is confirmed. |
 
 ### Scheduling Parameters
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `timerSchedule` | `0 0,30 * * * *` | NCrontab format: `{second} {minute} {hour} {day} {month} {day-of-week}`. Default runs every 30 minutes at :00 and :30. Stagger across deployments by varying minutes |
+| `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB for new batch initiation, stored in `TimerSchedule`. Default authorizes at :00 and :30. The separate reconciliation timer runs every minute; keep deployment parameters synchronized with app-setting changes |
+| `initiationEnabled` | `true` | Allow new timer-authorized batches. False still permits active-operation recovery and completion |
+| `continuationTimeoutHours` | `72` | Fixed deadline for each newly initiated operation (1-720 hours). Set longer than the approved drain and provisioning horizon; does not extend an existing operation |
 
 **Timer Schedule Examples**:
 
@@ -1807,7 +2086,8 @@ traces
 
 ### Monitoring Dashboard
 
-The Session Host Replacer includes a pre-built Azure Monitor Workbook that provides real-time visibility into automation status and host pool health.
+The Session Host Replacer includes a pre-built Azure Monitor Workbook that shows last-reported
+automation status, cycle progress and host inventory. It reads telemetry, not live operation state.
 
 **Access the Dashboard:**
 
@@ -1816,6 +2096,38 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
 3. Or open the resource group containing the selected Log Analytics workspace and select the
   **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
+
+#### Trace one replacement cycle
+
+1. Select the host pool and a time range that includes the cycle's initiation and latest progress.
+2. Select its **Cycle** ID. This is the durable SHR operation ID, shared across both timers and
+   successive invocations, not Application Insights' native operation ID.
+3. Read the cycle summary: status, activity/reason, batch, pinned image definition/version, target,
+   deadline, initiation hold, last observation and lease expiry. **Waiting** is not automatically
+   failure, and an individual engine action is not proof the cycle completed.
+4. Follow the chronological **cycle timeline**. It records authorization, deployment submission,
+   cycle snapshots, lease waits and terminal outcomes. Detailed checkpoints/internal progress
+   are diagnostic Trace events rather than repeated normal-level snapshots. **Open deployment** opens the
+   existing ARM deployment resource; it does not deploy anything.
+5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
+   follow the cycle across invocations. The timeline retains the whole selected cycle.
+
+The timer-health table separates **Initiation** from **Reconciliation** and shows their last
+observed starts, outcomes and failures. It does not mark sparse initiation schedules as delayed
+using a fixed 35/45-minute threshold. A started invocation with no observed completion is not
+silently treated as successful. The frequency chart counts both timers, including idle ticks.
+
+An owned **lease** means another invocation must wait; normal owners release it after work,
+while an interrupted owner may leave it until expiry. An expired lease permits checked takeover,
+not bypassing safety checks. Holding initiation prevents new batch authority but does not stop
+already authorized deployment monitoring or retirement. See [two-timer operations](#two-timer-operations).
+
+**Last Reported Inventory** has its own freshness panel: idle minute ticks are heartbeats, not
+fresh host inventories. Missing data, an old inventory, or an `UpToDate` action observation must
+not be read as proof that the current pool is healthy or that a cycle is complete. Sampling and
+ingestion delays can leave gaps; expand the time range and consult correlated logs before
+recovery. New cycle views require the updated function code and workbook; historical untyped
+logs are not backfilled. See [logging and correlation](logging-guide.md#cycle-correlation).
 
 **Dashboard Features:**
 
@@ -1889,6 +2201,38 @@ The workbook is fully customizable. You can:
 > resources can send telemetry to the same Log Analytics workspace. Use the **Host Pool** parameter
 > to filter the dashboard to a specific host pool or view aggregate data across all pools.
 
+### Function App Log Collection
+
+When monitoring is enabled, SHR keeps workspace-based Application Insights and
+the `APPLICATIONINSIGHTS_CONNECTION_STRING` app setting for invocation telemetry,
+traces and the workbook. It no longer creates the separate Function App diagnostic
+setting that forwards `FunctionAppLogs` to Log Analytics. Storage diagnostics and
+Application Insights private-link configuration are unchanged.
+
+Removing this separate collection path can reduce duplicate collection, but is
+not proof that all duplicate entries are resolved in Government or air-gapped
+clouds. Verify new invocation telemetry, traces and the workbook in the target
+cloud after the change; existing ingested entries remain in the workspace.
+Function Monitor views still depend on working Application Insights ingestion.
+
+**Existing deployments:** redeploying the updated template in incremental mode
+does **not** delete the existing `diag-<FunctionAppName>` diagnostic setting.
+After selecting the correct cloud and subscription, inspect the settings on the
+SHR Function App and remove only this deployment-owned setting through the
+approved operator process. For example, in Azure CLI:
+
+```powershell
+$shrFunctionAppResourceId = '/subscriptions/<subscription>/resourceGroups/<function-app-rg>/providers/Microsoft.Web/sites/<shr-function-app>'
+$diagnosticSettingName = "diag-$(($shrFunctionAppResourceId -split '/')[-1])"
+az monitor diagnostic-settings list --resource $shrFunctionAppResourceId
+# After confirming this is the SHR-owned FunctionAppLogs setting:
+az monitor diagnostic-settings delete --resource $shrFunctionAppResourceId --name $diagnosticSettingName
+```
+
+Do not remove unrelated diagnostic settings or use complete-mode deployment as
+the migration mechanism. A centrally assigned diagnostic-settings policy may
+recreate the setting; coordinate any required change with its owner.
+
 ### Enterprise Workbook Architecture
 
 The Session Host Replacer uses a **centralized workbook** pattern for enterprise-wide visibility:
@@ -1919,19 +2263,6 @@ capabilities (similar to AVD Insights). Use the same `workbookLocation` selected
 was first created for that workspace. The deployment identity needs permission to create or update
 workbooks in the workspace resource group, including when it is in a centralized monitoring
 subscription.
-
-> **Upgrade note:** Earlier releases deployed the workbook into each Session Host Replacer
-> Function App resource group. The first deployment of this version creates the workspace-scoped
-> workbook in the selected Log Analytics workspace resource group; ARM does not move or delete an
-> older workbook. Validate the centralized workbook, preserve any intentional customizations, and
-> then remove obsolete per-host workbooks through the approved change process.
-
-> **Application Insights naming upgrade:** This version gives each Function App a corresponding
-> Application Insights resource whose generated name uses the same host-pool identity. Redeploying
-> an environment that used the earlier convention-derived name creates the new component and rewires
-> the Function App to it. ARM does not delete the old component; retain it while historical telemetry
-> is needed, then remove it through the approved change process. Parameter files must remove the
-> retired `applicationInsightsNameOverride` parameter.
 
 This pattern:
 

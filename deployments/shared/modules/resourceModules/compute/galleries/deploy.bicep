@@ -1,3 +1,6 @@
+metadata name = 'Azure Compute Gallery'
+metadata description = 'Deploys an Azure Compute Gallery with optional user-assigned identities; image definitions, versions and role assignments are managed separately.'
+
 @sys.description('Required. Name of the Azure Compute Gallery.')
 @minLength(1)
 param name string
@@ -35,5 +38,7 @@ resource gallery 'Microsoft.Compute/galleries@2024-03-03' = {
   }
 }
 
+@sys.description('Resource ID of the azure Compute Gallery.')
 output resourceId string = gallery.id
+@sys.description('Azure resource name of the azure Compute Gallery.')
 output name string = gallery.name

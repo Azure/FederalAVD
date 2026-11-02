@@ -1,8 +1,12 @@
+metadata name = 'Storage configuration input types'
+metadata description = 'Exports storage network ACL and SMB protocol setting shapes; consuming modules configure existing or new storage resources.'
+
 // Storage-specific shared type definitions.
 // Import in storage modules with:
 //   import { networkAclsType, smbSettingsType } from '../types/storageTypes.bicep'
 
 @export()
+@description('Storage network access rules covering the default action, bypass services, virtual networks and IP addresses.')
 type networkAclsType = {
   @description('Services allowed to bypass network rules. Comma-separated: AzureServices, Logging, Metrics, None.')
   bypass: string?
@@ -13,6 +17,7 @@ type networkAclsType = {
 }
 
 @export()
+@description('Optional Azure Files SMB protocol, authentication, encryption and multichannel configuration.')
 type smbSettingsType = {
   @description('SMB protocol versions. E.g. "SMB3.0;SMB3.1.1;"')
   versions: string?

@@ -4,19 +4,30 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.46.1.21595",
-      "templateHash": "14413757828628509241"
-    }
+      "version": "0.48.1.52935",
+      "templateHash": "10749179182174799801"
+    },
+    "name": "Monitoring association remediation template",
+    "description": "Creates a data collection rule or endpoint association on an existing VM in the deployment resource group according to the supplied association type."
   },
   "parameters": {
     "associationType": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Association selector: DataCollectionRule or DataCollectionEndpoint."
+      }
     },
     "monitoringResourceId": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the existing data collection rule or endpoint selected by associationType."
+      }
     },
     "virtualMachineName": {
-      "type": "string"
+      "type": "string",
+      "metadata": {
+        "description": "Required. Name of the existing VM in the deployment resource group."
+      }
     }
   },
   "variables": {

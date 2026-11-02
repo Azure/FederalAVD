@@ -1,6 +1,13 @@
+metadata name = 'Virtual machine extension'
+metadata description = 'Deploys a caller-selected extension handler on an existing VM in the deployment resource group, with separate public and protected settings.'
+
+@description('Required. Name of the existing virtual machine in the deployment resource group.')
 param virtualMachineName string
+@description('Required. Name of the virtual machine extension to deploy.')
 param name string
+@description('Optional. Azure region for the virtual machine extension; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the virtual machine extension.')
 param tags object = {}
 
 @description('Extension handler publisher.')
@@ -49,5 +56,7 @@ resource extension 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = {
   }
 }
 
+@description('Resource ID of the virtual machine extension.')
 output resourceId string = extension.id
+@description('Azure resource name of the virtual machine extension.')
 output name string = extension.name

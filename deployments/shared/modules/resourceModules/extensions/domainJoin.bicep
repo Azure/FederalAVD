@@ -1,5 +1,11 @@
+metadata name = 'Active Directory domain join extension'
+metadata description = 'Joins an existing Windows VM to Active Directory using caller-supplied credentials and an optional OU. Domain connectivity and join permissions are caller prerequisites.'
+
+@description('Required. Name of the existing virtual machine in the deployment resource group.')
 param virtualMachineName string
+@description('Optional. Azure region for the active Directory domain join extension; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+@description('Optional. Tags applied to the active Directory domain join extension.')
 param tags object = {}
 
 @description('Domain to join.')
@@ -45,5 +51,7 @@ resource domainJoin 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = 
   }
 }
 
+@description('Resource ID of the active Directory domain join extension.')
 output resourceId string = domainJoin.id
+@description('Azure resource name of the active Directory domain join extension.')
 output name string = domainJoin.name

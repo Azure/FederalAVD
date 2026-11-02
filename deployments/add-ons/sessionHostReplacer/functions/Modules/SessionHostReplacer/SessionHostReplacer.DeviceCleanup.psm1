@@ -3,6 +3,351 @@
 
 #Region Device Cleanup
 
+function Get-SessionHostVMResourceId {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [hashtable]$SessionHostParameters = (Read-FunctionAppSetting SessionHostParameters | ConvertTo-CaseInsensitiveHashtable),
+        [string]$SubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
+        [string]$ResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)
+    )
+
+    $pattern = [string]$SessionHostParameters['virtualMachineNameConv']
+    $vmName = if ([string]::IsNullOrWhiteSpace($pattern)) { $Name } else { $pattern.Replace('SHNAME', $Name) }
+    return "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Compute/virtualMachines/$vmName"
+}
+
+function Test-ReplacerResourceAbsent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ARMToken,
+        [Parameter(Mandatory = $true)][string]$ResourceId,
+        [string]$ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+
+    try {
+        $resource = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get `
+            -Uri "$ResourceManagerUri$($ResourceId)?api-version=2024-07-01" -ErrorAction Stop
+        if ($null -eq $resource) {
+            throw "Empty resource lookup response for '$ResourceId'; absence cannot be established."
+        }
+        return $resource.error.code -eq 'ResourceNotFound'
+    }
+    catch {
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
+            return $true
+        }
+        Write-LogEntry -Message "Unable to establish resource absence for '$ResourceId': $($_.Exception.Message)" -Level Error
+        throw
+    }
+}
+
+function Wait-SessionHostVMDeletions {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ARMToken,
+        [Parameter(Mandatory = $true)][array]$SessionHosts,
+        [int]$MaxWaitMinutes = 10,
+        [int]$PollIntervalSeconds = 30,
+        [string]$ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+
+    $deadline = (Get-Date).AddMinutes($MaxWaitMinutes)
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    do {
+        $remaining = @($SessionHosts | Where-Object {
+            if ($continuation) { Assert-ShrWorkerLease }
+            -not (Test-ReplacerResourceAbsent -ARMToken $ARMToken -ResourceId $_.ResourceId -ResourceManagerUri $ResourceManagerUri)
+        })
+        if ($remaining.Count -eq 0) { return }
+        if ($continuation) {
+            Request-ShrWorkerYield -Message "VM deletion is pending for '$($remaining.SessionHostName -join ', ')'; continuation will recheck without reusing the names."
+        }
+        if ((Get-Date) -ge $deadline) {
+            throw "VM deletion remains unconfirmed for '$($remaining.SessionHostName -join ', ')'; cleanup and deployment are blocked."
+        }
+        Start-Sleep -Seconds $PollIntervalSeconds
+    } while ($true)
+}
+
+function Get-SessionHostDirectoryDevices {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$GraphToken,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][ValidateSet('Entra', 'Intune')][string]$Directory,
+        [string]$GraphEndpoint = (Get-GraphEndpoint),
+        [string]$ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+    )
+
+    $collection = if ($Directory -eq 'Entra') { 'devices' } else { 'deviceManagement/managedDevices' }
+    $nameProperty = if ($Directory -eq 'Entra') { 'displayName' } else { 'deviceName' }
+    $filter = [Uri]::EscapeDataString("$nameProperty eq '$($Name.Replace("'", "''"))'")
+    $uri = "/v1.0/$($collection)?`$filter=$filter"
+    $seen = [System.Collections.Generic.HashSet[string]]::new()
+    while ($uri) {
+        if (-not $seen.Add("$GraphEndpoint$uri")) {
+            throw "Repeated $Directory device pagination link for '$Name'."
+        }
+        $page = Invoke-GraphApiWithRetry -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken `
+            -Method Get -Uri $uri -ClientId $ClientId
+        $hasValue = if ($page -is [System.Collections.IDictionary]) {
+            $page.Contains('value')
+        }
+        else {
+            $null -ne $page -and $page.PSObject.Properties.Name -contains 'value'
+        }
+        if (-not $hasValue -or $page.value -isnot [System.Collections.IList]) {
+            throw "Invalid $Directory device lookup response for '$Name'."
+        }
+        foreach ($device in $page.value) {
+            if ([string]::IsNullOrWhiteSpace([string]$device.id) -or $device.$nameProperty -ine $Name) {
+                throw "Invalid or mismatched $Directory device lookup result for '$Name'."
+            }
+            $device
+        }
+        $uri = $null
+        if ($page.'@odata.nextLink') {
+            $next = [Uri]$page.'@odata.nextLink'
+            $allowedHosts = @(([Uri]$GraphEndpoint).Host)
+            if (([Uri]$GraphEndpoint).Host -eq 'graph.microsoft.us') { $allowedHosts += 'dod-graph.microsoft.us' }
+            if (-not $next.IsAbsoluteUri -or $next.Scheme -ne 'https' -or $next.Host -notin $allowedHosts) {
+                throw "Unexpected $Directory device pagination endpoint for '$Name'."
+            }
+            $GraphEndpoint = $next.GetLeftPart([UriPartial]::Authority)
+            $uri = $next.PathAndQuery
+        }
+    }
+}
+
+function Assert-SessionHostNamesAvailable {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ARMToken,
+        [Parameter(Mandatory = $true)][array]$SessionHosts,
+        [string]$GraphToken,
+        [switch]$WaitForVMDeletion,
+        [hashtable]$SessionHostParameters = (Read-FunctionAppSetting SessionHostParameters | ConvertTo-CaseInsensitiveHashtable),
+        [bool]$RemoveEntraDevice = (Read-FunctionAppSetting RemoveEntraDevice -AsBoolean),
+        [bool]$RemoveIntuneDevice = (Read-FunctionAppSetting RemoveIntuneDevice -AsBoolean),
+        [string]$HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [string]$HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [string]$HostPoolName = (Read-FunctionAppSetting HostPoolName),
+        [string]$ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+
+    try {
+        $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+        $pendingRetirements = @($continuation.CleanupIntent.VMDeletions | Where-Object { $_ })
+        if ($pendingRetirements.Count -gt 0) {
+            $SessionHosts = @($SessionHosts)
+            foreach ($pendingHost in $continuation.CleanupIntent.Hosts) {
+                if (-not @($SessionHosts | Where-Object {
+                    $_.SessionHostName -ieq $pendingHost.SessionHostName -and
+                    $_.ResourceId -ieq $pendingHost.ResourceId
+                }).Count) {
+                    $SessionHosts += [PSCustomObject]$pendingHost
+                }
+            }
+            $WaitForVMDeletion = [System.Management.Automation.SwitchParameter]::new($true)
+            $RemoveEntraDevice = $RemoveEntraDevice -or [bool]$continuation.CleanupIntent.RemoveEntraDevice
+            $RemoveIntuneDevice = $RemoveIntuneDevice -or [bool]$continuation.CleanupIntent.RemoveIntuneDevice
+        }
+        $hostsByName = @{}
+        $hostsToVerify = @(foreach ($hostToDeploy in $SessionHosts) {
+            if ([string]::IsNullOrWhiteSpace($hostToDeploy.SessionHostName) -or
+                [string]::IsNullOrWhiteSpace($hostToDeploy.ResourceId)) {
+                throw 'Every deployment host must have a name and VM resource ID.'
+            }
+            if ($hostsByName.ContainsKey($hostToDeploy.SessionHostName)) {
+                throw 'Duplicate host names in deployment batch.'
+            }
+            $verificationHost = [PSCustomObject]@{
+                Name = $hostToDeploy.SessionHostName
+                ResourceId = $hostToDeploy.ResourceId
+                VMConfirmed = $false
+                AVDConfirmed = $true
+                EntraIDConfirmed = $true
+                IntuneConfirmed = $true
+                EntraDevice = $null
+                IntuneDevice = $null
+            }
+            $hostsByName[$hostToDeploy.SessionHostName] = $verificationHost
+            $verificationHost
+        })
+        $isEntraJoined = $SessionHostParameters['IdentitySolution'] -in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')
+        $RemoveEntraDevice = $RemoveEntraDevice -or $isEntraJoined
+        $RemoveIntuneDevice = $RemoveIntuneDevice -or ($isEntraJoined -and [bool]$SessionHostParameters['IntuneEnrollment'])
+        $cleanupIntent = @{
+            Hosts = @($SessionHosts | ForEach-Object {
+                @{ SessionHostName = $_.SessionHostName; ResourceId = $_.ResourceId }
+            })
+            WaitForVMDeletion = $WaitForVMDeletion.IsPresent
+            RemoveEntraDevice = $RemoveEntraDevice
+            RemoveIntuneDevice = $RemoveIntuneDevice
+        }
+        if ($pendingRetirements.Count -gt 0) {
+            $cleanupIntent.VMDeletions = $pendingRetirements
+        }
+        # Replay cleanup even when a deleted VM disappears from the next invocation's inventory.
+        if ($WaitForVMDeletion) {
+            if ($continuation) {
+                $continuation.CleanupIntent = $cleanupIntent
+                Save-ShrContinuationCheckpoint
+            }
+            Wait-SessionHostVMDeletions -ARMToken $ARMToken -SessionHosts $SessionHosts -ResourceManagerUri $ResourceManagerUri
+        }
+
+        if ($RemoveEntraDevice -or $RemoveIntuneDevice) {
+            if ([string]::IsNullOrWhiteSpace($GraphToken)) {
+                $GraphToken = Get-AccessToken -ResourceUri (Get-GraphEndpoint)
+            }
+            if ([string]::IsNullOrWhiteSpace($graphToken)) { throw 'Required Graph token acquisition failed; deployment batch is blocked.' }
+        }
+
+        $poolPath = "/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName"
+        if ($continuation) { Assert-ShrWorkerLease }
+        $registrations = @(Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get `
+            -Uri "$ResourceManagerUri$poolPath/sessionHosts?api-version=2024-04-03" -RequireCollection -ErrorAction Stop)
+        $staleRegistrations = @()
+        foreach ($registration in $registrations) {
+            if ([string]::IsNullOrWhiteSpace($registration.name)) { throw 'Invalid AVD registration lookup response.' }
+            $fqdn = ([string]$registration.name).Split('/')[-1]
+            $matchingHost = $hostsByName[$fqdn.Split('.')[0]]
+            if ($matchingHost) {
+                if ($registration.id -ine "$poolPath/sessionHosts/$fqdn") {
+                    throw "Invalid AVD registration resource ID for '$fqdn'; deployment batch is blocked."
+                }
+                if ($registration.properties.resourceId -ine $matchingHost.ResourceId) {
+                    throw "AVD registration '$fqdn' references a different VM; deployment batch is blocked."
+                }
+                $staleRegistrations += $registration
+                $matchingHost.AVDConfirmed = $false
+            }
+        }
+
+        foreach ($verificationHost in $hostsToVerify) {
+            if ($continuation) { Assert-ShrWorkerLease }
+            if ($RemoveEntraDevice) {
+                $verificationHost.EntraDevice = Get-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name -Directory Entra
+                $verificationHost.EntraIDConfirmed = $null -eq $verificationHost.EntraDevice
+            }
+            if ($RemoveIntuneDevice) {
+                if ($continuation) { Assert-ShrWorkerLease }
+                $verificationHost.IntuneDevice = Get-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name -Directory Intune
+                $verificationHost.IntuneConfirmed = $null -eq $verificationHost.IntuneDevice
+            }
+        }
+
+        # Discovery is read-only. Prove the whole batch absent before the first mutation.
+        foreach ($verificationHost in $hostsToVerify) {
+            if ($continuation) { Assert-ShrWorkerLease }
+            if (-not $WaitForVMDeletion -and -not (Test-ReplacerResourceAbsent -ARMToken $ARMToken -ResourceId $verificationHost.ResourceId -ResourceManagerUri $ResourceManagerUri)) {
+                throw "VM absence is not confirmed for '$($verificationHost.Name)'; deployment batch is blocked."
+            }
+            $verificationHost.VMConfirmed = $true
+        }
+        $cleanupRequested = @($hostsToVerify | Where-Object {
+            -not ($_.AVDConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed)
+        }).Count -gt 0
+        if ($continuation -and $cleanupRequested -and -not $WaitForVMDeletion) {
+            $continuation.CleanupIntent = $cleanupIntent
+            Save-ShrContinuationCheckpoint
+        }
+        foreach ($verificationHost in $hostsToVerify) {
+            if ($verificationHost.EntraDevice) {
+                Remove-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name `
+                    -Id $verificationHost.EntraDevice.id -Directory Entra
+            }
+            if ($verificationHost.IntuneDevice) {
+                Remove-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name `
+                    -Id $verificationHost.IntuneDevice.id -Directory Intune
+            }
+        }
+        foreach ($registration in $staleRegistrations) {
+            try {
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Delete `
+                    -Uri "$ResourceManagerUri$($registration.id)?api-version=2024-04-03&force=true" -ErrorAction Stop | Out-Null
+            }
+            catch {
+                if (-not $_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 404) { throw }
+            }
+        }
+
+        $cleanupRequested = @($hostsToVerify | Where-Object {
+            -not ($_.AVDConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed)
+        }).Count -gt 0
+        if ($cleanupRequested) {
+            $verification = Wait-SessionHostDeletionVerification -ARMToken $ARMToken -GraphToken $GraphToken `
+                -HostsToVerify $hostsToVerify -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice `
+                -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
+                -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
+            if ($verification.TotalHosts -ne $SessionHosts.Count -or @($verification.IncompleteHosts).Count -gt 0) {
+                throw 'Required VM, AVD registration, or directory cleanup remains incomplete; deployment batch is blocked.'
+            }
+        }
+        # A clean allocation ends at its first VM check; waits and mutations need a fresh check.
+        if ($cleanupRequested -or $WaitForVMDeletion) {
+            foreach ($hostToDeploy in $SessionHosts) {
+                if ($continuation) { Assert-ShrWorkerLease }
+                if (-not (Test-ReplacerResourceAbsent -ARMToken $ARMToken -ResourceId $hostToDeploy.ResourceId -ResourceManagerUri $ResourceManagerUri)) {
+                    throw "VM '$($hostToDeploy.SessionHostName)' appeared during cleanup; deployment batch is blocked."
+                }
+            }
+        }
+        if ($continuation -and $continuation.CleanupIntent) {
+            $continuation.CleanupIntent = $null
+            Save-ShrContinuationCheckpoint
+        }
+    }
+    catch {
+        $level = if ($_.Exception -is [TimeoutException] -and $continuation) { 'Warning' } else { 'Error' }
+        Write-LogEntry -Message "DEPLOYMENT_PREFLIGHT_BLOCKED | $($_.Exception.Message) Recovery will retry on a subsequent run." -Level $level
+        throw
+    }
+}
+
+function Get-SessionHostDirectoryDevice {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$GraphToken,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][ValidateSet('Entra', 'Intune')][string]$Directory,
+        [string]$GraphEndpoint = (Get-GraphEndpoint),
+        [string]$ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+    )
+
+    $devices = @(Get-SessionHostDirectoryDevices @PSBoundParameters)
+    if ($devices.Count -gt 1) {
+        throw "Multiple $Directory devices match '$Name'; resolve ambiguous ownership before retrying."
+    }
+    if ($devices.Count -eq 1) { $devices[0] }
+}
+
+function Remove-SessionHostDirectoryDevice {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$GraphToken,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Id,
+        [Parameter(Mandatory = $true)][ValidateSet('Entra', 'Intune')][string]$Directory,
+        [string]$GraphEndpoint = (Get-GraphEndpoint),
+        [string]$ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+    )
+
+    $collection = if ($Directory -eq 'Entra') { 'devices' } else { 'deviceManagement/managedDevices' }
+    $directoryName = if ($Directory -eq 'Entra') { 'Entra ID' } else { 'Intune' }
+    Write-LogEntry -Message "Removing session host '$Name' device from $directoryName (device ID: $Id)" -Level Trace
+    try {
+        Invoke-GraphApiWithRetry -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken `
+            -Method Delete -Uri "/v1.0/$collection/$Id" -ClientId $ClientId | Out-Null
+    }
+    catch {
+        if (-not $_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 404) { throw }
+    }
+    Write-LogEntry -Message "Successfully removed device $Name from $directoryName"
+}
+
 function Remove-DeviceFromDirectories {
     <#
     .SYNOPSIS
@@ -41,9 +386,11 @@ function Remove-DeviceFromDirectories {
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
-    if (-not $GraphToken) {
-        Write-LogEntry -Message "No Graph token provided - skipping device cleanup for $DeviceName" -Level Trace
+    if (-not $RemoveEntraDevice -and -not $RemoveIntuneDevice) {
         return
+    }
+    if ([string]::IsNullOrWhiteSpace($GraphToken)) {
+        throw "Graph token is required for device cleanup of '$DeviceName'."
     }
     
     if ($RemoveEntraDevice) {
@@ -52,7 +399,8 @@ function Remove-DeviceFromDirectories {
             Remove-EntraDevice -GraphToken $GraphToken -Name $DeviceName -ClientId $ClientId
         }
         catch {
-            Write-LogEntry -Message "Failed to remove $DeviceName from Entra ID: $($_.Exception.Message)" -Level Warning
+            Write-LogEntry -Message "Failed to remove $DeviceName from Entra ID: $($_.Exception.Message)" -Level Error
+            throw
         }
     }
     
@@ -62,7 +410,8 @@ function Remove-DeviceFromDirectories {
             Remove-IntuneDevice -GraphToken $GraphToken -Name $DeviceName -ClientId $ClientId
         }
         catch {
-            Write-LogEntry -Message "Failed to remove $DeviceName from Intune: $($_.Exception.Message)" -Level Warning
+            Write-LogEntry -Message "Failed to remove $DeviceName from Intune: $($_.Exception.Message)" -Level Error
+            throw
         }
     }
 }
@@ -84,41 +433,19 @@ function Remove-EntraDevice {
     )
     
     try {
-        $Device = Invoke-GraphApiWithRetry `
-            -GraphEndpoint $GraphEndpoint `
-            -GraphToken $GraphToken `
-            -Method Get `
-            -Uri "/v1.0/devices?`$filter=displayName eq '$Name'" `
-            -ClientId $ClientId
+        $device = Get-SessionHostDirectoryDevice -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken -Name $Name -Directory Entra -ClientId $ClientId
         
-        If ($Device.value -and $Device.value.Count -gt 0) {
-            $Id = $Device.value[0].id
-            Write-LogEntry -Message "Removing session host $Name from Entra ID"
-            Write-LogEntry -Message "Device ID: $Id" -Level Trace
-            
-            Invoke-GraphApiWithRetry `
-                -GraphEndpoint $GraphEndpoint `
-                -GraphToken $GraphToken `
-                -Method Delete `
-                -Uri "/v1.0/devices/$Id" `
-                -ClientId $ClientId
-            
-            Write-LogEntry -Message "Successfully removed device $Name from Entra ID"
+        If ($device) {
+            Remove-SessionHostDirectoryDevice -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken `
+                -Name $Name -Id $device.id -Directory Entra -ClientId $ClientId
         }
         else {
             Write-LogEntry -Message "Device $Name not found in Entra ID"
         }
     }
     catch {
-        # Check if error is 404 (device already deleted)
-        $is404 = $_.Exception.Response.StatusCode.value__ -eq 404
-        if ($is404) {
-            Write-LogEntry -Message "Device $Name not found in Entra ID (404)"
-        }
-        else {
-            Write-LogEntry -Message "Failed to remove Entra device $Name : $($_.Exception.Message)" -Level Error
-            throw
-        }
+        Write-LogEntry -Message "Failed to remove Entra device $Name : $($_.Exception.Message)" -Level Error
+        throw
     }
 }
 
@@ -139,41 +466,19 @@ function Remove-IntuneDevice {
     )
     
     try {
-        $Device = Invoke-GraphApiWithRetry `
-            -GraphEndpoint $GraphEndpoint `
-            -GraphToken $GraphToken `
-            -Method Get `
-            -Uri "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$Name'" `
-            -ClientId $ClientId
+        $device = Get-SessionHostDirectoryDevice -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken -Name $Name -Directory Intune -ClientId $ClientId
         
-        If ($Device.value -and $Device.value.Count -gt 0) {
-            $Id = $Device.value[0].id
-            Write-LogEntry -Message "Removing session host '$Name' device from Intune"
-            Write-LogEntry -Message "Device ID: $Id" -Level Trace
-            
-            Invoke-GraphApiWithRetry `
-                -GraphEndpoint $GraphEndpoint `
-                -GraphToken $GraphToken `
-                -Method Delete `
-                -Uri "/v1.0/deviceManagement/managedDevices/$Id" `
-                -ClientId $ClientId
-            
-            Write-LogEntry -Message "Successfully removed device $Name from Intune"
+        If ($device) {
+            Remove-SessionHostDirectoryDevice -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken `
+                -Name $Name -Id $device.id -Directory Intune -ClientId $ClientId
         }
         else {
             Write-LogEntry -Message "Device $Name not found in Intune"
         }
     }
     catch {
-        # Check if error is 404 (device not enrolled or already deleted)
-        $is404 = $_.Exception.Response.StatusCode.value__ -eq 404
-        if ($is404) {
-            Write-LogEntry -Message "Device $Name not found in Intune (404)"
-        }
-        else {
-            Write-LogEntry -Message "Failed to remove Intune device $Name : $($_.Exception.Message)" -Level Error
-            throw
-        }
+        Write-LogEntry -Message "Failed to remove Intune device $Name : $($_.Exception.Message)" -Level Error
+        throw
     }
 }
 
@@ -243,7 +548,10 @@ function Confirm-SessionHostDeletions {
         [string] $ResourceManagerUri = (Get-ResourceManagerUri),
         
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+        [string] $HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName)
     )
     
     if ($DeletedHostNames.Count -eq 0) {
@@ -251,24 +559,24 @@ function Confirm-SessionHostDeletions {
         return [PSCustomObject]@{
             TotalHosts       = 0
             VMsConfirmed     = 0
+            AVDConfirmed     = 0
             EntraIDConfirmed = 0
             IntuneConfirmed  = 0
             IncompleteHosts  = @()
         }
     }
     
-    Write-LogEntry -Message "Verifying complete deletion for {0} host(s) (VM, Entra ID, Intune)..." -StringValues $DeletedHostNames.Count
-    
-    $startTime = Get-Date
-    $timeoutTime = $startTime.AddMinutes($MaxWaitMinutes)
+    if (($RemoveEntraDevice -or $RemoveIntuneDevice) -and [string]::IsNullOrWhiteSpace($GraphToken)) {
+        throw 'A Graph token is required to verify configured device cleanup.'
+    }
+    Write-LogEntry -Message "Verifying complete deletion for {0} host(s) (VM, AVD registration, Entra ID, Intune)..." -StringValues $DeletedHostNames.Count
     
     # Build validation tracking for each deleted host
     $hostsToVerify = @()
     foreach ($deletedName in $DeletedHostNames) {
         $sessionHost = $SessionHosts | Where-Object { $_.SessionHostName -eq $deletedName } | Select-Object -First 1
-        if (-not $sessionHost) {
-            Write-LogEntry -Message "Warning: Could not find resource ID for deleted host {0}, skipping verification" -StringValues $deletedName -Level Warning
-            continue
+        if (-not $sessionHost -or [string]::IsNullOrWhiteSpace($sessionHost.ResourceId)) {
+            throw "Could not find resource ID for deleted host '$deletedName'; verification is incomplete."
         }
         
         $vmName = $sessionHost.resourceId.Split('/')[-1]
@@ -279,14 +587,15 @@ function Confirm-SessionHostDeletions {
             VMName           = $vmName
             VMUri            = $vmUri
             VMConfirmed      = $false
+            AVDConfirmed     = $false
             EntraIDConfirmed = $false
             IntuneConfirmed  = $false
         }
     }
     
     # Mark Entra/Intune as confirmed if not being checked
-    if (-not $GraphToken -or (-not $RemoveEntraDevice -and -not $RemoveIntuneDevice)) {
-        Write-LogEntry -Message "Graph token not available or device cleanup disabled - skipping Entra ID and Intune validation" -Level Trace
+    if (-not $RemoveEntraDevice -and -not $RemoveIntuneDevice) {
+        Write-LogEntry -Message "Device cleanup disabled - Entra ID and Intune validation is not applicable" -Level Trace
         foreach ($sh in $hostsToVerify) {
             $sh.EntraIDConfirmed = $true
             $sh.IntuneConfirmed = $true
@@ -298,32 +607,87 @@ function Confirm-SessionHostDeletions {
     elseif (-not $RemoveIntuneDevice) {
         foreach ($sh in $hostsToVerify) { $sh.IntuneConfirmed = $true }
     }
+
+    Wait-SessionHostDeletionVerification -ARMToken $ARMToken -GraphToken $GraphToken -HostsToVerify $hostsToVerify `
+        -MaxWaitMinutes $MaxWaitMinutes -PollIntervalSeconds $PollIntervalSeconds `
+        -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice `
+        -ResourceManagerUri $ResourceManagerUri -ClientId $ClientId `
+        -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName
+}
+
+function Wait-SessionHostDeletionVerification {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$ARMToken,
+        [Parameter(Mandatory = $true)][array]$HostsToVerify,
+        [string]$GraphToken,
+        [int]$MaxWaitMinutes = 10,
+        [int]$PollIntervalSeconds = 30,
+        [bool]$RemoveEntraDevice,
+        [bool]$RemoveIntuneDevice,
+        [string]$ResourceManagerUri = (Get-ResourceManagerUri),
+        [string]$ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+        [string]$HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
+        [string]$HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
+        [string]$HostPoolName = (Read-FunctionAppSetting HostPoolName)
+    )
+
+    $startTime = Get-Date
+    $timeoutTime = $startTime.AddMinutes($MaxWaitMinutes)
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
     
     # Build verification system list for logging
-    $checkSystems = @('VM')
+    $checkSystems = @('VM', 'AVD registration')
     if ($GraphToken -and $RemoveEntraDevice) { $checkSystems += 'Entra ID' }
     if ($GraphToken -and $RemoveIntuneDevice) { $checkSystems += 'Intune' }
     Write-LogEntry -Message "Verifying deletion for {0}..." -StringValues ($checkSystems -join ', ') -Level Trace
     
     # Poll all systems until all hosts fully confirmed or timeout
     $checkCount = 0
-    $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
+    $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.AVDConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
     
     while ((Get-Date) -lt $timeoutTime -and $incompleteHosts.Count -gt 0) {
+        if ($continuation) { Assert-ShrWorkerLease }
         $checkCount++
         $elapsedSeconds = [Math]::Round(((Get-Date) - $startTime).TotalSeconds)
         $remainingHosts = $incompleteHosts.Count
         Write-LogEntry -Message "Deletion verification check {0} at {1}s: {2} host(s) with incomplete deletion..." -StringValues $checkCount, $elapsedSeconds, $remainingHosts -Level Trace
         
+        $registrationReadSucceeded = $false
+        $registeredNames = @{}
+        $needsRegistrationRead = @($incompleteHosts | Where-Object { -not $_.AVDConfirmed }).Count -gt 0
+        if ($needsRegistrationRead) {
+            try {
+                $poolPath = "/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName"
+                $registeredNames = @{}
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get `
+                    -Uri "$ResourceManagerUri$poolPath/sessionHosts?api-version=2024-04-03" -RequireCollection -ErrorAction Stop |
+                    ForEach-Object {
+                        if ([string]::IsNullOrWhiteSpace($_.name)) { throw 'Invalid AVD registration lookup response.' }
+                        $registeredNames[([string]$_.name).Split('/')[-1].Split('.')[0]] = $true
+                    }
+                $registrationReadSucceeded = $true
+            }
+            catch {
+                Write-LogEntry -Message "Unable to verify AVD registration absence: $($_.Exception.Message)" -Level Warning
+            }
+        }
         foreach ($sh in $incompleteHosts) {
+            if ($continuation) { Assert-ShrWorkerLease }
+            if (-not $sh.AVDConfirmed) {
+                $sh.AVDConfirmed = $registrationReadSucceeded -and -not $registeredNames.ContainsKey($sh.Name)
+            }
             # Check VM deletion
             if (-not $sh.VMConfirmed) {
                 try {
                     $vmCheck = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $sh.VMUri -ErrorAction SilentlyContinue
                     
-                    if ($null -eq $vmCheck -or $vmCheck.error.code -eq 'ResourceNotFound') {
+                    if ($null -ne $vmCheck -and $vmCheck.error.code -eq 'ResourceNotFound') {
                         $sh.VMConfirmed = $true
                         Write-LogEntry -Message "VM deletion confirmed: {0}" -StringValues $sh.VMName -Level Trace
+                    }
+                    elseif ($null -eq $vmCheck) {
+                        Write-LogEntry -Message "Unable to verify VM deletion for '$($sh.VMName)': empty response." -Level Warning
                     }
                 }
                 catch {
@@ -347,14 +711,9 @@ function Confirm-SessionHostDeletions {
             # Check Entra ID deletion (only if removal was enabled and Graph token available)
             if (-not $sh.EntraIDConfirmed -and $GraphToken -and $RemoveEntraDevice) {
                 try {
-                    $entraDevice = Invoke-GraphApiWithRetry `
-                        -GraphEndpoint (Get-GraphEndpoint) `
-                        -GraphToken $GraphToken `
-                        -Method Get `
-                        -Uri "/v1.0/devices?`$filter=displayName eq '$($sh.Name)'" `
-                        -ClientId $ClientId
+                    $entraDevices = @(Get-SessionHostDirectoryDevices -GraphToken $GraphToken -Name $sh.Name -Directory Entra -ClientId $ClientId)
                     
-                    if (-not $entraDevice.value -or $entraDevice.value.Count -eq 0) {
+                    if ($entraDevices.Count -eq 0) {
                         $sh.EntraIDConfirmed = $true
                         Write-LogEntry -Message "Entra ID deletion confirmed: {0}" -StringValues $sh.Name -Level Trace
                     }
@@ -365,16 +724,12 @@ function Confirm-SessionHostDeletions {
             }
             
             # Check Intune deletion (only if removal was enabled and Graph token available)
+            if ($continuation) { Assert-ShrWorkerLease }
             if (-not $sh.IntuneConfirmed -and $GraphToken -and $RemoveIntuneDevice) {
                 try {
-                    $intuneDevice = Invoke-GraphApiWithRetry `
-                        -GraphEndpoint (Get-GraphEndpoint) `
-                        -GraphToken $GraphToken `
-                        -Method Get `
-                        -Uri "/v1.0/deviceManagement/managedDevices?`$filter=deviceName eq '$($sh.Name)'" `
-                        -ClientId $ClientId
+                    $intuneDevices = @(Get-SessionHostDirectoryDevices -GraphToken $GraphToken -Name $sh.Name -Directory Intune -ClientId $ClientId)
                     
-                    if (-not $intuneDevice.value -or $intuneDevice.value.Count -eq 0) {
+                    if ($intuneDevices.Count -eq 0) {
                         $sh.IntuneConfirmed = $true
                         Write-LogEntry -Message "Intune deletion confirmed: {0}" -StringValues $sh.Name -Level Trace
                     }
@@ -388,49 +743,55 @@ function Confirm-SessionHostDeletions {
             $vmStatus = if ($sh.VMConfirmed) { 'Confirmed' } else { 'Pending' }
             $entraStatus = if ($sh.EntraIDConfirmed) { 'Confirmed' } else { 'Pending' }
             $intuneStatus = if ($sh.IntuneConfirmed) { 'Confirmed' } else { 'Pending' }
-            $fullyConfirmed = $sh.VMConfirmed -and $sh.EntraIDConfirmed -and $sh.IntuneConfirmed
+            $fullyConfirmed = $sh.VMConfirmed -and $sh.AVDConfirmed -and $sh.EntraIDConfirmed -and $sh.IntuneConfirmed
             if ($fullyConfirmed) {
-                Write-LogEntry -Message "Full deletion confirmed for {0}: VM={1} EntraID={2} Intune={3}" -StringValues $sh.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace
+                Write-LogEntry -Message "Full deletion confirmed for {0}: VM={1} AVD=True EntraID={2} Intune={3}" -StringValues $sh.Name, $vmStatus, $entraStatus, $intuneStatus -Level Trace
             }
         }
         
         # Recalculate incomplete hosts for next iteration
-        $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
+        $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.AVDConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
         
         if ($incompleteHosts.Count -gt 0 -and (Get-Date) -lt $timeoutTime) {
+            if ($continuation) {
+                Request-ShrWorkerYield -Message "VM, registration or directory deletion is pending for '$($incompleteHosts.Name -join ', ')'; continuation will recheck before deployment."
+            }
             Start-Sleep -Seconds $PollIntervalSeconds
         }
     }
 
     # Calculate summary counts
     $vmsConfirmed = ($hostsToVerify | Where-Object { $_.VMConfirmed }).Count
+    $avdConfirmed = ($hostsToVerify | Where-Object { $_.AVDConfirmed }).Count
     $entraIDConfirmed = ($hostsToVerify | Where-Object { $_.EntraIDConfirmed }).Count
     $intuneConfirmed = ($hostsToVerify | Where-Object { $_.IntuneConfirmed }).Count
     $totalHosts = $hostsToVerify.Count
 
     # Summary logging
-    Write-LogEntry -Message "DELETION_VERIFICATION | VMs: {0}/{1} confirmed | EntraID: {2}/{3} confirmed | Intune: {4}/{5} confirmed" `
-        -StringValues $vmsConfirmed, $totalHosts, $entraIDConfirmed, $totalHosts, $intuneConfirmed, $totalHosts
+    Write-LogEntry -Message "DELETION_VERIFICATION | VMs: {0}/{1} confirmed | AVD: {6}/{1} confirmed | EntraID: {2}/{3} confirmed | Intune: {4}/{5} confirmed" `
+        -StringValues $vmsConfirmed, $totalHosts, $entraIDConfirmed, $totalHosts, $intuneConfirmed, $totalHosts, $avdConfirmed
 
     # Warn about any incomplete deletions
-    $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
+    $incompleteHosts = $hostsToVerify | Where-Object { -not ($_.VMConfirmed -and $_.AVDConfirmed -and $_.EntraIDConfirmed -and $_.IntuneConfirmed) }
     if ($incompleteHosts.Count -gt 0) {
         foreach ($sh in $incompleteHosts) {
             $failures = @()
             if (-not $sh.VMConfirmed) { $failures += "VM" }
+            if (-not $sh.AVDConfirmed) { $failures += "AVD registration" }
             if (-not $sh.EntraIDConfirmed) { $failures += "EntraID" }
             if (-not $sh.IntuneConfirmed) { $failures += "Intune" }
             Write-LogEntry -Message "Warning: Incomplete deletion for {0} - unconfirmed: {1}" -StringValues $sh.Name, ($failures -join ', ') -Level Warning
         }
     }
     else {
-        Write-LogEntry -Message "All deletions fully confirmed across VM, Entra ID, and Intune"
+        Write-LogEntry -Message "All deletions fully confirmed across VM, AVD registration, Entra ID, and Intune"
     }
 
     # Return validation results
     return [PSCustomObject]@{
         TotalHosts       = $totalHosts
         VMsConfirmed     = $vmsConfirmed
+        AVDConfirmed     = $avdConfirmed
         EntraIDConfirmed = $entraIDConfirmed
         IntuneConfirmed  = $intuneConfirmed
         IncompleteHosts  = $incompleteHosts
@@ -440,4 +801,4 @@ function Confirm-SessionHostDeletions {
 #EndRegion Device Cleanup
 
 # Export functions
-Export-ModuleMember -Function Remove-DeviceFromDirectories, Remove-EntraDevice, Remove-IntuneDevice, Confirm-SessionHostDeletions
+Export-ModuleMember -Function Get-SessionHostVMResourceId, Test-ReplacerResourceAbsent, Wait-SessionHostVMDeletions, Assert-SessionHostNamesAvailable, Get-SessionHostDirectoryDevices, Remove-DeviceFromDirectories, Remove-EntraDevice, Remove-IntuneDevice, Confirm-SessionHostDeletions

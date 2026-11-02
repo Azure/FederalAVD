@@ -61,6 +61,12 @@ the fixed purpose-token pattern used by shared `operations`, `monitoring`, `cont
 `image-management` resources. With the standard convention, the shared storage resource group uses
 the `fslogix-storage` purpose value. Change the identifier only when separate shared FSLogix storage
 scopes must coexist in the same region.
+When host-pool naming is not selected or no naming tag is available, the Portal emits an empty
+convention object and the shared naming library applies the canonical defaults. The output must
+not read defaults from the hidden naming-policy control before it initializes; doing so can leave
+the initial form page blank and break step navigation.
+The editable shared-storage identifier uses a literal default checked against the canonical
+policy by Pester, rather than a runtime hidden-control lookup.
 When an existing host pool is selected, its resource ID is applied as the `cm-resource-parent` tag
 to newly created storage resource groups, temporary deployment resources, storage accounts, private
 endpoints, NetApp resources, backup registrations, encryption keys, and the storage encryption
@@ -133,6 +139,17 @@ For Azure Files backup, deploy AVD Shared Services with `deployFSLogixBackupVaul
 its `fslogixBackupVaultResourceId` output to `recoveryServicesVaultResourceId` and its
 `fslogixBackupPolicyName` output to `fileSharePolicyName`. The add-on owns registration of its
 storage accounts and shares as protected items; it does not modify the shared vault or policy.
+
+## Public Network Access
+
+`paasPublicNetworkAccess` selects `Disabled`, `EnabledWithRestrictions`, or `Enabled` for newly
+deployed Azure Files storage independently of `privateEndpoint`. The default `Auto` derives access
+from private endpoint selection and IP rules. The Portal offers the three explicit choices, initially
+Disabled with private endpoints and Enabled otherwise. `permittedIPs` can be staged in Disabled
+mode without enabling public access; restricted mode denies unmatched traffic even with an empty
+list. Existing `AzureServices` exceptions for backup/monitoring remain configured and can still
+apply when public access is Disabled. NetApp Files and existing backup vaults are not reconfigured.
+See the [shared access-mode contract](../../../docs/parameters.md#paas-public-network-access).
 
 ## NTFS and Entra Kerberos Automation
 

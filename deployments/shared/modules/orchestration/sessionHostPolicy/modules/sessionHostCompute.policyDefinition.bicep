@@ -1,7 +1,13 @@
+metadata name = 'Session host compute policy definition'
+metadata description = 'Defines a subscription Modify policy that can enable encryption at host and set a positive OS disk size on Windows or unspecified-OS VM requests.'
+
 targetScope = 'subscription'
 
+@description('Optional. Name of the subscription policy definition to create or update.')
 param policyDefinitionName string = 'avdSessionHostCompute-Modify'
+@description('Optional. Display name stored on the subscription policy definition.')
 param policyDefinitionDisplayName string = 'Configure AVD session host compute settings'
+@description('Optional. Description stored on the subscription policy definition; does not change its policy rule.')
 param policyDefinitionDescription string = 'Configures encryption at host and an optional OS disk size during session host virtual machine creation or update.'
 
 resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01' = {
@@ -113,4 +119,5 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
   }
 }
 
+@description('Resource ID of the subscription policy definition created by this module.')
 output policyDefinitionResourceId string = policyDefinition.id

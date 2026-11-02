@@ -93,7 +93,14 @@ Get-AzFunctionApp `
     Select-Object Name, State
 ```
 
-Stopping SHR prevents further timer work; it does **not** cancel submitted ARM deployments,
+For SHR deployments, an initiation-only hold is also available
+through `Set-SessionHostReplacerConfiguration.ps1 -InitiationEnabled $false`; an active approved
+batch can finish while new batches are held. See
+[two-timer operations](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-operations).
+Do not substitute a stopped app for that behavior: stopping the app stops **both** timer and worker.
+The full-stop release procedure above remains valid only after active work has settled.
+
+Stopping SHR prevents both initiation and reconciliation; it does **not** cancel submitted ARM deployments,
 reverse draining/deletion, stop autoscale, or restore old hosts. Do not start an instance later
 just because this runbook mentions "resume" if it was already intentionally stopped.
 

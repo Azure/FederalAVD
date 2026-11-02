@@ -105,6 +105,7 @@ before collecting files. Record a disposition for every dependency:
 | --- | --- | --- |
 | **Transfer from low** | Repository release; missing management tools; selected customer application or policy packages; offline patches; complete UWP artifact ZIP; Teams prerequisites listed below | Transfer only explicitly selected, approved files through the authorized low-to-high process |
 | **Obtain within high** | Target-cloud AVD Agent, Boot Loader, FSLogix, Office Deployment Tool, OneDrive, Teams bootstrapper, and Teams MSIX | Use the repository's Secret or Top Secret base manifest on high, after verifying management-workstation reachability |
+| **Optionally transfer from low** | AVD Agent, AVD Boot Loader, FSLogix, and `teamsbootstrapper.exe` | Already available within high, so transfer is normally unnecessary; a newer low-side installer may be useful for troubleshooting or testing whether a recent release resolves an issue |
 | **Stage from an approved internal source** | Required target-cloud files whose normal distribution endpoints are unavailable to the high-side workstation | Obtain the correct cloud versions through the environment's approved distribution process; stage locally or host internally; do not substitute public package-mode outputs |
 | **Unresolved** | Missing payloads, dependencies, licensing, or unverified management/build/runtime endpoints | Resolve before requesting transfer or starting the affected deployment |
 
@@ -114,21 +115,189 @@ Include Microsoft Graph modules only when using the Graph-dependent helpers. Azu
 tooling is needed only for workflows that use it; publishing the tracked ARM JSON with
 `New-TemplateSpecs.ps1` does not require compiling Bicep on high.
 
+The following four installers are available within high, so transferring them from low is
+normally unnecessary. They can nevertheless be transferred when desired, including when a
+low-side source offers a newer version than the high-side distribution link:
+
+| Optional low-to-high installer | High-side source |
+| --- | --- |
+| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | Target-cloud AVD Agent distribution |
+| `Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi` | Target-cloud AVD Boot Loader distribution |
+| `FSLogix.zip` | Target-cloud FSLogix distribution |
+| `teamsbootstrapper.exe` | Target-cloud Teams bootstrapper distribution |
+
+This is an alternative source for those installers, not a requirement to transfer them or a
+guarantee that the low-side release is newer. Record the version and verify signatures and hashes
+so troubleshooting results can be tied to the exact installer used. The Teams bootstrapper is
+separate from the Teams MSIX and its prerequisites; transferring it does not supply those files.
+
 Keep these **public-source local-package outputs on low**; obtain their target-cloud equivalents
 within high instead:
 
 | Do not select from the public package output | High-side source |
 | --- | --- |
-| `Microsoft.RDInfra.RDAgent.Installer-x64.msi` | Target-cloud AVD Agent distribution |
-| `Microsoft.RDInfra.RDAgentBootLoader.Installer-x64.msi` | Target-cloud AVD Boot Loader distribution |
-| `FSLogix.zip` | Target-cloud FSLogix distribution |
 | `Office365DeploymentTool.exe` | Target-cloud Office distribution |
 | `OneDriveSetup.exe` | Target-cloud OneDrive distribution |
-| `teamsbootstrapper.exe` and `MSTeams-x64.msix` | Target-cloud Teams distribution |
+| `MSTeams-x64.msix` | Target-cloud Teams distribution |
 
-Apply this rule to content **inside customer ZIPs** as well. A ZIP containing a public Teams,
-OneDrive, or FSLogix installer does not become suitable for the target cloud just because it is
-packaged as a customer artifact.
+Apply this rule to content **inside customer ZIPs** as well. Packaging public Office, OneDrive,
+or Teams MSIX payloads as customer artifacts does not make them target-cloud equivalents.
+
+### Combined prerequisite transfer ZIP
+
+[New-AirGappedArtifactPackage.ps1](../tools/New-AirGappedArtifactPackage.ps1) builds a
+connected-side `FederalAVD-AirGapPrerequisites.zip` and `.zip.sha256` without Azure access.
+It reuses the standalone WinGet/UWP builders and includes only:
+
+- `artifacts/Microsoft-WinGet.zip`, with one release's matching bundle, dependencies and offline license.
+- `artifacts/BuiltIn-UWP-Apps.zip`, with the existing default app selection or an explicit subset.
+  Required framework dependencies are kept and deduplicated; separately licensed HEVC is excluded.
+- `artifacts/WebView2.exe` and `artifacts/vc_redist.x64.exe`.
+- `artifacts/MsRdcWebRTCSvc.msi`, included by default for the current air-gapped Teams path.
+- A root `transfer-manifest.json` recording source revision, resolved versions, sizes, hashes,
+  destinations and unresolved approvals/support checks. Loose installers must have valid Microsoft
+  signatures; this does not claim every inner app payload was independently signature-validated.
+
+On a connected Windows workstation with PowerShell 7.2+ and working WinGet:
+
+```powershell
+.\tools\New-AirGappedArtifactPackage.ps1 `
+    -OutputPath 'C:\AirGapTransfer\FederalAVD-AirGapPrerequisites.zip' `
+    -SourceRevision '<repository-release-tag-or-commit>' `
+    -WinGetReleaseTag '<approved-stable-winget-tag>'
+```
+
+Omit `-WinGetReleaseTag` to resolve the latest stable release. Optionally pass `-AppStoreIds`
+with selected IDs from the UWP README, for example `@('9WZDNCRFHVN5', '9PCFS5B6T72H')`.
+WebRTC is included without an extra switch; `-IncludeWebRtc` remains valid for explicit inclusion.
+Use `-IncludeWebRtc:$false` only when an approved deployment path does not require this MSI.
+The builder warns on omission and records the selection as `includeWebRtc` in the transfer
+manifest. Existing bundles are not changed by updating the script: rebuild and reapprove them
+to adopt the new default.
+Store packages and evergreen prerequisite URLs resolve at build time: a repository tag alone does
+not reproduce their versions. Retain the approved ZIP and inventory. Existing outputs are not
+overwritten without `-Force`; if final publication of the ZIP/checksum pair fails, inspect and
+discard any incomplete output set before retrying. Large bundles are automatically split into
+1.5 GiB release parts, with a `.zip.parts.json` containing ordered filenames, sizes and hashes.
+The complete local ZIP and its checksum are also retained. Each published file stays below
+GitHub's 2 GiB limit; no apps or dependencies are dropped. Allow disk space for both the ZIP
+and its parts, plus build-time downloads and staging.
+
+Do not remove framework dependencies to reduce size. The UWP installer first tries frameworks
+already present in the image, then retries with staged dependencies when needed. Omitting them
+can break offline provisioning on images without matching frameworks. App Installer likewise
+needs its matching dependencies. Splitting changes only transport, not runtime installation.
+
+For a multipart release, download every `.zip.partNNN`, the `.zip.parts.json`, and the
+`.zip.sha256` into the same directory, then use the repository revision matching that release:
+
+```powershell
+# On the connected side, download into a fresh directory. The part* pattern includes
+# both the numbered parts and the .parts.json manifest, not an ordinary ZIP.
+gh release download '<published-release-tag>' --repo Azure/FederalAVD `
+    --dir 'C:\AirGapTransfer' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip.part*' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip.sha256'
+
+.\tools\Join-AirGappedArtifactPackage.ps1 `
+    -PartsManifest 'C:\AirGapTransfer\FederalAVD-AirGapPrerequisites.zip.parts.json'
+```
+
+Obtain the repository source archive for the same release to get the matching join script.
+GitHub CLI is optional: selecting the same named assets in the release page is equivalent.
+
+[Join-AirGappedArtifactPackage.ps1](../tools/Join-AirGappedArtifactPackage.ps1) checks each part
+and the reassembled ZIP before publishing the ZIP. Existing ZIPs require `-Force`; a downloaded
+checksum record must agree with the parts manifest. Parts are not separate extractable ZIPs.
+Continue with the independent approved-checksum verification below. For a smaller bundle,
+download the ordinary ZIP and checksum directly; no reassembly is needed.
+
+```powershell
+gh release download '<published-release-tag>' --repo Azure/FederalAVD `
+    --dir 'C:\AirGapTransfer' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip.sha256'
+```
+
+**This is a transport envelope, not an installation artifact.** Verify its outer checksum against
+the separately approved record, then extract into a fresh staging directory:
+
+```powershell
+$zip = 'C:\AirGapTransfer\FederalAVD-AirGapPrerequisites.zip'
+$expected = ((Get-Content -LiteralPath "$zip.sha256" -Raw).Trim() -split '\s+')[0]
+if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $expected) {
+    throw 'Transfer bundle checksum mismatch.'
+}
+Expand-Archive -LiteralPath $zip -DestinationPath 'C:\VerifiedTransfer'
+$manifest = Get-Content 'C:\VerifiedTransfer\transfer-manifest.json' -Raw | ConvertFrom-Json
+foreach ($item in $manifest.artifacts) {
+    $path = Join-Path 'C:\VerifiedTransfer\artifacts' $item.fileName
+    if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $item.sha256) {
+        throw "Transferred artifact checksum mismatch: $($item.fileName)"
+    }
+    Copy-Item -LiteralPath $path -Destination 'C:\ApprovedCustomer\artifacts' -ErrorAction Stop
+}
+```
+
+Use a clean, existing destination and follow [Stage and Upload on High](#stage-and-upload-on-high).
+Do not upload the outer ZIP, extract the inner artifact ZIPs, or add a combined customization.
+WinGet/UWP remain separate customizations; Teams prerequisites remain loose files. Installing
+WinGet does not enable public package sources in the enclave.
+
+Public Teams MSIX, Office, OneDrive, AVD Agent, Boot Loader and FSLogix are not included.
+Obtain the approved target-cloud base files through the existing high-side workflow.
+**Current Secret/Top Secret operating assumption:** retain WebRTC for this air-gapped Teams
+deployment path. Windows App support in these clouds is awaiting product-group confirmation.
+Do not treat [Microsoft's general Teams VDI guidance](https://learn.microsoft.com/en-us/microsoftteams/teams-client-vdi-requirements-deploy)
+as confirmation that Windows App or another optimization stack is available in the target enclave.
+This is the repository's current deployment assumption, not a declaration of Microsoft support.
+Revisit the prerequisite only after explicit product-group confirmation and validation of the
+approved client, host components and service connectivity in the target cloud.
+The built-in Teams installation still expects the WebRTC MSI; omitting it does not migrate that
+installation to Windows App or SlimCore. Endpoint-side components remain outside this bundle.
+
+#### Maintainer publication
+
+The independent [manual workflow](../.github/workflows/release-airgap-artifacts.yml) does not run
+on pushes, PRs, tags or release publication. Its **Include WebRTC** input defaults to enabled;
+leave it enabled for the current air-gapped Teams path. Before enabling the workflow:
+
+1. **Merge the workflow and tools into the repository's default branch (`main` here).**
+   GitHub only enables `workflow_dispatch` when the workflow exists on the default branch;
+   a missing workflow or **Run workflow** button before merge is expected, not a build failure.
+   See [GitHub's manual workflow requirements](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+2. Establish public redistribution rights for **every selected payload**. A successful download,
+   `--skip-license`, App Installer's offline license, or the repository MIT license is not a grant
+   to redistribute vendor binaries.
+3. A repository administrator must create or verify **Settings -> Environments ->
+   airgap-artifact-publication**, configure required maintainer reviewers, and allow deployment
+   from the default branch selected for dispatch. Enable prevention of self-review when independent
+   approval is required by the organization's process. Confirm these settings before the first run;
+   an environment API `404` does not verify that protections exist.
+   Merely naming an environment does not configure protections; workflow dispatch write access
+   and a checkbox are not substitutes for legal review.
+   See [GitHub's environment setup requirements](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+4. Confirm repository/organization Actions policy permits this workflow, its pinned checkout action,
+   the GitHub-hosted Windows runner, and the job's `contents: write` token for attaching release
+   assets. The dispatcher needs repository write access; the environment reviewer must approve the
+   waiting job. No Azure credentials or customer files are required.
+5. Publish the first release, or select an existing published release, whose commit includes the
+   combined builder, both standalone builders, and the join tool. An empty release/tag list before
+   the first publication is expected.
+   In Actions, select **Build approved air-gapped artifact bundle -> Run workflow**, choose the
+   default branch, enter the published release tag, optional WinGet tag/app subset/WebRTC choice,
+   and explicitly affirm redistribution approval. The dispatch branch supplies the workflow;
+   checkout uses the commit resolved from the release tag, not the dispatch branch's current code.
+
+The job rejects missing approval or a draft/missing release, resolves its immutable commit, and
+builds on GitHub's connected Windows runner. It bootstraps WinGet through Microsoft's PowerShell
+module only if the command is missing. It attaches the ZIP and checksum for small bundles, or
+all release parts, their manifest and the ZIP checksum for large bundles; the oversized complete
+ZIP is not uploaded. It never overwrites assets or deploys Azure resources.
+First-run Store downloads and GitHub-runner bootstrap still
+require live validation. For partial upload, maintainers must explicitly remove incomplete assets
+before rerunning; do not silently replace an approved package. When public redistribution is not
+approved, use the local builder and an organization-approved private transfer/publication process.
 
 ### Prepare and Select Files on Low
 
@@ -145,7 +314,8 @@ packaged as a customer artifact.
        -OutputPath 'C:\FederalAVD-PackageOutput'
    ```
 
-   This can also download the public base Microsoft files listed above. Leave them on low.
+   This can also download the public base Microsoft files listed above. Select the four optional
+   installers only when you intend to transfer them; otherwise leave the base outputs on low.
    Downloaded sources are staged temporarily; do not assume they were saved back into
    `customer/artifacts/`. Select the completed outputs, not the low-side customer tree.
 3. Create a **separate, fresh approved-transfer directory** and copy an explicit allowlist into
@@ -163,7 +333,7 @@ packaged as a customer artifact.
 
    This is an example selection, not a universal inventory. Remove unused items and explicitly
    add the other approved customer packages. Never copy the whole output folder or use
-   `*.zip`: `FSLogix.zip` is also a public base output, not a selected customer artifact.
+   `*.zip`: select `FSLogix.zip` explicitly only if you intend to transfer that optional installer.
    Include patches or other manually collected payloads in their complete artifact package.
 4. Record each approved item's source, version, exact filename, SHA-256, high-side destination,
    and consuming artifact or deployment parameter. Retain licensing/approval evidence and verify
@@ -182,6 +352,7 @@ The package layout determines its destination:
 | --- | --- | --- |
 | Selected prebuilt artifact ZIP, such as `BuiltIn-UWP-Apps.zip` or `Configure-EdgePolicy.zip` | `customer/artifacts/` root | Uploaded unchanged; do not wrap it in another artifact folder |
 | Manually staged `WebView2.exe`, `vc_redist.x64.exe`, `MsRdcWebRTCSvc.msi` when Teams is selected | `customer/artifacts/` root | Uploaded as individual files for the built-in Teams installation |
+| Optional transferred AVD Agent MSI, Boot Loader MSI, `FSLogix.zip`, or `teamsbootstrapper.exe` | `customer/artifacts/` root, using the exact filenames above | Stage as individual base files; use the download-skipping workflow below to retain the selected versions |
 | Complete unpackaged customer artifact, including its root script and all payloads | `customer/artifacts/<ArtifactName>/` | Compressed to `<ArtifactName>.zip` |
 
 Choose either a prebuilt ZIP or its source folder for a given artifact, not both.
@@ -202,8 +373,10 @@ and connecting to the target cloud, run from the repository root:
 customer artifact packages and the cloud-selected base downloads. It does **not** disable the
 target-cloud base downloads.
 
-Only add `-SkipDownloadingNewSources` after obtaining and staging every required target-cloud
-file through approved internal sources. That switch skips **all** downloads; it does not obtain
+Only add `-SkipDownloadingNewSources` after obtaining and staging every required base
+file, using high-side sources or the optional low-to-high installers described above as applicable.
+Use it when retaining transferred installer versions rather than downloading the cloud-linked
+versions again. That switch skips **all** downloads; it does not obtain
 missing files or validate that the selected workload is complete. A separately authored high-side
 customer download overlay is an optional advanced mechanism for approved internal source
 overrides, not a transfer requirement. Using one requires explicitly enabling customer merging
@@ -265,6 +438,11 @@ inventories and parameter details for each step.
    delete the consolidated PoC resource group and clean up related directory or device records.
    Do not reuse or promote the PoC into a pilot or production environment. Return to this checklist
    and deploy a new environment through the full **AVD Host Pool** Template Spec.
+
+   The standard [deduplicated publisher](design.md#deduplicated-template-spec-publisher)
+   packages shared templates inside the same target-cloud Template Spec without public downloads.
+   Use `-WhatIf` and a separate test-name suffix first, and verify publication and actual
+   deployments in the target enclave.
 
 4. **Deploy prerequisites through Template Specs.** Deploy Networking only when an existing VNet
    and subnet are unavailable. For IL6 and IL7, deploy AVD Shared Services by default to
@@ -356,6 +534,29 @@ network requirements, required URLs, and installer permalinks:
 
 - **[Azure Government Secret AVD Service Documentation](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/services/virtual-desktop-infrastructure/virtual-desktop?branch=live)** - Includes required endpoints and AVD Agent installer download URLs
 - **[Azure Government Top Secret AVD Service Documentation](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/services/virtual-desktop-infrastructure/virtual-desktop?branch=live)** - Includes required endpoints and AVD Agent installer download URLs
+
+### SHR Two-Timer Prerequisites
+
+SHR uses native initiation and reconciliation timers. The
+[Functions runtime natively supports timer triggers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-register);
+SHR no longer needs a Queue binding, Queue endpoint/private DNS, extension bundle download or
+prebuilt queue-extension package. This removes that transport dependency, not the underlying
+Functions, identity, Blob/Table or management-plane dependencies.
+Do not infer Secret or Top Secret availability from a successful Commercial deployment.
+
+| Inventory group | Required content or local verification |
+| --- | --- |
+| Manually staged | Matching repository/template release, generated ARM, Portal form and complete SHR shared code/modules; no separate queue-extension ZIP or NuGet restore is required |
+| Internally deployed | Full Template Spec or PowerShell deployment using approved management endpoints; preserve both timer bindings and the exact code release |
+| Platform/runtime | Confirm the enclave supports the selected Functions/PowerShell version, native timer indexing and Blob-backed timer coordination |
+| Identity and private connectivity | Verify managed identity, approved Azure management/Graph/Key Vault endpoints, private Blob/Table DNS/routing and data-plane roles |
+| Durable state | Verify conditional Table writes, retained operation/recovery rows and Blob host locks; do not delete state during migration |
+| Unresolved until tested locally | Cold restart, worker interruption/lease expiry, sparse-schedule progression, idle lookup behavior, safe cleanup and Portal rendering |
+
+These are platform/code-transfer prerequisites, separate from image-management `downloads.json`.
+The current SHR PowerShell requirements file is empty; future managed dependencies require their
+own approved offline sourcing. Do not deploy until unresolved target-cloud checks are completed.
+See [upgrade and live validation](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment).
 
 ### Private Endpoint DNS
 
@@ -501,7 +702,7 @@ The following artifacts have empty `DownloadUrl` entries in the secret and top s
 
 | Software | Destination Filename | Place In | Notes |
 | --- | --- | --- | --- |
-| **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download from [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) on an internet-connected system. |
+| **WebView2 Runtime** | `WebView2.exe` | `customer/artifacts/` | Required by Teams. Download the [Evergreen Standalone x64 offline installer](https://go.microsoft.com/fwlink/?linkid=2124701) on an internet-connected system, not the small online bootstrapper. |
 | **Visual Studio Redistributables** | `vc_redist.x64.exe` | `customer/artifacts/` | Required by Teams. Download from [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) on an internet-connected system. |
 | **Remote Desktop WebRTC Service** | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | Required for Teams media optimizations. Download from [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) on an internet-connected system. |
 
@@ -527,6 +728,14 @@ The following artifacts have working URLs in the secret and top secret downloads
 
 If these URLs are not reachable from your management system, download the files manually from the appropriate air-gapped cloud software distribution site and place them in `customer/artifacts/` before running with `-SkipDownloadingNewSources`.
 
+The AVD Agent, Boot Loader, FSLogix, and Teams bootstrapper can also be transferred from low
+when desired. Their availability within high means transfer is normally unnecessary, but a
+newer low-side release may help troubleshoot a new issue or test a potential fix. See
+[Prepare the Low-to-High Transfer Bundle](#prepare-the-low-to-high-transfer-bundle) for filenames
+and staging requirements. To retain those selected versions, stage all required base files
+before using `-SkipDownloadingNewSources`; transferring one installer is not a reason to skip
+downloads for missing dependencies.
+
 ---
 
 ### Upload Artifacts to Storage
@@ -546,8 +755,10 @@ cd C:\repos\FederalAVD\deployments
 The script automatically detects the connected environment and selects the correct base downloads file (`secret` or `topsecret`). Items with working air-gapped cloud URLs (AVD Agent, FSLogix, Teams, OneDrive, Office ODT) are downloaded automatically. Items with empty `DownloadUrl` (WebView2, vc_redist, MsRdcWebRTCSvc) and manually staged files in `customer/artifacts/` are packaged and uploaded as-is without a download attempt.
 
 > **If air-gapped network URLs are not reachable** from your management system, first obtain and
-> stage the required target-cloud files from approved internal distribution, then add
-> `-SkipDownloadingNewSources`. Do not substitute public low-side outputs.
+> stage the required files from high-side distribution or the optional low-to-high sources
+> described above, then add `-SkipDownloadingNewSources`. The optional transfer guidance applies
+> only to the AVD Agent, Boot Loader, FSLogix, and Teams bootstrapper; obtain Office, OneDrive,
+> and Teams MSIX from target-cloud sources.
 
 The `artifactsStorageAccountResourceId` is an output of the imageManagement deployment. See [Quick Start — Step 2](quick-start.md#step-2-deploy-image-management-resources).
 
@@ -732,6 +943,10 @@ The `BuiltIn-UWP-Apps` artifact (Calculator, Paint, Snipping Tool, Notepad, Clip
 Sticky Notes, Windows Terminal, and codec extensions) uses `WingetId` entries that require
 internet access. The recommended approach is to build the artifact zip on a connected machine,
 transfer only the zip to the air-gapped side, and upload it directly.
+The runtime installer upgrades only apps already provisioned in the image by default.
+To add absent apps intentionally, pass `-InstallMissing` in the customization arguments.
+This is image-baseline selection, not enforcement of individual users' uninstall choices;
+see the [artifact instructions](../customer-examples/artifacts/BuiltIn-UWP-Apps/README.md).
 
 ##### Step 1 - Build the Zip on a Connected Machine
 
@@ -907,7 +1122,7 @@ The following are **required by Teams** and must be staged manually:
 
 | File | Place In | Source |
 | --- | --- | --- |
-| `WebView2.exe` | `customer/artifacts/` | [go.microsoft.com/fwlink/?linkid=2124703](https://go.microsoft.com/fwlink/?linkid=2124703) |
+| `WebView2.exe` | `customer/artifacts/` | [Evergreen Standalone x64 offline installer](https://go.microsoft.com/fwlink/?linkid=2124701) |
 | `vc_redist.x64.exe` | `customer/artifacts/` | [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
 | `MsRdcWebRTCSvc.msi` | `customer/artifacts/` | [aka.ms/msrdcwebrtcsvc/msi](https://aka.ms/msrdcwebrtcsvc/msi) |
 

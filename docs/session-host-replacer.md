@@ -24,7 +24,36 @@ Each document has one purpose:
 The canonical flow document is authoritative when a lifecycle summary elsewhere conflicts with
 detailed replacement behavior.
 
+## Execution Model
+
+SHR always uses two timers and one durable lifecycle engine, independently of replacement mode:
+
+| Function | Schedule | Responsibility |
+| --- | --- | --- |
+| Initiator | Existing configurable `timerSchedule` | Read-only idle assessment, exact image selection and new-batch authorization |
+| Reconciler | Every minute (`0 * * * * *`) | Monitor deployment, validate health, hand off to autoscale and safely clean up authorized work |
+
+The reconciler returns after an operation lookup when nothing is active. It cannot authorize itself
+or switch images mid-operation. Both timers share conditional state ownership and the same health,
+capacity, drain and scaling safeguards. There is no direct-timer or queue execution option.
+The initiation schedule is not a hard execution window: approved work continues outside it.
+
+For SideBySide, a later scheduled tick can authorize another deployment batch after the previous
+replacements are healthy and handed back to autoscale, even while their old hosts are still draining.
+The same operation keeps retiring those old hosts safely; it does not wait for their grace period
+before deploying the next authorized batch. The pinned image, target and deadline remain unchanged.
+Batch-size and twice-target capacity ceilings still apply. DeleteFirst retains its stricter
+retirement-before-redeployment ordering. See the [deployment and retirement gates](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+
+Use `initiationEnabled=false` to hold new batches without stopping active work. Stopping the
+entire app stops both timers. See [operations and recovery](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-operations)
+and the [coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#two-timer-execution).
+Existing apps require the [full-template upgrade](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment);
+do not reset active durable state. Timer triggers need no queue binding or extension package.
+
 ## Replacement Modes
+
+The same execution model supports SideBySide and DeleteFirst.
 
 ### SideBySide
 
@@ -72,8 +101,9 @@ window.
 - Does not use shutdown retention.
 - Fails closed if any shutdown-retention VM remains from a prior configuration.
 
-Notification delay is timer-driven. With the default 30-minute schedule, forced sign-out can begin
-up to approximately 30 minutes after the configured delay elapses.
+Notification delay is checked by reconciliation invocations for an active batch, independently of
+the initiation schedule. The minute cadence does not shorten configured notification/drain intervals
+or guarantee an exact sign-out time; running invocations, host restarts and leases can delay checks.
 
 See the [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
 for complete sequencing and failure behavior.
@@ -86,11 +116,19 @@ for complete sequencing and failure behavior.
 - Scaling-aware readiness with exact-image validation evidence.
 - Replacer-owned scaling exclusions that do not overwrite administrator-owned exclusions.
 - Configurable drain notification, minimum drain time, and active-session grace period.
-- Entra device cleanup required for exact-name DeleteFirst and maintenance-override replacement of
-  Microsoft Entra joined hosts and optional for domain-joined or hybrid-joined hosts.
-- Optional Intune cleanup, highly recommended before exact-name reuse for Intune-enrolled
-  Entra-joined or hybrid-joined hosts.
+- Fail-closed VM, AVD registration, and directory checks before every deployment, including
+  SideBySide recovery of names vacated by manual VM deletion.
+- Mandatory Entra cleanup for native Entra joined hosts and Intune cleanup when those hosts are
+  Intune enrolled. Directory cleanup remains optional for AD DS and hybrid-joined machines.
+- Durable pending-name recovery; required cleanup failure blocks the entire batch and is rechecked
+  by a later lifecycle invocation. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
+  for permissions, ambiguous records, ownership checks, and auto-target limitations.
+- Change-aware predeployment verification: read required records once, poll only requested
+  deletions, and finish with the appropriate VM-absence check. Clean allocations avoid repeated
+  directory and AVD inventory reads.
 - Centralized Azure Monitor Workbook and alerting guidance.
+- [Cycle-first workbook tracing](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle)
+  across both timers, with native invocation drill-down, safe wait reasons and separate inventory freshness.
 - Validated operational-setting updates through
   [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).
 - Azure Commercial, Government, Secret, and Top Secret support.

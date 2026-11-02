@@ -1,0 +1,1031 @@
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$moduleRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer'
+foreach ($module in @('Core', 'Deployment', 'Planning', 'DeviceCleanup', 'Lifecycle')) {
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $moduleRoot "SessionHostReplacer.$module.psm1"), [ref]$null, [ref]$errors)
+    if ($errors.Count) { throw "Parse errors in $module" }
+    foreach ($definition in $ast.EndBlock.Statements |
+        Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] }) {
+        . ([scriptblock]::Create($definition.Extent.Text))
+    }
+}
+
+function New-ReplacerTestHttpException {
+    param([int]$StatusCode)
+    $exception = [System.Exception]::new("Simulated HTTP $StatusCode")
+    $exception | Add-Member -NotePropertyName Response -NotePropertyValue ([PSCustomObject]@{ StatusCode = $StatusCode })
+    return $exception
+}
+
+$invokeAzureRestMethodActual = (Get-Command Invoke-AzureRestMethod).ScriptBlock
+$confirmSessionHostDeletionsActual = (Get-Command Confirm-SessionHostDeletions).ScriptBlock
+$waitSessionHostDeletionVerificationActual = (Get-Command Wait-SessionHostDeletionVerification).ScriptBlock
+$getDateActual = Get-Command Get-Date -CommandType Cmdlet
+
+function Get-ShrWorkerState {}
+function Assert-ShrWorkerLease {}
+function Save-ShrContinuationCheckpoint {}
+function Request-ShrWorkerYield {}
+
+function Assert-ReplacerOperationBlocked {
+    param([scriptblock]$Operation, [string]$Message)
+    $failure = $null
+    try { & $Operation | Out-Null } catch { $failure = $_ }
+    $failure | Should Not BeNullOrEmpty
+    if ($Message) { $failure.Exception.Message | Should Match ([regex]::Escape($Message)) }
+}
+
+function New-ReplacerTestHost {
+    param([string]$Name = 'avd-01')
+    [PSCustomObject]@{
+        SessionHostName = $Name
+        ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-$Name"
+    }
+}
+
+function New-ReplacerTestRegistration {
+    param([string]$Name = 'avd-01')
+    $hostToDeploy = New-ReplacerTestHost $Name
+    [PSCustomObject]@{
+        id = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/pool/sessionHosts/$Name.contoso.test"
+        name = "pool/$Name.contoso.test"
+        properties = @{ resourceId = $hostToDeploy.ResourceId; status = 'Unavailable' }
+    }
+}
+
+function New-ReplacerRemovalTestHost {
+    param([string]$Name = 'avd-01')
+    $vm = New-ReplacerTestHost $Name
+    $global:shrPreflight.Resources[$vm.ResourceId] = [PSCustomObject]@{
+        id = $vm.ResourceId
+        name = "vm-$Name"
+        properties = @{ osProfile = @{ computerName = $Name } }
+    }
+    $global:shrPreflight.Registrations += New-ReplacerTestRegistration $Name
+    $global:shrPreflight.Entra[$Name] = @([PSCustomObject]@{ id = "entra-$Name"; displayName = $Name })
+    $global:shrPreflight.Intune[$Name] = @([PSCustomObject]@{ id = "intune-$Name"; deviceName = $Name })
+    [PSCustomObject]@{
+        SessionHostName = $Name
+        ResourceId = $vm.ResourceId
+        VMName = "vm-$Name"
+        FQDN = "$Name.contoso.test"
+        Sessions = 0
+        PoweredOff = $true
+        AllowNewSession = $false
+    }
+}
+
+Describe 'Session Host Replacer real predeployment safety gate' {
+    BeforeEach {
+        $global:shrPreflight = @{
+            Settings = @{
+                VirtualMachinesSubscriptionId = 'test'
+                VirtualMachinesResourceGroupName = 'hosts'
+                HostPoolSubscriptionId = 'test'
+                HostPoolResourceGroupName = 'hosts'
+                HostPoolName = 'pool'
+                SessionHostNamePrefix = 'avd-'
+                SessionHostNameIndexLength = 2
+                MinimumHostIndex = 1
+                DeploymentPrefix = 'shr-pool'
+                SessionHostTemplate = '/subscriptions/test/resourceGroups/templates/providers/Microsoft.Resources/templateSpecs/hosts'
+                Tag_IncludeInAutomation = 'AutoReplace'
+                Tag_DeployTimestamp = 'AutoReplaceDeployTimestamp'
+                RemoveEntraDevice = $false
+                RemoveIntuneDevice = $false
+                SessionHostParameters = @{
+                    IdentitySolution = 'EntraId'
+                    IntuneEnrollment = $true
+                    virtualMachineNameConv = 'vm-SHNAME'
+                    ImageReference = @{ publisher = 'MicrosoftWindowsDesktop' }
+                }
+            }
+            State = [PSCustomObject]@{ LastStatus = 'None'; PendingHostMappings = '{}' }
+            Resources = @{}
+            VMs = @()
+            Registrations = @()
+            Deployments = @()
+            Entra = @{ 'avd-01' = @([PSCustomObject]@{ id = 'entra-01'; displayName = 'avd-01' }) }
+            Intune = @{ 'avd-01' = @([PSCustomObject]@{ id = 'intune-01'; deviceName = 'avd-01' }) }
+            Events = @()
+            GraphToken = 'graph-token'
+            DenyGraph = $false
+            MalformedGraph = $false
+            FailSave = $false
+            DenyVMDeletion = $false
+            YieldVMDeletion = $false
+            DenyVMDeletionId = ''
+            DeferVMDeletion = $false
+            PendingDeletions = @()
+            TimeProvider = $null
+            AfterGraphLookup = $null
+            DenyGraphDeletion = $false
+            DelayGraphDeletions = $false
+            DelayAVDDeletions = $false
+            WorkerState = $null
+            LeaseError = ''
+            ContinuationSaves = @()
+            CurrentDeployment = $null
+            DeploymentReadStatusCode = 0
+        }
+        Mock Get-ShrWorkerState { $global:shrPreflight.WorkerState }
+        Mock Assert-ShrWorkerLease {
+            if ($global:shrPreflight.LeaseError) { throw $global:shrPreflight.LeaseError }
+        }
+        Mock Save-ShrContinuationCheckpoint {
+            if ($global:shrPreflight.FailSave) { throw 'Cleanup checkpoint failed' }
+            $global:shrPreflight.ContinuationSaves += ($global:shrPreflight.WorkerState | ConvertTo-Json -Depth 20 | ConvertFrom-Json)
+        }
+        Mock Request-ShrWorkerYield {
+            param($Message)
+            Save-ShrContinuationCheckpoint
+            throw [TimeoutException]::new($Message)
+        }
+        Mock Write-LogEntry {}
+        Mock Read-FunctionAppSetting {
+            param($SettingKey)
+            $global:shrPreflight.Settings[$SettingKey]
+        }
+        Mock Get-ResourceManagerUri { 'https://management.azure.com' }
+        Mock Get-GraphEndpoint { 'https://graph.microsoft.com' }
+        Mock Get-AccessToken { $global:shrPreflight.GraphToken }
+        Mock Get-TemplateSpecVersionResourceId { '/subscriptions/test/resourceGroups/templates/providers/Microsoft.Resources/templateSpecs/hosts/versions/1.0.0' }
+        Mock Get-DeploymentState { $global:shrPreflight.State }
+        Mock Save-DeploymentState {
+            param($DeploymentState, [switch]$RequireSuccess)
+            $global:shrPreflight.Events += 'checkpoint'
+            if (-not $RequireSuccess -or $global:shrPreflight.FailSave) { throw 'Checkpoint failed' }
+            $global:shrPreflight.State = $DeploymentState
+        }
+        Mock Start-Sleep { throw 'Unexpected polling: test fixtures must not wait on Azure.' }
+        Mock Get-Date {
+            param($Format)
+            if ($global:shrPreflight.TimeProvider) {
+                $time = & $global:shrPreflight.TimeProvider
+                if ($Format) { $time.ToString($Format) } else { $time }
+            }
+            else { & $getDateActual @PSBoundParameters }
+        }
+        Mock Confirm-SessionHostDeletions {
+            param($ARMToken, $GraphToken, $DeletedHostNames, $SessionHosts, $RemoveEntraDevice, $RemoveIntuneDevice)
+            & $confirmSessionHostDeletionsActual @PSBoundParameters
+        }
+        Mock Wait-SessionHostDeletionVerification {
+            param($ARMToken, $GraphToken, $HostsToVerify, $RemoveEntraDevice, $RemoveIntuneDevice,
+                $MaxWaitMinutes, $PollIntervalSeconds, $ResourceManagerUri, $ClientId,
+                $HostPoolSubscriptionId, $HostPoolResourceGroupName, $HostPoolName)
+            & $waitSessionHostDeletionVerificationActual @PSBoundParameters
+        }
+        Mock Invoke-AzureRestMethod {
+            param($Uri, $Method, $Body)
+            $path = ([Uri]$Uri).AbsolutePath
+            if ($Method -eq 'Post' -and $path.EndsWith('/listRegistrationTokens')) {
+                return [PSCustomObject]@{ expirationTime = [datetime]::UtcNow.AddHours(8).ToString('o') }
+            }
+            if ($path -match '/virtualMachines$') { return $global:shrPreflight.VMs }
+            if ($path -match '/virtualMachines/[^/]+$') {
+                $global:shrPreflight.Events += "$Method VM $path"
+                if ($Method -eq 'Delete') {
+                    if ($global:shrPreflight.YieldVMDeletion) {
+                        throw [TimeoutException]::new('invocation yielded before VM deletion')
+                    }
+                    if ($global:shrPreflight.DenyVMDeletion -or $global:shrPreflight.DenyVMDeletionId -eq $path) {
+                        throw (New-ReplacerTestHttpException 403)
+                    }
+                    if ($global:shrPreflight.DeferVMDeletion) {
+                        $global:shrPreflight.PendingDeletions += $path
+                    }
+                    else { $global:shrPreflight.Resources.Remove($path) }
+                    return
+                }
+                if ($global:shrPreflight.Resources.ContainsKey($path)) {
+                    $resource = $global:shrPreflight.Resources[$path]
+                    if ($resource -is [int]) { throw (New-ReplacerTestHttpException $resource) }
+                    return $resource
+                }
+                throw (New-ReplacerTestHttpException 404)
+            }
+            if ($path -match '/sessionHosts(?:/[^/]+)?$') {
+                $global:shrPreflight.Events += "$Method AVD $path"
+                if ($Method -eq 'Delete') {
+                    if ($global:shrPreflight.DelayAVDDeletions) { return }
+                    $global:shrPreflight.Registrations = @($global:shrPreflight.Registrations | Where-Object { $_.id -ine $path })
+                    return
+                }
+                return $global:shrPreflight.Registrations
+            }
+            if ($path -match '/deployments/?$') { return $global:shrPreflight.Deployments }
+            if ($path -match '/deployments/') {
+                $global:shrPreflight.Events += "$Method deployment $path"
+                if ($Method -eq 'Put') { $global:shrPreflight.SubmittedBody = $Body | ConvertFrom-Json }
+                if ($Method -eq 'Get') {
+                    if ($global:shrPreflight.DeploymentReadStatusCode) {
+                        throw (New-ReplacerTestHttpException $global:shrPreflight.DeploymentReadStatusCode)
+                    }
+                    return $global:shrPreflight.CurrentDeployment
+                }
+                return
+            }
+            throw "Unexpected ARM request: $Method $Uri"
+        }
+        Mock Invoke-GraphApiWithRetry {
+            param($Method, $Uri)
+            $global:shrPreflight.Events += "$Method Graph $Uri"
+            if ($global:shrPreflight.DenyGraph) { throw (New-ReplacerTestHttpException 403) }
+            if ($global:shrPreflight.MalformedGraph) { return [PSCustomObject]@{} }
+            $directory = if ($Uri -like '*managedDevices*') { 'Intune' } else { 'Entra' }
+            $records = $global:shrPreflight[$directory]
+            if ($Method -eq 'Delete') {
+                if ($global:shrPreflight.DenyGraphDeletion) { throw (New-ReplacerTestHttpException 403) }
+                if ($global:shrPreflight.DelayGraphDeletions) { return }
+                $id = $Uri.Split('/')[-1]
+                foreach ($name in @($records.Keys)) {
+                    $records[$name] = @($records[$name] | Where-Object { $_.id -ne $id })
+                }
+                return
+            }
+            $filter = [Uri]::UnescapeDataString($Uri)
+            if ($filter -notmatch "(?:displayName|deviceName) eq '(.*)'") { throw "Unexpected Graph query: $Uri" }
+            $name = $Matches[1].Replace("''", "'")
+            if ($global:shrPreflight.AfterGraphLookup) { & $global:shrPreflight.AfterGraphLookup -Name $name -Directory $directory }
+            return [PSCustomObject]@{ value = @($records[$name] | Where-Object { $null -ne $_ }) }
+        }
+    }
+
+    AfterAll { Remove-Variable shrPreflight -Scope Global -ErrorAction SilentlyContinue }
+
+    It 'cleans native Entra and Intune records before submitting the exact vacant VM name' {
+        $result = Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1
+        $result.SessionHostNames | Should Be @('avd-01')
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Events[0] | Should Be 'checkpoint'
+        $body = $global:shrPreflight.SubmittedBody
+        $body.properties.parameters.sessionHostNames.value | Should Be @('avd-01')
+        $body.properties.parameters.Tags.value.'Microsoft.Compute/virtualMachines'.AutoReplaceDeploymentName | Should Be $result.DeploymentName
+        ($global:shrPreflight.State.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
+            Should Be (New-ReplacerTestHost).ResourceId
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 1
+    }
+
+    It 'uses exactly 301 reads for 100 clean names with a <PoolSize>-host registration inventory' -TestCases @(
+        @{ PoolSize = 0 },
+        @{ PoolSize = 5000 }
+    ) {
+        param($PoolSize)
+        $global:shrPreflight.Entra.Clear()
+        $global:shrPreflight.Intune.Clear()
+        $global:shrPreflight.Registrations = @(for ($i = 1; $i -le $PoolSize; $i++) {
+            [PSCustomObject]@{ name = "pool/existing-$i.contoso.test" }
+        })
+        $result = Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 100
+        $result.SessionHostCount | Should Be 100
+        @($global:shrPreflight.SubmittedBody.properties.parameters.sessionHostNames.value).Count | Should Be 100
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 100
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*' }).Count | Should Be 200
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get *' }).Count | Should Be 301
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' }).Count | Should Be 0
+        $global:shrPreflight.Events[-2] | Should Match '^Get VM'
+        $global:shrPreflight.Events[-1] | Should Match '^Put deployment'
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 0 -Exactly -Scope It
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+    }
+
+    It 'polls only the directory records changed for each host and never rereads unchanged AVD inventory' {
+        $global:shrPreflight.Intune['avd-01'] = @()
+        $global:shrPreflight.Intune['avd-02'] = @([PSCustomObject]@{ id = 'intune-02'; deviceName = 'avd-02' })
+        Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 2 | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*' }).Count | Should Be 6
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 4
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*' }).Count | Should Be 2
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-02'].Count | Should Be 0
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'uses exactly 401 reads for 100 already-cleaned DeleteFirst names including the batch wait and final VM check' {
+        $hostsToRemove = @(1..100 | ForEach-Object { New-ReplacerRemovalTestHost ('avd-{0:d2}' -f $_) })
+        $result = Remove-SessionHosts -ARMToken token -GraphToken graph-token -SessionHostsPendingDelete $hostsToRemove `
+            -ReplacementMode DeleteFirst -EnableShutdownRetention $false -DeferDeviceCleanup
+        $global:shrPreflight.Entra.Clear()
+        $global:shrPreflight.Intune.Clear()
+        Deploy-SessionHosts -ARMToken token -GraphToken graph-token -NewSessionHostsCount 100 `
+            -PreferredSessionHostNames $result.SuccessfulDeletions -WaitForVMDeletion | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 200
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*' }).Count | Should Be 200
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get *' }).Count | Should Be 401
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 0 -Exactly -Scope It
+    }
+
+    It 'retries delayed Intune deletion without repeating already confirmed VM, Entra or AVD checks' {
+        $global:shrPreflight.Entra.Clear()
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        $global:shrPreflight.DelayGraphDeletions = $true
+        Mock Start-Sleep { $global:shrPreflight.Intune['avd-01'] = @() }
+        Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*/devices?*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*managedDevices?*' }).Count | Should Be 3
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 2
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 2
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 1
+        Assert-MockCalled Start-Sleep -Times 1 -Exactly -Scope It
+    }
+
+    It 'fails before any mutation when a VM appears during read-only discovery' {
+        $global:shrPreflight.AfterGraphLookup = {
+            param($Name, $Directory)
+            if ($Directory -eq 'Intune') {
+                $vm = New-ReplacerTestHost $Name
+                $global:shrPreflight.Resources[$vm.ResourceId] = [PSCustomObject]@{ id = $vm.ResourceId }
+            }
+        }
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'VM absence is not confirmed'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 1
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 1
+    }
+
+    It 'freshly rechecks a known deletion even when directory discovery found nothing to clean' {
+        $global:shrPreflight.Entra.Clear()
+        $global:shrPreflight.Intune.Clear()
+        $global:shrPreflight.AfterGraphLookup = {
+            param($Name, $Directory)
+            if ($Directory -eq 'Intune') {
+                $vm = New-ReplacerTestHost $Name
+                $global:shrPreflight.Resources[$vm.ResourceId] = [PSCustomObject]@{ id = $vm.ResourceId }
+            }
+        }
+        Assert-ReplacerOperationBlocked {
+            Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 -WaitForVMDeletion
+        } 'appeared during cleanup'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 2
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'discovers ambiguity in the complete batch before deleting an earlier unambiguous record' {
+        $global:shrPreflight.Entra['avd-02'] = @(
+            [PSCustomObject]@{ id = 'first'; displayName = 'avd-02' },
+            [PSCustomObject]@{ id = 'second'; displayName = 'avd-02' }
+        )
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 2 } 'Multiple Entra'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 1
+    }
+
+    It 'retains durable recovery and blocks submission when a discovered device cannot be deleted' {
+        $global:shrPreflight.DenyGraphDeletion = $true
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Simulated HTTP 403'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 0
+        ($global:shrPreflight.State.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
+            Should Be (New-ReplacerTestHost).ResourceId
+        $global:shrPreflight.DenyGraphDeletion = $false
+        (Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1).SessionHostNames | Should Be @('avd-01')
+    }
+
+    It 'removes and verifies a stale AVD registration before deploying' {
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 | Out-Null
+        $global:shrPreflight.Registrations.Count | Should Be 0
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete AVD*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 2
+    }
+
+    It 'blocks the complete batch on Graph failure and successfully retries its durable name' {
+        $global:shrPreflight.DenyGraph = $true
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Simulated HTTP 403'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 0
+        ($global:shrPreflight.State.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
+            Should Be (New-ReplacerTestHost).ResourceId
+        $global:shrPreflight.DenyGraph = $false
+        (Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1).SessionHostNames | Should Be @('avd-01')
+    }
+
+    It 'checks every VM in the batch before deleting any identity or registration' {
+        $hostToKeep = New-ReplacerTestHost avd-02
+        $global:shrPreflight.Resources[$hostToKeep.ResourceId] = [PSCustomObject]@{ id = $hostToKeep.ResourceId }
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 2 } 'VM absence is not confirmed'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'does not interpret a VM authorization error as absence' {
+        $global:shrPreflight.Resources[(New-ReplacerTestHost).ResourceId] = 403
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Simulated HTTP 403'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'does not interpret a null VM response as absence' {
+        $global:shrPreflight.Resources[(New-ReplacerTestHost).ResourceId] = $null
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Empty resource lookup response'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'requires a Graph token even when SideBySide cleanup flags are disabled for native Entra' {
+        $global:shrPreflight.GraphToken = ''
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Required Graph token'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'blocks malformed directory lookup responses instead of treating them as empty' {
+        $global:shrPreflight.MalformedGraph = $true
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Invalid Entra device lookup'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'follows pagination and blocks ambiguous duplicate device names without deleting either' {
+        Mock Invoke-GraphApiWithRetry {
+            param($Uri)
+            if ($Uri -like '*skiptoken*') {
+                return [PSCustomObject]@{ value = @([PSCustomObject]@{ id = 'second'; displayName = 'avd-01' }) }
+            }
+            [PSCustomObject]@{
+                value = @([PSCustomObject]@{ id = 'first'; displayName = 'avd-01' })
+                '@odata.nextLink' = 'https://graph.microsoft.com/v1.0/devices?$skiptoken=next'
+            }
+        }
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Multiple Entra'
+        Assert-MockCalled Invoke-GraphApiWithRetry -Times 2 -Exactly -Scope It
+        Assert-MockCalled Invoke-GraphApiWithRetry -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'Delete' }
+    }
+
+    It 'keeps hybrid directory cleanup optional while still verifying VM and AVD absence' {
+        $global:shrPreflight.Settings.SessionHostParameters.IdentitySolution = 'ActiveDirectoryDomainServices'
+        Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' }).Count | Should Be 0
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 1
+    }
+
+    It 'checkpoints a distinct deterministic deployment name for the second SideBySide batch' {
+        $global:shrPreflight.WorkerState = @{ Id = ('a' * 32); BatchNumber = 2; DeploymentIntent = $null }
+        $result = Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1
+        $result.DeploymentName | Should Be "shr_$('a' * 32)_b2"
+        $global:shrPreflight.WorkerState.DeploymentHostNames | Should Be @('avd-01')
+        $global:shrPreflight.ContinuationSaves[-1].DeploymentIntent.Name | Should Be $result.DeploymentName
+        $global:shrPreflight.WorkerState.DeploymentIntent.Uri | Should Match "/$($result.DeploymentName)\?"
+        $body = $global:shrPreflight.WorkerState.DeploymentIntent.Body | ConvertFrom-Json
+        $body.properties.parameters.Tags.value.'Microsoft.Compute/virtualMachines'.AutoReplaceDeploymentName |
+            Should Be $result.DeploymentName
+    }
+
+    It 'treats EntraKerberos-Hybrid as native Entra join but skips Intune if not enrolled or enabled' {
+        $global:shrPreflight.Settings.SessionHostParameters.IdentitySolution = 'EntraKerberos-Hybrid'
+        $global:shrPreflight.Settings.SessionHostParameters.IntuneEnrollment = $false
+        Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*/devices/*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like '*managedDevices*' }).Count | Should Be 0
+    }
+
+    It 'blocks a stale registration referencing a different VM before deleting identities' {
+        $registration = New-ReplacerTestRegistration
+        $registration.properties.resourceId = (New-ReplacerTestHost avd-99).ResourceId
+        $global:shrPreflight.Registrations = @($registration)
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'references a different VM'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'classifies a definitive VM 404 as a ghost without a second uncertain lookup' {
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        $hosts = @(Get-SessionHosts -ARMToken token -FixSessionHostTags:$false -IncludePreExistingSessionHosts $false)
+        $hosts.Count | Should Be 1
+        $hosts[0].IsUnavailable | Should Be $true
+        $hosts[0].ImageVersion | Should BeNullOrEmpty
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 1
+    }
+
+    It 'does not classify a VM service failure as a ghost' {
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        $global:shrPreflight.Resources[(New-ReplacerTestHost).ResourceId] = 503
+        Assert-ReplacerOperationBlocked {
+            Get-SessionHosts -ARMToken token -FixSessionHostTags:$false -IncludePreExistingSessionHosts $false
+        } 'Simulated HTTP 503'
+    }
+
+    It 'classifies an explicit ResourceNotFound response as a ghost' {
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        $global:shrPreflight.Resources[(New-ReplacerTestHost).ResourceId] = [PSCustomObject]@{ error = @{ code = 'ResourceNotFound' } }
+        $hosts = @(Get-SessionHosts -ARMToken token -FixSessionHostTags:$false -IncludePreExistingSessionHosts $false)
+        $hosts[0].IsUnavailable | Should Be $true
+    }
+
+    It 'does no cleanup or deployment if the required checkpoint cannot be saved' {
+        $global:shrPreflight.FailSave = $true
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Checkpoint failed'
+        $global:shrPreflight.Events | Should Be @('checkpoint')
+    }
+
+    It 'blocks a changed VM naming convention for an existing recovery mapping' {
+        $global:shrPreflight.State.PendingHostMappings = '{"avd-01":{"ResourceId":"/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/old-avd-01"}}'
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'VM naming changed'
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'blocks a changed legacy VM name before overwriting its recovery mapping' {
+        $global:shrPreflight.State.PendingHostMappings = '{"avd-01":{"VMName":"old-avd-01"}}'
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'legacy VM name'
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+        ($global:shrPreflight.State.PendingHostMappings | ConvertFrom-Json).'avd-01'.VMName | Should Be 'old-avd-01'
+    }
+
+    It 'uses one seven-read safety gate for a one-host DeleteFirst replacement without reacquiring Graph authentication' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $global:shrPreflight.State.PendingHostMappings = @{
+            'avd-01' = @{ VMName = $hostToRemove.VMName; ResourceId = $hostToRemove.ResourceId }
+        } | ConvertTo-Json -Compress
+        $result = Remove-SessionHosts -ARMToken token -GraphToken graph-token -SessionHostsPendingDelete @($hostToRemove) `
+            -ReplacementMode DeleteFirst -EnableShutdownRetention $false -DeferDeviceCleanup
+        $result.SuccessfulDeletions | Should Be @('avd-01')
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get *' -or $_ -like '* Graph *' }).Count | Should Be 0
+
+        Deploy-SessionHosts -ARMToken token -GraphToken graph-token -NewSessionHostsCount 1 `
+            -PreferredSessionHostNames $result.SuccessfulDeletions -WaitForVMDeletion | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get *' }).Count | Should Be 7
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+        Assert-MockCalled Get-AccessToken -Times 0 -Exactly -Scope It
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 1
+    }
+
+    It 'overlaps all DeleteFirst VM deletions before a single batch wait and directory verification' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.DeferVMDeletion = $true
+        Mock Start-Sleep {
+            @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete VM*' }).Count | Should Be 2
+            @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' }).Count | Should Be 0
+            foreach ($id in $global:shrPreflight.PendingDeletions) { $global:shrPreflight.Resources.Remove($id) }
+        }
+        $result = Remove-SessionHosts -ARMToken token -GraphToken graph-token -SessionHostsPendingDelete $hostsToRemove `
+            -ReplacementMode DeleteFirst -EnableShutdownRetention $false -DeferDeviceCleanup
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 0
+        Deploy-SessionHosts -ARMToken token -GraphToken graph-token -NewSessionHostsCount 2 `
+            -PreferredSessionHostNames $result.SuccessfulDeletions -WaitForVMDeletion | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 6
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*' }).Count | Should Be 8
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 1
+        Assert-MockCalled Start-Sleep -Times 1 -Exactly -Scope It
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'completes SideBySide retirement through one shared gate after requesting every deletion' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $result = Remove-SessionHosts -ARMToken token -GraphToken graph-token -SessionHostsPendingDelete $hostsToRemove `
+            -ReplacementMode SideBySide -EnableShutdownRetention $false
+        $result.SuccessfulDeletions.Count | Should Be 2
+        $events = $global:shrPreflight.Events
+        $events[0] | Should Match '^Delete AVD'
+        $events[1] | Should Match '^Delete VM'
+        $events[2] | Should Match '^Delete AVD'
+        $events[3] | Should Match '^Delete VM'
+        @($events | Where-Object { $_ -like 'Get VM*' }).Count | Should Be 4
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'does not allow SideBySide retirement to defer its required cleanup to a nonexistent deployment' {
+        Assert-ReplacerOperationBlocked {
+            Remove-SessionHosts -ARMToken token -SessionHostsPendingDelete @(New-ReplacerRemovalTestHost) `
+                -ReplacementMode SideBySide -EnableShutdownRetention $false -DeferDeviceCleanup
+        } 'Only a checkpointed'
+        $global:shrPreflight.Events.Count | Should Be 0
+    }
+
+    It 'cleans an accepted retirement deletion after a later deletion fails and stops before the next host' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02; New-ReplacerRemovalTestHost avd-03)
+        $global:shrPreflight.DenyVMDeletionId = $hostsToRemove[1].ResourceId
+        Assert-ReplacerOperationBlocked {
+            Remove-SessionHosts -ARMToken token -GraphToken graph-token -SessionHostsPendingDelete $hostsToRemove `
+                -ReplacementMode SideBySide -EnableShutdownRetention $false
+        } 'Simulated HTTP 403'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete VM*' }).Count | Should Be 2
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Entra['avd-02'].Count | Should Be 1
+        $global:shrPreflight.Entra['avd-03'].Count | Should Be 1
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'retains standalone removal cleanup and waits before returning' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        Remove-VirtualMachine -ARMToken token -GraphToken graph-token -VMName $hostToRemove.VMName `
+            -VMId $hostToRemove.ResourceId -FQDN $hostToRemove.FQDN
+        $global:shrPreflight.Resources.ContainsKey($hostToRemove.ResourceId) | Should Be $false
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'persists retirement before unregistering even when the VM delete never starts' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.YieldVMDeletion = $true
+
+        Assert-ReplacerOperationBlocked {
+            Remove-VirtualMachine -ARMToken token -VMName $hostToRemove.VMName `
+                -VMId $hostToRemove.ResourceId -FQDN $hostToRemove.FQDN -DeferCleanup
+        } 'invocation yielded'
+
+        $global:shrPreflight.Registrations.Count | Should Be 0
+        $global:shrPreflight.Resources.ContainsKey($hostToRemove.ResourceId) | Should Be $true
+        $saved = $global:shrPreflight.ContinuationSaves[0].CleanupIntent
+        $saved.Hosts[0].ResourceId | Should Be $hostToRemove.ResourceId
+        $saved.Hosts[0].SessionHostName | Should Be 'avd-01'
+        $saved.VMDeletions | Should Be @($hostToRemove.ResourceId)
+    }
+
+    It 'does not unregister or delete when the retirement checkpoint cannot be saved' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.FailSave = $true
+        Assert-ReplacerOperationBlocked {
+            Remove-VirtualMachine -ARMToken token -VMName $hostToRemove.VMName `
+                -VMId $hostToRemove.ResourceId -FQDN $hostToRemove.FQDN -DeferCleanup
+        } 'Cleanup checkpoint failed'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' }).Count | Should Be 0
+    }
+
+    It 'retains every exact retirement through a batch cleanup yield' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.DeferVMDeletion = $true
+        Assert-ReplacerOperationBlocked {
+            Remove-SessionHosts -ARMToken token -SessionHostsPendingDelete $hostsToRemove `
+                -ReplacementMode SideBySide -EnableShutdownRetention $false
+        } 'VM deletion'
+        $intent = $global:shrPreflight.WorkerState.CleanupIntent
+        $intent.Hosts.Count | Should Be 2
+        $intent.VMDeletions.Count | Should Be 2
+        foreach ($hostToRemove in $hostsToRemove) {
+            $intent.VMDeletions | Should Contain $hostToRemove.ResourceId
+        }
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*' }).Count | Should Be 0
+    }
+
+    It 'preserves a partial retirement failure without masking it with a cleanup yield' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.DenyVMDeletionId = $hostsToRemove[1].ResourceId
+        Assert-ReplacerOperationBlocked {
+            Remove-SessionHosts -ARMToken token -SessionHostsPendingDelete $hostsToRemove `
+                -ReplacementMode SideBySide -EnableShutdownRetention $false
+        } 'Simulated HTTP 403'
+        $global:shrPreflight.WorkerState.CleanupIntent.Hosts.Count | Should Be 2
+        $global:shrPreflight.WorkerState.CleanupIntent.VMDeletions.Count | Should Be 2
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 0 -Exactly -Scope It
+    }
+
+    It 'cleans the actual computer names of retained VMs with prefixed ARM resource names in one batch' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.Registrations = @()
+        $vms = @($hostsToRemove | ForEach-Object {
+            [PSCustomObject]@{
+                id = $_.ResourceId
+                name = $_.VMName
+                tags = [PSCustomObject]@{ Shutdown = [datetime]::UtcNow.AddDays(-4).ToString('o') }
+            }
+        })
+        Mock Get-VMPowerStates {
+            $states = @{}
+            foreach ($id in $global:shrPreflight.Resources.Keys) { $states[$id] = $true }
+            $states
+        }
+        $result = Remove-ExpiredShutdownVMs -ARMToken token -GraphToken graph-token -CachedVMs $vms `
+            -ShutdownRetentionDays 3 -TagShutdownTimestamp Shutdown
+        $result.CleanedUpCount | Should Be 2
+        $result.DeletedVMNames | Should Be @('vm-avd-01', 'vm-avd-02')
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Entra['avd-02'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-02'].Count | Should Be 0
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'does not guess a retained computer name when neither registration nor VM profile identifies it' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $global:shrPreflight.Registrations = @()
+        $global:shrPreflight.Resources[$hostToRemove.ResourceId].properties.osProfile = @{}
+        Assert-ReplacerOperationBlocked {
+            Remove-VirtualMachine -ARMToken token -VMName $hostToRemove.VMName -VMId $hostToRemove.ResourceId
+        } 'Cannot establish the computer name'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' }).Count | Should Be 0
+    }
+
+    It 'does not permit a VM that appears during cleanup to be overwritten' {
+        Mock Wait-SessionHostDeletionVerification {
+            $vm = New-ReplacerTestHost
+            $global:shrPreflight.Resources[$vm.ResourceId] = [PSCustomObject]@{ id = $vm.ResourceId }
+            [PSCustomObject]@{ TotalHosts = 1; IncompleteHosts = @() }
+        }
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'appeared during cleanup'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'preserves standalone <Directory> cleanup and avoids a second deletion when the record is already absent' -TestCases @(
+        @{ Directory = 'Entra'; CommandName = 'Remove-EntraDevice' },
+        @{ Directory = 'Intune'; CommandName = 'Remove-IntuneDevice' }
+    ) {
+        param($Directory, $CommandName)
+        & $CommandName -GraphToken graph-token -Name avd-01
+        $global:shrPreflight[$Directory]['avd-01'].Count | Should Be 0
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*' }).Count | Should Be 1
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*' }).Count | Should Be 1
+        & $CommandName -GraphToken graph-token -Name avd-01
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Get Graph*' }).Count | Should Be 2
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*' }).Count | Should Be 1
+    }
+
+    It 'cannot verify a deleted host that has no resource mapping' {
+        Assert-ReplacerOperationBlocked {
+            Confirm-SessionHostDeletions -ARMToken token -DeletedHostNames avd-02 -SessionHosts @(New-ReplacerTestHost)
+        } 'resource ID'
+    }
+
+    It 'cannot verify required device cleanup without a Graph token' {
+        Assert-ReplacerOperationBlocked {
+            Confirm-SessionHostDeletions -ARMToken token -DeletedHostNames avd-01 -SessionHosts @(New-ReplacerTestHost) -RemoveEntraDevice $true
+        } 'Graph token'
+    }
+
+    It 'blocks on incomplete AVD verification even with both directory flags disabled' {
+        $global:shrPreflight.Settings.SessionHostParameters.IdentitySolution = 'ActiveDirectoryDomainServices'
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        Mock Wait-SessionHostDeletionVerification {
+            [PSCustomObject]@{ TotalHosts = 1; IncompleteHosts = @([PSCustomObject]@{ Name = 'avd-01'; AVDConfirmed = $false }) }
+        }
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'remains incomplete'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'recognizes Accepted deployments as in-flight' {
+        $global:shrPreflight.Deployments = @([PSCustomObject]@{
+            name = 'shr-pool_Count_1_VMs_20260920000000'
+            properties = @{ provisioningState = 'Accepted'; parameters = @{ sessionHostNames = @{ value = @('avd-01') } } }
+        })
+        @( (Get-Deployments -ARMToken token).RunningDeployments ).Count | Should Be 1
+    }
+
+    It 'authoritatively discovers checkpointed <Status> deployment without legacy tracking' -TestCases @(
+        @{ Status = 'Accepted'; Running = 2; Failed = 0 }
+        @{ Status = 'Running'; Running = 2; Failed = 0 }
+        @{ Status = 'Succeeded'; Running = 1; Failed = 0 }
+        @{ Status = 'Failed'; Running = 1; Failed = 1 }
+        @{ Status = 'Canceled'; Running = 1; Failed = 1 }
+    ) {
+        param($Status, $Running, $Failed)
+        $name = 'shr_' + ('a' * 32)
+        $uri = "https://management.azure.com/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Resources/deployments/$name`?api-version=2021-04-01"
+        $global:shrPreflight.WorkerState = @{ DeploymentIntent = @{ Name = $name; Uri = $uri } }
+        $global:shrPreflight.CurrentDeployment = [PSCustomObject]@{
+            name = $name; properties = @{ provisioningState = $Status }
+        }
+        $global:shrPreflight.Deployments = @(
+            [PSCustomObject]@{ name = 'shr-pool-legacy'; properties = @{ provisioningState = 'Running' } }
+            [PSCustomObject]@{ name = ('shr_' + ('b' * 32)); properties = @{ provisioningState = 'Running' } }
+        )
+        $inventory = Get-Deployments -ARMToken token
+        $inventory.RunningDeployments.Count | Should Be $Running
+        $inventory.FailedDeployments.Count | Should Be $Failed
+        @($inventory.RunningDeployments.DeploymentName) | Should Contain 'shr-pool-legacy'
+        @($inventory.RunningDeployments.DeploymentName) | Should Not Contain ('shr_' + ('b' * 32))
+    }
+
+    It 'allows a confirmed missing prepared deployment but rejects unreadable or malformed status' {
+        $name = 'shr_' + ('a' * 32)
+        $uri = "https://management.azure.com/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Resources/deployments/$name`?api-version=2021-04-01"
+        $global:shrPreflight.WorkerState = @{ DeploymentIntent = @{ Name = $name; Uri = $uri } }
+        $global:shrPreflight.DeploymentReadStatusCode = 404
+        (Get-Deployments -ARMToken token).RunningDeployments.Count | Should Be 0
+        $global:shrPreflight.DeploymentReadStatusCode = 403
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'Simulated HTTP 403'
+        $global:shrPreflight.DeploymentReadStatusCode = 0
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'invalid response'
+        $global:shrPreflight.WorkerState.DeploymentIntent.Uri = $uri.Replace('/hosts/', '/another-pool/')
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'outside the configured deployment scope'
+    }
+    It 'requires a valid ARM collection through the real Get-Deployments call chain' {
+        Mock Invoke-AzureRestMethod {
+            param($ARMToken, $Method, $Uri, [switch]$RequireCollection)
+            & $invokeAzureRestMethodActual @PSBoundParameters
+        }
+        Mock Invoke-RestMethod { [PSCustomObject]@{ value = @() } }
+        (Get-Deployments -ARMToken token).RunningDeployments.Count | Should Be 0
+        Mock Invoke-RestMethod { [PSCustomObject]@{} }
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'Invalid collection response'
+        Mock Invoke-RestMethod { $null }
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'Invalid collection response'
+        $global:shrPreflight.ListReads = 0
+        Mock Invoke-RestMethod {
+            $global:shrPreflight.ListReads++
+            if ($global:shrPreflight.ListReads -eq 1) {
+                return [PSCustomObject]@{ value = @(); nextLink = 'https://management.azure.com/deployments?page=2' }
+            }
+            [PSCustomObject]@{}
+        }
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'Invalid collection response'
+        $global:shrPreflight.ListReads | Should Be 2
+    }
+
+    It 'checkpoints pending VM cleanup without sleeping or deleting directory records, then replays it' {
+        $hostToRemove = New-ReplacerRemovalTestHost avd-01
+        $global:shrPreflight.WorkerState = @{ Id = 'cleanup-test'; CleanupIntent = $null }
+        $caught = $null
+        try { Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @($hostToRemove) -WaitForVMDeletion }
+        catch { $caught = $_ }
+        $caught.Exception | Should BeOfType ([TimeoutException])
+        $intent = $global:shrPreflight.WorkerState.CleanupIntent
+        $intent.Hosts[0].ResourceId | Should Be $hostToRemove.ResourceId
+        $intent.WaitForVMDeletion | Should Be $true
+        $intent.RemoveEntraDevice | Should Be $true
+        $intent.RemoveIntuneDevice | Should Be $true
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+        $global:shrPreflight.Resources.Remove($hostToRemove.ResourceId)
+        Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @([PSCustomObject]$intent.Hosts[0]) `
+            -WaitForVMDeletion:([bool]$intent.WaitForVMDeletion) `
+            -RemoveEntraDevice $intent.RemoveEntraDevice -RemoveIntuneDevice $intent.RemoveIntuneDevice
+        $global:shrPreflight.WorkerState.CleanupIntent | Should BeNullOrEmpty
+        $global:shrPreflight.Registrations.Count | Should Be 0
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+    }
+
+    It 'yields for delayed directory deletion and preserves cleanup after the VM leaves inventory' {
+        $hostToRemove = New-ReplacerRemovalTestHost avd-01
+        $global:shrPreflight.Resources.Remove($hostToRemove.ResourceId)
+        $global:shrPreflight.WorkerState = @{ Id = 'cleanup-test'; CleanupIntent = $null }
+        $global:shrPreflight.DelayGraphDeletions = $true
+        $caught = $null
+        try { Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @($hostToRemove) }
+        catch { $caught = $_ }
+        $caught.Exception | Should BeOfType ([TimeoutException])
+        $global:shrPreflight.WorkerState.CleanupIntent.WaitForVMDeletion | Should Be $false
+        $global:shrPreflight.ContinuationSaves[0].CleanupIntent.Hosts[0].SessionHostName | Should Be 'avd-01'
+        $global:shrPreflight.DelayGraphDeletions = $false
+        Assert-SessionHostNamesAvailable -ARMToken token `
+            -SessionHosts @([PSCustomObject]$global:shrPreflight.WorkerState.CleanupIntent.Hosts[0])
+        $global:shrPreflight.WorkerState.CleanupIntent | Should BeNullOrEmpty
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+    }
+
+    It 'retains the cleanup gate while AVD unregistering is delayed with directory cleanup disabled' {
+        $hostToRemove = New-ReplacerRemovalTestHost avd-01
+        $global:shrPreflight.Resources.Remove($hostToRemove.ResourceId)
+        $global:shrPreflight.Settings.SessionHostParameters.IdentitySolution = 'ActiveDirectoryDomainServices'
+        $global:shrPreflight.WorkerState = @{ Id = 'cleanup-test'; CleanupIntent = $null }
+        $global:shrPreflight.DelayAVDDeletions = $true
+        $caught = $null
+        try { Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @($hostToRemove) }
+        catch { $caught = $_ }
+        $caught.Exception | Should BeOfType ([TimeoutException])
+        $global:shrPreflight.WorkerState.CleanupIntent | Should Not BeNullOrEmpty
+        $global:shrPreflight.Registrations = @()
+        Assert-SessionHostNamesAvailable -ARMToken token `
+            -SessionHosts @([PSCustomObject]$global:shrPreflight.WorkerState.CleanupIntent.Hosts[0])
+        $global:shrPreflight.WorkerState.CleanupIntent | Should BeNullOrEmpty
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' }).Count | Should Be 0
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+    }
+
+    It 'checkpoints asynchronous orphan cleanup before failed deployment history can be removed' {
+        $hostToRemove = New-ReplacerRemovalTestHost avd-01
+        $vm = [PSCustomObject]@{
+            id = $hostToRemove.ResourceId; name = 'vm-avd-01'
+            tags = @{ AutoReplaceDeploymentName = 'shr-pool-failed' }
+        }
+        $global:shrPreflight.Resources[$vm.id] = $vm
+        $global:shrPreflight.VMs = @($vm)
+        $global:shrPreflight.State.PendingHostMappings = @{ 'avd-01' = @{ ResourceId = $vm.id } } | ConvertTo-Json -Compress
+        $global:shrPreflight.DeferVMDeletion = $true
+        $global:shrPreflight.WorkerState = @{ Id = 'cleanup-test'; CleanupIntent = $null }
+        $failed = @([PSCustomObject]@{ DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01') })
+        $caught = $null
+        try { Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments $failed -RegisteredSessionHostNames @() }
+        catch { $caught = $_ }
+        $caught.Exception | Should BeOfType ([TimeoutException])
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete deployment*' }).Count | Should Be 0
+        $intent = $global:shrPreflight.WorkerState.CleanupIntent
+        $intent.Hosts[0].ResourceId | Should Be $vm.id
+        $global:shrPreflight.Resources.Remove($vm.id)
+        $global:shrPreflight.VMs = @()
+        Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @([PSCustomObject]$intent.Hosts[0]) -WaitForVMDeletion
+        Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments $failed -RegisteredSessionHostNames @()
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete deployment*' }).Count | Should Be 1
+        $global:shrPreflight.WorkerState.CleanupIntent | Should BeNullOrEmpty
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+    }
+
+    It 'fails closed on lost ownership and failed cleanup checkpoints without directory mutations' {
+        $hostToRemove = New-ReplacerRemovalTestHost avd-01
+        $global:shrPreflight.WorkerState = @{ Id = 'cleanup-test'; CleanupIntent = $null }
+        $global:shrPreflight.LeaseError = 'SHR lease lost'
+        Assert-ReplacerOperationBlocked {
+            Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @($hostToRemove) -WaitForVMDeletion
+        } 'SHR lease lost'
+        $global:shrPreflight.LeaseError = ''
+        $global:shrPreflight.FailSave = $true
+        Assert-ReplacerOperationBlocked {
+            Assert-SessionHostNamesAvailable -ARMToken token -SessionHosts @($hostToRemove) -WaitForVMDeletion
+        } 'Cleanup checkpoint failed'
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+    }
+
+    It 'does not delete a similarly named VM during failed-deployment cleanup' {
+        $global:shrPreflight.State.PendingHostMappings = @{ 'avd-01' = @{ ResourceId = (New-ReplacerTestHost).ResourceId } } | ConvertTo-Json -Compress
+        $other = New-ReplacerTestHost avd-010
+        $global:shrPreflight.VMs = @([PSCustomObject]@{ id = $other.ResourceId; name = 'vm-avd-010'; tags = @{} })
+        Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments @([PSCustomObject]@{
+            DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01')
+        }) -RegisteredSessionHostNames @()
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete VM*' }).Count | Should Be 0
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete deployment*' }).Count | Should Be 1
+    }
+
+    It 'preserves failed deployment history when VM deletion is denied' {
+        $vm = New-ReplacerTestHost
+        $global:shrPreflight.VMs = @([PSCustomObject]@{
+            id = $vm.ResourceId; name = 'vm-avd-01'; tags = @{ AutoReplaceDeploymentName = 'shr-pool-failed' }
+        })
+        $global:shrPreflight.Resources[$vm.ResourceId] = $global:shrPreflight.VMs[0]
+        $global:shrPreflight.DenyVMDeletion = $true
+        Assert-ReplacerOperationBlocked { Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments @([PSCustomObject]@{
+            DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01')
+        }) -RegisteredSessionHostNames @() } 'Simulated HTTP 403'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete deployment*' -or $_ -like '* Graph *' }).Count | Should Be 0
+    }
+
+    It 'refuses automatic deletion of legacy failed VMs without ownership evidence' {
+        $vm = New-ReplacerTestHost
+        $global:shrPreflight.VMs = @([PSCustomObject]@{ id = $vm.ResourceId; name = 'vm-avd-01'; tags = @{} })
+        Assert-ReplacerOperationBlocked { Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments @([PSCustomObject]@{
+            DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01')
+        }) -RegisteredSessionHostNames @() } 'Cannot prove ownership'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' }).Count | Should Be 0
+    }
+
+    It 'preserves failed deployment history when directory cleanup fails after the VM is gone' {
+        $global:shrPreflight.State.PendingHostMappings = @{ 'avd-01' = @{ ResourceId = (New-ReplacerTestHost).ResourceId } } | ConvertTo-Json -Compress
+        $global:shrPreflight.DenyGraph = $true
+        Assert-ReplacerOperationBlocked {
+            Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments @([PSCustomObject]@{
+                DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01')
+            }) -RegisteredSessionHostNames @()
+        } 'Simulated HTTP 403'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete deployment*' }).Count | Should Be 0
+    }
+
+    It 'requires operator review for legacy failed hosts without any durable resource inventory' {
+        Assert-ReplacerOperationBlocked {
+            Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments @([PSCustomObject]@{
+                DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01')
+            }) -RegisteredSessionHostNames @()
+        } 'no durable VM ID'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' }).Count | Should Be 0
+    }
+
+    It 'normalizes an empty ARM collection to zero items and rejects malformed envelopes' {
+        Mock Invoke-RestMethod { [PSCustomObject]@{ value = @() } }
+        @(& $invokeAzureRestMethodActual -ARMToken token -Uri 'https://management.azure.com/list' -RequireCollection).Count | Should Be 0
+        Mock Invoke-RestMethod { [PSCustomObject]@{} }
+        Assert-ReplacerOperationBlocked {
+            & $invokeAzureRestMethodActual -ARMToken token -Uri 'https://management.azure.com/list' -RequireCollection
+        } 'Invalid collection response'
+    }
+
+    It 'blocks the entire requested batch without directory mutations when VM deletion times out' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.DeferVMDeletion = $true
+        Remove-SessionHosts -ARMToken token -GraphToken graph-token -SessionHostsPendingDelete $hostsToRemove `
+            -ReplacementMode DeleteFirst -EnableShutdownRetention $false -DeferDeviceCleanup | Out-Null
+        $global:shrPreflight.Clock = 0
+        $global:shrPreflight.TimeProvider = {
+            $global:shrPreflight.Clock++
+            $seconds = $global:shrPreflight.Clock * 3600
+            ([datetime]'2026-09-20T00:00:00Z').AddSeconds($seconds)
+        }
+        Mock Start-Sleep {}
+        Assert-ReplacerOperationBlocked {
+            Deploy-SessionHosts -ARMToken token -GraphToken graph-token -NewSessionHostsCount 2 `
+                -PreferredSessionHostNames @('avd-01', 'avd-02') -WaitForVMDeletion
+        }
+        @($global:shrPreflight.Events | Where-Object { $_ -like '* Graph *' -or $_ -like 'Put deployment*' }).Count | Should Be 0
+        @((($global:shrPreflight.State.PendingHostMappings | ConvertFrom-Json).PSObject.Properties).Name).Count | Should Be 2
+    }
+
+    It 'actually leaves AVD verification incomplete while a registration remains, with directory cleanup disabled' {
+        $global:shrPreflight.Registrations = @(New-ReplacerTestRegistration)
+        $global:shrPreflight.Clock = 0
+        $global:shrPreflight.TimeProvider = {
+            $global:shrPreflight.Clock++
+            $seconds = if ($global:shrPreflight.Clock -le 3) { $global:shrPreflight.Clock } else { 3600 }
+            ([datetime]'2026-09-20T00:00:00Z').AddSeconds($seconds)
+        }
+        $result = & $confirmSessionHostDeletionsActual -ARMToken token `
+            -DeletedHostNames avd-01 -SessionHosts @(New-ReplacerTestHost) `
+            -RemoveEntraDevice $false -RemoveIntuneDevice $false -MaxWaitMinutes 1
+        $result.TotalHosts | Should Be 1
+        $result.VMsConfirmed | Should Be 1
+        $result.AVDConfirmed | Should Be 0
+        @($result.IncompleteHosts).Count | Should Be 1
+    }
+}
