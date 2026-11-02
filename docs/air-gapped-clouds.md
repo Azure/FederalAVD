@@ -147,18 +147,23 @@ or Teams MSIX payloads as customer artifacts does not make them target-cloud equ
 
 [New-AirGappedArtifactPackage.ps1](../tools/New-AirGappedArtifactPackage.ps1) builds a
 connected-side `FederalAVD-AirGapPrerequisites.zip` and `.zip.sha256` without Azure access.
-It reuses the standalone WinGet/UWP builders and includes only:
+It reuses the standalone WinGet builder and includes only:
 
 - `artifacts/Microsoft-WinGet.zip`, with one release's matching bundle, dependencies and offline license.
-- `artifacts/BuiltIn-UWP-Apps.zip`, with the existing default app selection or an explicit subset.
-  Required framework dependencies are kept and deduplicated; separately licensed HEVC is excluded.
 - `artifacts/WebView2.exe` and `artifacts/vc_redist.x64.exe`.
 - `artifacts/MsRdcWebRTCSvc.msi`, included by default for the current air-gapped Teams path.
 - A root `transfer-manifest.json` recording source revision, resolved versions, sizes, hashes,
   destinations and unresolved approvals/support checks. Loose installers must have valid Microsoft
-  signatures; this does not claim every inner app payload was independently signature-validated.
+  signatures; this does not claim every inner WinGet payload was independently signature-validated.
 
-On a connected Windows workstation with PowerShell 7.2+ and working WinGet:
+**Store/UWP apps and codecs are excluded**, including `BuiltIn-UWP-Apps.zip` and its frameworks.
+The combined builder and release workflow do not call the Store APIs, run `winget download`,
+or acquire Store licenses. The `AppStoreIds` parameter and workflow's `app_store_ids` input have
+been removed. The standalone UWP tooling is separate and unchanged; this bundle does not supply
+or approve its payloads. Microsoft-WinGet remains an offline artifact obtained from its GitHub
+release, with that release's dependencies and license; WinGet is not executed during this build.
+
+On a connected Windows workstation with PowerShell 7.2+ (no installed WinGet or Store sign-in required):
 
 ```powershell
 .\tools\New-AirGappedArtifactPackage.ps1 `
@@ -167,26 +172,23 @@ On a connected Windows workstation with PowerShell 7.2+ and working WinGet:
     -WinGetReleaseTag '<approved-stable-winget-tag>'
 ```
 
-Omit `-WinGetReleaseTag` to resolve the latest stable release. Optionally pass `-AppStoreIds`
-with selected IDs from the UWP README, for example `@('9WZDNCRFHVN5', '9PCFS5B6T72H')`.
+Omit `-WinGetReleaseTag` to resolve the latest stable release.
 WebRTC is included without an extra switch; `-IncludeWebRtc` remains valid for explicit inclusion.
 Use `-IncludeWebRtc:$false` only when an approved deployment path does not require this MSI.
 The builder warns on omission and records the selection as `includeWebRtc` in the transfer
 manifest. Existing bundles are not changed by updating the script: rebuild and reapprove them
 to adopt the new default.
-Store packages and evergreen prerequisite URLs resolve at build time: a repository tag alone does
+The WinGet release and evergreen prerequisite URLs resolve at build time: a repository tag alone does
 not reproduce their versions. Retain the approved ZIP and inventory. Existing outputs are not
 overwritten without `-Force`; if final publication of the ZIP/checksum pair fails, inspect and
 discard any incomplete output set before retrying. Large bundles are automatically split into
 1.5 GiB release parts, with a `.zip.parts.json` containing ordered filenames, sizes and hashes.
 The complete local ZIP and its checksum are also retained. Each published file stays below
-GitHub's 2 GiB limit; no apps or dependencies are dropped. Allow disk space for both the ZIP
+GitHub's 2 GiB limit; splitting does not drop included files or dependencies. Allow disk space for both the ZIP
 and its parts, plus build-time downloads and staging.
 
-Do not remove framework dependencies to reduce size. The UWP installer first tries frameworks
-already present in the image, then retries with staged dependencies when needed. Omitting them
-can break offline provisioning on images without matching frameworks. App Installer likewise
-needs its matching dependencies. Splitting changes only transport, not runtime installation.
+Do not remove App Installer's matching dependencies to reduce size. Omitting them can break
+offline provisioning. Splitting changes only transport, not runtime installation.
 
 For a multipart release, download every `.zip.partNNN`, the `.zip.parts.json`, and the
 `.zip.sha256` into the same directory, then use the repository revision matching that release:
@@ -241,10 +243,10 @@ foreach ($item in $manifest.artifacts) {
 
 Use a clean, existing destination and follow [Stage and Upload on High](#stage-and-upload-on-high).
 Do not upload the outer ZIP, extract the inner artifact ZIPs, or add a combined customization.
-WinGet/UWP remain separate customizations; Teams prerequisites remain loose files. Installing
+WinGet remains its own customization; Teams prerequisites remain loose files. Installing
 WinGet does not enable public package sources in the enclave.
 
-Public Teams MSIX, Office, OneDrive, AVD Agent, Boot Loader and FSLogix are not included.
+Store/UWP apps and codecs, public Teams MSIX, Office, OneDrive, AVD Agent, Boot Loader and FSLogix are not included.
 Obtain the approved target-cloud base files through the existing high-side workflow.
 **Current Secret/Top Secret operating assumption:** retain WebRTC for this air-gapped Teams
 deployment path. Windows App support in these clouds is awaiting product-group confirmation.
@@ -282,20 +284,20 @@ leave it enabled for the current air-gapped Teams path. Before enabling the work
    assets. The dispatcher needs repository write access; the environment reviewer must approve the
    waiting job. No Azure credentials or customer files are required.
 5. Publish the first release, or select an existing published release, whose commit includes the
-   combined builder, both standalone builders, and the join tool. An empty release/tag list before
+   combined builder, standalone WinGet builder, and the join tool. An empty release/tag list before
    the first publication is expected.
    In Actions, select **Build approved air-gapped artifact bundle -> Run workflow**, choose the
-   default branch, enter the published release tag, optional WinGet tag/app subset/WebRTC choice,
+   default branch, enter the published release tag, optional WinGet tag and WebRTC choice,
    and explicitly affirm redistribution approval. The dispatch branch supplies the workflow;
    checkout uses the commit resolved from the release tag, not the dispatch branch's current code.
 
 The job rejects missing approval or a draft/missing release, resolves its immutable commit, and
-builds on GitHub's connected Windows runner. It bootstraps WinGet through Microsoft's PowerShell
-module only if the command is missing. It attaches the ZIP and checksum for small bundles, or
+builds on GitHub's connected Windows runner without installing or executing WinGet or downloading
+Store/UWP apps. It attaches the ZIP and checksum for small bundles, or
 all release parts, their manifest and the ZIP checksum for large bundles; the oversized complete
 ZIP is not uploaded. It never overwrites assets or deploys Azure resources.
-First-run Store downloads and GitHub-runner bootstrap still
-require live validation. For partial upload, maintainers must explicitly remove incomplete assets
+The remaining prerequisite downloads, signatures and release upload still require live validation
+for the selected release. For partial upload, maintainers must explicitly remove incomplete assets
 before rerunning; do not silently replace an approved package. When public redistribution is not
 approved, use the local builder and an organization-approved private transfer/publication process.
 

@@ -3,10 +3,11 @@
 .SYNOPSIS
 Builds one connected-side transfer bundle of offline artifact prerequisites.
 .DESCRIPTION
-Reuses the WinGet and built-in UWP builders, then adds Microsoft-signed WebView2
+Reuses the WinGet builder, then adds Microsoft-signed WebView2
 and Visual C++ installers. WebRTC is included by default for the current air-gapped
 Teams path while Windows App support awaits product-group confirmation. No Azure resources are
 accessed and no installer is executed. Extract the outer ZIP before staging on high.
+Store-delivered UWP apps, codecs and their frameworks are excluded.
 Downloading packages does not grant redistribution or deployment rights.
 .PARAMETER OutputPath
 Destination ZIP. Existing output is preserved unless Force is specified.
@@ -17,8 +18,6 @@ Optional exact stable microsoft/winget-cli tag. Empty selects latest stable.
 .PARAMETER IncludeWebRtc
 Includes the WebRTC MSI by default. Use -IncludeWebRtc:$false only for an approved
 alternative; omission does not migrate the built-in Teams installation.
-.PARAMETER AppStoreIds
-Optional subset of the existing built-in UWP app selection. Empty uses its defaults.
 .PARAMETER ReleasePartSizeBytes
 Maximum size of each release part (default 1.5 GiB). Larger ZIPs are also split
 for publication; the complete local ZIP and all runtime dependencies are retained.
@@ -36,12 +35,6 @@ param(
     [ValidatePattern('^v[0-9]+(?:\.[0-9]+){1,3}(?:-[A-Za-z0-9.-]+)?$')]
     [string]$WinGetReleaseTag,
 
-    [ValidateSet('9WZDNCRFHVN5', '9PCFS5B6T72H', '9MZ95KL8MR0L', '9MSMLRH6LZF3',
-        '9P1J8S7CCWWT', '9WZDNCRFJBH4', '9NBLGGH4QGHW', '9N0DX20HK701',
-        '9N4D0MSMP0PT', '9N5TDP8VCMHS', '9PG2DK419DRG', '9MVZQVXJBQ9V',
-        '9N95Q1ZZPMH4', '9PMMSR1CGPWG')]
-    [string[]]$AppStoreIds,
-
     [ValidateRange(1, 2147483647)]
     [long]$ReleasePartSizeBytes = 1536MB,
 
@@ -52,9 +45,6 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw 'Build this package on a connected Windows workstation.' }
 if ([string]::IsNullOrWhiteSpace($SourceRevision)) { throw 'SourceRevision must identify the source checkout.' }
-if ($AppStoreIds -and $AppStoreIds.Count -ne @($AppStoreIds | Sort-Object -Unique).Count) {
-    throw 'AppStoreIds contains duplicate values.'
-}
 $outputFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
 if ([IO.Path]::GetExtension($outputFile) -ne '.zip') { throw 'OutputPath must be a .zip file.' }
 foreach ($path in @($outputFile, "$outputFile.sha256", "$outputFile.parts.json")) {
@@ -69,7 +59,6 @@ if (-not $IncludeWebRtc) {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $examples = Join-Path $repoRoot 'customer-examples\artifacts'
 $winGetBuilder = Join-Path $examples 'Microsoft-WinGet\_build\Build-MicrosoftWinGet.ps1'
-$uwpBuilder = Join-Path $examples 'BuiltIn-UWP-Apps\_build\Build-BuiltinUwpApps.ps1'
 $sources = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\public.downloads.parameters.json') -Raw |
     ConvertFrom-Json
 
@@ -100,11 +89,11 @@ function Get-InstallerVersion {
             $installer = New-Object -ComObject WindowsInstaller.Installer
             $database = $installer.OpenDatabase($Path, 0)
             $view = $database.OpenView("SELECT Value FROM Property WHERE Property='ProductVersion'")
-            $view.Execute()
+            [void]$view.Execute()
             $record = $view.Fetch()
             $version = $record.StringData(1)
         } finally {
-            if ($view) { $view.Close() }
+            if ($view) { [void]$view.Close() }
             foreach ($value in @($record, $view, $database, $installer)) {
                 if ($value -and [Runtime.InteropServices.Marshal]::IsComObject($value)) {
                     [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($value)
@@ -131,20 +120,9 @@ try {
     if (-not $winGetInventory.releaseTag -or @($winGetInventory.assets).Count -ne 4) {
         throw 'WinGet artifact inventory must identify one release and its four assets.'
     }
-    $uwpZip = Join-Path $artifacts 'BuiltIn-UWP-Apps.zip'
-    $arguments = @{ OutputPath = $uwpZip }
-    if ($AppStoreIds) { $arguments.AppStoreIds = $AppStoreIds }
-    & $uwpBuilder @arguments | Out-Host
-    $uwpInventory = Read-ArtifactInventory -Path $uwpZip -Installer 'Install-BuiltinUwpApps.ps1'
-    if (@($uwpInventory.apps).Count -eq 0 -or
-        @($uwpInventory.apps | Where-Object { $_.storeId -in @('9N4WGH0Z6VHQ', '9NMZLZ57R3T7') }).Count) {
-        throw 'UWP inventory must contain apps and must not include separately licensed HEVC.'
-    }
-
     $entries = [Collections.Generic.List[object]]::new()
     foreach ($artifact in @(
-        @{ Path = $winGetZip; Source = 'https://github.com/microsoft/winget-cli'; Versions = $winGetInventory },
-        @{ Path = $uwpZip; Source = 'Microsoft Store via winget download'; Versions = $uwpInventory }
+        @{ Path = $winGetZip; Source = 'https://github.com/microsoft/winget-cli'; Versions = $winGetInventory }
     )) {
         $file = Get-Item -LiteralPath $artifact.Path
         $entries.Add([ordered]@{
@@ -202,6 +180,7 @@ try {
         licenseScope = 'Repository LICENSE covers repository code only; vendor payload terms remain applicable'
         includeWebRtc = $IncludeWebRtc.IsPresent
         artifacts = $entries
+        excluded = @('BuiltIn-UWP-Apps.zip: Store apps, codecs and their frameworks')
         obtainWithinHigh = @('MSTeams-x64.msix', 'teamsbootstrapper.exe', 'Office365DeploymentTool.exe', 'OneDriveSetup.exe')
         unresolved = @('Redistribution and deployment approval', 'Product-group confirmation of Windows App support in air-gapped clouds; target-cloud Teams service connectivity')
     } | ConvertTo-Json -Depth 20 |

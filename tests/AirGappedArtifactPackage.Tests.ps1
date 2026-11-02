@@ -23,22 +23,14 @@ $global:airgapTest.ReleaseTag = $ReleaseTag
 $stage = Join-Path (Split-Path $OutputPath) 'winGet-stage'
 [IO.Directory]::CreateDirectory($stage) | Out-Null
 Set-Content (Join-Path $stage 'Install-MicrosoftWinGet.ps1') -Value 'runtime installer'
+[IO.Directory]::CreateDirectory((Join-Path $stage 'Dependencies')) | Out-Null
+Set-Content (Join-Path $stage 'Dependencies\framework.appx') -Value 'required App Installer framework'
 @{releaseTag='v1.29.380';assets=@(1,2,3,4)} | ConvertTo-Json | Set-Content (Join-Path $stage 'transfer-manifest.json')
 [IO.Compression.ZipFile]::CreateFromDirectory($stage, $OutputPath)
 Remove-Item -LiteralPath $stage -Recurse -Force
 '@ | Set-Content -LiteralPath (Join-Path $fakeRepo 'customer-examples\artifacts\Microsoft-WinGet\_build\Build-MicrosoftWinGet.ps1') -Encoding ascii
         @'
-param($OutputPath, $AppStoreIds)
-$global:airgapTest.AppStoreIds = $AppStoreIds
-$stage = Join-Path (Split-Path $OutputPath) 'uwp-stage'
-[IO.Directory]::CreateDirectory($stage) | Out-Null
-Set-Content (Join-Path $stage 'Install-BuiltinUwpApps.ps1') -Value 'runtime installer'
-[IO.Directory]::CreateDirectory((Join-Path $stage 'SharedDependencies')) | Out-Null
-Set-Content (Join-Path $stage 'SharedDependencies\framework.appx') -Value 'required offline framework'
-$id = if ($global:airgapTest.HEVC) {'9N4WGH0Z6VHQ'} else {'9WZDNCRFHVN5'}
-@{apps=@(@{storeId=$id;version='1.2.3.4'})} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $stage 'transfer-manifest.json')
-[IO.Compression.ZipFile]::CreateFromDirectory($stage, $OutputPath)
-Remove-Item -LiteralPath $stage -Recurse -Force
+throw 'Store/UWP builder must not execute in the combined prerequisite build'
 '@ | Set-Content -LiteralPath (Join-Path $fakeRepo 'customer-examples\artifacts\BuiltIn-UWP-Apps\_build\Build-BuiltinUwpApps.ps1') -Encoding ascii
         $testBuilder = Join-Path $toolDirectory 'New-AirGappedArtifactPackage.ps1'
         function Read-TransferEntry {
@@ -52,7 +44,7 @@ Remove-Item -LiteralPath $stage -Recurse -Force
     }
     BeforeEach {
         $output = Join-Path $TestDrive "$([guid]::NewGuid()).zip"
-        $global:airgapTest = @{FailBuilder=$false; HEVC=$false; ReleaseTag=''; AppStoreIds=@(); BadSignature=$false}
+        $global:airgapTest = @{FailBuilder=$false; ReleaseTag=''; BadSignature=$false}
         Mock Invoke-WebRequest { Set-Content -LiteralPath $OutFile -Value 'downloaded payload' }
         Mock Get-AuthenticodeSignature {
             [pscustomobject]@{
@@ -71,9 +63,9 @@ Remove-Item -LiteralPath $stage -Recurse -Force
             $record = [pscustomobject]@{}
             $record | Add-Member ScriptMethod StringData { param($Index) '1.2.3' }
             $view = [pscustomobject]@{Record=$record}
-            $view | Add-Member ScriptMethod Execute {}
+            $view | Add-Member ScriptMethod Execute { return $null }
             $view | Add-Member ScriptMethod Fetch { $this.Record }
-            $view | Add-Member ScriptMethod Close {}
+            $view | Add-Member ScriptMethod Close { return $null }
             $database = [pscustomobject]@{View=$view}
             $database | Add-Member ScriptMethod OpenView { param($Query) $this.View }
             $installer = [pscustomobject]@{Database=$database}
@@ -83,25 +75,38 @@ Remove-Item -LiteralPath $stage -Recurse -Force
     }
     AfterAll { Remove-Variable airgapTest -Scope Global -ErrorAction SilentlyContinue }
 
-    It 'creates one outer bundle with unchanged inner ZIPs and loose prerequisites' {
+    It 'creates one outer bundle with the WinGet ZIP and loose prerequisites, without Store/UWP apps' {
         $result = & $testBuilder -OutputPath $output -SourceRevision 'test-commit' -WinGetReleaseTag 'v1.29.380' `
-            -AppStoreIds '9WZDNCRFHVN5' -IncludeWebRtc
-        $result.ArtifactCount | Should Be 5
+            -IncludeWebRtc
+        $result.ArtifactCount | Should Be 4
         $result.PartCount | Should Be 0
         $result.ReleaseFiles.Count | Should Be 2
         $global:airgapTest.ReleaseTag | Should Be 'v1.29.380'
-        $global:airgapTest.AppStoreIds | Should Contain '9WZDNCRFHVN5'
         $manifest = Read-TransferEntry $output 'transfer-manifest.json' | ConvertFrom-Json
         $manifest.schemaVersion | Should Be 1
         $manifest.sourceRevision | Should Be 'test-commit'
         $manifest.includeWebRtc | Should Be $true
         $manifest.unresolved.Count | Should Be 2
-        $manifest.artifacts.Count | Should Be 5
+        $manifest.artifacts.Count | Should Be 4
+        $manifest.artifacts.fileName | Should Contain 'Microsoft-WinGet.zip'
+        $manifest.artifacts.fileName | Should Contain 'WebView2.exe'
+        $manifest.artifacts.fileName | Should Contain 'vc_redist.x64.exe'
+        $manifest.artifacts.fileName | Should Not Contain 'BuiltIn-UWP-Apps.zip'
+        $manifest.excluded | Should Contain 'BuiltIn-UWP-Apps.zip: Store apps, codecs and their frameworks'
+        $archive = [IO.Compression.ZipFile]::OpenRead($output)
+        try {
+            $archive.Entries.FullName | Should Not Contain 'artifacts/BuiltIn-UWP-Apps.zip'
+            @($archive.Entries | Where-Object FullName -like 'artifacts/*').Count | Should Be 4
+        } finally { $archive.Dispose() }
         $manifest.artifacts.fileName | Should Contain 'MsRdcWebRTCSvc.msi'
         $manifest.artifacts.fileName | Should Not Contain 'MSTeams-x64.msix'
         $manifest.artifacts.fileName | Should Not Contain 'OneDriveSetup.exe'
         $manifest.artifacts.fileName | Should Not Contain 'Office365DeploymentTool.exe'
         $manifest.artifacts.fileName | Should Not Contain 'teamsbootstrapper.exe'
+        foreach ($item in @($manifest.artifacts | Where-Object fileName -ne 'Microsoft-WinGet.zip')) {
+            $item.version | Should BeOfType 'System.String'
+            $item.version | Should Match '^\d+\.\d+\.\d+(?:\.\d+)?$'
+        }
         foreach ($item in $manifest.artifacts) {
             $archive = [IO.Compression.ZipFile]::OpenRead($output)
             try {
@@ -122,9 +127,9 @@ Remove-Item -LiteralPath $stage -Recurse -Force
     It 'includes WebRTC by default for the current air-gapped Teams path' {
         $result = & $testBuilder -OutputPath $output -SourceRevision 'test'
         $result.IncludeWebRtc | Should Be $true
-        $result.ArtifactCount | Should Be 5
+        $result.ArtifactCount | Should Be 4
         $manifest = Read-TransferEntry $output 'transfer-manifest.json' | ConvertFrom-Json
-        $manifest.artifacts.Count | Should Be 5
+        $manifest.artifacts.Count | Should Be 4
         $manifest.includeWebRtc | Should Be $true
         $manifest.artifacts.fileName | Should Contain 'MsRdcWebRTCSvc.msi'
         ($manifest.artifacts | Where-Object fileName -eq 'MsRdcWebRTCSvc.msi').consumer |
@@ -136,7 +141,7 @@ Remove-Item -LiteralPath $stage -Recurse -Force
         $result = & $testBuilder -OutputPath $output -SourceRevision 'test' -IncludeWebRtc:$false
         $result.IncludeWebRtc | Should Be $false
         $manifest = Read-TransferEntry $output 'transfer-manifest.json' | ConvertFrom-Json
-        $manifest.artifacts.Count | Should Be 4
+        $manifest.artifacts.Count | Should Be 3
         $manifest.includeWebRtc | Should Be $false
         $manifest.artifacts.fileName | Should Not Contain 'MsRdcWebRTCSvc.msi'
         Assert-MockCalled Invoke-WebRequest -Times 2 -Exactly -Scope It
@@ -144,11 +149,10 @@ Remove-Item -LiteralPath $stage -Recurse -Force
             $Message -like '*current air-gapped Teams path requires this MSI*'
         }
     }
-    It 'rejects licensed HEVC selections and HEVC returned in an inner inventory' {
+    It 'rejects the removed Store selection parameter before publishing output' {
         { & $testBuilder -OutputPath $output -SourceRevision 'test' -AppStoreIds '9N4WGH0Z6VHQ' } | Should Throw
-        $global:airgapTest.HEVC = $true
-        { & $testBuilder -OutputPath $output -SourceRevision 'test' } | Should Throw 'HEVC'
         Test-Path -LiteralPath $output | Should Be $false
+        Assert-MockCalled Invoke-WebRequest -Times 0 -Exactly -Scope It
     }
     It 'rejects unsigned payloads without publishing output' {
         $global:airgapTest.BadSignature = $true
@@ -163,18 +167,16 @@ Remove-Item -LiteralPath $stage -Recurse -Force
         (Get-Content -LiteralPath $output -Raw).Trim() | Should Be 'approved zip'
         (Get-Content -LiteralPath "$output.sha256" -Raw).Trim() | Should Be 'approved hash'
     }
-    It 'does not overwrite existing output or accept duplicate apps' {
+    It 'does not overwrite existing output' {
         Set-Content -LiteralPath $output -Value 'approved'
         { & $testBuilder -OutputPath $output -SourceRevision 'test' } | Should Throw 'exists'
-        { & $testBuilder -OutputPath "$output.new.zip" -SourceRevision 'test' `
-            -AppStoreIds '9WZDNCRFHVN5','9WZDNCRFHVN5' } | Should Throw 'duplicate'
     }
     It 'rejects part sizes at the GitHub release limit before building' {
         { & $testBuilder -OutputPath $output -SourceRevision 'test' -ReleasePartSizeBytes 2GB } | Should Throw
         Test-Path -LiteralPath $output | Should Be $false
         Test-Path -LiteralPath "$output.sha256" | Should Be $false
     }
-    It 'splits at exact byte boundaries and reassembles unchanged ZIPs with offline frameworks intact' {
+    It 'splits at exact byte boundaries and reassembles unchanged ZIPs with WinGet dependencies intact' {
         $result = & $testBuilder -OutputPath $output -SourceRevision 'test' -ReleasePartSizeBytes 256
         $result.PartCount | Should BeGreaterThan 1
         $result.ReleaseFiles | Should Not Contain $output
@@ -198,11 +200,11 @@ Remove-Item -LiteralPath $stage -Recurse -Force
         & $joiner -PartsManifest "$output.parts.json" -OutputPath $destination -Force | Out-Null
         $archive = [IO.Compression.ZipFile]::OpenRead($destination)
         try {
-            $inner = Join-Path $TestDrive 'checked-uwp.zip'
-            [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry('artifacts/BuiltIn-UWP-Apps.zip'), $inner)
-            $uwp = [IO.Compression.ZipFile]::OpenRead($inner)
-            try { $uwp.GetEntry('SharedDependencies/framework.appx') | Should Not BeNullOrEmpty }
-            finally { $uwp.Dispose() }
+            $inner = Join-Path $TestDrive 'checked-winget.zip'
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($archive.GetEntry('artifacts/Microsoft-WinGet.zip'), $inner)
+            $winGet = [IO.Compression.ZipFile]::OpenRead($inner)
+            try { $winGet.GetEntry('Dependencies/framework.appx') | Should Not BeNullOrEmpty }
+            finally { $winGet.Dispose() }
         } finally { $archive.Dispose() }
     }
     It 'rejects missing, corrupted, reordered, unsafe, or inconsistent parts without replacing approved output' {
@@ -259,7 +261,7 @@ Describe 'Manual approved transfer release workflow' {
     It 'defaults WebRTC to enabled and forwards explicit enabled or disabled selections' {
         $workflow = Get-Content -LiteralPath $workflowPath -Raw
         $workflow | Should Match 'include_webrtc:\s+description:[^\r\n]+\s+type: boolean\s+default: true'
-        $block = [regex]::Matches($workflow, '(?m)^        run: \|\r?\n((?:          .*(?:\r?\n|$))+)')[2]
+        $block = [regex]::Matches($workflow, '(?m)^        run: \|\r?\n((?:          .*(?:\r?\n|$))+)')[1]
         $text = $block.Groups[1].Value -replace '(?m)^          ', ''
         $tokens = $null; $errors = $null
         $ast = [Management.Automation.Language.Parser]::ParseInput($text, [ref]$tokens, [ref]$errors)
@@ -298,11 +300,13 @@ Describe 'Manual approved transfer release workflow' {
         $workflow | Should Match '\$result.ReleaseFiles'
         $workflow | Should Match 'gh release upload \$env:RELEASE_TAG @assets'
         $workflow | Should Match 'Length -ge 2GB'
+        $workflow | Should Not Match 'Repair-WinGetPackageManager|Install-Module Microsoft.WinGet.Client|winget --version'
+        $workflow | Should Not Match '(?i)app_store_ids|AppStoreIds|winget download|Build-BuiltinUwpApps|MicrosoftStoreDownloads'
     }
     It 'has parseable PowerShell blocks without inline expression injection' {
         $workflow = Get-Content -LiteralPath $workflowPath -Raw
         $blocks = @([regex]::Matches($workflow, '(?m)^        run: \|\r?\n((?:          .*(?:\r?\n|$))+)'))
-        $blocks.Count | Should Be 4
+        $blocks.Count | Should Be 3
         foreach ($block in $blocks) {
             $text = $block.Groups[1].Value -replace '(?m)^          ', ''
             $text | Should Not Match '\$\{\{'
@@ -370,7 +374,7 @@ Describe 'Manual approved transfer release workflow' {
     }
     It 'uploads only the returned release assets and rejects oversized files without GitHub writes' {
         $workflow = Get-Content -LiteralPath $workflowPath -Raw
-        $block = [regex]::Matches($workflow, '(?m)^        run: \|\r?\n((?:          .*(?:\r?\n|$))+)')[3]
+        $block = [regex]::Matches($workflow, '(?m)^        run: \|\r?\n((?:          .*(?:\r?\n|$))+)')[2]
         $upload = [scriptblock]::Create(($block.Groups[1].Value -replace '(?m)^          ', ''))
         $originalTemp = $env:RUNNER_TEMP
         $originalExit = $global:LASTEXITCODE
