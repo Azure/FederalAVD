@@ -315,23 +315,33 @@ Describe 'Manual approved transfer release workflow' {
         $workflow = Get-Content -LiteralPath $workflowPath -Raw
         $block = [regex]::Matches($workflow, '(?m)^        run: \|\r?\n((?:          .*(?:\r?\n|$))+)')[0]
         $gate = [scriptblock]::Create(($block.Groups[1].Value -replace '(?m)^          ', ''))
-        $names = @('REDISTRIBUTION_APPROVED','RELEASE_TAG','GITHUB_REPOSITORY','GITHUB_OUTPUT')
+        $names = @('REDISTRIBUTION_APPROVED','RELEASE_TAG','GITHUB_REPOSITORY','GITHUB_OUTPUT','GITHUB_ENV')
         $original = @{}
         foreach ($name in $names) { $original[$name] = [Environment]::GetEnvironmentVariable($name) }
         $originalExit = $global:LASTEXITCODE
-        $global:airgapGate = @{Calls=0; Draft=$false; Fail=$false}
+        $global:airgapGate = @{Calls=0; Draft=$false; Fail=$false; MissingTags=@(); Tags=@()}
         function gh {
             param([Parameter(ValueFromRemainingArguments)][string[]]$Arguments)
             $global:airgapGate.Calls++
-            $global:LASTEXITCODE = if ($global:airgapGate.Fail) {1} else {0}
             if ($Arguments[0] -eq 'release') {
-                @{isDraft=$global:airgapGate.Draft;tagName=$env:RELEASE_TAG} | ConvertTo-Json -Compress
-            } else { '0123456789012345678901234567890123456789' }
+                $releaseTag = $Arguments[2]
+                $global:airgapGate.Tags += $releaseTag
+                if ($global:airgapGate.Fail -or $releaseTag -in $global:airgapGate.MissingTags) {
+                    $global:LASTEXITCODE = 1
+                    return 'release not found'
+                }
+                $global:LASTEXITCODE = 0
+                @{isDraft=$global:airgapGate.Draft;tagName=$releaseTag} | ConvertTo-Json -Compress
+            } else {
+                $global:LASTEXITCODE = if ($global:airgapGate.Fail) {1} else {0}
+                '0123456789012345678901234567890123456789'
+            }
         }
         try {
             $env:RELEASE_TAG='tag-with-literal-input'
             $env:GITHUB_REPOSITORY='test/repository'
             $env:GITHUB_OUTPUT=Join-Path $TestDrive 'gate-output.txt'
+            $env:GITHUB_ENV=Join-Path $TestDrive 'gate-env.txt'
             $env:REDISTRIBUTION_APPROVED='false'
             { & $gate } | Should Throw 'approval'
             $global:airgapGate.Calls | Should Be 0
@@ -345,6 +355,13 @@ Describe 'Manual approved transfer release workflow' {
             & $gate
             (Get-Content $env:GITHUB_OUTPUT -Raw).Trim() |
                 Should Be 'sha=0123456789012345678901234567890123456789'
+            Get-Content $env:GITHUB_ENV | Should Contain 'RELEASE_TAG=tag-with-literal-input'
+            $env:RELEASE_TAG='2026-11-02'
+            $global:airgapGate.MissingTags=@('2026-11-02')
+            & $gate
+            $global:airgapGate.Tags | Should Contain '2026-11-02'
+            $global:airgapGate.Tags | Should Contain '2026.11.02'
+            Get-Content $env:GITHUB_ENV | Should Contain 'RELEASE_TAG=2026.11.02'
         } finally {
             foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name,$original[$name]) }
             $global:LASTEXITCODE=$originalExit
