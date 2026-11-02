@@ -1,4 +1,4 @@
 param($Timer)
 
 $ErrorActionPreference = 'Stop'
-Start-ShrContinuation -Timer $Timer
+Invoke-ShrTimer -Trigger Initiation -Timer $Timer

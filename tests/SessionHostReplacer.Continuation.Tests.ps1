@@ -19,17 +19,14 @@ if ($global:shrContinuationTest.Action) {
         $global:shrContinuationTest = @{
             Cycles = 0
             Order = @()
-            Messages = @()
             Saves = @()
             Logs = @()
             Conflict = $false
-            FailDelay = -1
             Action = $null
             Authorization = $null
             AuthorizationSaves = @()
             FailCheckpointOnce = $false
             Settings = @{
-                EnableQueueContinuation = $true
                 InitiationEnabled = $true
                 HostPoolSubscriptionId = 'test'
                 HostPoolResourceGroupName = 'hosts'
@@ -63,6 +60,7 @@ if ($global:shrContinuationTest.Action) {
         Mock Get-ShrInitiationImage -ModuleName SessionHostReplacer.Continuation {
             @{ Definition = '/gallery/images/avd'; Version = '2.0.0'; Date = '2026-01-01T00:00:00Z' }
         }
+        Mock Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation { $false }
         Mock Write-LogEntry -ModuleName SessionHostReplacer.Continuation {
             param($Message)
             $global:shrContinuationTest.Logs += $Message
@@ -96,13 +94,7 @@ if ($global:shrContinuationTest.Action) {
         }
         Mock Get-AccessToken -ModuleName SessionHostReplacer.Continuation { 'token' }
         Mock Get-ResourceManagerUri -ModuleName SessionHostReplacer.Continuation { 'https://management.azure.com' }
-        Mock Send-ShrWorkItem -ModuleName SessionHostReplacer.Continuation {
-            param($OperationId, $DelaySeconds, $Generation)
-            $global:shrContinuationTest.Messages += @{ Id = $OperationId; Delay = $DelaySeconds; Generation = $Generation }
-            $global:shrContinuationTest.Order += "send:$DelaySeconds"
-            if ($global:shrContinuationTest.FailDelay -eq $DelaySeconds) { throw 'queue unavailable' }
-        }
-        $workItem = @{ SchemaVersion = 1; OperationId = ('a' * 32); Generation = 0 }
+
     }
 
     AfterAll {
@@ -111,11 +103,61 @@ if ($global:shrContinuationTest.Action) {
     }
 
     It 'continues a waiting operation without throwing or completing it' {
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 1
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
         $global:shrContinuationTest.Operation.State.LockOwner | Should Be ''
-        @($global:shrContinuationTest.Messages | Where-Object Delay -eq 120).Count | Should Be 1
+
+    }
+
+    It 'does only the operation read when no work is active' {
+        $global:shrContinuationTest.Operation = $null
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+        Assert-MockCalled Get-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 1 -Exactly -Scope It
+        Assert-MockCalled Get-ShrInitiationImage -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
+        Assert-MockCalled Get-ShrConfigurationHash -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
+    }
+
+    It 'continues authorized work between sparse initiation ticks while initiation is held' {
+        $global:shrContinuationTest.Settings.TimerSchedule = '0 0 1 * * 1'
+        $global:shrContinuationTest.Settings.InitiationEnabled = $false
+        $state = $global:shrContinuationTest.Operation.State
+        $state.BatchHostNames = @('avd-old')
+        $state.InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddHours(-2).ToString('o')
+        $state.Image = @{ Definition = '/gallery/images/avd'; Version = '1.0.0' }
+        $state.Generation = 17
+        $deadline = [DateTimeOffset]$state.DeadlineUtc
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should Be 2
+        $after = $global:shrContinuationTest.Operation.State
+        $after.Image.Version | Should Be '1.0.0'
+        $after.Generation | Should Be 17
+        ([DateTimeOffset]$after.DeadlineUtc) | Should Be $deadline
+        $after.NextBatchAuthorization | Should BeNullOrEmpty
+        $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 0
+        Assert-MockCalled Get-ShrInitiationImage -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
+    }
+
+    It 'retries a transient state read on the next timer tick without rewriting the operation' {
+        Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation { throw 'Table unavailable' }
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'Table unavailable'
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation {
+            $global:shrContinuationTest.Operation | ConvertTo-Json -Depth 40 | ConvertFrom-Json -AsHashtable
+        }
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should Be 1
+    }
+
+    It 'fails closed on an unrecognized durable status' {
+        $global:shrContinuationTest.Operation.State.Status = 'Unknown'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'Invalid SHR operation state'
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Cycles | Should Be 0
     }
 
     It 'checkpoints an intentional cleanup yield and resumes exact cleanup before the next engine run' {
@@ -127,9 +169,9 @@ if ($global:shrContinuationTest.Action) {
             }
             Request-ShrWorkerYield -Message 'cleanup is pending'
         }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
-        $global:shrContinuationTest.Operation.State.Generation | Should Be 1
+
         $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should Be 'avd-03'
         Mock Assert-SessionHostNamesAvailable -ModuleName SessionHostReplacer.Continuation {
             param($SessionHosts, $WaitForVMDeletion, $RemoveEntraDevice, $RemoveIntuneDevice)
@@ -148,10 +190,8 @@ if ($global:shrContinuationTest.Action) {
             $Result.Completed = $true
         }
         $global:shrContinuationTest.Order = @()
-        $workItem.Generation = 1
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
-        $global:shrContinuationTest.Order.IndexOf('send:600') |
-            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cleanup')
+        Invoke-ShrContinuation -CyclePath $cyclePath
+
         $global:shrContinuationTest.Order.IndexOf('cleanup') |
             Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
@@ -164,9 +204,9 @@ if ($global:shrContinuationTest.Action) {
             $State.CleanupIntent = @{ Hosts = @(@{ SessionHostName = 'avd-01'; ResourceId = '/vm/avd-01' }) }
             Request-ShrWorkerYield -Message 'cleanup is pending'
         }
-        { Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath } | Should Throw 'cleanup checkpoint unavailable'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'cleanup checkpoint unavailable'
         $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
-        @($global:shrContinuationTest.Messages | Where-Object Delay -eq 120).Count | Should Be 0
+
         $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should Be 'avd-01'
     }
 
@@ -178,7 +218,7 @@ if ($global:shrContinuationTest.Action) {
             (Get-ShrWorkerState).CleanupIntent = $null
             Save-ShrContinuationCheckpoint
         }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Order | Should Contain 'cleanup'
         $global:shrContinuationTest.Cycles | Should Be 0
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
@@ -189,100 +229,62 @@ if ($global:shrContinuationTest.Action) {
         Mock Assert-SessionHostNamesAvailable -ModuleName SessionHostReplacer.Continuation {
             Request-ShrWorkerYield -Message 'cleanup is still pending'
         }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 0
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
         $global:shrContinuationTest.Operation.State.CleanupIntent | Should Not BeNullOrEmpty
-        $global:shrContinuationTest.Operation.State.Generation | Should Be 1
+
     }
 
-    It 'persists a crash watchdog before running the lifecycle engine' {
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
-        $global:shrContinuationTest.Order.IndexOf('send:600') |
-            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
+    It 'persists the operation lease before running the lifecycle engine' {
+        Invoke-ShrContinuation -CyclePath $cyclePath
+
         $global:shrContinuationTest.Saves[0].State.LockOwner | Should Not BeNullOrEmpty
         ([DateTimeOffset]$global:shrContinuationTest.Saves[0].State.LockExpiresUtc -
             [DateTimeOffset]::UtcNow).TotalMinutes | Should BeGreaterThan 29
     }
 
-    It 'does not run the engine when the watchdog cannot be queued' {
-        $global:shrContinuationTest.FailDelay = 600
-        { Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath } | Should Throw 'queue unavailable'
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
-    }
-
     It 'completes only when the lifecycle engine explicitly reports readiness and cleanup complete' {
         $global:shrContinuationTest.Action = { param($State, $Result) $Result.Completed = $true }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
-        @($global:shrContinuationTest.Messages | Where-Object Delay -eq 120).Count | Should Be 0
+
     }
 
-    It 'ignores duplicate messages after completion' {
+    It 'exits cheaply on reconciliation ticks after completion' {
         $global:shrContinuationTest.Operation.State.Status = 'Completed'
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Messages.Count | Should Be 0
-        $global:shrContinuationTest.Saves.Count | Should Be 0
-    }
 
-    It 'discards a prior generation watchdog without producing more continuation chains' {
-        $global:shrContinuationTest.Operation.State.Generation = 1
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Messages.Count | Should Be 0
-        $global:shrContinuationTest.Saves.Count | Should Be 0
-    }
-
-    It 'defers a next-generation message that arrives before its checkpoint commits' {
-        $workItem.Generation = 1
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Messages[0].Generation | Should Be 1
-        $global:shrContinuationTest.Messages[0].Delay | Should Be 120
-    }
-
-    It 'advances one generation only after successfully queuing the successor' {
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
-        $global:shrContinuationTest.Messages[0].Generation | Should Be 0
-        $global:shrContinuationTest.Messages[-1].Generation | Should Be 1
-        $global:shrContinuationTest.Operation.State.Generation | Should Be 1
-    }
-
-    It 'ignores messages for an earlier operation' {
-        $workItem.OperationId = 'b' * 32
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
         $global:shrContinuationTest.Saves.Count | Should Be 0
     }
 
     It 'defers duplicates while another worker owns the lease' {
         $global:shrContinuationTest.Operation.State.LockOwner = 'another-worker'
         $global:shrContinuationTest.Operation.State.LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(20).ToString('o')
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Messages[0].Delay | Should Be 120
+
         $global:shrContinuationTest.Saves.Count | Should Be 0
     }
 
     It 'defers an ETag acquisition loser without invoking the engine' {
         $global:shrContinuationTest.Conflict = $true
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Messages[0].Delay | Should Be 120
+
     }
 
     It 'reacquires an expired crash lease' {
         $global:shrContinuationTest.Operation.State.LockOwner = 'crashed-worker'
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 1
     }
 
     It 'stops an expired operation without changing its deadline or calling the engine' {
         $deadline = [DateTimeOffset]::UtcNow.AddHours(-1).ToString('o')
         $global:shrContinuationTest.Operation.State.DeadlineUtc = $deadline
-        { Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath } | Should Throw 'deadline expired'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'deadline expired'
         $global:shrContinuationTest.Cycles | Should Be 0
         $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
         ([DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc) |
@@ -291,20 +293,20 @@ if ($global:shrContinuationTest.Action) {
 
     It 'stops when immutable configuration changes' {
         $global:shrContinuationTest.Operation.State.ConfigurationHash = 'old-configuration'
-        { Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath } | Should Throw 'configuration changed'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'configuration changed'
         $global:shrContinuationTest.Cycles | Should Be 0
     }
 
     It 'treats a bounded invocation timeout as continuation rather than operation failure' {
         $global:shrContinuationTest.Action = { throw [TimeoutException]::new('bounded wait') }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
-        $global:shrContinuationTest.Messages[-1].Delay | Should Be 120
+
     }
 
     It 'persists and surfaces unexpected lifecycle failures' {
         $global:shrContinuationTest.Action = { throw 'unsafe lifecycle state' }
-        { Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath } | Should Throw 'unsafe lifecycle state'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'unsafe lifecycle state'
         $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
         $global:shrContinuationTest.Operation.State.LastError | Should Be 'unsafe lifecycle state'
         $global:shrContinuationTest.Operation.State.LockOwner | Should Be ''
@@ -312,7 +314,7 @@ if ($global:shrContinuationTest.Action) {
 
     It 'does not initiate a replacement from an authorization delayed beyond its initiation window' {
         $global:shrContinuationTest.Operation.State.InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o')
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 0
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
     }
@@ -321,22 +323,77 @@ if ($global:shrContinuationTest.Action) {
         $global:shrContinuationTest.Settings.InitiationEnabled = $false
         $global:shrContinuationTest.Operation.State.Status = 'Completed'
         Start-ShrContinuation
-        $global:shrContinuationTest.Messages.Count | Should Be 0
+
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+    }
+
+    It 'does not persist an operation when the read-only preflight finds no work' {
+        foreach ($previousState in @('Completed', 'Absent')) {
+            if ($previousState -eq 'Absent') {
+                $global:shrContinuationTest.Operation = $null
+            } else {
+                $global:shrContinuationTest.Operation.State.Status = 'Completed'
+            }
+            Mock Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation { $true }
+            Start-ShrContinuation
+        }
+
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+        Assert-MockCalled Get-ShrOperation -ModuleName SessionHostReplacer.Continuation `
+            -ParameterFilter { $EnsureTable } -Times 0 -Exactly -Scope It
+    }
+
+    It 'creates one durable operation from <PreviousState> when the preflight finds work' -TestCases @(
+        @{ PreviousState = 'Completed' }
+        @{ PreviousState = 'Absent' }
+    ) {
+        param($PreviousState)
+        if ($PreviousState -eq 'Absent') {
+            $global:shrContinuationTest.Operation = $null
+        } else {
+            $global:shrContinuationTest.Operation.State.Status = 'Completed'
+        }
+        Start-ShrContinuation
+        $global:shrContinuationTest.Saves.Count | Should Be 1
+
+    }
+
+    It 'does not overwrite an operation created by another timer during the idle check' {
+        $global:shrContinuationTest.Operation = $null
+        Mock Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation {
+            $global:shrContinuationTest.Operation = @{
+                Key = 'key'; ETag = 'new-version'
+                State = @{ Id = ('b' * 32); Status = 'Running' }
+            }
+            $false
+        }
+        Start-ShrContinuation
+        $global:shrContinuationTest.Operation.State.Id | Should Be ('b' * 32)
+
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+    }
+
+    It 'surfaces an idle-check failure without recording a successful operation' {
+        $global:shrContinuationTest.Operation.State.Status = 'Completed'
+        Mock Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation { throw 'inventory unavailable' }
+        { Start-ShrContinuation } | Should Throw 'inventory unavailable'
+
         $global:shrContinuationTest.Saves.Count | Should Be 0
     }
 
     It 'still resumes existing work while initiation is held' {
         $global:shrContinuationTest.Settings.InitiationEnabled = $false
         Start-ShrContinuation
-        $global:shrContinuationTest.Messages[0].Id | Should Be ('a' * 32)
+
         $global:shrContinuationTest.Saves.Count | Should Be 0
+        Assert-MockCalled Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
     }
 
     It 'does not silently restart an operation that needs attention' {
         $global:shrContinuationTest.Operation.State.Status = 'NeedsAttention'
         $global:shrContinuationTest.Operation.State.LastError = 'inspect capacity'
         { Start-ShrContinuation } | Should Throw 'requires operator recovery'
-        $global:shrContinuationTest.Messages.Count | Should Be 0
+
     }
 
     It 'authorizes another scheduled SideBySide deployment without changing a leased operation' {
@@ -354,7 +411,7 @@ if ($global:shrContinuationTest.Action) {
             Should BeGreaterThan ([DateTimeOffset]::UtcNow)
         $global:shrContinuationTest.Saves.Count | Should Be 0
         $state.LockOwner | Should Be 'active-worker'
-        $global:shrContinuationTest.Messages.Count | Should Be 1
+
     }
 
     It 'does not authorize extra batches while held, unhealthy, fully deployed or in DeleteFirst' {
@@ -390,7 +447,7 @@ if ($global:shrContinuationTest.Action) {
             $State.LastBatchAuthorizationId = $State.NextBatchAuthorization.Id
             $State.NextBatchAuthorization = $null
         }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         ([DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc).UtcTicks |
             Should Be ([DateTimeOffset]$deadline).UtcTicks
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
@@ -398,8 +455,7 @@ if ($global:shrContinuationTest.Action) {
             param($State, $Result)
             $State.NextBatchAuthorization | Should BeNullOrEmpty
         }
-        $workItem.Generation = 1
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 2
         $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 1
     }
@@ -421,8 +477,7 @@ if ($global:shrContinuationTest.Action) {
             @{ Id = 'old-batch'; OperationId = $state.Id; AfterBatchNumber = 1; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o') }
         )) {
             $global:shrContinuationTest.Authorization = @{ State = $request }
-            $workItem.Generation = $global:shrContinuationTest.Operation.State.Generation
-            Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+            Invoke-ShrContinuation -CyclePath $cyclePath
         }
         $global:shrContinuationTest.Cycles | Should Be 3
     }
@@ -441,7 +496,7 @@ if ($global:shrContinuationTest.Action) {
             $State.NextBatchAuthorization | Should BeNullOrEmpty
             $State.NextBatchAuthorized | Should Be $false
         }
-        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Cycles | Should Be 1
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
     }
@@ -454,131 +509,18 @@ if ($global:shrContinuationTest.Action) {
         Mock Save-ShrOperation -ModuleName SessionHostReplacer.Continuation { throw 'authorization storage unavailable' }
         { Start-ShrContinuation } | Should Throw 'authorization storage unavailable'
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
-        $global:shrContinuationTest.Messages.Count | Should Be 0
+
     }
 
-    It 'persists a fresh operation before queuing its first message' {
+    It 'persists a fresh operation for the reconciliation timer' {
         $global:shrContinuationTest.Operation = $null
         Start-ShrContinuation
         $global:shrContinuationTest.Operation.State.Id | Should Match '^[a-f0-9]{32}$'
         $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
         $global:shrContinuationTest.Order[0] | Should Be 'save'
-        $global:shrContinuationTest.Messages.Count | Should Be 1
+
     }
 
-    It 'rejects invalid queue message schemas before accessing state' {
-        $workItem.SchemaVersion = 2
-        { Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath } | Should Throw 'Invalid SHR'
-        Assert-MockCalled Get-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
-    }
-}
-
-Describe 'SHR continuation deployment contract' {
-    BeforeAll {
-        $shrRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer'
-        $arm = Get-Content (Join-Path $shrRoot 'main.json') -Raw | ConvertFrom-Json
-        $form = Get-Content (Join-Path $shrRoot 'uiFormDefinition.json') -Raw | ConvertFrom-Json
-        $worker = $arm.resources.workerCode
-        $factory = $worker.properties.template
-        $appParameters = $arm.resources.functionApp.properties.parameters
-        function Get-CompiledScriptText {
-            param([string] $Reference)
-            $match = [regex]::Match($Reference, "variables\('([^']+)'\)")
-            if (-not $match.Success) { throw "Expected a compiled text variable: $Reference" }
-            return $arm.variables.PSObject.Properties[$match.Groups[1].Value].Value
-        }
-    }
-
-    It 'keeps continuation opt-in and persists initiation and operation deadline parameters' {
-        $arm.parameters.enableQueueContinuation.defaultValue | Should Be $false
-        $arm.parameters.initiationEnabled.defaultValue | Should Be $true
-        $arm.parameters.continuationTimeoutHours.defaultValue | Should Be 72
-        $arm.parameters.continuationTimeoutHours.minValue | Should Be 1
-        $arm.parameters.continuationTimeoutHours.maxValue | Should Be 720
-    }
-
-    It 'deploys the queue worker only when enabled and after the shared code upload' {
-        $worker.condition | Should Be "[parameters('enableQueueContinuation')]"
-        $worker.dependsOn | Should Contain 'functionCode'
-        $worker.properties.parameters.functionName.value | Should Be 'session-host-replacer-worker'
-        $worker.properties.parameters.triggerType.value | Should Be 'queueTrigger'
-        $worker.properties.parameters.queueName.value | Should Be 'shr-continuation'
-        $worker.properties.parameters.connection.value | Should Be 'AzureWebJobsStorage'
-    }
-
-    It 'enables queue identity/networking while retaining the optional existing DNS-zone contract' {
-        $appParameters.enableQueueStorage.value | Should Be "[parameters('enableQueueContinuation')]"
-        $appParameters.azureQueuePrivateDnsZoneResourceId.value |
-            Should Be "[parameters('azureQueuePrivateDnsZoneResourceId')]"
-        $form.view.outputs.parameters.azureQueuePrivateDnsZoneResourceId | Should Match 'enableQueueContinuation'
-        $form.view.outputs.parameters.azureQueuePrivateDnsZoneResourceId | Should Match 'enablePrivateDNSIntegration'
-    }
-
-    It 'disables a previously deployed worker on opt-out and keeps controls bound to deployment parameters' {
-        $settings = $appParameters.functionAppAppSettings.value
-        $settings | Should Match "'EnableQueueContinuation', 'value', string\(parameters\('enableQueueContinuation'\)\)"
-        $settings | Should Match "'InitiationEnabled', 'value', string\(parameters\('initiationEnabled'\)\)"
-        $settings | Should Match "'ContinuationTimeoutHours', 'value', string\(parameters\('continuationTimeoutHours'\)\)"
-        $settings | Should Match "'AzureWebJobs\.session-host-replacer-worker\.Disabled', 'value', string\(not\(parameters\('enableQueueContinuation'\)\)\)"
-    }
-
-    It 'wires both delivery paths to the schedule app setting without changing the parameter default' {
-        $arm.parameters.timerSchedule.defaultValue | Should Be '0 0,30 * * * *'
-        $arm.resources.functionCode.properties.parameters.schedule.value | Should Be '%TimerSchedule%'
-        $appParameters.functionAppAppSettings.value | Should Match "'TimerSchedule', 'value',"
-        $appParameters.functionAppAppSettings.value | Should Match "trim\(parameters\('timerSchedule'\)\)"
-        $appParameters.functionAppAppSettings.value | Should Match 'A timerTrigger requires a nonempty schedule'
-        $form.view.outputs.parameters.timerSchedule | Should Not BeNullOrEmpty
-    }
-
-    It 'does not invalidate an approved operation when only its initiation schedule changes' {
-        Import-Module $modulePath -Force
-        try {
-            InModuleScope SessionHostReplacer.Continuation {
-                $previousSchedule = [Environment]::GetEnvironmentVariable('TimerSchedule')
-                try {
-                    [Environment]::SetEnvironmentVariable('TimerSchedule', '0 0,30 * * * *')
-                    $originalHash = Get-ShrConfigurationHash
-                    $originalHash | Should Match '^[A-Fa-f0-9]{64}$'
-                    [Environment]::SetEnvironmentVariable('TimerSchedule', '0 0,30 17,19,21,1,4 * * *')
-                    Get-ShrConfigurationHash | Should Be $originalHash
-                } finally {
-                    [Environment]::SetEnvironmentVariable('TimerSchedule', $previousSchedule)
-                }
-            }
-        } finally { Remove-Module SessionHostReplacer -Force }
-    }
-
-    It 'preserves timer defaults while requiring valid timer or queue trigger inputs' {
-        $factory.parameters.triggerType.defaultValue | Should Be 'timerTrigger'
-        $factory.parameters.triggerType.allowedValues | Should Contain 'queueTrigger'
-        $factory.variables.triggerBinding | Should Match "'name', 'Timer'"
-        $factory.variables.triggerBinding | Should Match "'name', 'WorkItem'"
-        $factory.variables.triggerBinding | Should Match 'fail\('
-        $factory.variables.triggerBinding | Should Match "trim\(parameters\('schedule'\)\)"
-        $factory.variables.triggerBinding | Should Match "trim\(parameters\('queueName'\)\)"
-    }
-
-    It 'embeds the exact thin worker, shared engine and conditional legacy timer code' {
-        $timerFiles = $arm.resources.functionCode.properties.parameters.files.value
-        $match = [regex]::Match($timerFiles,
-            "if\(parameters\('enableQueueContinuation'\), variables\('([^']+)'\), variables\('([^']+)'\)\)")
-        $match.Success | Should Be $true
-        $arm.variables.PSObject.Properties[$match.Groups[1].Value].Value |
-            Should Be (Get-Content (Join-Path $shrRoot 'functions\scheduler.ps1') -Raw)
-        $arm.variables.PSObject.Properties[$match.Groups[2].Value].Value |
-            Should Be (Get-Content (Join-Path $shrRoot 'functions\run.ps1') -Raw)
-        Get-CompiledScriptText $worker.properties.parameters.files.value.'run.ps1' |
-            Should Be (Get-Content (Join-Path $shrRoot 'functions\worker.ps1') -Raw)
-        Get-CompiledScriptText $arm.variables.sharedFunctionFiles.'../shr-cycle.ps1' |
-            Should Be (Get-Content (Join-Path $shrRoot 'functions\run.ps1') -Raw)
-    }
-
-    It 'stages the queue extension-bundle host configuration only in the continuation shared-file branch' {
-        $arm.variables.sharedFunctionFiles.'../host.json' | Should Match 'Microsoft.Azure.Functions.ExtensionBundle'
-        $arm.resources.functionCode.properties.parameters.files.value |
-            Should Match "if\(parameters\('enableQueueContinuation'\), variables\('sharedFunctionFiles'\), createObject\(\)\)"
-    }
 }
 
 Describe 'SHR continuation storage protocol' {
@@ -643,18 +585,6 @@ Describe 'SHR continuation storage protocol' {
         }
     }
 
-    It 'encodes queue messages as base64 JSON and schedules expected waits explicitly' {
-        InModuleScope SessionHostReplacer.Continuation {
-            Send-ShrWorkItem -OperationId ('a' * 32) -DelaySeconds 120
-            $request = $global:shrStorageRequests[-1]
-            $request.Path | Should Match 'visibilitytimeout=120&messagettl=604800'
-            $xml = [xml]$request.Body
-            $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($xml.QueueMessage.MessageText))
-            $message = $json | ConvertFrom-Json
-            $message.SchemaVersion | Should Be 1
-            $message.OperationId | Should Be ('a' * 32)
-        }
-    }
 }
 
     Describe 'SHR deterministic deployment replay' {
@@ -883,11 +813,10 @@ $CycleResult.Completed = $true
             }
             function script:Get-ShrOperation { $script:ProbeOperation }
             function script:Save-ShrOperation { param($Operation) $script:ProbeOperation = $Operation; return $true }
-            function script:Send-ShrWorkItem {}
             function script:Read-FunctionAppSetting { return $true }
             function script:Get-ShrConfigurationHash { return 'probe' }
             function script:Write-LogEntry {}
-            Invoke-ShrContinuation -WorkItem @{ SchemaVersion = 1; OperationId = ('a' * 32); Generation = 0 } -CyclePath $Path
+            Invoke-ShrContinuation -CyclePath $Path
             return $script:ProbeOperation.State.Status
         } $probePath
         $status | Should Be 'Completed'

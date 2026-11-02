@@ -1,12 +1,14 @@
 ﻿# Input bindings are passed in via param block.
-param($Timer, [hashtable] $ContinuationContext, [hashtable] $CycleResult)
+param($Timer,
+    [Parameter(Mandatory)][hashtable] $ContinuationContext,
+    [Parameter(Mandatory)][hashtable] $CycleResult)
 
 # The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
 
-Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o')
+Write-LogEntry -Message "SessionHostReplacer function started at {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Trace
 
 # Log configuration settings for workbook visibility
 $configuredReplacementMode = Read-FunctionAppSetting ReplacementMode
@@ -133,7 +135,7 @@ $settingsLog = @{
 
 Write-LogEntry -Message "SETTINGS | ReplacementMode: {0} | MinimumDrainMinutes: {1} | DrainGracePeriodHours: {2} | MinimumCapacityPercent: {3} | MaxDeletionsPerCycle: {4} | EnableProgressiveScaleUp: {5} | InitialDeploymentPercent: {6} | ScaleUpIncrementPercent: {7} | SuccessfulRunsBeforeScaleUp: {8} | MaxDeploymentBatchSize: {9} | MinimumHostIndex: {10} | EnableShutdownRetention: {11} | ShutdownRetentionDays: {12} | TargetSessionHostCount: {13} | DynamicCapacity: {14} | IncludeExcludedImageVersions: {16} | FunctionAppResourceId: {15}" -StringValues $settingsLog.ReplacementMode, $settingsLog.MinimumDrainMinutes, $settingsLog.DrainGracePeriodHours, $settingsLog.MinimumCapacityPercent, $settingsLog.MaxDeletionsPerCycle, $settingsLog.EnableProgressiveScaleUp, $settingsLog.InitialDeploymentPercent, $settingsLog.ScaleUpIncrementPercent, $settingsLog.SuccessfulRunsBeforeScaleUp, $settingsLog.MaxDeploymentBatchSize, $settingsLog.MinimumHostIndex, $settingsLog.EnableShutdownRetention, $settingsLog.ShutdownRetentionDays, $settingsLog.TargetSessionHostCount, $settingsLog.DynamicCapacityEnabled, $functionAppResourceId, $includeExcludedImageVersions
 if ($replacementMode -eq 'MaintenanceWindow') {
-    Write-LogEntry -Message "Effective replacement behavior: MaintenanceWindow override (configured mode: $configuredReplacementMode)."
+    Write-LogEntry -Message "Effective replacement behavior: MaintenanceWindow override (configured mode: $configuredReplacementMode)." -Level Trace
 }
 
 # Acquire ARM access token
@@ -151,13 +153,13 @@ catch {
 
 # Fetch ALL VMs in the resource group once to avoid redundant queries throughout the run
 # Power state will be queried lazily for deletion candidates only
-Write-LogEntry -Message "Fetching all VMs in resource group for caching"
+Write-LogEntry -Message "Fetching all VMs in resource group for caching" -Level Trace
 $virtualMachinesSubscriptionId = Read-FunctionAppSetting VirtualMachinesSubscriptionId
 $virtualMachinesResourceGroupName = Read-FunctionAppSetting VirtualMachinesResourceGroupName
 $resourceManagerUri = Get-ResourceManagerUri
 $Uri = "$resourceManagerUri/subscriptions/$virtualMachinesSubscriptionId/resourceGroups/$virtualMachinesResourceGroupName/providers/Microsoft.Compute/virtualMachines?api-version=2024-07-01"
 $cachedVMs = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri
-Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count
+Write-LogEntry -Message "Cached {0} VMs from resource group" -StringValues $cachedVMs.Count -Level Trace
 
 if ($maintenanceRequest) {
     $shutdownRetentionTag = Read-FunctionAppSetting Tag_ShutdownTimestamp
@@ -176,7 +178,7 @@ if ($maintenanceRequest) {
 
 # Check for and cleanup expired shutdown VMs BEFORE fetching session hosts (so the list is already clean)
 if ($enableShutdownRetention) {
-    Write-LogEntry -Message "Shutdown retention is enabled - checking for expired shutdown VMs"
+    Write-LogEntry -Message "Shutdown retention is enabled - checking for expired shutdown VMs" -Level Trace
     
     # Acquire Graph token for device cleanup if enabled
     $GraphToken = $null
@@ -282,7 +284,7 @@ if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
     }
     
     if (-not [string]::IsNullOrEmpty($deploymentState.LastDeploymentName)) {
-        Write-LogEntry -Message "Checking status of previous deployment: {0}" -StringValues $deploymentState.LastDeploymentName
+        Write-LogEntry -Message "Checking status of previous deployment: {0}" -StringValues $deploymentState.LastDeploymentName -Level Trace
         $previousDeploymentStatus = Get-LastDeploymentStatus -DeploymentName $deploymentState.LastDeploymentName -ARMToken $ARMToken
         
         if ($previousDeploymentStatus) {
@@ -364,7 +366,7 @@ if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
                     try {
                         $pendingMappings = $deploymentState.PendingHostMappings | ConvertFrom-Json
                         $sessionHostNames = $pendingMappings.PSObject.Properties.Name
-                        Write-LogEntry -Message "Extracted {0} session host name(s) from pending mappings for cleanup: {1}" -StringValues $sessionHostNames.Count, ($sessionHostNames -join ', ')
+                        Write-LogEntry -Message "Extracted {0} session host name(s) from pending mappings for cleanup: {1}" -StringValues $sessionHostNames.Count, ($sessionHostNames -join ', ') -Level Trace
                     }
                     catch {
                         Write-LogEntry -Message "Failed to extract session host names from pending mappings: $_" -Level Warning
@@ -399,7 +401,7 @@ if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
                 $deploymentState.LastStatus = 'Failed'
             }
             elseif ($previousDeploymentStatus.Running) {
-                Write-LogEntry -Message "Previous deployment is still running. Will check again on next run." -Level Warning
+                Write-LogEntry -Message "Previous deployment is still running. Will check again on next run." -Level Trace
                 # Don't update state yet - wait until it completes
             }
             
@@ -412,12 +414,12 @@ if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
             Save-DeploymentState -DeploymentState $deploymentState
 
             if ($previousDeploymentStatus.Running) {
-                Write-LogEntry -Message "Skipping this cycle while deployment {0} remains in progress" -StringValues $deploymentState.LastDeploymentName -Level Warning
+                Write-LogEntry -Message "Skipping this cycle while deployment {0} remains in progress" -StringValues $deploymentState.LastDeploymentName -Level Trace
                 return
             }
 
             if ($previousDeploymentStatus.Succeeded -and $replacementMode -in @('DeleteFirst', 'MaintenanceWindow') -and -not $allHostsRegistered) {
-                Write-LogEntry -Message "Skipping this cycle while successfully deployed hosts complete AVD registration" -Level Warning
+                Write-LogEntry -Message "Skipping this cycle while successfully deployed hosts complete AVD registration" -Level Trace
                 return
             }
         }
@@ -426,7 +428,7 @@ if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
 
 # Filter to Session hosts that are included in auto replace
 $sessionHostsFiltered = $sessionHosts | Where-Object { $_.IncludeInAutomation }
-Write-LogEntry -Message "Filtered to {0} session hosts enabled for automatic replacement: {1}" -StringValues $sessionHostsFiltered.Count, ($sessionHostsFiltered.SessionHostName -join ',')
+Write-LogEntry -Message "Filtered to {0} session hosts enabled for automatic replacement: {1}" -StringValues $sessionHostsFiltered.Count, ($sessionHostsFiltered.SessionHostName -join ',') -Level Trace
 
 # Further filter out VMs that are already in shutdown retention (to avoid redundant shutdown operations)
 if ($enableShutdownRetention) {
@@ -501,7 +503,7 @@ if ($enableShutdownRetention) {
     
     if ($hostsInShutdownRetention.Count -gt 0) {
         $shutdownRetentionNames = $hostsInShutdownRetention.SessionHostName -join ', '
-        Write-LogEntry -Message "Excluding {0} session host(s) already in shutdown retention from replacement processing: {1}" -StringValues $hostsInShutdownRetention.Count, $shutdownRetentionNames
+        Write-LogEntry -Message "Excluding {0} session host(s) already in shutdown retention from replacement processing: {1}" -StringValues $hostsInShutdownRetention.Count, $shutdownRetentionNames -Level Trace
         $sessionHostsFiltered = $sessionHostsFiltered | Where-Object { $_.SessionHostName -notin $hostsInShutdownRetention.SessionHostName }
     }
     else {
@@ -513,10 +515,10 @@ if ($enableShutdownRetention) {
 $deploymentsInfo = Get-Deployments -ARMToken $ARMToken
 $runningDeployments = $deploymentsInfo.RunningDeployments
 $failedDeployments = $deploymentsInfo.FailedDeployments
-Write-LogEntry -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count
+Write-LogEntry -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count -Level Trace
 
 if ($runningDeployments.Count -gt 0) {
-    Write-LogEntry -Message "Skipping this cycle while {0} session host deployment(s) remain in progress: {1}" -StringValues $runningDeployments.Count, ($runningDeployments.DeploymentName -join ', ') -Level Warning
+    Write-LogEntry -Message "Skipping this cycle while {0} session host deployment(s) remain in progress: {1}" -StringValues $runningDeployments.Count, ($runningDeployments.DeploymentName -join ', ') -Level Trace
     return
 }
 
@@ -532,7 +534,7 @@ if ($maintenanceRequestScheduled -and $replacementMode -eq 'SideBySide') {
 }
 
 # Get latest version of session host image
-Write-LogEntry -Message "Getting latest image version using Image Reference."
+Write-LogEntry -Message "Getting latest image version using Image Reference." -Level Trace
 try {
     if ($ContinuationContext -and $ContinuationContext.Image) {
         $latestImageVersion = [PSCustomObject]$ContinuationContext.Image
@@ -579,8 +581,8 @@ catch {
         Write-LogEntry -Message "Failed to update host pool status tag: $($_.Exception.Message)" -Level Warning
     }
     
-    Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')
-    Write-LogEntry -Message "SessionHostReplacer function exiting - no replicated image versions available"
+    Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Trace
+    Write-LogEntry -Message "SessionHostReplacer function exiting - no replicated image versions available" -Level Trace
     return
 }
 
@@ -595,8 +597,8 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     
     # Log current state for debugging
     $lastToReplace = if ($null -eq $deploymentState.LastImageVersion) { 0 } else { $deploymentState.LastTotalToReplace }
-    Write-LogEntry -Message "New cycle detection - Current: ImageVersion='$currentImageVersion', LastTotalToReplace=$lastToReplace"
-    Write-LogEntry -Message "New cycle detection - Previous: LastImageVersion='$($deploymentState.LastImageVersion)' (IsNull: $($null -eq $deploymentState.LastImageVersion)), LastStatus='$($deploymentState.LastStatus)'"
+    Write-LogEntry -Message "New cycle detection - Current: ImageVersion='$currentImageVersion', LastTotalToReplace=$lastToReplace" -Level Trace
+    Write-LogEntry -Message "New cycle detection - Previous: LastImageVersion='$($deploymentState.LastImageVersion)' (IsNull: $($null -eq $deploymentState.LastImageVersion)), LastStatus='$($deploymentState.LastStatus)'" -Level Trace
     
     # Check if image version changed AND we were previously up to date (not already in a cycle)
     # This prevents repeatedly triggering new cycle on every run while hosts are still being replaced
@@ -608,7 +610,7 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
     $currentVersionValid = $currentImageVersion -ne "N/A"
     $wasUpToDate = $lastToReplace -eq 0
     
-    Write-LogEntry -Message "New cycle detection conditions - HasLastImageVersion: $hasLastImageVersion, ImageVersionChanged: $imageVersionChanged, CurrentVersionValid: $currentVersionValid, WasUpToDate: $wasUpToDate"
+    Write-LogEntry -Message "New cycle detection conditions - HasLastImageVersion: $hasLastImageVersion, ImageVersionChanged: $imageVersionChanged, CurrentVersionValid: $currentVersionValid, WasUpToDate: $wasUpToDate" -Level Trace
     
     if ($hasLastImageVersion -and $imageVersionChanged -and $currentVersionValid -and $wasUpToDate) {
         Write-LogEntry -Message "New cycle detection - Image version changed from $($deploymentState.LastImageVersion) to $currentImageVersion (was previously up to date)"
@@ -732,7 +734,7 @@ if ($replacementMode -in @('DeleteFirst', 'SideBySide', 'MaintenanceWindow')) {
         $hostPoolName = Read-FunctionAppSetting HostPoolName
         $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
 
-        Write-LogEntry -Message "$replacementMode mode: Querying scaling plan"
+        Write-LogEntry -Message "$replacementMode mode: Querying scaling plan" -Level Trace
         $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
 
         if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
@@ -860,7 +862,7 @@ $getReplacementPlan = {
 
 # If up to date, skip replacement planning and go straight to the early exit path.
 if ($isUpToDate) {
-    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation"
+    Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation" -Level Trace
     
     # Create a minimal replacement plan for early exit logic
     $hostPoolReplacementPlan = [PSCustomObject]@{
@@ -875,7 +877,7 @@ if ($isUpToDate) {
 }
 else {
     # Host pool needs work - run full replacement plan calculation
-    Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation"
+    Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation" -Level Trace
 
     # Get full replacement plan with all calculations
     $hostPoolReplacementPlan = & $getReplacementPlan
@@ -1003,7 +1005,7 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         'The approved replacement batch has no remaining deployments or removals; checking readiness and scaling handoff.'
     } else {
         'Host pool is UP TO DATE - all session hosts are on the latest image version and no work is needed.'
-    })
+    }) -Level Trace
 
     $upToDateHostReadiness = Test-NewSessionHostsAvailable `
         -ARMToken $ARMToken `
@@ -1180,6 +1182,7 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
         -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.LatestImageVersion, $metricsLog.Status
     
     # Update host pool status tag with current state
+    Write-ShrEvent -Event Progress -State $ContinuationContext -Metrics $metricsLog
     try {
         Update-HostPoolStatus `
             -ARMToken $ARMToken `
@@ -1194,14 +1197,14 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
     }
     
     # Log completion timestamp for workbook visibility
-    Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')
-    Write-LogEntry -Message "SessionHostReplacer function completed - host pool is up to date"
+    Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Trace
+    Write-LogEntry -Message "SessionHostReplacer function completed - host pool is up to date" -Level Trace
     
     return
 }
 
 # Host pool needs work - continue with normal processing
-Write-LogEntry -Message "Host pool requires updates - proceeding with replacement operations"
+Write-LogEntry -Message "Host pool requires updates - proceeding with replacement operations" -Level Trace
 
 # Check availability of new session hosts (hosts already on the latest image version)
 # This provides metrics for monitoring and is used as a safety check before removing old hosts
@@ -1235,13 +1238,13 @@ else {
 # New cycle detection will now happen earlier in the flow, before replacement plan calculation
 
 # Check replacement mode to determine execution order
-Write-LogEntry -Message "Effective Replacement Mode: {0}" -StringValues $replacementMode
+Write-LogEntry -Message "Effective Replacement Mode: {0}" -StringValues $replacementMode -Level Trace
 
 if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     # ================================================================================================
     # DELETE-FIRST MODE: Delete idle hosts first, then deploy replacements
     # ================================================================================================
-    Write-LogEntry -Message "Using $replacementMode delete-before-deploy workflow."
+    Write-LogEntry -Message "Using $replacementMode delete-before-deploy workflow." -Level Trace
     
     # STEP 1: Delete session hosts first
     $deletedSessionHostNames = @()
@@ -1257,7 +1260,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     if ($deploymentState.PendingHostMappings -and $deploymentState.PendingHostMappings -ne '{}') {
         try {
             $hostPropertyMapping = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
-            Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count
+            Write-LogEntry -Message "Loaded {0} pending host mapping(s) from previous run" -StringValues $hostPropertyMapping.Count -Level Trace
                 
             # Check if any pending hosts are still unresolved (deleted but not registered)
             $pendingHostNames = $hostPropertyMapping.Keys
@@ -1286,9 +1289,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     # This prevents cascading capacity loss if previous deployments created VMs that didn't register properly
     $shouldSkipEntireFlow = $false
     if (-not $newHostAvailability.SafeToProceed -and $newHostAvailability.TotalNewHosts -gt 0) {
-        Write-LogEntry -Message "SAFETY CHECK FAILED: {0}" -StringValues $newHostAvailability.Message -Level Warning
-        Write-LogEntry -Message "Halting DeleteFirst mode - will not delete old hosts until existing new hosts become available" -Level Warning
-        Write-LogEntry -Message "This prevents further capacity loss when previous deployments have hosts that aren't accessible" -Level Warning
+        Write-LogEntry -Message "DeleteFirst is waiting for replacement host availability: {0}. No additional old hosts will be deleted." -StringValues $newHostAvailability.Message -Level Warning
         # Skip the entire delete/deploy cycle - exit DeleteFirst flow
         $shouldSkipEntireFlow = $true
     }
@@ -1340,7 +1341,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     # Execute deletion logic only if we're not in a pending host retry scenario
     if (-not $shouldSkipEntireFlow -and -not $hasPendingUnresolvedHosts) {
         if ($newHostAvailability.TotalNewHosts -gt 0) {
-            Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
+            Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message -Level Trace
         }
 
         if ($hostPoolReplacementPlan.PossibleSessionHostDeleteCount -gt 0 -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
@@ -1462,7 +1463,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     
         # STEP 2: Deploy replacement session hosts
         if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
-            Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
+            Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount -Level Trace
         
             # In DeleteFirst mode: exclude deleted host names so they can be reused
             # Calculate existing names: all current hosts + running deployments - just deleted hosts
@@ -1476,7 +1477,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
     
     # STEP 2: Deploy replacement session hosts (executes whether we deleted hosts or are retrying pending deployments)
     if (-not $shouldSkipEntireFlow -and $hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
-        Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
+        Write-LogEntry -Message "We will deploy {0} replacement session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount -Level Trace
         
         # In DeleteFirst mode: exclude deleted host names so they can be reused
         # Calculate existing names: all current hosts + running deployments - just deleted hosts
@@ -1531,7 +1532,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
                 Write-LogEntry -Message "Saved {0} session host name(s) to deployment state for cleanup tracking" -StringValues $deploymentResult.SessionHostNames.Count -Level Trace
             }
 
-            Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+            Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run." -Level Trace
             Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
         }
         catch {
@@ -1564,12 +1565,12 @@ else {
     # ================================================================================================
     # SIDE-BY-SIDE MODE: Deploy new hosts first, then delete old ones
     # ================================================================================================
-    Write-LogEntry -Message "Using SIDE-BY-SIDE mode: will deploy new hosts before deleting old ones"
+    Write-LogEntry -Message "Using SIDE-BY-SIDE mode: will deploy new hosts before deleting old ones" -Level Trace
     
     # STEP 1: Deploy new session hosts first
     $deploymentResult = $null
     if ($hostPoolReplacementPlan.PossibleDeploymentsCount -gt 0) {
-        Write-LogEntry -Message "We will deploy {0} session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount
+        Write-LogEntry -Message "We will deploy {0} session hosts" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount -Level Trace
         # Deploy session hosts - use SessionHostName (hostname from FQDN) not VMName (Azure VM resource name)
         $existingSessionHostNames = (@($sessionHosts | Where-Object { -not $_.IsUnavailable } | ForEach-Object { $_.SessionHostName }) + @($hostPoolReplacementPlan.ExistingSessionHostNames)) | Sort-Object | Select-Object -Unique
         
@@ -1614,7 +1615,7 @@ else {
                     $deploymentState.PendingHostMappings = '{}'
                 }
                 
-                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run."
+                Write-LogEntry -Message "Deployment submitted: $($deploymentResult.DeploymentName). Status will be checked on next run." -Level Trace
                 
                 # Save state
                 Save-DeploymentState -DeploymentState $deploymentState -RequireSuccess
@@ -1640,12 +1641,11 @@ else {
     # STEP 2: Verify new session hosts are available before removing old ones (safety check)
     # This prevents capacity loss if newly deployed hosts fail to register or pass health checks
     if (-not $newHostAvailability.SafeToProceed -and $newHostAvailability.TotalNewHosts -gt 0) {
-        Write-LogEntry -Message "SAFETY CHECK FAILED: {0}" -StringValues $newHostAvailability.Message -Level Warning
-        Write-LogEntry -Message "Skipping old host removal to preserve capacity until new hosts become available" -Level Warning
+        Write-LogEntry -Message "SideBySide retirement is waiting for replacement host availability: {0}. Old hosts are retained." -StringValues $newHostAvailability.Message -Level Warning
         # Don't proceed with deletion - exit the SideBySide flow here
     }
     elseif ($newHostAvailability.TotalNewHosts -gt 0) {
-        Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message
+        Write-LogEntry -Message "SAFETY CHECK PASSED: {0}" -StringValues $newHostAvailability.Message -Level Trace
     }
 
     if ($newHostAvailability.SafeToProceed -and
@@ -1878,7 +1878,7 @@ if ($cycleComplete -or $sideBySideRetentionTransition -or $sideBySideDeploymentT
                         Write-LogEntry -Message "Successfully removed scaling exclusion tag from $($sessionHost.SessionHostName)" -Level Trace
                     }
                     else {
-                        Write-LogEntry -Message "Skipping removal of scaling exclusion tag from $($sessionHost.SessionHostName) - appears to be admin-set (value: '$tagValue')"
+                        Write-LogEntry -Message "Skipping removal of scaling exclusion tag from $($sessionHost.SessionHostName) - appears to be admin-set (value: '$tagValue')" -Level Trace
                     }
                 }
             }
@@ -1915,6 +1915,7 @@ Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToR
     -StringValues $metricsLog.TotalSessionHosts, $metricsLog.EnabledForAutomation, $metricsLog.TargetCount, $metricsLog.ToReplace, $metricsLog.ToReplacePercentage, $metricsLog.InDrain, $metricsLog.PendingDelete, $metricsLog.ShutdownRetention, $metricsLog.ToDeployNow, $metricsLog.RunningDeployments, $metricsLog.NewHostsAvailable, $metricsLog.NewHostsTotal, $metricsLog.NewHostsAvailablePct, $metricsLog.LatestImageVersion
 
 # Log the action taken this run - used by the monitoring workbook for run history classification
+Write-ShrEvent -Event Progress -State $ContinuationContext -Metrics $metricsLog
 $actionTaken = if ($failedDeployments.Count -gt 0) { 'FailedRecovery' }
                elseif ($deploymentResult -and $deploymentResult.SessionHostCount -gt 0) { "Deployed:$($deploymentResult.SessionHostCount)" }
                elseif ($deletionResults -and $deletionResults.SuccessfulDeletions.Count -gt 0) { "Deleted:$($deletionResults.SuccessfulDeletions.Count)" }
@@ -1949,4 +1950,4 @@ if (Read-FunctionAppSetting EnableProgressiveScaleUp -AsBoolean) {
 }
 
 # Log completion timestamp for workbook visibility
-Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o')
+Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Trace

@@ -67,11 +67,11 @@
     Does not bypass replication, publication-age delay, rollback protection, or health/capacity checks.
 
 .PARAMETER InitiationEnabled
-    Allows the timer to initiate a new queue-continuation batch. Existing work continues while false.
-    Requires a deployment with queue continuation enabled.
+    Allows the initiation timer to authorize new batches. The reconciliation timer
+    continues existing work while false.
 
 .PARAMETER ContinuationTimeoutHours
-    Deadline for newly initiated queue operations, in hours. Does not extend an existing operation.
+    Deadline for newly initiated operations, in hours. Does not extend an existing operation.
 
 .PARAMETER PassThru
     Returns the interpreted configuration object after review or update.
@@ -268,7 +268,7 @@ function Get-InterpretedConfiguration {
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
         IncludeExcludedImageVersions = Get-SettingValue -Settings $Settings -Name 'IncludeExcludedImageVersions' -Default 'false'
-        QueueContinuationEnabled = Get-SettingValue -Settings $Settings -Name 'EnableQueueContinuation' -Default 'false'
+        ExecutionModel = 'Initiation timer and one-minute reconciliation timer'
         InitiationEnabled = Get-SettingValue -Settings $Settings -Name 'InitiationEnabled' -Default 'true'
         ContinuationTimeoutHours = Get-SettingValue -Settings $Settings -Name 'ContinuationTimeoutHours' -Default '72'
         MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(
@@ -333,10 +333,6 @@ foreach ($parameterName in $settingParameters.Keys) {
 }
 
 $replacementMode = Get-SettingValue -Settings $settings -Name 'ReplacementMode'
-if (($requestedChanges.Contains('InitiationEnabled') -or $requestedChanges.Contains('ContinuationTimeoutHours')) -and
-    -not [bool]::Parse((Get-SettingValue -Settings $settings -Name 'EnableQueueContinuation' -Default 'false'))) {
-    throw 'InitiationEnabled and ContinuationTimeoutHours require queue continuation infrastructure. Enable it through the SHR deployment first.'
-}
 if ($replacementMode -ne 'DeleteFirst' -and
     ($requestedChanges.Contains('MinimumCapacityPercentage') -or $requestedChanges.Contains('MaxDeletionsPerCycle'))) {
     throw 'MinimumCapacityPercentage and MaxDeletionsPerCycle apply only to DeleteFirst mode.'

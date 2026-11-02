@@ -56,7 +56,7 @@ function Remove-ExpiredShutdownVMs {
         [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
     
-    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days"
+    Write-LogEntry -Message "Checking for shutdown VMs exceeding retention period of $ShutdownRetentionDays days" -Level Trace
     
     # Use cached VMs if provided, otherwise fetch
     if ($CachedVMs -and $CachedVMs.Count -gt 0) {
@@ -79,7 +79,7 @@ function Remove-ExpiredShutdownVMs {
         }
     }
     
-    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate"
+    Write-LogEntry -Message "Found $($shutdownVMs.Count) shutdown VM(s) to evaluate" -Level Trace
     
     $cleanedUpCount = 0
     $retainedCount = 0
@@ -164,7 +164,7 @@ function Remove-ExpiredShutdownVMs {
         Write-LogEntry -Message "Cleanup complete: Deleted $cleanedUpCount expired shutdown VM(s), retained $retainedCount VM(s)"
     }
     else {
-        Write-LogEntry -Message "No shutdown VMs exceeded retention period"
+        Write-LogEntry -Message "No shutdown VMs exceeded retention period" -Level Trace
     }
     
     return [PSCustomObject]@{
@@ -239,20 +239,20 @@ function Remove-SessionHosts {
         Write-LogEntry -Message "Evaluating session host $($sessionHost.SessionHostName): Sessions=$($sessionHost.Sessions), AllowNewSession=$($sessionHost.AllowNewSession), PendingDrainTimeStamp=$($sessionHost.PendingDrainTimeStamp)" -Level Trace
 
         if ($sessionHost.Sessions -eq 0) {
-            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions."
+            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has no sessions." -Level Trace
             
             # Optimization: If VM is already powered off, skip draining and delete immediately (no point draining an offline VM)
             if ($sessionHost.PoweredOff) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - marking for immediate deletion without drain period (VM already shutdown)"
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - marking for immediate deletion without drain period (VM already shutdown)" -Level Trace
                 $deleteSessionHost = $true
             }
             # Optimization: If MinimumDrainMinutes = 0, skip draining entirely and delete immediately
             elseif ($MinimumDrainMinutes -eq 0) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - marking for immediate removal without drain period"
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is idle and MinimumDrainMinutes is 0 - marking for immediate removal without drain period" -Level Trace
                 $deleteSessionHost = $true
             }
             elseif (-Not $sessionHost.AllowNewSession) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions."
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode with zero sessions." -Level Trace
                 if ($sessionHost.PendingDrainTimeStamp) {                    
                     # In SideBySide mode, skip minimum drain time check since new capacity is already deployed
                     if ($ReplacementMode -eq 'SideBySide') {
@@ -260,38 +260,38 @@ function Remove-SessionHosts {
                     }
                     # If VM is powered off, skip minimum drain time check - no race condition possible
                     elseif ($sessionHost.PoweredOff) {
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - skipping minimum drain time check (no race condition possible)"
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) is powered off - skipping minimum drain time check (no race condition possible)" -Level Trace
                         $deleteSessionHost = $true
                     }
                     else {
                         $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
                   
-                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)"
+                        Write-LogEntry -Message "Session host $($sessionHost.FQDN) has been draining for $([Math]::Round($elapsedMinutes, 1)) minutes (minimum required: $MinimumDrainMinutes)" -Level Trace
                         if ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts."
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has met the minimum drain time for idle hosts." -Level Trace
                             $deleteSessionHost = $true
                         }
                         else {
-                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time."
+                            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has not yet met the minimum drain time." -Level Trace
                         }
                     }
                 }
                 else {
-                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp."
+                    Write-LogEntry -Message "Session host $($sessionHost.FQDN) does not have a drain timestamp." -Level Trace
                     $drainSessionHost = $true
                 }
             }
             else {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode."
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is not in drain mode. Turning on drain mode." -Level Trace
                 $drainSessionHost = $true
             }
         }
         else {
-            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." 
+            Write-LogEntry -Message "Session host $($sessionHost.FQDN) has $($sessionHost.Sessions) sessions." -Level Trace
             if (-Not $sessionHost.AllowNewSession) {
-                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode."
+                Write-LogEntry -Message "Session host $($sessionHost.FQDN) is in drain mode." -Level Trace
                 if ($sessionHost.PendingDrainTimeStamp) {
-                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)"
+                    Write-LogEntry -Message "Session Host $($sessionHost.FQDN) drain timestamp is $($sessionHost.PendingDrainTimeStamp)" -Level Trace
                     if ($ReplacementMode -eq 'MaintenanceWindow') {
                         $elapsedMinutes = ((Get-Date).ToUniversalTime() - $sessionHost.PendingDrainTimeStamp).TotalMinutes
                         if ($elapsedMinutes -ge $MaintenanceLogOffDelayMinutes) {
@@ -332,7 +332,7 @@ function Remove-SessionHosts {
                 }
             }
             else {
-                Write-LogEntry -Message "Session host $($sessionHost.Name) in not in drain mode. Turning on drain mode."
+                Write-LogEntry -Message "Session host $($sessionHost.Name) in not in drain mode. Turning on drain mode." -Level Trace
                 $drainSessionHost = $true
             }
         }
@@ -346,7 +346,7 @@ function Remove-SessionHosts {
                 Write-LogEntry -Message "Drain mode enabled for $($sessionHost.SessionHostName)" -Level Trace
                 
                 $drainTimestamp = (Get-Date).ToUniversalTime().ToString('o')
-                Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp"
+                Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp" -Level Trace
                 $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                 $Body = @{
                     properties = @{
@@ -356,7 +356,7 @@ function Remove-SessionHosts {
                 }
                 Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
                 
-                Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp"
+                Write-LogEntry -Message "Successfully tagged $($sessionHost.SessionHostName) with drain timestamp" -Level Trace
                 
                 # Update in-memory session host object so timestamp is available for deletion check in same run
                 $sessionHost.PendingDrainTimeStamp = [DateTime]::Parse($drainTimestamp, $null, [System.Globalization.DateTimeStyles]::AssumeUniversal -bor [System.Globalization.DateTimeStyles]::AdjustToUniversal)
@@ -368,24 +368,24 @@ function Remove-SessionHosts {
                     
                     # HIGHEST PRIORITY: If VM is already powered off, delete immediately (no point waiting - it's already offline)
                     if ($sessionHost.PoweredOff) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is powered off - marking for immediate deletion (VM already shutdown)"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is powered off - marking for immediate deletion (VM already shutdown)" -Level Trace
                         $deleteSessionHost = $true
                     }
                     # In SideBySide mode, allow immediate deletion since new capacity is already deployed
                     elseif ($ReplacementMode -eq 'SideBySide') {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is in SideBySide mode - marking for immediate deletion (new capacity already deployed)"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) is in SideBySide mode - marking for immediate deletion (new capacity already deployed)" -Level Trace
                         $deleteSessionHost = $true
                     }
                     elseif ($MinimumDrainMinutes -eq 0) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) has MinimumDrainMinutes=0 - marking for immediate deletion"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) has MinimumDrainMinutes=0 - marking for immediate deletion" -Level Trace
                         $deleteSessionHost = $true
                     }
                     elseif ($elapsedMinutes -ge $MinimumDrainMinutes) {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed >= $MinimumDrainMinutes required) - marking for deletion"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) meets deletion criteria ($([Math]::Round($elapsedMinutes, 1)) minutes elapsed >= $MinimumDrainMinutes required) - marking for deletion" -Level Trace
                         $deleteSessionHost = $true
                     }
                     else {
-                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) must wait $([Math]::Round($MinimumDrainMinutes - $elapsedMinutes, 1)) more minutes before deletion (minimum drain time: $MinimumDrainMinutes minutes)"
+                        Write-LogEntry -Message "Session host $($sessionHost.SessionHostName) must wait $([Math]::Round($MinimumDrainMinutes - $elapsedMinutes, 1)) more minutes before deletion (minimum drain time: $MinimumDrainMinutes minutes)" -Level Trace
                     }
                 }
                 
@@ -670,7 +670,7 @@ function Send-DrainNotification {
     )
     
     try {       
-        Write-LogEntry -Message "Getting user sessions for session host $SessionHostName"
+        Write-LogEntry -Message "Getting user sessions for session host $SessionHostName" -Level Trace
         $SessionsUri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$SessionHostName/userSessions?api-version=2024-04-03"
         
         $sessionsResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $SessionsUri
@@ -682,11 +682,11 @@ function Send-DrainNotification {
         $sessions = $sessions | Where-Object { $_ -and $_.name }
         
         if ($sessions.Count -eq 0) {
-            Write-LogEntry -Message "No active sessions found on session host $SessionHostName"
+            Write-LogEntry -Message "No active sessions found on session host $SessionHostName" -Level Trace
             return
         }
         
-        Write-LogEntry -Message "Found $($sessions.Count) active session(s) on session host $SessionHostName"
+        Write-LogEntry -Message "Found $($sessions.Count) active session(s) on session host $SessionHostName" -Level Trace
         
         foreach ($session in $sessions) {
             $sessionId = $session.name -replace '.+\/.+\/(.+)', '$1'
@@ -852,10 +852,12 @@ function Test-NewSessionHostsAvailable {
         [Parameter()]
         [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
         [Parameter()]
+        [switch] $ReadOnly,
+        [Parameter()]
         [string] $ResourceManagerUri = (Get-ResourceManagerUri)
     )
     
-    Write-LogEntry -Message "Verifying latest-image session host readiness before proceeding with old host removal"
+    Write-LogEntry -Message "Verifying latest-image session host readiness before proceeding with old host removal" -Level Trace
     
     # Identify new hosts (hosts on the latest image version)
     $newHosts = $SessionHosts | Where-Object { 
@@ -874,11 +876,12 @@ function Test-NewSessionHostsAvailable {
             TotalNewHosts      = 0
             UnavailableHosts   = @()
             SafeToProceed      = $false
+            ValidationUpdatesRequired = $false
             Message            = "No latest-image hosts are available to verify"
         }
     }
     
-    Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version
+    Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version -Level Trace
 
     $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
     $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
@@ -891,8 +894,10 @@ function Test-NewSessionHostsAvailable {
         $hashAlgorithm.Dispose()
     }
 
+    $validationUpdatesRequired = $false
     if ([string]::IsNullOrWhiteSpace($TagValidatedImage)) {
         Write-LogEntry -Message "Tag_ValidatedImage is not configured - exact-image validation evidence cannot be recorded" -Level Warning
+        $validationUpdatesRequired = $true
     }
     else {
         foreach ($newHost in $newHosts) {
@@ -903,6 +908,10 @@ function Test-NewSessionHostsAvailable {
                 $failedHealthChecks.Count -eq 0
 
             if ($isHealthValidated -and $newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
+                if ($ReadOnly) {
+                    $validationUpdatesRequired = $true
+                    continue
+                }
                 try {
                     $tagsUri = "$ResourceManagerUri$($newHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                     $body = @{
@@ -949,7 +958,7 @@ function Test-NewSessionHostsAvailable {
             $isOnlineHealthy = $isHealthValidated -and $newHost.AllowNewSession
 
             if ($isHealthValidated) {
-                if ((Test-SessionHostScalingRelease -SessionHost $newHost -LatestImageVersion $LatestImageVersion -TagValidatedImage $TagValidatedImage) -and
+                if (-not $ReadOnly -and (Test-SessionHostScalingRelease -SessionHost $newHost -LatestImageVersion $LatestImageVersion -TagValidatedImage $TagValidatedImage) -and
                     $TagScalingPlanExclusionTag -and
                     $newHost.Tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
                     try {
@@ -1002,7 +1011,7 @@ function Test-NewSessionHostsAvailable {
                     ValidatedForImage = [bool]$isValidatedForImage
                 }
                 $unreadyHosts += $unreadyHost
-                Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Warning
+                Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3} | PoweredOff: {4} | ScalingExcluded: {5} | ValidatedForImage: {6}" -StringValues $unreadyHost.SessionHostName, $unreadyHost.Status, $unreadyHost.AllowNewSession, $unreadyHost.FailedHealthCheckCount, $unreadyHost.PoweredOff, $unreadyHost.HasScalingExclusion, $unreadyHost.ValidatedForImage -Level Trace
             }
         }
 
@@ -1033,6 +1042,7 @@ function Test-NewSessionHostsAvailable {
             TotalNewHosts = $newHosts.Count
             UnavailableHosts = $unreadyHosts
             SafeToProceed = $safeToProceed
+            ValidationUpdatesRequired = $validationUpdatesRequired
             Message = $message
         }
     }
@@ -1066,7 +1076,7 @@ function Test-NewSessionHostsAvailable {
                 FailedHealthCheckCount = $failedHealthChecks.Count
             }
             $unavailableHosts += $unavailableHost
-            Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Warning
+            Write-LogEntry -Message "Latest-image host is not ready: {0} | Status: {1} | AllowNewSession: {2} | FailedHealthChecks: {3}" -StringValues $hostName, $hostStatus, $unavailableHost.AllowNewSession, $unavailableHost.FailedHealthCheckCount -Level Trace
         }
     }
     
@@ -1094,9 +1104,9 @@ function Test-NewSessionHostsAvailable {
     Write-LogEntry -Message "NEW_HOST_VERIFICATION | Available: {0}/{1} ({2}%) | SafeToProceed: {3}" -StringValues $availableCount, $totalNewHosts, $availablePercentage, $safeToProceed
     
     if (-not $safeToProceed) {
-        Write-LogEntry -Message "WARNING: New session hosts are not ready - will skip removal of old hosts to preserve capacity" -Level Warning
+        Write-LogEntry -Message "New session hosts are not ready - removal of old hosts remains blocked to preserve capacity" -Level Trace
         foreach ($unavailable in $unavailableHosts) {
-            Write-LogEntry -Message "  - {0}: Status={1}" -StringValues $unavailable.SessionHostName, $unavailable.Status -Level Warning
+            Write-LogEntry -Message "  - {0}: Status={1}" -StringValues $unavailable.SessionHostName, $unavailable.Status -Level Trace
         }
     }
     
@@ -1107,6 +1117,7 @@ function Test-NewSessionHostsAvailable {
         AvailablePercentage  = $availablePercentage
         UnavailableHosts     = $unavailableHosts
         SafeToProceed        = $safeToProceed
+        ValidationUpdatesRequired = $validationUpdatesRequired
         Message              = $message
     }
 }

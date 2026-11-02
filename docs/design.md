@@ -51,23 +51,53 @@ any remaining DCR validation error rather than masking it with a fixed delay.
 
 ## Shared module contracts
 
-Session Host Replacer can opt into a timer-to-queue continuation design in the same Function App.
-The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#queue-continuation)
+Session Host Replacer uses one mandatory two-timer design in the same Function App: the configurable
+initiation schedule authorizes batches, and a fixed one-minute timer reconciles authorized work.
+The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#two-timer-execution)
 defines initiation authorization, immutable image selection, timer-authorized batch scope, conditional state ownership,
 idempotent deployment intent, deadlines and operator recovery. This is separate from application
 or image acceptance testing. SideBySide separates deployment readiness from old-host retirement:
 later scheduled batches can extend the same operation without waiting for prior drains, while
 retirement scope remains explicitly checkpointed and capacity-bounded. DeleteFirst keeps its
 retirement-before-redeployment gates. The canonical design owns the detailed coordination contract.
-The optional
-[prebuilt extension package](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
-keeps binary packaging outside ARM/Template Specs and leaves normal bundle deployment unchanged.
-Its `%TimerSchedule%` binding uses the same deployment-owned app setting as the normal timer,
-allowing a tagged release ZIP to be reused across deployments. The
-[release workflow](../.github/workflows/release-shr-package.yml) attaches that ZIP and its checksum
-without deploying Azure resources or overwriting existing assets.
-Use it only when approved target-cloud bundle endpoints are unavailable; enclave support must
-still be verified.
+Observability uses the durable operation ID as the cycle correlation key, distinct from native
+Application Insights invocation/operation IDs. Both timers emit compact start/outcome events;
+cycle events expose only allowlisted status, pinned image, batch, deployment resource identity,
+deadline, ownership and safe wait/stop reasons, never saved deployment bodies or raw saved errors.
+Existing engine messages retain their host-pool-first prefix and action suffix, with cycle/batch/
+trigger context inserted between them. The workbook joins native invocation telemetry for
+drill-down and separates timer health, cycle state and inventory freshness. Telemetry is
+last-reported evidence, not an authoritative live Table read; idle reconciliation must not
+reassociate completed cycles or make stale inventory look fresh. See the
+[correlation contract](../deployments/add-ons/sessionHostReplacer/logging-guide.md#cycle-correlation)
+and [operator tracing flow](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle).
+Normal logging keeps timer health, meaningful actions and one final active-pass cycle snapshot;
+internal checkpoints/progress, repeated setup and unchanged per-host observations are Trace.
+Existing dashboard snapshot records stay at Information. This avoids persistent deduplication
+state or blanket sampling, while stopped-state polling does not replay a saved failure as a new
+error. The logging guide owns the [severity and volume contract](../deployments/add-ons/sessionHostReplacer/logging-guide.md#normal-output-versus-diagnostics).
+For a pool without an active operation, a read-only timer preflight reuses the planner and readiness
+checks to avoid new operation writes when idle. The reconciler returns after an operation lookup
+when no work is active. Recovery, housekeeping
+and validation work still reach the worker, whose persisted lease, intent and fresh safety checks
+remain authoritative; the preflight never replaces an active operation's continuation path.
+For a rejected first SideBySide submission, the timer can
+[automatically supersede the failed attempt](../deployments/add-ons/sessionHostReplacer/README.md#automatic-recovery-of-a-rejected-template-submission)
+after a template-only correction and authoritative no-started-work checks. It archives the full
+failed state before an ETag-conditional terminal transition, preserves matching name reservations,
+and lets normal initiation create a fresh operation. Partial/ambiguous work remains stopped;
+the reconciliation timer cannot grant this recovery authority.
+The [operator recovery command](../deployments/add-ons/sessionHostReplacer/README.md#recover-a-stopped-operation)
+previews by default and requires confirmation for a backed-up, ETag-conditional recovery of the same
+operation. Correcting a rejected first SideBySide deployment's template reference is a narrowly
+checked migration of its saved link and fingerprint, not permission to rebase image, capacity,
+cleanup or identity configuration during an operation.
+Timer triggers are native to Functions; SHR needs no queue binding, extension bundle or prebuilt
+extension package. Blob host storage, Table state, managed identity and private connectivity remain
+required. The [upgrade procedure](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment)
+reuses the existing worker function name and durable state without resetting active operations.
+Incremental deployments can leave historical queue resources; cleanup is explicit and separate.
+Enclave runtime support must still be verified.
 
 Shared Bicep files under `deployments/shared/modules/` describe their purpose with
 `metadata name` and `metadata description`. Parameter and output descriptions

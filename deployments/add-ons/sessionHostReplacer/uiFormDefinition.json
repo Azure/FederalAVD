@@ -164,23 +164,13 @@
               }
             },
             {
-              "name": "enableQueueContinuation",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Enable Queue Continuation",
-              "toolTip": "Opt in to a timer scheduler and queue worker with bounded replacement cycles. Leave unchecked to preserve timer-only execution. Queue storage uses the Function App managed identity and private connectivity settings.",
-              "constraints": {
-                "required": false
-              }
-            },
-            {
               "name": "initiationEnabled",
               "type": "Microsoft.Common.DropDown",
               "label": "New Replacement Cycle Initiation",
               "defaultValue": "Enabled",
-              "visible": "[steps('replacerConfig').enableQueueContinuation]",
               "toolTip": "Pause new replacement cycles without stopping drain or repair work for an active continuation cycle. Save this setting in deployment parameters to preserve the hold on redeployment.",
               "constraints": {
-                "required": "[steps('replacerConfig').enableQueueContinuation]",
+                "required": true,
                 "allowedValues": [
                   { "label": "Enabled", "value": "true" },
                   { "label": "Paused", "value": "false" }
@@ -198,7 +188,7 @@
               "name": "scheduleInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "The function will run every 30 minutes during the selected hours on the selected days of the week.\n\nFor example, selecting 8 AM to 5 PM with Monday-Friday will run the function at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only.\n\nUse the Start Minute to offset the schedule (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
+                "text": "This schedule authorizes new replacement batches every 30 minutes during the selected hours and days. A separate reconciliation timer runs every minute to monitor and finish authorized work, including outside these hours.\n\nFor example, selecting 8 AM to 5 PM with Monday-Friday authorizes batches at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only.\n\nUse the Start Minute to offset initiation (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
                 "style": "Info"
               }
             },
@@ -2748,7 +2738,7 @@
               "name": "zeroTrustNetworkingInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "Private Networking for the Function App and Runtime Storage\n\nEnable private endpoints for the Function App and its Blob/Table runtime storage, with optional Queue storage. Public network access is selected independently below. Existing Key Vault access is not changed.\n\nThe Function App needs outbound virtual network integration to reach private resources, using a dedicated subnet with Microsoft.Web/serverFarms delegation. Configure private DNS and a working private access path before disabling public access. For centralized DNS, see the linked networking guidance.",
+                "text": "Private Networking for the Function App and Runtime Storage\n\nEnable private endpoints for the Function App and its Blob/Table runtime storage. SHR uses two timers and does not require Queue storage. Public network access is selected independently below. Existing Key Vault access is not changed.\n\nThe Function App needs outbound virtual network integration to reach private resources, using a dedicated subnet with Microsoft.Web/serverFarms delegation. Configure private DNS and a working private access path before disabling public access. For centralized DNS, see the linked networking guidance.",
                 "style": "Info",
                 "uri": "https://learn.microsoft.com/en-us/azure/azure-functions/functions-networking-options?tabs=azure-portal"
               }
@@ -2905,19 +2895,6 @@
               "constraints": {
                 "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
                 "required": true
-              }
-            },
-            {
-              "name": "azureQueuePrivateDnsZone",
-              "type": "Microsoft.Common.DropDown",
-              "defaultValue": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration, steps('replacerConfig').enableQueueContinuation, not(empty(steps('infrastructure').privateDNSZonesApi))), first(map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name)), '')]",
-              "visible": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration, steps('replacerConfig').enableQueueContinuation)]",
-              "label": "Azure Queue Storage",
-              "multiLine": true,
-              "toolTip": "Select the existing target-cloud Private DNS Zone for queue continuation storage. If DNS is managed by policy, disable Private DNS Zone Integration instead.",
-              "constraints": {
-                "allowedValues": "[map(filter(steps('infrastructure').privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]",
-                "required": "[and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration, steps('replacerConfig').enableQueueContinuation)]"
               }
             },
             {
@@ -3603,8 +3580,7 @@
         "templateSpecName": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'new'), steps('replacerConfig').templateSpecName, '')]",
         "templateSpecVersion": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'new'), steps('replacerConfig').templateSpecVersion, '1.0.0')]",
         "timerSchedule": "[concat('0 ', string(steps('replacerConfig').scheduleMinuteOffset), ',', string(add(steps('replacerConfig').scheduleMinuteOffset, 30)), ' ', if(equals(length(steps('replacerConfig').scheduleHours), 24), '*', replace(replace(replace(string(steps('replacerConfig').scheduleHours), '[', ''), ']', ''), '\"', '')), ' * * ', if(equals(length(steps('replacerConfig').scheduleDaysOfWeek), 7), '*', replace(replace(replace(string(steps('replacerConfig').scheduleDaysOfWeek), '[', ''), ']', ''), '\"', '')))]",
-        "enableQueueContinuation": "[steps('replacerConfig').enableQueueContinuation]",
-        "initiationEnabled": "[if(steps('replacerConfig').enableQueueContinuation, bool(steps('replacerConfig').initiationEnabled), true)]",
+        "initiationEnabled": "[bool(steps('replacerConfig').initiationEnabled)]",
         "replaceSessionHostOnNewImageVersionDelayDays": "[steps('replacerConfig').replaceSessionHostOnNewImageVersionDelayDays]",
         "allowImageVersionRollback": "[steps('replacerConfig').allowImageVersionRollback]",
         "includeExcludedImageVersions": "[steps('replacerConfig').includeExcludedImageVersions]",
@@ -3646,7 +3622,6 @@
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureFunctionAppPrivateDnsZone, '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureBlobPrivateDnsZone, '')]",
         "azureTablePrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration), steps('infrastructure').azureTablePrivateDnsZone, '')]",
-        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('infrastructure').configureZeroTrustNetworking, steps('infrastructure').enablePrivateDNSIntegration, steps('replacerConfig').enableQueueContinuation), steps('infrastructure').azureQueuePrivateDnsZone, '')]",
         "permittedIPs": "[filter(map(steps('infrastructure').permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
         "paasPublicNetworkAccess": "[steps('infrastructure').paasPublicNetworkAccess]",
         "identitySolution": "[if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('hosts').identity.machineIdentity, if(or(equals(steps('basics').hostPoolProps.properties.hostPoolType, 'Personal'), not(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts))), 'EntraId', steps('userProfiles').userIdentity))]",

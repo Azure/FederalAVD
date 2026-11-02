@@ -1093,17 +1093,28 @@ After restoration:
 The script intentionally does not drain or delete the bad-image generation, alter gallery versions,
 re-enable host automation, or restart the Function App.
 
-## Queue Continuation
+## Two-Timer Execution
 
-Queue continuation is **opt-in** (`enableQueueContinuation=false` by default). Enable it through
-a complete SHR deployment, not by changing only an app setting or uploading a script.
-See the [standard timer versus queue comparison](../../../docs/session-host-replacer.md#execution-approaches).
+SHR has one execution model: an initiation timer and a one-minute reconciliation timer.
+Deploy the complete SHR template; changing only an app setting or uploading one script does not
+install this model. See the [execution overview](../../../docs/session-host-replacer.md#execution-model).
 
 The existing `session-host-replacer` timer authorizes a replacement batch and selects an exact image.
-The `session-host-replacer-worker` queue function then monitors deployment, validates health, releases
+The `session-host-replacer-worker` reconciliation timer then monitors deployment, validates health, releases
 eligible hosts to autoscale and safely removes the approved old hosts without waiting for the next
-timer tick. It uses the same Function App, identity, storage account and lifecycle engine. Another
+initiation tick. It uses the same Function App, identity, storage account and lifecycle engine. Another
 batch still requires the initiation schedule. This is not a new image-validation add-on.
+
+When no operation is active, the timer first performs a read-only work assessment using the shared
+planner and readiness gates. An idle, healthy pool creates no operation.
+The minute reconciler performs only the operation lookup when no active work exists; it does not
+inventory the pool, select images or run the lifecycle engine. Pending capacity, validation,
+handoff, deployment or recovery work still reaches the worker.
+Maintenance requests and shutdown-retention inventory conservatively retain worker processing.
+Existing authorized operations resume on reconciliation ticks, independently of the initiation schedule.
+After deploying this behavior, verify a scheduled tick against an idle, validated pool logs
+`Host pool is idle` without a new operation. Then verify due capacity/image work
+starts a durable operation and active deployment/drain work continues between initiation ticks.
 
 In **SideBySide**, that next scheduled batch does not have to wait for the previous old hosts to
 finish draining. Once the previous replacements are healthy, registered and handed back to
@@ -1114,20 +1125,19 @@ ceiling of 10 can therefore deploy two batches while old hosts remain occupied, 
 the surge. **DeleteFirst** still completes the current retirement/redeployment batch first.
 See the [canonical deployment and retirement gates](replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
 
-See [queue sequencing and coordination](replacement-flow.md#queue-continuation) for operation scope,
+See [timer sequencing and coordination](replacement-flow.md#two-timer-execution) for operation scope,
 duplicate/crash handling, deadlines and lease behavior.
 
-### Queue Continuation Operations
+### Two-Timer Operations
 
-The normal deployment uses Microsoft's Functions extension bundle. Where that mechanism is not
-available, an optional [prebuilt extension package](deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
-can be built outside the enclave and transferred with SHR. Use it only when needed; enclave-local
-bundle endpoints may already be available, and target-cloud runtime support remains unverified.
+Timer triggers are native to the Functions runtime. SHR no longer uses a queue binding, extension
+bundle, prebuilt queue-extension package, queue endpoint or queue data-plane role.
+Blob host storage and Table state access remain required, including managed identity and private
+connectivity. Target-cloud runtime support still requires a live pilot.
 
-For rollout, first allow existing deployments, recovery and draining work to settle. Stop the app
-for the upgrade; redeploy the full SHR template with queue continuation enabled, then verify both
-functions load, the queue binding uses managed identity, and private queue connectivity works before
-resuming production. Do not switch between legacy and queue modes while a batch is active.
+Use the [upgrade procedure](deployment-guide.md#upgrading-an-existing-deployment) for existing apps.
+It preserves active durable operations rather than clearing them. The existing worker function name
+is retained and its binding is changed to a timer, so an old queue listener is not left alongside it.
 
 To hold **new batches** while allowing an active batch to finish, use the configuration helper:
 
@@ -1143,33 +1153,139 @@ wait for its lease to expire before continuing. Persist the matching `initiation
 for later redeployments. **Stopping the Function App stops both functions**; it does not cancel ARM
 deployments, undo drain/deletion or disable autoscale.
 
-Monitor `CONTINUATION |` logs, the operation's status/deadline, the `shr-continuation` queue and
-`shr-continuation-poison`. An expired deadline or unexpected failure leaves `NeedsAttention`; the
-timer does not silently start a replacement operation over it. Queue-function failures still use the
-Functions retry/poison mechanism; a persisted stopped operation must be recovered explicitly.
+Monitor `CONTINUATION |` logs and the operation's status/deadline. An expired deadline or unexpected
+failure leaves `NeedsAttention`.
+Partially executed or ambiguous work still requires explicit recovery. A corrected template reference
+can take the checked automatic path below; the timer never silently discards an active batch.
+Timer invocations do not use queue retries or poison handling. A transient failure before state
+ownership is acquired is retried by the next timer tick. An interrupted owner may delay progress
+until its 30-minute lease expires. Polling, restarts and leases mean one minute is a reconciliation
+cadence, not a completion-time guarantee.
 
-For operator recovery:
+### Automatic recovery of a rejected template submission
 
-1. Hold initiation, inspect the logged error, ARM deployment, AVD health/sessions and both state
-   tables. Correct connectivity, permissions or configuration first. Do not change image, mode,
-   target, cleanup or identity settings during a batch; those configuration changes stop it.
-2. Before editing state, stop the app and confirm the worker is no longer executing and its
-   `LockExpiresUtc` has passed. Preserve a restricted-access copy of the operation and deployment
-   recovery records. Check for ARM work still running.
-3. If continuing the same approved operation is safe, restore its initiating configuration. Use
-   an authorized Table client and the current ETag to change only the JSON state's `Status` to
-   `Running`, clear `LastError`/`LockOwner`, and, if necessary, set a newly approved future
-   `DeadlineUtc`. Preserve its ID, pinned image, batch names, deployment intent and recovery mappings.
-   Do not delete state or clear exclusions to bypass readiness.
-4. Restart the app, then invoke its existing timer through the approved operator procedure or wait
-   for the next tick to enqueue the same operation. Confirm progress and scaling handoff before
-   releasing initiation. If the operation cannot safely continue, use the established manual
-   recovery process rather than marking it complete.
+After deploying the updated SHR code, a wrong `SessionHostTemplate` reference does not normally
+require Table edits or a recovery script:
+
+1. In the Function App's **Environment variables** (app settings), correct `SessionHostTemplate` to
+   the **session-host VM Template Spec** resource ID, not the SHR infrastructure Template Spec.
+   Save the change. App-setting changes restart the app; another restart is not a state reset.
+2. Keep `InitiationEnabled=true` and wait for the next configured initiation invocation.
+   The minute reconciler does not authorize automatic supersession.
+3. Check Application Insights for `Superseded rejected operation` followed by a fresh operation
+   initiation (or the idle message if nothing remains to do).
+
+Persist the matching `sessionHostTemplateSpecResourceId` deployment parameter so a redeployment
+does not undo the correction. This is not a new Portal button or an HTTP recovery endpoint.
+
+The timer automatically replans only a **rejected first SideBySide deployment** with a saved
+validation/HTTP 400 failure, an expired worker lease, and proof that **only the template reference
+changed** among the protected settings. It checks both ARM's deployment inventory and the exact
+deployment lookup. It also verifies the original pinned template predates the attempt and could
+not accept the saved parameters; a generic HTTP 400 alone is not proof of submission rejection.
+It verifies that no planned replacement VM or AVD registration exists, and refuses
+missing/unhealthy/draining old batch hosts, pending cleanup/maintenance, and drain/retention/SHR-owned
+scaling-exclusion tags. Read failures and malformed inventory or recovery mappings fail closed.
+Accepted deployments, even failed ones, later batches, unchanged bad configuration, DeleteFirst,
+and other protected-setting changes still require explicit recovery.
+
+Name reservations are written before deployment submission. Reservations matching only the rejected
+request's target names and VM IDs are preserved for fresh planning; they are not erased or mistaken
+for proof that VMs were created. Other pending mappings block automatic replanning.
+
+Before replacing the active operation, SHR saves its complete failed state in the existing
+`shrContinuation` table under `<pool-key>-superseded-<operation-id>`, then conditionally marks the
+active row `Superseded` using its ETag. The next operation records `SupersedesOperationId` and uses
+fresh image selection, current settings, and a new initiation deadline. The old attempt is **not**
+marked completed. Crashes or conditional-write conflicts cannot authorize duplicate operations;
+the reconciler cannot resume a superseded attempt, even before the fresh operation is created.
+The archive contains deployment parameters and must receive the same restricted Table access as
+the active operation. The automatic supersession check never changes VM/AVD resources or clears recovery mappings;
+the fresh worker still applies the normal readiness, capacity and cleanup gates.
+
+### Recover a stopped operation
+
+For cases outside the automatic path, use
+[Repair-SessionHostReplacerOperation.ps1](Repair-SessionHostReplacerOperation.ps1) instead of
+editing Table entities by hand. Run it from the repository root in PowerShell **7.4 or later**,
+signed in through `Connect-AzAccount` to the Function App subscription. The operator needs Function
+App read/config-list/stop/start, deployment/VM/AVD/Template Spec read permissions, **Storage Table
+Data Contributor**, and network/DNS access to the private Table endpoint. A storage firewall or
+403 is a prerequisite failure, not a reason to enable public access or use account keys.
+
+**1. Preview.** Fix the original connectivity/permission problem or restore the initiating settings,
+then run:
+
+```powershell
+$recovery = @{
+    FunctionAppName = '<shr-name>'
+    ResourceGroupName = '<shr-resource-group>'
+}
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery
+```
+
+**2. Apply after reviewing the preview.** The command prompts before changing Azure:
+
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -Apply
+```
+
+Apply stops the app, rechecks the settings/operation/lease/deployments, backs up both state records
+to a new restricted-access folder under `customer/shr-recovery/`, conditionally updates the same
+operation using its ETag, verifies the exact saved state, and requests app startup. It does not
+delete state, create a different operation, or directly invoke either function.
+**The next minute reconciliation tick can resume work after startup**, independently of the
+initiation schedule.
+Normal health, capacity, image and cleanup gates remain in force. Confirm host startup, worker
+progress and scaling handoff in Application Insights; a successful state update is not proof of
+replacement completion.
+
+Backups include the saved deployment request and can contain credentials and registration tokens.
+Keep them private; do not attach them to issues, copy them into tracked folders, or commit them.
+Use `-BackupDirectory` to choose another approved local parent directory. `-WhatIf -Apply` performs
+the read-only checks without stopping the app, writing backups or changing state.
+
+#### Correcting a wrong session-host Template Spec
+
+If `SessionHostTemplate` pointed to the SHR infrastructure template instead of the **session-host
+VM template**, correct `sessionHostTemplateSpecResourceId` in the deployment parameters and the
+resulting app setting first. Prefer the
+[automatic timer reconciliation](#automatic-recovery-of-a-rejected-template-submission) above.
+The following explicit command remains available when a reviewed same-operation repair is needed;
+a restart alone does not clear the failed operation.
+
+Add **`-RepairTemplateReference` to both commands**:
+
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference
+.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference -Apply
+```
+
+This narrow repair requires the first SideBySide deployment, a saved validation/HTTP 400 failure,
+no ARM deployment record, no target VM or AVD registration, and proof that **only the template
+reference changed** among the fingerprinted settings. It resolves the corrected Template Spec using
+SHR's existing version-selection helper and checks that its parameter contract accepts the saved
+request. It changes only the saved template link and configuration fingerprint in addition to
+normal recovery fields. The pinned image, host names, request parameters, generation and progress
+remain intact. Expired credentials or registration tokens in the saved request need separate review.
+
+If the deadline expired, explicitly approve `-ExtendDeadlineHours 24` on both preview and apply.
+The command never extends a deadline silently.
+
+If any check fails, stop and inspect the error; do not delete the Table rows or mark the operation
+complete. Cleanup intents, unstarted batches, other configuration changes, and template repairs
+after deployment acceptance require manual recovery. After an apply failure, verify the app is
+stopped and inspect the backup/current state before retrying; successful writes are not rolled back.
+For manual recovery, hold initiation, stop the app, wait for the lease to expire, preserve restricted
+copies of both state records, and review ARM work, AVD health/sessions and the initiating configuration.
+Only resume the same approved operation with an ETag-conditional update after that review; preserve
+its ID, image, batch names, deployment intent and recovery mappings. Never clear exclusions to bypass
+readiness.
 
 Before production use, exercise a sparse initiation schedule, slow/unhealthy registration,
-duplicate messages, a worker crash after ARM acceptance, drain periods, scaling-phase changes,
-retention, an initiation hold and maintenance-window expiry in an isolated pool. Live queue identity,
-private DNS, Portal rendering and target-cloud extension availability require separate verification;
+concurrent timers, a worker crash after ARM acceptance, drain periods, scaling-phase changes,
+retention, an initiation hold and maintenance-window expiry in an isolated pool. Live managed identity,
+private Blob/Table DNS, Portal rendering and target-cloud runtime availability require separate verification;
 offline tests do not establish deployment success.
 
 For the SideBySide pilot, also keep users on the first old-host batch and verify that the next
@@ -1329,11 +1445,9 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB including seconds, stored in the `TimerSchedule` app setting used by both normal and prebuilt timer bindings. Default runs at :00 and :30. Changing the setting does not require rebuilding the ZIP; keep deployment parameters synchronized |
-| `enableQueueContinuation` | `false` | Opt into timer initiation plus a queue worker that completes the approved batch independently of the next timer tick. Requires queue storage connectivity |
-| `initiationEnabled` | `true` | With queue continuation, allow new timer-authorized batches. False still permits active-operation recovery and completion |
-| `continuationTimeoutHours` | `72` | Deadline for each newly initiated queue operation (1-720 hours). Set longer than the approved drain and provisioning horizon; does not extend an existing operation |
-| `azureQueuePrivateDnsZoneResourceId` | Empty | Existing cloud-appropriate Queue private DNS zone; follow the shared Function App zone-creation/reuse contract when private queue storage is enabled |
+| `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB for new batch initiation, stored in `TimerSchedule`. Default authorizes at :00 and :30. The separate reconciliation timer runs every minute; keep deployment parameters synchronized with app-setting changes |
+| `initiationEnabled` | `true` | Allow new timer-authorized batches. False still permits active-operation recovery and completion |
+| `continuationTimeoutHours` | `72` | Fixed deadline for each newly initiated operation (1-720 hours). Set longer than the approved drain and provisioning horizon; does not extend an existing operation |
 
 **Timer Schedule Examples**:
 
@@ -1972,7 +2086,8 @@ traces
 
 ### Monitoring Dashboard
 
-The Session Host Replacer includes a pre-built Azure Monitor Workbook that provides real-time visibility into automation status and host pool health.
+The Session Host Replacer includes a pre-built Azure Monitor Workbook that shows last-reported
+automation status, cycle progress and host inventory. It reads telemetry, not live operation state.
 
 **Access the Dashboard:**
 
@@ -1981,6 +2096,38 @@ The Session Host Replacer includes a pre-built Azure Monitor Workbook that provi
 3. Or open the resource group containing the selected Log Analytics workspace and select the
   **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
+
+#### Trace one replacement cycle
+
+1. Select the host pool and a time range that includes the cycle's initiation and latest progress.
+2. Select its **Cycle** ID. This is the durable SHR operation ID, shared across both timers and
+   successive invocations, not Application Insights' native operation ID.
+3. Read the cycle summary: status, activity/reason, batch, pinned image definition/version, target,
+   deadline, initiation hold, last observation and lease expiry. **Waiting** is not automatically
+   failure, and an individual engine action is not proof the cycle completed.
+4. Follow the chronological **cycle timeline**. It records authorization, deployment submission,
+   cycle snapshots, lease waits and terminal outcomes. Detailed checkpoints/internal progress
+   are diagnostic Trace events rather than repeated normal-level snapshots. **Open deployment** opens the
+   existing ARM deployment resource; it does not deploy anything.
+5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
+   follow the cycle across invocations. The timeline retains the whole selected cycle.
+
+The timer-health table separates **Initiation** from **Reconciliation** and shows their last
+observed starts, outcomes and failures. It does not mark sparse initiation schedules as delayed
+using a fixed 35/45-minute threshold. A started invocation with no observed completion is not
+silently treated as successful. The frequency chart counts both timers, including idle ticks.
+
+An owned **lease** means another invocation must wait; normal owners release it after work,
+while an interrupted owner may leave it until expiry. An expired lease permits checked takeover,
+not bypassing safety checks. Holding initiation prevents new batch authority but does not stop
+already authorized deployment monitoring or retirement. See [two-timer operations](#two-timer-operations).
+
+**Last Reported Inventory** has its own freshness panel: idle minute ticks are heartbeats, not
+fresh host inventories. Missing data, an old inventory, or an `UpToDate` action observation must
+not be read as proof that the current pool is healthy or that a cycle is complete. Sampling and
+ingestion delays can leave gaps; expand the time range and consult correlated logs before
+recovery. New cycle views require the updated function code and workbook; historical untyped
+logs are not backfilled. See [logging and correlation](logging-guide.md#cycle-correlation).
 
 **Dashboard Features:**
 

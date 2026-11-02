@@ -24,29 +24,19 @@ Each document has one purpose:
 The canonical flow document is authoritative when a lifecycle summary elsewhere conflicts with
 detailed replacement behavior.
 
-## Execution Approaches
+## Execution Model
 
-Choose how SHR progresses work independently of the replacement mode:
+SHR always uses two timers and one durable lifecycle engine, independently of replacement mode:
 
-| | Standard timer | Queue continuation |
+| Function | Schedule | Responsibility |
 | --- | --- | --- |
-| Execution | Timer invokes the lifecycle engine directly | Timer initiates; queue worker progresses the approved batch |
-| Pending deployment, health or cleanup work | Follow-up may wait for the next timer invocation | Worker schedules follow-up independently of the timer |
-| Schedule controls | Lifecycle invocations | New batch initiation; approved work can continue between ticks |
-| Further batches | Evaluated on timer invocations | Require another timer initiation |
-| Dependencies | Existing timer infrastructure | Adds queue binding, connectivity and extension requirements |
-| Default | Enabled | Opt-in with `enableQueueContinuation=true` |
+| Initiator | Existing configurable `timerSchedule` | Read-only idle assessment, exact image selection and new-batch authorization |
+| Reconciler | Every minute (`0 * * * * *`) | Monitor deployment, validate health, hand off to autoscale and safely clean up authorized work |
 
-Both approaches use the same health, capacity, drain and scaling safeguards. A timer schedule is
-not a hard execution window: it does not terminate work already running.
-
-### Optional Queue Continuation
-
-Set `enableQueueContinuation=true` to let the scheduled function hand an approved replacement batch
-to a queue-triggered function in the same app. Deployment monitoring, health validation, autoscale
-handoff and safe cleanup then continue without another timer tick. The worker pins the operation's
-image and batch; it does not authorize further batches or newer images outside the initiation
-schedule. Existing deployments remain timer-only unless explicitly opted in.
+The reconciler returns after an operation lookup when nothing is active. It cannot authorize itself
+or switch images mid-operation. Both timers share conditional state ownership and the same health,
+capacity, drain and scaling safeguards. There is no direct-timer or queue execution option.
+The initiation schedule is not a hard execution window: approved work continues outside it.
 
 For SideBySide, a later scheduled tick can authorize another deployment batch after the previous
 replacements are healthy and handed back to autoscale, even while their old hosts are still draining.
@@ -55,16 +45,15 @@ before deploying the next authorized batch. The pinned image, target and deadlin
 Batch-size and twice-target capacity ceilings still apply. DeleteFirst retains its stricter
 retirement-before-redeployment ordering. See the [deployment and retirement gates](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
 
-Use `initiationEnabled=false` to hold new queue batches without stopping active work. Stopping the
-entire app stops the worker too. See [operations and recovery](../deployments/add-ons/sessionHostReplacer/README.md#queue-continuation-operations)
-and the [coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#queue-continuation).
-
-The optional [prebuilt extension package](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
-is a code-delivery option for queue continuation, not a third execution approach or replacement mode.
+Use `initiationEnabled=false` to hold new batches without stopping active work. Stopping the
+entire app stops both timers. See [operations and recovery](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-operations)
+and the [coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#two-timer-execution).
+Existing apps require the [full-template upgrade](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment);
+do not reset active durable state. Timer triggers need no queue binding or extension package.
 
 ## Replacement Modes
 
-Both execution approaches support SideBySide and DeleteFirst.
+The same execution model supports SideBySide and DeleteFirst.
 
 ### SideBySide
 
@@ -112,9 +101,9 @@ window.
 - Does not use shutdown retention.
 - Fails closed if any shutdown-retention VM remains from a prior configuration.
 
-Notification delay is checked by lifecycle invocations. In timer-only mode, the default 30-minute
-schedule can delay forced sign-out by approximately another 30 minutes. Queue continuation checks
-an active batch independently; it does not shorten the configured notification/drain intervals.
+Notification delay is checked by reconciliation invocations for an active batch, independently of
+the initiation schedule. The minute cadence does not shorten configured notification/drain intervals
+or guarantee an exact sign-out time; running invocations, host restarts and leases can delay checks.
 
 See the [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
 for complete sequencing and failure behavior.
@@ -138,6 +127,8 @@ for complete sequencing and failure behavior.
   deletions, and finish with the appropriate VM-absence check. Clean allocations avoid repeated
   directory and AVD inventory reads.
 - Centralized Azure Monitor Workbook and alerting guidance.
+- [Cycle-first workbook tracing](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle)
+  across both timers, with native invocation drill-down, safe wait reasons and separate inventory freshness.
 - Validated operational-setting updates through
   [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).
 - Azure Commercial, Government, Secret, and Top Secret support.

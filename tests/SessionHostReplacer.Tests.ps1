@@ -651,7 +651,8 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         function Invoke-ReadinessCheck {
             param (
                 [array] $SessionHosts,
-                $ScalingPlanTarget
+                $ScalingPlanTarget,
+                [switch] $ReadOnly
             )
 
             Test-NewSessionHostsAvailable `
@@ -661,6 +662,7 @@ Describe 'Session Host Replacer scaling-aware readiness' {
                 -ScalingPlanTarget $ScalingPlanTarget `
                 -TagScalingPlanExclusionTag 'ScalingPlanExclusion' `
                 -TagValidatedImage 'AutoReplaceValidatedImage' `
+                -ReadOnly:$ReadOnly `
                 -ResourceManagerUri 'https://management.azure.com'
         }
     }
@@ -684,6 +686,27 @@ Describe 'Session Host Replacer scaling-aware readiness' {
         $result.TotalNewHosts | Should Be 0
         $result.AvailablePercentage | Should Be 0
         $result.Message | Should Be 'No latest-image hosts are available to verify'
+    }
+
+    It 'reports missing validation evidence without writing tags during read-only assessment' {
+        $hostEntry = New-ReadinessHost -Index 1
+        $result = Invoke-ReadinessCheck -SessionHosts @($hostEntry) -ReadOnly
+        $result.SafeToProceed | Should Be $true
+        $result.ValidationUpdatesRequired | Should Be $true
+        $hostEntry.Tags.Count | Should Be 0
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
+    }
+
+    It 'does not release scaling exclusions during read-only assessment' {
+        $hostEntry = New-ReadinessHost -Index 1 -Tags @{
+            AutoReplaceValidatedImage = $validatedImageToken
+            ScalingPlanExclusion = 'SessionHostReplacer'
+        }
+        $result = Invoke-ReadinessCheck -SessionHosts @($hostEntry) -ReadOnly `
+            -ScalingPlanTarget ([PSCustomObject]@{ Source = 'ScalingPlan'; CapacityPercentage = 100 })
+        $result.SafeToProceed | Should Be $false
+        $hostEntry.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
     }
 
     It 'counts validated stopped hosts as scalable standby for the shared mode-independent check' {

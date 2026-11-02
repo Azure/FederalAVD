@@ -21,7 +21,9 @@ function Get-DeploymentState {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName),
 
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+
+        [switch] $ReadOnly
     )
     
     try {
@@ -52,21 +54,23 @@ function Get-DeploymentState {
             'x-ms-date'     = [DateTime]::UtcNow.ToString('R')
         }
         
-        # Check if table exists, create if not
-        $tablesUri = "$tableEndpoint/Tables"
-        try {
-            $existingTables = Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Get -ContentType 'application/json' -ErrorAction SilentlyContinue
-            $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
-            
-            if (-not $tableExists) {
-                Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
-                $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
-                $headers['Content-Type'] = 'application/json'
-                Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
+        # A scheduler preflight must not initialize storage while checking for idle work.
+        if (-not $ReadOnly) {
+            $tablesUri = "$tableEndpoint/Tables"
+            try {
+                $existingTables = Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Get -ContentType 'application/json' -ErrorAction SilentlyContinue
+                $tableExists = $existingTables.value | Where-Object { $_.TableName -eq $tableName }
+
+                if (-not $tableExists) {
+                    Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
+                    $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
+                    $headers['Content-Type'] = 'application/json'
+                    Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
+                }
             }
-        }
-        catch {
-            Write-LogEntry -Message "Error checking/creating table: $_" -Level Warning
+            catch {
+                Write-LogEntry -Message "Error checking/creating table: $_" -Level Warning
+            }
         }
         
         # Query entity
@@ -122,6 +126,7 @@ function Get-DeploymentState {
     }
     catch {
         Write-LogEntry -Message "Failed to retrieve deployment state: $_" -Level Error
+        if ($ReadOnly) { throw }
         # Return default state on error
         return [PSCustomObject]@{
             LastDeploymentName       = ''
@@ -183,7 +188,7 @@ function Get-LastDeploymentStatus {
     )
 
     if ([string]::IsNullOrEmpty($DeploymentName)) {
-        Write-LogEntry -Message "No previous deployment name provided"
+        Write-LogEntry -Message "No previous deployment name provided" -Level Trace
         return $null
     }
 
@@ -211,7 +216,7 @@ function Get-LastDeploymentStatus {
                 Write-LogEntry -Message "Previous deployment failed with error: $($result.ErrorMessage)" -Level Warning
             }
             elseif ($result.Running) {
-                Write-LogEntry -Message "Previous deployment is still running" -Level Warning
+                Write-LogEntry -Message "Previous deployment is still running" -Level Trace
             }
             
             return $result
@@ -460,7 +465,7 @@ function Deploy-SessionHosts {
             $hoursRemaining = ($tokenExpiration - $currentTimeUtc).TotalHours
             
             if ($hoursRemaining -ge 2) {
-                Write-LogEntry -Message "Existing registration token is valid for {0:F1} more hours - reusing token" -StringValues $hoursRemaining
+                Write-LogEntry -Message "Existing registration token is valid for {0:F1} more hours - reusing token" -StringValues $hoursRemaining -Level Trace
                 $skipTokenGeneration = $true
             }
             else {
@@ -480,7 +485,7 @@ function Deploy-SessionHosts {
     
     # Generate new token if needed
     if (-not $skipTokenGeneration) {
-        Write-LogEntry -Message "Generating new registration token for host pool $HostPoolName in Resource Group $HostPoolResourceGroupName"
+        Write-LogEntry -Message "Generating new registration token for host pool $HostPoolName in Resource Group $HostPoolResourceGroupName" -Level Trace
         $Body = @{
             properties = @{
                 registrationInfo = @{
@@ -511,10 +516,10 @@ function Deploy-SessionHosts {
     }
 
     # Calculate Session Host Names
-    Write-LogEntry -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',')
+    Write-LogEntry -Message "Existing session host VM names: {0}" -StringValues ($ExistingSessionHostNames -join ',') -Level Trace
     
     if ($PreferredSessionHostNames -and $PreferredSessionHostNames.Count -gt 0) {
-        Write-LogEntry -Message "Preferred session host names for reuse: {0}" -StringValues ($PreferredSessionHostNames -join ',')
+        Write-LogEntry -Message "Preferred session host names for reuse: {0}" -StringValues ($PreferredSessionHostNames -join ',') -Level Trace
     }
     
     [array] $sessionHostNames = @()
@@ -575,7 +580,7 @@ function Deploy-SessionHosts {
     # Apply per-VM dedicated host properties if provided
     # Build arrays for dedicatedHostResourceId and dedicatedHostGroupResourceId indexed by VM
     if ($PreferredHostProperties.Count -gt 0) {
-        Write-LogEntry -Message "Applying per-VM dedicated host properties from mapping"
+        Write-LogEntry -Message "Applying per-VM dedicated host properties from mapping" -Level Trace
         
         $dedicatedHostIds = @()
         $dedicatedHostGroupIds = @()
@@ -644,8 +649,8 @@ function Deploy-SessionHosts {
     }
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines']['AutoReplaceDeploymentName'] = $deploymentName
     
-    Write-LogEntry -Message "Deployment name: $deploymentName"
-    Write-LogEntry -Message "Deploying using Template Spec: $sessionHostTemplate"
+    Write-LogEntry -Message "Deployment name: $deploymentName" -Level Trace
+    Write-LogEntry -Message "Deploying using Template Spec: $sessionHostTemplate" -Level Trace
     $templateSpecVersionResourceId = Get-TemplateSpecVersionResourceId -ARMToken $ARMToken -ResourceId $SessionHostTemplate
 
     Write-LogEntry -Message "Deploying $NewSessionHostsCount session host(s) to resource group $VirtualMachinesResourceGroupName" 
@@ -746,7 +751,7 @@ function Get-Deployments {
         [string] $HostPoolName = (Read-FunctionAppSetting HostPoolName)
     )
 
-    Write-LogEntry -Message "Getting deployments for resource group '$ResourceGroupName'"
+    Write-LogEntry -Message "Getting deployments for resource group '$ResourceGroupName'" -Level Trace
     $Uri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/?api-version=2021-04-01"
     $deployments = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $Uri -RequireCollection
     
@@ -879,13 +884,13 @@ function Get-TemplateSpecVersionResourceId {
             if ($versionsWithTime -and $versionsWithTime.Count -gt 0) {
                 # Sort by last modified time (most recent first)
                 $latestVersion = $versionsWithTime | Sort-Object -Property { [DateTime]$_.systemData.lastModifiedAt } -Descending | Select-Object -First 1
-                Write-LogEntry -Message "Latest version: $($latestVersion.name) Last modified at $($latestVersion.systemData.lastModifiedAt) - Returning Resource Id $($latestVersion.id)"
+                Write-LogEntry -Message "Latest version: $($latestVersion.name) Last modified at $($latestVersion.systemData.lastModifiedAt) - Returning Resource Id $($latestVersion.id)" -Level Trace
             }
             else {
                 # Fallback: if no versions have lastModifiedAt, use version name sorting (assumes semantic versioning)
                 Write-LogEntry -Message "No versions with systemData.lastModifiedAt found, sorting by version name" -Level Warning
                 $latestVersion = $templateSpecVersions | Sort-Object -Property name -Descending | Select-Object -First 1
-                Write-LogEntry -Message "Latest version: $($latestVersion.name) (sorted by name) - Returning Resource Id $($latestVersion.id)"
+                Write-LogEntry -Message "Latest version: $($latestVersion.name) (sorted by name) - Returning Resource Id $($latestVersion.id)" -Level Trace
             }
             
             return $latestVersion.id

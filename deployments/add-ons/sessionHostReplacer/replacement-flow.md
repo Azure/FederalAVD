@@ -2,18 +2,19 @@
 
 # Canonical Session Host Replacer Flow
 
-These diagrams describe one lifecycle-engine invocation. By default the timer invokes the engine.
-With opt-in queue continuation, the timer authorizes deployment batches and a queue-triggered worker
-progresses their deployment and retirement. A SideBySide operation can contain multiple scheduled
+These diagrams describe one lifecycle-engine invocation. The initiation timer authorizes deployment
+batches; a separate one-minute reconciliation timer progresses their deployment and retirement.
+There is one shared lifecycle engine and no alternate execution mode.
+A SideBySide operation can contain multiple scheduled
 deployment batches while previously selected old hosts continue draining.
 
 > **Canonical lifecycle reference:** This document owns the detailed replacement, readiness,
 > scaling-phase, and recovery behavior. The [add-on README](README.md) owns deployment,
 > configuration, monitoring, and troubleshooting guidance.
 
-## Queue Continuation
+## Two-Timer Execution
 
-Set `enableQueueContinuation=true` to separate initiation from progress. Both functions run in the
+Initiation is always separate from progress. Both functions run in the
 same Function App; there is no additional VM or Function App.
 
 ```mermaid
@@ -21,26 +22,45 @@ flowchart TD
     T[Scheduled timer] --> A{Active operation?}
     A -- Yes --> S{SideBySide deployment ready<br/>and more replacements needed?}
     S -- Yes --> P[If initiation enabled, persist<br/>next-batch authorization]
-    P --> Q[Enqueue existing operation ID]
-    S -- No --> Q
+    P --> X[Finish initiation tick]
+    S -- No --> X
     A -- No --> H{Initiation enabled?}
     H -- No --> X[Finish without new work]
-    H -- Yes --> I[Select exact image and persist authorization]
-    I --> Q
-    Q --> W[Queue worker acquires conditional per-pool lease]
+    H -- Yes --> I[Select exact image and assess work read-only]
+    I --> N{Pool idle?}
+    N -- Yes --> X
+    N -- No --> O[Persist authorization]
+    O --> X
+    R[Every-minute reconciliation timer] --> L{Active authorized operation?}
+    L -- No --> Z[Return after operation lookup]
+    L -- Yes --> W[Worker acquires conditional per-pool lease]
     W --> B[Checkpoint approved batch and deployment intent]
     B --> E[Run bounded lifecycle step]
     E --> C{Health, scaling handoff and cleanup complete?}
-    C -- No --> D[Enqueue delayed continuation and exit]
-    D --> W
+    C -- No --> D[Checkpoint and return;<br/>next reconciliation tick resumes]
     C -- Yes --> F[Complete authorized work;<br/>further batches require timer]
 ```
 
 The timer selects the image using the existing replication, exclusion, rollback and publication-age
 policies; age is enforced again by planning. The worker does not switch to a newer publication.
 Initial authorization expires after five minutes if no batch checkpoint has been established.
-This prevents a stale queued initiation from starting a replacement hours later. Once a batch has
+This prevents a delayed initiation from starting a replacement hours later. Once a batch has
 started, its progress is independent of the initiation schedule.
+
+With no active operation, the timer uses the shared replacement planner and readiness checks in
+read-only mode before persisting authorization. An idle, healthy pool creates no operation.
+The reconciliation timer still fires, but returns after its operation lookup without running the engine.
+The initiation preflight still requires Azure
+inventory, deployment, image and readiness reads; it is not an image-version-only cache.
+Active operations always bypass this idle check and retain their existing progress/recovery path.
+
+Capacity differences, image-policy work, unhealthy or draining hosts, recovery mappings, deployment
+tracking, missing validation evidence and SHR-owned scaling exclusions require worker processing.
+Maintenance requests and any shutdown-retention tags conservatively use the worker, including
+unregistered retained VMs, so cleanup and tag/power-state repair cannot be skipped.
+Configured host-tag repairs also require the worker. Read failures surface as errors, not an idle
+result. The worker refreshes inventory and rechecks every lifecycle guard; the preflight does not
+authorize mutations or relax readiness, including the active-scaling-plan requirement for standby.
 
 The first worker step checkpoints the selected old-host names, deployment ceiling and pool target.
 Subsequent planning uses the full inventory for capacity safety but restricts retirement to the
@@ -81,24 +101,24 @@ progressive batching; the planner retains its twice-target temporary-capacity ce
   also prevents consumption of unstarted authorizations. State updates use the returned ETag, never
   wildcard replacement. Deploy only one SHR Function App per pool; separate storage accounts cannot
   coordinate ownership.
-- Timer retries and duplicate queue messages resume the same operation. The worker acquires a
+- Reconciliation ticks resume the same operation without creating a new image or batch authorization.
+  The worker acquires a
   30-minute lease using a conditional entity update. Mutating ARM/Graph calls and recovery-state
   writes check ownership and deadlines. The host timeout is ten minutes; the engine yields before
   further mutations at its eight-minute budget. A crash can delay recovery until lease expiry.
 - Cleanup checkpoints retain exact hostnames, VM resource IDs, authorized VM-deletion waits and
   directory-removal flags. A worker performs one verification pass without a polling sleep,
-  then yields if deletion is still pending. The next generation replays that cleanup before
+  then yields if deletion is still pending. The next reconciliation tick replays that cleanup before
   inventory/planning, even when a deleted VM has disappeared from inventory. Names remain
   blocked until VM, registration and required directory absence is verified. Initial batch
   authorization is not extended by completing previously authorized cleanup.
-  Timer-only mode retains its bounded ten-minute, thirty-second polling behavior.
-- A persisted generation counter makes already-processed messages and their watchdogs obsolete.
-  The successor is enqueued before advancing its generation; an early successor waits for the
-  prior checkpoint. Duplicate delivery therefore does not multiply long-lived continuation chains.
-- A delayed ten-minute watchdog is enqueued before lifecycle side effects. Normal waiting queues
-  another message with a two-minute visibility delay and returns successfully. Provisioning, health
-  and drain waits therefore do not consume poison retries. Polling, platform restarts and leases
-  mean these are delays, not completion-time guarantees.
+- The minute timer supplies the next wake-up; no message, generation advancement or watchdog is
+  required before side effects. The operation lease and intent are persisted before mutations.
+  No operation, `Completed` and `Superseded` return without running the engine; `NeedsAttention`
+  remains stopped. Transient state-read/acquisition failures are retried on a later tick.
+  Different timer functions can overlap, so the shared ETag lease and companion authorization row
+  remain necessary. The same timer does not run overlapping invocations across scaled instances.
+  Polling, platform restarts and leases mean the cadence is not a completion-time guarantee.
 - The deployment intent is saved before ARM submission. Its deterministic `shr_<operation-id>`
   name, exact hostnames, Template Spec version and request body are reused after an interruption.
   Later SideBySide batches use `shr_<operation-id>_bN`, retaining the original deployment history.
@@ -109,9 +129,24 @@ progressive batching; the planner retains its twice-target temporary-capacity ce
   placement remains keyed by exact hostname. Invalid ARM deployment collection envelopes fail
   closed rather than being interpreted as an empty deployment list.
 - The deadline is established once (`continuationTimeoutHours`, default 72, range 1-720); new
-  messages and additional SideBySide batches do not reset it. Unexpected failures, changed initiating configuration and expired
+  reconciliation ticks and additional SideBySide batches do not reset it. Unexpected failures, changed initiating configuration and expired
   deadlines stop in `NeedsAttention`, retaining the batch, pins and recovery information.
-  See the [operator recovery procedure](README.md#queue-continuation-operations).
+  At an enabled initiation tick, a rejected first SideBySide submission can be automatically
+  superseded after a template-only correction. The timer proves the protected settings otherwise
+  match, the lease expired, the unchanged original template could not accept the saved parameters,
+  ARM recorded no work, the targets do not exist, and old batch hosts
+  remain healthy/accepting with no drain, retention or handoff work. Only exact matching prepared
+  name reservations can remain; no mappings are cleared. Unknown state and failed reads block it.
+  The complete failed operation is archived at `<pool-key>-superseded-<operation-id>` before an
+  ETag-conditional transition to `Superseded`. A fresh timer-authorized operation selects its own
+  image/deadline and records the superseded ID. `Superseded` is terminal for reconciliation;
+  archive conflicts, timer races and crashes do not bypass ownership. See
+  [automatic recovery](README.md#automatic-recovery-of-a-rejected-template-submission).
+  See the [preview-first recovery command](README.md#recover-a-stopped-operation).
+  Explicit recovery preserves the operation and its pins. Its only supported configuration rebase is an
+  explicit template-reference repair for a rejected first SideBySide submission, with no deployment
+  record or target VM/registration and a fingerprint proving no other protected setting changed.
+  Active deployments, live leases and pending cleanup cannot be bypassed by the command.
 - Operation state contains deployment parameters. Protect Table data access as carefully as
   Function App configuration; do not copy entity contents into public diagnostics. Oversized
   checkpoints fail explicitly. Reduce batch size rather than discarding state.
@@ -126,7 +161,7 @@ flowchart TD
     A[Lifecycle invocation: timer or worker] --> B["Load configured mode,<br/>request, and durable state"]
     B --> R{"Active maintenance<br/>request?"}
     R -- Yes --> MW[Maintenance override flow]
-    R -- No --> C["Resolve selected image:<br/>pinned for queue operation"]
+    R -- No --> C["Resolve selected image:<br/>pinned for durable operation"]
     C --> D["Inventory session hosts<br/>and active deployments"]
     D --> E["Evaluate enabled scaling plan<br/>and active schedule"]
     E --> F["Build replacement<br/>plan"]

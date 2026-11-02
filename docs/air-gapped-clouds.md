@@ -501,43 +501,28 @@ network requirements, required URLs, and installer permalinks:
 - **[Azure Government Secret AVD Service Documentation](https://review.learn.microsoft.com/en-us/microsoft-government-secret/azure/azure-government-secret/services/virtual-desktop-infrastructure/virtual-desktop?branch=live)** - Includes required endpoints and AVD Agent installer download URLs
 - **[Azure Government Top Secret AVD Service Documentation](https://review.learn.microsoft.com/en-us/microsoft-government-topsecret/azure/azure-government-top-secret/services/virtual-desktop-infrastructure/virtual-desktop?branch=live)** - Includes required endpoints and AVD Agent installer download URLs
 
-### SHR Queue Continuation Prerequisites
+### SHR Two-Timer Prerequisites
 
-SHR remains timer-only unless `enableQueueContinuation=true`. Enabling it introduces a Queue
-Storage trigger and runtime queue data-plane access in addition to the existing blob/table paths.
-Do not infer availability in Secret or Top Secret from a successful Commercial deployment.
+SHR uses native initiation and reconciliation timers. The
+[Functions runtime natively supports timer triggers](https://learn.microsoft.com/en-us/azure/azure-functions/functions-bindings-register);
+SHR no longer needs a Queue binding, Queue endpoint/private DNS, extension bundle download or
+prebuilt queue-extension package. This removes that transport dependency, not the underlying
+Functions, identity, Blob/Table or management-plane dependencies.
+Do not infer Secret or Top Secret availability from a successful Commercial deployment.
 
-| Dependency | Disposition before enabling in the target enclave |
+| Inventory group | Required content or local verification |
 | --- | --- |
-| Queue service and identity-based Functions queue trigger | Confirm the service, binding/extension version and managed-identity connection are supported by the enclave's Functions runtime |
-| Queue data endpoint | Use the deployed account's configured Queue service URI; verify approved routing, firewall rules and data-plane RBAC |
-| Queue private endpoint/DNS | Create or reuse the cloud-authoritative queue zone, link it to the resolver serving the Function App, and verify private resolution; blob/table DNS alone is insufficient |
-| Functions Storage extension / extension bundle | First verify the enclave's normal bundle mechanism, including any approved local equivalent endpoints. If unavailable, build and transfer the optional [prebuilt SHR package](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#option-2-optional-prebuilt-queue-extension-package); a Bicep build does not package or prove availability of runtime extensions |
-| Worker and shared runtime code | Transfer the repository/template release containing both functions and the updated modules; a timer-script-only upload is insufficient |
+| Manually staged | Matching repository/template release, generated ARM, Portal form and complete SHR shared code/modules; no separate queue-extension ZIP or NuGet restore is required |
+| Internally deployed | Full Template Spec or PowerShell deployment using approved management endpoints; preserve both timer bindings and the exact code release |
+| Platform/runtime | Confirm the enclave supports the selected Functions/PowerShell version, native timer indexing and Blob-backed timer coordination |
+| Identity and private connectivity | Verify managed identity, approved Azure management/Graph/Key Vault endpoints, private Blob/Table DNS/routing and data-plane roles |
+| Durable state | Verify conditional Table writes, retained operation/recovery rows and Blob host locks; do not delete state during migration |
+| Unresolved until tested locally | Cold restart, worker interruption/lease expiry, sparse-schedule progression, idle lookup behavior, safe cleanup and Portal rendering |
 
-These are additional items for the deployment's transfer/dependency inventory, not new software
-entries in the image artifacts manifest. Enclave-specific extension sourcing and service availability
-remain **unresolved until verified locally**. Keep continuation disabled when those checks cannot be
-completed. See [SHR rollout and recovery](../deployments/add-ons/sessionHostReplacer/README.md#queue-continuation-operations).
-
-#### Optional SHR Package Transfer Inventory
-
-Prebuilding is a fallback, not a claim that Secret or Top Secret lacks extension bundles. Prefer
-approved enclave-provided endpoints when they work. Download the matching release ZIP and checksum,
-or build on a workstation with approved package access. Transfer the ready-to-run ZIP, not NuGet
-restore instructions. See the [release/download procedure](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#download-a-release-package).
-
-| Group | Source/content | Transfer or target disposition |
-| --- | --- | --- |
-| Reachable outside the enclave | GitHub release assets, or .NET SDK 8 or later and configured NuGet sources for a custom build | Release downloads require no local SDK or package restore. For custom builds, an approved feed can provide the complete dependency graph |
-| Build inputs | `Microsoft.NET.Sdk.Functions` 4.6.0 and `Microsoft.Azure.WebJobs.Extensions.Storage.Queues` 5.3.5 by default, plus restored transitive dependencies | Compiled with the repository code by `New-SessionHostReplacerPackage.ps1`; inspect/approve the resulting release artifact |
-| Manually staged | `customer/packages/SessionHostReplacer.zip` and release `.sha256` (or a local build's recorded hash), containing code, bindings, extension binaries/dependencies, registration and `shr-package.json` | Transfer and verify the hash before deployment. The ZIP contains no deployment-specific schedule; the template populates `TimerSchedule`. No external bundle or NuGet URL is embedded in the packaged host configuration |
-| Internally deployed | Transferred ZIP | Upload through the target Function App's approved SCM endpoint with remote build disabled, after full template provisioning. Reapply after template redeployments |
-| Unresolved until verified | Enclave Functions host compatibility, Queue service/identity support, SCM access, private DNS/routing and cold-start/worker-replacement behavior | Run the isolated pilot and runtime checks in the target enclave. A connected-side build is not deployment evidence |
-
-This inventory is separate from image-management `downloads.json` and image artifacts. The current
-SHR PowerShell requirements file is empty; the builder rejects added managed dependencies until
-their offline packaging is addressed. Existing API/platform dependencies remain unchanged.
+These are platform/code-transfer prerequisites, separate from image-management `downloads.json`.
+The current SHR PowerShell requirements file is empty; future managed dependencies require their
+own approved offline sourcing. Do not deploy until unresolved target-cloud checks are completed.
+See [upgrade and live validation](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment).
 
 ### Private Endpoint DNS
 
