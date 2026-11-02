@@ -66,7 +66,17 @@ function Invoke-OrchestrationCycle {
     param ([int] $RunNumber)
 
     $global:shrSimulation.RunNumber = $RunNumber
-    & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false })
+    if (-not $global:shrSimulation.Context) {
+        $global:shrSimulation.Context = @{
+            Id = 'orchestration-test'
+            Image = $null
+            BatchHostNames = $null
+            InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+        }
+    }
+    $global:shrSimulation.CycleResult = @{ Completed = $false }
+    & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+        -ContinuationContext $global:shrSimulation.Context -CycleResult $global:shrSimulation.CycleResult
 }
 
 Describe 'Session Host Replacer deterministic orchestration failures' {
@@ -86,7 +96,16 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             }
             Hosts = @(1..2 | ForEach-Object { New-OrchestrationTestHost -Name "avd-0$_" })
             DeploymentState = New-OrchestrationDeploymentState
-            Plan = $null
+            Plan = [PSCustomObject]@{
+                PossibleDeploymentsCount = 0
+                PossibleSessionHostDeleteCount = 0
+                SessionHostsPendingDelete = @()
+                ExistingSessionHostNames = @('avd-01', 'avd-02')
+                TargetSessionHostCount = 2
+                TotalSessionHostsToReplace = 0
+                TotalFleetSessionHostsToReplace = 0
+                ReplacementCandidates = @()
+            }
             Readiness = [PSCustomObject]@{
                 TotalNewHosts = 0
                 AvailableCount = 0
@@ -179,6 +198,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             })
         }
         Mock Get-SessionHosts { @($global:shrSimulation.Hosts) }
+        Mock Save-ShrContinuationCheckpoint {}
         Mock Get-DeploymentState { Copy-OrchestrationValue $global:shrSimulation.DeploymentState }
         Mock Save-DeploymentState {
             param ($DeploymentState, [switch] $RequireSuccess)
@@ -208,6 +228,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             param ($DeploymentName)
             $status = $global:shrSimulation.DeploymentStatuses[$global:shrSimulation.RunNumber]
             if (-not $status) { return $null }
+            if ($status -isnot [string]) { return $status }
             [PSCustomObject]@{
                 Succeeded = $status -eq 'Succeeded'
                 Failed = $status -eq 'Failed'
@@ -219,7 +240,16 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Mock Get-ScalingPlanCurrentTarget {
             $global:shrSimulation.ScalingPlanTarget
         }
-        Mock Get-SessionHostReplacementPlan { $global:shrSimulation.Plan }
+        Mock Get-SessionHostReplacementPlan {
+            $plan = $global:shrSimulation.Plan
+            if ($plan -and -not $plan.PSObject.Properties['ReplacementCandidates']) {
+                $plan | Add-Member NoteProperty ReplacementCandidates @($global:shrSimulation.Hosts)
+            }
+            if ($plan -and -not $plan.PSObject.Properties['TotalFleetSessionHostsToReplace']) {
+                $plan | Add-Member NoteProperty TotalFleetSessionHostsToReplace $plan.TotalSessionHostsToReplace
+            }
+            $plan
+        }
         Mock Test-NewSessionHostsAvailable { $global:shrSimulation.Readiness }
         Mock Get-SessionHostDeletionSafety {
             param (
@@ -256,6 +286,16 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 $SessionHostParameters,
                 [switch]$WaitForVMDeletion
             )
+            $intent = $global:shrSimulation.Context.DeploymentIntent
+            $status = $global:shrSimulation.DeploymentStatuses[$global:shrSimulation.RunNumber]
+            if ($intent -and ($status -eq 'Succeeded' -or $status.Succeeded)) {
+                # A durable accepted deployment waits for registration instead of submitting another PUT.
+                return [PSCustomObject]@{
+                    DeploymentName = $intent.Name
+                    SessionHostNames = @($intent.HostNames)
+                    SessionHostCount = @($intent.HostNames).Count
+                }
+            }
             $names = if ($PreferredSessionHostNames) { @($PreferredSessionHostNames) }
             elseif ($global:shrSimulation.DeploymentState.PendingHostMappings -ne '{}') {
                 @(($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).PSObject.Properties.Name |
@@ -792,12 +832,31 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
     It 'SideBySide waits for live AVD registration after ARM succeeds without redeploying or deleting' {
         $global:shrSimulation.DeploymentState.LastDeploymentName = 'deployment-previous'
         $global:shrSimulation.DeploymentState.PendingHostMappings = '{"avd-03":{"ResourceId":"/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-03"}}'
+        $global:shrSimulation.Context = @{
+            Id = 'accepted-deployment'
+            Image = @{ Definition = $global:shrSimulation.LatestImage.Definition; Version = '2.0.0'; Date = '2026-09-01T00:00:00Z' }
+            BatchHostNames = @('avd-01')
+            BatchDeploymentLimit = 1
+            DeploymentIntent = @{ Name = 'deployment-previous'; HostNames = @('avd-03') }
+            DeploymentHostNames = @('avd-03')
+        }
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 1
+            PossibleSessionHostDeleteCount = 1
+            SessionHostsPendingDelete = @($global:shrSimulation.Hosts[0])
+            ExistingSessionHostNames = @($global:shrSimulation.Hosts.SessionHostName)
+            TargetSessionHostCount = 2
+            TotalSessionHostsToReplace = 1
+        }
         $global:shrSimulation.DeploymentStatuses[1] = [PSCustomObject]@{
             Succeeded = $true; Failed = $false; Running = $false; ProvisioningState = 'Succeeded'
         }
         Invoke-OrchestrationCycle -RunNumber 1
         $global:shrSimulation.DeploymentCalls.Count | Should Be 0
         $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.VerificationCalls.Count | Should Be 0
+        $global:shrSimulation.CycleResult.Completed | Should Be $false
+        $global:shrSimulation.Context.DeploymentIntent.Name | Should Be 'deployment-previous'
         ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-03'.ResourceId |
             Should Not BeNullOrEmpty
     }

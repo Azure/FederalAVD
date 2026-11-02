@@ -146,7 +146,8 @@ function Remove-ExpiredShutdownVMs {
         }
         catch {
             Write-LogEntry -Message "Failed to clean up shutdown VM $vmName : $($_.Exception.Message)" -Level Error
-            if ($deletedHosts.Count -gt 0) {
+            $worker = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+            if ($deletedHosts.Count -gt 0 -and -not $worker) {
                 Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
                     -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
                     -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
@@ -500,7 +501,8 @@ function Remove-SessionHosts {
                     Reason          = $_.Exception.Message
                 }
                 Write-LogEntry -Message "Failed to delete session host $($sessionHost.SessionHostName): $($_.Exception.Message); batch is blocked." -Level Error
-                if (-not $DeferDeviceCleanup -and $deletedHosts.Count -gt 0) {
+                $worker = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+                if (-not $DeferDeviceCleanup -and $deletedHosts.Count -gt 0 -and -not $worker) {
                     Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
                         -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
                         -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $ResourceGroupName `
@@ -603,14 +605,6 @@ function Remove-VirtualMachine {
         }
     }
     
-    # Remove from host pool if FQDN is known
-    if (-not [string]::IsNullOrEmpty($FQDN)) {
-        Write-LogEntry -Message "Removing session host $FQDN from host pool $HostPoolName" -Level Trace
-        $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$FQDN`?api-version=2024-04-03"
-        [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)
-        Write-LogEntry -Message "Removed $VMName from host pool" -Level Trace
-    }
-    
     # Extract hostname from FQDN for device cleanup (Entra ID/Intune use hostname, not VM resource name)
     $deviceName = if (-not [string]::IsNullOrEmpty($FQDN)) {
         $FQDN.Split('.')[0]  # Get hostname from FQDN (e.g., "avdtest29use207" from "avdtest29use207.domain.com")
@@ -623,11 +617,48 @@ function Remove-VirtualMachine {
     }
     
     Write-LogEntry -Message "Using device name '$deviceName' for Entra ID/Intune cleanup" -Level Trace
-    
+
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation) {
+        $pending = $continuation.CleanupIntent
+        $hosts = @($pending.Hosts | Where-Object { $_ })
+        $existing = @($hosts | Where-Object { $_.ResourceId -ieq $VMId })
+        if ($existing.Count -gt 0 -and $existing[0].SessionHostName -ine $deviceName) {
+            throw "Retirement computer name changed for '$VMId'; cleanup is blocked."
+        }
+        if ($existing.Count -eq 0) {
+            $hosts += @{ SessionHostName = $deviceName; ResourceId = $VMId }
+        }
+        $continuation.CleanupIntent = @{
+            Hosts = $hosts
+            VMDeletions = @(@($pending.VMDeletions | Where-Object { $_ }) + $VMId | Select-Object -Unique)
+            WaitForVMDeletion = $true
+            RemoveEntraDevice = $RemoveEntraDevice -or [bool]$pending.RemoveEntraDevice
+            RemoveIntuneDevice = $RemoveIntuneDevice -or [bool]$pending.RemoveIntuneDevice
+        }
+        Save-ShrContinuationCheckpoint
+    }
+
+    # Persist retirement before removing the registration that makes this VM discoverable.
+    if (-not [string]::IsNullOrEmpty($FQDN)) {
+        Write-LogEntry -Message "Removing session host $FQDN from host pool $HostPoolName" -Level Trace
+        $Uri = "$ResourceManagerUri/subscriptions/$HostPoolSubscriptionId/resourceGroups/$HostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$HostPoolName/sessionHosts/$FQDN`?api-version=2024-04-03"
+        try {
+            [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method DELETE -Uri $Uri)
+        } catch {
+            if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+        }
+        Write-LogEntry -Message "Removed $VMName from host pool" -Level Trace
+    }
+
     # Delete the VM
     Write-LogEntry -Message "Deleting VM: $VMId" -Level Trace
     $Uri = "$ResourceManagerUri$VMId`?forceDeletion=true&api-version=2024-07-01"
-    [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
+    try {
+        [void](Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'DELETE' -Uri $Uri)
+    } catch {
+        if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+    }
     $deletedHost = [PSCustomObject]@{ SessionHostName = $deviceName; ResourceId = $VMId }
     if ($DeferCleanup) { return $deletedHost }
     Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts @($deletedHost) -WaitForVMDeletion `

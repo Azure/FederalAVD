@@ -554,18 +554,26 @@ function Get-ShrWorkerState {
     if ($script:WorkerContext) { return $script:WorkerContext.Operation.State }
 }
 
-function Assert-ShrWorkerLease {
-    if (-not $script:WorkerContext) { return }
-    $now = [DateTimeOffset]::UtcNow
+function Assert-ShrWorkerDeadlines {
+    param([DateTimeOffset] $Now)
+
     $state = $script:WorkerContext.Operation.State
-    if ($now -ge [DateTimeOffset]$state.DeadlineUtc) {
+    if ($Now -ge [DateTimeOffset]$state.DeadlineUtc) {
         throw 'SHR operation deadline expired; no further mutations are permitted.'
     }
-    if ($now -ge $script:WorkerContext.InvocationDeadline) {
+    if ($Now -ge $script:WorkerContext.InvocationDeadline) {
         $script:WorkerContext.YieldRequested = $true
         throw [TimeoutException]::new('SHR invocation budget reached; continuation will resume from persisted state.')
     }
+}
+
+function Assert-ShrWorkerLease {
+    if (-not $script:WorkerContext) { return }
+    Assert-ShrWorkerDeadlines -Now ([DateTimeOffset]::UtcNow)
+    $state = $script:WorkerContext.Operation.State
     $current = Get-ShrOperation
+    $now = [DateTimeOffset]::UtcNow
+    Assert-ShrWorkerDeadlines -Now $now
     if (-not $current -or $current.State.Id -ne $state.Id -or
         $current.State.LockOwner -ne $state.LockOwner -or
         [DateTimeOffset]$current.State.LockExpiresUtc -le $now) {
@@ -725,6 +733,30 @@ function Invoke-ShrContinuation {
             if ($operation.State.CleanupIntent) {
                 $cleanup = $operation.State.CleanupIntent
                 $armToken = Get-AccessToken -ResourceUri (Get-ResourceManagerUri)
+                foreach ($resourceId in @($cleanup.VMDeletions | Where-Object { $_ })) {
+                    Assert-ShrWorkerLease
+                    if ($resourceId -notin @($cleanup.Hosts.ResourceId)) {
+                        throw 'Retirement VM is not included in the checkpointed cleanup hosts.'
+                    }
+                    $vmUri = "$(Get-ResourceManagerUri)$resourceId`?api-version=2024-07-01"
+                    try {
+                        $vm = Invoke-AzureRestMethod -ARMToken $armToken -Method GET -Uri $vmUri
+                    } catch {
+                        if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+                        continue
+                    }
+                    if (-not $vm -or $vm.id -ine $resourceId) {
+                        throw 'Retirement VM lookup did not return the checkpointed resource.'
+                    }
+                    if ($vm.properties.provisioningState -ne 'Deleting') {
+                        try {
+                            Invoke-AzureRestMethod -ARMToken $armToken -Method DELETE `
+                                -Uri "$(Get-ResourceManagerUri)$resourceId`?forceDeletion=true&api-version=2024-07-01" | Out-Null
+                        } catch {
+                            if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+                        }
+                    }
+                }
                 Assert-SessionHostNamesAvailable -ARMToken $armToken `
                     -SessionHosts @($cleanup.Hosts | ForEach-Object { [PSCustomObject]$_ }) `
                     -WaitForVMDeletion:([bool]$cleanup.WaitForVMDeletion) `

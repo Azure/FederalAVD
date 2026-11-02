@@ -104,10 +104,15 @@ progressive batching; the planner retains its twice-target temporary-capacity ce
 - Reconciliation ticks resume the same operation without creating a new image or batch authorization.
   The worker acquires a
   30-minute lease using a conditional entity update. Mutating ARM/Graph calls and recovery-state
-  writes check ownership and deadlines. The host timeout is ten minutes; the engine yields before
+  writes check ownership and deadlines. Deadline checks run both before and after the ownership
+  read, and Graph endpoint fallback and recovery-state writes recheck immediately before mutation.
+  The host timeout is ten minutes; the engine yields before
   further mutations at its eight-minute budget. A crash can delay recovery until lease expiry.
-- Cleanup checkpoints retain exact hostnames, VM resource IDs, authorized VM-deletion waits and
-  directory-removal flags. A worker performs one verification pass without a polling sleep,
+- Retirement is checkpointed with exact computer names and VM resource IDs before unregistering
+  an AVD host or submitting its VM deletion. Cleanup checkpoints retain the authorized VM deletions,
+  deletion waits and directory-removal flags. On reconciliation, the worker resubmits an outstanding
+  retirement deletion only when the exact VM still exists and is not already deleting; an already
+  absent VM is not deleted again. It then performs one verification pass without a polling sleep,
   then yields if deletion is still pending. The next reconciliation tick replays that cleanup before
   inventory/planning, even when a deleted VM has disappeared from inventory. Names remain
   blocked until VM, registration and required directory absence is verified. Initial batch
@@ -123,6 +128,10 @@ progressive batching; the planner retains its twice-target temporary-capacity ce
   name, exact hostnames, Template Spec version and request body are reused after an interruption.
   Later SideBySide batches use `shr_<operation-id>_bN`, retaining the original deployment history.
   An already accepted deployment is observed rather than submitted under a new name.
+  Deployment inventory reads the current intent's exact ARM resource before planning or batch
+  advancement, even if a crash prevented saving `LastDeploymentName` or the deployment is absent
+  from the resource-group list. Legacy pool-prefix discovery remains; other pools' `shr_*`
+  deployments are not included. Unreadable or invalid deployment status blocks the cycle.
   After partial failure, a checkpointed `_rN` retry includes only unresolved names and their aligned
   per-host placement settings; already registered hosts are not redeployed.
   Pending host mappings preserve planner priority through checkpoint serialization and reload;
@@ -438,7 +447,8 @@ respectively, rather than the previous 702. These counts exclude tokens, recover
 deletion requests, additional polling, pagination of directory results, and API retries. Stale
 records require additional confirmation reads only for the affected systems.
 
-Only deletions requested by the current invocation enable the batch VM-deletion wait. A live VM
+Only deletions authorized by the current invocation or its durable retirement checkpoint enable
+the batch VM-deletion wait. A live VM
 found during ordinary name allocation or a pending-name retry blocks without a VM-deletion wait
 or identity deletion. SideBySide retirement and expired shutdown-VM cleanup likewise
 submit their deletion requests before completing one shared batch cleanup gate; standalone VM

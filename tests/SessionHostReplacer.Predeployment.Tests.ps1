@@ -114,6 +114,7 @@ Describe 'Session Host Replacer real predeployment safety gate' {
             MalformedGraph = $false
             FailSave = $false
             DenyVMDeletion = $false
+            YieldVMDeletion = $false
             DenyVMDeletionId = ''
             DeferVMDeletion = $false
             PendingDeletions = @()
@@ -125,6 +126,8 @@ Describe 'Session Host Replacer real predeployment safety gate' {
             WorkerState = $null
             LeaseError = ''
             ContinuationSaves = @()
+            CurrentDeployment = $null
+            DeploymentReadStatusCode = 0
         }
         Mock Get-ShrWorkerState { $global:shrPreflight.WorkerState }
         Mock Assert-ShrWorkerLease {
@@ -184,6 +187,9 @@ Describe 'Session Host Replacer real predeployment safety gate' {
             if ($path -match '/virtualMachines/[^/]+$') {
                 $global:shrPreflight.Events += "$Method VM $path"
                 if ($Method -eq 'Delete') {
+                    if ($global:shrPreflight.YieldVMDeletion) {
+                        throw [TimeoutException]::new('invocation yielded before VM deletion')
+                    }
                     if ($global:shrPreflight.DenyVMDeletion -or $global:shrPreflight.DenyVMDeletionId -eq $path) {
                         throw (New-ReplacerTestHttpException 403)
                     }
@@ -213,6 +219,12 @@ Describe 'Session Host Replacer real predeployment safety gate' {
             if ($path -match '/deployments/') {
                 $global:shrPreflight.Events += "$Method deployment $path"
                 if ($Method -eq 'Put') { $global:shrPreflight.SubmittedBody = $Body | ConvertFrom-Json }
+                if ($Method -eq 'Get') {
+                    if ($global:shrPreflight.DeploymentReadStatusCode) {
+                        throw (New-ReplacerTestHttpException $global:shrPreflight.DeploymentReadStatusCode)
+                    }
+                    return $global:shrPreflight.CurrentDeployment
+                }
                 return
             }
             throw "Unexpected ARM request: $Method $Uri"
@@ -603,6 +615,65 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
     }
 
+    It 'persists retirement before unregistering even when the VM delete never starts' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.YieldVMDeletion = $true
+
+        Assert-ReplacerOperationBlocked {
+            Remove-VirtualMachine -ARMToken token -VMName $hostToRemove.VMName `
+                -VMId $hostToRemove.ResourceId -FQDN $hostToRemove.FQDN -DeferCleanup
+        } 'invocation yielded'
+
+        $global:shrPreflight.Registrations.Count | Should Be 0
+        $global:shrPreflight.Resources.ContainsKey($hostToRemove.ResourceId) | Should Be $true
+        $saved = $global:shrPreflight.ContinuationSaves[0].CleanupIntent
+        $saved.Hosts[0].ResourceId | Should Be $hostToRemove.ResourceId
+        $saved.Hosts[0].SessionHostName | Should Be 'avd-01'
+        $saved.VMDeletions | Should Be @($hostToRemove.ResourceId)
+    }
+
+    It 'does not unregister or delete when the retirement checkpoint cannot be saved' {
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.FailSave = $true
+        Assert-ReplacerOperationBlocked {
+            Remove-VirtualMachine -ARMToken token -VMName $hostToRemove.VMName `
+                -VMId $hostToRemove.ResourceId -FQDN $hostToRemove.FQDN -DeferCleanup
+        } 'Cleanup checkpoint failed'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete *' }).Count | Should Be 0
+    }
+
+    It 'retains every exact retirement through a batch cleanup yield' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.DeferVMDeletion = $true
+        Assert-ReplacerOperationBlocked {
+            Remove-SessionHosts -ARMToken token -SessionHostsPendingDelete $hostsToRemove `
+                -ReplacementMode SideBySide -EnableShutdownRetention $false
+        } 'VM deletion'
+        $intent = $global:shrPreflight.WorkerState.CleanupIntent
+        $intent.Hosts.Count | Should Be 2
+        $intent.VMDeletions.Count | Should Be 2
+        foreach ($hostToRemove in $hostsToRemove) {
+            $intent.VMDeletions | Should Contain $hostToRemove.ResourceId
+        }
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Delete Graph*' }).Count | Should Be 0
+    }
+
+    It 'preserves a partial retirement failure without masking it with a cleanup yield' {
+        $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
+        $global:shrPreflight.WorkerState = @{ Id = 'retirement-test'; CleanupIntent = $null }
+        $global:shrPreflight.DenyVMDeletionId = $hostsToRemove[1].ResourceId
+        Assert-ReplacerOperationBlocked {
+            Remove-SessionHosts -ARMToken token -SessionHostsPendingDelete $hostsToRemove `
+                -ReplacementMode SideBySide -EnableShutdownRetention $false
+        } 'Simulated HTTP 403'
+        $global:shrPreflight.WorkerState.CleanupIntent.Hosts.Count | Should Be 2
+        $global:shrPreflight.WorkerState.CleanupIntent.VMDeletions.Count | Should Be 2
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 0 -Exactly -Scope It
+    }
+
     It 'cleans the actual computer names of retained VMs with prefixed ARM resource names in one batch' {
         $hostsToRemove = @(New-ReplacerRemovalTestHost avd-01; New-ReplacerRemovalTestHost avd-02)
         $global:shrPreflight.Registrations = @()
@@ -693,6 +764,44 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         @( (Get-Deployments -ARMToken token).RunningDeployments ).Count | Should Be 1
     }
 
+    It 'authoritatively discovers checkpointed <Status> deployment without legacy tracking' -TestCases @(
+        @{ Status = 'Accepted'; Running = 2; Failed = 0 }
+        @{ Status = 'Running'; Running = 2; Failed = 0 }
+        @{ Status = 'Succeeded'; Running = 1; Failed = 0 }
+        @{ Status = 'Failed'; Running = 1; Failed = 1 }
+        @{ Status = 'Canceled'; Running = 1; Failed = 1 }
+    ) {
+        param($Status, $Running, $Failed)
+        $name = 'shr_' + ('a' * 32)
+        $uri = "https://management.azure.com/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Resources/deployments/$name`?api-version=2021-04-01"
+        $global:shrPreflight.WorkerState = @{ DeploymentIntent = @{ Name = $name; Uri = $uri } }
+        $global:shrPreflight.CurrentDeployment = [PSCustomObject]@{
+            name = $name; properties = @{ provisioningState = $Status }
+        }
+        $global:shrPreflight.Deployments = @(
+            [PSCustomObject]@{ name = 'shr-pool-legacy'; properties = @{ provisioningState = 'Running' } }
+            [PSCustomObject]@{ name = ('shr_' + ('b' * 32)); properties = @{ provisioningState = 'Running' } }
+        )
+        $inventory = Get-Deployments -ARMToken token
+        $inventory.RunningDeployments.Count | Should Be $Running
+        $inventory.FailedDeployments.Count | Should Be $Failed
+        @($inventory.RunningDeployments.DeploymentName) | Should Contain 'shr-pool-legacy'
+        @($inventory.RunningDeployments.DeploymentName) | Should Not Contain ('shr_' + ('b' * 32))
+    }
+
+    It 'allows a confirmed missing prepared deployment but rejects unreadable or malformed status' {
+        $name = 'shr_' + ('a' * 32)
+        $uri = "https://management.azure.com/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Resources/deployments/$name`?api-version=2021-04-01"
+        $global:shrPreflight.WorkerState = @{ DeploymentIntent = @{ Name = $name; Uri = $uri } }
+        $global:shrPreflight.DeploymentReadStatusCode = 404
+        (Get-Deployments -ARMToken token).RunningDeployments.Count | Should Be 0
+        $global:shrPreflight.DeploymentReadStatusCode = 403
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'Simulated HTTP 403'
+        $global:shrPreflight.DeploymentReadStatusCode = 0
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'invalid response'
+        $global:shrPreflight.WorkerState.DeploymentIntent.Uri = $uri.Replace('/hosts/', '/another-pool/')
+        Assert-ReplacerOperationBlocked { Get-Deployments -ARMToken token } 'outside the configured deployment scope'
+    }
     It 'requires a valid ARM collection through the real Get-Deployments call chain' {
         Mock Invoke-AzureRestMethod {
             param($ARMToken, $Method, $Uri, [switch]$RequireCollection)

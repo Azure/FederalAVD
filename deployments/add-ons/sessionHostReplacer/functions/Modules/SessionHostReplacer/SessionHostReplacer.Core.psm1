@@ -801,6 +801,9 @@ function Invoke-GraphRestMethod {
                 $params['Uri'] = $dodUri
                 $params['Headers'] = $headers
                 
+                if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+                    Assert-ShrWorkerLease
+                }
                 $result = Invoke-RestMethod @params -ErrorAction Stop
                 return $result
             }
@@ -906,6 +909,10 @@ function Invoke-GraphApiWithRetry {
             }
         }
         
+        if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+            Assert-ShrWorkerLease
+        }
+
         try {
             $currentUri = "$endpoint$uriPath"
             

@@ -210,6 +210,63 @@ if ($global:shrContinuationTest.Action) {
         $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should Be 'avd-01'
     }
 
+    It 'resumes exact retirement before cleanup and planning when the VM is <VMStatus>' -TestCases @(
+        @{ VMStatus = 'Succeeded'; Deletes = 1 }
+        @{ VMStatus = 'Deleting'; Deletes = 0 }
+        @{ VMStatus = 'Absent'; Deletes = 0 }
+    ) {
+        param($VMStatus, $Deletes)
+        $id = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-avd-01'
+        $global:shrContinuationTest.VMStatus = $VMStatus
+        $global:shrContinuationTest.Operation.State.CleanupIntent = @{
+            Hosts = @(@{ SessionHostName = 'avd-01'; ResourceId = $id })
+            VMDeletions = @($id)
+            WaitForVMDeletion = $true
+        }
+        Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Continuation {
+            param($Uri, $Method)
+            $global:shrContinuationTest.Order += "vm-$Method"
+            $Uri | Should Match '/virtualMachines/vm-avd-01\?'
+            if ($Method -eq 'GET') {
+                if ($global:shrContinuationTest.VMStatus -eq 'Absent') {
+                    $error = [Exception]::new('VM is absent')
+                    $error | Add-Member Response ([PSCustomObject]@{ StatusCode = 404 })
+                    throw $error
+                }
+                [PSCustomObject]@{
+                    id = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-avd-01'
+                    properties = @{ provisioningState = $global:shrContinuationTest.VMStatus }
+                }
+            }
+        }
+        Mock Assert-SessionHostNamesAvailable -ModuleName SessionHostReplacer.Continuation {
+            $global:shrContinuationTest.Order += 'cleanup'
+            (Get-ShrWorkerState).CleanupIntent = $null
+        }
+        $global:shrContinuationTest.Action = { param($State, $Result) $Result.Completed = $true }
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        @($global:shrContinuationTest.Order | Where-Object { $_ -eq 'vm-DELETE' }).Count | Should Be $Deletes
+        $global:shrContinuationTest.Order.IndexOf('vm-GET') |
+            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cleanup')
+        $global:shrContinuationTest.Order.IndexOf('cleanup') |
+            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
+        $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
+    }
+
+    It 'does not abandon retirement or invoke planning after a VM deletion is denied' {
+        $id = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-avd-01'
+        $global:shrContinuationTest.Operation.State.CleanupIntent = @{
+            Hosts = @(@{ SessionHostName = 'avd-01'; ResourceId = $id })
+            VMDeletions = @($id)
+        }
+        Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Continuation {
+            throw 'Retirement access denied'
+        }
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'Retirement access denied'
+        $global:shrContinuationTest.Cycles | Should Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
+        $global:shrContinuationTest.Operation.State.CleanupIntent.VMDeletions | Should Be @($id)
+    }
     It 'finishes checkpointed cleanup after initiation expiry without authorizing a new batch' {
         $global:shrContinuationTest.Operation.State.InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o')
         $global:shrContinuationTest.Operation.State.CleanupIntent = @{ Hosts = @(@{ SessionHostName = 'avd-01'; ResourceId = '/vm/avd-01' }) }

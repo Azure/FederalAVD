@@ -299,6 +299,7 @@ function Save-DeploymentState {
             if (-not $tableExists) {
                 Write-LogEntry -Message "Creating deployment state table '$tableName'" -Level Trace
                 $createTableBody = @{ TableName = $tableName } | ConvertTo-Json
+                if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
                 Invoke-RestMethod -Uri $tablesUri -Headers $headers -Method Post -Body $createTableBody -ErrorAction Stop | Out-Null
             }
         }
@@ -346,18 +347,24 @@ function Save-DeploymentState {
             $updateHeaders = $headers.Clone()
             $updateHeaders['If-Match'] = '*'
             $body = $entityData | ConvertTo-Json
+            if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
             Invoke-RestMethod -Uri $entityUri -Headers $updateHeaders -Method Merge -Body $body -ErrorAction Stop | Out-Null
         }
         else {
             # Insert new entity
             $insertUri = "$tableEndpoint/$tableName"
             $body = $entityData | ConvertTo-Json
+            if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
             Invoke-RestMethod -Uri $insertUri -Headers $headers -Method Post -Body $body -ErrorAction Stop | Out-Null
         }
         
         Write-LogEntry -Message "Saved deployment state: Status=$($DeploymentState.LastStatus), ConsecutiveSuccesses=$($DeploymentState.ConsecutiveSuccesses), NextPercentage=$($DeploymentState.CurrentPercentage)%" -Level Trace
     }
     catch {
+        if ($_.Exception -is [TimeoutException] -and (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) -and (Get-ShrWorkerState)) {
+            Write-LogEntry -Message "Deployment state save yielded: $($_.Exception.Message)" -Level Trace
+            throw
+        }
         Write-LogEntry -Message "Failed to save deployment state: $_" -Level Error
         if ($RequireSuccess) {
             throw
@@ -757,13 +764,39 @@ function Get-Deployments {
     
     # Filter by deployment prefix
     $deployments = $deployments | Where-Object { $_.name -like "$DeploymentPrefix*" }
+
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation.DeploymentIntent) {
+        $intent = $continuation.DeploymentIntent
+        $intentUri = "$ResourceManagerUri/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Resources/deployments/$($intent.Name)?api-version=2021-04-01"
+        if ($intent.Uri -ine $intentUri) {
+            throw 'Checkpointed deployment is outside the configured deployment scope.'
+        }
+        try {
+            $currentDeployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET -Uri $intentUri
+            if (-not $currentDeployment -or $currentDeployment.name -ine $intent.Name -or
+                $currentDeployment.properties.provisioningState -notin @(
+                    'Accepted', 'Running', 'Ready', 'Creating', 'Updating', 'Deleting',
+                    'Succeeded', 'Failed', 'Canceled'
+                )) {
+                throw 'Checkpointed deployment lookup returned an invalid response.'
+            }
+        } catch {
+            if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+            $currentDeployment = $null
+        }
+        $deployments = @($deployments | Where-Object { $_.name -ine $intent.Name })
+        if ($currentDeployment) {
+            $deployments += $currentDeployment
+        }
+    }
     
     if ($deployments) {
         Write-LogEntry -Message "Deployment names: $($deployments.name -join ', ')" -Level Trace
     }
     
     # Handle failed deployments - don't block automation, but return info for cleanup
-    $failedDeployments = $deployments | Where-Object { $_.properties.provisioningState -eq 'Failed' }
+    $failedDeployments = $deployments | Where-Object { $_.properties.provisioningState -in @('Failed', 'Canceled') }
     if ($failedDeployments) {
         Write-LogEntry -Message "Found $($failedDeployments.Count) failed deployments. VMs from these deployments will be marked for cleanup." -Level Warning
         foreach ($failedDeploy in $failedDeployments) {

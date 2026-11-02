@@ -414,6 +414,7 @@ if ($replacementMode -in @('SideBySide', 'DeleteFirst', 'MaintenanceWindow')) {
             Save-DeploymentState -DeploymentState $deploymentState
 
             if ($previousDeploymentStatus.Running) {
+                Write-ShrEvent -Event Progress -State $ContinuationContext -Metrics @{ RunningDeployments = 1 }
                 Write-LogEntry -Message "Skipping this cycle while deployment {0} remains in progress" -StringValues $deploymentState.LastDeploymentName -Level Trace
                 return
             }
@@ -518,6 +519,7 @@ $failedDeployments = $deploymentsInfo.FailedDeployments
 Write-LogEntry -Message "Found {0} running deployments and {1} failed deployments" -StringValues $runningDeployments.Count, $failedDeployments.Count -Level Trace
 
 if ($runningDeployments.Count -gt 0) {
+    Write-ShrEvent -Event Progress -State $ContinuationContext -Metrics @{ RunningDeployments = $runningDeployments.Count }
     Write-LogEntry -Message "Skipping this cycle while {0} session host deployment(s) remain in progress: {1}" -StringValues $runningDeployments.Count, ($runningDeployments.DeploymentName -join ', ') -Level Trace
     return
 }

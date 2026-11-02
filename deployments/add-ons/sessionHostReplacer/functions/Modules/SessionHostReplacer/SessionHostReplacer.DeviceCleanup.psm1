@@ -137,6 +137,22 @@ function Assert-SessionHostNamesAvailable {
     )
 
     try {
+        $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+        $pendingRetirements = @($continuation.CleanupIntent.VMDeletions | Where-Object { $_ })
+        if ($pendingRetirements.Count -gt 0) {
+            $SessionHosts = @($SessionHosts)
+            foreach ($pendingHost in $continuation.CleanupIntent.Hosts) {
+                if (-not @($SessionHosts | Where-Object {
+                    $_.SessionHostName -ieq $pendingHost.SessionHostName -and
+                    $_.ResourceId -ieq $pendingHost.ResourceId
+                }).Count) {
+                    $SessionHosts += [PSCustomObject]$pendingHost
+                }
+            }
+            $WaitForVMDeletion = [System.Management.Automation.SwitchParameter]::new($true)
+            $RemoveEntraDevice = $RemoveEntraDevice -or [bool]$continuation.CleanupIntent.RemoveEntraDevice
+            $RemoveIntuneDevice = $RemoveIntuneDevice -or [bool]$continuation.CleanupIntent.RemoveIntuneDevice
+        }
         $hostsByName = @{}
         $hostsToVerify = @(foreach ($hostToDeploy in $SessionHosts) {
             if ([string]::IsNullOrWhiteSpace($hostToDeploy.SessionHostName) -or
@@ -162,7 +178,6 @@ function Assert-SessionHostNamesAvailable {
         $isEntraJoined = $SessionHostParameters['IdentitySolution'] -in @('EntraId', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly')
         $RemoveEntraDevice = $RemoveEntraDevice -or $isEntraJoined
         $RemoveIntuneDevice = $RemoveIntuneDevice -or ($isEntraJoined -and [bool]$SessionHostParameters['IntuneEnrollment'])
-        $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
         $cleanupIntent = @{
             Hosts = @($SessionHosts | ForEach-Object {
                 @{ SessionHostName = $_.SessionHostName; ResourceId = $_.ResourceId }
@@ -170,6 +185,9 @@ function Assert-SessionHostNamesAvailable {
             WaitForVMDeletion = $WaitForVMDeletion.IsPresent
             RemoveEntraDevice = $RemoveEntraDevice
             RemoveIntuneDevice = $RemoveIntuneDevice
+        }
+        if ($pendingRetirements.Count -gt 0) {
+            $cleanupIntent.VMDeletions = $pendingRetirements
         }
         # Replay cleanup even when a deleted VM disappears from the next invocation's inventory.
         if ($WaitForVMDeletion) {

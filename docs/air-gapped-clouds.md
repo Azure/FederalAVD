@@ -192,15 +192,32 @@ For a multipart release, download every `.zip.partNNN`, the `.zip.parts.json`, a
 `.zip.sha256` into the same directory, then use the repository revision matching that release:
 
 ```powershell
+# On the connected side, download into a fresh directory. The part* pattern includes
+# both the numbered parts and the .parts.json manifest, not an ordinary ZIP.
+gh release download '<published-release-tag>' --repo Azure/FederalAVD `
+    --dir 'C:\AirGapTransfer' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip.part*' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip.sha256'
+
 .\tools\Join-AirGappedArtifactPackage.ps1 `
     -PartsManifest 'C:\AirGapTransfer\FederalAVD-AirGapPrerequisites.zip.parts.json'
 ```
+
+Obtain the repository source archive for the same release to get the matching join script.
+GitHub CLI is optional: selecting the same named assets in the release page is equivalent.
 
 [Join-AirGappedArtifactPackage.ps1](../tools/Join-AirGappedArtifactPackage.ps1) checks each part
 and the reassembled ZIP before publishing the ZIP. Existing ZIPs require `-Force`; a downloaded
 checksum record must agree with the parts manifest. Parts are not separate extractable ZIPs.
 Continue with the independent approved-checksum verification below. For a smaller bundle,
 download the ordinary ZIP and checksum directly; no reassembly is needed.
+
+```powershell
+gh release download '<published-release-tag>' --repo Azure/FederalAVD `
+    --dir 'C:\AirGapTransfer' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip' `
+    --pattern 'FederalAVD-AirGapPrerequisites.zip.sha256'
+```
 
 **This is a transport envelope, not an installation artifact.** Verify its outer checksum against
 the separately approved record, then extract into a fresh staging directory:
@@ -245,15 +262,32 @@ The independent [manual workflow](../.github/workflows/release-airgap-artifacts.
 on pushes, PRs, tags or release publication. Its **Include WebRTC** input defaults to enabled;
 leave it enabled for the current air-gapped Teams path. Before enabling the workflow:
 
-1. Establish public redistribution rights for **every selected payload**. A successful download,
+1. **Merge the workflow and tools into the repository's default branch (`main` here).**
+   GitHub only enables `workflow_dispatch` when the workflow exists on the default branch;
+   a missing workflow or **Run workflow** button before merge is expected, not a build failure.
+   See [GitHub's manual workflow requirements](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+2. Establish public redistribution rights for **every selected payload**. A successful download,
    `--skip-license`, App Installer's offline license, or the repository MIT license is not a grant
    to redistribute vendor binaries.
-2. Configure the `airgap-artifact-publication` GitHub environment with required maintainer reviewers.
+3. A repository administrator must create or verify **Settings -> Environments ->
+   airgap-artifact-publication**, configure required maintainer reviewers, and allow deployment
+   from the default branch selected for dispatch. Enable prevention of self-review when independent
+   approval is required by the organization's process. Confirm these settings before the first run;
+   an environment API `404` does not verify that protections exist.
    Merely naming an environment does not configure protections; workflow dispatch write access
    and a checkbox are not substitutes for legal review.
-3. Publish a release whose commit includes the builder. In Actions, select
-   **Build approved air-gapped artifact bundle -> Run workflow**, enter the published release tag,
-   optional WinGet tag/app subset/WebRTC choice, and explicitly affirm redistribution approval.
+   See [GitHub's environment setup requirements](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+4. Confirm repository/organization Actions policy permits this workflow, its pinned checkout action,
+   the GitHub-hosted Windows runner, and the job's `contents: write` token for attaching release
+   assets. The dispatcher needs repository write access; the environment reviewer must approve the
+   waiting job. No Azure credentials or customer files are required.
+5. Publish the first release, or select an existing published release, whose commit includes the
+   combined builder, both standalone builders, and the join tool. An empty release/tag list before
+   the first publication is expected.
+   In Actions, select **Build approved air-gapped artifact bundle -> Run workflow**, choose the
+   default branch, enter the published release tag, optional WinGet tag/app subset/WebRTC choice,
+   and explicitly affirm redistribution approval. The dispatch branch supplies the workflow;
+   checkout uses the commit resolved from the release tag, not the dispatch branch's current code.
 
 The job rejects missing approval or a draft/missing release, resolves its immutable commit, and
 builds on GitHub's connected Windows runner. It bootstraps WinGet through Microsoft's PowerShell
