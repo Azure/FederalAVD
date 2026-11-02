@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "17694024718168089074"
+      "templateHash": "9224649178591818634"
     }
   },
   "definitions": {
@@ -2018,7 +2018,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "2952628345569650749"
+              "templateHash": "11370532900403625353"
             },
             "name": "AVD monitoring orchestration",
             "description": "Creates a Log Analytics workspace, data collection endpoint, and AVD Insights data collection rule in an existing monitoring resource group, optionally adding them to an existing Azure Monitor Private Link Scope."
@@ -2101,6 +2101,12 @@
                   },
                   "retentionInDays": {
                     "value": "[parameters('logAnalyticsWorkspaceRetention')]"
+                  },
+                  "builtInTableNames": {
+                    "value": [
+                      "Perf",
+                      "Event"
+                    ]
                   }
                 },
                 "template": {
@@ -2111,7 +2117,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.48.1.52935",
-                      "templateHash": "1775104530343543910"
+                      "templateHash": "17280748657464142888"
                     },
                     "name": "Log Analytics workspace",
                     "description": "Deploys a Log Analytics workspace with caller-selected pricing, retention and optional diagnostics; data collection rules and resource diagnostic sources are configured separately."
@@ -2259,6 +2265,16 @@
                         "description": "Data retention in days (30–730)."
                       }
                     },
+                    "builtInTableNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Built-in Microsoft table names to provision with their standard schemas before this module completes. Empty skips table provisioning."
+                      }
+                    },
                     "diagnosticSettings": {
                       "$ref": "#/definitions/diagnosticSettingsType",
                       "nullable": true,
@@ -2284,6 +2300,23 @@
                         },
                         "retentionInDays": "[parameters('retentionInDays')]"
                       }
+                    },
+                    "builtInTables": {
+                      "copy": {
+                        "name": "builtInTables",
+                        "count": "[length(parameters('builtInTableNames'))]"
+                      },
+                      "type": "Microsoft.OperationalInsights/workspaces/tables",
+                      "apiVersion": "2022-10-01",
+                      "name": "[format('{0}/{1}', parameters('name'), parameters('builtInTableNames')[copyIndex()])]",
+                      "properties": {
+                        "schema": {
+                          "name": "[parameters('builtInTableNames')[copyIndex()]]"
+                        }
+                      },
+                      "dependsOn": [
+                        "logAnalyticsWorkspace"
+                      ]
                     },
                     "diagnosticSetting": {
                       "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",

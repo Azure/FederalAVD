@@ -387,6 +387,12 @@ resource-group name, and FSLogix backup policy resource ID.
 - The AVD Insights DCR collects the supported performance and event data documented for FederalAVD.
   It does not collect the Windows Security event log; add a supplemental DCR or SIEM agent when
   Security events are required.
+- Newly deployed monitoring explicitly provisions the workspace's built-in `Perf` and `Event`
+  tables before creating the DCR. No custom table schemas, table plan/retention overrides,
+  deployment scripts or fixed sleeps are introduced. A deployment identity with a restricted
+  custom role also needs `Microsoft.OperationalInsights/workspaces/tables/write` at the workspace
+  scope (or higher). Existing monitoring IDs are consumed without table provisioning.
+  See [monitoring table prerequisites](../../docs/design.md#monitoring-table-prerequisites).
 - A Recovery Services vault and policy do not protect shares until a consuming deployment registers
   the Azure Files storage account and protected items.
 - Shared Services owns workspace-level settings and its deterministically named feed endpoints.

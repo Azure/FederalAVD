@@ -27,6 +27,28 @@ The UWP runtime defaults to upgrading existing image-provisioned apps; adding mi
 requires an explicit `-InstallMissing` opt-in. This does not implement per-user update selection.
 Package availability does not prove classified-cloud service support or offline application UX.
 
+## Monitoring table prerequisites
+
+The shared monitoring orchestration provisions the Log Analytics workspace and its built-in
+`Perf` and `Event` tables before creating the AVD Insights DCR. The DCR's workspace-module output
+reference waits for the entire nested deployment, including the table resources, rather than only
+the workspace resource. This addresses first-deployment failures where DCR validation cannot yet
+find the destination tables.
+
+The generic workspace module accepts optional `builtInTableNames` (empty by default). Monitoring
+supplies `Perf` and `Event`; table declarations provide only `schema.name`, leaving Microsoft's
+standard columns to the service and omitting table plan and retention overrides. This is native
+ARM resource sequencing, not a deployment script, polling loop, legacy monitoring solution or
+fixed sleep. Shared Services, standard and automated host pools, and the PoC share this path.
+Adopting existing monitoring IDs does not deploy or modify that workspace's tables.
+
+See the [workspace table resource contract](https://learn.microsoft.com/en-us/azure/templates/microsoft.operationalinsights/2022-10-01/workspaces/tables)
+and [Microsoft-defined versus custom tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table).
+Offline compilation proves the resource graph, not service-side propagation or cloud support.
+Validate a first deployment into a genuinely fresh workspace in each target cloud, then redeploy
+and check that existing table schemas, custom columns and retention remain as intended. Capture
+any remaining DCR validation error rather than masking it with a fixed delay.
+
 ## Shared module contracts
 
 Session Host Replacer can opt into a timer-to-queue continuation design in the same Function App.

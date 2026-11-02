@@ -29,6 +29,10 @@ module logAnalyticsWorkspace '../../resourceModules/operationalInsights/workspac
     tags: tags[?'Microsoft.OperationalInsights/workspaces'] ?? {}
     sku: logAnalyticsWorkspaceSku
     retentionInDays: logAnalyticsWorkspaceRetention
+    builtInTableNames: [
+      'Perf'
+      'Event'
+    ]
   }
 }
 
@@ -44,6 +48,7 @@ module dataCollectionEndpoint '../../resourceModules/insights/dataCollectionEndp
 }
 
 // ─── AVD Insights Data Collection Rule ────────────────────────────────────────
+// The workspace module must finish provisioning Perf and Event before DCR validation.
 module avdInsightsDataCollectionRule '../../resourceModules/monitoring/avdInsightsDataCollectionRule.bicep' = {
   scope: resourceGroup(resourceGroupMonitoring)
   params: {
