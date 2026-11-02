@@ -810,6 +810,54 @@ if ($destructiveOperationsFrozen) {
     }
 }
 
+$tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
+$testSideBySideBatchReady = {
+    param($Availability, [switch] $RequireHandoff)
+    if (-not $ContinuationContext -or $replacementMode -ne 'SideBySide' -or
+        -not $ContinuationContext.DeploymentIntent -or $ContinuationContext.CleanupIntent -or
+        $runningDeployments.Count -gt 0 -or $failedDeployments.Count -gt 0 -or
+        -not $Availability.SafeToProceed) { return $false }
+    $names = @($ContinuationContext.DeploymentHostNames | Where-Object { $_ })
+    if ($names.Count -eq 0) { $names = @($ContinuationContext.DeploymentIntent.HostNames) }
+    if ($names.Count -eq 0) { return $false }
+    foreach ($name in $names) {
+        $hosts = @($sessionHostsFiltered | Where-Object {
+            $_.SessionHostName -eq $name -and -not $_.IsUnavailable -and
+            $_.ImageVersion -eq $latestImageVersion.Version -and
+            $_.ImageDefinition -eq $latestImageVersion.Definition
+        })
+        if ($hosts.Count -ne 1) { return $false }
+        if ($RequireHandoff -and $tagScalingPlanExclusionTag -and
+            $hosts[0].Tags[$tagScalingPlanExclusionTag] -eq 'SessionHostReplacer') { return $false }
+    }
+    return $true
+}
+
+$ContinuationContextNextBatch = $ContinuationContext -and $replacementMode -eq 'SideBySide' -and
+    $ContinuationContext.DeploymentBatchReady -and $ContinuationContext.MoreDeploymentsAllowed -and
+    $ContinuationContext.NextBatchAuthorization -and
+    [DateTimeOffset]$ContinuationContext.NextBatchAuthorization.ExpiresUtc -gt [DateTimeOffset]::UtcNow
+if ($ContinuationContextNextBatch) {
+    $readiness = Test-NewSessionHostsAvailable -ARMToken $ARMToken -SessionHosts $sessionHosts `
+        -LatestImageVersion $latestImageVersion -ScalingPlanTarget $scalingPlanTarget
+    $ContinuationContext.NextBatchAuthorized = & $testSideBySideBatchReady $readiness -RequireHandoff
+}
+
+$getReplacementPlan = {
+    Get-SessionHostReplacementPlan `
+        -ARMToken $ARMToken `
+        -SessionHosts $sessionHostsFiltered `
+        -RunningDeployments $runningDeployments `
+        -LatestImageVersion $latestImageVersion `
+        -AllowImageVersionRollback $allowImageVersionRollback `
+        -ScalingPlanTarget $scalingPlanTarget `
+        -MaintenanceMaxVmsRemoved $(if ($maintenanceRequest) { $maintenanceRequest.MaxVmsRemoved } else { 1 }) `
+        -MaintenanceAllowFullPoolOutage $(if ($maintenanceRequest) { $maintenanceRequest.AllowFullPoolOutage } else { $false }) `
+        -GraphToken $GraphToken `
+        -RemoveEntraDevice $removeEntraDevice `
+        -RemoveIntuneDevice $removeIntuneDevice
+}
+
 # If up to date, skip replacement planning and go straight to the early exit path.
 if ($isUpToDate) {
     Write-LogEntry -Message "Host pool is UP TO DATE - skipping replacement plan calculation"
@@ -830,42 +878,60 @@ else {
     Write-LogEntry -Message "Host pool requires updates - running full replacement plan calculation"
 
     # Get full replacement plan with all calculations
-    $hostPoolReplacementPlan = Get-SessionHostReplacementPlan `
-        -ARMToken $ARMToken `
-        -SessionHosts $sessionHostsFiltered `
-        -RunningDeployments $runningDeployments `
-        -LatestImageVersion $latestImageVersion `
-        -AllowImageVersionRollback $allowImageVersionRollback `
-        -ScalingPlanTarget $scalingPlanTarget `
-        -MaintenanceMaxVmsRemoved $(if ($maintenanceRequest) { $maintenanceRequest.MaxVmsRemoved } else { 1 }) `
-        -MaintenanceAllowFullPoolOutage $(if ($maintenanceRequest) { $maintenanceRequest.AllowFullPoolOutage } else { $false }) `
-        -GraphToken $GraphToken `
-        -RemoveEntraDevice $removeEntraDevice `
-        -RemoveIntuneDevice $removeIntuneDevice
+    $hostPoolReplacementPlan = & $getReplacementPlan
 }
 
 if ($ContinuationContext) {
-    if ($null -eq $ContinuationContext.BatchHostNames) {
-        if ([DateTimeOffset]$ContinuationContext.InitiationExpiresUtc -le [DateTimeOffset]::UtcNow) {
+    if ($ContinuationContext.NextBatchAuthorized -and
+        [DateTimeOffset]$ContinuationContext.NextBatchAuthorization.ExpiresUtc -le [DateTimeOffset]::UtcNow) {
+        $ContinuationContext.NextBatchAuthorized = $false
+        $hostPoolReplacementPlan = & $getReplacementPlan
+        Write-LogEntry -Message 'CONTINUATION | Next SideBySide batch authorization expired; continuing only existing retirement.' -Level Warning
+    }
+    $extendingBatch = [bool]$ContinuationContext.NextBatchAuthorized
+    if ($null -eq $ContinuationContext.BatchHostNames -or $extendingBatch) {
+        if (-not $extendingBatch -and
+            [DateTimeOffset]$ContinuationContext.InitiationExpiresUtc -le [DateTimeOffset]::UtcNow) {
             Write-LogEntry -Message 'CONTINUATION | Initiation authorization expired before the batch checkpoint; no new replacement is started.' -Level Warning
             $CycleResult.Completed = $true
             return
         }
-        $limit = [Math]::Max($hostPoolReplacementPlan.PossibleDeploymentsCount,
-            $hostPoolReplacementPlan.PossibleSessionHostDeleteCount)
-        if ($limit -eq 0 -and $hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
+        $limit = if ($extendingBatch) { $hostPoolReplacementPlan.PossibleDeploymentsCount } else {
+            [Math]::Max($hostPoolReplacementPlan.PossibleDeploymentsCount,
+                $hostPoolReplacementPlan.PossibleSessionHostDeleteCount)
+        }
+        if (-not $extendingBatch -and $limit -eq 0 -and $hostPoolReplacementPlan.TotalSessionHostsToReplace -gt 0) {
             Write-LogEntry -Message 'CONTINUATION | No replacement batch is permitted by the current capacity policy; awaiting the next initiation schedule.' -Level Warning
             $CycleResult.Completed = $true
             return
         }
         $candidates = @($hostPoolReplacementPlan.ReplacementCandidates)
-        if ($hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
+        if (-not $extendingBatch -and $hostPoolReplacementPlan.SessionHostsPendingDelete.Count -gt 0) {
             $candidates = @($hostPoolReplacementPlan.SessionHostsPendingDelete)
         }
-        $ContinuationContext.BatchHostNames = @($candidates |
+        $newBatchNames = @($candidates |
+            Where-Object { $_.SessionHostName -notin @($ContinuationContext.BatchHostNames) } |
             Select-Object -First ([Math]::Max(0, $limit)) |
             ForEach-Object { $_.SessionHostName })
-        $ContinuationContext.BatchDeploymentLimit = [int]$hostPoolReplacementPlan.PossibleDeploymentsCount
+        if (-not $extendingBatch -or $limit -gt 0) {
+            $ContinuationContext.BatchHostNames = @(
+                @($ContinuationContext.BatchHostNames | Where-Object { $_ }) + $newBatchNames |
+                    Select-Object -Unique
+            )
+            $ContinuationContext.BatchDeploymentLimit = [int]$hostPoolReplacementPlan.PossibleDeploymentsCount
+            $ContinuationContext.BatchNumber = if ($extendingBatch) {
+                [Math]::Max(1, [int]$ContinuationContext.BatchNumber) + 1
+            } else { 1 }
+            $ContinuationContext.DeploymentIntent = $null
+            $ContinuationContext.DeploymentHostNames = @()
+            $ContinuationContext.DeploymentBatchReady = $false
+            $ContinuationContext.MoreDeploymentsAllowed = $false
+        }
+        if ($extendingBatch) {
+            $ContinuationContext.LastBatchAuthorizationId = $ContinuationContext.NextBatchAuthorization.Id
+            $ContinuationContext.NextBatchAuthorization = $null
+            $ContinuationContext.NextBatchAuthorized = $false
+        }
         $ContinuationContext.TargetCount = [int]$hostPoolReplacementPlan.TargetSessionHostCount
         $parameterBytes = [Text.Encoding]::Unicode.GetByteCount(
             ($sessionHostParameters | ConvertTo-Json -Depth 20 -Compress)
@@ -877,6 +943,10 @@ if ($ContinuationContext) {
             throw 'SHR batch is too large to safely checkpoint its deployment intent. Reduce the deployment batch size before deleting hosts.'
         }
         Save-ShrContinuationCheckpoint
+        if ($extendingBatch) {
+            $hostPoolReplacementPlan = & $getReplacementPlan
+            Write-LogEntry -Message "CONTINUATION | SideBySide deployment batch $($ContinuationContext.BatchNumber); retirement remains authorized for $($ContinuationContext.BatchHostNames.Count) old hosts."
+        }
     }
     $hostPoolReplacementPlan.SessionHostsPendingDelete = @(
         $hostPoolReplacementPlan.SessionHostsPendingDelete |
@@ -965,7 +1035,8 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
             $deploymentState.LastImageVersion = $currentImageVersion
         }
 
-        if ($targetSessionHostCount -eq 0 -and $deploymentState.PendingHostMappings -eq '{}') {
+        if ($targetSessionHostCount -eq 0 -and $deploymentState.PendingHostMappings -eq '{}' -and
+            (-not $ContinuationContext -or $hostPoolReplacementPlan.TotalFleetSessionHostsToReplace -eq 0)) {
             $deploymentState.TargetSessionHostCount = 0
             Write-LogEntry -Message "Cycle complete - clearing the auto-detected target so the next cycle can detect intentional pool-size changes" -Level Trace
         }
@@ -1729,13 +1800,18 @@ $cycleComplete = $metricsLog.ToReplace -eq 0 -and $metricsLog.InDrain -eq 0 -and
 # In SideBySide mode with shutdown retention: also remove tags from new hosts if old hosts are in retention (even if cycle not fully complete)
 # This allows scaling plan to manage new capacity while old hosts remain protected during retention period
 $sideBySideRetentionTransition = $replacementMode -eq 'SideBySide' -and $enableShutdownRetention -and $shutdownRetentionCount -gt 0 -and $metricsLog.ToReplace -eq 0 -and $metricsLog.RunningDeployments -eq 0
+$sideBySideDeploymentTransition = -not $deploymentResult -and
+    (& $testSideBySideBatchReady $newHostAvailability)
 
-if ($cycleComplete -or $sideBySideRetentionTransition) {
+if ($cycleComplete -or $sideBySideRetentionTransition -or $sideBySideDeploymentTransition) {
     if ($cycleComplete) {
         Write-LogEntry -Message "Update cycle complete - all hosts are up to date. Removing scaling exclusion tags (preserving tags on shutdown retention VMs)."
     }
-    else {
+    elseif ($sideBySideRetentionTransition) {
         Write-LogEntry -Message "SideBySide mode with shutdown retention - removing scaling exclusion tags from new active hosts (preserving tags on shutdown retention VMs)."
+    }
+    else {
+        Write-LogEntry -Message 'CONTINUATION | SideBySide replacements are healthy; handing them back to autoscale while old hosts continue draining.'
     }
     
     $tagScalingPlanExclusionTag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
@@ -1821,6 +1897,18 @@ if ($cycleComplete -or $sideBySideRetentionTransition) {
     else {
         Write-LogEntry -Message "No scaling exclusion tag configured - skipping tag cleanup" -Level Trace
     }
+}
+
+if ($ContinuationContext -and $replacementMode -eq 'SideBySide') {
+    $ContinuationContext.DeploymentBatchReady = $sideBySideDeploymentTransition -and
+        (& $testSideBySideBatchReady $newHostAvailability -RequireHandoff)
+    $latestHostCount = @($sessionHostsFiltered | Where-Object {
+        -not $_.IsUnavailable -and -not $_.ShutdownTimestamp -and
+        $_.ImageVersion -eq $latestImageVersion.Version -and
+        $_.ImageDefinition -eq $latestImageVersion.Definition
+    }).Count
+    $ContinuationContext.MoreDeploymentsAllowed = $ContinuationContext.DeploymentBatchReady -and
+        $latestHostCount -lt $ContinuationContext.TargetCount
 }
 
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | NewHosts: {10}/{11} ({12}%) Available | LatestImage: {13}" `

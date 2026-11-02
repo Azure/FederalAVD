@@ -31,9 +31,13 @@ Package availability does not prove classified-cloud service support or offline 
 
 Session Host Replacer can opt into a timer-to-queue continuation design in the same Function App.
 The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#queue-continuation)
-defines initiation authorization, immutable image/batch scope, conditional state ownership,
+defines initiation authorization, immutable image selection, timer-authorized batch scope, conditional state ownership,
 idempotent deployment intent, deadlines and operator recovery. This is separate from application
-or image acceptance testing. The optional
+or image acceptance testing. SideBySide separates deployment readiness from old-host retirement:
+later scheduled batches can extend the same operation without waiting for prior drains, while
+retirement scope remains explicitly checkpointed and capacity-bounded. DeleteFirst keeps its
+retirement-before-redeployment gates. The canonical design owns the detailed coordination contract.
+The optional
 [prebuilt extension package](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#option-2-optional-prebuilt-queue-extension-package)
 keeps binary packaging outside ARM/Template Specs and leaves normal bundle deployment unchanged.
 Its `%TimerSchedule%` binding uses the same deployment-owned app setting as the normal timer,

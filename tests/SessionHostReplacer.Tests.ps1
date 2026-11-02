@@ -1009,7 +1009,10 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
             param (
                 [string] $ReplacementMode,
                 $ScalingPlanTarget,
-                [array] $SessionHosts = $oldHosts
+                [array] $SessionHosts = $oldHosts,
+                [int] $MaxDeploymentBatchSize = 100,
+                [bool] $EnableProgressiveScaleUp = $false,
+                [int] $InitialDeploymentPercentage = 20
             )
 
             Get-SessionHostReplacementPlan `
@@ -1024,7 +1027,10 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
                 -DrainGracePeriodHours 24 `
                 -MinimumCapacityPercentage 80 `
                 -MaxDeletionsPerCycle 50 `
-                -EnableProgressiveScaleUp $false `
+                -EnableProgressiveScaleUp $EnableProgressiveScaleUp `
+                -MaxDeploymentBatchSize $MaxDeploymentBatchSize `
+                -InitialDeploymentPercentage $InitialDeploymentPercentage `
+                -SuccessfulRunsBeforeScaleUp 1 `
                 -ScalingPlanTarget $ScalingPlanTarget `
                 -RemoveEntraDevice $false `
                 -RemoveIntuneDevice $false `
@@ -1102,6 +1108,50 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $finished.TotalFleetSessionHostsToReplace | Should Be 8
         $finished.PossibleDeploymentsCount | Should Be 0
         $finished.PossibleSessionHostDeleteCount | Should Be 0
+    }
+
+    It 'honors the SideBySide deployment ceiling with progressive batching <Progressive>' -TestCases @(
+        @{ Progressive = $false }
+        @{ Progressive = $true }
+    ) {
+        param($Progressive)
+        Mock Get-DeploymentState -ModuleName SessionHostReplacer.Planning { [PSCustomObject]@{ ConsecutiveSuccesses = 0 } }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide `
+            -MaxDeploymentBatchSize 3 -EnableProgressiveScaleUp $Progressive -InitialDeploymentPercentage 50
+        $plan.PossibleDeploymentsCount | Should Be 3
+    }
+
+    It 'preserves the original target between authorized batches while unselected old hosts remain' {
+        Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning { 0 }
+        Mock Get-DeploymentState -ModuleName SessionHostReplacer.Planning {
+            [PSCustomObject]@{ TargetSessionHostCount = 10 }
+        }
+        Mock Save-DeploymentState -ModuleName SessionHostReplacer.Planning {}
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('already-retired'); TargetCount = 10 }
+        }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide
+        $plan.TotalFleetSessionHostsToReplace | Should Be 10
+        $plan.TotalSessionHostsToReplace | Should Be 0
+        Assert-MockCalled Save-DeploymentState -ModuleName SessionHostReplacer.Planning -Times 0 -Exactly -Scope It
+    }
+
+    It 'does not exceed the twice-target SideBySide capacity ceiling when a later batch is authorized' {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('avd-01'); TargetCount = 10; NextBatchAuthorized = $true }
+        }
+        $moreOldHosts = 11..20 | ForEach-Object {
+            [PSCustomObject]@{
+                SessionHostName = "avd-$_"; VMName = "avd-$_"
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$_"
+                ImageDefinition = $latestImage.Definition; ImageVersion = '1.0.0'
+                Status = 'Available'; AllowNewSession = $true; Sessions = 0
+                ShutdownTimestamp = $null; PendingDrainTimeStamp = $null; IsUnavailable = $false
+            }
+        }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -SessionHosts @($oldHosts + $moreOldHosts)
+        $plan.PossibleDeploymentsCount | Should Be 0
+        $plan.TargetSessionHostCount | Should Be 10
     }
 
     It 'SideBySide grows an up-to-date pool to an explicit target without an image update' {

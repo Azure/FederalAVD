@@ -1105,6 +1105,15 @@ eligible hosts to autoscale and safely removes the approved old hosts without wa
 timer tick. It uses the same Function App, identity, storage account and lifecycle engine. Another
 batch still requires the initiation schedule. This is not a new image-validation add-on.
 
+In **SideBySide**, that next scheduled batch does not have to wait for the previous old hosts to
+finish draining. Once the previous replacements are healthy, registered and handed back to
+autoscale, a later tick can authorize another deployment batch within the same pinned operation.
+The worker continues retiring all previously authorized old hosts safely. A target of 20 and batch
+ceiling of 10 can therefore deploy two batches while old hosts remain occupied, temporarily reaching
+40 VMs. Batch-size and temporary-capacity ceilings still apply; quota and subnet capacity must allow
+the surge. **DeleteFirst** still completes the current retirement/redeployment batch first.
+See the [canonical deployment and retirement gates](replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+
 See [queue sequencing and coordination](replacement-flow.md#queue-continuation) for operation scope,
 duplicate/crash handling, deadlines and lease behavior.
 
@@ -1162,6 +1171,13 @@ duplicate messages, a worker crash after ARM acceptance, drain periods, scaling-
 retention, an initiation hold and maintenance-window expiry in an isolated pool. Live queue identity,
 private DNS, Portal rendering and target-cloud extension availability require separate verification;
 offline tests do not establish deployment success.
+
+For the SideBySide pilot, also keep users on the first old-host batch and verify that the next
+scheduled tick can deploy another batch after replacement health and scaling handoff, without
+waiting for those users' grace period. Confirm that worker-only wake-ups never add a batch,
+an initiation hold prevents further authorizations, unhealthy replacements block advancement, and
+the configured batch and twice-target capacity ceilings hold. Test a restart with an unconsumed
+authorization and verify that it cannot be reused for a different operation or batch.
 
 ## Configuration
 

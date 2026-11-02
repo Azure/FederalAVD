@@ -577,9 +577,11 @@ function Get-SessionHostReplacementPlan {
     $totalFleetHostsToReplace = $sessionHostsToReplace.Count
     $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
     if ($continuation -and $null -ne $continuation.BatchHostNames) {
-        $sessionHostsToReplace = @($sessionHostsToReplace | Where-Object {
-            $_.SessionHostName -in $continuation.BatchHostNames
-        })
+        if (-not ($ReplacementMode -eq 'SideBySide' -and $continuation.NextBatchAuthorized)) {
+            $sessionHostsToReplace = @($sessionHostsToReplace | Where-Object {
+                $_.SessionHostName -in $continuation.BatchHostNames
+            })
+        }
         $TargetSessionHostCount = $continuation.TargetCount
     }
 
@@ -697,6 +699,9 @@ function Get-SessionHostReplacementPlan {
             
             Write-LogEntry -Message "Progressive scale-up: Using $currentPercentage% of $canDeploy needed = $actualDeployCount hosts (ConsecutiveSuccesses: $($deploymentState.ConsecutiveSuccesses), Max: $batchSizeLimit)"
             $canDeploy = $actualDeployCount
+        }
+        if ($ReplacementMode -eq 'SideBySide') {
+            $canDeploy = [Math]::Min($canDeploy, $MaxDeploymentBatchSize)
         }
     }
         
@@ -896,7 +901,7 @@ function Get-SessionHostReplacementPlan {
     
     # Auto-detect mode: Clear stored target when replacement cycle is complete
     $configuredTarget = Read-FunctionAppSetting TargetSessionHostCount
-    if ($configuredTarget -eq 0 -and $canDeploy -eq 0 -and $unavailableHosts.Count -eq 0 -and $sessionHostsToReplace.Count -eq 0 -and $sessionHostsPendingDelete.Count -eq 0) {
+    if ($configuredTarget -eq 0 -and $canDeploy -eq 0 -and $unavailableHosts.Count -eq 0 -and $totalFleetHostsToReplace -eq 0 -and $sessionHostsPendingDelete.Count -eq 0) {
         # All hosts are up to date and nothing pending - clear stored target for next cycle
         try {
             $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName

@@ -72,6 +72,7 @@ function Invoke-OrchestrationCycle {
 Describe 'Session Host Replacer deterministic orchestration failures' {
     BeforeAll {
         Import-Module $modulePath -Force
+        $actualReplacementPlan = (Get-Command Get-SessionHostReplacementPlan).ScriptBlock
     }
 
     BeforeEach {
@@ -280,6 +281,12 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             if ($global:shrSimulation.RunNumber -in $global:shrSimulation.AcceptedButThrowRuns) {
                 throw 'simulated timeout after ARM accepted the deployment'
             }
+            if ($global:shrSimulation.Context) {
+                $global:shrSimulation.Context.DeploymentHostNames = @($names)
+                $global:shrSimulation.Context.DeploymentIntent = @{
+                    Name = "deployment-$($global:shrSimulation.RunNumber)"; HostNames = @($names)
+                }
+            }
             [PSCustomObject]@{
                 DeploymentName = "deployment-$($global:shrSimulation.RunNumber)"
                 SessionHostNames = $names
@@ -415,6 +422,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
     It 'does not select a newly published image while completing a previously approved batch' {
         Mock Get-LatestImageVersion { throw 'must not select another image' }
+        $global:shrSettings.TargetSessionHostCount = 0
+        $global:shrSettings.EnableProgressiveScaleUp = $true
+        $global:shrSimulation.DeploymentState.TargetSessionHostCount = 2
         $global:shrSimulation.Hosts[0].ImageVersion = '2.0.0'
         $global:shrSimulation.Readiness.SafeToProceed = $true
         $global:shrSimulation.Plan = [PSCustomObject]@{
@@ -434,11 +444,127 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult $result
         $result.Completed | Should Be $true
+        $global:shrSimulation.DeploymentState.TargetSessionHostCount | Should Be 2
         $global:shrSimulation.DeploymentCalls.Count | Should Be 0
         Assert-MockCalled Get-LatestImageVersion -Times 0 -Exactly -Scope It
         Assert-MockCalled Update-HostPoolStatus -Times 1 -Exactly -Scope It -ParameterFilter {
             $HostsToReplace -eq 1
         }
+    }
+
+    It 'deploys two scheduled ten-host SideBySide batches while old hosts drain with target setting <TargetSetting>' -TestCases @(
+        @{ TargetSetting = 0 }
+        @{ TargetSetting = 20 }
+    ) {
+        param($TargetSetting)
+        Mock Save-ShrContinuationCheckpoint {}
+        $global:shrSettings.TargetSessionHostCount = $TargetSetting
+        $global:shrSettings.MaxDeploymentBatchSize = 10
+        $global:shrSimulation.Hosts = @(1..20 | ForEach-Object {
+            New-OrchestrationTestHost -Name "avd-$($_.ToString('00'))"
+        })
+        $global:shrSimulation.DeploymentState.TargetSessionHostCount = 20
+        $global:shrSimulation.Context = @{
+            Id = 'operation'; Image = $null; BatchHostNames = $null
+            InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+        }
+        $global:shrSimulation.RealPlanner = $actualReplacementPlan
+        Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning {
+            param($SettingKey, [switch]$AsBoolean)
+            if ($AsBoolean) { return [bool]$global:shrSettings[$SettingKey] }
+            $global:shrSettings[$SettingKey]
+        }
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning { $global:shrSimulation.Context }
+        Mock Get-DeploymentState -ModuleName SessionHostReplacer.Planning { $global:shrSimulation.DeploymentState }
+        Mock Get-VMPowerStates -ModuleName SessionHostReplacer.Planning {
+            param($VMResourceIds)
+            $states = @{}
+            foreach ($id in $VMResourceIds) { $states[$id] = $false }
+            $states
+        }
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Get-SessionHostReplacementPlan {
+            param($ARMToken, $SessionHosts, $RunningDeployments, $LatestImageVersion,
+                $AllowImageVersionRollback, $ScalingPlanTarget, $MaintenanceMaxVmsRemoved,
+                $MaintenanceAllowFullPoolOutage, $GraphToken, $RemoveEntraDevice, $RemoveIntuneDevice)
+            & $global:shrSimulation.RealPlanner @PSBoundParameters
+        }
+        Mock Test-SessionHostScalingRelease {
+            param($SessionHost)
+            $SessionHost.ImageVersion -eq '2.0.0' -and $SessionHost.AllowNewSession
+        }
+        Mock Remove-SessionHosts {
+            param($SessionHostsPendingDelete)
+            foreach ($candidate in @($global:shrSimulation.Hosts | Where-Object {
+                $_.SessionHostName -in $SessionHostsPendingDelete.SessionHostName
+            })) {
+                $candidate.AllowNewSession = $false
+                $candidate.Sessions = 2
+                $candidate.PendingDrainTimeStamp = [DateTimeOffset]::UtcNow.ToString('o')
+            }
+            [PSCustomObject]@{
+                SuccessfulDeletions = @(); SuccessfulShutdowns = @(); FailedDeletions = @()
+            }
+        }
+        $context = $global:shrSimulation.Context
+        $global:shrSimulation.AllocatedNames = @(1..10 | ForEach-Object { "new-$($_.ToString('00'))" })
+        $global:shrSimulation.RunNumber = 1
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult @{ Completed = $false }
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].Count | Should Be 10
+        $context.BatchHostNames.Count | Should Be 10
+        $context.DeploymentBatchReady | Should Be $false
+
+        $firstReplacements = @($global:shrSimulation.AllocatedNames | ForEach-Object {
+            $newHost = New-OrchestrationTestHost -Name $_ -ImageVersion '2.0.0'
+            $newHost.Tags.ScalingPlanExclusion = 'SessionHostReplacer'
+            $newHost
+        })
+        $global:shrSimulation.Hosts += $firstReplacements
+        $global:shrSimulation.Readiness.SafeToProceed = $true
+        $global:shrSimulation.Readiness.TotalNewHosts = 10
+        $global:shrSimulation.RunNumber = 2
+        $global:shrSimulation.DeploymentStatuses[2] = 'Succeeded'
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult @{ Completed = $false }
+        $context.DeploymentBatchReady | Should Be $true
+        $context.MoreDeploymentsAllowed | Should Be $true
+        @($firstReplacements | Where-Object { $_.Tags.ScalingPlanExclusion }).Count | Should Be 0
+        @($global:shrSimulation.Hosts | Where-Object { -not $_.AllowNewSession }).Count | Should Be 10
+
+        # Worker-only follow-up cannot expand the authorization.
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult @{ Completed = $false }
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+
+        $context.NextBatchAuthorization = @{
+            Id = 'scheduled-second-batch'; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+        }
+        $global:shrSimulation.AllocatedNames = @(11..20 | ForEach-Object { "new-$($_.ToString('00'))" })
+        $global:shrSimulation.RunNumber = 3
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult @{ Completed = $false }
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
+        $global:shrSimulation.DeploymentCalls[1].Count | Should Be 10
+        $context.BatchHostNames.Count | Should Be 20
+        $context.BatchNumber | Should Be 2
+        $context.LastBatchAuthorizationId | Should Be 'scheduled-second-batch'
+        $context.DeploymentBatchReady | Should Be $false
+        @($global:shrSimulation.Hosts | Where-Object { $_.ImageVersion -eq '1.0.0' }).Count | Should Be 20
+
+        $global:shrSimulation.Hosts += @($global:shrSimulation.AllocatedNames | ForEach-Object {
+            New-OrchestrationTestHost -Name $_ -ImageVersion '2.0.0'
+        })
+        $global:shrSimulation.Readiness.TotalNewHosts = 20
+        $global:shrSimulation.RunNumber = 4
+        $global:shrSimulation.DeploymentStatuses[4] = 'Succeeded'
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult @{ Completed = $false }
+        $global:shrSimulation.Hosts.Count | Should Be 40
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
+        $context.DeploymentBatchReady | Should Be $true
+        $context.MoreDeploymentsAllowed | Should Be $false
     }
 
     It 'does not release unhealthy up-to-date hosts or mark their continuation complete' {
@@ -463,6 +589,58 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $result.Completed | Should Be $false
         $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
         Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PATCH' }
+    }
+
+    It 'does not advance a SideBySide deployment batch with a <Blocker> gate' -TestCases @(
+        @{ Blocker = 'health' }
+        @{ Blocker = 'missing-registration' }
+        @{ Blocker = 'running-deployment' }
+        @{ Blocker = 'expired-authorization' }
+        @{ Blocker = 'scaling-handoff' }
+        @{ Blocker = 'pending-cleanup' }
+    ) {
+        param($Blocker)
+        Mock Save-ShrContinuationCheckpoint {}
+        Mock Test-SessionHostScalingRelease { $false }
+        $newHost = New-OrchestrationTestHost -Name 'new-01' -ImageVersion '2.0.0'
+        $global:shrSimulation.Hosts += $newHost
+        $global:shrSimulation.Readiness.SafeToProceed = $true
+        $global:shrSimulation.Readiness.TotalNewHosts = 1
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 0; PossibleSessionHostDeleteCount = 1
+            SessionHostsPendingDelete = @($global:shrSimulation.Hosts[0])
+            ReplacementCandidates = @($global:shrSimulation.Hosts[0..1])
+            ExistingSessionHostNames = @($global:shrSimulation.Hosts.SessionHostName)
+            TargetSessionHostCount = 2; TotalSessionHostsToReplace = 1; TotalFleetSessionHostsToReplace = 2
+        }
+        $context = @{
+            Image = @{ Definition = $global:shrSimulation.LatestImage.Definition; Version = '2.0.0'; Date = '2026-09-01T00:00:00Z' }
+            BatchHostNames = @('avd-01'); BatchDeploymentLimit = 1; BatchNumber = 1
+            TargetCount = 2; DeploymentBatchReady = $true; MoreDeploymentsAllowed = $true
+            DeploymentHostNames = @('new-01'); DeploymentIntent = @{ Name = 'first'; HostNames = @('new-01') }
+            NextBatchAuthorization = @{ Id = 'next'; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o') }
+        }
+        switch ($Blocker) {
+            'health' { $global:shrSimulation.Readiness.SafeToProceed = $false }
+            'missing-registration' { $global:shrSimulation.Hosts = @($global:shrSimulation.Hosts[0..1]) }
+            'running-deployment' {
+                $global:shrSimulation.RunningDeployments[0] = @(
+                    [PSCustomObject]@{ DeploymentName = 'first'; SessionHostNames = @('new-01') }
+                )
+            }
+            'expired-authorization' { $context.NextBatchAuthorization.ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o') }
+            'scaling-handoff' { $newHost.Tags.ScalingPlanExclusion = 'SessionHostReplacer' }
+            'pending-cleanup' { $context.CleanupIntent = @{ Hosts = @(@{ SessionHostName = 'old' }) } }
+        }
+        Mock Remove-SessionHosts {
+            [PSCustomObject]@{ SuccessfulDeletions = @(); SuccessfulShutdowns = @(); FailedDeletions = @() }
+        }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $context -CycleResult @{ Completed = $false }
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $context.BatchNumber | Should Be 1
+        $context.LastBatchAuthorizationId | Should BeNullOrEmpty
+        $context.DeploymentIntent.Name | Should Be 'first'
     }
 
     It 'does not report completion when exact-image validation prevents scaling handoff' {

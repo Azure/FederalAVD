@@ -77,13 +77,14 @@ function Get-ShrConfigurationHash {
 }
 
 function Get-ShrOperation {
-    param([switch] $EnsureTable)
+    param([switch] $EnsureTable, [switch] $BatchAuthorization)
 
     if ($EnsureTable) {
         Invoke-ShrStorageRequest -Service Table -Path Tables -Method POST `
             -Body '{"TableName":"shrContinuation"}' -ExpectedStatus 409 | Out-Null
     }
     $key = Get-ShrOperationKey
+    if ($BatchAuthorization) { $key += '-initiation' }
     $response = Invoke-ShrStorageRequest -Service Table `
         -Path "shrContinuation(PartitionKey='SHR',RowKey='$key')" -ExpectedStatus 404
     if ([int]$response.StatusCode -eq 404) { return $null }
@@ -191,8 +192,32 @@ function Start-ShrContinuation {
         if ($operation.State.Status -eq 'NeedsAttention') {
             throw "SHR operation $($operation.State.Id) requires operator recovery: $($operation.State.LastError)"
         }
+        if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -and
+            (Read-FunctionAppSetting InitiationEnabled -AsBoolean) -and
+            $operation.State.DeploymentBatchReady -and $operation.State.MoreDeploymentsAllowed) {
+            # A separate entity lets a timer authorize work without invalidating the worker's ETag.
+            $authorization = Get-ShrOperation -BatchAuthorization
+            $request = @{
+                Id = [guid]::NewGuid().ToString('N')
+                OperationId = $operation.State.Id
+                AfterBatchNumber = [int]$operation.State.BatchNumber
+                ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+            }
+            if ($authorization) {
+                $authorization.State = $request
+                $saved = Save-ShrOperation -Operation $authorization -AllowConflict
+            } else {
+                $authorization = @{ Key = "$($operation.Key)-initiation"; State = $request; ETag = '' }
+                $saved = Save-ShrOperation -Operation $authorization -Insert -AllowConflict
+            }
+            if ($saved) {
+                Write-LogEntry -Message "CONTINUATION | Authorized the next SideBySide deployment batch for $($operation.State.Id); old-host retirement continues."
+            } else {
+                Write-LogEntry -Message 'CONTINUATION | Another timer updated the SideBySide authorization; resuming the active operation.' -Level Warning
+            }
+        }
         Send-ShrWorkItem -OperationId $operation.State.Id -Generation $operation.State.Generation
-        Write-LogEntry -Message "CONTINUATION | Rescheduled active operation $($operation.State.Id); no new batch initiated."
+        Write-LogEntry -Message "CONTINUATION | Rescheduled active operation $($operation.State.Id)."
         return
     }
     if (-not (Read-FunctionAppSetting InitiationEnabled -AsBoolean)) {
@@ -215,6 +240,10 @@ function Start-ShrContinuation {
         LockExpiresUtc = $now.ToString('o')
         Image = $image
         BatchHostNames = $null
+        BatchNumber = 0
+        DeploymentHostNames = @()
+        DeploymentBatchReady = $false
+        MoreDeploymentsAllowed = $false
         DeploymentIntent = $null
         CleanupIntent = $null
         LastError = ''
@@ -396,6 +425,19 @@ function Invoke-ShrContinuation {
         }
         if ($operation.State.ConfigurationHash -ne (Get-ShrConfigurationHash)) {
             throw 'SHR operation configuration changed. Restore the initiating configuration or perform operator recovery.'
+        }
+        $operation.State.NextBatchAuthorization = $null
+        $operation.State.NextBatchAuthorized = $false
+        if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -and
+            (Read-FunctionAppSetting InitiationEnabled -AsBoolean) -and
+            $operation.State.DeploymentBatchReady -and $operation.State.MoreDeploymentsAllowed) {
+            $authorization = Get-ShrOperation -BatchAuthorization
+            if ($authorization -and $authorization.State.OperationId -eq $operation.State.Id -and
+                [int]$authorization.State.AfterBatchNumber -eq [int]$operation.State.BatchNumber -and
+                $authorization.State.Id -ne $operation.State.LastBatchAuthorizationId -and
+                [DateTimeOffset]$authorization.State.ExpiresUtc -gt [DateTimeOffset]::UtcNow) {
+                $operation.State.NextBatchAuthorization = $authorization.State
+            }
         }
         if ($null -eq $operation.State.BatchHostNames -and -not $operation.State.CleanupIntent -and
             [DateTimeOffset]$operation.State.InitiationExpiresUtc -le $now) {

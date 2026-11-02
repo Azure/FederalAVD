@@ -446,6 +446,18 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         @($global:shrPreflight.Events | Where-Object { $_ -like 'Get AVD*' }).Count | Should Be 1
     }
 
+    It 'checkpoints a distinct deterministic deployment name for the second SideBySide batch' {
+        $global:shrPreflight.WorkerState = @{ Id = ('a' * 32); BatchNumber = 2; DeploymentIntent = $null }
+        $result = Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1
+        $result.DeploymentName | Should Be "shr_$('a' * 32)_b2"
+        $global:shrPreflight.WorkerState.DeploymentHostNames | Should Be @('avd-01')
+        $global:shrPreflight.ContinuationSaves[-1].DeploymentIntent.Name | Should Be $result.DeploymentName
+        $global:shrPreflight.WorkerState.DeploymentIntent.Uri | Should Match "/$($result.DeploymentName)\?"
+        $body = $global:shrPreflight.WorkerState.DeploymentIntent.Body | ConvertFrom-Json
+        $body.properties.parameters.Tags.value.'Microsoft.Compute/virtualMachines'.AutoReplaceDeploymentName |
+            Should Be $result.DeploymentName
+    }
+
     It 'treats EntraKerberos-Hybrid as native Entra join but skips Intune if not enrolled or enabled' {
         $global:shrPreflight.Settings.SessionHostParameters.IdentitySolution = 'EntraKerberos-Hybrid'
         $global:shrPreflight.Settings.SessionHostParameters.IntuneEnrollment = $false

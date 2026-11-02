@@ -48,6 +48,13 @@ handoff and safe cleanup then continue without another timer tick. The worker pi
 image and batch; it does not authorize further batches or newer images outside the initiation
 schedule. Existing deployments remain timer-only unless explicitly opted in.
 
+For SideBySide, a later scheduled tick can authorize another deployment batch after the previous
+replacements are healthy and handed back to autoscale, even while their old hosts are still draining.
+The same operation keeps retiring those old hosts safely; it does not wait for their grace period
+before deploying the next authorized batch. The pinned image, target and deadline remain unchanged.
+Batch-size and twice-target capacity ceilings still apply. DeleteFirst retains its stricter
+retirement-before-redeployment ordering. See the [deployment and retirement gates](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+
 Use `initiationEnabled=false` to hold new queue batches without stopping active work. Stopping the
 entire app stops the worker too. See [operations and recovery](../deployments/add-ons/sessionHostReplacer/README.md#queue-continuation-operations)
 and the [coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#queue-continuation).

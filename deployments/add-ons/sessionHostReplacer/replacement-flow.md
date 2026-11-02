@@ -3,8 +3,9 @@
 # Canonical Session Host Replacer Flow
 
 These diagrams describe one lifecycle-engine invocation. By default the timer invokes the engine.
-With opt-in queue continuation, the timer authorizes a batch and a queue-triggered worker invokes
-the same engine until that batch finishes. A replacement cycle can span multiple batches.
+With opt-in queue continuation, the timer authorizes deployment batches and a queue-triggered worker
+progresses their deployment and retirement. A SideBySide operation can contain multiple scheduled
+deployment batches while previously selected old hosts continue draining.
 
 > **Canonical lifecycle reference:** This document owns the detailed replacement, readiness,
 > scaling-phase, and recovery behavior. The [add-on README](README.md) owns deployment,
@@ -18,7 +19,10 @@ same Function App; there is no additional VM or Function App.
 ```mermaid
 flowchart TD
     T[Scheduled timer] --> A{Active operation?}
-    A -- Yes --> Q[Enqueue existing operation ID]
+    A -- Yes --> S{SideBySide deployment ready<br/>and more replacements needed?}
+    S -- Yes --> P[If initiation enabled, persist<br/>next-batch authorization]
+    P --> Q[Enqueue existing operation ID]
+    S -- No --> Q
     A -- No --> H{Initiation enabled?}
     H -- No --> X[Finish without new work]
     H -- Yes --> I[Select exact image and persist authorization]
@@ -29,7 +33,7 @@ flowchart TD
     E --> C{Health, scaling handoff and cleanup complete?}
     C -- No --> D[Enqueue delayed continuation and exit]
     D --> W
-    C -- Yes --> F[Complete batch; next batch requires timer]
+    C -- Yes --> F[Complete authorized work;<br/>further batches require timer]
 ```
 
 The timer selects the image using the existing replication, exclusion, rollback and publication-age
@@ -39,16 +43,42 @@ This prevents a stale queued initiation from starting a replacement hours later.
 started, its progress is independent of the initiation schedule.
 
 The first worker step checkpoints the selected old-host names, deployment ceiling and pool target.
-Subsequent planning uses the full inventory for capacity safety but restricts replacement candidates
-to that batch. Unselected old hosts remain for a later timer-authorized batch; metrics still report
+Subsequent planning uses the full inventory for capacity safety but restricts retirement to the
+authorized names. Unselected old hosts require a later timer-authorized batch; metrics still report
 the fleet's outstanding replacements. Existing drain/session timing, scaling-phase restrictions,
 fresh-state deletion checks, exact-name recovery and shutdown retention remain in force.
 Maintenance requests are not marked complete merely because one of their batches has finished.
 
+### SideBySide deployment and retirement are separate gates
+
+SideBySide does not wait for an earlier batch's old hosts to finish draining before permitting the
+next scheduled deployment batch. Once all checkpointed replacement names are registered on the
+pinned image, latest-image readiness passes, ARM work has finished, and SHR-owned scaling exclusions
+have been released, a later initiation tick may authorize another deployment batch. The worker
+rechecks readiness, registration, handoff, capacity and the authorization's five-minute expiry before
+extending the scope. It cannot authorize itself or roll into another batch merely because it woke up.
+
+The same leased operation retains the cumulative old-host names and continues their safe retirement
+between ticks. Each additional deployment gets a distinct checkpointed intent. A pending cleanup
+checkpoint or failed/unhealthy deployment blocks advancement; a long drain/session wait alone does
+not. The image, pool target and operation deadline remain fixed across those batches. DeleteFirst
+still requires the current delete/redeploy/health/handoff batch to finish before another starts.
+
+For example, with a target of 20 and `maxDeploymentBatchSize=10`, the first 10 replacements can become
+healthy while 10 old hosts remain occupied. The next eligible initiation tick can deploy the other
+10 replacements without waiting for the old hosts' 24-hour grace period. Up to 40 VMs can temporarily
+exist. This is not a completion-time guarantee: health, schedule, quota, subnet space, cleanup,
+capacity and session gates still apply. The SideBySide deployment ceiling applies with or without
+progressive batching; the planner retains its twice-target temporary-capacity ceiling.
+
 ### Coordination and Recovery Boundaries
 
-- The `shrContinuation` table stores one entity per fully qualified host pool, separate from the
-  existing `sessionHostDeploymentState` recovery table. State updates use the returned ETag, never
+- The `shrContinuation` table stores one operation entity per fully qualified host pool, separate from
+  the existing `sessionHostDeploymentState` recovery table. A companion `<pool-key>-initiation`
+  entity holds the latest scheduled SideBySide authorization, scoped to operation ID and deployment
+  batch number. It does not update the leased operation's ETag or grant a second worker ownership.
+  Expired, consumed and superseded authorizations cannot extend the operation. Holding initiation
+  also prevents consumption of unstarted authorizations. State updates use the returned ETag, never
   wildcard replacement. Deploy only one SHR Function App per pool; separate storage accounts cannot
   coordinate ownership.
 - Timer retries and duplicate queue messages resume the same operation. The worker acquires a
@@ -71,6 +101,7 @@ Maintenance requests are not marked complete merely because one of their batches
   mean these are delays, not completion-time guarantees.
 - The deployment intent is saved before ARM submission. Its deterministic `shr_<operation-id>`
   name, exact hostnames, Template Spec version and request body are reused after an interruption.
+  Later SideBySide batches use `shr_<operation-id>_bN`, retaining the original deployment history.
   An already accepted deployment is observed rather than submitted under a new name.
   After partial failure, a checkpointed `_rN` retry includes only unresolved names and their aligned
   per-host placement settings; already registered hosts are not redeployed.
@@ -78,7 +109,7 @@ Maintenance requests are not marked complete merely because one of their batches
   placement remains keyed by exact hostname. Invalid ARM deployment collection envelopes fail
   closed rather than being interpreted as an empty deployment list.
 - The deadline is established once (`continuationTimeoutHours`, default 72, range 1-720); new
-  messages do not reset it. Unexpected failures, changed initiating configuration and expired
+  messages and additional SideBySide batches do not reset it. Unexpected failures, changed initiating configuration and expired
   deadlines stop in `NeedsAttention`, retaining the batch, pins and recovery information.
   See the [operator recovery procedure](README.md#queue-continuation-operations).
 - Operation state contains deployment parameters. Protect Table data access as carefully as

@@ -638,6 +638,9 @@ function Deploy-SessionHosts {
     $deploymentName = "{0}_Count_{1}_VMs_{2}" -f $DeploymentPrefix, $sessionHostNames.count, $deploymentTimestamp
     if ($continuation) {
         $deploymentName = "shr_$($continuation.Id)"
+        if ([int]$continuation.BatchNumber -gt 1) {
+            $deploymentName += "_b$($continuation.BatchNumber)"
+        }
     }
     $sessionHostParameters['Tags']['Microsoft.Compute/virtualMachines']['AutoReplaceDeploymentName'] = $deploymentName
     
@@ -685,6 +688,7 @@ function Deploy-SessionHosts {
         -WaitForVMDeletion:$WaitForVMDeletion -ResourceManagerUri $ResourceManagerUri `
         -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName
     if ($continuation) {
+        $continuation.DeploymentHostNames = @($sessionHostNames)
         $continuation.DeploymentIntent = @{
             Name = $deploymentName
             Uri = $Uri

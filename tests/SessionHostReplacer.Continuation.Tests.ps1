@@ -25,6 +25,8 @@ if ($global:shrContinuationTest.Action) {
             Conflict = $false
             FailDelay = -1
             Action = $null
+            Authorization = $null
+            AuthorizationSaves = @()
             FailCheckpointOnce = $false
             Settings = @{
                 EnableQueueContinuation = $true
@@ -66,6 +68,8 @@ if ($global:shrContinuationTest.Action) {
             $global:shrContinuationTest.Logs += $Message
         }
         Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation {
+            param([switch] $BatchAuthorization)
+            if ($BatchAuthorization) { return $global:shrContinuationTest.Authorization }
             if ($global:shrContinuationTest.Operation) {
                 $global:shrContinuationTest.Operation | ConvertTo-Json -Depth 40 |
                     ConvertFrom-Json -AsHashtable
@@ -74,6 +78,11 @@ if ($global:shrContinuationTest.Action) {
         Mock Save-ShrOperation -ModuleName SessionHostReplacer.Continuation {
             param($Operation)
             if ($global:shrContinuationTest.Conflict) { return $false }
+            if ($Operation.Key -like '*-initiation') {
+                $global:shrContinuationTest.Authorization = $Operation
+                $global:shrContinuationTest.AuthorizationSaves += $Operation
+                return $true
+            }
             if ($global:shrContinuationTest.FailCheckpointOnce -and $global:shrContinuationTest.Saves.Count -gt 0) {
                 $global:shrContinuationTest.FailCheckpointOnce = $false
                 throw 'cleanup checkpoint unavailable'
@@ -330,6 +339,124 @@ if ($global:shrContinuationTest.Action) {
         $global:shrContinuationTest.Messages.Count | Should Be 0
     }
 
+    It 'authorizes another scheduled SideBySide deployment without changing a leased operation' {
+        $global:shrContinuationTest.Settings.ReplacementMode = 'SideBySide'
+        $state = $global:shrContinuationTest.Operation.State
+        $state.BatchNumber = 1
+        $state.DeploymentBatchReady = $true
+        $state.MoreDeploymentsAllowed = $true
+        $state.LockOwner = 'active-worker'
+        $state.LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(30).ToString('o')
+        Start-ShrContinuation
+        $global:shrContinuationTest.Authorization.State.OperationId | Should Be $state.Id
+        $global:shrContinuationTest.Authorization.State.AfterBatchNumber | Should Be 1
+        ([DateTimeOffset]$global:shrContinuationTest.Authorization.State.ExpiresUtc) |
+            Should BeGreaterThan ([DateTimeOffset]::UtcNow)
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $state.LockOwner | Should Be 'active-worker'
+        $global:shrContinuationTest.Messages.Count | Should Be 1
+    }
+
+    It 'does not authorize extra batches while held, unhealthy, fully deployed or in DeleteFirst' {
+        $state = $global:shrContinuationTest.Operation.State
+        foreach ($scenario in @(
+            @{ Mode = 'SideBySide'; Enabled = $false; Ready = $true; More = $true },
+            @{ Mode = 'SideBySide'; Enabled = $true; Ready = $false; More = $true },
+            @{ Mode = 'SideBySide'; Enabled = $true; Ready = $true; More = $false },
+            @{ Mode = 'DeleteFirst'; Enabled = $true; Ready = $true; More = $true }
+        )) {
+            $global:shrContinuationTest.Settings.ReplacementMode = $scenario.Mode
+            $global:shrContinuationTest.Settings.InitiationEnabled = $scenario.Enabled
+            $state.DeploymentBatchReady = $scenario.Ready
+            $state.MoreDeploymentsAllowed = $scenario.More
+            Start-ShrContinuation
+        }
+        $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should Be 0
+    }
+
+    It 'delivers a fresh scheduled authorization to the leased worker without resetting its deadline' {
+        $global:shrContinuationTest.Settings.ReplacementMode = 'SideBySide'
+        $state = $global:shrContinuationTest.Operation.State
+        $state.BatchHostNames = @('old-01')
+        $state.BatchNumber = 1
+        $state.DeploymentBatchReady = $true
+        $state.MoreDeploymentsAllowed = $true
+        $deadline = $state.DeadlineUtc
+        Start-ShrContinuation
+        $global:shrContinuationTest.Action = {
+            param($State, $Result)
+            $State.NextBatchAuthorization.AfterBatchNumber | Should Be 1
+            $State.LastBatchAuthorizationId = $State.NextBatchAuthorization.Id
+            $State.NextBatchAuthorization = $null
+        }
+        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        ([DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc).UtcTicks |
+            Should Be ([DateTimeOffset]$deadline).UtcTicks
+        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        $global:shrContinuationTest.Action = {
+            param($State, $Result)
+            $State.NextBatchAuthorization | Should BeNullOrEmpty
+        }
+        $workItem.Generation = 1
+        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should Be 2
+        $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 1
+    }
+
+    It 'does not use expired, obsolete-operation or obsolete-batch authorizations' {
+        $global:shrContinuationTest.Settings.ReplacementMode = 'SideBySide'
+        $state = $global:shrContinuationTest.Operation.State
+        $state.BatchHostNames = @('old-01')
+        $state.BatchNumber = 2
+        $state.DeploymentBatchReady = $true
+        $state.MoreDeploymentsAllowed = $true
+        $global:shrContinuationTest.Action = {
+            param($State, $Result)
+            $State.NextBatchAuthorization | Should BeNullOrEmpty
+        }
+        foreach ($request in @(
+            @{ Id = 'expired'; OperationId = $state.Id; AfterBatchNumber = 2; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o') },
+            @{ Id = 'old-operation'; OperationId = ('b' * 32); AfterBatchNumber = 2; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o') },
+            @{ Id = 'old-batch'; OperationId = $state.Id; AfterBatchNumber = 1; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o') }
+        )) {
+            $global:shrContinuationTest.Authorization = @{ State = $request }
+            $workItem.Generation = $global:shrContinuationTest.Operation.State.Generation
+            Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        }
+        $global:shrContinuationTest.Cycles | Should Be 3
+    }
+
+    It 'revokes an unconsumed SideBySide authorization when initiation is held' {
+        $global:shrContinuationTest.Settings.ReplacementMode = 'SideBySide'
+        $global:shrContinuationTest.Settings.InitiationEnabled = $false
+        $state = $global:shrContinuationTest.Operation.State
+        $state.BatchHostNames = @('old')
+        $state.DeploymentBatchReady = $true
+        $state.MoreDeploymentsAllowed = $true
+        $state.NextBatchAuthorization = @{ Id = 'previous'; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o') }
+        $state.NextBatchAuthorized = $true
+        $global:shrContinuationTest.Action = {
+            param($State, $Result)
+            $State.NextBatchAuthorization | Should BeNullOrEmpty
+            $State.NextBatchAuthorized | Should Be $false
+        }
+        Invoke-ShrContinuation -WorkItem $workItem -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should Be 1
+        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+    }
+
+    It 'surfaces an authorization storage failure without modifying the active operation' {
+        $global:shrContinuationTest.Settings.ReplacementMode = 'SideBySide'
+        $state = $global:shrContinuationTest.Operation.State
+        $state.DeploymentBatchReady = $true
+        $state.MoreDeploymentsAllowed = $true
+        Mock Save-ShrOperation -ModuleName SessionHostReplacer.Continuation { throw 'authorization storage unavailable' }
+        { Start-ShrContinuation } | Should Throw 'authorization storage unavailable'
+        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        $global:shrContinuationTest.Messages.Count | Should Be 0
+    }
+
     It 'persists a fresh operation before queuing its first message' {
         $global:shrContinuationTest.Operation = $null
         Start-ShrContinuation
@@ -481,6 +608,21 @@ Describe 'SHR continuation storage protocol' {
             $global:shrStorageRequests[0].Method | Should Be 'PUT'
             $global:shrStorageRequests[0].ETag | Should Be 'version-1'
             $operation.ETag | Should Be 'version-2'
+        }
+    }
+
+    It 'reads scheduled batch authorization from a distinct pool-scoped table entity' {
+        Mock Get-ShrOperationKey -ModuleName SessionHostReplacer.Continuation { 'pool-key' }
+        Mock Invoke-ShrStorageRequest -ModuleName SessionHostReplacer.Continuation {
+            param($Path)
+            $Path | Should Be "shrContinuation(PartitionKey='SHR',RowKey='pool-key-initiation')"
+            @{ StatusCode = 200; Headers = @{ ETag = @('auth-version') }; Content = '{"State":"{\"Id\":\"request\"}"}' }
+        }
+        InModuleScope SessionHostReplacer.Continuation {
+            $authorization = Get-ShrOperation -BatchAuthorization
+            $authorization.Key | Should Be 'pool-key-initiation'
+            $authorization.ETag | Should Be 'auth-version'
+            $authorization.State.Id | Should Be 'request'
         }
     }
 
