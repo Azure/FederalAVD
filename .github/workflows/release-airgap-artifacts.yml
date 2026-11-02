@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing published FederalAVD release to build and attach assets to
+        description: Existing published FederalAVD release tag (YYYY-MM-DD is also accepted for date tags)
         required: true
         type: string
       winget_release_tag:
@@ -49,11 +49,17 @@ jobs:
           if ($env:REDISTRIBUTION_APPROVED -ne 'true') {
             throw 'Public redistribution approval is required. This checkbox does not grant a license.'
           }
-          $releaseJson = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft,tagName
+          $releaseTag = $env:RELEASE_TAG
+          $releaseJson = gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft,tagName
+          if ($LASTEXITCODE -ne 0 -and $releaseTag -match '^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$') {
+            $releaseTag = "$($Matches.year).$($Matches.month).$($Matches.day)"
+            $releaseJson = gh release view $releaseTag --repo $env:GITHUB_REPOSITORY --json isDraft,tagName
+          }
           if ($LASTEXITCODE -ne 0) { throw 'Published release lookup failed.' }
           $release = $releaseJson | ConvertFrom-Json
-          if ($release.isDraft -or $release.tagName -ne $env:RELEASE_TAG) { throw 'Select an existing published release.' }
-          $tag = [uri]::EscapeDataString($env:RELEASE_TAG)
+          if ($release.isDraft -or $release.tagName -ne $releaseTag) { throw 'Select an existing published release.' }
+          "RELEASE_TAG=$releaseTag" >> $env:GITHUB_ENV
+          $tag = [uri]::EscapeDataString($releaseTag)
           $sha = gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq '.sha'
           if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw 'Released commit lookup failed.' }
           "sha=$sha" >> $env:GITHUB_OUTPUT
