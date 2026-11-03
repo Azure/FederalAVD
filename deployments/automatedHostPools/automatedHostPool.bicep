@@ -275,10 +275,9 @@ param globalFeedPrivateDnsZoneResourceId string = ''
 @description('Optional. Friendly name shown for a newly created workspace.')
 param workspaceFriendlyName string = ''
 
-@minLength(1)
 @maxLength(20)
-@description('Required. Friendly name shown for the desktop application group.')
-param desktopFriendlyName string
+@description('Optional. Desktop friendly name. Leave empty to skip renaming the session desktop.')
+param desktopFriendlyName string = ''
 
 @description('Optional. Entra group object IDs assigned access to the desktop application group.')
 param appGroupSecurityGroupIds string[] = []
@@ -453,6 +452,9 @@ param azureQueuePrivateDnsZoneResourceId string = ''
 
 @description('Optional. VM size used by the temporary FSLogix deployment virtual machine. Select an available 2-vCPU SKU in the deployment region.')
 param deploymentVirtualMachineSize string = 'Standard_D2ads_v5'
+
+@description('Optional. Join the deployment VM using the session-host domain, OU, and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join.')
+param domainJoinDeploymentVirtualMachine bool = false
 
 @description('Optional. IP addresses or CIDR blocks permitted through the Azure Files firewall.')
 param fslogixPermittedIPs string[] = []
@@ -721,6 +723,9 @@ var effectiveDomainJoinPasswordSecretUri = !empty(domainJoinPasswordSecretUri) ?
 var domainConfigurationIsValid = !domainJoinRequired || !empty(domainName)
   ? true
   : fail('Domain-joined automated session hosts require domainName.')
+var deploymentVmDomainJoinIsValid = !domainJoinDeploymentVirtualMachine || (domainJoinRequired && !empty(domainName))
+  ? true
+  : fail('domainJoinDeploymentVirtualMachine requires ActiveDirectoryDomainServices or EntraDomainServices and a nonempty domainName.')
 var monitoringConfigurationIsValid = !enableMonitoring || !empty(effectiveDataCollectionRuleResourceId)
   ? true
   : fail('dataCollectionRuleResourceId is required when enableMonitoring is true.')
@@ -962,7 +967,7 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
       ? credentialsKeyVault.getSecret(last(split(effectiveDomainJoinUsernameSecretUri, '/'))!)
       : ''
     domainName: domainName
-    domainJoinDeploymentVirtualMachine: deployFSLogixStorage && fslogixStorageSolution == 'AzureNetAppFiles'
+    domainJoinDeploymentVirtualMachine: deploymentVmDomainJoinIsValid && (domainJoinDeploymentVirtualMachine || (deployFSLogixStorage && fslogixStorageSolution == 'AzureNetAppFiles'))
     encryptionAtHost: true
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId

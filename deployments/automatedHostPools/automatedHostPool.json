@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "2576126904396863581"
+      "templateHash": "11153631691621274188"
     }
   },
   "definitions": {
@@ -1949,10 +1949,10 @@
     },
     "desktopFriendlyName": {
       "type": "string",
-      "minLength": 1,
+      "defaultValue": "",
       "maxLength": 20,
       "metadata": {
-        "description": "Required. Friendly name shown for the desktop application group."
+        "description": "Optional. Desktop friendly name. Leave empty to skip renaming the session desktop."
       }
     },
     "appGroupSecurityGroupIds": {
@@ -2324,6 +2324,13 @@
         "description": "Optional. VM size used by the temporary FSLogix deployment virtual machine. Select an available 2-vCPU SKU in the deployment region."
       }
     },
+    "domainJoinDeploymentVirtualMachine": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Join the deployment VM using the session-host domain, OU, and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join."
+      }
+    },
     "fslogixPermittedIPs": {
       "type": "array",
       "items": {
@@ -2527,6 +2534,7 @@
     "hpBaseName": "[toLower(parameters('identifier'))]",
     "domainJoinRequired": "[contains(parameters('identitySolution'), 'DomainServices')]",
     "domainConfigurationIsValid": "[if(or(not(variables('domainJoinRequired')), not(empty(parameters('domainName')))), true(), fail('Domain-joined automated session hosts require domainName.'))]",
+    "deploymentVmDomainJoinIsValid": "[if(or(not(parameters('domainJoinDeploymentVirtualMachine')), and(variables('domainJoinRequired'), not(empty(parameters('domainName'))))), true(), fail('domainJoinDeploymentVirtualMachine requires ActiveDirectoryDomainServices or EntraDomainServices and a nonempty domainName.'))]",
     "monitoringIdentityConfigurationIsValid": "[if(empty(parameters('monitoringUserAssignedIdentityResourceId')), true(), fail('monitoringUserAssignedIdentityResourceId is no longer supported. Azure Monitor Agent uses each session host system-assigned identity.'))]",
     "marketplaceImageConfigurationIsValid": "[if(or(not(empty(parameters('customImageResourceId'))), and(not(empty(parameters('imageVersion'))), not(equals(toLower(parameters('imageVersion')), 'latest')))), true(), fail('Marketplace automated host pools require a concrete imageVersion. The latest sentinel is not supported by Session Host Configuration.'))]",
     "avdServicePrincipalIsValid": "[if(or(not(or(parameters('deployDynamicScalingPlan'), parameters('startVMOnConnect'))), not(empty(parameters('avdServicePrincipalObjectId')))), true(), fail('avdServicePrincipalObjectId is required when dynamic scaling or Start VM on Connect is enabled.'))]",
@@ -9569,7 +9577,7 @@
             "value": "[parameters('domainName')]"
           },
           "domainJoinDeploymentVirtualMachine": {
-            "value": "[and(parameters('deployFSLogixStorage'), equals(variables('fslogixStorageSolution'), 'AzureNetAppFiles'))]"
+            "value": "[and(variables('deploymentVmDomainJoinIsValid'), or(parameters('domainJoinDeploymentVirtualMachine'), and(parameters('deployFSLogixStorage'), equals(variables('fslogixStorageSolution'), 'AzureNetAppFiles'))))]"
           },
           "encryptionAtHost": {
             "value": true

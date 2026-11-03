@@ -18,6 +18,14 @@ Parameter documentation lives alongside each deployment template. Find the secti
 | 🏢 **Host Pool (standard management)** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
 | 🏢 **Automated Host Pool (Session Host Configuration)** | [automatedHostPools/README.md](../deployments/automatedHostPools/README.md) | [starter parameters](../customer-examples/parameters/automatedHostPools/example.automatedHostPool.parameters.json) |
 
+For automated host pools, `desktopFriendlyName` is optional (default `''`, maximum 20 characters).
+Leave **Session Desktop Friendly Name** blank, omit the deployment parameter, or pass an empty
+string to skip renaming the session desktop.
+
+Automated host pools also accept `domainJoinDeploymentVirtualMachine` (default `false`). For
+AD DS or Entra Domain Services, it joins the temporary helper using the existing session-host
+domain, OU, and credentials. Azure NetApp Files retains its automatic helper domain join.
+
 ---
 
 ## Naming Convention

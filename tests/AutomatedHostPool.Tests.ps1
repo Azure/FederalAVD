@@ -10,6 +10,57 @@ $availabilitySetPolicyPath = Join-Path $repoRoot 'deployments\shared\modules\orc
 $controlPlaneModulePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
 $readmePath = Join-Path $repoRoot 'deployments\automatedHostPools\README.md'
 
+Describe 'Automated host-pool optional session desktop friendly name' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $template = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $controlPlane = $form.view.properties.steps | Where-Object name -eq 'controlPlane'
+        $workspace = $controlPlane.elements | Where-Object name -eq 'workspace'
+        $friendlyName = $workspace.elements | Where-Object name -eq 'desktopFriendlyName'
+        $controlPlaneTemplate = $template.resources.controlPlane.properties.template
+        $helperTemplate = $template.resources.deploymentHelper.properties.template
+    }
+
+    It 'allows the Portal field to be blank while retaining its maximum length validation' {
+        $friendlyName.constraints.required | Should Be $false
+        $friendlyName.defaultValue | Should Be ''
+        $friendlyName.constraints.validations[0].isValid |
+            Should Be "[lessOrEquals(length(steps('controlPlane').workspace.desktopFriendlyName), 20)]"
+        $form.view.outputs.parameters.desktopFriendlyName |
+            Should Be "[steps('controlPlane').workspace.desktopFriendlyName]"
+    }
+
+    It 'allows deployment parameters to omit the name or explicitly supply an empty string' {
+        $parameter = $template.parameters.desktopFriendlyName
+        $parameter.type | Should Be 'string'
+        ($parameter.PSObject.Properties.Name -contains 'defaultValue') | Should Be $true
+        $parameter.defaultValue | Should Be ''
+        ($parameter.PSObject.Properties.Name -contains 'minLength') | Should Be $false
+        $parameter.maxLength | Should Be 20
+    }
+
+    It 'passes optional and supplied names unchanged to both deployment modules' {
+        foreach ($moduleName in @('controlPlane', 'deploymentHelper')) {
+            $template.resources.$moduleName.properties.parameters.desktopFriendlyName.value |
+                Should Be "[parameters('desktopFriendlyName')]"
+        }
+        $controlPlaneTemplate.parameters.desktopFriendlyName.defaultValue | Should Be ''
+        $controlPlaneTemplate.resources.applicationGroup.properties.parameters.friendlyName.value |
+            Should Be "[parameters('desktopFriendlyName')]"
+    }
+
+    It 'skips the SessionDesktop update and its helper permissions when the name is empty' {
+        $controlPlaneTemplate.resources.updateDesktopFriendlyName.condition |
+            Should Be "[not(empty(parameters('desktopFriendlyName')))]"
+        $helperTemplate.variables.roleAssignmentsControlPlane |
+            Should Match "^\[if\(not\(empty\(parameters\('desktopFriendlyName'\)\)\)"
+        $helperTemplate.variables.roleAssignmentsControlPlane | Should Match 'createArray\(\)\)\]$'
+        $applicationGroupTemplate = $controlPlaneTemplate.resources.applicationGroup.properties.template
+        $applicationGroupTemplate.resources.applicationGroup.properties.friendlyName |
+            Should Be "[if(not(empty(parameters('friendlyName'))), parameters('friendlyName'), null())]"
+    }
+}
+
 Describe 'Automated host-pool AVD Private Link virtual networks' {
     BeforeAll {
         $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
@@ -593,6 +644,53 @@ Describe 'Automated host-pool deployment helper lifecycle' {
         $controlPlane | Should Match 'updateDesktopFriendlyName[\s\S]+dependsOn: \[rbacPropagationWait\]'
         $rbacWaitScript | Should Match 'Start-Sleep -Seconds \$WaitSeconds'
         $readme | Should Match 'waits 90 seconds'
+    }
+}
+
+Describe 'Automated host-pool optional deployment VM domain join' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $template = Get-Content -LiteralPath $armPath -Raw | ConvertFrom-Json
+        $operations = $form.view.properties.steps | Where-Object name -eq 'operationsAndMonitoring'
+        $deploymentVm = $operations.elements | Where-Object name -eq 'deploymentVm'
+        $domainJoin = $deploymentVm.elements | Where-Object name -eq 'domainJoin'
+        $helperParameters = $template.resources.deploymentHelper.properties.parameters
+    }
+
+    It 'places an optional unchecked checkbox immediately after the size for AD DS and Entra Domain Services' {
+        $domainJoin.type | Should Be 'Microsoft.Common.CheckBox'
+        ($domainJoin.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
+        $domainJoin.constraints.required | Should Not Be $true
+        $domainJoin.visible | Should Be "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]"
+        $names = @($deploymentVm.elements.name)
+        $names.IndexOf('domainJoin') | Should Be ($names.IndexOf('size') + 1)
+    }
+
+    It 'defaults direct deployments to no optional join and clears a hidden checked value' {
+        $template.parameters.domainJoinDeploymentVirtualMachine.type | Should Be 'bool'
+        $template.parameters.domainJoinDeploymentVirtualMachine.defaultValue | Should Be $false
+        $form.view.outputs.parameters.domainJoinDeploymentVirtualMachine |
+            Should Be "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('operationsAndMonitoring').deploymentVm.domainJoin)]"
+    }
+
+    It 'validates the requested domain join while preserving the existing NetApp requirement' {
+        $template.variables.deploymentVmDomainJoinIsValid |
+            Should Match "not\(parameters\('domainJoinDeploymentVirtualMachine'\)\)"
+        $template.variables.deploymentVmDomainJoinIsValid |
+            Should Match "and\(variables\('domainJoinRequired'\), not\(empty\(parameters\('domainName'\)\)\)\)"
+        $template.variables.deploymentVmDomainJoinIsValid | Should Match 'fail\('
+        $helperParameters.domainJoinDeploymentVirtualMachine.value |
+            Should Be "[and(variables('deploymentVmDomainJoinIsValid'), or(parameters('domainJoinDeploymentVirtualMachine'), and(parameters('deployFSLogixStorage'), equals(variables('fslogixStorageSolution'), 'AzureNetAppFiles'))))]"
+    }
+
+    It 'reuses the existing domain, OU, and Key Vault credentials even without new FSLogix storage' {
+        $helperParameters.domainName.value | Should Be "[parameters('domainName')]"
+        $helperParameters.ouPath.value | Should Be "[parameters('organizationalUnitPath')]"
+        $template.variables.fslogixDomainCredentialsRequired | Should Match "contains\(parameters\('identitySolution'\), 'DomainServices'\)"
+        $helperParameters.domainJoinUserPrincipalName |
+            Should Match "createObject\('reference',[\s\S]+'secretName',[\s\S]+parameters\('domainJoinUsernameSecretUri'\)"
+        $helperParameters.domainJoinUserPassword |
+            Should Match "createObject\('reference',[\s\S]+'secretName',[\s\S]+parameters\('domainJoinPasswordSecretUri'\)"
     }
 }
 

@@ -297,6 +297,10 @@ Publishing makes the guided form available; it does not deploy the workload. In 
   template and parameters** and save the generated automated-host-pool parameter file under
   `customer\parameters\automatedHostPools\`; this folder is intentionally excluded from git.
 
+**Session Desktop Friendly Name** is optional. Leave it blank in the form, omit
+`desktopFriendlyName` from deployment parameters, or supply an empty string to skip the
+SessionDesktop rename. A supplied name retains the 20-character limit.
+
 The automated Template Spec is opt-in because the preview resource API is available only in Azure
 Commercial. The form uses the default secret names listed in Prerequisites unless **Customize
 credential secret names** is selected. Optional picker overrides submit the selected versionless
@@ -719,6 +723,19 @@ complete. This targeted delay reduces first-deployment validation failures cause
 propagation. The helper also performs SessionDesktop friendly-name updates and optional FSLogix
 storage operations. It uses the session-host subnet, which must allow outbound TCP 443 to the
 `AzureResourceManager` service tag.
+
+On **Operations and Monitoring**, the **Domain join deployment VM** checkbox appears beside the
+deployment VM size for Active Directory Domain Services and Microsoft Entra Domain Services.
+It is unchecked by default. Selecting it reuses the session-host domain name, organizational unit,
+and domain-join credentials, including any existing Key Vault secret overrides. For parameter-file
+deployments, set `domainJoinDeploymentVirtualMachine: true`; other identity solutions reject this
+opt-in. Azure NetApp Files storage deployments retain their existing automatic helper domain join
+regardless of the checkbox.
+
+The helper subnet needs domain-controller connectivity and DNS resolution when domain join is
+enabled. Review the selected OU's policies for compatibility with the temporary Windows Server
+helper and its Run Commands. Deleting the helper VM does not remove its AD computer account;
+include that account in the customer's approved directory cleanup process.
 
 When dynamic scaling is disabled, select the desired initial `sessionHostCount`. ARM first creates
 Session Host Management without a provisioning request, which is the API's zero-host state. It then
