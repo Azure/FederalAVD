@@ -340,10 +340,12 @@ function Remove-SessionHostDirectoryDevice {
     Write-LogEntry -Message "Removing session host '$Name' device from $directoryName (device ID: $Id)" -Level Trace
     try {
         Invoke-GraphApiWithRetry -GraphEndpoint $GraphEndpoint -GraphToken $GraphToken `
-            -Method Delete -Uri "/v1.0/$collection/$Id" -ClientId $ClientId | Out-Null
+            -Method Delete -Uri "/v1.0/$collection/$Id" -ClientId $ClientId -SuppressNotFoundError | Out-Null
     }
     catch {
         if (-not $_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 404) { throw }
+        Write-LogEntry -Message "Device $Name is already absent from $directoryName; cleanup verification is still required." -Level Information
+        return
     }
     Write-LogEntry -Message "Successfully removed device $Name from $directoryName"
 }

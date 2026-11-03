@@ -86,6 +86,161 @@ Describe 'SHR Graph mutation ownership guards' {
     }
 }
 
+Describe 'SHR repeat-safe directory deletion logging' {
+    BeforeAll { Import-Module $modulePath -Force }
+    AfterAll { Remove-Module SessionHostReplacer -Force }
+    BeforeEach {
+        $global:shrGraphDelete = @{
+            Status = 404
+            IntegerStatus = $false
+            Directory = 'Entra'
+            ThrowOnError = $true
+            Requests = @()
+            Logs = @()
+        }
+        Mock Assert-ShrWorkerLease -ModuleName SessionHostReplacer.Core {}
+        Mock Invoke-RestMethod -ModuleName SessionHostReplacer.Core {
+            param($Uri, $Method)
+            $global:shrGraphDelete.Requests += @{ Uri = $Uri; Method = $Method }
+            if ($global:shrGraphDelete.Requests.Count -eq 2 -and $global:shrGraphDelete.ContainsKey('SecondStatus')) {
+                $global:shrGraphDelete.Status = $global:shrGraphDelete.SecondStatus
+            }
+            if ($global:shrGraphDelete.Status -eq 204) { return }
+            if ($null -eq $global:shrGraphDelete.Status) { throw [IO.IOException]::new('Simulated transport failure.') }
+            $exception = [Exception]::new("Simulated HTTP $($global:shrGraphDelete.Status).")
+            $response = [PSCustomObject]@{
+                StatusCode = if ($global:shrGraphDelete.IntegerStatus) {
+                    $global:shrGraphDelete.Status
+                } else { [Net.HttpStatusCode]$global:shrGraphDelete.Status }
+            }
+            $response | Add-Member ScriptMethod GetResponseStream {
+                [IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes('{"error":{"code":"ResourceNotFound"}}'))
+            }
+            $exception | Add-Member -NotePropertyName Response -NotePropertyValue $response
+            throw $exception
+        }
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.Core {
+            param($Message, $Level = 'Information')
+            $global:shrGraphDelete.Logs += @{ Message = $Message; Level = $Level }
+            if ($Level -eq 'Error' -and $global:shrGraphDelete.ThrowOnError) { throw 'Error logger terminated.' }
+        }
+        Mock Write-LogEntry -ModuleName SessionHostReplacer.DeviceCleanup {
+            param($Message, $Level = 'Information')
+            $global:shrGraphDelete.Logs += @{ Message = $Message; Level = $Level }
+        }
+    }
+    AfterEach { Remove-Variable shrGraphDelete -Scope Global }
+
+    It 'logs an already-absent <Directory> device at Information without invoking the error logger' -TestCases @(
+        @{ Directory = 'Entra'; DisplayName = 'Entra ID'; Collection = 'devices' }
+        @{ Directory = 'Intune'; DisplayName = 'Intune'; Collection = 'deviceManagement/managedDevices' }
+    ) {
+        param($Directory, $DisplayName, $Collection)
+        $global:shrGraphDelete.Directory = $Directory
+        InModuleScope SessionHostReplacer.DeviceCleanup {
+            Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                -Name old-host -Id old-id -Directory $global:shrGraphDelete.Directory -ClientId test-client
+        }
+        $global:shrGraphDelete.Requests.Count | Should Be 1
+        $global:shrGraphDelete.Requests[0].Uri | Should Be "https://graph.microsoft.com/v1.0/$Collection/old-id"
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should Be 0
+        $info = @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Information')
+        $info.Count | Should Be 1
+        $info[0].Message | Should Be "Device old-host is already absent from $DisplayName; cleanup verification is still required."
+        $global:shrGraphDelete.Logs.Message -join "`n" | Should Not Match 'Successfully removed'
+    }
+
+    It 'preserves a DELETE 404 exception for its caller when suppression is explicitly enabled' {
+        $global:shrGraphDelete.IntegerStatus = $true
+        $failure = $null
+        try {
+            Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                -Method Delete -Uri '/v1.0/devices/old-id' -ClientId test-client -SuppressNotFoundError
+        } catch { $failure = $_ }
+        $failure.Exception.Message | Should Be 'Simulated HTTP 404.'
+        [int]$failure.Exception.Response.StatusCode | Should Be 404
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should Be 0
+    }
+
+    It 'retains error logging for a <Method> 404 without a device-delete opt-in' -TestCases @(
+        @{ Method = 'Get'; Suppress = $true }
+        @{ Method = 'Delete'; Suppress = $false }
+    ) {
+        param($Method, $Suppress)
+        $global:shrGraphDelete.ThrowOnError = $false
+        {
+            Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                -Method $Method -Uri '/v1.0/devices/old-id' -ClientId test-client -SuppressNotFoundError:$Suppress
+        } | Should Throw 'Simulated HTTP 404'
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should BeGreaterThan 0
+    }
+
+    It 'does not classify HTTP <Status> as an already-absent device' -TestCases @(
+        @{ Status = 400 }
+        @{ Status = 401 }
+        @{ Status = 403 }
+        @{ Status = 429 }
+        @{ Status = 500 }
+    ) {
+        param($Status)
+        $global:shrGraphDelete.Status = $Status
+        $global:shrGraphDelete.ThrowOnError = $false
+        InModuleScope SessionHostReplacer.DeviceCleanup {
+            {
+                Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                    -Name old-host -Id old-id -Directory Entra -ClientId test-client
+            } | Should Throw 'Simulated HTTP'
+        }
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should BeGreaterThan 0
+        $global:shrGraphDelete.Logs.Message -join "`n" | Should Not Match 'already absent|Successfully removed'
+    }
+
+    It 'preserves transport failures as errors' {
+        $global:shrGraphDelete.Status = $null
+        $global:shrGraphDelete.ThrowOnError = $false
+        InModuleScope SessionHostReplacer.DeviceCleanup {
+            {
+                Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                    -Name old-host -Id old-id -Directory Entra -ClientId test-client
+            } | Should Throw 'Simulated transport failure'
+        }
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should BeGreaterThan 0
+    }
+
+    It 'retains the GCCH-to-DoD fallback after HTTP <Status> and checks ownership before both DELETEs' -TestCases @(
+        @{ Status = 401; IntegerStatus = $false }
+        @{ Status = 403; IntegerStatus = $true }
+    ) {
+        param($Status, $IntegerStatus)
+        $global:shrGraphDelete.Status = $Status
+        $global:shrGraphDelete.IntegerStatus = $IntegerStatus
+        $global:shrGraphDelete.SecondStatus = 204
+        $global:shrGraphDelete.ThrowOnError = $false
+        Mock Get-AccessToken -ModuleName SessionHostReplacer.Core { 'dod-token' }
+        InModuleScope SessionHostReplacer.DeviceCleanup {
+            Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.us' -GraphToken test-token `
+                -Name old-host -Id old-id -Directory Entra -ClientId test-client
+        }
+        $global:shrGraphDelete.Requests.Count | Should Be 2
+        $global:shrGraphDelete.Requests[1].Uri | Should Be 'https://dod-graph.microsoft.us/v1.0/devices/old-id'
+        Assert-MockCalled Get-AccessToken -ModuleName SessionHostReplacer.Core -Scope It -Times 1 -Exactly -ParameterFilter {
+            $ResourceUri -eq 'https://dod-graph.microsoft.us' -and $ClientId -eq 'test-client'
+        }
+        Assert-MockCalled Assert-ShrWorkerLease -ModuleName SessionHostReplacer.Core -Scope It -Times 2 -Exactly
+        $global:shrGraphDelete.Logs.Message | Should Contain 'Successfully removed device old-host from Entra ID'
+    }
+
+    It 'retains the successful deletion message after HTTP 204' {
+        $global:shrGraphDelete.Status = 204
+        InModuleScope SessionHostReplacer.DeviceCleanup {
+            Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                -Name old-host -Id old-id -Directory Entra -ClientId test-client
+        }
+        $global:shrGraphDelete.Logs.Message | Should Contain 'Successfully removed device old-host from Entra ID'
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should Be 0
+    }
+}
+
 Describe 'SHR recovery-state mutation boundaries' {
     BeforeAll { Import-Module $modulePath -Force }
     AfterAll { Remove-Module SessionHostReplacer -Force }

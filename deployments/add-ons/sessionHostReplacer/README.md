@@ -303,6 +303,11 @@ The Session Host Replacer Function App supports two identity options:
 > for exact checks, ambiguous device records, live-VM collisions, explicit-target requirements,
 > and manual cleanup of failed VMs without ownership tags.
 >
+> **Repeat-safe deletion:** An Entra ID or Intune device-delete HTTP 404 is logged at Information
+> level as "already absent," not as a Graph error or a newly successful deletion. Independent
+> cleanup verification still must pass. Unexpected 404s on other Graph requests, permission
+> failures, and other errors retain normal failure handling.
+>
 > Configure the corresponding Graph permissions **before** the first function execution. Use a User-Assigned Managed Identity to grant permissions before deployment, or grant them to the System-Assigned Identity after deployment and stop the function app for about an hour before the first run to allow time for the permissions to propagate.
 >
 > **Maintenance override:** Exact-name cleanup has the same requirement and is available only when

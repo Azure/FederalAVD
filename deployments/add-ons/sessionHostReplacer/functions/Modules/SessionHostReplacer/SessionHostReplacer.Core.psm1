@@ -841,6 +841,8 @@ function Invoke-GraphApiWithRetry {
         Optional custom headers. Authorization header will be added automatically.
     .PARAMETER ClientId
         Optional client ID for user-assigned managed identity (needed to acquire new token for DoD endpoint).
+    .PARAMETER SuppressNotFoundError
+        Preserves a DELETE 404 exception without error logging so the device-cleanup caller can report an already-absent device.
     .EXAMPLE
         Invoke-GraphApiWithRetry -GraphEndpoint $env:GraphEndpoint -GraphToken $token -Method Get -Uri "/v1.0/devices?`$filter=displayName eq 'VM01'" -ClientId $clientId
     #>
@@ -866,7 +868,10 @@ function Invoke-GraphApiWithRetry {
         [hashtable] $Headers = @{},
         
         [Parameter()]
-        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
+        [string] $ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId),
+
+        [Parameter()]
+        [switch] $SuppressNotFoundError
     )
     
     # Ensure GraphEndpoint doesn't have trailing slash
@@ -938,10 +943,13 @@ function Invoke-GraphApiWithRetry {
         }
         catch {
             $lastError = $_
+            $statusCode = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { $null }
+
+            if ($SuppressNotFoundError -and $Method -eq 'Delete' -and $statusCode -eq 404) {
+                throw
+            }
             
             if ($_.Exception.Response) {
-                $statusCode = $_.Exception.Response.StatusCode.value__
-                
                 # Try to get detailed error message from response body
                 try {
                     $errorStream = $_.Exception.Response.GetResponseStream()
