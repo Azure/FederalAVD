@@ -729,8 +729,8 @@ deployment VM size for Active Directory Domain Services and Microsoft Entra Doma
 It is unchecked by default. Selecting it reuses the session-host domain name, organizational unit,
 and domain-join credentials, including any existing Key Vault secret overrides. For parameter-file
 deployments, set `domainJoinDeploymentVirtualMachine: true`; other identity solutions reject this
-opt-in. Azure NetApp Files storage deployments retain their existing automatic helper domain join
-regardless of the checkbox.
+opt-in. When deploying Azure NetApp Files storage, the form hides the checkbox and submits `true`
+because the helper must domain join. Parameter-file deployments also retain this automatic join.
 
 The helper subnet needs domain-controller connectivity and DNS resolution when domain join is
 enabled. Review the selected OU's policies for compatibility with the temporary Windows Server

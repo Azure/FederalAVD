@@ -38,6 +38,9 @@ param deploymentVirtualMachineNicName string = ''
 @description('Optional. Size of the temporary deployment VM.')
 param deploymentVirtualMachineSize string = 'Standard_B2s'
 
+@description('Optional. Domain join the add-on-created deployment VM using the configured domain and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join.')
+param domainJoinDeploymentVirtualMachine bool = false
+
 @description('Conditional. Subnet resource ID required when this add-on creates a temporary deployment VM. Not used for Entra ID storage-account-key authentication or an externally managed deployment VM.')
 param deploymentVirtualMachineSubnetResourceId string = ''
 
@@ -77,7 +80,7 @@ param domainName string = ''
 @description('Optional. OU path for storage computer objects.')
 param organizationalUnitPath string = ''
 
-@description('Optional. OU path used when the temporary deployment VM must be domain joined for Azure NetApp Files configuration.')
+@description('Optional. OU path for a domain-joined deployment VM. When empty, uses organizationalUnitPath.')
 param deploymentVirtualMachineOrganizationalUnitPath string = ''
 
 @description('Optional. Existing user-assigned identity resource ID with permissions to update and consent to storage account enterprise applications for Entra Kerberos.')
@@ -282,6 +285,9 @@ var netAppResourceGroupConfigurationIsValid = storageSolution != 'AzureNetAppFil
   : fail('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.')
 var deploymentVirtualMachineRequired = identitySolution != 'EntraId'
 var deployDeploymentVirtualMachine = manageDeploymentVirtualMachine && deploymentVirtualMachineRequired
+var deploymentVmDomainJoinIsValid = !domainJoinDeploymentVirtualMachine || (deployDeploymentVirtualMachine && contains(identitySolution, 'DomainServices') && !empty(domainName) && (!empty(credentialsKeyVaultResourceId) || (!empty(domainJoinUserPrincipalName) && !empty(domainJoinUserPassword))))
+  ? true
+  : fail('domainJoinDeploymentVirtualMachine requires an add-on-managed deployment VM, ActiveDirectoryDomainServices or EntraDomainServices, domainName, and domain-join credentials or credentialsKeyVaultResourceId. Join an externally managed VM through its owning deployment.')
 var resourceGroupNamesAreDistinct = !deployDeploymentVirtualMachine || toLower(effectiveStorageResourceGroupName) != toLower(effectiveDeploymentResourceGroupName)
   ? true
   : fail('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')
@@ -355,7 +361,7 @@ module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/dep
         : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
-    domainJoinDeploymentVirtualMachine: storageSolution == 'AzureNetAppFiles'
+    domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || storageSolution == 'AzureNetAppFiles'
     identitySolution: identitySolution
     ouPath: !empty(deploymentVirtualMachineOrganizationalUnitPath)
       ? deploymentVirtualMachineOrganizationalUnitPath
@@ -401,7 +407,7 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/storag
 
 module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
   params: {
-    activeDirectoryConnection: storageIdentityConfigurationIsValid && netAppResourceGroupConfigurationIsValid
+    activeDirectoryConnection: storageIdentityConfigurationIsValid && netAppResourceGroupConfigurationIsValid && deploymentVmDomainJoinIsValid
       ? netAppDeploymentMode == 'CreateAll' || existingSharedActiveDirectoryConnection
       : existingSharedActiveDirectoryConnection
     createNetAppAccount: netAppDeploymentMode == 'CreateAll'

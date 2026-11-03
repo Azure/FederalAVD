@@ -758,6 +758,9 @@ param tags object = {}
 @description('Optional. The vm size of the management VM.')
 param deploymentVmSize string = 'Standard_B2s'
 
+@description('Optional. Domain join an otherwise-required deployment VM using the session-host domain, OU, and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join.')
+param domainJoinDeploymentVirtualMachine bool = false
+
 var cmkIsRequested = contains(keyManagementStorage, 'CustomerManaged') || contains(
   keyManagementRecoveryServicesVault,
   'CustomerManaged'
@@ -922,6 +925,9 @@ var effectiveMonitoringSubscription = empty(monitoringSubscriptionId)
 var rbacSubs = union([effectiveControlPlaneSubscription], [subscription().subscriptionId])
 
 var createDeploymentVm = (deployFSLogixStorage && identitySolution != 'EntraId') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
+var deploymentVmDomainJoinIsValid = !domainJoinDeploymentVirtualMachine || (createDeploymentVm && contains(identitySolution, 'DomainServices') && !empty(domainName) && (!empty(existingCredentialsKeyVaultResourceId) || (!empty(domainJoinUserPrincipalName) && !empty(domainJoinUserPassword))))
+  ? true
+  : fail('domainJoinDeploymentVirtualMachine requires an otherwise-required deployment VM, ActiveDirectoryDomainServices or EntraDomainServices, domainName, and domain-join credentials or existingCredentialsKeyVaultResourceId.')
 var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups)
 
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
@@ -1376,7 +1382,7 @@ module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/re
 
 module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
-    location: virtualMachinesLocation
+    location: deploymentVmDomainJoinIsValid ? virtualMachinesLocation : virtualMachinesLocation
     name: effectiveHostsResourceGroup
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, vmConfigurationTags, fslogixConfigurationTags, {
       'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.hostPoolName}'
@@ -1437,7 +1443,7 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
-    domainJoinDeploymentVirtualMachine: split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
+    domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId

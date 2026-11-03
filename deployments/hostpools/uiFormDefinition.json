@@ -3790,7 +3790,7 @@
                   "type": "Microsoft.Common.InfoBox",
                   "options": {
                     "style": "Info",
-                    "text": "[concat('Based on your configuration choices, a deployment virtual machine is required to perform steps that cannot be completed via ARM templates. This virtual machine will be automatically deleted from Azure once the deployment is complete.', if(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), ' Since you selected a Active Directory Domain Services or Entra Kerberos Domain Service as your identity solution and deployed FSLogix profile storage, the deployment virtual machine will also be joined to the domain and the same OU as the session hosts. You should remove the computer account for this VM once the deployment completes.', if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').userIdentity, 'EntraKerberos-Hybrid'), or(equals(steps('userProfiles').azureFiles.leastPrivNTFS, true), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardPerms'))), ' Since you selected Microsoft Entra Kerberos for hybrid identities with group-scoped NTFS access or sharding via permissions, the workgroup deployment virtual machine uses the supplied AD lookup credentials to resolve group SIDs. Its subnet must have network line of sight to an AD DS domain controller.','')))]"
+                    "text": "Based on your configuration choices, a temporary deployment VM performs operations that ARM templates cannot complete and is deleted afterward. Domain join is optional for AD DS and Entra Domain Services; Azure NetApp Files retains its automatic domain join. Domain join requires domain-controller connectivity and DNS resolution. Entra Kerberos Hybrid with group-scoped NTFS access or permission sharding also requires domain-controller connectivity for AD lookups, even though its deployment VM is not domain joined. Remove any temporary VM computer account through your approved directory cleanup process."
                   }
                 },
                 {
@@ -3804,6 +3804,13 @@
                     "allowedValues": "[steps('hosts').resourceSkusApi.transformed.deploymentVMSizes]",
                     "required": true
                   }
+                },
+                {
+                  "name": "domainJoin",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Domain join deployment VM",
+                  "visible": "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), not(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'))))]",
+                  "toolTip": "Use the existing session-host domain, organizational unit, and domain-join credentials for the temporary deployment VM."
                 }
               ]
             },
@@ -5970,6 +5977,7 @@
         "fslogixAdminGroups": "[if(steps('userProfiles').shareManagement.configureAdminAccess, steps('userProfiles').shareManagement.groupPickerBlade.transformed.groups, parse('[]'))]",
         "avdObjectId": "[if(and(steps('operationsAndMonitoring').servicePrincipals.enableAVDSPRBAC, or(steps('controlPlane').hostPool.startVMOnConnect, steps('controlPlane').scalingPlan.deployScalingPlan)), if(empty(first(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalPickerBlade.transformed.selection, (sp) => sp.id)), first(map(steps('operationsAndMonitoring').servicePrincipals.avdServicePrincipalApi.value, (sp) => sp.id))), '')]",
         "deploymentVmSize": "[if(or(or(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged')), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption), not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.size, 'Standard_B2s')]",
+        "domainJoinDeploymentVirtualMachine": "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), true, and(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.domainJoin)))]",
         "recoveryServices": "[steps('operationsAndMonitoring').backup.recoveryServices]",
         "recoveryServicesVaultStorageRedundancy": "[if(steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.recoveryServicesVaultStorageRedundancy, 'LocallyRedundant')]",
         "existingVmBackupVaultResourceId": "[if(and(equals(steps('controlPlane').hostPool.type, 'Personal'), steps('operationsAndMonitoring').backup.recoveryServices, steps('operationsAndMonitoring').backup.useExistingRecoveryServicesVault), steps('operationsAndMonitoring').backup.recoveryServicesVault, '')]",

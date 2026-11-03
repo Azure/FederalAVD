@@ -3732,8 +3732,8 @@
                   "name": "domainJoin",
                   "type": "Microsoft.Common.CheckBox",
                   "label": "Domain join deployment VM",
-                  "visible": "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]",
-                  "toolTip": "Use the session-host domain, organizational unit, and domain-join credentials for the temporary deployment VM. Azure NetApp Files deployments retain their automatic domain join even when unchecked."
+                  "visible": "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), not(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, startsWith(steps('profiles').storage.service, 'AzureNetAppFiles'))))]",
+                  "toolTip": "Use the session-host domain, organizational unit, and domain-join credentials for the temporary deployment VM."
                 }
               ]
             }
@@ -4447,7 +4447,7 @@
         "fslogixPrivateEndpointSubnetResourceId": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints), steps('zeroTrust').privateEndpoints.privateEndpointSubnet.id, '')]",
         "azureFilePrivateDnsZoneResourceId": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('zeroTrust').privateEndpoints.deployPrivateEndpoints, steps('zeroTrust').privateEndpoints.enablePrivateDNSIntegration), steps('zeroTrust').privateEndpoints.azureFilePrivateDnsZone, '')]",
         "deploymentVirtualMachineSize": "[steps('operationsAndMonitoring').deploymentVm.size]",
-        "domainJoinDeploymentVirtualMachine": "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('operationsAndMonitoring').deploymentVm.domainJoin)]",
+        "domainJoinDeploymentVirtualMachine": "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), if(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, startsWith(steps('profiles').storage.service, 'AzureNetAppFiles')), true, steps('operationsAndMonitoring').deploymentVm.domainJoin))]",
         "permittedIPs": "[if(or(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), equals(steps('hosts').credentials.source, 'create'), and(not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')))), filter(map(steps('zeroTrust').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip))), parse('[]'))]",
         "paasPublicNetworkAccess": "[if(or(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), equals(steps('hosts').credentials.source, 'create'), and(not(steps('zeroTrust').keyManagement.useExistingEncryptionKv), or(contains(steps('zeroTrust').keyManagement.keyManagementDisks, 'CustomerManaged'), contains(steps('zeroTrust').keyManagement.keyManagementStorage, 'CustomerManaged')))), steps('zeroTrust').permittedIPsSection.paasPublicNetworkAccess, 'Auto')]",
         "enableMonitoring": "[steps('operationsAndMonitoring').monitoring.enableMonitoring]",

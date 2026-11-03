@@ -105,6 +105,22 @@ retain the deployment VM controls and requirements. Direct template deployments 
 `deploymentVirtualMachineSubnetResourceId` for storage-account-key authentication or when reusing an
 externally managed deployment VM; the subnet is required when this add-on creates the VM.
 
+For AD DS and Microsoft Entra Domain Services, **Domain join deployment VM** appears immediately
+after the temporary VM size when domain join is optional. For Azure NetApp Files, the form hides
+the checkbox and submits `true` because domain join is required. Otherwise, it is unchecked by
+default and reuses the configured domain and
+manual or Key Vault credentials. The parameter `domainJoinDeploymentVirtualMachine` defaults to
+`false`. A true value requires an add-on-managed helper, a domain name, and domain credentials;
+it is rejected for Entra-joined identity modes or an externally managed VM. Join an external helper
+through its owning deployment instead.
+
+The helper uses `deploymentVirtualMachineOrganizationalUnitPath` when supplied, otherwise
+`organizationalUnitPath`. The existing Portal helper OU override remains available for Azure NetApp
+Files; other optional joins reuse the storage OU. Azure NetApp Files retains automatic domain join
+for parameter-file deployments as well. Ensure domain-controller connectivity and DNS resolution,
+review the OU's policies for compatibility with the temporary Windows Server helper, and remove
+its AD computer account through the approved directory cleanup process after Azure cleanup.
+
 After publishing an updated Template Spec, smoke-test the form in Azure Portal. Confirm that the
 storage-key path can advance past this step without VM selections, then switch to AD DS, Entra
 Domain Services, and both Entra Kerberos options and verify the VM controls are required. Also test
@@ -248,7 +264,8 @@ storage-resource-group roles needed for that work and cleanup. Cleanup removes s
 assignments before deleting the temporary resource group. Entra ID storage-account-key
 authentication skips the temporary VM.
 
-For Azure Files, the temporary VM remains in a workgroup. The scripts install the Active Directory
+For Azure Files, the temporary VM remains in a workgroup unless the optional domain join is
+selected for AD DS or Entra Domain Services. The scripts install the Active Directory
 RSAT tools, use DNS-based DC Locator to discover an ADWS-capable domain controller, and pass the
 selected server and Key Vault credentials explicitly to every Active Directory operation. The OU
 path controls AD DS storage computer object placement; when it is empty, the domain's default

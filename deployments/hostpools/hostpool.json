@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "9513058001520982169"
+      "templateHash": "7264870991538480484"
     }
   },
   "definitions": {
@@ -2618,6 +2618,13 @@
       "metadata": {
         "description": "Optional. The vm size of the management VM."
       }
+    },
+    "domainJoinDeploymentVirtualMachine": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Domain join an otherwise-required deployment VM using the session-host domain, OU, and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join."
+      }
     }
   },
   "variables": {
@@ -2720,6 +2727,7 @@
     "effectiveMonitoringSubscription": "[if(empty(parameters('monitoringSubscriptionId')), subscription().subscriptionId, parameters('monitoringSubscriptionId'))]",
     "rbacSubs": "[union(createArray(variables('effectiveControlPlaneSubscription')), createArray(subscription().subscriptionId))]",
     "createDeploymentVm": "[or(or(and(parameters('deployFSLogixStorage'), not(equals(parameters('identitySolution'), 'EntraId'))), parameters('confidentialVMOSDiskEncryption')), not(empty(parameters('desktopFriendlyName'))))]",
+    "deploymentVmDomainJoinIsValid": "[if(or(not(parameters('domainJoinDeploymentVirtualMachine')), and(and(and(variables('createDeploymentVm'), contains(parameters('identitySolution'), 'DomainServices')), not(empty(parameters('domainName')))), or(not(empty(parameters('existingCredentialsKeyVaultResourceId'))), and(not(empty(parameters('domainJoinUserPrincipalName'))), not(empty(parameters('domainJoinUserPassword'))))))), true(), fail('domainJoinDeploymentVirtualMachine requires an otherwise-required deployment VM, ActiveDirectoryDomainServices or EntraDomainServices, domainName, and domain-join credentials or existingCredentialsKeyVaultResourceId.'))]",
     "hybridDomainCredentialsRequired": "[and(and(parameters('deployFSLogixStorage'), equals(parameters('identitySolution'), 'EntraKerberos-Hybrid')), not(empty(parameters('fslogixUserGroups'))))]",
     "deployDiskCmk": "[and(contains(parameters('keyManagementDisks'), 'CustomerManaged'), not(parameters('confidentialVMOSDiskEncryption')))]",
     "deployStorageCmk": "[and(and(parameters('deployFSLogixStorage'), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureFiles')), not(equals(parameters('keyManagementStorage'), 'PlatformManaged')))]",
@@ -8686,9 +8694,7 @@
         },
         "mode": "Incremental",
         "parameters": {
-          "location": {
-            "value": "[parameters('virtualMachinesLocation')]"
-          },
+          "location": "[if(variables('deploymentVmDomainJoinIsValid'), createObject('value', parameters('virtualMachinesLocation')), createObject('value', parameters('virtualMachinesLocation')))]",
           "name": {
             "value": "[variables('effectiveHostsResourceGroup')]"
           },
@@ -9125,7 +9131,7 @@
             "value": "[parameters('domainName')]"
           },
           "domainJoinDeploymentVirtualMachine": {
-            "value": "[equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureNetAppFiles')]"
+            "value": "[or(parameters('domainJoinDeploymentVirtualMachine'), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureNetAppFiles'))]"
           },
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"

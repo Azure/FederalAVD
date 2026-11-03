@@ -59,6 +59,23 @@ friendly name, matching the automated host-pool behavior. This does not change
 the application group's Azure resource name or ID. An empty value leaves the
 application-group friendly name unset and skips the desktop-name update.
 
+## Deployment VM domain join
+
+When a temporary helper is required, **Operations and Monitoring > Deployment Virtual Machine**
+offers **Domain join deployment VM** immediately after the size selector. It is unchecked by
+default and appears only for AD DS and Microsoft Entra Domain Services when domain join is optional.
+When deploying Azure NetApp Files storage, the form hides the checkbox and submits `true` because
+the helper must domain join. The equivalent parameter,
+`domainJoinDeploymentVirtualMachine`, defaults to `false`; it does not create an otherwise
+unnecessary helper. An explicit opt-in requires a helper, domain name, and the existing manual
+domain credentials or credentials Key Vault. No new credential fields or secret names are used.
+
+The helper reuses `vmOUPath`. Azure NetApp Files retains its existing automatic helper domain join
+for parameter-file deployments as well. Ensure domain-controller connectivity and DNS resolution,
+and verify the OU's policies are compatible with the temporary Windows Server helper and its
+Run Commands. Azure cleanup does not delete the AD computer account; include it in the approved
+directory cleanup process.
+
 ## Purpose
 
 Deploy production-ready AVD environments with:

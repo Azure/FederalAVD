@@ -22,9 +22,13 @@ For automated host pools, `desktopFriendlyName` is optional (default `''`, maxim
 Leave **Session Desktop Friendly Name** blank, omit the deployment parameter, or pass an empty
 string to skip renaming the session desktop.
 
-Automated host pools also accept `domainJoinDeploymentVirtualMachine` (default `false`). For
-AD DS or Entra Domain Services, it joins the temporary helper using the existing session-host
-domain, OU, and credentials. Azure NetApp Files retains its automatic helper domain join.
+Standard and automated host pools and the FSLogix Storage add-on accept
+`domainJoinDeploymentVirtualMachine` (default `false`). For AD DS or Entra Domain Services, it
+joins an otherwise-required temporary helper using existing domain information and credentials.
+Host pools reuse the session-host OU; the add-on uses its deployment VM OU override or storage OU.
+The add-on cannot join externally managed helpers. Azure NetApp Files retains its automatic helper
+domain join. See the [standard host-pool guidance](../deployments/hostpools/README.md#deployment-vm-domain-join)
+and [FSLogix Storage guidance](../deployments/add-ons/fslogixStorage/README.md#deployment).
 
 ---
 

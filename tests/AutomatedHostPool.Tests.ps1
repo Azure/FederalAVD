@@ -657,20 +657,20 @@ Describe 'Automated host-pool optional deployment VM domain join' {
         $helperParameters = $template.resources.deploymentHelper.properties.parameters
     }
 
-    It 'places an optional unchecked checkbox immediately after the size for AD DS and Entra Domain Services' {
+    It 'places an optional unchecked checkbox after size but hides it for mandatory NetApp joins' {
         $domainJoin.type | Should Be 'Microsoft.Common.CheckBox'
         ($domainJoin.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
         $domainJoin.constraints.required | Should Not Be $true
-        $domainJoin.visible | Should Be "[contains(steps('hosts').identity.machineIdentity, 'DomainServices')]"
+        $domainJoin.visible | Should Be "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), not(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, startsWith(steps('profiles').storage.service, 'AzureNetAppFiles'))))]"
         $names = @($deploymentVm.elements.name)
         $names.IndexOf('domainJoin') | Should Be ($names.IndexOf('size') + 1)
     }
 
-    It 'defaults direct deployments to no optional join and clears a hidden checked value' {
+    It 'defaults direct deployments to no optional join but forces the Portal NetApp join' {
         $template.parameters.domainJoinDeploymentVirtualMachine.type | Should Be 'bool'
         $template.parameters.domainJoinDeploymentVirtualMachine.defaultValue | Should Be $false
         $form.view.outputs.parameters.domainJoinDeploymentVirtualMachine |
-            Should Be "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), steps('operationsAndMonitoring').deploymentVm.domainJoin)]"
+            Should Be "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), if(and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage, startsWith(steps('profiles').storage.service, 'AzureNetAppFiles')), true, steps('operationsAndMonitoring').deploymentVm.domainJoin))]"
     }
 
     It 'validates the requested domain join while preserving the existing NetApp requirement' {

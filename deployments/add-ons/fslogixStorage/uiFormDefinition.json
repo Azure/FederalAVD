@@ -1266,7 +1266,7 @@
               "visible": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]",
               "options": {
                 "style": "Info",
-                "text": "A temporary virtual machine and managed identity initialize root NTFS permissions for identity-based storage authentication. Domain-backed and Entra Kerberos configurations also use the VM for applicable identity setup. Cleanup removes external role assignments and deletes the temporary resource group after configuration completes."
+                "text": "A temporary virtual machine and managed identity initialize root NTFS permissions for identity-based storage authentication. Domain-backed and Entra Kerberos configurations also use the VM for applicable identity setup. Domain join is optional for AD DS and Entra Domain Services; Azure NetApp Files retains its automatic domain join. Cleanup removes external role assignments and deletes the temporary resource group after configuration completes. Remove any temporary VM computer account through your approved directory cleanup process."
               }
             },
             {
@@ -1350,6 +1350,13 @@
                 "allowedValues": "[if(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), steps('deployment').resourceSkusApi.transformed.deploymentVMSizes, parse('[]'))]",
                 "required": "[not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))]"
               }
+            },
+            {
+              "name": "domainJoin",
+              "type": "Microsoft.Common.CheckBox",
+              "label": "Domain join deployment VM",
+              "visible": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), not(startsWith(steps('storage').storageService, 'AzureNetAppFiles')))]",
+              "toolTip": "Use the existing domain and domain-join credentials. The VM uses the storage OU unless a deployment VM OU override is supplied."
             }
           ]
         },
@@ -1674,6 +1681,7 @@
         "deploymentVirtualMachineDiskName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineDiskNameOverride, ''), '')]",
         "deploymentVirtualMachineNicName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentVirtualMachineNicNameOverride, ''), '')]",
         "deploymentVirtualMachineSize": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), 'Standard_B2s', steps('deployment').deploymentVirtualMachineSize)]",
+        "domainJoinDeploymentVirtualMachine": "[and(contains(steps('identity').machineIdentity, 'DomainServices'), if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), true, steps('deployment').domainJoin))]",
         "deploymentVirtualMachineSubnetResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), '', steps('deployment').deploymentVirtualMachineSubnet.id)]",
         "deploymentUserAssignedIdentityName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentUserAssignedIdentityNameOverride, ''), '')]",
         "identitySolution": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').machineIdentity, steps('identity').identitySolution)]",
