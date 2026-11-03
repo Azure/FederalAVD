@@ -132,6 +132,13 @@ and [App Service access restrictions](https://learn.microsoft.com/en-us/azure/ap
 
 ## Add-Ons
 
+SHR's `functionAppResourceGroupName` defaults to the session-host VM resource group name.
+The Portal exposes it as **Infrastructure > Session Host Replacer Resource Group**, selecting an
+existing RG in the deployment subscription. It scopes pool-specific replacer resources, not the
+session-host VMs or shared dependencies. App Service Plan placement remains independently
+configurable; in direct deployments an omitted plan RG defaults to the replacer RG.
+See [resource placement and rebuild cautions](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#dedicated-replacer-resource-group).
+
 For Session Host Replacer gallery-image pilots, `includeExcludedImageVersions` defaults to `false`.
 Enable it only on pilot pools to test excluded candidates before promotion. See
 [pilot selection and promotion](../deployments/add-ons/sessionHostReplacer/README.md#pilot-image-selection-and-promotion)

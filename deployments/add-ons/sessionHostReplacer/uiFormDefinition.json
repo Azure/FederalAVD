@@ -172,8 +172,14 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Enabled", "value": "true" },
-                  { "label": "Paused", "value": "false" }
+                  {
+                    "label": "Enabled",
+                    "value": "true"
+                  },
+                  {
+                    "label": "Paused",
+                    "value": "false"
+                  }
                 ]
               }
             },
@@ -2566,6 +2572,35 @@
           "label": "Infrastructure",
           "elements": [
             {
+              "name": "resourceGroupsApi",
+              "type": "Microsoft.Solutions.ArmApiControl",
+              "condition": "[not(empty(steps('basics').subscription.id))]",
+              "request": {
+                "method": "GET",
+                "path": "[concat(steps('basics').subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+              }
+            },
+            {
+              "name": "functionAppResourceGroup",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Session Host Replacer Resource Group",
+              "multiLine": true,
+              "defaultValue": "[if(empty(steps('hosts').scope.resourceGroup), '', steps('hosts').scope.resourceGroup.name)]",
+              "toolTip": "Select an existing resource group in the deployment subscription for this pool's Function App, runtime storage and other dedicated replacer resources. Defaults to the session hosts resource group. Shared hosting, monitoring, networking and Key Vault selections remain independent. Create a dedicated resource group before opening this deployment if needed.",
+              "constraints": {
+                "allowedValues": "[map(steps('infrastructure').resourceGroupsApi.value, (rg) => parse(concat('{\"label\":\"', rg.name, '\",\"description\":\"location: ', rg.location, '\",\"value\":{\"location\":\"', rg.location, '\",\"name\":\"', rg.name, '\",\"id\":\"', rg.id, '\"}}')))]",
+                "required": true
+              }
+            },
+            {
+              "name": "functionAppResourceGroupInfo",
+              "type": "Microsoft.Common.InfoBox",
+              "options": {
+                "style": "Warning",
+                "text": "A dedicated replacer resource group provides a separate rebuild boundary; changing this selection does not move an existing deployment. Deleting the group also deletes SHR operation and recovery state. Do not delete it while replacement, drain, cleanup or retained-host recovery work remains outstanding. Shared resources stay in their separately selected locations."
+              }
+            },
+            {
               "name": "functionAppStacksApi",
               "type": "Microsoft.Solutions.ArmApiControl",
               "request": {
@@ -2590,15 +2625,6 @@
               "defaultValue": false,
               "label": "Use Existing App Service Plan",
               "toolTip": "Select an existing App Service Plan instead of creating a new one."
-            },
-            {
-              "name": "resourceGroupsApi",
-              "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[not(empty(steps('basics').subscription.id))]",
-              "request": {
-                "method": "GET",
-                "path": "[concat(steps('basics').subscription.id, '/resourcegroups?api-version=2021-04-01')]"
-              }
             },
             {
               "name": "resourceGroup",
@@ -2919,9 +2945,18 @@
               "constraints": {
                 "required": true,
                 "allowedValues": [
-                  { "label": "Disabled", "value": "Disabled" },
-                  { "label": "Enabled with restrictions", "value": "EnabledWithRestrictions" },
-                  { "label": "Enabled", "value": "Enabled" }
+                  {
+                    "label": "Disabled",
+                    "value": "Disabled"
+                  },
+                  {
+                    "label": "Enabled with restrictions",
+                    "value": "EnabledWithRestrictions"
+                  },
+                  {
+                    "label": "Enabled",
+                    "value": "Enabled"
+                  }
                 ]
               }
             },
@@ -3199,10 +3234,10 @@
             {
               "name": "functionAppName_rePUT",
               "type": "Microsoft.Solutions.ArmApiControl",
-              "condition": "[and(steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)))]",
+              "condition": "[and(steps('advanced').infrastructureNaming.enableCustomNames, not(empty(steps('advanced').infrastructureNaming.functionAppNameOverride)), not(empty(steps('infrastructure').functionAppResourceGroup.id)))]",
               "request": {
                 "method": "GET",
-                "path": "[concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
+                "path": "[concat(steps('infrastructure').functionAppResourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]",
                 "body": {}
               }
             },
@@ -3398,7 +3433,7 @@
                         "message": "[coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"message\":\"\"}')).message]"
                       },
                       {
-                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"nameAvailable\":true}')).nameAvailable, equals(coalesce(steps('advanced').functionAppName_rePUT, parse('{\"id\":\"\"}')).id, concat(steps('hosts').scope.resourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride)), not(equals(coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"reason\":\"\"}')).reason, 'AlreadyExists')))]",
+                        "isValid": "[or(empty(steps('advanced').infrastructureNaming.functionAppNameOverride), coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"nameAvailable\":true}')).nameAvailable, equals(coalesce(steps('advanced').functionAppName_rePUT, parse('{\"id\":\"\"}')).id, concat(steps('infrastructure').functionAppResourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride)), not(equals(coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"reason\":\"\"}')).reason, 'AlreadyExists')))]",
                         "message": "[coalesce(steps('advanced').functionApp_checkNameAvailability, parse('{\"message\":\"\"}')).message]"
                       }
                     ]
@@ -3574,7 +3609,7 @@
     "outputs": {
       "parameters": {
         "location": "[steps('basics').location.name]",
-        "functionAppResourceGroupName": "[last(split(steps('hosts').scope.resourceGroup.id, '/'))]",
+        "functionAppResourceGroupName": "[steps('infrastructure').functionAppResourceGroup.name]",
         "hostPoolResourceId": "[steps('basics').hostPool.id]",
         "sessionHostTemplateSpecResourceId": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'existing'), steps('replacerConfig').templateSpecResourceSelector.id, '')]",
         "templateSpecName": "[if(equals(steps('replacerConfig').templateSpecOptionsGroup, 'new'), steps('replacerConfig').templateSpecName, '')]",

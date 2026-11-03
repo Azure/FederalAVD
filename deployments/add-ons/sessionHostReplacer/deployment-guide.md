@@ -40,6 +40,44 @@ cannot safely upgrade the function bindings, shared code and settings together.
 Preserve deployment-specific parameters, including `initiationEnabled` and `continuationTimeoutHours`.
 Follow [verification](#verify-deployment) before enabling production initiation.
 
+## Dedicated Replacer Resource Group
+
+On the Portal form's **Infrastructure** step, **Session Host Replacer Resource Group** defaults
+to the session hosts resource group. Select another existing RG in the deployment subscription
+to isolate this pool's replacer resources. Create that RG before opening the deployment form.
+For PowerShell or Bicep deployments, set the existing `functionAppResourceGroupName` parameter.
+The RG's metadata location does not change the selected session-host and Function App region.
+
+The selected RG contains the Function App, runtime storage (including operation/recovery tables),
+pool-specific Application Insights when enabled, private endpoints when enabled, the dedicated
+storage-encryption identity when CMK is enabled, and a session-host Template Spec when SHR creates
+one. Session-host VMs and the host pool stay in their selected RGs.
+
+Shared resources keep their existing selections: the App Service Plan uses its independent
+existing-plan or plan-RG selection; Log Analytics and the centralized workbook remain with the
+selected workspace; existing networking, DNS zones, Key Vault, app identities and externally
+supplied Template Specs are not relocated. For direct deployments, explicitly set
+`appServicePlanResourceGroupName` or `existingAppServicePlanResourceId` to keep a shared plan outside
+the replacer RG; an omitted plan RG otherwise defaults to `functionAppResourceGroupName`.
+
+**This is a rebuild boundary, not a migration or routine upgrade requirement.** Changing the
+parameter deploys resources at the new scope; it does not move or retire the previous app.
+Never run two replacers for the same host pool. Prefer an in-place update when retaining state.
+
+Before deleting a dedicated RG, hold initiation, allow authorized replacement, drain and cleanup
+work to finish, resolve any stopped operation/pending hostname mappings and retained-host recovery
+needs, then stop the app and confirm no live lease or in-flight deployment remains. Preserve any
+required recovery evidence securely. Deleting the RG permanently removes its SHR state; do not
+reconstruct an active operation by merely redeploying an empty storage account.
+A recreated system-assigned identity has a new principal ID and requires its external Graph
+permissions to be granted again. Review external role assignments and CMK key dependencies
+through the approved cleanup process; deleting the RG is not complete cross-scope cleanup.
+
+After changing this form, live-smoke-test **Infrastructure** and **Advanced** with the default
+hosts RG and a different existing RG. Confirm parameter export, shared plan placement and custom
+Function App name checks use the intended scopes. Offline schema/contract checks do not prove
+Portal rendering or successful Azure deployment.
+
 ## Upgrading an Existing Deployment
 
 This is a breaking contract change: remove `enableQueueContinuation` and the SHR-specific

@@ -738,7 +738,7 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **Identity**: Domain join configuration
    - **Session Hosts**: VM configuration, image, networking
    - **User Profiles**: FSLogix settings (optional)
-   - **Infrastructure**: App Service Plan, encryption, zero trust networking
+   - **Infrastructure**: Replacer resource group (defaults to the hosts RG), App Service Plan, encryption, zero trust networking
    - **Monitoring**: Application Insights, Log Analytics workspace
    - **Advanced**: Resource-name overrides, session-host naming and resource tags (optional)
 5. Review and click **Create**
@@ -748,6 +748,11 @@ Here is a screen shot of the form:
 ![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)
 
 The form automatically validates inputs and provides helpful descriptions for each parameter.
+
+For an isolated per-pool rebuild boundary, select an existing **Session Host Replacer Resource
+Group** on **Infrastructure**. Shared resource selections remain independent. This does not move
+an existing deployment, and deleting the RG also deletes SHR operation/recovery state; do not
+delete it during outstanding work. See [placement and safe rebuild prerequisites](deployment-guide.md#dedicated-replacer-resource-group).
 
 ##### Brownfield Deployments with Custom Naming
 

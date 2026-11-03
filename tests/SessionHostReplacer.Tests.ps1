@@ -92,6 +92,104 @@ Describe 'Session Host Replacer App Service Plan resource-group selection' {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
 
+Describe 'Session Host Replacer dedicated resource-group selection' {
+    BeforeAll {
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json') -Raw | ConvertFrom-Json
+        $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
+        $advanced = $form.view.properties.steps | Where-Object name -eq 'advanced'
+        $selector = $infrastructure.elements | Where-Object name -eq 'functionAppResourceGroup'
+        $lookup = $advanced.elements | Where-Object name -eq 'functionAppName_rePUT'
+        $naming = $advanced.elements | Where-Object name -eq 'infrastructureNaming'
+        $nameOverride = $naming.elements | Where-Object name -eq 'functionAppNameOverride'
+    }
+
+    It 'defaults the independent replacer selector to the hosts RG display label' {
+        $selector.type | Should Be 'Microsoft.Common.DropDown'
+        $selector.label | Should Be 'Session Host Replacer Resource Group'
+        $selector.defaultValue | Should Be "[if(empty(steps('hosts').scope.resourceGroup), '', steps('hosts').scope.resourceGroup.name)]"
+        $selector.constraints.required | Should Be $true
+    }
+
+    It 'places the replacer RG first on Infrastructure with its hidden API dependency before it' {
+        $infrastructure.elements[0].name | Should Be 'resourceGroupsApi'
+        $visibleControls = @($infrastructure.elements | Where-Object {
+            $_.type -ne 'Microsoft.Solutions.ArmApiControl' -and $_.visible -ne $false
+        })
+        $visibleControls[0].name | Should Be 'functionAppResourceGroup'
+        $visibleControls[1].name | Should Be 'functionAppResourceGroupInfo'
+        $visibleControls[2].name | Should Be 'powerShellVersion'
+    }
+
+    It 'offers existing deployment-subscription groups without constraining their metadata location' {
+        $api = $infrastructure.elements | Where-Object name -eq 'resourceGroupsApi'
+        $api.condition | Should Be "[not(empty(steps('basics').subscription.id))]"
+        $api.request.path | Should Be "[concat(steps('basics').subscription.id, '/resourcegroups?api-version=2021-04-01')]"
+        $selector.constraints.allowedValues | Should Match "^.map\(steps\('infrastructure'\)\.resourceGroupsApi\.value"
+        $selector.constraints.allowedValues | Should Not Match 'filter\('
+        $selector.constraints.allowedValues | Should Match 'rg\.name'
+        $selector.constraints.allowedValues | Should Match 'rg\.id'
+    }
+
+    It 'exports the chosen group through the existing string parameter without changing the hosts scope' {
+        $form.view.outputs.parameters.functionAppResourceGroupName | Should Be "[steps('infrastructure').functionAppResourceGroup.name]"
+        $template.parameters.functionAppResourceGroupName.type | Should Be 'string'
+        $template.parameters.functionAppResourceGroupName.defaultValue | Should Be "[last(split(parameters('virtualMachinesResourceGroupId'), '/'))]"
+        $form.view.outputs.parameters.virtualMachinesResourceGroupId | Should Be "[steps('hosts').scope.resourceGroup.id]"
+    }
+
+    It 'keeps the existing hosting plan placement independent of the replacer RG' {
+        $form.view.outputs.parameters.appServicePlanResourceGroupName |
+            Should Be "[if(steps('infrastructure').useExistingHostingPlan, '', coalesce(steps('infrastructure').resourceGroup.name, ''))]"
+        $form.view.outputs.parameters.existingAppServicePlanResourceId |
+            Should Be "[if(steps('infrastructure').useExistingHostingPlan, steps('infrastructure').appServicePlan, '')]"
+        $template.resources.hostingPlan.resourceGroup | Should Be "[variables('aspResourceGroupName')]"
+        $template.variables.aspResourceGroupName |
+            Should Be "[if(empty(parameters('appServicePlanResourceGroupName')), parameters('functionAppResourceGroupName'), parameters('appServicePlanResourceGroupName'))]"
+    }
+
+    It 'scopes dedicated infrastructure to the selected group but leaves the workbook with its workspace' {
+        foreach ($moduleName in @('functionApp', 'templateSpec', 'storageCmk')) {
+            $template.resources.$moduleName.resourceGroup | Should Be "[parameters('functionAppResourceGroupName')]"
+        }
+        $template.resources.workbook.resourceGroup | Should Be "[variables('workbookResourceGroupName')]"
+        $template.variables.workbookResourceGroupName | Should Match "parameters\('logAnalyticsWorkspaceResourceId'\)"
+    }
+
+    It 'waits for the selected group before reading an existing custom-named Function App' {
+        $lookup.condition | Should Match ([regex]::Escape("not(empty(steps('infrastructure').functionAppResourceGroup.id))"))
+        $lookup.request.path |
+            Should Be "[concat(steps('infrastructure').functionAppResourceGroup.id, '/providers/Microsoft.Web/sites/', steps('advanced').infrastructureNaming.functionAppNameOverride, '?api-version=2022-03-01')]"
+        $lookup.request.path | Should Not Match "steps\('hosts'\)"
+    }
+
+    It 'accepts an existing custom name only at the selected replacer scope' {
+        $existingNameValidation = @($nameOverride.constraints.validations | Where-Object { $_.isValid -match 'functionAppName_rePUT' })
+        $existingNameValidation.Count | Should Be 1
+        $existingNameValidation[0].isValid |
+            Should Match ([regex]::Escape("concat(steps('infrastructure').functionAppResourceGroup.id, '/providers/Microsoft.Web/sites/'"))
+        $existingNameValidation[0].isValid | Should Not Match "steps\('hosts'\)"
+    }
+
+    It 'warns about the state-loss and migration boundary using literal text' {
+        $notice = $infrastructure.elements | Where-Object name -eq 'functionAppResourceGroupInfo'
+        $notice.type | Should Be 'Microsoft.Common.InfoBox'
+        $notice.options.style | Should Be 'Warning'
+        $notice.options.text | Should Not Match '^\['
+        $notice.options.text | Should Match 'does not move an existing deployment'
+        $notice.options.text | Should Match 'deletes SHR operation and recovery state'
+        $notice.options.text | Should Match 'Do not delete'
+    }
+
+    It 'keeps every Portal parameter mapped to the entry-template contract' {
+        foreach ($parameter in $form.view.outputs.parameters.PSObject.Properties.Name) {
+            ($parameter -in $template.parameters.PSObject.Properties.Name) | Should Be $true
+        }
+        $form.view.outputs.kind | Should Be 'Subscription'
+        $form.view.outputs.subscriptionId | Should Be "[steps('basics').subscription.id]"
+    }
+}
+
 Describe 'Session Host Replacer maintenance request contract' {
     BeforeAll {
         $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
