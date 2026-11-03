@@ -67,6 +67,7 @@
         # Image Management functions (from SessionHostReplacer.ImageManagement.psm1)
         'Compare-ImageVersion'
         'Get-LatestImageVersion'
+        'Get-ImageReplicaDeploymentLimit'
         
         # Planning functions (from SessionHostReplacer.Planning.psm1)
         'Get-SessionHostReplacementPlan'

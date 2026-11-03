@@ -58,6 +58,11 @@ each active reconciliation pass. `SETTINGS`, `IMAGE_INFO`, `METRICS` and `ACTION
 at Information because existing workbook configuration, inventory and action panels consume them.
 These dashboard records are not additional host operations.
 
+`IMAGE_REPLICA_CAP`, `IMAGE_REPLICA_BATCH` and `IMAGE_REPLICA_SUBMISSION` are also Information:
+they record the live regional replica count/status, calculated ceiling, existing-policy allowance
+and final planned/submitted count. Replica-read failures block new planning and log an Error.
+See the [replica safeguard contract](replacement-flow.md#live-gallery-replica-safeguard).
+
 Repeated engine startup/completion banners, VM caching, planner arithmetic, image enumeration,
 unchanged per-host sessions/drain timing and duplicate action narration use Trace. Internal
 `Reconciling`, `Checkpoint`, `Progress` and repeated `DeploymentObserved` snapshots also use Trace;

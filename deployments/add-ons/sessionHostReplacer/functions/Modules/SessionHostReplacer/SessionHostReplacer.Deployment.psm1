@@ -403,6 +403,10 @@ function Deploy-SessionHosts {
         [Parameter(Mandatory = $true)]
         [int] $NewSessionHostsCount,
 
+        [Parameter()]
+        [ValidateRange(1, [int]::MaxValue)]
+        [int] $ImageReplicaDeploymentLimit = [int]::MaxValue,
+
         [Parameter(Mandatory = $false)]
         [string] $HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
 
@@ -519,7 +523,14 @@ function Deploy-SessionHosts {
     
     $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
     if ($continuation -and $continuation.DeploymentIntent) {
-        return Invoke-ShrDeploymentIntent -ARMToken $ARMToken -RegisteredSessionHostNames $ExistingSessionHostNames
+        return Invoke-ShrDeploymentIntent -ARMToken $ARMToken -RegisteredSessionHostNames $ExistingSessionHostNames `
+            -ImageReplicaDeploymentLimit $ImageReplicaDeploymentLimit
+    }
+
+    $NewSessionHostsCount = [Math]::Min($NewSessionHostsCount, $ImageReplicaDeploymentLimit)
+    if ($ImageReplicaDeploymentLimit -lt [int]::MaxValue) {
+        Write-LogEntry -Message "IMAGE_REPLICA_SUBMISSION | ReplicaCeiling: {0} | SubmissionBatch: {1}" `
+            -StringValues $ImageReplicaDeploymentLimit, $NewSessionHostsCount
     }
 
     # Calculate Session Host Names

@@ -588,6 +588,15 @@ catch {
     return
 }
 
+try {
+    $imageReplicaDeploymentLimit = Get-ImageReplicaDeploymentLimit -ARMToken $ARMToken `
+        -Image $latestImageVersion -Location $sessionHostParameters.Location
+}
+catch {
+    Write-LogEntry -Message "IMAGE_REPLICA_CAP | New deployment and replacement planning blocked: $($_.Exception.Message)" -Level Error
+    return
+}
+
 # Read AllowImageVersionRollback setting with default of false
 $allowImageVersionRollback = Read-FunctionAppSetting AllowImageVersionRollback -AsBoolean
 
@@ -853,6 +862,7 @@ $getReplacementPlan = {
         -SessionHosts $sessionHostsFiltered `
         -RunningDeployments $runningDeployments `
         -LatestImageVersion $latestImageVersion `
+        -ImageReplicaDeploymentLimit $imageReplicaDeploymentLimit `
         -AllowImageVersionRollback $allowImageVersionRollback `
         -ScalingPlanTarget $scalingPlanTarget `
         -MaintenanceMaxVmsRemoved $(if ($maintenanceRequest) { $maintenanceRequest.MaxVmsRemoved } else { 1 }) `
@@ -1311,7 +1321,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
         # The planning function doesn't know about pending deleted hosts, so it calculates as if pool is short
         # Example: Target=7, Registered=6 (missing the 1 pending), Plan says deploy 1+replacement
         # But we should ONLY deploy the 1 pending, not grow beyond target
-        $pendingHostCount = $unresolvedHosts.Count
+        $pendingHostCount = [Math]::Min($unresolvedHosts.Count, $imageReplicaDeploymentLimit)
         Write-LogEntry -Message "Adjusting deployment count: plan suggested {0}, but limiting to {1} pending host(s) only" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount, $pendingHostCount -Level Warning
         $hostPoolReplacementPlan.PossibleDeploymentsCount = $pendingHostCount
     }
@@ -1499,6 +1509,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
             $deploymentResult = Deploy-SessionHosts `
                 -ARMToken $ARMToken `
                 -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount `
+                -ImageReplicaDeploymentLimit $imageReplicaDeploymentLimit `
                 -ExistingSessionHostNames $existingSessionHostNames `
                 -PreferredSessionHostNames $deletedSessionHostNames `
                 -PreferredHostProperties $hostPropertyMapping `
@@ -1579,6 +1590,7 @@ else {
         try {
             $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken `
                 -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount `
+                -ImageReplicaDeploymentLimit $imageReplicaDeploymentLimit `
                 -ExistingSessionHostNames $existingSessionHostNames `
                 -SessionHostParameters $sessionHostParameters
             

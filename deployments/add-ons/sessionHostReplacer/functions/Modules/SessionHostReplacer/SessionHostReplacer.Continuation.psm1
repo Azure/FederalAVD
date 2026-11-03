@@ -599,7 +599,12 @@ function Request-ShrWorkerYield {
 }
 
 function Invoke-ShrDeploymentIntent {
-    param([string] $ARMToken, [string[]] $RegisteredSessionHostNames = @())
+    param(
+        [string] $ARMToken,
+        [string[]] $RegisteredSessionHostNames = @(),
+        [ValidateRange(1, [int]::MaxValue)]
+        [int] $ImageReplicaDeploymentLimit = [int]::MaxValue
+    )
 
     $state = Get-ShrWorkerState
     $intent = $state.DeploymentIntent
@@ -648,6 +653,13 @@ function Invoke-ShrDeploymentIntent {
             }
             Save-ShrContinuationCheckpoint
             $intent = $state.DeploymentIntent
+        }
+        if (@($intent.HostNames).Count -gt $ImageReplicaDeploymentLimit) {
+            throw "Checkpointed deployment has $(@($intent.HostNames).Count) hosts, exceeding the live image replica ceiling of $ImageReplicaDeploymentLimit. Restore replica capacity before retrying; the saved intent has not been split or submitted."
+        }
+        if ($ImageReplicaDeploymentLimit -lt [int]::MaxValue) {
+            Write-LogEntry -Message "IMAGE_REPLICA_SUBMISSION | ReplicaCeiling: {0} | SubmissionBatch: {1} | Replay: True" `
+                -StringValues $ImageReplicaDeploymentLimit, @($intent.HostNames).Count
         }
         Invoke-AzureRestMethod -ARMToken $ARMToken -Method PUT -Uri $intent.Uri -Body $intent.Body | Out-Null
         Write-ShrEvent -Event DeploymentSubmitted -State $state

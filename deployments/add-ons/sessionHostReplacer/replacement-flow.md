@@ -91,6 +91,39 @@ exist. This is not a completion-time guarantee: health, schedule, quota, subnet 
 capacity and session gates still apply. The SideBySide deployment ceiling applies with or without
 progressive batching; the planner retains its twice-target temporary-capacity ceiling.
 
+### Live gallery replica safeguard
+
+Before replacement planning, the worker reads the selected **exact image version** with
+`$expand=ReplicationStatus` from Azure Resource Manager. This happens on every planning pass,
+including continuation passes and later scheduled batches; the image stays pinned, but its
+replica capacity is not cached. In-progress deployments are observed without starting another batch.
+
+For the session-host region, the ceiling is **20 VMs per configured replica**. The regional
+`regionalReplicaCount` overrides the version-wide `replicaCount`; counts from other regions are
+never added. This follows [Microsoft's replica-sizing recommendation](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery#scaling),
+not a guaranteed Azure concurrency limit. The publishing profile and regional replication status
+come from the [gallery image version GET API](https://learn.microsoft.com/rest/api/compute/gallery-image-versions/get).
+Configured replicas are not a live count of free deployment slots. Other pools and deployments
+can use the same image, so this is a per-pool safeguard, not a cross-pool reservation.
+
+The planner applies this ceiling after existing mode-specific limits and progressive scale-up,
+before selecting destructive replacement candidates. It cannot increase a smaller existing
+allowance. DeleteFirst pending-host recovery and the final submission path also honor the
+ceiling. A saved deployment retry that still exceeds it stops rather than silently splitting
+the durable request; restore replica capacity and use the normal operation-recovery procedure.
+An already accepted deployment is not canceled or resized.
+
+Failed queries, missing/invalid counts, missing regional data or replication other than
+`Completed` block new replacement planning and log an Error; later reconciliation can retry the
+read. Full replication is required: shallow replication is deliberately blocked rather than
+assuming that its single source can support full-replica concurrency. Marketplace images have
+no customer-controlled gallery replicas and retain their existing batch behavior.
+
+Information-level `IMAGE_REPLICA_CAP` logs record the exact image, region, effective count,
+count source, replication status and ceiling. `IMAGE_REPLICA_BATCH` records the existing policy
+allowance and resulting planned batch; `IMAGE_REPLICA_SUBMISSION` records the final submission
+count, including retries. No new app setting or additional role assignment is required.
+
 ### Coordination and Recovery Boundaries
 
 - The `shrContinuation` table stores one operation entity per fully qualified host pool, separate from

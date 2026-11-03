@@ -1034,6 +1034,8 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
                 $ScalingPlanTarget,
                 [array] $SessionHosts = $oldHosts,
                 [int] $MaxDeploymentBatchSize = 100,
+                [int] $ImageReplicaDeploymentLimit = [int]::MaxValue,
+                [int] $TargetSessionHostCount = 10,
                 [bool] $EnableProgressiveScaleUp = $false,
                 [int] $InitialDeploymentPercentage = 20
             )
@@ -1043,7 +1045,7 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
                 -SessionHosts $SessionHosts `
                 -RunningDeployments @() `
                 -HostPoolName 'hp-test' `
-                -TargetSessionHostCount 10 `
+                -TargetSessionHostCount $TargetSessionHostCount `
                 -LatestImageVersion $latestImage `
                 -ReplaceSessionHostOnNewImageVersionDelayDays 0 `
                 -ReplacementMode $ReplacementMode `
@@ -1052,6 +1054,7 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
                 -MaxDeletionsPerCycle 50 `
                 -EnableProgressiveScaleUp $EnableProgressiveScaleUp `
                 -MaxDeploymentBatchSize $MaxDeploymentBatchSize `
+                -ImageReplicaDeploymentLimit $ImageReplicaDeploymentLimit `
                 -InitialDeploymentPercentage $InitialDeploymentPercentage `
                 -SuccessfulRunsBeforeScaleUp 1 `
                 -ScalingPlanTarget $ScalingPlanTarget `
@@ -1078,6 +1081,37 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
 
     AfterAll {
         Remove-Module SessionHostReplacer -Force
+    }
+
+    It 'caps <Mode> planning at twenty VMs for one regional replica before destructive selection' -TestCases @(
+        @{ Mode = 'SideBySide' }
+        @{ Mode = 'DeleteFirst' }
+        @{ Mode = 'MaintenanceWindow' }
+    ) {
+        param($Mode)
+        $hosts = @(1..60 | ForEach-Object {
+            $copy = $oldHosts[0] | Select-Object *
+            $copy.SessionHostName = "avd-$_"
+            $copy.VMName = "avd-$_"
+            $copy.ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-$_"
+            $copy
+        })
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode $Mode -SessionHosts $hosts `
+            -TargetSessionHostCount 60 -ImageReplicaDeploymentLimit 20
+        $plan.PossibleDeploymentsCount | Should Be 20
+        ($plan.PossibleSessionHostDeleteCount -le 20) | Should Be $true
+        (@($plan.SessionHostsPendingDelete).Count -le 20) | Should Be $true
+    }
+
+    It 'preserves a smaller configured or progressive batch allowance' -TestCases @(
+        @{ Progressive = $false; Expected = 3 }
+        @{ Progressive = $true; Expected = 1 }
+    ) {
+        param($Progressive, $Expected)
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide `
+            -MaxDeploymentBatchSize 3 -ImageReplicaDeploymentLimit 20 `
+            -EnableProgressiveScaleUp $Progressive -InitialDeploymentPercentage 10
+        $plan.PossibleDeploymentsCount | Should Be $Expected
     }
 
     It 'SideBySide plans ten deployments and no deletion with a scaling plan' {

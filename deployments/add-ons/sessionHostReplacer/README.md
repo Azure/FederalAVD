@@ -1130,6 +1130,13 @@ ceiling of 10 can therefore deploy two batches while old hosts remain occupied, 
 the surge. **DeleteFirst** still completes the current retirement/redeployment batch first.
 See the [canonical deployment and retirement gates](replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
 
+Gallery-backed deployments also have an automatic **20 VMs per regional image replica** ceiling.
+SHR queries the selected exact version live before planning, including continuation passes, and
+uses the smaller of this ceiling and existing batch allowances. Missing replica data, incomplete
+replication or failed queries block new planning and are logged. Marketplace behavior is unchanged.
+See the [live replica safeguard](replacement-flow.md#live-gallery-replica-safeguard) for recovery,
+shallow-replication restrictions and the `IMAGE_REPLICA_CAP` / batch/submission logs.
+
 See [timer sequencing and coordination](replacement-flow.md#two-timer-execution) for operation scope,
 duplicate/crash handling, deadlines and lease behavior.
 

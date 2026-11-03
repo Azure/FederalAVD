@@ -121,6 +121,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 Source = $null
             }
             FailDeploymentRuns = @()
+            ReplicaLimit = 100
+            ReplicaFailure = $false
+            ReplicaQueries = @()
             AcceptedButThrowRuns = @()
             InterruptAfterDeletionRuns = @()
             DeploymentStatuses = @{}
@@ -236,6 +239,12 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             }
         }
         Mock Get-LatestImageVersion { $global:shrSimulation.LatestImage }
+        Mock Get-ImageReplicaDeploymentLimit {
+            param($Image, $Location)
+            $global:shrSimulation.ReplicaQueries += @{ Version = $Image.Version; Location = $Location }
+            if ($global:shrSimulation.ReplicaFailure) { throw 'Live regional replication unavailable' }
+            $global:shrSimulation.ReplicaLimit
+        }
         Mock Compare-ImageVersion { -1 }
         Mock Get-ScalingPlanCurrentTarget {
             $global:shrSimulation.ScalingPlanTarget
@@ -489,6 +498,27 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Assert-MockCalled Get-LatestImageVersion -Times 0 -Exactly -Scope It
         Assert-MockCalled Update-HostPoolStatus -Times 1 -Exactly -Scope It -ParameterFilter {
             $HostsToReplace -eq 1
+        }
+    }
+
+    It 'blocks replacement planning and deployment when the live replica query fails' {
+        $global:shrSimulation.ReplicaFailure = $true
+        Invoke-OrchestrationCycle -RunNumber 1
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        Assert-MockCalled Get-SessionHostReplacementPlan -Times 0 -Exactly -Scope It
+        ($global:shrSimulation.Logs -join "`n") | Should Match 'IMAGE_REPLICA_CAP.*blocked.*Live regional replication unavailable'
+    }
+
+    It 'rechecks the pinned image on each continuation pass before planning' {
+        Invoke-OrchestrationCycle -RunNumber 1
+        Invoke-OrchestrationCycle -RunNumber 2
+        $global:shrSimulation.ReplicaQueries.Count | Should Be 2
+        $global:shrSimulation.ReplicaQueries[0].Version | Should Be '2.0.0'
+        $global:shrSimulation.ReplicaQueries[1].Version | Should Be '2.0.0'
+        Assert-MockCalled Get-LatestImageVersion -Times 1 -Exactly -Scope It
+        Assert-MockCalled Get-SessionHostReplacementPlan -Scope It -ParameterFilter {
+            $ImageReplicaDeploymentLimit -eq 100
         }
     }
 
@@ -1058,6 +1088,41 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             Should Be "Maintenance override requires configured ReplacementMode DeleteFirst. Found 'SideBySide'."
         $global:shrSimulation.DeletionCalls.Count | Should Be 0
         $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+    }
+
+    It 'limits pending DeleteFirst recovery without deleting more hosts or dropping mappings' {
+        $global:shrSimulation.Mode = 'DeleteFirst'
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        $global:shrSimulation.ReplicaLimit = 20
+        $global:shrSimulation.Hosts = @()
+        $mappings = @{}
+        foreach ($index in 1..21) {
+            $name = 'avd-{0:d2}' -f $index
+            $mappings[$name] = @{
+                VMName = $name
+                ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/$name"
+            }
+        }
+        $global:shrSimulation.DeploymentState.PendingHostMappings = $mappings | ConvertTo-Json -Compress
+        $global:shrSimulation.Plan = [PSCustomObject]@{
+            PossibleDeploymentsCount = 21
+            PossibleSessionHostDeleteCount = 0
+            SessionHostsPendingDelete = @()
+            ExistingSessionHostNames = @()
+            TargetSessionHostCount = 21
+            TotalSessionHostsToReplace = 21
+        }
+
+        Invoke-OrchestrationCycle -RunNumber 1
+
+        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[0].Count | Should Be 20
+        @((($global:shrSimulation.DeploymentState.PendingHostMappings |
+            ConvertFrom-Json).PSObject.Properties.Name)).Count | Should Be 21
+        Assert-MockCalled Deploy-SessionHosts -Times 1 -Exactly -Scope It -ParameterFilter {
+            $ImageReplicaDeploymentLimit -eq 20 -and $NewSessionHostsCount -eq 20
+        }
     }
 
     It 'scheduled maintenance suspends new DeleteFirst batches but allows pending recovery' {

@@ -42,6 +42,149 @@ function New-SelectionTestVersion {
     }
 }
 
+Describe 'Session Host Replacer live regional replica ceiling' {
+    BeforeEach {
+        $script:replicaVersion = New-SelectionTestVersion
+        $script:replicaVersion.properties.publishingProfile.replicaCount = 3
+        $script:replicaVersion.properties.publishingProfile.targetRegions[0].regionalReplicaCount = 2
+        $script:replicaParameters = @{
+            ARMToken = 'test-token'
+            ResourceManagerUri = 'https://arm.example.invalid'
+            Image = [pscustomobject]@{
+                Definition = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd'
+                Version = '2.0.0'
+            }
+            Location = 'eastus'
+        }
+        Mock Write-LogEntry {}
+        Mock Invoke-AzureRestMethod { $script:replicaVersion }
+    }
+
+    It 'uses the target region override rather than the global count or another region' {
+        $script:replicaVersion.properties.publishingProfile.targetRegions += @{
+            name = 'West US'; regionalReplicaCount = 10
+        }
+        Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be 40
+        Assert-MockCalled Invoke-AzureRestMethod -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Method -eq 'Get' -and
+            $Uri -eq 'https://arm.example.invalid/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd/versions/2.0.0?$expand=ReplicationStatus&api-version=2024-03-03'
+        }
+        Assert-MockCalled Write-LogEntry -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Message -like 'IMAGE_REPLICA_CAP*' -and
+            $StringValues[1] -eq 'eastus' -and $StringValues[2] -eq 2 -and
+            $StringValues[3] -eq 'Regional' -and $StringValues[4] -eq 40
+        }
+    }
+
+    It 'uses the version count when the region has no override' {
+        $script:replicaVersion.properties.publishingProfile.targetRegions[0].Remove('regionalReplicaCount')
+        Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be 60
+    }
+
+    It 'supports a configured count of <Count> with a ceiling of <Expected>' -TestCases @(
+        @{ Count = 1; Expected = 20 }
+        @{ Count = 100; Expected = 2000 }
+    ) {
+        param($Count, $Expected)
+        $script:replicaVersion.properties.publishingProfile.targetRegions[0].regionalReplicaCount = $Count
+        Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be $Expected
+    }
+
+    It 'does not use a previous invocation count as a cached capacity allowance' {
+        Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be 40
+        $script:replicaVersion.properties.publishingProfile.targetRegions[0].regionalReplicaCount = 1
+        Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be 20
+        Assert-MockCalled Invoke-AzureRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'rejects incomplete or unknown regional replication: <State>' -TestCases @(
+        @{ State = 'InProgress' }
+        @{ State = 'Failed' }
+        @{ State = 'Unknown' }
+        @{ State = '' }
+    ) {
+        param($State)
+        $script:replicaVersion.properties.replicationStatus.summary[0].state = $State
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'cannot confirm completed replication'
+    }
+
+    It 'rejects a missing target region rather than using another region' -TestCases @(
+        @{ Surface = 'publishingProfile' }
+        @{ Surface = 'replicationStatus' }
+    ) {
+        param($Surface)
+        if ($Surface -eq 'publishingProfile') {
+            $script:replicaVersion.properties.publishingProfile.targetRegions[0].name = 'westus'
+        } else {
+            $script:replicaVersion.properties.replicationStatus.summary[0].region = 'westus'
+        }
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'cannot confirm completed replication'
+    }
+
+    It 'rejects ambiguous region records rather than selecting an arbitrary count' -TestCases @(
+        @{ Surface = 'publishingProfile' }
+        @{ Surface = 'replicationStatus' }
+    ) {
+        param($Surface)
+        if ($Surface -eq 'publishingProfile') {
+            $script:replicaVersion.properties.publishingProfile.targetRegions += @{
+                name = 'eastus'; regionalReplicaCount = 5
+            }
+        } else {
+            $script:replicaVersion.properties.replicationStatus.summary += @{
+                region = 'eastus'; state = 'Completed'
+            }
+        }
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'cannot confirm completed replication'
+    }
+
+    It 'rejects an empty live response' {
+        Mock Invoke-AzureRestMethod { $null }
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'cannot confirm completed replication'
+    }
+
+    It 'does not fall back from an invalid regional override: <Count>' -TestCases @(
+        @{ Count = 0 }
+        @{ Count = -1 }
+        @{ Count = 101 }
+        @{ Count = 'two' }
+        @{ Count = '1.5' }
+        @{ Count = '' }
+    ) {
+        param($Count)
+        $script:replicaVersion.properties.publishingProfile.targetRegions[0].regionalReplicaCount = $Count
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'invalid or missing replica count'
+    }
+
+    It 'rejects missing counts rather than assuming a single replica' {
+        $script:replicaVersion.properties.publishingProfile.targetRegions[0].Remove('regionalReplicaCount')
+        $script:replicaVersion.properties.publishingProfile.Remove('replicaCount')
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'invalid or missing replica count'
+    }
+
+    It 'does not apply full-replica scaling assumptions to a shallow image' {
+        $script:replicaVersion.properties.publishingProfile.replicationMode = 'Shallow'
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'requires Full replication'
+    }
+
+    It 'propagates live query failure without an uncapped fallback' {
+        Mock Invoke-AzureRestMethod { throw 'HTTP 403' }
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'HTTP 403'
+    }
+
+    It 'leaves marketplace deployment policies unchanged without a gallery query' {
+        $script:replicaParameters.Image.Definition = 'marketplace:MicrosoftWindowsDesktop/windows-11/avd'
+        Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be ([int]::MaxValue)
+        Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It
+    }
+
+    It 'rejects an unresolved gallery image version without querying an arbitrary resource' {
+        $script:replicaParameters.Image.Version = 'latest'
+        { Get-ImageReplicaDeploymentLimit @replicaParameters } | Should Throw 'requires an exact'
+        Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It
+    }
+}
+
 Describe 'Session Host Replacer numeric gallery selection and pilot exclusions' {
     BeforeEach {
         $script:selectionVersions = @()

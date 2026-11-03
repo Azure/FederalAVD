@@ -269,6 +269,15 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment*' }).Count | Should Be 1
     }
 
+    It 'caps actual ARM submission at twenty names even when a caller requests twenty-one' {
+        $global:shrPreflight.Entra.Clear()
+        $global:shrPreflight.Intune.Clear()
+        $result = Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 21 -ImageReplicaDeploymentLimit 20
+        $result.SessionHostCount | Should Be 20
+        @($global:shrPreflight.SubmittedBody.properties.parameters.sessionHostNames.value).Count | Should Be 20
+        $result.SessionHostNames | Should Not Contain 'avd-21'
+    }
+
     It 'uses exactly 301 reads for 100 clean names with a <PoolSize>-host registration inventory' -TestCases @(
         @{ PoolSize = 0 },
         @{ PoolSize = 5000 }

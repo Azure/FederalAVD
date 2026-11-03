@@ -424,6 +424,9 @@ function Get-SessionHostReplacementPlan {
             if ([string]::IsNullOrEmpty($setting)) { 100 } else { $setting }
         ),
         [Parameter()]
+        [ValidateRange(1, [int]::MaxValue)]
+        [int] $ImageReplicaDeploymentLimit = [int]::MaxValue,
+        [Parameter()]
         [int] $SuccessfulRunsBeforeScaleUp = (Read-FunctionAppSetting SuccessfulRunsBeforeScaleUp),
         [Parameter()]
         [string] $ReplacementMode = (Read-FunctionAppSetting ReplacementMode),
@@ -706,6 +709,12 @@ function Get-SessionHostReplacementPlan {
         }
         if ($ReplacementMode -eq 'SideBySide') {
             $canDeploy = [Math]::Min($canDeploy, $MaxDeploymentBatchSize)
+        }
+        $requestedDeployCount = $canDeploy
+        $canDeploy = [Math]::Min($canDeploy, $ImageReplicaDeploymentLimit)
+        if ($ImageReplicaDeploymentLimit -lt [int]::MaxValue) {
+            Write-LogEntry -Message "IMAGE_REPLICA_BATCH | Mode: {0} | ExistingPolicyLimit: {1} | ReplicaCeiling: {2} | PlannedBatch: {3}" `
+                -StringValues $ReplacementMode, $requestedDeployCount, $ImageReplicaDeploymentLimit, $canDeploy
         }
     }
         

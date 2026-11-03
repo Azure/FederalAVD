@@ -707,6 +707,31 @@ Describe 'SHR continuation storage protocol' {
             $global:shrReplayState.Submitted[0].Uri | Should Match '/shr_operation$'
         }
 
+        It 'blocks an oversized persisted retry without splitting or submitting its body' {
+            $global:shrReplayState.Status = 'Absent'
+            $global:shrReplayState.DeploymentIntent.HostNames = @(1..21 | ForEach-Object { "avd-$_" })
+            $global:shrReplayState.DeploymentIntent.Body = @{
+                properties = @{
+                    parameters = @{
+                        sessionHostNames = @{ value = $global:shrReplayState.DeploymentIntent.HostNames }
+                    }
+                }
+            } | ConvertTo-Json -Depth 10 -Compress
+            $originalBody = $global:shrReplayState.DeploymentIntent.Body
+            { Invoke-ShrDeploymentIntent -ARMToken token -ImageReplicaDeploymentLimit 20 } |
+                Should Throw 'exceeding the live image replica ceiling'
+            $global:shrReplayState.Submitted.Count | Should Be 0
+            $global:shrReplayState.DeploymentIntent.Body | Should Be $originalBody
+            Assert-MockCalled Save-ShrContinuationCheckpoint -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
+        }
+
+        It 'observes an already accepted deployment even when the current replica count is lower' {
+            $global:shrReplayState.DeploymentIntent.HostNames = @(1..21 | ForEach-Object { "avd-$_" })
+            $result = Invoke-ShrDeploymentIntent -ARMToken token -ImageReplicaDeploymentLimit 20
+            $result.SessionHostCount | Should Be 21
+            $global:shrReplayState.Submitted.Count | Should Be 0
+        }
+
         It 'checkpoints a deterministic retry of only unresolved names and aligned placement arrays' {
             $global:shrReplayState.Status = 'Absent'
             $intent = $global:shrReplayState.DeploymentIntent

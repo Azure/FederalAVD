@@ -297,7 +297,63 @@ function Get-LatestImageVersion {
     }
 }
 
+function Get-ImageReplicaDeploymentLimit {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [string] $ARMToken,
+        [Parameter(Mandatory)]
+        [PSCustomObject] $Image,
+        [Parameter(Mandatory)]
+        [string] $Location,
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
+    )
+
+    if ($Image.Definition -like 'marketplace:*') {
+        Write-LogEntry -Message 'IMAGE_REPLICA_CAP | Marketplace image; gallery replica cap is not applicable.' -Level Trace
+        return [int]::MaxValue
+    }
+    if ($Image.Definition -notmatch '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Compute/galleries/[^/]+/images/[^/]+$' -or
+        $Image.Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+        throw 'Replica safeguard requires an exact Azure Compute Gallery image version.'
+    }
+
+    $imageId = "$($Image.Definition)/versions/$($Image.Version)"
+    $uri = "$ResourceManagerUri${imageId}?`$expand=ReplicationStatus&api-version=2024-03-03"
+    $version = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $uri
+    $normalizedLocation = $Location -replace '\s', ''
+    $regions = @($version.properties.publishingProfile.targetRegions | Where-Object {
+        ($_.name -replace '\s', '') -eq $normalizedLocation
+    })
+    $replication = @($version.properties.replicationStatus.summary | Where-Object {
+        ($_.region -replace '\s', '') -eq $normalizedLocation
+    })
+    if ($regions.Count -ne 1 -or $replication.Count -ne 1 -or $replication[0].state -ne 'Completed') {
+        throw "Replica safeguard cannot confirm completed replication of image '$imageId' in region '$Location'."
+    }
+    $profile = $version.properties.publishingProfile
+    if ($profile.replicationMode -and $profile.replicationMode -ne 'Full') {
+        throw "Replica safeguard requires Full replication; image '$imageId' uses '$($profile.replicationMode)'."
+    }
+
+    # A regional override takes precedence over the version-wide replica count.
+    $countValue = $regions[0].regionalReplicaCount
+    $countSource = 'Regional'
+    if ($null -eq $countValue) {
+        $countValue = $profile.replicaCount
+        $countSource = 'VersionDefault'
+    }
+    $replicas = 0
+    if (-not [int]::TryParse([string]$countValue, [ref]$replicas) -or $replicas -lt 1 -or $replicas -gt 100) {
+        throw "Replica safeguard found an invalid or missing replica count for image '$imageId' in region '$Location'."
+    }
+    $limit = $replicas * 20
+    Write-LogEntry -Message "IMAGE_REPLICA_CAP | Image: {0} | Region: {1} | Replicas: {2} | CountSource: {3} | Replication: Completed | VMsPerReplica: 20 | Ceiling: {4}" `
+        -StringValues $imageId, $Location, $replicas, $countSource, $limit
+    return $limit
+}
+
 #EndRegion Image Version Functions
 
 # Export functions
-Export-ModuleMember -Function Compare-ImageVersion, Get-LatestImageVersion
+Export-ModuleMember -Function Compare-ImageVersion, Get-LatestImageVersion, Get-ImageReplicaDeploymentLimit
