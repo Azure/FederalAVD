@@ -395,8 +395,9 @@ Maintenance-override behavior:
 - Autoscale must be disabled. Failure to query scaling-plan state also fails closed.
 - The function explicitly calls the AVD user-session logoff operation and re-queries sessions;
   deleting a VM does not substitute for logoff.
-- Notification delay is evaluated on timer invocations. With the default 30-minute timer, forced
-  sign-out can begin up to approximately 30 minutes after the requested delay elapses.
+- Notification delay for an active batch is evaluated by the minute reconciler, independently of
+  the initiation schedule. Running invocations, restarts and leases can delay checks; the cadence
+  does not guarantee an exact sign-out time.
 - A full-pool outage, including one-host replacement, requires explicit authorization.
 - The configured replacement mode must be DeleteFirst.
 - Any shutdown-retention VM blocks scheduling and execution; maintenance does not purge retained

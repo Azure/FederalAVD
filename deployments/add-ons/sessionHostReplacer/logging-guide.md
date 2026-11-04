@@ -1,217 +1,153 @@
-﻿# Session Host Replacer - Logging Guidelines
+# Session Host Replacer - Logging Guide
 
-## Logging Levels
+Use the [design overview](../../../docs/session-host-replacer.md#what-operators-see) for the monitoring
+model and [Trace one replacement cycle](README.md#trace-one-replacement-cycle) for workbook navigation.
 
-The SessionHostReplacer uses `Write-LogEntry` with Information, Warning, Error, Trace and Debug
-output. Timer health and operational cycle summaries use Information; internal cycle diagnostics use Trace.
+## Where Logs Go
 
-- **Information**: Important status messages for tracking progress
-- **Trace**: Detailed diagnostic information written to the PowerShell verbose stream
-- **Debug**: Diagnostic information written to the PowerShell debug stream
-- **Warning**: Issues that don't stop execution
-- **Error**: Failures that impact functionality
+When `logAnalyticsWorkspaceResourceId` is nonempty, SHR creates workspace-based Application
+Insights and configures the Function App's `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+The optional workbook queries selected Application Insights resources.
 
-## Cycle correlation
+```text
+Both timers + shared lifecycle engine
+  -> PowerShell streams -> Azure Functions host -> Application Insights
+                                                -> linked Log Analytics workspace
+```
 
-Start with the [workbook tracing procedure](README.md#trace-one-replacement-cycle), rather than
-treating every Function invocation as a complete replacement cycle.
+SHR disables its separate Function App diagnostic setting for `FunctionAppLogs`. That table is
+not the source for the current workbook. Existing diagnostic settings are not deleted by an
+incremental redeployment; see [collection-path cleanup](README.md#function-app-log-collection).
+Without a supplied workspace, the template does not enable this Application Insights/workbook
+path. Local or streamed output is not a substitute for retained telemetry.
 
-- **Cycle ID** is the durable operation's ID. It spans initiation, reconciliation and authorized
-  batches until terminal completion, supersession or checked recovery.
-- **Batch** is the operation's deployment-batch number, not an invocation count.
-- **Trigger** is `Initiation` or `Reconciliation`.
-- **Invocation ID** and **native operation ID** come from Azure Functions/Application Insights.
-  They are distinct from the SHR cycle ID. The workbook uses the native invocation ID when
-  available and falls back to native operation identity only for log joins; it never labels that
-  fallback as an invocation ID.
+The examples below run in **Application Insights > Logs**, using `traces`, `exceptions` and
+`requests`. In a workspace-native query, the corresponding tables are `AppTraces`,
+`AppExceptions` and `AppRequests`, with different column names (for example `TimeGenerated`,
+`Message` and `Properties`). Do not paste an Application Insights query unchanged into that schema.
 
-An ordinary correlated message looks like:
+## Normal Output Versus Diagnostics
+
+`Write-LogEntry` maps Information to `Write-Host`, Warning to `Write-Warning`, Error to
+`Write-Error`, Trace to `Write-Verbose`, and Debug to `Write-Debug`. **Host is a PowerShell
+output command, not a separate SHR severity or an always-visible collection tier.**
+
+| Level | Current purpose |
+| --- | --- |
+| Information | Timer starts/outcomes, authorization, deployment submission, lease waits, host actions and the final cycle observation for an active reconciliation pass |
+| Information dashboard records | `SETTINGS`, `IMAGE_INFO`, `METRICS` and `ACTION`; snapshots are not additional host operations |
+| Information replica records | `IMAGE_REPLICA_CAP`, `IMAGE_REPLICA_BATCH`, `IMAGE_REPLICA_SUBMISSION`; live replica capacity and planned/submitted counts |
+| Warning | Blockers or unexpected conditions needing investigation; a warning can defer work, not just describe a harmless issue |
+| Error / native exceptions | Invocation failures and critical API, state or deployment failures; timer failures are rethrown |
+| Trace / Debug | Internal checkpoints, repeated deployment observations, planning, cache and per-host diagnostics |
+
+`Reconciling`, `Checkpoint`, `Progress` and repeated `DeploymentObserved` structured events use
+Trace. Their absence from an Information-level timeline is expected. Later read-only polls of
+a stopped operation report `NeedsAttention` without replaying its saved exception as a new Error
+every minute. Inspect the original failed invocation; counting only recent Error rows misses
+persistently stopped work.
+
+The deployed `host.json` contains only `"version": "2.0"`; SHR does not deploy an explicit
+log-level or sampling policy. Verify effective host settings and app-setting overrides. Preserve
+Information collection for Function logs and `Host.Results`; raising thresholds can remove
+dashboard records and successful invocation telemetry.
+
+## Cycle Correlation
+
+- **Cycle ID:** the persisted SHR operation ID, spanning timers, invocations and authorized batches.
+- **Batch:** the operation's deployment-batch number, not an invocation count.
+- **Trigger:** `Initiation` or `Reconciliation`.
+- **Invocation ID / native operation ID:** Azure Functions/Application Insights identifiers, not
+  the SHR cycle. The workbook uses native invocation identity for drill-down; its log joins can
+  fall back to native operation identity without relabeling it an invocation ID.
 
 ```text
 [pool] [Cycle:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] [Batch:2] [Trigger:Reconciliation] ACTION | Deployed:2
 ```
 
-The host pool remains the first bracket and the original message remains the suffix, preserving
-existing metrics/action parsers. Correlation is invocation-local, refreshed at checkpoints and
-cleared in `finally`, including failed invocations. Idle reconciliation of absent or terminal
-operations does not attach an old cycle ID to minute-timer heartbeats.
+The pool remains the first bracket and the original message remains the suffix for existing
+dashboard parsers. Correlation is invocation-local and cleared in `finally`. Idle reconciliation
+does not attach a completed cycle to a new heartbeat.
 
 ### Structured events
 
-Structured messages end with `SHR_TIMER | {json}` or `SHR_EVENT | {json}`.
-The JSON contract has `SchemaVersion: 1`:
+Structured records are **JSON in trace message text**, not native `customEvents` or automatically
+populated custom dimensions. Parse the suffix `SHR_TIMER | {json}` or `SHR_EVENT | {json}`.
+The current contract is `SchemaVersion: 1`:
 
 - Common fields: `Event`, `Trigger`, `CycleId`, `Batch`, `FunctionApp`, `Phase`,
-  `InitiationEnabled` and a safe `Reason`.
-- Cycle snapshots additionally allow `Status`, `StartedUtc`, `DeadlineUtc`, `LeaseExpiresUtc`,
+  `InitiationEnabled`, `Reason`.
+- Cycle snapshots can also carry `Status`, `StartedUtc`, `DeadlineUtc`, `LeaseExpiresUtc`,
   `LeaseHeld`, `ImageVersion`, `ImageDefinition`, `Target`, `DeploymentName`,
-  `DeploymentResourceId`, `SupersedesCycleId`, `InDrain` and `RunningDeployments`.
-- Timer events record `Started` and `Succeeded` or `Failed`; failures are rethrown, not hidden.
-- Cycle events cover initiation/authorization, supersession, checkpoints, deployment submission/
-  observation, reconciliation, lease waits, progress and terminal outcomes.
+  `DeploymentResourceId`, `SupersedesCycleId`, `InDrain`, `RunningDeployments`.
+- Timer events: `Started`, then `Succeeded` or `Failed`. Timer success is not cycle completion.
+- Cycle events describe authorization, deployment, waiting, supersession and terminal outcomes.
+  Wait reasons distinguish cleanup, deployment, readiness, scheduled authorization and drain.
 
-### Normal output versus diagnostics
+Structured payloads allowlist metadata and exclude saved deployment bodies, credentials, tokens,
+host-name arrays, configuration hashes and raw `LastError`. Deployment links contain validated ARM
+resource paths, not query strings or a fixed cloud Portal hostname. This is not a claim that every
+native error or ordinary diagnostic message is sanitized; restrict telemetry access and protect
+exported logs. Telemetry adds no separate ARM/Table requests or durable-state writes.
 
-Normal Information output retains timer starts/outcomes, initiation and batch authorization,
-new deployment submissions, lease waits, actual host actions and a final cycle snapshot for
-each active reconciliation pass. `SETTINGS`, `IMAGE_INFO`, `METRICS` and `ACTION` records remain
-at Information because existing workbook configuration, inventory and action panels consume them.
-These dashboard records are not additional host operations.
+## Query Both Timers
 
-`IMAGE_REPLICA_CAP`, `IMAGE_REPLICA_BATCH` and `IMAGE_REPLICA_SUBMISSION` are also Information:
-they record the live regional replica count/status, calculated ceiling, existing-policy allowance
-and final planned/submitted count. Replica-read failures block new planning and log an Error.
-See the [replica safeguard contract](replacement-flow.md#live-gallery-replica-safeguard).
-
-Repeated engine startup/completion banners, VM caching, planner arithmetic, image enumeration,
-unchanged per-host sessions/drain timing and duplicate action narration use Trace. Internal
-`Reconciling`, `Checkpoint`, `Progress` and repeated `DeploymentObserved` snapshots also use Trace;
-progress counts still feed the final Information-level snapshot. Detailed checkpoint events are
-therefore diagnostic, not guaranteed rows in the normal workbook timeline.
-
-An actual invocation failure still surfaces its error and is rethrown. Later read-only polls of
-that stopped operation report `NeedsAttention` without replaying its saved exception as a new
-Error every minute; the saved detail is diagnostic. Host-availability blockers have one
-mode-specific warning rather than repeating the same warning in multiple layers and listing
-every unavailable host at Warning. Per-host details remain available at Trace.
-
-No persistent deduplication cache, new state writes, global sampling or blanket warning/error
-suppression is used. Each timer remains visible, and the final cycle observation keeps workbook
-freshness honest even when the underlying wait is unchanged.
-
-The structured payload excludes saved deployment bodies, credentials, configuration hashes,
-host-name arrays, tokens and raw `LastError`. Stop reasons use fixed descriptions, not exception
-text. Deployment links include only a validated ARM deployment resource path, never its query
-string or a hard-coded Portal hostname. Detailed errors remain in existing/native logs under
-the normal telemetry access controls; the workbook joins traces and exceptions by native
-invocation identity, with empty join keys excluded.
-
-Waiting phases distinguish cleanup, ARM deployment, host availability, next scheduled
-authorization, draining and other progress checks. `NeedsAttention` and terminal states override
-old progress counts. `AuthorizationExpired` is distinct from a successfully completed batch.
-Lease ownership is last-reported, so the workbook also shows expiry and observation age.
-
-These are telemetry snapshots, not live Table reads. The workbook bounds cycle summaries and
-chronological timelines/logs, honors the selected time range and distinguishes timer heartbeats
-from inventory observations. Sampling, ingestion delays or a narrow time range can hide events.
-No data is not proof of health. Redeploy both runtime and workbook to use this schema; old logs
-are not backfilled. Observability adds no ARM/Table requests or durable-state writes.
-
-## Enabling Verbose Mode
-
-### Option 1: Information-level operational tracing
-
-Timer health, key lifecycle events and final cycle summaries do not need verbose mode. Preserve Information-level Function logging in the
-deployed host configuration and verify Application Insights ingestion. Changing
-`FUNCTIONS_WORKER_RUNTIME_VERSION` selects a runtime; it does not enable verbose logging.
-
-### Option 2: host.json Configuration
-Edit `host.json` in your function app root:
-
-```json
-{
-  "version": "2.0",
-  "logging": {
-    "logLevel": {
-      "default": "Information",
-      "Function": "Information",
-      "Host.Results": "Information"
-    },
-    "console": {
-      "isEnabled": true
-    }
-  }
-}
-```
-
-### Option 3: Local Development with VSCode
-For temporary diagnostics, set the runspace-wide preference before importing the modules
-(for example, in the deployed startup profile), so nested modules can write their verbose stream:
-
-```powershell
-$global:VerbosePreference = 'Continue'
-```
-
-For Azure capture, also configure Function host logging to admit Trace rather than Information.
-Both PowerShell stream emission and host ingestion must permit the messages; changing only a
-workbook query cannot recover filtered diagnostics. Revert the temporary preference/log-level
-changes after troubleshooting and retain the normal Information-level dashboard records.
-
-### Option 4: Query Application Insights
-Verbose logs are captured in Application Insights. Query them with:
+Run this in the SHR Application Insights resource. It includes both timer names and their `.User`
+categories, plus native exceptions. The exact-category filter
+`Category == "Function.session-host-replacer"` misses the worker and user-category records.
 
 ```kusto
-traces
+union traces, exceptions
 | where timestamp > ago(1d)
 | where tostring(customDimensions.Category) startswith "Function.session-host-replacer"
-| where severityLevel == 0
+| project timestamp, cloud_RoleName, operation_Id,
+          InvocationId = tostring(customDimensions.InvocationId),
+          severityLevel, Detail = coalesce(message, outerMessage, innermostMessage)
 | order by timestamp desc
 ```
 
-## Current Logging Strategy
+For last-reported cycle state:
 
-### Host Level (Always Visible)
+```kusto
+traces
+| where timestamp > ago(7d)
+| where message contains "SHR_EVENT |"
+| extend Data = parse_json(extract(@"SHR_EVENT \| (\{.*\})$", 1, message))
+| where toint(Data.SchemaVersion) == 1 and isnotempty(tostring(Data.CycleId))
+| extend CycleId = tostring(Data.CycleId)
+| summarize arg_max(timestamp, *) by cloud_RoleName, CycleId
+| project timestamp, cloud_RoleName, CycleId, Status = tostring(Data.Status),
+          Phase = tostring(Data.Phase), Reason = tostring(Data.Reason)
+| order by timestamp desc
+```
 
-- Function start/stop
-- Token acquisition status
-- Session host counts
-- Deployment decisions and submission
-- Deletion decisions
-- Major state transitions
+These queries report ingested evidence, not live state. Bound and select the time range to include
+the operation's start and latest observation. No rows do not prove health. See
+[suggested alerts](alerts/alerts-guide.md) for structured cycle/timer queries and response guidance.
+They are documentation examples, not deployed rules; the
+[legacy pack](alerts/alerts-guide.md#current-coverage-limitations) does not implement them.
 
-### Information Level (Default)
+## Temporarily Collect Trace Diagnostics
 
-- Deployment state tracking
-- Previous deployment status checks
-- Image version detection
-- State persistence operations
+Querying logs does not enable logging or recover records that were never emitted or ingested.
+Both gates must be open:
 
-### Verbose Level (Diagnostic)
+1. Before module import, set `$global:VerbosePreference = 'Continue'` in the startup profile for
+   verbose emission from nested modules. Debug output separately needs
+   `$global:DebugPreference = 'Continue'`.
+2. Permit Trace in the Functions host for **both** functions. Temporary app-setting overrides
+   can use `AzureFunctionsJobHost__logging__logLevel__Function.session-host-replacer=Trace`
+   and `AzureFunctionsJobHost__logging__logLevel__Function.session-host-replacer-worker=Trace`.
+   Check for more-specific category overrides that could still filter `.User` messages.
+3. Apply changes through the controlled deployment/configuration process, account for app
+   restarts, then confirm a known diagnostic record reaches Application Insights. Runtime-version
+   settings do not enable verbose logging.
+4. Restore the normal profile and log levels after the investigation. Trace can be high-volume
+   and contain sensitive diagnostics; do not leave it enabled as the production baseline.
 
-- Individual session host details
-- VM tag operations
-- Image version enumeration
-- API response details
-- Cache operations
+Sampling, ingestion delay and network/private-link failures can still leave gaps. Check both timer
+outcomes, cycle observation age and inventory age after a runtime/workbook upgrade in the target
+cloud. Old logs are not backfilled into the structured schema.
 
-### Warning Level
-
-- Non-critical failures (Graph token, device cleanup)
-- Unexpected conditions that don't stop execution
-- Previous deployment still running
-
-### Error Level  
-
-- Token acquisition failures
-- Deployment submission errors
-- Critical API failures
-- State persistence errors
-
-## Recommended Changes
-
-To reduce log noise while maintaining visibility, the following logs should be changed from Host/Information to Verbose:
-
-### In run.ps1:
-
-- Subscription IDs → Verbose
-- Token acquisition success → Verbose (keep failure as Host)
-- Image reference details → Verbose
-- Running deployment count → Verbose
-
-### In SessionHostReplacer.psm1:
-
-- Individual session host processing → Verbose
-- VM tag operations → Verbose
-- Image version details → Verbose
-- Template spec version resolution → Verbose
-- State table creation → Verbose
-- Individual drain operations → Verbose
-
-### Keep as Host/Information:
-
-- Overall session host counts
-- Deployment decisions (how many to deploy/delete)
-- Deployment submission results
-- Progressive scale-up status
-- Previous deployment outcome
-- Critical errors
+References: [PowerShell logging in Azure Functions](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell#logging),
+[Functions monitoring configuration](https://learn.microsoft.com/en-us/azure/azure-functions/configure-monitoring#configure-log-levels).

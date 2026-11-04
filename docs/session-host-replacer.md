@@ -2,195 +2,179 @@
 
 # Session Host Replacer Add-On
 
-The Session Host Replacer is an Azure Function add-on that replaces standard-management Azure
-Virtual Desktop session hosts when a newer Compute Gallery image version is available.
+**The Session Host Replacer (SHR) automates moving an Azure Virtual Desktop host pool onto a newer
+desktop image.** After you build and test an image - for example, with monthly Windows and
+application updates - it replaces session-host VMs running the previous image with new VMs built
+from that image. It does not build the image, patch the existing machines or rebuild the host pool.
 
-> **Standard host pools only.** Do not target an automated host pool that uses Session Host
-> Configuration. Automated pools use native Session Host Update. See
-> [Choose a Host Pool Management Approach](host-pool-management.md).
+The challenge is replacing machines people are using without removing too much desktop capacity
+at once. SHR works through the fleet in limited batches, manages session draining and user
+notifications, checks replacement readiness, and tracks deployment and cleanup through completion.
 
-## Documentation Map
+**Use it only with standard-management host pools.** Automated host pools use native Session
+Host Update instead. Deploy one replacer per host pool; never run two against the same pool.
+See [Choose a Host Pool Management Approach](host-pool-management.md).
 
-Each document has one purpose:
+## The Design in One Minute
 
-| Document | Purpose |
-| --- | --- |
-| [Add-on README](../deployments/add-ons/sessionHostReplacer/README.md) | Prerequisites, deployment, parameters, monitoring, configuration management, and troubleshooting |
-| [Canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) | SideBySide and DeleteFirst sequencing, scaling-phase behavior, readiness, recovery, and safety invariants |
-| [Deployment update guide](../deployments/add-ons/sessionHostReplacer/deployment-guide.md) | Updating the deployed Function App code and reviewing operational settings |
-| [Logging guide](../deployments/add-ons/sessionHostReplacer/logging-guide.md) | Logging conventions and diagnostic configuration |
-| [Alerts guide](../deployments/add-ons/sessionHostReplacer/alerts/alerts-guide.md) | Recommended monitoring alerts |
+Replacing a desktop VM affects both the people using it and the capacity available to everyone
+else. SHR manages that transition in small, checked batches rather than replacing the fleet at once:
 
-The canonical flow document is authoritative when a lifecycle summary elsewhere conflicts with
-detailed replacement behavior.
+1. **Find hosts that need the new image.** SHR checks image eligibility and identifies participating
+   hosts that need replacement. Each rollout stays on one exact image version.
+2. **Replace a limited number at a time.** With SideBySide, SHR creates and checks new hosts before
+   retiring old ones. With DeleteFirst, it removes a capacity-safe group first and reuses their names
+   for replacements, avoiding the need to run both generations together.
+3. **Manage users and available capacity.** Old hosts stop accepting new sessions, users receive
+   notifications, and existing sessions get the configured time to finish. Readiness and capacity
+   checks control when hosts can be removed and when replacement can advance.
+4. **Verify and finish the transition.** SHR checks replacement registration and readiness, returns
+   validated hosts to autoscale, and completes old-host and required device-record cleanup. It saves
+   progress so a restart or failed deployment does not lose track of hosts still needing recovery.
 
-## Execution Model
+**SideBySide creates replacements before retiring old hosts**, requiring temporary extra capacity.
+**DeleteFirst removes a capacity-safe batch before recreating it**, conserving resources but
+temporarily reducing capacity. Neither guarantees uninterrupted sessions or proves that the new
+image's applications work. Image approval, batch sizes and session-grace settings remain deliberate
+operator decisions.
 
-SHR always uses two timers and one durable lifecycle engine, independently of replacement mode:
+## Choose the Capacity Trade-Off
 
-| Function | Schedule | Responsibility |
+| | SideBySide | DeleteFirst |
 | --- | --- | --- |
-| Initiator | Existing configurable `timerSchedule` | Read-only idle assessment, exact image selection and new-batch authorization |
-| Reconciler | Every minute (`0 * * * * *`) | Monitor deployment, validate health, hand off to autoscale and safely clean up authorized work |
+| Order | Deploy and validate replacements, then retire old hosts | Retire a capacity-safe batch, then replace it |
+| Temporary resources | Up to twice the target host count; plan subnet space, quota and cost | Avoids pool doubling, but temporarily reduces capacity |
+| Hostnames | Uses available names; does not preserve old-to-new names | Reuses exact names and dedicated-host placement |
+| Availability protection | Readiness and online-capacity gates before retirement | Online-capacity floor and recovery gates before further deletion |
+| Rollback | Optional retention of deallocated old hosts | No shutdown-retention rollback |
+| Best fit | Availability-first deployments with spare capacity | Constrained resources or exact-name replacement |
 
-The reconciler returns after an operation lookup when nothing is active. It cannot authorize itself
-or switch images mid-operation. Both timers share conditional state ownership and the same health,
-capacity, drain and scaling safeguards. There is no direct-timer or queue execution option.
-The initiation schedule is not a hard execution window: approved work continues outside it.
+Neither mode guarantees uninterrupted sessions or application correctness. Normal replacement
+drains hosts, notifies users, and observes minimum-drain and session-grace settings. **A grace
+period is not indefinite protection:** an old host can be removed after it expires even if sessions
+remain. Choose those settings as an explicit user-impact decision.
 
-For SideBySide, a later scheduled tick can authorize another deployment batch after the previous
-replacements are healthy and handed back to autoscale, even while their old hosts are still draining.
-The same operation keeps retiring those old hosts safely; it does not wait for their grace period
-before deploying the next authorized batch. The pinned image, target and deadline remain unchanged.
-Batch-size and twice-target capacity ceilings still apply. DeleteFirst retains its stricter
-retirement-before-redeployment ordering. See the [deployment and retirement gates](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+In SideBySide, a later scheduled batch can deploy after earlier replacements are ready and handed
+back to autoscale, while their old hosts continue draining. Long drains therefore need not stall
+all new deployment. Batch limits and the twice-target ceiling still apply.
 
-Use `initiationEnabled=false` to hold new batches without stopping active work. Stopping the
-entire app stops both timers. See [operations and recovery](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-operations)
-and the [coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#two-timer-execution).
-Existing apps require the [full-template upgrade](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment);
-do not reset active durable state. Timer triggers need no queue binding or extension package.
-
-## Replacement Modes
-
-The same execution model supports SideBySide and DeleteFirst.
-
-### SideBySide
-
-SideBySide deploys and validates new hosts before removing old hosts.
-
-- Best availability and rollback options.
-- Requires temporary subnet, compute quota, and VM capacity for both generations.
-- Can retain deallocated old hosts for a configured rollback period.
-- Replacement deployment, validation, and capacity-safe removal can continue during every scaling
-  phase. Old hosts are removed only when the latest-image fleet and the final fresh-state check
-  preserve the active scaling-plan online target.
-
-### DeleteFirst
-
-DeleteFirst removes a capacity-safe batch before deploying replacements with the same names.
-
-- Avoids temporary pool doubling.
-- Preserves hostnames and dedicated-host placement.
-- Persists recovery mappings before deletion and blocks new deletion until unresolved replacements
-  are registered and healthy.
-- Retains at least one online healthy host.
-- Starts no new delete/deploy batch during the 60-minute pre-RampUp window, RampUp, or Peak.
-- Exact-name replacement is blocked for a one-host target because it cannot preserve availability.
+DeleteFirst will not start another destructive batch while earlier replacements remain unresolved.
+It preserves at least one online healthy host, so normal exact-name replacement is blocked for a
+one-host target. New destructive batches also pause during the 60 minutes before RampUp, RampUp,
+and Peak. Recovery already in flight continues.
 
 ### One-Time Maintenance Override
 
-An optional one-time maintenance request temporarily expedites an existing DeleteFirst
-configuration for an administrator-approved outage window. No replacement-mode redeployment is
-required. SideBySide replacers are not eligible. Schedule the operation from the separately
-published [Schedule Session Host Maintenance](../deployments/add-ons/sessionHostMaintenance/README.md)
-Template Spec Form View, or use
-[Start-SessionHostMaintenanceReplacement.ps1](../deployments/add-ons/sessionHostReplacer/Start-SessionHostMaintenanceReplacement.ps1)
-for PowerShell automation and air-gapped workflows. Both paths arm an exact image version and UTC
-window.
+An existing DeleteFirst replacer can accept a separately authorized request for an exact image
+and UTC window. This is not a third deployment mode. It requires autoscale to be disabled and
+explicit forced-sign-out permission; a one-host or zero-capacity batch also requires full-outage
+permission.
 
-- Requires explicit forced-sign-out authorization.
-- Requires separate full-pool-outage authorization for a one-host pool or zero-capacity batch.
-- Sends AVD session notifications, waits 0-60 minutes, calls the AVD logoff operation, and verifies
-  zero sessions before deletion.
-- Requires autoscale to be disabled.
-- Starts no new destructive batch after the window closes, but completes recovery already in flight.
-- Reuses exact hostnames and dedicated-host placement.
-- Suspends normal replacement while scheduled or active, then automatically resumes continuous
-  DeleteFirst behavior after completion or expiry.
-- Does not use shutdown retention.
-- Fails closed if any shutdown-retention VM remains from a prior configuration.
+SHR notifies sessions, waits the configured delay, calls AVD logoff, verifies zero sessions, then
+replaces the batch with the same names. No new destructive batch starts after the window closes;
+recovery of already draining or deleted hosts continues. Normal replacement resumes after the
+request completes or expires.
 
-Notification delay is checked by reconciliation invocations for an active batch, independently of
-the initiation schedule. The minute cadence does not shorten configured notification/drain intervals
-or guarantee an exact sign-out time; running invocations, host restarts and leases can delay checks.
+Use the [maintenance scheduling form](../deployments/add-ons/sessionHostMaintenance/README.md)
+or the [guarded PowerShell command](../deployments/add-ons/sessionHostReplacer/Start-SessionHostMaintenanceReplacement.ps1).
+Do not redeploy SHR while a request is active.
 
-See the [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
-for complete sequencing and failure behavior.
+## Why the Rollout Is Guarded
 
-## Key Capabilities
+| Design concern | Safeguard |
+| --- | --- |
+| A published image is not necessarily ready | Image eligibility includes replication, exclusion, rollout-age and rollback rules. The selected version stays pinned. |
+| A successful ARM deployment is not a usable desktop | Registration and exact-image readiness checks gate progress; availability, health, power state and session acceptance are evaluated as applicable to scaling state. |
+| Replacing too much at once increases risk | Mode-specific batch ceilings, optional progressive scale-up, capacity floors and a live regional gallery-replica ceiling constrain planning. The replica ceiling is per pool, not a shared reservation. |
+| Autoscale and replacement can compete | SHR protects work with its own scaling exclusions, preserves administrator-owned exclusions and hands validated hosts back to autoscale. |
+| Reusing a name can collide with old resources | VM, AVD registration and required directory cleanup must be verified before deployment. Failed or ambiguous reads block reuse. |
+| A restart must not lose deleted-host recovery | Deployment intent and pending-name mappings are checkpointed. Later invocations reconcile accepted deployments instead of blindly submitting duplicates. |
+| An unsafe operation should stop visibly | Deadline, protected-configuration or unrecoverable failures can stop the operation as `NeedsAttention`; checked recovery is required. |
 
-- Image-version-based replacement with optional rollout delay and rollback protection.
-- Explicit or cycle-based auto-detected target host count.
-- Progressive batch growth with independent mode-specific ceilings.
-- Scaling-aware readiness with exact-image validation evidence.
-- Replacer-owned scaling exclusions that do not overwrite administrator-owned exclusions.
-- Configurable drain notification, minimum drain time, and active-session grace period.
-- Fail-closed VM, AVD registration, and directory checks before every deployment, including
-  SideBySide recovery of names vacated by manual VM deletion.
-- Mandatory Entra cleanup for native Entra joined hosts and Intune cleanup when those hosts are
-  Intune enrolled. Directory cleanup remains optional for AD DS and hybrid-joined machines.
-- Durable pending-name recovery; required cleanup failure blocks the entire batch and is rechecked
-  by a later lifecycle invocation. See [safe name reuse](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#safe-name-reuse-in-every-mode)
-  for permissions, ambiguous records, ownership checks, and auto-target limitations.
-- Change-aware predeployment verification: read required records once, poll only requested
-  deletions, and finish with the appropriate VM-absence check. Clean allocations avoid repeated
-  directory and AVD inventory reads.
-- Centralized Azure Monitor Workbook and alerting guidance.
-- [Cycle-first workbook tracing](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle)
-  across both timers, with native invocation drill-down, safe wait reasons and separate inventory freshness.
-- Validated operational-setting updates through
-  [Set-SessionHostReplacerConfiguration.ps1](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1).
-- Azure Commercial, Government, Secret, and Top Secret support.
+Native Entra joined hosts require Entra cleanup, and Intune cleanup when enrolled. Directory
+cleanup remains optional for AD DS and hybrid-joined machines. Required Graph permissions must
+be granted before rollout; cleanup is not merely best effort when hostname safety depends on it.
 
-## Deployment
+These are infrastructure safeguards, **not an image acceptance test**. Validate applications,
+sign-in, profiles and user experience in a representative pilot pool before production promotion.
+The [Monthly Image Operations guide](monthly-image-operations.md) owns that release workflow.
 
-Deploy one Session Host Replacer instance per standard host pool. Template Specs provide the guided
-portal form in every supported cloud and are the recommended first-deployment method.
+## What Operators See
 
-Start with the
-[complete deployment prerequisites](../deployments/add-ons/sessionHostReplacer/README.md#prerequisites)
-and
-[Template Spec deployment instructions](../deployments/add-ons/sessionHostReplacer/README.md#template-spec-portal-form-first-deployment).
+When a Log Analytics workspace is supplied, the deployment creates workspace-based Application
+Insights for the Function App. Function telemetry goes through Application Insights; SHR does
+not create the separate Function App diagnostic setting that collects `FunctionAppLogs`.
+The optional shared workbook queries the selected Application Insights resources.
 
-## Operations
+Read monitoring as three separate signals:
 
-For recurring image releases, use a **dedicated, representative pilot host pool** before production.
-Enable `includeExcludedImageVersions` only on the upgraded pilot SHR and publish candidates with
-`imageVersionExcludeFromLatest=true`. Keep the option disabled in production, then clear the same
-version's exclusion only after pilot approval. Use production Function App holds for sequential
-per-pool release; rollout delay and infrastructure-health validation are not approval gates.
-Follow the [Monthly Image Operations operator's guide](monthly-image-operations.md) for the
-air-gapped transfer-to-production workflow, acceptance checklist, and troubleshooting.
+1. **Timer health:** are initiation and reconciliation running and reporting outcomes?
+2. **Cycle progress:** which image and batch are authorized, and what is progressing or waiting?
+3. **Inventory freshness:** when was the host fleet actually observed?
 
-Use the centralized workbook to review replacement progress, effective scaling behavior, current
-configuration, warnings, and errors. Use the guarded configuration command to review or update
-supported operational settings without displaying secrets:
+A successful timer invocation does not mean a rollout completed. A minute-timer heartbeat does
+not refresh host inventory. The workbook shows last-reported telemetry, not live Table state;
+ingestion delay, sampling, filtering and the selected time range can hide evidence.
 
-```powershell
-.\Set-SessionHostReplacerConfiguration.ps1 `
-  -FunctionAppName <function-app-name> `
-  -ResourceGroupName <function-app-resource-group>
-```
+Use the **Cycle ID** to follow an operation across both timers and the native **Invocation ID**
+to investigate a particular failure. Information-level logs contain timer outcomes, key actions
+and final active-pass cycle snapshots. Internal checkpoints and repeated diagnostics use Trace,
+which needs temporary PowerShell and host-log configuration to be collected.
 
-Replacement mode, timer schedule, identity, networking, permissions, and infrastructure remain
-Template Spec or Bicep deployment concerns. A later Template Spec redeployment can overwrite direct
-operational-setting changes unless its authoritative parameters are updated to match.
+See the [logging guide](../deployments/add-ons/sessionHostReplacer/logging-guide.md) for collection,
+query scope and diagnostics, and [Trace one replacement cycle](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle)
+for the workbook procedure. The [suggested alerts](../deployments/add-ons/sessionHostReplacer/alerts/alerts-guide.md)
+describe stopped replacements, timer failures and missing reconciliation outcomes, with example
+queries and response guidance. They are not deployed by SHR; the legacy standalone alert pack
+does not implement these recommendations.
 
-Schedule maintenance directly against an existing DeleteFirst Function App with the guarded
-command. Confirm that no replacement, recovery, or retained shutdown VM exists first. Do not
-redeploy while a request is active because deployment initializes the request app setting. Before
-scheduling a later request with `-ReplaceExistingRequest`, confirm that the prior request is
-complete and no pending recovery remains.
+## How Execution Is Coordinated
 
-### Shutdown-retention rollback
+The configurable initiation timer controls when SHR can start another replacement batch. A second
+timer checks approved replacements every minute, so deployment monitoring, readiness checks and
+old-host retirement do not have to wait for the next initiation time. Both run in one Function App.
 
-Rollback is operator initiated; retained VMs are not restored automatically. Use the guarded
-[rollback script](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1) with
-the Function App name and resource group. After one confirmation it stops SHR, starts retained
-hosts concurrently, validates health, restores service, drains/excludes the bad generation,
-pins this pool to the restored image, and restarts SHR. No hosts or sessions are deleted.
+The initiation schedule is **not a hard maintenance window**: replacement and recovery already
+started can continue outside it. One-minute reconciliation is a polling cadence, not a guarantee
+that a deployment, drain or recovery step finishes within a minute.
 
-Use the same command with `-ResumeLatest` after correcting normal image eligibility to remove
-the pool-local pin. It refuses to select a known bad version recorded by rollback. Unsafe
-unfinished work blocks automatic resume; `-RestoreOnly` restores service while leaving SHR
-stopped. See the [two-command quick start and safety requirements](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
+Each operation records its exact image, target host count and deadline. Table-backed checkpoints
+record deployment intent and recovery names; a conditional per-pool lease prevents overlapping
+invocations from owning the same operation. This supports resuming replacement safely across
+invocations and restarts. It is not an Azure Durable Functions orchestration or a queue workflow.
 
-## Related Documentation
+## Operate and Recover Safely
 
-- [Add-Ons](add-ons.md)
-- [Host Pool Management](host-pool-management.md)
-- [Image Automation](automation-guide.md)
-- [Image Build](image-build.md)
-- [BCDR](bcdr.md)
-- [Air-Gapped Clouds](air-gapped-clouds.md)
+- **Hold new work:** set `initiationEnabled=false`. Existing authorized work continues.
+- **Stop everything:** stopping the Function App stops both timers; it does not cancel submitted
+  ARM deployments. Use this deliberately, not as the normal rollout hold.
+- **Change settings:** use the [configuration command](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1)
+  for supported operational settings. Keep authoritative deployment parameters aligned; a later
+  redeployment can overwrite direct changes.
+- **Recover a stopped operation:** inspect correlated logs and deployment state, fix the cause,
+  then use [checked recovery](../deployments/add-ons/sessionHostReplacer/README.md#recover-a-stopped-operation).
+  Do not delete state or clear leases to force a fresh start.
+- **Roll back retained hosts:** rollback is operator initiated, not automatic. The
+  [rollback command](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
+  restores retained capacity and pins the pool to the restored image; unsafe unfinished work can
+  require restore-only operation with SHR left stopped.
+- **Upgrade:** deploy the complete supported template/code release using the
+  [upgrade procedure](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment).
+  Do not upload one module or ZIP the source folder as a substitute for the deployed app layout.
+
+## Deployment and Detailed References
+
+Template Specs are the recommended guided deployment path. Review prerequisites, identity/RBAC,
+networking, image source and monitoring before enabling initiation. Azure Commercial, Government,
+Secret and Top Secret deployments still require target-cloud service/connectivity validation;
+offline source checks do not prove a successful rollout.
+
+| Need | Reference |
+| --- | --- |
+| Prerequisites, deployment and parameter reference | [Add-on README](../deployments/add-ons/sessionHostReplacer/README.md#prerequisites) |
+| Detailed sequencing, readiness and safety invariants | [Canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) |
+| Upgrades and historical resource cleanup | [Deployment update guide](../deployments/add-ons/sessionHostReplacer/deployment-guide.md) |
+| Telemetry collection and diagnostic queries | [Logging guide](../deployments/add-ons/sessionHostReplacer/logging-guide.md) |
+| Pilot approval and production image promotion | [Monthly Image Operations](monthly-image-operations.md) |
+
+The canonical flow owns detailed lifecycle behavior; this page is the design overview.

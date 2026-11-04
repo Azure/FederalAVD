@@ -1105,7 +1105,7 @@ The **[End-to-End Automation Guide](automation-guide.md)** covers:
 - **Output → Input mapping** — which output from each step feeds which parameter in the next
 - **Pipeline integration** — how to wire steps together in Azure DevOps, GitHub Actions, or any CI/CD tool
 - **Image refresh automation** — `Invoke-ImageBuilds.ps1` to trigger new image versions on a schedule
-- **Zero-downtime host replacement** — [Session Host Replacer add-on](../deployments/add-ons/sessionHostReplacer/README.md) monitors for new image versions and drains/replaces session hosts automatically
+- **Controlled host replacement** — [Session Host Replacer add-on](session-host-replacer.md) monitors for eligible images and replaces hosts in readiness-gated batches
 
 ```mermaid
 graph LR
@@ -1137,7 +1137,7 @@ graph LR
 
 **Explore operational automation:**
 
-- 🔄 **[Session Host Replacer](../deployments/add-ons/sessionHostReplacer/README.md)** - Zero-downtime host replacements on image updates
+- 🔄 **[Session Host Replacer](session-host-replacer.md)** - Bounded host replacements with readiness and capacity safeguards
 - 💾 **[Storage Quota Manager](../deployments/add-ons/storageQuotaManager/README.md)** - Automated FSLogix profile quota management
 - 🔑 **[Update Storage Keys](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)** - Automated key rotation
 - ⚡ **[Run Commands on VMs](../deployments/add-ons/runCommandsOnVms/README.md)** - Execute scripts across session hosts

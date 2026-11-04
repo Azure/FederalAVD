@@ -823,11 +823,11 @@ Get-AzWvdUserSession -ResourceGroupName $resourceGroup -HostPoolName $hostPoolNa
 
 Automate the replacement of session hosts when new images become available:
 
-**🔄 [Session Host Replacer](../deployments/add-ons/sessionHostReplacer/README.md)**
+**🔄 [Session Host Replacer](session-host-replacer.md)**
 
 **Features:**
 
-- Zero-downtime rolling updates
+- Bounded rolling replacement with readiness and capacity safeguards
 - Automatic image version detection
 - Delete-First or Side-by-Side replacement modes
 - Progressive scale-up for large deployments

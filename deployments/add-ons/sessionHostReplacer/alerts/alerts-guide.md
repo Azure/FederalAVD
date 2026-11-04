@@ -1,706 +1,254 @@
-﻿# SessionHostReplacer - Monitoring and Alerting Guide
+# Session Host Replacer - Suggested Alerts
 
-This document provides recommended alerts and monitoring configurations for the SessionHostReplacer function.
+The workbook helps an operator investigate replacement activity. Alerts should tell that
+operator when attention is needed: replacement has stopped, a timer is failing, or expected
+reconciliation telemetry has disappeared.
 
-## Prerequisites
+**These are recommendations and example queries, not deployed functionality.** SHR does not
+deploy these alerts or configure notification recipients. The existing standalone alert pack
+does not implement this design; see [Current coverage limitations](#current-coverage-limitations).
 
-- Application Insights enabled for the Function App
-- Log Analytics workspace connected
-- Action Group configured with notification channels (email, SMS, webhook, etc.)
+## Recommended Starting Set
 
----
+| Alert | What it means | Suggested severity | Initial condition |
+| --- | --- | --- | --- |
+| Replacement needs intervention | SHR has stopped an operation that needs checked recovery | Sev 1 (Error) | Latest observed cycle state is `NeedsAttention` |
+| Timer failures | Replacement coordination is encountering execution failures | Sev 2 (Warning) | Three reconciliation invocations fail within 15 minutes and the latest outcome is failed; for initiation, alert on the latest failed outcome |
+| Reconciliation outcome missing | SHR is no longer reporting completion of its expected minute-timer invocations | Sev 2 (Warning) | No reconciliation success or failure observed for 15 minutes |
 
-## Alert Categories
+These are starting points, not service-level guarantees. A stopped replacement does not
+necessarily mean desktops are unavailable. Confirm actual user impact before treating it as
+a critical outage.
 
-### 1. Critical Alerts (Severity 0-1)
+An initiation failure is worth reporting on its own because its next scheduled attempt may be
+hours away. Reconciliation retries every minute, so its example tolerates isolated failures.
 
-#### 1.1 Deployment Failure with Pending Hosts
-**Scenario**: Deployment failed and hosts are deleted but not replaced (DeleteFirst mode)
+## Query and Rule Configuration
 
-**KQL Query**:
+- Run the examples in the SHR **Application Insights resource's Logs view**. They use the
+  Application Insights `traces` schema, not workspace-native `AppTraces` or `FunctionAppLogs`.
+- Replace `<shr-function-app-name>` with the exact app identity observed in `cloud_RoleName`.
+  Each example targets one app. Repeat deliberately for other apps rather than querying every
+  Function App in a shared monitoring environment.
+- The source is SHR's own `SHR_TIMER` and `SHR_EVENT` trace messages with `SchemaVersion: 1`,
+  not the Microsoft AVD Insights host/session tables. See the [telemetry contract](../logging-guide.md#cycle-correlation).
+  These records are JSON in message text, not native custom events.
+- Keep Information-level telemetry enabled. Timer `Failed` and cycle `NeedsAttention` events
+  are Information records; an Error-only filter would discard these signals.
+- Each query returns **only rows requiring attention**. For a manually configured log search
+  alert, use **Table rows**, **Greater than 0**, evaluation every **5 minutes**, and a **2-hour
+  query lookback**, with one failing evaluation initially. Ensure the rule's effective query
+  time range actually covers the full two hours; an `ago(2h)` expression cannot restore rows
+  excluded by a shorter rule lookback.
+- Use stateful alerting with automatic resolution. Split by `FunctionApp`, adding `Trigger`
+  for timer failures. Keep cycle IDs, invocation IDs and timestamps as investigation context,
+  not changing split dimensions. Resolution follows Azure Monitor's evaluation policy; it is
+  not an immediate acknowledgement that the service is healthy.
+- If configuring notifications later, use an approved Action Group. A query returning rows
+  does not deliver a notification by itself.
+
+The two-hour examples suit the default half-hour initiation schedule. For a sparse or
+business-hours schedule, tune the initiation failure observation window and response procedure
+to that schedule and the target cloud's supported alert lookback limits. Do not infer missing
+initiation from a fixed elapsed-time threshold.
+
+## 1. Replacement Needs Intervention
+
+**Why:** An operation can remain stopped while minute-timer invocations succeed: they report
+the stopped state without repeating the original exception. An Error-count rule misses this.
+
+Select the latest observation **before** filtering its status, so an observed recovery,
+completion or supersession replaces an earlier failure.
 
 ```kusto
+let functionAppName = "<shr-function-app-name>";
 traces
-| where timestamp > ago(1h)
-| where message has "Deployment failed" and message has "pending host mappings"
-| summarize FailureCount = count(), LastFailure = max(timestamp) by cloud_RoleName
-| where FailureCount > 0
+| where timestamp > ago(2h)
+| where cloud_RoleName == functionAppName
+| where message contains "SHR_EVENT |"
+| extend Data = parse_json(extract(@"SHR_EVENT \| (\{.*\})$", 1, message))
+| where toint(Data.SchemaVersion) == 1
+| extend CycleId = tostring(Data.CycleId)
+| where CycleId matches regex @"^[a-f0-9]{32}$"
+| summarize arg_max(timestamp, Data) by FunctionApp = cloud_RoleName, CycleId
+| where tostring(Data.Status) == "NeedsAttention"
+| project FunctionApp, CycleId, LastObservedUtc = timestamp,
+          Reason = tostring(Data.Reason), ImageVersion = tostring(Data.ImageVersion)
 ```
 
-**Recommended Configuration**:
-- Severity: **0 (Critical)**
-- Frequency: Every 5 minutes
-- Evaluation period: Last 15 minutes
-- Threshold: >= 1 occurrence
-- Action: Immediate notification (SMS + Email)
+**Response:** Open the workbook's cycle and failed invocation, inspect the linked ARM deployment
+and current host capacity, then correct the cause. Use the
+[checked recovery procedure](../README.md#recover-a-stopped-operation); do not clear state,
+leases or pending-name mappings to silence an alert.
 
-**Impact**: Capacity loss - hosts deleted but not replaced
+**Expected resolution:** A later observation for that same cycle reports `Running`, `Completed`
+or `Superseded`. Repeated `NeedsAttention` observations should keep the condition active.
+If telemetry simply stops or ages out of the lookback, the query can also stop returning the
+cycle. That is loss of evidence, not proof of recovery; check the missing-outcome alert too.
 
-**Remediation**:
-1. Check Function App logs for deployment error details
-2. Verify Azure quota/limits not exceeded
-3. Check managed identity permissions
-4. Verify registration token not expired
-5. Consider manual VM deployment to restore capacity
+## 2. Timer Failures
 
----
+**Why:** Failures can occur before an operation exists or before its state can be updated.
+Monitor both `Initiation` and `Reconciliation`, independently of cycle status.
 
-#### 1.2 Device Cleanup Failure Blocking Deployment
-**Scenario**: DeleteFirst mode cannot proceed because Entra/Intune cleanup failed (Graph API permissions)
-
-**KQL Query**:
+Deduplicate by native invocation identity, falling back to native operation identity only as
+a correlation key. Then evaluate the latest completed outcome for each timer. A later successful
+outcome clears this condition even while older failures remain in the lookback.
 
 ```kusto
+let functionAppName = "<shr-function-app-name>";
 traces
-| where timestamp > ago(30m)
-| where message has "Device cleanup verification failed" or message has "cannot safely reuse hostnames"
-| summarize FailureCount = count(), LastFailure = max(timestamp), 
-            sample_message = any(message) by cloud_RoleName
-| where FailureCount > 0
+| where timestamp > ago(2h)
+| where cloud_RoleName == functionAppName
+| where message contains "SHR_TIMER |"
+| extend Data = parse_json(extract(@"SHR_TIMER \| (\{.*\})$", 1, message))
+| where toint(Data.SchemaVersion) == 1
+| extend Trigger = tostring(Data.Trigger), Outcome = tostring(Data.Event),
+         InvocationKey = coalesce(tostring(customDimensions.InvocationId), operation_Id)
+| where Trigger in ("Initiation", "Reconciliation")
+| where Outcome in ("Succeeded", "Failed") and isnotempty(InvocationKey)
+| summarize arg_max(timestamp, Outcome) by FunctionApp = cloud_RoleName, Trigger, InvocationKey
+| summarize FailedInvocationsIn15m = countif(Outcome == "Failed" and timestamp > ago(15m)),
+            arg_max(timestamp, Outcome) by FunctionApp, Trigger
+| where Outcome == "Failed"
+| where Trigger == "Initiation"
+    or (Trigger == "Reconciliation" and FailedInvocationsIn15m >= 3 and timestamp > ago(15m))
+| project FunctionApp, Trigger, LastOutcomeUtc = timestamp, FailedInvocationsIn15m
 ```
 
-**Recommended Configuration**:
-- Severity: **0 (Critical)**
-- Frequency: Every 5 minutes
-- Evaluation period: Last 30 minutes
-- Threshold: >= 1 occurrence
-- Action: Immediate notification
+Confirm native correlation keys are populated and distinguish invocations in the target cloud.
+Rows without either key are excluded because they cannot be reliably deduplicated; do not rely
+on this example until that prerequisite is verified. Duplicate ingestion must not count as
+additional failed invocations.
 
-**Impact**: Deployments completely blocked, capacity cannot be restored
+**Response:** Investigate the latest failed invocation's native exception and correlated traces.
+Check identity, storage access, network connectivity and configuration. If a cycle is also
+`NeedsAttention`, fixing the underlying dependency alone does not resume it; follow checked recovery.
 
-**Remediation**:
-1. Connect to the correct Microsoft Graph environment with the scopes documented in the Session Host Replacer prerequisites
-2. Run `Set-GraphPermissions.ps1` with the managed identity Object ID and the cleanup targets enabled in the deployment
-3. Verify the permission for each enabled cleanup target
-4. Check for 401/403 errors in logs
-5. Verify the active Graph account is authorized to grant application roles
+**Expected resolution:** The same timer reports a later `Succeeded` outcome. Reconciliation also
+falls below its condition as failures leave the 15-minute window. An old initiation failure can
+age out after two hours without a new attempt; for sparse schedules, confirm the next expected
+run rather than interpreting that disappearance as recovery.
 
----
+## 3. Reconciliation Outcome Missing
 
-#### 1.3 Safety Check Failure with Capacity Loss
-**Scenario**: SideBySide mode - new hosts deployed but not Available, old hosts not yet deleted, but pool under capacity
+**Why:** An app that is stopped, cannot run its timer, or cannot send telemetry may produce no
+failure event. A query based only on observed failures cannot detect an entirely silent app.
 
-**KQL Query**:
+Seed the expected app explicitly so the query returns a row even if it has **never** emitted
+telemetry. Check outcomes, not just starts: a start with no observed completion is not success.
 
 ```kusto
-traces
-| where timestamp > ago(1h)
-| where message has "SAFETY CHECK FAILED" 
-| join kind=inner (
+let ExpectedApps = datatable(FunctionApp:string)
+[
+    "<shr-function-app-name>"
+];
+let LastObservations =
     traces
-    | where timestamp > ago(1h)
-    | where message has "Current available capacity" and message has "%"
-    | extend capacity_pct = todouble(extract(@"(\d+)%", 1, message))
-    | where capacity_pct < 80
-) on cloud_RoleName
-| summarize FailureCount = count(), MinCapacity = min(capacity_pct), 
-            LastFailure = max(timestamp) by cloud_RoleName
+    | where timestamp > ago(2h)
+    | where cloud_RoleName in (ExpectedApps)
+    | where message contains "SHR_TIMER |"
+    | extend Data = parse_json(extract(@"SHR_TIMER \| (\{.*\})$", 1, message))
+    | where toint(Data.SchemaVersion) == 1 and tostring(Data.Trigger) == "Reconciliation"
+    | summarize LastStartedUtc = maxif(timestamp, tostring(Data.Event) == "Started"),
+                LastOutcomeUtc = maxif(timestamp, tostring(Data.Event) in ("Succeeded", "Failed"))
+        by FunctionApp = cloud_RoleName;
+ExpectedApps
+| join kind=leftouter LastObservations on FunctionApp
+| where isnull(LastOutcomeUtc) or LastOutcomeUtc < ago(15m)
+| project FunctionApp, LastStartedUtc, LastOutcomeUtc,
+          Reason = iff(isnull(LastOutcomeUtc),
+              "No reconciliation outcome observed in the two-hour lookback.",
+              "No reconciliation outcome observed in the last 15 minutes.")
 ```
 
-**Recommended Configuration**:
-- Severity: **1 (High)**
-- Frequency: Every 10 minutes
-- Evaluation period: Last 1 hour
-- Threshold: MinCapacity < 80%
-- Action: Immediate notification
-
-**Impact**: User experience degraded due to insufficient capacity
-
-**Remediation**:
-1. Investigate why new hosts not registering (check VM guest logs)
-2. Verify DSC extension ran successfully
-3. Check network connectivity from VMs to AVD control plane
-4. Force DSC re-run by redeploying template
-5. Consider manual intervention to fix registration
-
----
-
-### 2. High Priority Alerts (Severity 2)
-
-#### 2.1 Registration Failure Pattern
-**Scenario**: Hosts deployed but consistently failing to register in AVD
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(2h)
-| where message has "Deployment succeeded but hosts not yet registered" or 
-        message has "hosts still not registered" or
-        message has "PendingRegistration"
-| summarize OccurrenceCount = count(), 
-            FirstOccurrence = min(timestamp),
-            LastOccurrence = max(timestamp),
-            UnresolvedDuration = datetime_diff('minute', max(timestamp), min(timestamp))
-            by cloud_RoleName
-| where UnresolvedDuration > 30  // Unresolved for more than 30 minutes
-```
-
-**Recommended Configuration**:
-- Severity: **2 (High)**
-- Frequency: Every 15 minutes
-- Evaluation period: Last 2 hours
-- Threshold: UnresolvedDuration > 30 minutes
-- Action: Email notification
-
-**Impact**: Hosts exist but not usable, wasting compute cost
-
-**Remediation**:
-1. Check DSC extension status in Azure portal
-2. Review VM guest logs (C:\WindowsAzure\Logs\Plugins\Microsoft.Powershell.DSC)
-3. Verify registration token valid (not expired)
-4. Check firewall rules allow AVD agent communication
-5. Verify domain join succeeded (if hybrid)
-6. Force DSC retry with forceUpdateTag deployment
-
----
-
-#### 2.2 Blocked Deletions Due to Unresolved Hosts
-**Scenario**: DeleteFirst mode blocked from deleting more hosts because previous deletions not resolved
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(1h)
-| where message has "BLOCKING new deletions" or 
-        message has "Cannot delete more hosts while previous deletions have unresolved"
-| summarize BlockCount = count(),
-            FirstBlock = min(timestamp),
-            LastBlock = max(timestamp),
-            BlockedDuration = datetime_diff('minute', max(timestamp), min(timestamp))
-            by cloud_RoleName
-| where BlockedDuration > 60  // Blocked for more than 1 hour
-```
-
-**Recommended Configuration**:
-- Severity: **2 (High)**
-- Frequency: Every 30 minutes
-- Evaluation period: Last 1 hour
-- Threshold: BlockedDuration > 60 minutes
-- Action: Email notification
-
-**Impact**: Replacement cycle stalled, cannot progress until resolved
-
-**Remediation**:
-1. Identify unresolved hostnames from logs
-2. Check deployment status in Azure portal
-3. Verify VMs exist and are running
-4. Check if hosts registered in AVD host pool
-5. Force registration retry or manual cleanup
-
----
-
-#### 2.3 Progressive Scale-Up Stuck at Initial Percentage
-**Scenario**: ConsecutiveSuccesses remains at 0 after multiple runs (deployments failing repeatedly)
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(6h)
-| where message has "Progressive scale-up: Using" and message has "ConsecutiveSuccesses: 0"
-| summarize RunCount = count(), 
-            FirstRun = min(timestamp),
-            LastRun = max(timestamp),
-            StuckDuration = datetime_diff('hour', max(timestamp), min(timestamp))
-            by cloud_RoleName
-| where RunCount >= 5 and StuckDuration >= 2  // Stuck for 2+ hours with 5+ runs
-```
-
-**Recommended Configuration**:
-- Severity: **2 (High)**
-- Frequency: Every 1 hour
-- Evaluation period: Last 6 hours
-- Threshold: RunCount >= 5 AND StuckDuration >= 2 hours
-- Action: Email notification
-
-**Impact**: Replacement cycle not progressing, pool not being updated
-
-**Remediation**:
-1. Investigate why deployments consistently failing
-2. Check for recurring error patterns in logs
-3. Verify quota limits
-4. Review recent configuration changes
-5. Consider disabling progressive scale-up temporarily if urgent
-
----
-
-### 3. Medium Priority Alerts (Severity 3)
-
-#### 3.1 Graph API Permission Warnings
-**Scenario**: Function attempting device cleanup but lacks Graph API permissions
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(1h)
-| where (message has "Failed to acquire Graph access token" or
-         message has "Get-AccessToken returned null or empty" or
-         message has "Device cleanup will be skipped") and
-        (message has "Device.ReadWrite.All" or message has "DeviceManagementManagedDevices.ReadWrite.All")
-| summarize WarningCount = count(), LastWarning = max(timestamp),
-            sample_message = any(message) by cloud_RoleName
-```
-
-**Recommended Configuration**:
-- Severity: **3 (Medium)**
-- Frequency: Every 1 hour
-- Evaluation period: Last 1 hour
-- Threshold: >= 1 occurrence
-- Action: Email notification
-
-**Impact**: Device cleanup not happening (Entra/Intune hygiene), potential hostname conflicts in future
-
-**Remediation**:
-1. Connect to the correct Microsoft Graph environment with the scopes documented in the Session Host Replacer prerequisites
-2. Run `Set-GraphPermissions.ps1` with the managed identity Object ID and the cleanup targets enabled in the deployment
-3. Verify permissions propagated (can take 15-30 minutes)
-4. Confirm the helper reports every selected cleanup-target permission as present
-
----
-
-#### 3.2 Partial Deletion Failures
-**Scenario**: Some hosts failed to delete (VM, Entra, or Intune cleanup incomplete)
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(2h)
-| where message has "session host deletion(s) failed" or 
-        message has "FailedDeletions" or
-        message has "IncompleteHosts"
-| extend failed_count = toint(extract(@"(\d+) session host", 1, message))
-| where failed_count > 0
-| summarize TotalFailures = sum(failed_count),
-            LastFailure = max(timestamp),
-            sample_message = any(message) by cloud_RoleName
-```
-
-**Recommended Configuration**:
-- Severity: **3 (Medium)**
-- Frequency: Every 1 hour
-- Evaluation period: Last 2 hours
-- Threshold: TotalFailures > 0
-- Action: Email notification
-
-**Impact**: Orphaned resources, potential cost waste, cleanup required
-
-**Remediation**:
-1. Identify failed hostnames from logs
-2. Manually verify VM/Entra/Intune state in portal
-3. Manual cleanup if needed
-4. Check for permission issues or locks
-5. Review deletion failure reasons in logs
-
----
-
-#### 3.3 Capacity Below Minimum Threshold During Replacement
-**Scenario**: Available capacity dropped below configured minimum during replacement cycle
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(30m)
-| where message has "Current available capacity" and message has "%"
-| extend capacity_pct = todouble(extract(@"(\d+)%", 1, message))
-| extend min_capacity_pct = todouble(extract(@"minimum capacity \((\d+)%\)", 1, message))
-| where capacity_pct < min_capacity_pct
-| summarize MinCapacity = min(capacity_pct), 
-            LastOccurrence = max(timestamp),
-            sample_message = any(message) by cloud_RoleName
-```
-
-**Recommended Configuration**:
-- Severity: **3 (Medium)**
-- Frequency: Every 15 minutes
-- Evaluation period: Last 30 minutes
-- Threshold: MinCapacity < configured minimum
-- Action: Email notification
-
-**Impact**: User experience may be degraded, load balancing stressed
-
-**Remediation**:
-1. Review minimum capacity percentage setting
-2. Check if scaling plan capacity more aggressive than expected
-3. Verify new hosts deploying and registering correctly
-4. Consider pausing replacement cycle during peak hours
-
----
-
-### 4. Informational Alerts (Severity 4)
-
-#### 4.1 Replacement Cycle Complete
-**Scenario**: All hosts successfully replaced
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(1h)
-| where message has "All session hosts are up to date" or
-        message has "Session host replacement cycle complete"
-| summarize CompletionCount = count(), LastCompletion = max(timestamp) by cloud_RoleName
-```
-
-**Recommended Configuration**:
-- Severity: **4 (Informational)**
-- Frequency: Every 1 hour
-- Evaluation period: Last 1 hour
-- Threshold: >= 1 occurrence
-- Action: Email notification (optional)
-
-**Impact**: None - success notification
-
----
-
-#### 4.2 Progressive Scale-Up Advancement
-**Scenario**: Progressive scale-up percentage increased (milestone achieved)
-
-**KQL Query**:
-
-```kusto
-traces
-| where timestamp > ago(1h)
-| where message has "Progressive scale-up: Using" and message has "ConsecutiveSuccesses:"
-| extend current_pct = toint(extract(@"Using (\d+)%", 1, message))
-| extend successes = toint(extract(@"ConsecutiveSuccesses: (\d+)", 1, message))
-| where successes > 0 and (current_pct == 60 or current_pct == 100)  // Milestone percentages
-| summarize LastAdvancement = max(timestamp), 
-            Percentage = max(current_pct),
-            sample_message = any(message) by cloud_RoleName
-```
-
-**Recommended Configuration**:
-- Severity: **4 (Informational)**
-- Frequency: Every 1 hour
-- Evaluation period: Last 1 hour
-- Threshold: >= 1 occurrence at milestone percentages
-- Action: Email notification (optional)
-
-**Impact**: None - progress notification
-
----
-
-## Deployment Options
-
-### Option 1: Azure Portal Manual Configuration
-
-1. Navigate to Function App → Monitoring → Alerts
-2. Click "New alert rule"
-3. Select "Custom log search" condition
-4. Paste KQL query from above
-5. Configure threshold and evaluation frequency
-6. Select Action Group for notifications
-7. Set alert name, description, and severity
-8. Save alert rule
-
-### Option 2: ARM/Bicep Template (Automated Deployment)
-
-Create an alert rules module that can be deployed alongside SessionHostReplacer:
-
-```bicep
-// alertRules.bicep
-param functionAppName string
-param appInsightsResourceId string
-param actionGroupResourceId string
-param location string = resourceGroup().location
-
-var alerts = [
-  {
-    name: 'SessionHostReplacer-DeploymentFailureWithPendingHosts'
-    severity: 0
-    query: '''
-      traces
-      | where timestamp > ago(1h)
-      | where message has "Deployment failed" and message has "pending host mappings"
-      | summarize FailureCount = count() by cloud_RoleName
-      | where FailureCount > 0
-      '''
-    threshold: 1
-    frequency: 'PT5M'
-    timeWindow: 'PT15M'
-  }
-  {
-    name: 'SessionHostReplacer-DeviceCleanupBlocking'
-    severity: 0
-    query: '''
-      traces
-      | where timestamp > ago(30m)
-      | where message has "Device cleanup verification failed"
-      | summarize FailureCount = count() by cloud_RoleName
-      | where FailureCount > 0
-      '''
-    threshold: 1
-    frequency: 'PT5M'
-    timeWindow: 'PT30M'
-  }
-  // Add more alerts here
-]
-
-resource alertRules 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = [for alert in alerts: {
-  name: alert.name
-  location: location
-  properties: {
-    displayName: alert.name
-    description: 'Auto-generated alert for SessionHostReplacer monitoring'
-    severity: alert.severity
-    enabled: true
-    evaluationFrequency: alert.frequency
-    windowSize: alert.timeWindow
-    scopes: [
-      appInsightsResourceId
-    ]
-    criteria: {
-      allOf: [
-        {
-          query: alert.query
-          timeAggregation: 'Count'
-          operator: 'GreaterThanOrEqual'
-          threshold: alert.threshold
-          failingPeriods: {
-            numberOfEvaluationPeriods: 1
-            minFailingPeriodsToAlert: 1
-          }
-        }
-      ]
-    }
-    actions: {
-      actionGroups: [
-        actionGroupResourceId
-      ]
-    }
-  }
-}]
-```
-
-### Option 3: PowerShell Script for Bulk Deployment
-
-```powershell
-# Deploy-SessionHostReplacerAlerts.ps1
-
-param(
-    [Parameter(Mandatory)]
-    [string]$FunctionAppName,
-    
-    [Parameter(Mandatory)]
-    [string]$ResourceGroupName,
-    
-    [Parameter(Mandatory)]
-    [string]$ActionGroupResourceId,
-    
-    [ValidateSet('Critical', 'High', 'Medium', 'All')]
-    [string]$AlertLevel = 'Critical'
-)
-
-# Get Function App and App Insights
-$functionApp = Get-AzFunctionApp -Name $FunctionAppName -ResourceGroupName $ResourceGroupName
-$appInsightsResourceId = $functionApp.ApplicationInsightId
-
-# Define alert configurations (import from JSON or define inline)
-$alerts = @(
-    @{
-        Name = "SessionHostReplacer-DeploymentFailureWithPendingHosts"
-        Severity = 0
-        Query = @"
-traces
-| where timestamp > ago(1h)
-| where message has "Deployment failed" and message has "pending host mappings"
-| summarize FailureCount = count() by cloud_RoleName
-| where FailureCount > 0
-"@
-        Threshold = 1
-        Frequency = [TimeSpan]::FromMinutes(5)
-        TimeWindow = [TimeSpan]::FromMinutes(15)
-    }
-    # Add more alerts
-)
-
-# Filter by level
-if ($AlertLevel -ne 'All') {
-    $severityMap = @{
-        'Critical' = @(0)
-        'High' = @(0, 1, 2)
-        'Medium' = @(0, 1, 2, 3)
-    }
-    $alerts = $alerts | Where-Object { $_.Severity -in $severityMap[$AlertLevel] }
-}
-
-# Deploy each alert
-foreach ($alert in $alerts) {
-    Write-Host "Deploying alert: $($alert.Name)"
-    
-    $condition = New-AzScheduledQueryRuleCondition `
-        -Query $alert.Query `
-        -TimeAggregation 'Count' `
-        -Operator 'GreaterThanOrEqual' `
-        -Threshold $alert.Threshold
-    
-    New-AzScheduledQueryRule `
-        -Name $alert.Name `
-        -ResourceGroupName $ResourceGroupName `
-        -Location $functionApp.Location `
-        -DisplayName $alert.Name `
-        -Scope $appInsightsResourceId `
-        -Severity $alert.Severity `
-        -WindowSize $alert.TimeWindow `
-        -EvaluationFrequency $alert.Frequency `
-        -Condition $condition `
-        -ActionGroup $ActionGroupResourceId `
-        -ErrorAction Stop
-    
-    Write-Host "  ✓ Deployed successfully" -ForegroundColor Green
-}
-
-Write-Host "`nDeployed $($alerts.Count) alert(s)" -ForegroundColor Green
-```
-
----
-
-## Monitoring Dashboard
-
-### Recommended Log Analytics Queries for Dashboard
-
-#### Query 1: Replacement Progress Over Time
-
-```kusto
-traces
-| where timestamp > ago(7d)
-| where message has "hosts still need replacement" or message has "All session hosts are up to date"
-| extend hosts_remaining = toint(extract(@"(\d+) hosts still need replacement", 1, message))
-| extend all_updated = iff(message has "All session hosts are up to date", true, false)
-| project timestamp, hosts_remaining = iff(all_updated, 0, hosts_remaining)
-| summarize RemainingHosts = max(hosts_remaining) by bin(timestamp, 1h)
-| render timechart
-```
-
-#### Query 2: Progressive Scale-Up Progression
-
-```kusto
-traces
-| where timestamp > ago(7d)
-| where message has "Progressive scale-up: Using"
-| extend percentage = toint(extract(@"Using (\d+)%", 1, message))
-| extend successes = toint(extract(@"ConsecutiveSuccesses: (\d+)", 1, message))
-| project timestamp, percentage, successes
-| summarize Percentage = max(percentage), Successes = max(successes) by bin(timestamp, 1h)
-| render timechart
-```
-
-#### Query 3: Deployment Success Rate
-
-```kusto
-traces
-| where timestamp > ago(7d)
-| where message has "Deployment submitted" or 
-        message has "Previous deployment succeeded" or 
-        message has "Previous deployment failed"
-| extend status = case(
-    message has "succeeded", "Success",
-    message has "failed", "Failed",
-    message has "submitted", "Pending",
-    "Unknown"
-)
-| summarize SuccessCount = countif(status == "Success"),
-            FailureCount = countif(status == "Failed"),
-            PendingCount = countif(status == "Pending")
-            by bin(timestamp, 1d)
-| extend SuccessRate = round(100.0 * SuccessCount / (SuccessCount + FailureCount), 2)
-| render columnchart
-```
-
-#### Query 4: Capacity Trend During Replacements
-
-```kusto
-traces
-| where timestamp > ago(7d)
-| where message has "Current available capacity"
-| extend capacity_pct = todouble(extract(@"(\d+)%", 1, message))
-| summarize AvgCapacity = avg(capacity_pct), 
-            MinCapacity = min(capacity_pct),
-            MaxCapacity = max(capacity_pct)
-            by bin(timestamp, 1h)
-| render timechart
-```
-
----
-
-## Alert Tuning Recommendations
-
-### 1. Adjust Thresholds Based on Pool Size
-
-- Small pools (< 50 hosts): More sensitive thresholds
-- Large pools (> 200 hosts): Higher thresholds to avoid noise
-
-### 2. Business Hours vs. Off-Hours
-
-- Configure different action groups for peak vs. off-peak
-- Higher urgency during business hours
-- Lower notification frequency overnight
-
-### 3. Alert Fatigue Prevention
-
-- Start with Critical and High severity only
-- Add Medium/Informational after team is comfortable
-- Use alert suppression rules for known maintenance windows
-
-### 4. Testing Alerts
-
-```powershell
-# Trigger test alert by forcing a log entry
-Write-Host "Test alert trigger: Deployment failed with 5 pending host mappings"
-```
-
-### 5. Integration with ITSM
-
-- Configure action groups to create incidents in ServiceNow/JIRA
-- Include runbook links in alert descriptions
-- Tag alerts with service names for routing
-
----
-
-## Troubleshooting Common Alert Issues
-
-### Alert Not Triggering
-
-1. Verify Application Insights receiving logs
-2. Check KQL query syntax in Log Analytics
-3. Confirm evaluation frequency and time window
-4. Verify action group has valid notification channels
-
-### Too Many False Positives
-
-1. Increase threshold or time window
-2. Add additional filters to KQL query
-3. Use `summarize` to aggregate before alerting
-4. Implement alert suppression rules
-
-### Missing Notifications
-
-1. Verify action group notification channels configured
-2. Check email/SMS quota limits
-3. Review action group activity log for delivery failures
-4. Confirm webhook endpoints are reachable
-
----
-
-## Summary
-
-**Recommended Starting Configuration**:
-- Deploy all **Critical** alerts (Severity 0-1)
-- Configure one Action Group with email notifications
-- Set up Log Analytics dashboard for monitoring trends
-- Review and tune alerts after 1 week of operation
-
-**Minimum Viable Monitoring**:
-1. Deployment Failure with Pending Hosts (Critical)
-2. Device Cleanup Blocking (Critical)
-3. Registration Failure Pattern (High)
-
-**Gradual Enhancement**:
-- Add Medium severity alerts after 2 weeks
-- Implement ITSM integration after 1 month
-- Build custom dashboards based on operational needs
+The 15-minute starting threshold allows for the configured ten-minute invocation timeout and
+some ingestion delay. Measure actual ingestion latency and tune it; cold starts, restarts or
+platform issues can take longer. A live operation lease may defer host changes, but a healthy
+timer still reports its invocation outcome.
+
+**Response:** Check whether the app was intentionally stopped, then verify its state, worker
+binding, host storage access, effective log levels and Application Insights ingestion/private
+connectivity. This alert cannot distinguish an automation outage from a telemetry outage.
+Use current Azure resource evidence to make that distinction.
+
+**Expected resolution:** A recent `Succeeded` **or** `Failed` reconciliation outcome is observed.
+A failed outcome restores visibility, not health; the timer-failure or stopped-cycle alert may
+still need attention. `InitiationEnabled=false` does not suppress this check: reconciliation
+should continue even while new replacement batches are held.
+
+## Avoid Alerting on Expected Waiting
+
+Do not treat these conditions alone as failures:
+
+- No new batch while initiation is intentionally paused or outside its configured schedule.
+- Waiting for scheduled authorization, a live lease, capacity or scaling-plan safety gates.
+- Old hosts draining within their configured grace period.
+- A new replacement that has not yet finished deployment or readiness checks.
+- An idle pool without cycle or inventory events; minute-timer outcomes are a separate signal.
+
+Do not use a generic "cycle older than 30 minutes" or "no host actions" rule. Normal drain
+periods and rollout schedules can be much longer. Route repeated warnings and detailed wait
+diagnostics to the workbook before deciding whether a separate, mode-aware alert is warranted.
+
+Suppress notifications for a deliberately stopped app during an approved upgrade using a
+time-bounded maintenance process. Do not suppress missing reconciliation merely because new
+batch initiation is held.
+
+## Additional Alerts to Consider Later
+
+**Deleted hosts with blocked recovery** deserve higher urgency when they represent real
+capacity loss. The current structured events do not expose enough pending-host/available-capacity
+evidence to assert that condition reliably. It needs a reviewed telemetry contract before a
+recommended query; do not join unrelated warning messages to infer an outage.
+
+Capacity and user-experience alerts should come from authoritative AVD/VM monitoring and be
+correlated with SHR, not inferred from timer success or an old inventory snapshot. Routine
+completion and progressive-batch milestones belong in the workbook unless operators explicitly
+want informational notifications.
+
+## Validate Before Relying on These Suggestions
+
+The queries are documentation examples, not evidence of successful Azure query execution or
+alert delivery. Validate in an isolated pilot in each target cloud:
+
+1. Confirm current schema-version-1 Information records, app identity, both triggers and native
+   invocation keys. Verify Application Insights scope and actual ingestion delay/sampling.
+2. Observe `NeedsAttention`, then checked recovery/completion/supersession. The stopped-cycle
+   query should return one row per stopped app/cycle and stop returning it after a later
+   non-stopped observation for that cycle.
+3. Check one versus three distinct reconciliation failures, duplicate records, one initiation
+   failure, and a later successful outcome. Only the documented conditions should return rows.
+4. Test no telemetry, starts without outcomes, stale outcomes and restored outcomes, including
+   a `Failed` outcome. Confirm the seeded query still detects a completely silent expected app.
+5. Confirm an initiation hold, a healthy idle pool, long drains and normal lease waits do not
+   trigger these conditions when timer outcomes remain healthy.
+6. If manually creating alert rules, verify effective lookback, row-count threshold, stable
+   dimensions, firing and automatic resolution. Test Action Group delivery separately.
+
+Do not manufacture production failures or delete recovery state to test alerts. A `Write-Host`
+message from an operator shell is not a Functions invocation and does not prove end-to-end
+collection, alert evaluation or notification delivery.
+
+## Current Coverage Limitations
+
+The legacy [Bicep alert pack](alertRules.bicep) and
+[standalone deployment script](Deploy-SessionHostReplacerAlerts.ps1) remain unchanged. They
+contain duplicated, historical message-based queries rather than the suggested rules above.
+Known issues include:
+
+- No equivalent structured stopped-cycle or missing-outcome coverage.
+- A low-capacity rule in the Bicep pack joins separate records on identical timestamps.
+- A blocked-deletions rule requires more than 60 minutes inside a one-hour query window.
+- Progressive-scale-up regex escaping in Bicep does not match representative messages.
+
+Do not assume running those deployment tools creates the recommendations in this guide.
+Repairing or integrating them is a separate implementation task. No alert deployment, UI
+parameter, runtime telemetry change or notification configuration is introduced here.
+
+## References
+
+- [SHR design and monitoring overview](../../../../docs/session-host-replacer.md#what-operators-see)
+- [Logging and correlation](../logging-guide.md)
+- [Trace one replacement cycle](../README.md#trace-one-replacement-cycle)
+- [Create Azure Monitor log search alert rules](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-create-log-alert-rule)
