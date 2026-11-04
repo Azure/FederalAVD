@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.48.1.52935",
-      "templateHash": "15279453550941150226"
+      "templateHash": "16446304689821106177"
     }
   },
   "definitions": {
@@ -10648,7 +10648,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.48.1.52935",
-              "templateHash": "3562169308594000860"
+              "templateHash": "7061275786208159380"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -10811,7 +10811,7 @@
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Enables queue endpoint configuration for AzureWebJobsStorage and queue private endpoint DNS integration."
+                "description": "Optional. Enables queue endpoint configuration, private endpoint DNS integration, and automatic Storage Queue Data Contributor assignment. Default true preserves queue-enabled callers."
               }
             },
             "enableTableStorage": {
@@ -11036,7 +11036,7 @@
             "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
             "storageEncryptionUaiResourceId": "[if(variables('useCmk'), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('storageEncryptionIdentityName')), '')]",
             "cmkUaiResourceId": "[if(variables('useCmk'), variables('storageEncryptionUaiResourceId'), '')]",
-            "storageAccountRoleDefinitions": "[union(createArray('b7e6dc6d-f1e8-4753-8033-0f276bb0955b', '974c5e8b-45b9-4653-ba55-5f855dd0fb88'), parameters('storageAccountRoleDefinitionIds'))]"
+            "storageAccountRoleDefinitions": "[union(createArray('b7e6dc6d-f1e8-4753-8033-0f276bb0955b'), if(parameters('enableQueueStorage'), createArray('974c5e8b-45b9-4653-ba55-5f855dd0fb88'), createArray()), parameters('storageAccountRoleDefinitionIds'))]"
           },
           "resources": {
             "storageAccount::blobService": {

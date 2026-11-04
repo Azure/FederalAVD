@@ -80,6 +80,24 @@ Describe 'SHR mandatory two-timer deployment contract' {
         $appParameters.azureTablePrivateDnsZoneResourceId.value | Should Not BeNullOrEmpty
     }
 
+    It 'gates automatic queue RBAC on the shared queue capability while preserving host Blob and caller-supplied roles' {
+        $appTemplate = $arm.resources.functionApp.properties.template
+        $appTemplate.variables.storageAccountRoleDefinitions | Should Be (
+            "[union(createArray('b7e6dc6d-f1e8-4753-8033-0f276bb0955b'), " +
+            "if(parameters('enableQueueStorage'), createArray('974c5e8b-45b9-4653-ba55-5f855dd0fb88'), createArray()), " +
+            "parameters('storageAccountRoleDefinitionIds'))]"
+        )
+        $appParameters.enableQueueStorage.value | Should Be $false
+        $appParameters.storageAccountRoleDefinitionIds.value |
+            Should Contain '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
+        $appParameters.storageAccountRoleDefinitionIds.value |
+            Should Not Contain '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
+    }
+
+    It 'keeps automatic queue access enabled by default for other shared-module callers' {
+        $arm.resources.functionApp.properties.template.parameters.enableQueueStorage.defaultValue | Should Be $true
+    }
+
     It 'embeds the exact thin entries and always deploys the single shared lifecycle engine' {
         $files = $initiator.properties.parameters.files.value
         $match = [regex]::Match($files, "createObject\('run.ps1', variables\('([^']+)'\)")

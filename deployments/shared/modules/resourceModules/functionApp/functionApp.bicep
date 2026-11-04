@@ -24,7 +24,7 @@ param enableApplicationInsights bool = false
 @description('Optional. Forward FunctionAppLogs to the workspace. Independent of Application Insights; default true preserves existing module callers.')
 param enableFunctionAppDiagnosticSettings bool = true
 
-@description('Optional. Enables queue endpoint configuration for AzureWebJobsStorage and queue private endpoint DNS integration.')
+@description('Optional. Enables queue endpoint configuration, private endpoint DNS integration, and automatic Storage Queue Data Contributor assignment. Default true preserves queue-enabled callers.')
 param enableQueueStorage bool = true
 
 @description('Optional. Enables table endpoint configuration for AzureWebJobsStorage and table private endpoint DNS integration.')
@@ -558,12 +558,14 @@ var functionAppPrincipalId = !empty(functionAppUserAssignedIdentityResourceId)
   ? functionAppUAI!.properties.principalId
   : functionApp.identity.principalId
 
-// Storage account role assignments - always include roles required by AzureWebJobsStorage, optionally add others
+// Host coordination always needs Blob access; queue permissions follow the enabled capability.
 var storageAccountRoleDefinitions = union(
   [
     'b7e6dc6d-f1e8-4753-8033-0f276bb0955b' // Storage Blob Data Owner
-    '974c5e8b-45b9-4653-ba55-5f855dd0fb88' // Storage Queue Data Contributor
   ],
+  enableQueueStorage
+    ? ['974c5e8b-45b9-4653-ba55-5f855dd0fb88'] // Storage Queue Data Contributor
+    : [],
   storageAccountRoleDefinitionIds
 )
 

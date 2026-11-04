@@ -117,6 +117,14 @@ After a successful pilot, inventory dependencies and use the approved cleanup pr
 owned exclusively by the retired SHR queue transport. Never remove shared DNS zones, generic storage
 roles, Blob/Table endpoints or durable operation state indiscriminately.
 
+The shared Function App module now gates its automatic **Storage Queue Data Contributor**
+assignment on `enableQueueStorage`. SHR passes `false`, so new SHR deployments receive host Blob
+and deployment-state Table permissions without the queue role. Queue-enabled module callers keep
+their existing queue access. Upgrading an existing SHR deployment does **not** revoke an earlier
+queue-role assignment; remove that assignment explicitly only after confirming the identity and
+storage-account scope are exclusive to the retired queue transport. An explicitly supplied
+additional role remains caller-owned and is not filtered out by the capability switch.
+
 ## Verify Deployment
 
 ### Offline validation

@@ -399,14 +399,15 @@ When Session Host Replacer uses `SideBySide` mode with shutdown retention enable
 (old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather
 than deleted. If a new image is discovered to have issues, initiate rollback with the guarded
 [`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
-operator script. It stops the replacer, powers on selected retained hosts, waits for AVD health,
-restores session acceptance, removes replacer-owned retention controls, and opts restored hosts out
-of automation.
+operator script. With one confirmation it stops SHR, starts the selected retained generation
+concurrently, waits for AVD health, restores service, drains/excludes bad-image hosts, pins this
+pool to the restored image, and restarts SHR. It does not delete VMs or sign out existing sessions.
+Validate user access and remove drained bad-image hosts later through the approved process.
 
-After restoration, validate user access, drain the bad-image hosts, establish the corrected
-known-good Compute Gallery version, remove the bad-image generation, explicitly opt the intended
-hosts back into automation, and restart the Function App. See the
-[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
+After publishing a corrected higher version or excluding the bad version, run the same command
+with `-ResumeLatest` to remove the pool-local pin and resume normal image selection. For unsafe
+unfinished work, `-RestoreOnly` provides emergency restoration while leaving SHR stopped.
+See the [rollback quick start](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
 The **Ringed Rollout** setting (0-30 day delay based on image publication time) stages image
 adoption, but does not enforce approval. Validate the exact excluded candidate in a dedicated pilot

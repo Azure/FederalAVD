@@ -2138,34 +2138,29 @@ Describe 'Session Host Replacer rollback operator experience' {
     It 'provides a syntactically valid fail-closed rollback script' {
         $parseErrors.Count | Should Be 0
         $rollbackScript | Should Match 'SupportsShouldProcess'
-        $rollbackScript | Should Match "Stop it first or rerun with -StopFunctionApp"
+        $rollbackScript | Should Match 'Assert-UnchangedSettings'
         $rollbackScript | Should Match "ReplacementMode"
         $rollbackScript | Should Match "EnableShutdownRetention"
     }
 
-    It 'waits for AVD health before restoring session acceptance and tags' {
-        $healthPosition = $rollbackScript.IndexOf('Wait-SessionHostReady -SessionHostPath')
-        $allowSessionPosition = $rollbackScript.IndexOf('allowNewSession = $true')
-        $tagRemovalPosition = $rollbackScript.IndexOf("operation = 'Delete'", $allowSessionPosition)
-
-        $healthPosition | Should BeGreaterThan -1
-        $allowSessionPosition | Should BeGreaterThan $healthPosition
-        $tagRemovalPosition | Should BeGreaterThan $allowSessionPosition
+    It 'provides one top-level confirmation for the complete rollback plan' {
+        $confirmations = @($rollbackAst.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and
+                $node.Member.Value -eq 'ShouldProcess'
+        }, $true))
+        $confirmations.Count | Should Be 1
     }
 
-    It 'removes only replacer-owned scaling exclusions and opts restored hosts out of automation' {
-        $rollbackScript | Should Match "scalingExclusionValue -eq 'SessionHostReplacer'"
-        $rollbackScript | Should Match '\$includeInAutomationTagName = ''false'''
-        $rollbackScript | Should Match 'does not drain or remove the bad-image generation'
-    }
-
-    It 'does not expose a switch that restarts the Function App' {
+    It 'exposes guided rollback, an explicit emergency restore, and a way to resume latest selection' {
         $parameterNames = @($rollbackAst.ParamBlock.Parameters | ForEach-Object {
             $_.Name.VariablePath.UserPath
         })
 
-        ($parameterNames -contains 'StartFunctionApp') | Should Be $false
-        ($parameterNames -contains 'ResumeAutomation') | Should Be $false
+        ($parameterNames -contains 'RestoreOnly') | Should Be $true
+        ($parameterNames -contains 'ResumeLatest') | Should Be $true
+        ($parameterNames -contains 'ImageVersion') | Should Be $true
+        ($parameterNames -contains 'StartBatchSize') | Should Be $true
     }
 }
 

@@ -176,14 +176,15 @@ complete and no pending recovery remains.
 ### Shutdown-retention rollback
 
 Rollback is operator initiated; retained VMs are not restored automatically. Use the guarded
-[rollback script](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1) to stop
-the replacer, start selected retained hosts, validate AVD health, restore session acceptance, remove
-replacer-owned retention controls, and opt the restored hosts out of automation.
+[rollback script](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1) with
+the Function App name and resource group. After one confirmation it stops SHR, starts retained
+hosts concurrently, validates health, restores service, drains/excludes the bad generation,
+pins this pool to the restored image, and restarts SHR. No hosts or sessions are deleted.
 
-The Function App remains stopped after restoration. Correct the Compute Gallery desired image,
-drain and remove the bad-image generation, explicitly opt the intended hosts back into automation,
-and then restart the Function App. Follow the
-[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
+Use the same command with `-ResumeLatest` after correcting normal image eligibility to remove
+the pool-local pin. It refuses to select a known bad version recorded by rollback. Unsafe
+unfinished work blocks automatic resume; `-RestoreOnly` restores service while leaving SHR
+stopped. See the [two-command quick start and safety requirements](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
 ## Related Documentation
 

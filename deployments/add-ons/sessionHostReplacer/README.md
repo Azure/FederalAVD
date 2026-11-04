@@ -1053,55 +1053,61 @@ configuration, monitoring, maintenance, and troubleshooting guidance.
 
 ## Roll Back to Shutdown-Retention Hosts
 
-Shutdown retention preserves the old-image VMs and their AVD registrations, but rollback is an
-operator-controlled action. Do not only power on retained VMs: they remain drained, carry retention
-and scaling-exclusion tags, and still use an image older than the gallery version selected by the
-replacer.
-
-Use `Invoke-SessionHostRollback.ps1` to perform the guarded restoration:
+**Roll back with one command and one confirmation** from the repository root in a signed-in
+PowerShell 7.4+ session:
 
 ```powershell
-# Preview every retained host that would be restored.
-.\Invoke-SessionHostRollback.ps1 `
+.\deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1 `
   -FunctionAppName <function-app-name> `
-  -FunctionAppResourceGroupName <function-app-resource-group> `
-  -StopFunctionApp `
-  -WhatIf
-
-# Restore selected retained hosts.
-.\Invoke-SessionHostRollback.ps1 `
-  -FunctionAppName <function-app-name> `
-  -FunctionAppResourceGroupName <function-app-resource-group> `
-  -SessionHostName avd-001, avd-002 `
-  -StopFunctionApp `
-  -Confirm:$false `
-  -PassThru
+  -FunctionAppResourceGroupName <function-app-resource-group>
 ```
 
-The script:
+The command discovers retained hosts **in this host pool**, shows the image and affected hosts,
+and validates the plan before stopping SHR. It starts hosts in batches of up to ten concurrent
+start requests, waits for AVD health, restores session acceptance, removes retention/drain controls,
+and re-enables management. It drains and excludes the bad-image hosts from SHR and, when configured,
+autoscale. Existing sessions are not signed out and no VMs are deleted; validate user access and
+remove the drained bad-image hosts later through your approved process.
 
-1. Fails closed unless the Function App is stopped, or stops it when `-StopFunctionApp` is supplied.
-2. Discovers the deployment settings and VMs carrying the configured shutdown-retention tag.
-3. Starts each selected VM and waits for `Available` status with no failed AVD health checks.
-4. Sets the configured automation opt-in tag to `false` before returning the host to service.
-5. Sets `AllowNewSession=true`.
-6. Removes the shutdown-retention tag and removes the scaling exclusion only when its value is
-   `SessionHostReplacer`.
+SHR restarts **pinned to the restored image for this pool only**. Gallery exclusions and other
+pools are unchanged. The command preserves durable recovery evidence and conditionally supersedes
+an interrupted operation only when its checkpointed deployments are fully provisioned and
+registered, with no pending cleanup/recovery work.
 
-After restoration:
+- Add `-WhatIf` for a read-only preview.
+- If multiple retained image generations exist, the error lists them. Rerun with
+  `-ImageVersion <major.minor.patch>`; `-SessionHostName` optionally limits restored hosts.
+- Guided resume requires enough healthy known-good hosts to meet the configured target
+  (or the current managed count in auto-detect mode), Table data access, and private-network
+  connectivity to SHR storage. It supports retained versions of the pool's configured Compute
+  Gallery image definition, not marketplace images or cross-definition migrations.
+  Unfinished ARM deployments, cleanup, maintenance, or recovery
+  mappings block it **before stopping SHR**. Add `-RestoreOnly` for emergency restoration instead:
+  restored hosts remain excluded, other hosts are untouched, and SHR remains stopped.
+- On a failure after stopping SHR, the command keeps it stopped and prints the phase, started
+  and restored hosts, and the retry command. Resolve the error and rerun that command; its pool
+  checkpoint supports interrupted restoration. Do not redeploy SHR while this pin is in use:
+  deployment parameters can overwrite the pinned `SessionHostParameters`.
 
-1. Validate user access and capacity on the restored generation.
-2. Drain the bad-image generation and migrate or sign out its sessions.
-3. Establish the desired image state. Prefer publishing the corrected known-good image as a newer
-   Compute Gallery version. If intentionally making an older gallery version current, review
-   `AllowImageVersionRollback` before automation replaces hosts running the newer bad version.
-4. Remove the bad-image hosts through the approved operator process.
-5. Set the configured automation opt-in tag back to `true` only on hosts that should re-enter
-   replacement management.
-6. Start the Function App and monitor the workbook and traces for the next invocation.
+**Remove the pin and resume normal image updates** after publishing a corrected higher version
+or excluding the bad version:
 
-The script intentionally does not drain or delete the bad-image generation, alter gallery versions,
-re-enable host automation, or restart the Function App.
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1 `
+  -FunctionAppName <function-app-name> `
+  -FunctionAppResourceGroupName <function-app-resource-group> `
+  -ResumeLatest
+```
+
+This restores gallery-definition selection, checks the currently selected eligible version,
+and refuses to unpin if it would select a known bad image recorded by the rollback. It leaves
+bad-image hosts drained/excluded. The `ShutdownRetentionRollback` app setting retains recovery
+history; a `FollowingLatest` status means the image reference is no longer pinned.
+No `AllowImageVersionRollback` change is needed: those hosts
+are deliberately outside SHR management. `-StopFunctionApp` remains accepted for compatibility,
+but stopping and restarting are now automatic in the default guided workflow. Use `-RestoreOnly`
+for the earlier stop-after-restoration behavior. `-PassThru` now returns one operation summary
+with `RestoredHosts`, `DrainedHosts`, `Image`, and `FunctionAppState`, rather than one object per host.
 
 ## Two-Timer Execution
 
