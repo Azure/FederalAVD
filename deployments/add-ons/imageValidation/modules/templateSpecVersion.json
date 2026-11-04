@@ -1,0 +1,376 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "16917877374550428767"
+    }
+  },
+  "definitions": {
+    "runCommandSettingType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "script": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/runCommandParameterType"
+          }
+        }
+      }
+    },
+    "runCommandParameterType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../../shared/modules/resourceModules/types/customizationTypes.bicep"
+        }
+      }
+    }
+  },
+  "parameters": {
+    "diskName": {
+      "type": "string"
+    },
+    "imageVersionResourceId": {
+      "type": "string"
+    },
+    "keyVaultResourceId": {
+      "type": "string"
+    },
+    "licenseType": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "networkInterfaceName": {
+      "type": "string"
+    },
+    "privateIPAddress": {
+      "type": "string"
+    },
+    "subnetResourceId": {
+      "type": "string"
+    },
+    "userAssignedIdentityResourceId": {
+      "type": "string"
+    },
+    "virtualMachineName": {
+      "type": "string"
+    },
+    "virtualMachineSize": {
+      "type": "string"
+    },
+    "runCommandSettings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/runCommandSettingType"
+      }
+    }
+  },
+  "resources": {
+    "keyVault": {
+      "existing": true,
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2022-07-01",
+      "subscriptionId": "[split(parameters('keyVaultResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('keyVaultResourceId'), '/')[4]]",
+      "name": "[last(split(parameters('keyVaultResourceId'), '/'))]"
+    },
+    "virtualMachine": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('virtualMachine-{0}', uniqueString('virtualMachine', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "diskName": {
+            "value": "[parameters('diskName')]"
+          },
+          "licenseType": {
+            "value": "[parameters('licenseType')]"
+          },
+          "imageVersionResourceId": {
+            "value": "[parameters('imageVersionResourceId')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "networkInterfaceName": {
+            "value": "[parameters('networkInterfaceName')]"
+          },
+          "privateIPAddress": {
+            "value": "[parameters('privateIPAddress')]"
+          },
+          "runCommandSettings": {
+            "value": "[parameters('runCommandSettings')]"
+          },
+          "subnetResourceId": {
+            "value": "[parameters('subnetResourceId')]"
+          },
+          "tags": {
+            "value": "[reference('keyVault', '2022-07-01', 'full').tags]"
+          },
+          "userAssignedIdentityResourceId": {
+            "value": "[parameters('userAssignedIdentityResourceId')]"
+          },
+          "virtualMachineName": {
+            "value": "[parameters('virtualMachineName')]"
+          },
+          "virtualMachinePassword": {
+            "reference": {
+              "keyVault": {
+                "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('keyVaultResourceId'), '/')[2], split(parameters('keyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('keyVaultResourceId'), '/')))]"
+              },
+              "secretName": "LocalAdminPassword"
+            }
+          },
+          "virtualMachineSize": {
+            "value": "[parameters('virtualMachineSize')]"
+          },
+          "virtualMachineUsername": {
+            "reference": {
+              "keyVault": {
+                "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('keyVaultResourceId'), '/')[2], split(parameters('keyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('keyVaultResourceId'), '/')))]"
+              },
+              "secretName": "LocalAdminUsername"
+            }
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.48.1.52935",
+              "templateHash": "10531834001857259877"
+            }
+          },
+          "definitions": {
+            "runCommandSettingType": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "script": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/runCommandParameterType"
+                  }
+                }
+              }
+            },
+            "runCommandParameterType": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "metadata": {
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                }
+              }
+            }
+          },
+          "parameters": {
+            "diskName": {
+              "type": "string"
+            },
+            "imageVersionResourceId": {
+              "type": "string"
+            },
+            "licenseType": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "networkInterfaceName": {
+              "type": "string"
+            },
+            "privateIPAddress": {
+              "type": "string"
+            },
+            "runCommandSettings": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandSettingType"
+              }
+            },
+            "subnetResourceId": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "userAssignedIdentityResourceId": {
+              "type": "string"
+            },
+            "virtualMachineName": {
+              "type": "string"
+            },
+            "virtualMachinePassword": {
+              "type": "securestring"
+            },
+            "virtualMachineSize": {
+              "type": "string"
+            },
+            "virtualMachineUsername": {
+              "type": "securestring"
+            }
+          },
+          "resources": {
+            "networkInterface": {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2020-05-01",
+              "name": "[parameters('networkInterfaceName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig",
+                    "properties": {
+                      "primary": true,
+                      "privateIPAddress": "[parameters('privateIPAddress')]",
+                      "privateIPAddressVersion": "IPv4",
+                      "privateIPAllocationMethod": "Static",
+                      "subnet": {
+                        "id": "[parameters('subnetResourceId')]"
+                      }
+                    }
+                  }
+                ],
+                "enableAcceleratedNetworking": true,
+                "enableIPForwarding": false
+              }
+            },
+            "virtualMachine": {
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2021-11-01",
+              "name": "[parameters('virtualMachineName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('userAssignedIdentityResourceId'))]": {}
+                }
+              },
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('virtualMachineSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "id": "[parameters('imageVersionResourceId')]"
+                  },
+                  "osDisk": {
+                    "deleteOption": "Delete",
+                    "osType": "Windows",
+                    "createOption": "FromImage",
+                    "caching": "ReadWrite",
+                    "managedDisk": {
+                      "storageAccountType": "Premium_LRS"
+                    },
+                    "name": "[parameters('diskName')]"
+                  },
+                  "dataDisks": []
+                },
+                "osProfile": {
+                  "computerName": "[parameters('virtualMachineName')]",
+                  "adminUsername": "[parameters('virtualMachineUsername')]",
+                  "adminPassword": "[parameters('virtualMachinePassword')]",
+                  "windowsConfiguration": {
+                    "provisionVMAgent": true,
+                    "enableAutomaticUpdates": false
+                  },
+                  "secrets": [],
+                  "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('networkInterfaceName'))]",
+                      "properties": {
+                        "deleteOption": "Detach"
+                      }
+                    }
+                  ]
+                },
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": false
+                  }
+                },
+                "licenseType": "[parameters('licenseType')]"
+              },
+              "dependsOn": [
+                "networkInterface"
+              ]
+            },
+            "runCommand": {
+              "copy": {
+                "name": "runCommand",
+                "count": "[length(parameters('runCommandSettings'))]"
+              },
+              "condition": "[not(empty(parameters('runCommandSettings')))]",
+              "type": "Microsoft.Compute/virtualMachines/runCommands",
+              "apiVersion": "2023-09-01",
+              "name": "[format('{0}/{1}', parameters('virtualMachineName'), parameters('runCommandSettings')[copyIndex()].name)]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "asyncExecution": false,
+                "parameters": "[parameters('runCommandSettings')[copyIndex()].parameters]",
+                "source": {
+                  "script": "[parameters('runCommandSettings')[copyIndex()].script]"
+                },
+                "treatFailureAsDeploymentFailure": true
+              },
+              "dependsOn": [
+                "virtualMachine"
+              ]
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "keyVault"
+      ]
+    }
+  }
+}
