@@ -351,12 +351,10 @@ Describe 'Shared naming and module metadata contracts' {
         $errors = $null
         $ast = [Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors)
         $errors.Count | Should Be 0
-        $defaults = $ast.Find({
-            param($node)
-            $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$namingDefaults'
-        }, $true)
+        $defaults = $ast.ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -eq 'NamingConvention' }
         $defaults | Should Not BeNullOrEmpty
-        $actual = Invoke-Expression $defaults.Right.Extent.Text
+        $actual = $defaults.DefaultValue.SafeGetValue()
         ($actual.components -join ',') | Should Be ($policy.defaults.components -join ',')
         $actual.delimiter | Should Be $policy.defaults.delimiter
         $actual.workload | Should Be $policy.defaults.workload

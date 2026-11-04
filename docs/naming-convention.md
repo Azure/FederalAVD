@@ -229,7 +229,11 @@ The publishing script uses `purpose = operations` for its default resource group
 purpose for each Template Spec. Its `components` array must include `purpose`; otherwise multiple
 Template Specs would resolve to the same name. Supplying `-ResourceGroupName` overrides
 resource-group name generation without changing Template Spec names. Omitting
-`-NamingConvention` uses the publisher's default naming configuration.
+`-NamingConvention` uses the default object declared in the script's parameter block.
+Partial objects retain the defaults for omitted properties.
+The publisher reuses the resolved resource group when it exists and automatically creates it
+when missing; no creation flag is needed. This also applies to an explicit
+`-ResourceGroupName` override. `-WhatIf` previews these operations without Azure writes.
 
 Publishing a new add-on requires registration as well as infrastructure naming:
 add its publishing purpose under `templateSpecs` in the shared naming policy and

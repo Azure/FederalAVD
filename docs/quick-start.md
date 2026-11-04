@@ -285,6 +285,10 @@ underlying standard and automated entry templates directly compose Shared Servic
 pool-specific modules.
 `AddOns` publishes the complete add-on Template Spec collection, including FSLogix Storage; deploy
 only the add-on selected by the chosen path.
+Only `-Location` is required. The publisher derives its resource-group name from the naming
+convention with purpose `operations` (for example, `rg-avd-operations-use` in `eastus`),
+reuses that group when it exists, and creates it when missing. Use `-WhatIf` to preview
+publication without creating resources.
 To apply an enterprise naming standard to the publishing resource group and Template Specs, pass a
 `-NamingConvention` hashtable using the schema and example in the
 [Naming Convention guide](naming-convention.md#passing-the-parameter). An explicit

@@ -229,6 +229,11 @@ The authoritative references are:
 `tools/New-TemplateSpecs.ps1` uses deduplicated REST publication and supports
 `-TemplateSpecNameSuffix` for isolated test names and `-WhatIf` for preflight without
 Azure writes. Without a suffix it targets the existing standard names.
+Only `-Location` is mandatory. The resource-group name defaults to the naming convention
+with purpose `operations`; `-ResourceGroupName` remains an optional override. After package
+preflight, the publisher reuses the resolved group or creates it if missing, subject to
+`ShouldProcess`. The redundant `-createResourceGroup` parameter has been removed; callers
+that supplied it must omit it.
 Offline checks do not establish live publication or deployment compatibility.
 Version incrementing remains enabled by default;
 disabling it overwrites version `1.0.0`.

@@ -1,18 +1,132 @@
 <#
 .SYNOPSIS
+
 Template Spec publisher that stores identical inline templates once.
+
 .DESCRIPTION
+
 Uses the active Azure context and the ARM REST API to publish the complete package.
-Deduplication affects only the publication copy; tracked ARM files are unchanged.
+
+Repeated nested templates and compiler annotations increase package size. To help
+stay within the Template Spec content limit, the publisher filters annotations and
+deduplicates eligible templates in an in-memory publication copy. Bicep sources
+and tracked ARM files are not changed.
+
+Annotation filtering removes Bicep compiler provenance (_generator and
+__bicep_imported_from!) and nested-template parameter/output/type descriptions.
+It does not strip metadata indiscriminately: top-level interface descriptions,
+other interface metadata, validation constraints, resource/policy metadata,
+function logic and descriptions, and the complete Portal form are preserved.
+Filtering targets recognized template/schema locations, not similarly named
+properties in literal application data. Full module documentation remains in
+the repository sources.
+
+After filtering, identical eligible nested templates are identified by SHA-256
+and stored once as linked artifacts inside the same Template Spec version.
+References use bundled relative paths, not public URLs or separately published
+Template Specs. Only templates with explicit inner expression scope are extracted;
+outer/default-scope subtrees stay inline to preserve expression behavior.
+Unique inner-scope ancestors of extracted duplicates are also linked when needed
+to preserve relative-link origin. Pre-existing relative template links are rejected.
+
+Before any Azure writes, every selected package is serialized and size-checked,
+including the main template, all linked artifacts, Portal form, and location
+envelope. A 16,384-byte safety reserve is included in the 2,000,000-byte budget.
+Exceeding that budget stops publication; output reports savings and headroom.
+Offline checks do not prove Azure service acceptance or deployment compatibility.
+
+See docs\design.md, sections Generated-template size budgets and Deduplicated
+Template Spec publisher, for the design rationale and validation requirements.
+
+The publishing resource group is named using the convention with purpose operations
+unless ResourceGroupName overrides it. An existing group is reused; a missing group
+is created automatically.
+
 Use -WhatIf first and -TemplateSpecNameSuffix dedup-test for isolated test names.
 Live publication and deployment validation are required before production use.
+
+.PARAMETER Location
+
+Required Azure region for the Template Specs and for a resource group if created.
+Use the region name for the active Azure cloud, for example eastus or usgovvirginia.
+
+.PARAMETER ResourceGroupName
+
+Optional override for the publishing resource group. Normally omit this parameter:
+the naming convention generates the name with purpose operations, for example
+rg-avd-operations-use in eastus. Use the override to target a separately named group.
+Whether generated or explicit, the group is reused if it exists and created if missing.
+
+.PARAMETER NamingConvention
+
+Optional hashtable or object using the deployment namingConvention schema, not a
+file path or JSON string. The parameter declares these defaults:
+
+  components = @('resourceType', 'workload', 'purpose', 'location')
+  delimiter = '-'
+  workload = 'avd'
+
+The components array must include purpose so each Template Spec has a distinct name.
+Other supported component values are environment, freeform1, freeform2, and none.
+Optional properties include environment, freeform1, freeform2, locationAbbreviation,
+and resourceTypeCodes (for example @{ resourceGroups = 'rg'; templateSpecs = 'ts' }).
+Missing properties use defaults; empty component values are omitted from names.
+This controls publishing names only, not the naming of resources later deployed
+through the published forms. See docs\naming-convention.md for the full schema.
+
+.PARAMETER incrementVersion
+Defaults to true. Existing Template Specs get the next numeric major version.
+Setting this to false publishes version 1.0.0, overwriting that version if present.
+
+.PARAMETER TemplateSpecNameSuffix
+
+Optional suffix appended to Template Spec names for isolated testing. It does not
+change the publishing resource-group name.
+
+.EXAMPLE
+
+.\tools\New-TemplateSpecs.ps1 -Location eastus -WhatIf
+
+Preview using default names, including resource group rg-avd-operations-use.
+No resource group or Template Specs are written. Remove -WhatIf to publish.
+
+.EXAMPLE
+
+$naming = @{
+    components = @('resourceType', 'workload', 'purpose', 'environment', 'location')
+    delimiter = '-'
+    workload = 'avd'
+    environment = 'prod'
+}
+.\tools\New-TemplateSpecs.ps1 -Location eastus -NamingConvention $naming -WhatIf
+
+Preview publishing into rg-avd-operations-prod-use, creating it if missing when
+run without -WhatIf. No ResourceGroupName or creation flag is needed.
+
+.EXAMPLE
+
+.\tools\New-TemplateSpecs.ps1 -Location usgovvirginia -ResourceGroupName rg-template-catalog -WhatIf
+
+Preview using an explicit publishing group while retaining default Template Spec
+names. The group is reused or created automatically when run without -WhatIf.
+
+.NOTES
+
+Sign in and select the intended cloud and subscription before running the script.
+Only Location is required. By default, Custom Image, Host Pool, and all add-on
+Template Specs are selected. The other create parameters select additional entries;
+they publish templates, not workloads. These parameters are booleans, so use
+-createCustomImage $false, -createHostPool $false, or -CreateAddOns $false to
+exclude the corresponding default selections.
+
+Use Get-Help .\tools\New-TemplateSpecs.ps1 -Full to read this help.
+
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param (
-    [string]$ResourceGroupName,
+    [string]$ResourceGroupName = '',
     [Parameter(Mandatory=$true)]
     [string]$Location,
-    [bool]$createResourceGroup = $true,
     [bool]$createSharedServices = $false,
     [bool]$createNetwork = $false,
     [bool]$createCustomImage = $true,
@@ -22,7 +136,11 @@ param (
     [bool]$createAutomatedHostPool = $false,
     [bool]$CreateAddOns = $true,
     [ValidateNotNull()]
-    [object]$NamingConvention = @{},
+    [object]$NamingConvention = @{
+        components = @('resourceType', 'workload', 'purpose', 'location')
+        delimiter = '-'
+        workload = 'avd'
+    },
     [bool]$incrementVersion = $true,
     [ValidatePattern('^[A-Za-z0-9_-]*$')]
     [string]$TemplateSpecNameSuffix = ''
@@ -400,11 +518,6 @@ $locationsPath = Join-Path $PSScriptRoot -ChildPath '..\deployments\shared\data\
 $resourceAbbreviationsPath = Join-Path $PSScriptRoot -ChildPath '..\deployments\shared\data\resourceAbbreviations.json'
 $locations = Get-Content -Path $locationsPath -Raw | ConvertFrom-Json
 $resourceAbbreviations = Get-Content -Path $resourceAbbreviationsPath -Raw | ConvertFrom-Json
-$namingDefaults = @{
-    components = @('resourceType', 'workload', 'purpose', 'location')
-    delimiter = '-'
-    workload = 'avd'
-}
 
 # Determine cloud environment and get location abbreviation
 $cloud = $Context.Environment.Name
@@ -425,7 +538,7 @@ if ($null -eq $locationAbbr) {
     $locationAbbr = $Location
 }
 
-$components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue $namingDefaults.components)
+$components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue @('resourceType', 'workload', 'purpose', 'location'))
 $allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none')
 $invalidComponents = @($components | Where-Object { $_ -notin $allowedComponents })
 if ($invalidComponents.Count -gt 0) {
@@ -435,8 +548,8 @@ if ($components -notcontains 'purpose') {
     throw "NamingConvention.components must contain 'purpose' so each Template Spec receives a distinct name."
 }
 
-$delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue $namingDefaults.delimiter)
-$workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue $namingDefaults.workload)
+$delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue '-')
+$workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue 'avd')
 $environment = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'environment' -DefaultValue '')
 $freeform1 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform1' -DefaultValue '')
 $freeform2 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform2' -DefaultValue '')
@@ -449,8 +562,8 @@ $resourceTypeCodes = Get-ObjectPropertyValue -InputObject $NamingConvention -Pro
 $resourceGroupTypeCode = [string](Get-ObjectPropertyValue -InputObject $resourceTypeCodes -PropertyName 'resourceGroups' -DefaultValue $resourceAbbreviations.resourceGroups)
 $templateSpecTypeCode = [string](Get-ObjectPropertyValue -InputObject $resourceTypeCodes -PropertyName 'templateSpecs' -DefaultValue $resourceAbbreviations.templateSpecs)
 
-if ($null -eq $ResourceGroupName -or $ResourceGroupName -eq '') {
-    Write-Output 'Resource Group Name not provided. Using default naming convention'
+if ([string]::IsNullOrWhiteSpace($ResourceGroupName)) {
+    Write-Output 'Resource Group Name not provided. Using naming convention with purpose operations'
     $ResourceGroupName = New-ConventionName `
         -Components $components `
         -Delimiter $delimiter `
@@ -600,9 +713,6 @@ if ($templateSpecs.Count -eq 0) {
 }
 $resourceGroupExists = $null -ne (Get-AzResourceGroup -ErrorAction Stop | Where-Object { $_.ResourceGroupName -eq $ResourceGroupName })
 if (-not $resourceGroupExists) {
-    if (-not $createResourceGroup) {
-        throw "Resource group '$ResourceGroupName' does not exist and createResourceGroup is false."
-    }
     if ($PSCmdlet.ShouldProcess($ResourceGroupName, 'Create Template Spec resource group')) {
         New-AzResourceGroup -Name $ResourceGroupName -Location $Location -ErrorAction Stop | Out-Null
         $resourceGroupExists = $true

@@ -302,6 +302,27 @@ Describe 'Explicit cloud-context Template Spec publication' {
     }
 }
 
+Describe 'Publisher parameter contract' {
+    It 'requires only Location and does not expose a resource-group creation flag' {
+        $parameters = $publisherAst.ParamBlock.Parameters
+        ($parameters.Name.VariablePath.UserPath -contains 'createResourceGroup') | Should Be $false
+        $mandatory = @($parameters | Where-Object { $_.Extent.Text -match 'Mandatory\s*=\s*\$true' })
+        $mandatory.Count | Should Be 1
+        $mandatory[0].Name.VariablePath.UserPath | Should Be 'Location'
+        $resourceGroup = $parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'ResourceGroupName' }
+        $resourceGroup.DefaultValue.SafeGetValue() | Should Be ''
+    }
+
+    It 'declares the default naming convention in the parameter' {
+        $parameter = $publisherAst.ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -eq 'NamingConvention' }
+        $defaults = $parameter.DefaultValue.SafeGetValue()
+        ($defaults.components -join ',') | Should Be 'resourceType,workload,purpose,location'
+        $defaults.delimiter | Should Be '-'
+        $defaults.workload | Should Be 'avd'
+    }
+}
+
 Describe 'Publisher process lifecycle without Azure requests' {
     BeforeAll {
         $harnessPath = Join-Path $TestDrive 'publisher-harness.ps1'
@@ -312,10 +333,19 @@ Import-Module Az.Resources -ErrorAction Stop
 $global:FixtureMode = $Mode
 $global:RestCalls = [System.Collections.Generic.List[object]]::new()
 $global:ResourceGroupCreates = 0
+$global:CreatedResourceGroup = $null
 $global:SpecReads = 0
 $root = Split-Path -Parent (Split-Path -Parent $PublisherPath)
 $abbreviations = Get-Content -Raw (Join-Path $root 'deployments\shared\data\resourceAbbreviations.json') | ConvertFrom-Json
 $global:SpecName = "$($abbreviations.templateSpecs)-avd-hostpool-va-dedup-test"
+$global:ExpectedResourceGroup = 'rg-test'
+if ($Mode -like '*Convention*') {
+    $global:ExpectedResourceGroup = "$($abbreviations.resourceGroups)-avd-operations-va"
+}
+if ($Mode -eq 'CustomConvention') {
+    $global:ExpectedResourceGroup = 'group_ops_operations_prod'
+    $global:SpecName = "$($abbreviations.templateSpecs)_ops_hostpool_prod-dedup-test"
+}
 function global:Get-AzContext {
     [CmdletBinding()]param()
     [pscustomobject]@{
@@ -325,17 +355,21 @@ function global:Get-AzContext {
 }
 function global:Get-AzResourceGroup {
     [CmdletBinding()]param()
-    if ($global:FixtureMode -notin @('Create', 'WhatIfMissing')) {
-        [pscustomobject]@{ ResourceGroupName = 'rg-test' }
+    if ($global:FixtureMode -eq 'ResourceGroupReadFailure') { throw 'Fixture resource group access denied' }
+    if ($global:FixtureMode -notin @('Create', 'WhatIfMissing', 'ConventionCreate', 'WhatIfConventionMissing', 'ResourceGroupCreateFailure')) {
+        [pscustomobject]@{ ResourceGroupName = $global:ExpectedResourceGroup }
     }
 }
 function global:New-AzResourceGroup {
     [CmdletBinding()]param($Name, $Location)
     $global:ResourceGroupCreates++
+    $global:CreatedResourceGroup = [pscustomobject]@{ Name = $Name; Location = $Location }
+    if ($global:FixtureMode -eq 'ResourceGroupCreateFailure') { throw 'Fixture resource group creation denied' }
 }
 function global:Get-AzTemplateSpec {
     [CmdletBinding()]param($ResourceGroupName, $Name, [ValidatePattern('^[-\w\._\(\)]+$')][string]$Version)
     $global:SpecReads++
+    if ($ResourceGroupName -ne $global:ExpectedResourceGroup) { throw "Unexpected resource group '$ResourceGroupName'." }
     if (-not $Name -and $global:FixtureMode -like 'Collection*') {
         $specs = [System.Collections.Generic.List[Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]]::new()
         $other = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]::new()
@@ -397,6 +431,25 @@ try {
         createCustomImage = $false
         CreateAddOns = $false
     }
+    if ($Mode -like '*Convention*') { $arguments.Remove('ResourceGroupName') }
+    if ($Mode -eq 'PartialConvention') {
+        $arguments.NamingConvention = @{ environment = 'prod' }
+    }
+    if ($Mode -eq 'WhitespaceConvention') { $arguments.ResourceGroupName = '   ' }
+    if ($Mode -in @('CustomConvention', 'ExplicitConvention')) {
+        $arguments.NamingConvention = @{
+            components = @('resourceType', 'workload', 'purpose', 'environment')
+            delimiter = '_'
+            workload = 'ops'
+            environment = 'prod'
+            resourceTypeCodes = @{ resourceGroups = 'group' }
+        }
+    }
+    if ($Mode -eq 'ExplicitConvention') {
+        $arguments.ResourceGroupName = 'rg-test'
+        $global:ExpectedResourceGroup = 'rg-test'
+        $global:SpecName = "$($abbreviations.templateSpecs)_ops_hostpool_prod-dedup-test"
+    }
     if ($Mode -like 'WhatIf*') { $arguments.WhatIf = $true }
     $output = @(& $PublisherPath @arguments)
 }
@@ -407,6 +460,8 @@ $result = @{
     Failure = $failure
     RestCalls = @($global:RestCalls.ToArray())
     ResourceGroupCreates = $global:ResourceGroupCreates
+    CreatedResourceGroup = $global:CreatedResourceGroup
+    ExpectedResourceGroup = $global:ExpectedResourceGroup
     SpecReads = $global:SpecReads
     Output = @($output | ForEach-Object { [string]$_ })
 }
@@ -424,8 +479,17 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         @{ Mode = 'EmptyVersions'; ExpectedPuts = 2; ExpectedCreates = 0 }
         @{ Mode = 'NonNumericVersion'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Create'; ExpectedPuts = 2; ExpectedCreates = 1 }
+        @{ Mode = 'ConventionExisting'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'ConventionCreate'; ExpectedPuts = 2; ExpectedCreates = 1 }
+        @{ Mode = 'WhitespaceConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'CustomConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'PartialConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'ExplicitConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'ResourceGroupReadFailure'; ExpectedPuts = 0; ExpectedCreates = 0 }
+        @{ Mode = 'ResourceGroupCreateFailure'; ExpectedPuts = 0; ExpectedCreates = 1 }
         @{ Mode = 'WhatIf'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'WhatIfMissing'; ExpectedPuts = 0; ExpectedCreates = 0 }
+        @{ Mode = 'WhatIfConventionMissing'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'VersionReadFailure'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Forbidden'; ExpectedPuts = 1; ExpectedCreates = 0 }
     ) {
@@ -438,7 +502,15 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         $result = $record[0].Substring(7) | ConvertFrom-Json
         @($result.RestCalls).Count | Should Be $ExpectedPuts
         $result.ResourceGroupCreates | Should Be $ExpectedCreates
-        if ($Mode -eq 'CollectionWrongLocation') {
+        if ($ExpectedCreates -eq 1) {
+            $result.CreatedResourceGroup.Name | Should Be $result.ExpectedResourceGroup
+            $result.CreatedResourceGroup.Location | Should Be 'usgovvirginia'
+        }
+        if ($Mode -in @('ResourceGroupReadFailure', 'ResourceGroupCreateFailure')) {
+            $result.Failure | Should Match 'Fixture resource group .* denied'
+            $result.SpecReads | Should Be 0
+        }
+        elseif ($Mode -eq 'CollectionWrongLocation') {
             $result.Failure | Should Match "is in 'westus2', not 'usgovvirginia'"
             $result.SpecReads | Should Be 1
         }
@@ -461,6 +533,7 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
             $version.properties.mainTemplate.languageVersion | Should Be '2.0'
             $result.RestCalls[1].Path | Should Match '-dedup-test/versions/'
             $result.RestCalls[1].Path | Should Match '^/subscriptions/'
+            $result.RestCalls[1].Path | Should Match ([regex]::Escape("/resourceGroups/$($result.ExpectedResourceGroup)/"))
             if ($Mode -in @('Existing', 'CollectionExisting')) {
                 $parent.tags.owner | Should Be 'preserved'
                 $result.RestCalls[1].Path | Should Match '/versions/5.0.0\?'
