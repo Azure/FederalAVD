@@ -804,12 +804,81 @@ function Remove-SessionHostUserSessions {
     }
 }
 
+function Get-RdpCertificateCustomization {
+    $parameters = Read-FunctionAppSetting SessionHostParameters
+    if ($null -eq $parameters) { return $null }
+    if ($parameters -isnot [System.Collections.IDictionary]) {
+        throw 'SessionHostParameters must be a JSON object; certificate readiness configuration cannot be established.'
+    }
+    $customizations = @($parameters['sessionHostCustomizations'])
+    $enroll = @($customizations | Where-Object { $_.name -eq 'RdpCertificate-Enroll' })
+    if ($enroll.Count -eq 0) { return $null }
+    $prepare = @($customizations | Where-Object { $_.name -eq 'RdpCertificate-Prepare' })
+    if ($enroll.Count -ne 1 -or $prepare.Count -ne 1 -or
+        $enroll[0].arguments -cne '-Mode EnrollHost' -or $prepare[0].arguments -cne '-Mode PrepareHost' -or
+        $enroll[0].blobNameOrUri -cne $prepare[0].blobNameOrUri -or
+        [array]::IndexOf($customizations, $prepare[0]) -ge [array]::IndexOf($customizations, $enroll[0])) {
+        throw 'RDP certificate customizations must contain ordered RdpCertificate-Prepare/Enroll entries, the same URI, and the documented exact arguments.'
+    }
+    $artifactUri = [string]$enroll[0].blobNameOrUri
+    if (-not $artifactUri.StartsWith('https://', [StringComparison]::Ordinal)) {
+        $artifactUri = "$($parameters['artifactsContainerUri'])/$artifactUri"
+    }
+    $uri = [Uri]$artifactUri
+    if (-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
+        throw 'RDP certificate customizations require an HTTPS artifact URI without credentials or queries.'
+    }
+    return [pscustomobject]@{ ArtifactUri = $artifactUri }
+}
+
+function Test-SessionHostRdpCertificate {
+    param($SessionHost, [string]$ARMToken, [string]$ResourceManagerUri,
+        $Customization = (Get-RdpCertificateCustomization))
+    if ($null -eq $Customization) { return $true }
+    try {
+        if (-not $ARMToken) { throw 'An ARM token is required for opted-in certificate readiness.' }
+        $vm = Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET `
+            -Uri "$ResourceManagerUri$($SessionHost.ResourceId)?api-version=2022-03-01"
+        $command = Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET `
+            -Uri "$ResourceManagerUri$($SessionHost.ResourceId)/runCommands/RdpCertificate-Enroll?api-version=2023-03-01&`$expand=instanceView"
+        $properties = $command.properties
+        if ($vm.id -ine $SessionHost.ResourceId -or
+            $command.id -ine "$($SessionHost.ResourceId)/runCommands/RdpCertificate-Enroll" -or
+            $properties.provisioningState -ne 'Succeeded' -or $properties.instanceView.executionState -ne 'Succeeded' -or
+            $null -eq $properties.instanceView.exitCode -or $properties.instanceView.exitCode -ne 0) {
+            throw 'The VM or synchronous enrollment customization has no successful execution evidence.'
+        }
+        $arguments = @($properties.parameters | Where-Object { $_.name -eq 'Arguments' })
+        $artifact = @($properties.parameters | Where-Object { $_.name -eq 'Uri' })
+        if ($arguments.Count -ne 1 -or $arguments[0].value -cne '-Mode EnrollHost' -or
+            $artifact.Count -ne 1 -or $artifact[0].value -cne $Customization.ArtifactUri) {
+            throw 'The enrollment command does not match the configured artifact and arguments.'
+        }
+        $matches = [regex]::Matches($properties.instanceView.output, '(?m)^FEDERALAVD_RDP_READY:(\{[^\r\n]+\})\r?$')
+        if ($matches.Count -ne 1) { throw 'The listener verification marker is missing or ambiguous.' }
+        $ready = $matches[0].Groups[1].Value | ConvertFrom-Json -ErrorAction Stop
+        $vmId = ([Guid]::Parse($vm.properties.vmId)).ToString('D')
+        if ($vmId -eq [Guid]::Empty.ToString() -or $ready.Version -ne 1 -or $ready.VmId -ine $vmId -or
+            $ready.VmResourceId -ine $SessionHost.ResourceId -or $ready.Thumbprint -cnotmatch '^[A-F0-9]{40}$') {
+            throw 'The listener verification marker is not bound to this VM incarnation.'
+        }
+        return $true
+    }
+    catch {
+        Write-LogEntry -Message "RDP certificate readiness blocked for $($SessionHost.SessionHostName): $($_.Exception.Message)" -Level Warning
+        return $false
+    }
+}
+
 function Test-SessionHostScalingRelease {
     param(
         $SessionHost,
         $LatestImageVersion,
         [string] $TagValidatedImage = (Read-FunctionAppSetting Tag_ValidatedImage),
-        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp)
+        [string] $TagShutdownTimestamp = (Read-FunctionAppSetting Tag_ShutdownTimestamp),
+        [string] $ARMToken,
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        [Nullable[bool]] $RdpCertificateReady
     )
 
     $hostReady = $SessionHost.Status -eq 'Available' -and $SessionHost.AllowNewSession -and
@@ -826,7 +895,9 @@ function Test-SessionHostScalingRelease {
     $token = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes($identity)
     )).ToLowerInvariant()
-    return $SessionHost.Tags[$TagValidatedImage] -eq $token
+    if ($SessionHost.Tags[$TagValidatedImage] -ne $token) { return $false }
+    if ($null -ne $RdpCertificateReady) { return [bool]$RdpCertificateReady }
+    return Test-SessionHostRdpCertificate -SessionHost $SessionHost -ARMToken $ARMToken -ResourceManagerUri $ResourceManagerUri
 }
 
 function Test-NewSessionHostsAvailable {
@@ -914,6 +985,13 @@ function Test-NewSessionHostsAvailable {
     
     Write-LogEntry -Message "Found {0} session host(s) on latest image version {1}" -StringValues $newHosts.Count, $LatestImageVersion.Version -Level Trace
 
+    $rdpCustomization = Get-RdpCertificateCustomization
+    $certificateReadiness = @{}
+    foreach ($newHost in $newHosts) {
+        $certificateReadiness[$newHost.ResourceId] = Test-SessionHostRdpCertificate -SessionHost $newHost `
+            -ARMToken $ARMToken -ResourceManagerUri $ResourceManagerUri -Customization $rdpCustomization
+    }
+
     $imageIdentity = "$($LatestImageVersion.Definition)|$($LatestImageVersion.Version)".ToLowerInvariant()
     $hashAlgorithm = [System.Security.Cryptography.SHA256]::Create()
     try {
@@ -935,7 +1013,7 @@ function Test-NewSessionHostsAvailable {
             $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
                 $_.healthCheckResult -eq 'HealthCheckFailed'
             })
-            $isHealthValidated = $newHost.Status -eq 'Available' -and
+            $isHealthValidated = $certificateReadiness[$newHost.ResourceId] -and $newHost.Status -eq 'Available' -and
                 $failedHealthChecks.Count -eq 0
 
             if ($isHealthValidated -and $newHost.Tags[$TagValidatedImage] -ne $validatedImageToken) {
@@ -984,12 +1062,12 @@ function Test-NewSessionHostsAvailable {
             $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
                 $_.healthCheckResult -eq 'HealthCheckFailed'
             })
-            $isHealthValidated = $newHost.Status -eq 'Available' -and
+            $isHealthValidated = $certificateReadiness[$newHost.ResourceId] -and $newHost.Status -eq 'Available' -and
                 $failedHealthChecks.Count -eq 0
             $isOnlineHealthy = $isHealthValidated -and $newHost.AllowNewSession
 
             if ($isHealthValidated) {
-                if (-not $ReadOnly -and (Test-SessionHostScalingRelease -SessionHost $newHost -LatestImageVersion $LatestImageVersion -TagValidatedImage $TagValidatedImage) -and
+                if (-not $ReadOnly -and (Test-SessionHostScalingRelease -SessionHost $newHost -LatestImageVersion $LatestImageVersion -TagValidatedImage $TagValidatedImage -RdpCertificateReady $certificateReadiness[$newHost.ResourceId]) -and
                     $TagScalingPlanExclusionTag -and
                     $newHost.Tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer') {
                     try {
@@ -1024,7 +1102,7 @@ function Test-NewSessionHostsAvailable {
                 $newHost.Tags.ContainsKey($TagScalingPlanExclusionTag)
             $isValidatedForImage = $TagValidatedImage -and
                 $newHost.Tags[$TagValidatedImage] -eq $validatedImageToken
-            $isScalableStandby = $newHostPowerStates[$newHost.ResourceId] -and
+            $isScalableStandby = $certificateReadiness[$newHost.ResourceId] -and $newHostPowerStates[$newHost.ResourceId] -and
                 -not $hasScalingExclusion -and
                 $isValidatedForImage
 
@@ -1088,7 +1166,7 @@ function Test-NewSessionHostsAvailable {
         $failedHealthChecks = @($newHost.SessionHostHealthCheckResults | Where-Object {
             $_.healthCheckResult -eq 'HealthCheckFailed'
         })
-        $isAvailable = $hostStatus -eq 'Available' -and
+        $isAvailable = $certificateReadiness[$newHost.ResourceId] -and $hostStatus -eq 'Available' -and
             $newHost.AllowNewSession -and
             $failedHealthChecks.Count -eq 0
         

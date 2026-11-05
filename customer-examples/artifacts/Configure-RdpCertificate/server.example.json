@@ -1,0 +1,22 @@
+{
+  "Prefix": "https://enroll.example.internal:8443/enrollment/",
+  "CaConfig": "CA01\\Example RDP Issuing CA",
+  "RootCaSha256": "<64 uppercase hex characters>",
+  "IssuingCaSha256": "<64 uppercase hex characters>",
+  "MaximumValidityDays": 397,
+  "RenewBeforeDays": 30,
+  "Hosts": [],
+  "Bootstrap": {
+    "Enabled": true,
+    "ArmEndpoint": "<authorized enclave ARM HTTPS endpoint>",
+    "ArmAudience": "<authorized enclave ARM token resource>",
+    "ManagedIdentityClientId": "<CA-only identity client GUID, or null for system identity>",
+    "VirtualMachinesResourceGroupId": "/subscriptions/<subscription-guid>/resourceGroups/hosts",
+    "HostPoolResourceId": "/subscriptions/<subscription-guid>/resourceGroups/avd/providers/Microsoft.DesktopVirtualization/hostPools/pool",
+    "DnsSuffix": "example.internal",
+    "ArtifactUri": "https://<authorized-internal-storage>/artifacts/Configure-RdpCertificate-v1.zip",
+    "PrepareScriptSha256": "<normalized SHA-256 of approved Invoke-Customization.ps1>",
+    "MaximumProofAgeMinutes": 120,
+    "RetirementGraceMinutes": 60
+  }
+}

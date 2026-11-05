@@ -99,6 +99,23 @@ These are infrastructure safeguards, **not an image acceptance test**. Validate 
 sign-in, profiles and user experience in a representative pilot pool before production promotion.
 The [Monthly Image Operations guide](monthly-image-operations.md) owns that release workflow.
 
+### Optional RDP certificate readiness
+
+The [host-initiated certificate example](../customer-examples/artifacts/Configure-RdpCertificate/README.md#unattended-session-host-customization-and-shr-deployment)
+provides ordered `RdpCertificate-Prepare` and `RdpCertificate-Enroll` customizations for standard
+host-pool/standalone session-host deployments and SHR. Copy the same pair and artifact inputs into
+SHR, and republish/redeploy its updated template (which embeds the function code). The gateway verifies provisioning through a CA-only
+read-only identity; session users' VM tokens and shared enrollment secrets are not trusted.
+
+When that exact enrollment customization is configured, readiness additionally requires its
+successful managed Run Command and listener-verification marker bound to the current immutable
+VM ID. Missing/failed evidence or ARM read errors block online and scalable-standby readiness,
+image-validation tagging, and scaling-exclusion release. Pools without this opt-in make no extra
+certificate ARM reads. This is provisioning evidence, not continuous certificate health monitoring.
+It does not stop AVD registration or prevent logons before customizations finish, and DeleteFirst
+still retires its batch before deploying new VMs. Follow the example's pilot, recovery, retirement,
+CRL-distribution and admission-control limitations before production use.
+
 ## What Operators See
 
 When a Log Analytics workspace is supplied, the deployment creates workspace-based Application

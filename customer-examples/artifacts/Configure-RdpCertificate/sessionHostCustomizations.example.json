@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "sessionHostCustomizations": {
+      "value": [
+        {
+          "name": "RdpCertificate-Prepare",
+          "blobNameOrUri": "https://<authorized-internal-storage>/artifacts/Configure-RdpCertificate-v1.zip",
+          "arguments": "-Mode PrepareHost"
+        },
+        {
+          "name": "RdpCertificate-Enroll",
+          "blobNameOrUri": "https://<authorized-internal-storage>/artifacts/Configure-RdpCertificate-v1.zip",
+          "arguments": "-Mode EnrollHost"
+        }
+      ]
+    }
+  }
+}

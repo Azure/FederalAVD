@@ -8,6 +8,25 @@ This page describes the Azure resource topology. See [Secure Endpoint Architectu
 for the control-layer, shared-responsibility, lifecycle, evidence, and AI access model implemented
 through that topology.
 
+## Host-initiated RDP certificate enrollment
+
+The optional [RDP certificate example](../customer-examples/artifacts/Configure-RdpCertificate/README.md)
+uses host-local machine keys and SYSTEM tasks for enrollment, listener binding and renewal.
+A restricted CA-side HTTPS gateway authenticates a separately bootstrapped client key and validates
+the exact per-host certificate profile before approving its own pending AD CS requests. It does not
+run commands on hosts, enable global automatic issuance, or grant multi-session VM identities access
+to enrollment passwords. The example documents privileged gateway permissions, offline dependencies,
+bootstrap and rollover ownership, scanner acceptance criteria, and required live qualification.
+It is a reference implementation, not evidence of classified-cloud service acceptance or compliance.
+For unattended replacement, ordered `RdpCertificate-Prepare`/`RdpCertificate-Enroll` customizations
+publish public SYSTEM preparation evidence and complete listener validation synchronously. The
+gateway's CA-only managed identity has read-only ARM access to verify the approved provisioning
+source, immutable VM incarnation, scope and key; guest identity tokens are not enrollment proof.
+SHR's opt-in gate checks completed current-VM listener evidence before counting replacement
+readiness or releasing scaling exclusions. Deleted/replaced incarnations are retired with a grace
+period and issuance inventory; retained rollback VMs remain authorized. This is not pre-logon
+admission control or hardware attestation. The linked example owns setup, trust and CRL latency.
+
 ## Air-gapped prerequisite packaging
 
 The [combined transfer bundle](air-gapped-clouds.md#combined-prerequisite-transfer-zip)

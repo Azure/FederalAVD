@@ -1,0 +1,15 @@
+{
+  "Name": "FederalAVD RDP Enrollment Provisioning Reader",
+  "IsCustom": true,
+  "Description": "Read VM incarnation and managed Run Command preparation evidence for RDP enrollment. No VM or Run Command writes.",
+  "Actions": [
+    "Microsoft.Compute/virtualMachines/read",
+    "Microsoft.Compute/virtualMachines/runCommands/read"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": [
+    "/subscriptions/<subscription-guid>/resourceGroups/hosts"
+  ]
+}

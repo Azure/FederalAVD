@@ -88,6 +88,7 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
 | [Configure-OneDrivePolicy](Configure-OneDrivePolicy/) | Configure OneDrive Known Folder Move and free-space thresholds | — |
 | [Configure-RemoteDesktopPolicy](Configure-RemoteDesktopPolicy/) | Configure Remote Desktop session policies | — |
+| [Configure-RdpCertificate](Configure-RdpCertificate/) | Host-initiated RDP certificate enrollment/renewal with a restricted mutual-TLS Standalone CA gateway; requires trusted bootstrap and live qualification | — |
 | [Configure-SecureNetworkProtocols](Configure-SecureNetworkProtocols/) | Disable legacy TLS/SSL and weak cipher suites | — |
 | [Configure-WindowsUpdatePolicy](Configure-WindowsUpdatePolicy/) | Configure Windows Update / WSUS policy settings | — |
 | [DoD-InstallRoot](DoD-InstallRoot/) | Install DoD Root CA certificates | `DoDInstallRoot` |

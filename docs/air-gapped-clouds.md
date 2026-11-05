@@ -35,6 +35,24 @@ target enclave can reach the authoritative AVD service endpoints and can obtain 
 Boot Loader from cloud-native or internally hosted sources. Verify the exact marketplace publisher,
 offer, and SKU in the target cloud before selecting the shorter path.
 
+## Optional host RDP certificate enrollment
+
+The [host-initiated RDP certificate example](../customer-examples/artifacts/Configure-RdpCertificate/README.md)
+requires no Marketplace product, public identity endpoint or runtime software download.
+Stage the complete scripts and an approved PowerShell 7.4+ x64 runtime through the authorized
+transfer process. Host an AD CS issuing CA, restricted mutual-TLS enrollment endpoint, DNS and
+chain/revocation distribution entirely inside the enclave. The example's dependency inventory
+and live qualification checklist are authoritative for that optional path; it is not qualified
+for Secret or Top Secret by offline tests alone. Initial client credentials require trusted
+provisioning. The unattended alternative uses the existing ordered session-host customizations:
+the host creates a SYSTEM-only key, and the gateway verifies completed provisioning proof through
+its own **read-only, CA-only managed identity** before returning a public client certificate.
+This adds link-local IMDS and enclave-local ARM dependencies (including managed Run Command
+instanceView); supply the authorized ARM endpoint/audience explicitly and qualify the API versions
+in the example. No endpoint is inferred for a restricted cloud. Configure and monitor automatic
+internal CA CRL publication/distribution for retired-host revocations. Do not grant a multi-session
+VM identity access to a shared enrollment password or provisioning-write rights.
+
 ## Configure and Connect With Azure PowerShell
 
 Before publishing Template Specs, configure Azure PowerShell for the target cloud and connect to the

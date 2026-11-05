@@ -1111,7 +1111,7 @@ if ($hostPoolReplacementPlan.TotalSessionHostsToReplace -eq 0 -and
                         Write-LogEntry -Message "Preserving scaling exclusion tag on shutdown retention VM: $vmName" -Level Trace
                         continue
                     }
-                    if (-not (Test-SessionHostScalingRelease -SessionHost $sessionHost -LatestImageVersion $latestImageVersion)) {
+                    if (-not (Test-SessionHostScalingRelease -SessionHost $sessionHost -LatestImageVersion $latestImageVersion -ARMToken $ARMToken -ResourceManagerUri $resourceManagerUri)) {
                         Write-LogEntry -Message "Preserving scaling exclusion on $($sessionHost.SessionHostName): exact-image health, drain or retention gate is not satisfied." -Level Trace
                         continue
                     }
@@ -1859,7 +1859,7 @@ if ($cycleComplete -or $sideBySideRetentionTransition -or $sideBySideDeploymentT
                     Write-LogEntry -Message "Preserving scaling exclusion tag on shutdown retention VM: $vmName" -Level Trace
                     continue
                 }
-                if (-not (Test-SessionHostScalingRelease -SessionHost $sessionHost -LatestImageVersion $latestImageVersion)) {
+                if (-not (Test-SessionHostScalingRelease -SessionHost $sessionHost -LatestImageVersion $latestImageVersion -ARMToken $ARMToken -ResourceManagerUri $resourceManagerUri)) {
                     Write-LogEntry -Message "Preserving scaling exclusion on $($sessionHost.SessionHostName): exact-image health, drain or retention gate is not satisfied." -Level Trace
                     continue
                 }

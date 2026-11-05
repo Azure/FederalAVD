@@ -1,0 +1,9 @@
+{
+  "DnsSuffix": "example.internal",
+  "EnrollmentUrl": "https://enroll.example.internal:8443/enrollment/",
+  "RootCaSha256": "<64 uppercase hex characters>",
+  "IssuingCaSha256": "<64 uppercase hex characters>",
+  "MaximumValidityDays": 397,
+  "RenewBeforeDays": 30,
+  "RdpPort": 3389
+}
