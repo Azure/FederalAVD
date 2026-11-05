@@ -1,0 +1,522 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+  "view": {
+    "kind": "Form",
+    "properties": {
+      "title": "Azure Virtual Desktop Image Validation",
+      "steps": [
+        {
+          "name": "basics",
+          "label": "Basics",
+          "elements": [
+            {
+              "name": "overview",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Deploy a Windows PowerShell timer Function App and supporting infrastructure for Image Validation. Select the deployment subscription, region, and existing Compute Gallery image definition. Resource group and resource names are configured on Naming + Tags. Verify the validation implementation and its workload permissions before enabling scheduled execution."
+              }
+            },
+            {
+              "name": "subscription",
+              "type": "Microsoft.Common.SubscriptionSelector",
+              "resourceProviders": [
+                "Microsoft.Web",
+                "Microsoft.Storage",
+                "Microsoft.ManagedIdentity",
+                "Microsoft.Compute",
+                "Microsoft.Resources"
+              ],
+              "constraints": {
+                "validations": [
+                  {
+                    "isValid": "[not(empty(steps('basics').subscription.subscriptionId))]",
+                    "message": "Select a deployment subscription."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "location",
+              "type": "Microsoft.Common.LocationSelector",
+              "label": "Function App Region",
+              "toolTip": "Region for the managed resource group and Function infrastructure. Verify Windows Dedicated plan and PowerShell runtime availability in this cloud and region.",
+              "resourceTypes": [
+                "Microsoft.Web/serverFarms",
+                "Microsoft.Web/sites",
+                "Microsoft.Storage/storageAccounts"
+              ],
+              "scope": {
+                "subscriptionId": "[steps('basics').subscription.subscriptionId]"
+              },
+              "visible": "[not(empty(steps('basics').subscription.subscriptionId))]"
+            },
+            {
+              "name": "imageDefinition",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Compute Gallery Image Definition",
+              "toolTip": "Select an existing image definition, not an individual image version. Selection does not grant the Function identity access to the gallery.",
+              "resourceType": "Microsoft.Compute/galleries/images",
+              "constraints": {
+                "required": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "functionApp",
+          "label": "Function App Settings",
+          "elements": [
+            {
+              "name": "hostingInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "The deployment creates a Windows Dedicated PremiumV3_P0v3 plan unless you select an existing plan. An existing plan must be Windows Dedicated, in the selected region, and support VNet integration and Always On. The timer code is packaged from the repository scripts; this form does not upload or replace validation code."
+              }
+            },
+            {
+              "name": "hostingPlan",
+              "type": "Microsoft.Common.DropDown",
+              "label": "App Service Plan",
+              "defaultValue": "Create new",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Create new",
+                    "value": "new"
+                  },
+                  {
+                    "label": "Use existing",
+                    "value": "existing"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "existingPlan",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Existing Windows Dedicated Plan",
+              "resourceType": "Microsoft.Web/serverFarms",
+              "scope": {
+                "subscriptionId": "[steps('basics').subscription.subscriptionId]",
+                "location": "[steps('basics').location.name]"
+              },
+              "visible": "[equals(steps('functionApp').hostingPlan, 'existing')]",
+              "constraints": {
+                "required": "[equals(steps('functionApp').hostingPlan, 'existing')]"
+              }
+            },
+            {
+              "name": "schedule",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Validation Timer Schedule",
+              "toolTip": "Enter six NCRONTAB fields: second minute hour day month day-of-week, or an app-setting reference such as %ImageValidationSchedule%. Timer time zone is UTC unless configured through supported Function App settings. Verify ranges and supported syntax before deployment.",
+              "placeholder": "0 0 2 * * *",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "regex": "^(?:\\S+\\s+){5}\\S+$|^%[^%\\s]+%$",
+                    "message": "Enter six whitespace-separated NCRONTAB fields or an app-setting reference enclosed in percent signs."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "settingsInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Additional app settings are optional. Use unique setting names and managed identity or Key Vault references; do not enter plaintext secrets. If the schedule references an app setting, provide that setting below. Do not override platform runtime or host-storage settings."
+              }
+            },
+            {
+              "name": "appSettings",
+              "type": "Microsoft.Common.EditableGrid",
+              "label": "Additional Function App Settings",
+              "ariaLabel": "Enter additional Function App setting names and values",
+              "constraints": {
+                "width": "Full",
+                "rows": {
+                  "count": {
+                    "min": 0,
+                    "max": 100
+                  }
+                },
+                "columns": [
+                  {
+                    "id": "name",
+                    "header": "Name",
+                    "width": "1fr",
+                    "element": {
+                      "type": "Microsoft.Common.TextBox",
+                      "placeholder": "ImageValidationSchedule",
+                      "constraints": {
+                        "required": true,
+                        "validations": [
+                          {
+                            "regex": "^[a-zA-Z0-9._]+$",
+                            "message": "Use letters, digits, periods, and underscores."
+                          },
+                          {
+                            "isValid": "[equals(length(filter(steps('functionApp').appSettings, (setting) => equals(toLower(setting.name), toLower(last(take(steps('functionApp').appSettings, $rowIndex)).name)))), 1)]",
+                            "message": "App setting names must be unique."
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "id": "value",
+                    "header": "Value",
+                    "width": "2fr",
+                    "element": {
+                      "type": "Microsoft.Common.TextBox",
+                      "placeholder": "Non-secret value or Key Vault reference",
+                      "constraints": {
+                        "required": true
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "networking",
+          "label": "Networking",
+          "elements": [
+            {
+              "name": "privateEndpoint",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Network Access",
+              "defaultValue": "Private endpoints (recommended)",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Private endpoints (recommended)",
+                    "value": "private"
+                  },
+                  {
+                    "label": "Public app and storage access",
+                    "value": "public"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "publicWarning",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[equals(steps('networking').privateEndpoint, 'public')]",
+              "options": {
+                "text": "Public mode explicitly enables public Function App and runtime storage access and does not configure private endpoints or VNet integration through this form. Use only when approved by your network and security owners."
+              }
+            },
+            {
+              "name": "privateNetwork",
+              "type": "Microsoft.Common.Section",
+              "label": "Existing Private Connectivity",
+              "visible": "[equals(steps('networking').privateEndpoint, 'private')]",
+              "elements": [
+                {
+                  "name": "prerequisites",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "Networking is not created by this add-on. Supply a same-region integration subnet delegated to Microsoft.Web/serverFarms and a separate private-endpoint subnet. Existing blob and Function App private DNS zones must match the target cloud, be linked to the integration VNet, and resolve app/SCM records. Verify routing, firewall access, and available subnet addresses."
+                  }
+                },
+                {
+                  "name": "integrationSubnetId",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Function App Integration Subnet Resource ID",
+                  "constraints": {
+                    "required": "[equals(steps('networking').privateEndpoint, 'private')]",
+                    "validations": [
+                      {
+                        "regex": "^/subscriptions/[^/\\s]+/resourceGroups/[^/\\s]+/providers/Microsoft\\.Network/virtualNetworks/[^/\\s]+/subnets/[^/\\s]+$",
+                        "message": "Enter a complete virtual network subnet resource ID."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "endpointSubnetId",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Private Endpoint Subnet Resource ID",
+                  "constraints": {
+                    "required": "[equals(steps('networking').privateEndpoint, 'private')]",
+                    "validations": [
+                      {
+                        "regex": "^/subscriptions/[^/\\s]+/resourceGroups/[^/\\s]+/providers/Microsoft\\.Network/virtualNetworks/[^/\\s]+/subnets/[^/\\s]+$",
+                        "message": "Enter a complete virtual network subnet resource ID."
+                      },
+                      {
+                        "isValid": "[not(equals(toLower(steps('networking').privateNetwork.integrationSubnetId), toLower(steps('networking').privateNetwork.endpointSubnetId)))]",
+                        "message": "Use separate integration and private-endpoint subnets."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "blobDnsZone",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Blob Private DNS Zone",
+                  "toolTip": "Select the target cloud's blob private DNS zone, linked to the integration VNet.",
+                  "resourceType": "Microsoft.Network/privateDnsZones",
+                  "constraints": {
+                    "required": "[equals(steps('networking').privateEndpoint, 'private')]"
+                  }
+                },
+                {
+                  "name": "appDnsZone",
+                  "type": "Microsoft.Solutions.ResourceSelector",
+                  "label": "Function App Private DNS Zone",
+                  "toolTip": "Select the target cloud's App Service private DNS zone, linked to the integration VNet.",
+                  "resourceType": "Microsoft.Network/privateDnsZones",
+                  "constraints": {
+                    "required": "[equals(steps('networking').privateEndpoint, 'private')]"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "monitoring",
+          "label": "Monitoring",
+          "elements": [
+            {
+              "name": "enableMonitoring",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Application Insights and Function Logs",
+              "defaultValue": "Disabled",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  {
+                    "label": "Disabled",
+                    "value": "disabled"
+                  },
+                  {
+                    "label": "Use an existing Log Analytics workspace",
+                    "value": "enabled"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "workspace",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Log Analytics Workspace",
+              "resourceType": "Microsoft.OperationalInsights/workspaces",
+              "visible": "[equals(steps('monitoring').enableMonitoring, 'enabled')]",
+              "constraints": {
+                "required": "[equals(steps('monitoring').enableMonitoring, 'enabled')]"
+              }
+            },
+            {
+              "name": "privateMonitoring",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Monitoring Connectivity",
+              "defaultValue": "Public ingestion and query endpoints",
+              "visible": "[equals(steps('monitoring').enableMonitoring, 'enabled')]",
+              "constraints": {
+                "required": "[equals(steps('monitoring').enableMonitoring, 'enabled')]",
+                "allowedValues": [
+                  {
+                    "label": "Public ingestion and query endpoints",
+                    "value": "public"
+                  },
+                  {
+                    "label": "Use an existing Azure Monitor Private Link Scope",
+                    "value": "private"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "monitoringInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[equals(steps('monitoring').enableMonitoring, 'enabled')]",
+              "options": {
+                "text": "Private app/storage access does not automatically make monitoring private. Without an Azure Monitor Private Link Scope, Insights uses public ingestion and query endpoints. For private monitoring, select an existing configured scope and verify its workspace association, endpoints, DNS, and routing."
+              }
+            },
+            {
+              "name": "privateLinkScope",
+              "type": "Microsoft.Solutions.ResourceSelector",
+              "label": "Azure Monitor Private Link Scope",
+              "resourceType": "Microsoft.Insights/privateLinkScopes",
+              "visible": "[and(equals(steps('monitoring').enableMonitoring, 'enabled'), equals(steps('monitoring').privateMonitoring, 'private'))]",
+              "constraints": {
+                "required": "[and(equals(steps('monitoring').enableMonitoring, 'enabled'), equals(steps('monitoring').privateMonitoring, 'private'))]"
+              }
+            }
+          ]
+        },
+        {
+          "name": "namingAndTags",
+          "label": "Naming + Tags",
+          "elements": [
+            {
+              "name": "namingInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Names use the centralized FederalAVD naming defaults and the identifier below. Leave overrides empty to generate names. Explicit overrides bypass generation; ensure globally unique app and storage names are available. The deployment manages the named resource group. Changing naming inputs can create new resources, not migrate an existing instance. For custom namingConvention objects, use a parameter file."
+              }
+            },
+            {
+              "name": "identifier",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Add-on Identifier",
+              "defaultValue": "iv",
+              "toolTip": "Use a short, distinct identifier for each independent instance. Generated storage names must fit the 24-character service limit.",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "regex": "^[a-zA-Z0-9][a-zA-Z0-9-]*$",
+                    "message": "Start with a letter or digit and use only letters, digits, and hyphens."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "overrides",
+              "type": "Microsoft.Common.Section",
+              "label": "Optional Complete Name Overrides",
+              "elements": [
+                {
+                  "name": "resourceGroup",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Resource Group Name",
+                  "defaultValue": "",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9_()\\-.]{1,90}$",
+                        "message": "Use 1-90 letters, digits, underscores, parentheses, hyphens, or periods."
+                      },
+                      {
+                        "isValid": "[not(endsWith(steps('namingAndTags').overrides.resourceGroup, '.'))]",
+                        "message": "Resource group names cannot end with a period."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "identity",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "User-Assigned Managed Identity Name",
+                  "defaultValue": "",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9][a-zA-Z0-9_-]{2,127}$",
+                        "message": "Use 3-128 letters, digits, hyphens, or underscores; start with a letter or digit."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "plan",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "New App Service Plan Name",
+                  "defaultValue": "",
+                  "visible": "[equals(steps('functionApp').hostingPlan, 'new')]",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9-]{1,60}$",
+                        "message": "Use 1-60 letters, digits, or hyphens."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "functionApp",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Function App Name",
+                  "defaultValue": "",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,58}[a-zA-Z0-9])?$",
+                        "message": "Use 2-60 letters, digits, or hyphens; start and end with a letter or digit."
+                      },
+                      {
+                        "isValid": "[or(empty(steps('namingAndTags').overrides.functionApp), greaterOrEquals(length(steps('namingAndTags').overrides.functionApp), 2))]",
+                        "message": "Function App names must contain at least two characters."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "storage",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Runtime Storage Account Name",
+                  "defaultValue": "",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^[a-z0-9]{3,24}$",
+                        "message": "Use 3-24 lowercase letters or digits."
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "tagsInfo",
+              "type": "Microsoft.Common.TextBlock",
+              "options": {
+                "text": "Enter tags for the resource group below. This same flat tag set is applied to all add-on resource types that accept tags; per-resource-type tag sets are not supported by this deployment."
+              }
+            },
+            {
+              "name": "tags",
+              "type": "Microsoft.Common.TagsByResource",
+              "resources": [
+                "Microsoft.Resources/resourceGroups"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "outputs": {
+      "kind": "Subscription",
+      "subscriptionId": "[steps('basics').subscription.subscriptionId]",
+      "location": "[steps('basics').location.name]",
+      "parameters": {
+        "appServicePlanNameOverride": "[if(equals(steps('functionApp').hostingPlan, 'new'), steps('namingAndTags').overrides.plan, '')]",
+        "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('networking').privateEndpoint, 'private'), steps('networking').privateNetwork.blobDnsZone.id, '')]",
+        "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('networking').privateEndpoint, 'private'), steps('networking').privateNetwork.appDnsZone.id, '')]",
+        "existingAppServicePlanResourceId": "[if(equals(steps('functionApp').hostingPlan, 'existing'), steps('functionApp').existingPlan.id, '')]",
+        "functionAppAppSettings": "[steps('functionApp').appSettings]",
+        "functionAppDelegatedSubnetResourceId": "[if(equals(steps('networking').privateEndpoint, 'private'), steps('networking').privateNetwork.integrationSubnetId, '')]",
+        "functionAppNameOverride": "[steps('namingAndTags').overrides.functionApp]",
+        "identifier": "[steps('namingAndTags').identifier]",
+        "imageDefinitionResourceId": "[steps('basics').imageDefinition.id]",
+        "location": "[steps('basics').location.name]",
+        "logAnalyticsWorkspaceResourceId": "[if(equals(steps('monitoring').enableMonitoring, 'enabled'), steps('monitoring').workspace.id, '')]",
+        "namingConvention": "[parse('{}')]",
+        "privateEndpoint": "[equals(steps('networking').privateEndpoint, 'private')]",
+        "privateEndpointSubnetResourceId": "[if(equals(steps('networking').privateEndpoint, 'private'), steps('networking').privateNetwork.endpointSubnetId, '')]",
+        "privateLinkScopeResourceId": "[if(and(equals(steps('monitoring').enableMonitoring, 'enabled'), equals(steps('monitoring').privateMonitoring, 'private')), steps('monitoring').privateLinkScope.id, '')]",
+        "resourceGroupNameOverride": "[steps('namingAndTags').overrides.resourceGroup]",
+        "schedule": "[steps('functionApp').schedule]",
+        "storageAccountNameOverride": "[steps('namingAndTags').overrides.storage]",
+        "tags": "[coalesce(steps('namingAndTags').tags['Microsoft.Resources/resourceGroups'], parse('{}'))]",
+        "userAssignedIdentityNameOverride": "[steps('namingAndTags').overrides.identity]"
+      }
+    }
+  }
+}
