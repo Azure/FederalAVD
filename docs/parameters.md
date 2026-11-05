@@ -4,6 +4,11 @@
 
 Parameter documentation lives alongside each deployment template. Find the section for your solution below.
 
+The [Image Validation parameter reference](../deployments/add-ons/imageValidation/README.md#parameters)
+covers generated validation resource names, existing image-version and credentials
+inputs, VM network/size settings, and typed Run Commands. Its names are resolved by
+the shared naming framework, not by caller-supplied app-setting strings.
+
 ---
 
 ## Core Deployments

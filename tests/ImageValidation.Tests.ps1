@@ -24,6 +24,14 @@ Describe 'Image validation infrastructure' {
         $template.variables.names | Should Match '__bicep\.functionAppNames'
         $template.variables.names | Should Match "'userAssignedIdentities'"
         $template.variables.names | Should Match "'appServicePlans'"
+        foreach ($type in @('osdisks', 'networkInterfaces', 'templateSpecs', 'keyVaults')) {
+            $template.variables.names | Should Match "__bicep\.resourceNameForType\(parameters\('namingConvention'\), '$type', parameters\('identifier'\), variables\('namingContext'\)\)"
+        }
+        $template.variables.validationVirtualMachineName |
+            Should Match "__bicep\.resourceNameForType\(parameters\('namingConvention'\), 'virtualMachines', parameters\('identifier'\), variables\('namingContext'\)\)"
+        $template.variables.names | Should Match "greater\(length\(variables\('validationVirtualMachineName'\)\), variables\('namingPolicy'\)\.limits\.deploymentVm\)"
+        $template.variables.namingPolicy.limits.deploymentVm | Should Be 15
+        $template.resources.templateSpec.properties.parameters.templateSpecName.value | Should Be "[variables('names').templateSpecName]"
         $template.resources.rg.name | Should Be "[variables('names').resourceGroup]"
         $template.resources.userAssignedIdentity.properties.parameters.name.value | Should Be "[variables('names').userAssignedIdentity]"
         foreach ($name in @('functionAppName', 'storageAccountName', 'applicationInsightsName', 'privateEndpointNameConv', 'privateEndpointNICNameConv')) {
@@ -33,7 +41,7 @@ Describe 'Image validation infrastructure' {
     }
 
     It 'preserves explicit name overrides in the shared naming call' {
-        foreach ($name in @('resourceGroupNameOverride', 'userAssignedIdentityNameOverride', 'appServicePlanNameOverride', 'functionAppNameOverride', 'storageAccountNameOverride')) {
+        foreach ($name in @('resourceGroupNameOverride', 'userAssignedIdentityNameOverride', 'appServicePlanNameOverride', 'functionAppNameOverride', 'storageAccountNameOverride', 'encryptionKeyVaultNameOverride')) {
             ($template.variables | ConvertTo-Json -Depth 10) | Should Match "parameters\('$name'\)"
         }
     }
@@ -61,7 +69,7 @@ Describe 'Image validation infrastructure' {
     It 'requires private connectivity by default with an explicit public opt-out' {
         $template.parameters.privateEndpoint.defaultValue | Should Be $true
         $app.paasPublicNetworkAccess | Should Be "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]"
-        foreach ($variable in @('integrationSubnetId', 'endpointSubnetId', 'blobDnsZoneId', 'appDnsZoneId')) {
+        foreach ($variable in @('integrationSubnetId', 'endpointSubnetId', 'blobDnsZoneId', 'appDnsZoneId', 'vaultDnsZoneId')) {
             $template.variables.$variable | Should Match "parameters\('privateEndpoint'\)"
             $template.variables.$variable | Should Match "fail\('Private mode requires"
         }
@@ -71,24 +79,86 @@ Describe 'Image validation infrastructure' {
         $app.azureFunctionAppPrivateDnsZoneResourceId.value | Should Be "[variables('appDnsZoneId')]"
     }
 
-    It 'requires caller-supplied code and schedule instead of shipping successful placeholder validation' {
-        ($template.parameters.files.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
+    It 'embeds the packaged timer code and requires an explicit schedule' {
         ($template.parameters.schedule.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
-        $template.parameters.files.properties.'run.ps1'.type | Should Be 'string'
-        $template.parameters.files.properties.'run.ps1'.nullable | Should Not Be $true
-        $template.variables.validationFiles | Should Match "fail\('Supply approved image-validation code"
-        $timer.files.value | Should Be "[variables('validationFiles')]"
+        $runContent = $timer.files.value.'run.ps1'
+        if ($runContent -match "^\[variables\('([^']+)'\)\]$") {
+            $runContent = $template.variables.($Matches[1])
+        }
+        $runContent | Should Be (Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1') -Raw)
+        ($timer.files.value.PSObject.Properties.Name -contains 'requirements.psd1') | Should Be $true
+        ($timer.files.value.PSObject.Properties.Name -contains '../profile.ps1') | Should Be $true
         $timer.schedule.value | Should Be "[parameters('schedule')]"
         $timer.functionName.value | Should Be 'ImageValidation'
         $app.enableQueueStorage.value | Should Be $false
         $app.enableTableStorage.value | Should Be $false
     }
 
-    It 'uses platform encryption and only enables monitoring with an existing workspace' {
-        $app.keyManagementStorageAccounts.value | Should Be 'PlatformManaged'
+    It 'wires generated VM names and required workload inputs into app settings' {
+        foreach ($name in @('imageVersionResourceId', 'keyVaultResourceId', 'privateIPAddress', 'subnetResourceId', 'virtualMachineSize')) {
+            $template.parameters.$name.type | Should Be 'string'
+            ($template.parameters.$name.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
+            $app.functionAppAppSettings.value | Should Match "parameters\('$name'\)"
+        }
+        foreach ($name in @('diskName', 'networkInterfaceName', 'virtualMachineName')) {
+            $app.functionAppAppSettings.value | Should Match "variables\('names'\)\.$name"
+        }
+        $app.functionAppAppSettings.value | Should Match "string\(parameters\('runCommandSettings'\)\)"
+        $commandType = ($template.parameters.runCommandSettings.items.'$ref' -split '/')[-1]
+        $template.definitions.$commandType.properties.parameters.type | Should Be 'array'
+        $template.variables.additionalAppSettings | Should Match "fail\('Additional Function App settings cannot override"
+        $template.variables.additionalAppSettings | Should Match "toLower"
+    }
+
+    It 'uses HSM customer-managed encryption and only enables monitoring with an existing workspace' {
+        $app.keyManagementStorageAccounts.value | Should Be 'CustomerManagedHSM'
         $app.enableApplicationInsights.value | Should Be "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
         $app.logAnalyticsWorkspaceResourceId.value | Should Be "[parameters('logAnalyticsWorkspaceResourceId')]"
         $app.privateLinkScopeResourceId.value | Should Be "[parameters('privateLinkScopeResourceId')]"
+    }
+
+    It 'creates the encryption vault and storage-named key before Function infrastructure' {
+        $vaults = $template.resources.encryptionKeyVault
+        $cmk = $template.resources.storageCmk
+        ($vaults.dependsOn -contains 'rg') | Should Be $true
+        $vaults.properties.parameters.deploySecretsKeyVault.value | Should Be $false
+        $vaults.properties.parameters.deployEncryptionKeyVault.value | Should Be $true
+        $vaults.properties.parameters.encryptionKeyVaultName.value | Should Be "[variables('names').encryptionKeyVaultName]"
+        ($cmk.dependsOn -contains 'encryptionKeyVault') | Should Be $true
+        $cmk.properties.parameters.keyVaultResourceId.value |
+            Should Be "[reference('encryptionKeyVault').outputs.encryptionKeyVaultResourceId.value]"
+        $cmk.properties.parameters.keyNames.value.Count | Should Be 1
+        $cmk.properties.parameters.keyNames.value[0] | Should Be $app.storageAccountName.value
+        $app.encryptionKeyName.value | Should Be $app.storageAccountName.value
+        $app.encryptionKeyVaultResourceId.value | Should Be $cmk.properties.parameters.keyVaultResourceId.value
+        $cmk.properties.parameters.identityName.value | Should Be "[variables('names').storageEncryptionIdentityName]"
+        $app.storageEncryptionIdentityName.value | Should Be $cmk.properties.parameters.identityName.value
+        ($app.storageEncryptionIdentityName.value -ne $app.functionAppUserAssignedIdentityResourceId.value) | Should Be $true
+        ($template.resources.functionApp.dependsOn -contains 'storageCmk') | Should Be $true
+        ($template.resources.functionApp.dependsOn -contains 'encryptionKeyVault') | Should Be $true
+        $app.functionAppAppSettings.value | Should Match "parameters\('keyVaultResourceId'\)"
+    }
+
+    It 'reuses protected Premium vault and key-scoped CMK provisioning with private networking and monitoring' {
+        $vaults = $template.resources.encryptionKeyVault
+        $vault = $vaults.properties.template.resources.encryptionKeyVault.properties.parameters
+        $vault.sku.value | Should Be 'premium'
+        $vault.enablePurgeProtection.value | Should Be $true
+        $vault.enableSoftDelete.value | Should Be $true
+        $vaults.properties.parameters.azureKeyVaultPrivateDnsZoneResourceId.value | Should Be "[variables('vaultDnsZoneId')]"
+        $vaults.properties.parameters.privateEndpointSubnetResourceId.value | Should Be "[variables('endpointSubnetId')]"
+        $vaults.properties.parameters.privateEndpoint.value | Should Be "[parameters('privateEndpoint')]"
+        $vaults.properties.parameters.paasPublicNetworkAccess | Should Be $app.paasPublicNetworkAccess
+        $vaults.properties.parameters.logAnalyticsWorkspaceResourceId.value | Should Be "[parameters('logAnalyticsWorkspaceResourceId')]"
+        $vaults.properties.template.variables.encryptionKvNetworkAcls.bypass | Should Be 'AzureServices'
+        $cmk = $template.resources.storageCmk.properties.template
+        $template.resources.storageCmk.properties.parameters.keyManagementType.value | Should Be 'CustomerManagedHSM'
+        $cmk.resources.paasKeys.properties.parameters.keySize.value | Should Be 4096
+        $cmk.resources.paasKeys.properties.parameters.attributesExportable.value | Should Be $false
+        $cmk.resources.paasKeys.properties.parameters.rotationPolicy.value | Should Be "[variables('rotationPolicy')]"
+        $cmk.variables.roleKeyVaultCryptoEncryptionUser | Should Be 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
+        ($cmk.resources.paasKeyRoleAssignments.dependsOn -contains 'paasIdentity') | Should Be $true
+        ($cmk.resources.paasKeyRoleAssignments.dependsOn -contains "[format('paasKeys[{0}]', copyIndex())]") | Should Be $true
     }
 
     It 'fits conservative ARM and no-form Template Spec publishing budgets including the SDK envelope' {

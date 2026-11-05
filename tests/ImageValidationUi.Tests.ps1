@@ -20,8 +20,8 @@ Describe 'Image validation Portal form' {
         }
     }
 
-    It 'provides the requested steps plus networking and monitoring' {
-        ($form.view.properties.steps.name -join ',') | Should Be 'basics,functionApp,networking,monitoring,namingAndTags'
+    It 'provides the requested steps plus validation VM, networking and monitoring settings' {
+        ($form.view.properties.steps.name -join ',') | Should Be 'basics,validationVm,functionApp,networking,monitoring,namingAndTags'
         $steps.functionApp.label | Should Be 'Function App Settings'
         $steps.namingAndTags.label | Should Be 'Naming + Tags'
     }
@@ -56,20 +56,40 @@ Describe 'Image validation Portal form' {
         ($steps.monitoring.elements | Where-Object name -eq 'enableMonitoring').defaultValue | Should Be 'Disabled'
     }
 
+    It 'maps the required validation VM inputs and defaults Run Commands to a typed empty array' {
+        foreach ($name in @('imageVersionResourceId', 'keyVault', 'subnetResourceId', 'privateIPAddress', 'virtualMachineSize')) {
+            ($steps.validationVm.elements | Where-Object name -eq $name).constraints.required | Should Be $true
+        }
+        $form.view.outputs.parameters.imageVersionResourceId | Should Be "[steps('validationVm').imageVersionResourceId]"
+        $form.view.outputs.parameters.keyVaultResourceId | Should Be "[steps('validationVm').keyVault.id]"
+        $form.view.outputs.parameters.privateIPAddress | Should Be "[steps('validationVm').privateIPAddress]"
+        $form.view.outputs.parameters.subnetResourceId | Should Be "[steps('validationVm').subnetResourceId]"
+        $form.view.outputs.parameters.virtualMachineSize | Should Be "[steps('validationVm').virtualMachineSize]"
+        $form.view.outputs.parameters.imageLicenseType | Should Be "[steps('validationVm').licenseType]"
+        $form.view.outputs.parameters.runCommandSettings | Should Be "[parse('[]')]"
+        $template.parameters.runCommandSettings.type | Should Be 'array'
+        @($template.parameters.runCommandSettings.defaultValue).Count | Should Be 0
+        $regex = ($steps.validationVm.elements | Where-Object name -eq 'privateIPAddress').constraints.validations[0].regex
+        ('10.0.0.4' -match $regex) | Should Be $true
+        ('10.0.0.256' -match $regex) | Should Be $false
+    }
+
     It 'requires private inputs only in private mode and clears disabled selections' {
         $privateSection = $steps.networking.elements | Where-Object name -eq 'privateNetwork'
         $privateSection.visible | Should Be "[equals(steps('networking').privateEndpoint, 'private')]"
-        foreach ($name in @('integrationSubnetId', 'endpointSubnetId', 'blobDnsZone', 'appDnsZone')) {
+        foreach ($name in @('integrationSubnetId', 'endpointSubnetId', 'blobDnsZone', 'appDnsZone', 'vaultDnsZone')) {
             ($privateSection.elements | Where-Object name -eq $name).constraints.required |
                 Should Be $privateSection.visible
         }
-        foreach ($name in @('functionAppDelegatedSubnetResourceId', 'privateEndpointSubnetResourceId', 'azureBlobPrivateDnsZoneResourceId', 'azureFunctionAppPrivateDnsZoneResourceId')) {
+        foreach ($name in @('functionAppDelegatedSubnetResourceId', 'privateEndpointSubnetResourceId', 'azureBlobPrivateDnsZoneResourceId', 'azureFunctionAppPrivateDnsZoneResourceId', 'azureKeyVaultPrivateDnsZoneResourceId')) {
             $form.view.outputs.parameters.$name | Should Match "^\[if\(equals\(steps\('networking'\)\.privateEndpoint, 'private'\), .+, ''\)\]$"
         }
         $form.view.outputs.parameters.existingAppServicePlanResourceId |
             Should Be "[if(equals(steps('functionApp').hostingPlan, 'existing'), steps('functionApp').existingPlan.id, '')]"
         $form.view.outputs.parameters.privateLinkScopeResourceId |
             Should Be "[if(and(equals(steps('monitoring').enableMonitoring, 'enabled'), equals(steps('monitoring').privateMonitoring, 'private')), steps('monitoring').privateLinkScope.id, '')]"
+        $form.view.outputs.parameters.encryptionKeyVaultNameOverride |
+            Should Be "[steps('namingAndTags').overrides.encryptionKeyVault]"
     }
 
     It 'outputs typed app-setting rows and a flat tag object' {
