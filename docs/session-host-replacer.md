@@ -112,12 +112,13 @@ Read monitoring as three separate signals:
 2. **Cycle progress:** which image and batch are authorized, and what is progressing or waiting?
 3. **Inventory freshness:** when was the host fleet actually observed?
 
-A successful timer invocation does not mean a rollout completed. A minute-timer heartbeat does
-not refresh host inventory. The workbook shows last-reported telemetry, not live Table state;
+A successful timer invocation does not mean a rollout completed or refresh host inventory.
+Successful idle reconciliation omits routine SHR application logs; native Functions invocation
+telemetry supplies timer health, including idle ticks. The workbook shows last-reported telemetry, not live Table state;
 ingestion delay, sampling, filtering and the selected time range can hide evidence.
 
 Use the **Cycle ID** to follow an operation across both timers and the native **Invocation ID**
-to investigate a particular failure. Information-level logs contain timer outcomes, key actions
+to investigate a particular failure. Information-level logs contain initiation/non-idle timer outcomes, key actions
 and final active-pass cycle snapshots. Internal checkpoints and repeated diagnostics use Trace,
 which needs temporary PowerShell and host-log configuration to be collected.
 

@@ -176,7 +176,7 @@ Describe 'SHR correlated cycle telemetry' {
         $global:shrTelemetryMessages[-1] | Should Be '[pool] Outside failed invocation'
     }
 
-    It 'keeps idle reconciliation uncorrelated with an old <Status> operation' -TestCases @(
+    It 'emits no application logs for idle reconciliation with an old <Status> operation' -TestCases @(
         @{ Status = 'Completed' }
         @{ Status = 'Superseded' }
         @{ Status = 'Absent' }
@@ -189,9 +189,31 @@ Describe 'SHR correlated cycle telemetry' {
         }
         Mock Save-ShrOperation -ModuleName SessionHostReplacer.Continuation {}
         Invoke-ShrTimer -Trigger Reconciliation -CyclePath 'must-not-run'
-        $global:shrTelemetryMessages.Count | Should Be 2
-        ($global:shrTelemetryMessages -join "`n") | Should Not Match '\[Cycle:|SHR_EVENT'
+        $global:shrTelemetryMessages.Count | Should Be 0
         Assert-MockCalled Get-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 1 -Exactly -Scope It
+        Assert-MockCalled Save-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
+        Write-LogEntry -Message 'Outside idle invocation'
+        $global:shrTelemetryMessages[-1] | Should Be '[pool] Outside idle invocation'
+    }
+
+    It 'reports state-lookup failures even before reconciliation activity can be determined' {
+        Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation { throw 'State lookup failed' }
+        { Invoke-ShrTimer -Trigger Reconciliation -CyclePath 'must-not-run' } | Should Throw 'State lookup failed'
+        $global:shrTelemetryMessages.Count | Should Be 1
+        $global:shrTelemetryMessages[0] | Should Match 'SHR_TIMER.*"Event":"Failed"'
+        $global:shrTelemetryMessages[0] | Should Not Match '"Event":"Succeeded"'
+        Write-LogEntry -Message 'Outside failed lookup'
+        $global:shrTelemetryMessages[-1] | Should Be '[pool] Outside failed lookup'
+    }
+
+    It 'keeps active lease waits visible without writing state or running the lifecycle engine' {
+        Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation { @{ State = $global:shrTelemetryState } }
+        Mock Save-ShrOperation -ModuleName SessionHostReplacer.Continuation {}
+        Invoke-ShrTimer -Trigger Reconciliation -CyclePath 'must-not-run'
+        $global:shrTelemetryMessages.Count | Should Be 3
+        ($global:shrTelemetryMessages -join "`n") | Should Match '"Event":"Started"'
+        ($global:shrTelemetryMessages -join "`n") | Should Match '"Event":"WaitingForLease"'
+        ($global:shrTelemetryMessages -join "`n") | Should Match '"Event":"Succeeded"'
         Assert-MockCalled Save-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
     }
 
@@ -223,6 +245,7 @@ Describe 'SHR correlated cycle telemetry' {
         $events.Count | Should Be 1
         $events[0] | Should Match '"LeaseHeld":false'
         ($global:shrTelemetryMessages -join "`n") | Should Match 'SHR_TIMER.*"Event":"Failed"'
+        ($global:shrTelemetryMessages -join "`n") | Should Not Match 'SHR_TIMER.*"Event":"Succeeded"'
         Assert-MockCalled Write-Error -ModuleName SessionHostReplacer.Core -Times 1 -Exactly -Scope It
         Assert-MockCalled Save-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 2 -Exactly -Scope It
     }
@@ -322,11 +345,21 @@ Describe 'SHR workbook cycle tracing contract' {
     It 'separates timer roles without applying fixed thresholds to a sparse initiation schedule' {
         $health = ($operations.content.items | Where-Object name -eq 'schedule-table').content.query
         $health | Should Match "dynamic\(\['Initiation', 'Reconciliation'\]\)"
-        $health | Should Match 'No start observed in selected range'
+        $health | Should Match 'No completed invocation observed in selected range'
+        $health | Should Match 'let invocations = requests'
+        $health | Should Match 'CompletedUtc = timestamp \+ \(duration \* 1ms\)'
         $health | Should Not Match '35|45|On Schedule|Due Soon'
         $frequency = ($operations.content.items | Where-Object name -eq 'frequency-chart').content.query
-        $frequency | Should Match "Data.Event\) == 'Started'"
+        $frequency | Should Match '\r\nrequests\r\n'
         $frequency | Should Match 'bin\(timestamp, 1h\), Trigger'
+        foreach ($query in @($health, $frequency)) {
+            $query | Should Match 'session-host-replacer-worker'
+            $query | Should Match 'isnotempty\(InvocationKey\)'
+            $query | Should Match 'by Source, FunctionApp, Trigger, InvocationKey'
+            $query | Should Match 'lookup kind=leftouter poolNames on Source, FunctionApp'
+            $query | Should Match "HostPoolName == hostPoolFilter"
+            $query | Should Not Match "Data.Event\) == 'Started'"
+        }
     }
 
     It 'labels inventory and action records as observations, not live cycle completion' {
@@ -338,6 +371,17 @@ Describe 'SHR workbook cycle tracing contract' {
             Should Match 'Not Cycle Completion'
         ($operations.content.items | Where-Object name -eq 'cycle-tracing-help').content.json |
             Should Match 'not a live Table read'
+    }
+
+    It 'uses native invocation outcomes for idle-aware timer alert examples' {
+        $guide = Get-Content (Join-Path $shrRoot 'alerts\alerts-guide.md') -Raw
+        $timerSections = [regex]::Match($guide, '(?s)## 2\. Timer Failures(.*?)## Avoid Alerting').Groups[1].Value
+        $timerSections | Should Match 'requests'
+        $timerSections | Should Match 'session-host-replacer-worker'
+        $timerSections | Should Match 'InvocationKey'
+        $timerSections | Should Match 'duration \* 1ms'
+        $timerSections | Should Not Match 'message contains "SHR_TIMER'
+        $timerSections | Should Match 'successful idle'
     }
 
     It 'retains the legacy dashboard snapshots at Information despite quieter diagnostics' {

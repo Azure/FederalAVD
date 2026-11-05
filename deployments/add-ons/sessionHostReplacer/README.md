@@ -1152,6 +1152,10 @@ planner and readiness gates. An idle, healthy pool creates no operation.
 The minute reconciler performs only the operation lookup when no active work exists; it does not
 inventory the pool, select images or run the lifecycle engine. Pending capacity, validation,
 handoff, deployment or recovery work still reaches the worker.
+Successful idle reconciliation emits no routine SHR application logs. State-read failures,
+active work and stopped-operation observations remain visible. Native Functions invocation
+telemetry remains enabled and supplies the workbook's timer-health/frequency views; absence
+of an SHR timer message is not evidence that an idle worker failed to run.
 Maintenance requests and shutdown-retention inventory conservatively retain worker processing.
 Existing authorized operations resume on reconciliation ticks, independently of the initiation schedule.
 After deploying this behavior, verify a scheduled tick against an idle, validated pool logs

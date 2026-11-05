@@ -441,11 +441,15 @@ function Invoke-ShrTimer {
         $Timer, [string] $CyclePath)
 
     Set-ShrLogContext -Trigger $Trigger
+    $invocationResult = @{ Idle = $false }
     try {
-        Write-ShrEvent -Category SHR_TIMER -Event Started
-        if ($Trigger -eq 'Initiation') { Start-ShrContinuation -Timer $Timer }
-        else { Invoke-ShrContinuation -CyclePath $CyclePath }
-        Write-ShrEvent -Category SHR_TIMER -Event Succeeded
+        if ($Trigger -eq 'Initiation') {
+            Write-ShrEvent -Category SHR_TIMER -Event Started
+            Start-ShrContinuation -Timer $Timer
+        } else {
+            Invoke-ShrContinuation -CyclePath $CyclePath -InvocationResult $invocationResult
+        }
+        if (-not $invocationResult.Idle) { Write-ShrEvent -Category SHR_TIMER -Event Succeeded }
     } catch {
         Write-ShrEvent -Category SHR_TIMER -Event Failed
         throw
@@ -682,14 +686,16 @@ function Invoke-ShrDeploymentIntent {
 
 function Invoke-ShrContinuation {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $CyclePath)
+    param([Parameter(Mandatory)][string] $CyclePath, [hashtable] $InvocationResult)
 
     $operation = Get-ShrOperation
     Set-ShrLogContext -Operation $(if ($operation -and $operation.State.Status -notin @('Completed', 'Superseded')) { $operation.State } else { $null })
     if (-not $operation -or
         $operation.State.Status -in @('Completed', 'Superseded')) {
+        if ($null -ne $InvocationResult) { $InvocationResult.Idle = $true }
         return
     }
+    if ($null -ne $InvocationResult) { Write-ShrEvent -Category SHR_TIMER -Event Started }
     if ($operation.State.Status -eq 'NeedsAttention') {
         Write-ShrEvent -Event NeedsAttention -State $operation.State
         Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) is stopped: $($operation.State.LastError)" -Level Trace

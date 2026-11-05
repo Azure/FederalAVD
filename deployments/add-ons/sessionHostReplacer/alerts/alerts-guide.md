@@ -26,15 +26,18 @@ hours away. Reconciliation retries every minute, so its example tolerates isolat
 ## Query and Rule Configuration
 
 - Run the examples in the SHR **Application Insights resource's Logs view**. They use the
-  Application Insights `traces` schema, not workspace-native `AppTraces` or `FunctionAppLogs`.
+  Application Insights `traces` and `requests` schemas, not workspace-native `AppTraces`,
+  `AppRequests` or `FunctionAppLogs`.
 - Replace `<shr-function-app-name>` with the exact app identity observed in `cloud_RoleName`.
   Each example targets one app. Repeat deliberately for other apps rather than querying every
   Function App in a shared monitoring environment.
-- The source is SHR's own `SHR_TIMER` and `SHR_EVENT` trace messages with `SchemaVersion: 1`,
-  not the Microsoft AVD Insights host/session tables. See the [telemetry contract](../logging-guide.md#cycle-correlation).
-  These records are JSON in message text, not native custom events.
-- Keep Information-level telemetry enabled. Timer `Failed` and cycle `NeedsAttention` events
-  are Information records; an Error-only filter would discard these signals.
+- Cycle state uses SHR's `SHR_EVENT` trace messages with `SchemaVersion: 1`; timer health
+  uses native Functions invocation records in `requests`, including successful idle ticks.
+  These are not Microsoft AVD Insights host/session tables. See the
+  [telemetry contract](../logging-guide.md#cycle-correlation).
+- Keep Information-level Function logs and `Host.Results` telemetry enabled. Idle reconciliation
+  deliberately emits no `SHR_TIMER` messages; do not use their absence as an outage signal.
+  Cycle `NeedsAttention` events are Information records, not native custom events.
 - Each query returns **only rows requiring attention**. For a manually configured log search
   alert, use **Table rows**, **Greater than 0**, evaluation every **5 minutes**, and a **2-hour
   query lookback**, with one failing evaluation initially. Ensure the rule's effective query
@@ -91,32 +94,33 @@ cycle. That is loss of evidence, not proof of recovery; check the missing-outcom
 **Why:** Failures can occur before an operation exists or before its state can be updated.
 Monitor both `Initiation` and `Reconciliation`, independently of cycle status.
 
-Deduplicate by native invocation identity, falling back to native operation identity only as
-a correlation key. Then evaluate the latest completed outcome for each timer. A later successful
+Deduplicate by native invocation identity, falling back to the native request ID if the
+invocation dimension is absent. Use completed invocation records so a successful idle tick can clear
+an earlier failure without adding SHR heartbeat messages. A later successful
 outcome clears this condition even while older failures remain in the lookback.
 
 ```kusto
 let functionAppName = "<shr-function-app-name>";
-traces
+requests
 | where timestamp > ago(2h)
 | where cloud_RoleName == functionAppName
-| where message contains "SHR_TIMER |"
-| extend Data = parse_json(extract(@"SHR_TIMER \| (\{.*\})$", 1, message))
-| where toint(Data.SchemaVersion) == 1
-| extend Trigger = tostring(Data.Trigger), Outcome = tostring(Data.Event),
-         InvocationKey = coalesce(tostring(customDimensions.InvocationId), operation_Id)
-| where Trigger in ("Initiation", "Reconciliation")
-| where Outcome in ("Succeeded", "Failed") and isnotempty(InvocationKey)
-| summarize arg_max(timestamp, Outcome) by FunctionApp = cloud_RoleName, Trigger, InvocationKey
-| summarize FailedInvocationsIn15m = countif(Outcome == "Failed" and timestamp > ago(15m)),
-            arg_max(timestamp, Outcome) by FunctionApp, Trigger
+| extend FunctionName = replace_regex(name, @"^Functions\.", ""),
+         InvocationKey = coalesce(tostring(customDimensions.InvocationId),
+             tostring(customDimensions["prop__InvocationId"]), id)
+| where FunctionName in ("session-host-replacer", "session-host-replacer-initiator", "session-host-replacer-worker")
+| where isnotempty(InvocationKey) and isnotnull(success)
+| extend Trigger = iff(FunctionName == "session-host-replacer-worker", "Reconciliation", "Initiation"),
+         Outcome = iff(success, "Succeeded", "Failed"), CompletedUtc = timestamp + (duration * 1ms)
+| summarize arg_max(CompletedUtc, Outcome) by FunctionApp = cloud_RoleName, Trigger, InvocationKey
+| summarize FailedInvocationsIn15m = countif(Outcome == "Failed" and CompletedUtc > ago(15m)),
+            arg_max(CompletedUtc, Outcome) by FunctionApp, Trigger
 | where Outcome == "Failed"
-| where Trigger == "Initiation"
-    or (Trigger == "Reconciliation" and FailedInvocationsIn15m >= 3 and timestamp > ago(15m))
-| project FunctionApp, Trigger, LastOutcomeUtc = timestamp, FailedInvocationsIn15m
+| where Trigger == "Initiation" or (Trigger == "Reconciliation" and FailedInvocationsIn15m >= 3 and CompletedUtc > ago(15m))
+| project FunctionApp, Trigger, LastOutcomeUtc = CompletedUtc, FailedInvocationsIn15m
 ```
 
-Confirm native correlation keys are populated and distinguish invocations in the target cloud.
+Confirm `requests.name`, `duration`, `success` and native correlation keys in the target cloud.
+These examples accept the function name with or without a `Functions.` prefix.
 Rows without either key are excluded because they cannot be reliably deduplicated; do not rely
 on this example until that prerequisite is verified. Duplicate ingestion must not count as
 additional failed invocations.
@@ -125,7 +129,8 @@ additional failed invocations.
 Check identity, storage access, network connectivity and configuration. If a cycle is also
 `NeedsAttention`, fixing the underlying dependency alone does not resume it; follow checked recovery.
 
-**Expected resolution:** The same timer reports a later `Succeeded` outcome. Reconciliation also
+**Expected resolution:** The same timer has a later successful native invocation, including an
+idle reconciliation with no SHR messages. Reconciliation also
 falls below its condition as failures leave the 15-minute window. An old initiation failure can
 age out after two hours without a new attempt; for sparse schedules, confirm the next expected
 run rather than interpreting that disappearance as recovery.
@@ -144,14 +149,12 @@ let ExpectedApps = datatable(FunctionApp:string)
     "<shr-function-app-name>"
 ];
 let LastObservations =
-    traces
+    requests
     | where timestamp > ago(2h)
     | where cloud_RoleName in (ExpectedApps)
-    | where message contains "SHR_TIMER |"
-    | extend Data = parse_json(extract(@"SHR_TIMER \| (\{.*\})$", 1, message))
-    | where toint(Data.SchemaVersion) == 1 and tostring(Data.Trigger) == "Reconciliation"
-    | summarize LastStartedUtc = maxif(timestamp, tostring(Data.Event) == "Started"),
-                LastOutcomeUtc = maxif(timestamp, tostring(Data.Event) in ("Succeeded", "Failed"))
+    | extend FunctionName = replace_regex(name, @"^Functions\.", "")
+    | where FunctionName == "session-host-replacer-worker" and isnotnull(success)
+    | summarize LastStartedUtc = max(timestamp), LastOutcomeUtc = max(timestamp + (duration * 1ms))
         by FunctionApp = cloud_RoleName;
 ExpectedApps
 | join kind=leftouter LastObservations on FunctionApp
@@ -165,14 +168,15 @@ ExpectedApps
 The 15-minute starting threshold allows for the configured ten-minute invocation timeout and
 some ingestion delay. Measure actual ingestion latency and tune it; cold starts, restarts or
 platform issues can take longer. A live operation lease may defer host changes, but a healthy
-timer still reports its invocation outcome.
+timer still produces native invocation telemetry. `LastStartedUtc` is the start of an observed
+completed invocation, not evidence that a different invocation is currently running.
 
 **Response:** Check whether the app was intentionally stopped, then verify its state, worker
 binding, host storage access, effective log levels and Application Insights ingestion/private
 connectivity. This alert cannot distinguish an automation outage from a telemetry outage.
 Use current Azure resource evidence to make that distinction.
 
-**Expected resolution:** A recent `Succeeded` **or** `Failed` reconciliation outcome is observed.
+**Expected resolution:** A recent successful **or** failed native reconciliation invocation is observed.
 A failed outcome restores visibility, not health; the timer-failure or stopped-cycle alert may
 still need attention. `InitiationEnabled=false` does not suppress this check: reconciliation
 should continue even while new replacement batches are held.
@@ -185,7 +189,7 @@ Do not treat these conditions alone as failures:
 - Waiting for scheduled authorization, a live lease, capacity or scaling-plan safety gates.
 - Old hosts draining within their configured grace period.
 - A new replacement that has not yet finished deployment or readiness checks.
-- An idle pool without cycle or inventory events; minute-timer outcomes are a separate signal.
+- An idle pool without SHR application messages; native invocation telemetry is the timer signal.
 
 Do not use a generic "cycle older than 30 minutes" or "no host actions" rule. Normal drain
 periods and rollout schedules can be much longer. Route repeated warnings and detailed wait
@@ -212,13 +216,14 @@ want informational notifications.
 The queries are documentation examples, not evidence of successful Azure query execution or
 alert delivery. Validate in an isolated pilot in each target cloud:
 
-1. Confirm current schema-version-1 Information records, app identity, both triggers and native
-   invocation keys. Verify Application Insights scope and actual ingestion delay/sampling.
+1. Confirm current schema-version-1 cycle records and native `requests` for both functions,
+   including idle reconciliation. Verify names, success, duration, invocation keys, Application
+   Insights scope and actual ingestion delay/sampling. `Host.Results` must remain collected.
 2. Observe `NeedsAttention`, then checked recovery/completion/supersession. The stopped-cycle
    query should return one row per stopped app/cycle and stop returning it after a later
    non-stopped observation for that cycle.
 3. Check one versus three distinct reconciliation failures, duplicate records, one initiation
-   failure, and a later successful outcome. Only the documented conditions should return rows.
+   failure, and a later successful idle invocation. Only the documented conditions should return rows.
 4. Test no telemetry, starts without outcomes, stale outcomes and restored outcomes, including
    a `Failed` outcome. Confirm the seeded query still detects a completely silent expected app.
 5. Confirm an initiation hold, a healthy idle pool, long drains and normal lease waits do not

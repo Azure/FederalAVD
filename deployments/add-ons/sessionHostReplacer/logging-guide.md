@@ -34,7 +34,7 @@ output command, not a separate SHR severity or an always-visible collection tier
 
 | Level | Current purpose |
 | --- | --- |
-| Information | Timer starts/outcomes, authorization, deployment submission, lease waits, host actions and the final cycle observation for an active reconciliation pass |
+| Information | Initiation and non-idle reconciliation timer starts/outcomes, authorization, deployment submission, lease waits, host actions and the final active-pass cycle observation |
 | Information dashboard records | `SETTINGS`, `IMAGE_INFO`, `METRICS` and `ACTION`; snapshots are not additional host operations |
 | Information replica records | `IMAGE_REPLICA_CAP`, `IMAGE_REPLICA_BATCH`, `IMAGE_REPLICA_SUBMISSION`; live replica capacity and planned/submitted counts |
 | Warning | Blockers or unexpected conditions needing investigation; a warning can defer work, not just describe a harmless issue |
@@ -46,6 +46,19 @@ Trace. Their absence from an Information-level timeline is expected. Later read-
 a stopped operation report `NeedsAttention` without replaying its saved exception as a new Error
 every minute. Inspect the original failed invocation; counting only recent Error rows misses
 persistently stopped work.
+
+Successful idle reconciliation ticks (no operation, or an already completed/superseded operation)
+emit no routine SHR application messages, including no `SHR_TIMER` start/success pair. They still
+perform the state lookup. A failed lookup emits `SHR_TIMER Failed` and rethrows even though no
+start was logged. Active work, lease waits and stopped operations retain their diagnostics;
+the invocation that completes a cycle still reports completion.
+
+Azure Functions can still emit native execution traces and `requests` telemetry for idle
+invocations. Explicitly enabled Trace diagnostics can also include authentication details.
+This change does not filter those records, change sampling, or fix duplicate Application
+Insights ingestion. Use native invocation IDs and raw records to investigate duplicates.
+The workbook's timer health and frequency views use native completed invocation records,
+deduplicated by native invocation identity; they do not depend on SHR idle heartbeats.
 
 The deployed `host.json` contains only `"version": "2.0"`; SHR does not deploy an explicit
 log-level or sampling policy. Verify effective host settings and app-setting overrides. Preserve
@@ -67,7 +80,7 @@ dashboard records and successful invocation telemetry.
 
 The pool remains the first bracket and the original message remains the suffix for existing
 dashboard parsers. Correlation is invocation-local and cleared in `finally`. Idle reconciliation
-does not attach a completed cycle to a new heartbeat.
+does not attach a completed cycle to a new invocation.
 
 ### Structured events
 
@@ -80,7 +93,9 @@ The current contract is `SchemaVersion: 1`:
 - Cycle snapshots can also carry `Status`, `StartedUtc`, `DeadlineUtc`, `LeaseExpiresUtc`,
   `LeaseHeld`, `ImageVersion`, `ImageDefinition`, `Target`, `DeploymentName`,
   `DeploymentResourceId`, `SupersedesCycleId`, `InDrain`, `RunningDeployments`.
-- Timer events: `Started`, then `Succeeded` or `Failed`. Timer success is not cycle completion.
+- Timer events: `Started`, then `Succeeded` or `Failed` for initiation and non-idle reconciliation.
+  Idle reconciliation omits both events; a failed state lookup can emit `Failed` without `Started`.
+  Timer success is not cycle completion.
 - Cycle events describe authorization, deployment, waiting, supersession and terminal outcomes.
   Wait reasons distinguish cleanup, deployment, readiness, scheduled authorization and drain.
 
@@ -89,6 +104,14 @@ host-name arrays, configuration hashes and raw `LastError`. Deployment links con
 resource paths, not query strings or a fixed cloud Portal hostname. This is not a claim that every
 native error or ordinary diagnostic message is sanitized; restrict telemetry access and protect
 exported logs. Telemetry adds no separate ARM/Table requests or durable-state writes.
+
+Native timer views accept `requests.name` with or without the `Functions.` prefix. Completion
+time is `timestamp + (duration * 1ms)` because `requests.duration` is in milliseconds; these records
+describe completed invocations, not a live-running
+invocation. Host-pool filtering maps the app/resource identity to SHR trace messages in the
+selected time range. If that mapping is absent, use **All Host Pools** to see native timer rows
+by Function App. Keep `Host.Results` at Information and validate these fields, mappings and
+queries in the live pilot; offline contract checks do not prove ingestion or KQL execution.
 
 ## Query Both Timers
 
