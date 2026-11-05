@@ -432,14 +432,14 @@ sequenceDiagram
     participant C as Local Standalone AD CS
     D->>H: Run RdpCertificate-Prepare
     H->>H: Read local VM identity and create protected enrollment key/CSR
-    H-->>A: Complete Prepare; record public key/CSR hashes and VM incarnation
+    H-->>A: Complete Prepare and record public key/CSR hashes and VM incarnation
     D->>H: After Prepare succeeds, run RdpCertificate-Enroll
     H->>H: Install retry/startup and daily renewal tasks
-    H->>G: HTTPS bootstrap: public CSR and VM resource ID; no client certificate yet
+    H->>G: HTTPS bootstrap with public CSR and VM resource ID, no client certificate yet
     G->>A: Read current VM and completed Prepare command using CA-only identity
     A-->>G: VM incarnation, ownership tag, source, arguments and public proof
     G->>G: Verify scope, approved source/artifact, freshness, key and CSR profile
-    G->>C: Submit credential CSR; hold pending
+    G->>C: Submit credential CSR and hold pending
     C-->>G: Pending request ID
     G->>G: Persist own request ID before approval
     G->>C: Approve that validated request and retrieve certificate
@@ -447,7 +447,7 @@ sequenceDiagram
     G-->>H: Return checked public client certificate
     H->>H: Associate certificate with existing SYSTEM-only key
     H->>G: Mutual TLS: request RDP certificate with a separate host key
-    Note over G,C: Validate current VM and exact profile; repeat recorded pending/approval workflow
+    Note over G,C: Validate current VM and exact profile, repeat recorded pending/approval workflow
     G-->>H: Return checked public RDP certificate
     H->>H: Install, grant RDP key access, bind listener and perform actual TLS probe
     H->>H: After success, targeted old-cert cleanup and delete bootstrap task
