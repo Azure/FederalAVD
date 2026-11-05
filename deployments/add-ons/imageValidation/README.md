@@ -46,8 +46,7 @@ The unused draft `namingComponentOrder` parameter is replaced by the shared
 | `functionAppNameOverride`, `storageAccountNameOverride` | Empty generates names; supply globally available explicit names as needed |
 | `appServicePlanNameOverride` | Empty generates the new plan name; ignored for an existing plan ID |
 | `existingAppServicePlanResourceId` | Empty creates a dedicated plan; otherwise supply a same-region Windows Dedicated plan supporting VNet integration and Always On |
-| `hostPoolResourceId` | Required parent resource ID for traceability, not authorization or validation scope |
-| `files` | Required string-valued file/content map with a nonempty `run.ps1` |
+| `imageDefinitionResourceId` | Required existing Azure Compute Gallery image definition resource ID |
 | `schedule` | Required six-field Functions NCRONTAB schedule, or supported app-setting reference |
 | `functionAppAppSettings` | `[]`; additional `{ name, value }` settings, without plaintext secrets |
 | `privateEndpoint` | `true`; explicit `false` enables public app and storage access |
@@ -92,14 +91,14 @@ PowerShell modules, profiles, or managed dependencies.
 
 ## Deploy with PowerShell
 
-Create your approved script and environment-specific input JSON under the
-git-ignored [customer area](../../../customer/README.md). For example, save this
+Review the packaged validation scripts and create environment-specific input JSON
+under the git-ignored [customer area](../../../customer/README.md). For example, save this
 input shape as `customer\parameters\imageValidation\infrastructure.json` and
 replace every resource ID before use:
 
 ```json
 {
-  "hostPoolResourceId": "/subscriptions/<subscription>/resourceGroups/<group>/providers/Microsoft.DesktopVirtualization/hostPools/<pool>",
+  "imageDefinitionResourceId": "/subscriptions/<subscription>/resourceGroups/<group>/providers/Microsoft.Compute/galleries/<gallery>/images/<definition>",
   "schedule": "0 0 2 * * *",
   "functionAppDelegatedSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<integration-subnet>",
   "privateEndpointSubnetResourceId": "/subscriptions/<subscription>/resourceGroups/<network-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<endpoint-subnet>",
@@ -113,27 +112,59 @@ From the repository root, using an authorized subscription and cloud:
 ```powershell
 $inputs = Get-Content customer\parameters\imageValidation\infrastructure.json -Raw |
     ConvertFrom-Json -AsHashtable
-$inputs.files = @{
-    'run.ps1' = Get-Content customer\artifacts\imageValidation\run.ps1 -Raw
-}
 New-AzSubscriptionDeployment -Name image-validation -Location eastus `
     -TemplateFile deployments\add-ons\imageValidation\main.bicep `
     -TemplateParameterObject $inputs
 ```
 
-The empty draft [Portal form](./uiFormDefinition.json) is not implemented.
-Use Bicep with PowerShell/Azure CLI; this add-on is not registered with the
-Template Spec publisher and has no tracked ARM counterpart yet.
+## Portal form
+
+The [Portal form](./uiFormDefinition.json) follows the repository's Form View
+patterns and maps to the current entry-template parameters:
+
+1. **Basics** selects the deployment subscription, Function region, and existing
+   Compute Gallery image definition. The template deploys at subscription scope;
+   it manages the resource group named on the final step.
+2. **Function App Settings** selects a new or existing same-region plan, requires
+   a six-field timer schedule or app-setting reference, and provides an optional
+   name/value grid for non-secret app settings. Confirm existing plans are Windows
+   Dedicated with VNet integration and Always On; region filtering is not a SKU or
+   operating-system compatibility check. Schedule validation checks field count,
+   not NCRONTAB ranges or runtime acceptance.
+3. **Networking** defaults to private endpoints and requires separate existing
+   integration and endpoint subnet IDs plus target-cloud blob and app DNS zones.
+   Public mode explicitly enables public app/storage access and clears private
+   networking inputs, including VNet integration.
+4. **Monitoring** optionally selects an existing workspace and configured Azure
+   Monitor Private Link Scope. Private app/storage access alone does not make
+   monitoring private.
+5. **Naming + Tags** uses the short `iv` identifier and shared naming defaults,
+   exposes complete name overrides, and applies one flat tag set to all resource
+   types that accept tags. Custom `namingConvention` objects remain a parameter-file
+   option.
+
+The form does not accept validation code: the current template embeds the
+repository scripts. Review the implementation and arrange workload permissions
+before deployment. Hidden existing-plan, networking, and monitoring selections
+are cleared from outputs when their corresponding options are disabled.
+
+This add-on is not registered with the Template Spec publisher and has no tracked
+ARM counterpart yet. Use Bicep with PowerShell/Azure CLI, or explicitly package the
+compiled template with this form for a Template Spec. Before relying on the Portal
+path, run a live render smoke test through every step, including private/public,
+new/existing-plan, and monitoring transitions; offline checks do not prove Portal
+expression evaluation or deployment success.
 
 ## Validation
 
 ```powershell
 Invoke-Pester -Script tests\ImageValidation.Tests.ps1,tests\IdentifierNaming.Tests.ps1
 Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1
+Invoke-Pester -Script tests\ImageValidationUi.Tests.ps1
 ```
 
 Offline checks cover compilation, centralized naming wiring, private defaults,
-module sequencing, explicit code requirements, existing-plan selection, and
+module sequencing, form parameter bindings, existing-plan selection, and
 conservative serialized size budgets. Live validation still needs a first deploy
 and redeploy in the selected cloud, identity authorization, runtime startup,
 private DNS/connectivity (including monitoring if selected), and successful and
