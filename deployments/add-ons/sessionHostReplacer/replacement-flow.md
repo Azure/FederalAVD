@@ -16,6 +16,8 @@ deployment batches while previously selected old hosts continue draining.
 
 Initiation is always separate from progress. Both functions run in the
 same Function App; there is no additional VM or Function App.
+`session-host-replacer-initiator` authorizes batches on `%TimerSchedule%`;
+`session-host-replacer-worker` reconciles progress every minute.
 
 ```mermaid
 flowchart TD
@@ -219,6 +221,23 @@ flowchart TD
 
 Exact-image evidence is written whenever a latest-image host has AVD status `Available` and no failed AVD health checks. Drain mode does not prevent evidence from being written.
 
+Before cleanup or replacement, SHR checks the assigned scaling plan. An enabled plan must
+have a nonempty `exclusionTag` matching `Tag_ScalingPlanExclusionTag`. The leased worker
+repairs mismatches only after a full-resource read proves exactly one host-pool reference
+to this pool; disabled references to other pools also prevent repair. Read-only initiation
+hands repairable mismatches to the worker. Already-matching shared plans remain supported.
+Blank SHR names, shared mismatches, failed requests and unverifiable repairs block replacement.
+Disabled or absent plans need no match; MaintenanceWindow never repairs an enabled plan.
+When changing a nonblank plan name, existing VM exclusions are copied and verified first,
+preserving administrator ownership and old tags. The worker rechecks membership, patches
+only `exclusionTag` with `If-Match` when available, and reads back the result. Membership
+checking and updating are not guaranteed atomic without an ETag; avoid concurrent edits.
+
+Each selected retirement host is protected by the exclusion tag before drain or other
+lifecycle mutations. Missing protection is repaired on each retirement pass, including
+hosts already draining. Existing exclusion values are preserved regardless of ownership.
+Reasserting drain after external interference preserves the original grace-period timestamp.
+
 Every scaling-exclusion cleanup path additionally requires an online, non-draining, automation-enabled
 host on the exact image with the matching validation token. Shutdown-retention hosts and
 administrator-owned exclusions are preserved. A cached token alone never authorizes release of an
@@ -255,8 +274,8 @@ flowchart TD
     I --> Z
     H -- Yes --> J{"Old hosts eligible<br/>for removal?"}
     J -- No --> Z
-    J -- Yes --> K["Enable drain mode on<br/>selected old hosts"]
-    K --> L["Set drain timestamp and<br/>replacer scaling exclusion"]
+    J -- Yes --> K["Ensure scaling exclusion,<br/>then enable drain mode"]
+    K --> L["Set or preserve<br/>drain timestamp"]
     L --> M["Notify each active<br/>AVD user session"]
     M --> N{Sessions remain?}
     N -- Yes, within grace period --> Z
@@ -306,8 +325,8 @@ flowchart TD
     J --> K{Any hosts safe to remove?}
     K -- No --> Z
     K -- Yes --> L["Save hostname and<br/>placement mapping"]
-    L --> M["Enable drain mode on<br/>selected old hosts"]
-    M --> N["Set drain timestamp and<br/>replacer scaling exclusion"]
+    L --> M["Ensure scaling exclusion,<br/>then enable drain mode"]
+    M --> N["Set or preserve<br/>drain timestamp"]
     N --> O["Notify each active<br/>AVD user session"]
     O --> P{Sessions remain?}
     P -- Yes, within grace period --> Z

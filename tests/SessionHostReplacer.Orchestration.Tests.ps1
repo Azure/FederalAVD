@@ -434,6 +434,33 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Mock Update-HostPoolStatus {}
     }
 
+    It 'blocks <Mode> before inventory or mutation when scaling protection reports <Source>' -TestCases @(
+        @{ Mode = 'SideBySide'; Source = 'InvalidExclusionTag' }
+        @{ Mode = 'DeleteFirst'; Source = 'InvalidExclusionTag' }
+        @{ Mode = 'SideBySide'; Source = 'Error' }
+        @{ Mode = 'DeleteFirst'; Source = 'Error' }
+    ) {
+        param($Mode, $Source)
+        $global:shrSettings.ReplacementMode = $Mode
+        $global:shrSettings.EnableShutdownRetention = $true
+        $global:shrSimulation.ScalingPlanTarget = [pscustomobject]@{
+            Source = $Source
+            ErrorMessage = 'Scaling exclusion configuration must be corrected before retrying.'
+        }
+        { Invoke-OrchestrationCycle -RunNumber 1 } | Should Throw 'Scaling exclusion configuration must be corrected'
+        Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It
+        Assert-MockCalled Get-SessionHosts -Times 0 -Exactly -Scope It
+        Assert-MockCalled Deploy-SessionHosts -Times 0 -Exactly -Scope It
+        Assert-MockCalled Remove-SessionHosts -Times 0 -Exactly -Scope It
+    }
+
+    It 'requests exclusion repair during normal replacement' {
+        Invoke-OrchestrationCycle -RunNumber 1
+        Assert-MockCalled Get-ScalingPlanCurrentTarget -Times 1 -Exactly -Scope It -ParameterFilter {
+            $RepairExclusionTag
+        }
+    }
+
     AfterAll {
         Remove-Variable shrSimulation -Scope Global -ErrorAction SilentlyContinue
         Remove-Variable shrSettings -Scope Global -ErrorAction SilentlyContinue
@@ -1197,6 +1224,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
             Invoke-OrchestrationCycle -RunNumber 1
 
+            Assert-MockCalled Get-ScalingPlanCurrentTarget -Times 1 -Exactly -Scope It -ParameterFilter {
+                -not $RepairExclusionTag
+            }
             $global:shrSimulation.DeletionCalls.Count | Should Be 1
             $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01')
             $global:shrSimulation.DeploymentCalls.Count | Should Be 1

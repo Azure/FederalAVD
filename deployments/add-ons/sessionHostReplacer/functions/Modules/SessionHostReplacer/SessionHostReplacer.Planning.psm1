@@ -57,6 +57,84 @@ function Get-ReplacementCapacityPolicy {
     }
 }
 
+function Update-ScalingPlanExclusionTag {
+    param(
+        [string] $ARMToken,
+        $ScalingPlan,
+        [string] $HostPoolResourceId,
+        [string] $TagScalingPlanExclusionTag,
+        [string] $ResourceManagerUri
+    )
+
+    $previousTag = [string]$ScalingPlan.properties.exclusionTag
+    if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
+        $hostsUri = "$ResourceManagerUri$HostPoolResourceId/sessionHosts?api-version=2024-04-03"
+        $hosts = @(Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $hostsUri -RequireCollection)
+        $vmIds = @($hosts | ForEach-Object {
+            $id = [string]$_.properties.resourceId
+            if ($id -notmatch '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Compute/virtualMachines/[^/]+$') {
+                throw 'Cannot preserve scaling exclusions because a session host has no valid VM resource ID.'
+            }
+            $id
+        } | Select-Object -Unique)
+        foreach ($vmId in $vmIds) {
+            $vmUri = "$ResourceManagerUri$vmId`?api-version=2024-07-01"
+            $vm = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $vmUri
+            if ($vm.id -ne $vmId) {
+                throw "Cannot read VM '$vmId' to preserve its scaling exclusion."
+            }
+            $tags = if ($null -eq $vm.tags) { @{} } else { $vm.tags | ConvertTo-CaseInsensitiveHashtable }
+            if ($tags.ContainsKey($previousTag) -and
+                (-not $tags.ContainsKey($TagScalingPlanExclusionTag) -or
+                    ($tags[$TagScalingPlanExclusionTag] -eq 'SessionHostReplacer' -and
+                        $tags[$previousTag] -ne 'SessionHostReplacer'))) {
+                $value = $tags[$previousTag]
+                $body = @{
+                    operation = 'Merge'
+                    properties = @{ tags = @{ $TagScalingPlanExclusionTag = $value } }
+                } | ConvertTo-Json -Depth 5
+                $tagsUri = "$ResourceManagerUri$vmId/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Method Patch -Uri $tagsUri -Body $body | Out-Null
+                $verifiedVm = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $vmUri
+                $verifiedTags = if ($null -eq $verifiedVm.tags) { @{} } else { $verifiedVm.tags | ConvertTo-CaseInsensitiveHashtable }
+                if ($verifiedVm.id -ne $vmId -or
+                    -not $verifiedTags.ContainsKey($TagScalingPlanExclusionTag) -or
+                    $verifiedTags[$TagScalingPlanExclusionTag] -ne $value) {
+                    throw "Could not verify the preserved scaling exclusion on VM '$vmId'; the plan was not updated."
+                }
+            }
+        }
+    }
+
+    # Recheck full membership after tag preservation; use conditional writes when the API supplies an ETag.
+    $planUri = "$ResourceManagerUri$($ScalingPlan.id)?api-version=2024-04-03"
+    $currentPlan = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $planUri
+    $references = @($currentPlan.properties.hostPoolReferences | Where-Object { $null -ne $_ })
+    if ($currentPlan.id -ne $ScalingPlan.id -or $references.Count -ne 1 -or
+        $references[0].hostPoolArmPath -ne $HostPoolResourceId -or
+        $references[0].scalingPlanEnabled -ne $true) {
+        throw 'Scaling plan membership changed or is shared; automatic exclusion-tag repair is blocked.'
+    }
+    if ($currentPlan.properties.exclusionTag -eq $TagScalingPlanExclusionTag) { return $currentPlan }
+    if ([string]$currentPlan.properties.exclusionTag -ne $previousTag) {
+        throw 'Scaling plan exclusion tag changed concurrently; retry after reviewing its configuration.'
+    }
+    $headers = @{}
+    if ($currentPlan.etag) { $headers['If-Match'] = $currentPlan.etag }
+    $body = @{ properties = @{ exclusionTag = $TagScalingPlanExclusionTag } } | ConvertTo-Json -Depth 3
+    Invoke-AzureRestMethod -ARMToken $ARMToken -Method Patch -Uri $planUri -Body $body -AdditionalHeaders $headers | Out-Null
+    $verifiedPlan = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $planUri
+    $references = @($verifiedPlan.properties.hostPoolReferences | Where-Object { $null -ne $_ })
+    if ($verifiedPlan.id -ne $ScalingPlan.id -or
+        $verifiedPlan.properties.exclusionTag -ne $TagScalingPlanExclusionTag -or
+        $references.Count -ne 1 -or $references[0].hostPoolArmPath -ne $HostPoolResourceId -or
+        $references[0].scalingPlanEnabled -ne $true) {
+        throw 'Scaling plan exclusion-tag repair could not be verified; replacement is blocked.'
+    }
+    Write-LogEntry -Message "Updated unshared scaling plan '$($verifiedPlan.name)' exclusion tag to '$TagScalingPlanExclusionTag'."
+    return $verifiedPlan
+}
+
 function Get-ScalingPlanCurrentTarget {
     <#
     .SYNOPSIS
@@ -76,6 +154,9 @@ function Get-ScalingPlanCurrentTarget {
     
     .PARAMETER CurrentDateTime
     Current date/time in UTC (defaults to Get-Date -AsUTC). Used for schedule evaluation.
+
+    .PARAMETER RepairExclusionTag
+    Allow the leased worker to repair an unshared plan. Discovery remains read-only by default.
     
     .RETURNS
     PSCustomObject with properties:
@@ -100,7 +181,11 @@ function Get-ScalingPlanCurrentTarget {
         [Parameter()]
         [datetime] $CurrentDateTime = (Get-Date -AsUTC),
         [Parameter()]
-        [string] $ResourceManagerUri = (Get-ResourceManagerUri)
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        [Parameter()]
+        [string] $TagScalingPlanExclusionTag = (Read-FunctionAppSetting Tag_ScalingPlanExclusionTag),
+        [Parameter()]
+        [switch] $RepairExclusionTag
     )
     
     try {
@@ -108,7 +193,7 @@ function Get-ScalingPlanCurrentTarget {
         
         # Query scaling plans assigned to this host pool - returns scaling plan details directly
         $scalingPlansUri = "$ResourceManagerUri$HostPoolResourceId/scalingPlans?api-version=2024-04-03"
-        $scalingPlansResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $scalingPlansUri
+        $scalingPlansResponse = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri $scalingPlansUri -RequireCollection
         
         if (-not $scalingPlansResponse -or $scalingPlansResponse.Count -eq 0) {
             Write-LogEntry -Message "No scaling plan assigned to this host pool" -Level Trace
@@ -119,6 +204,9 @@ function Get-ScalingPlanCurrentTarget {
                 Phase = $null
                 Source = $null
             }
+        }
+        if (@($scalingPlansResponse).Count -ne 1) {
+            throw 'Cannot safely evaluate more than one scaling plan for the host pool.'
         }
         
         # Get the first (should be only one) scaling plan
@@ -142,6 +230,49 @@ function Get-ScalingPlanCurrentTarget {
         }
         
         Write-LogEntry -Message "Found enabled scaling plan: $scalingPlanName" -Level Trace
+
+        $planExclusionTag = [string]$scalingPlan.properties.exclusionTag
+        if ([string]::IsNullOrWhiteSpace($TagScalingPlanExclusionTag) -or
+            [string]::IsNullOrWhiteSpace($planExclusionTag) -or
+            $planExclusionTag -ne $TagScalingPlanExclusionTag) {
+            $canRepair = $false
+            if (-not [string]::IsNullOrWhiteSpace($TagScalingPlanExclusionTag) -and
+                $scalingPlan.id -match '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.DesktopVirtualization/scalingPlans/[^/]+$') {
+                # The host-pool-scoped list is not proof that the full plan is unshared.
+                $planId = $scalingPlan.id
+                $scalingPlan = Invoke-AzureRestMethod -ARMToken $ARMToken -Method Get -Uri "$ResourceManagerUri$planId`?api-version=2024-04-03"
+                if ($scalingPlan.id -ne $planId) { throw 'Cannot read the full scaling plan configuration.' }
+                $references = @($scalingPlan.properties.hostPoolReferences | Where-Object { $null -ne $_ })
+                if (@($references | Where-Object {
+                    $_.hostPoolArmPath -eq $HostPoolResourceId -and $_.scalingPlanEnabled -eq $true
+                }).Count -ne 1) {
+                    throw 'Scaling plan membership changed; the host pool is no longer uniquely enabled in this plan.'
+                }
+                $canRepair = $references.Count -eq 1 -and
+                    $references[0].hostPoolArmPath -eq $HostPoolResourceId -and
+                    $references[0].scalingPlanEnabled -eq $true
+                if ($canRepair -and $RepairExclusionTag -and
+                    $scalingPlan.properties.exclusionTag -ne $TagScalingPlanExclusionTag) {
+                    $scalingPlan = Update-ScalingPlanExclusionTag -ARMToken $ARMToken -ScalingPlan $scalingPlan `
+                        -HostPoolResourceId $HostPoolResourceId -TagScalingPlanExclusionTag $TagScalingPlanExclusionTag `
+                        -ResourceManagerUri $ResourceManagerUri
+                }
+            }
+            if ([string]::IsNullOrWhiteSpace($TagScalingPlanExclusionTag) -or
+                $scalingPlan.properties.exclusionTag -ne $TagScalingPlanExclusionTag) {
+                $message = "Enabled scaling plan '$scalingPlanName' has exclusionTag '$($scalingPlan.properties.exclusionTag)', but SHR uses '$TagScalingPlanExclusionTag'. Configure the scaling plan Exclusion tag and SHR Tag_ScalingPlanExclusionTag to the same nonempty tag name before retrying. Automatic repair requires a verified unshared plan and a nonempty SHR tag name."
+                Write-LogEntry -Message $message -Level Warning
+                return [PSCustomObject]@{
+                    CapacityPercentage = $null
+                    ScalingPlanName = $scalingPlanName
+                    ScheduleName = $null
+                    Phase = $null
+                    Source = 'InvalidExclusionTag'
+                    CanRepairExclusionTag = $canRepair
+                    ErrorMessage = $message
+                }
+            }
+        }
         
         # Get scaling plan time zone and convert current time from UTC
         $scalingPlanTimeZone = $scalingPlan.properties.timeZone
@@ -389,6 +520,7 @@ function Get-ScalingPlanCurrentTarget {
             ScheduleName = $null
             Phase = $null
             Source = 'Error'
+            ErrorMessage = "Cannot verify the scaling plan configuration: $($_.Exception.Message)"
         }
     }
 }
@@ -1287,9 +1419,7 @@ function Get-SessionHosts {
             $vmIncludeInAutomation = $IncludePreExistingSessionHosts
         }
         
-        # Note: Scaling exclusion tag is automatically set during VM deployment (Deploy-SessionHosts)
-        # No need to backfill here - only newly deployed VMs should have the tag
-        # Tag will be removed when replacement cycle completes or after successful registration
+        # Scaling exclusions are reconciled only for selected retirement hosts or new deployments.
         
         # Get drain timestamp tag
         $vmPendingDrainTimeStamp = $vmTags[$TagPendingDrainTimeStamp]

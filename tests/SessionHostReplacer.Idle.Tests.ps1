@@ -160,6 +160,19 @@ Describe 'SHR read-only timer idle assessment' {
         { Invoke-IdleAssessment } | Should Throw 'scaling plan query failed'
     }
 
+    It 'surfaces an invalid scaling exclusion rather than declaring the pool idle' {
+        $global:shrIdleTest.ScalingTarget.Source = 'InvalidExclusionTag'
+        $global:shrIdleTest.ScalingTarget | Add-Member ErrorMessage 'Configure matching nonempty scaling exclusion tags.'
+        { Invoke-IdleAssessment } | Should Throw 'Configure matching nonempty scaling exclusion tags'
+    }
+
+    It 'hands repairable unshared plan configuration to the worker without performing timer mutations' {
+        $global:shrIdleTest.ScalingTarget.Source = 'InvalidExclusionTag'
+        $global:shrIdleTest.ScalingTarget | Add-Member CanRepairExclusionTag $true
+        Invoke-IdleAssessment | Should Be $false
+        Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
+    }
+
     It 'hands off retained inventory even when it is no longer registered' {
         $global:shrIdleTest.VMs[0].tags | Add-Member ShutdownTimestamp '2026-01-01T00:00:00Z'
         $global:shrIdleTest.Registrations = @()

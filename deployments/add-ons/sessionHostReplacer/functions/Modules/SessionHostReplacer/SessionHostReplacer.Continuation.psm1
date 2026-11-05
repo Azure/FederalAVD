@@ -231,6 +231,10 @@ function Test-ShrPoolIdle {
     $hostPoolName = Read-FunctionAppSetting HostPoolName
     $hostPoolId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
     $scalingTarget = Get-ScalingPlanCurrentTarget -ARMToken $armToken -HostPoolResourceId $hostPoolId
+    if ($scalingTarget.Source -eq 'InvalidExclusionTag') {
+        if ($scalingTarget.CanRepairExclusionTag) { return $false }
+        throw $scalingTarget.ErrorMessage
+    }
     if ($scalingTarget.Source -eq 'Error') {
         throw 'Cannot assess SHR idle status because the scaling plan query failed.'
     }

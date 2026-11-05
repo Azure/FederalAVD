@@ -237,6 +237,35 @@ function Remove-SessionHosts {
         $drainSessionHost = $false
         $deleteSessionHost = $false
 
+        if (-not [string]::IsNullOrWhiteSpace($TagScalingPlanExclusionTag) -and
+            -not ($sessionHost.Tags -and $sessionHost.Tags.ContainsKey($TagScalingPlanExclusionTag))) {
+            try {
+                $tagsUri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
+                $body = @{
+                    properties = @{
+                        tags = @{ $TagScalingPlanExclusionTag = 'SessionHostReplacer' }
+                    }
+                    operation = 'Merge'
+                }
+                Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $tagsUri | Out-Null
+                if ($null -ne $sessionHost.Tags) {
+                    $sessionHost.Tags[$TagScalingPlanExclusionTag] = 'SessionHostReplacer'
+                }
+                Write-LogEntry -Message "Protected retiring session host $($sessionHost.SessionHostName) from autoscale" -Level Trace
+            }
+            catch {
+                Write-LogEntry -Message "Failed to protect retiring session host $($sessionHost.SessionHostName) from autoscale: $($_.Exception.Message)" -Level Warning
+                $worker = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+                if (-not $DeferDeviceCleanup -and $deletedHosts.Count -gt 0 -and -not $worker) {
+                    Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts $deletedHosts `
+                        -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice -WaitForVMDeletion `
+                        -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $ResourceGroupName `
+                        -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
+                }
+                throw
+            }
+        }
+
         Write-LogEntry -Message "Evaluating session host $($sessionHost.SessionHostName): Sessions=$($sessionHost.Sessions), AllowNewSession=$($sessionHost.AllowNewSession), PendingDrainTimeStamp=$($sessionHost.PendingDrainTimeStamp)" -Level Trace
 
         if ($sessionHost.Sessions -eq 0) {
@@ -346,7 +375,12 @@ function Remove-SessionHosts {
                 
                 Write-LogEntry -Message "Drain mode enabled for $($sessionHost.SessionHostName)" -Level Trace
                 
-                $drainTimestamp = (Get-Date).ToUniversalTime().ToString('o')
+                $drainTimestamp = if ($sessionHost.PendingDrainTimeStamp) {
+                    $sessionHost.PendingDrainTimeStamp.ToUniversalTime().ToString('o')
+                }
+                else {
+                    (Get-Date).ToUniversalTime().ToString('o')
+                }
                 Write-LogEntry -Message "Setting drain timestamp tag on $($sessionHost.SessionHostName): $drainTimestamp" -Level Trace
                 $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                 $Body = @{
@@ -390,19 +424,6 @@ function Remove-SessionHosts {
                     }
                 }
                 
-                if ($TagScalingPlanExclusionTag -ne ' ') {
-                    Write-LogEntry -Message "Setting scaling plan exclusion tag on $($sessionHost.SessionHostName)" -Level Trace
-                    $Body = @{
-                        properties = @{
-                            tags = @{ $TagScalingPlanExclusionTag = 'SessionHostReplacer' }
-                        }
-                        operation  = 'Merge'
-                    }
-                    Invoke-AzureRestMethod -ARMToken $ARMToken -Body ($Body | ConvertTo-Json -Depth 5) -Method PATCH -Uri $Uri | Out-Null
-                    
-                    Write-LogEntry -Message "Successfully set scaling plan exclusion tag with value: SessionHostReplacer" -Level Trace
-                }
-
                 Write-LogEntry -Message 'Notifying Users' -Level Trace
                 if ($ReplacementMode -eq 'MaintenanceWindow') {
                     Send-DrainNotification `
@@ -447,17 +468,12 @@ function Remove-SessionHosts {
                         Write-LogEntry -Message "VM is already deallocated/stopped - skipping deallocate operation" -Level Trace
                     }
                     
-                    # Tag with shutdown timestamp for later cleanup and ensure scaling exclusion tag is present
+                    # Scaling protection was established before any lifecycle mutation.
                     $shutdownTimestamp = (Get-Date).ToUniversalTime().ToString('o')
                     Write-LogEntry -Message "Setting shutdown timestamp tag on $($sessionHost.SessionHostName): $shutdownTimestamp" -Level Trace
                     $Uri = "$ResourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
                     
-                    # Build tags to apply: shutdown timestamp + scaling exclusion tag (if configured)
                     $tagsToApply = @{ $TagShutdownTimestamp = $shutdownTimestamp }
-                    if ($TagScalingPlanExclusionTag -and $TagScalingPlanExclusionTag -ne ' ') {
-                        $tagsToApply[$TagScalingPlanExclusionTag] = 'SessionHostReplacer'
-                        Write-LogEntry -Message "Ensuring scaling exclusion tag is set on shutdown retention VM: $($sessionHost.SessionHostName)" -Level Trace
-                    }
                     
                     $Body = @{
                         properties = @{

@@ -6,6 +6,15 @@ The [quickStart](quick-start.md#required-deployer-roles-by-deployment) guide lis
 
 ---
 
+SHR also deploys a runtime custom role in the host-pool subscription:
+`FederalAVD SHR Scaling Plan Configuration (...)`. It grants only
+`Microsoft.DesktopVirtualization/scalingPlans/read` and
+`Microsoft.DesktopVirtualization/scalingPlans/write`, with no delete, data-plane or role-management
+actions. The subscription scope supports plans in a different resource group. The deployer needs
+`Microsoft.Authorization/roleDefinitions/write` and role-assignment permission there.
+RBAC cannot limit updates to one property or distinguish shared plans; SHR enforces those
+conditions in code. See the [scaling plan exclusion contract](../deployments/add-ons/sessionHostReplacer/README.md#scaling-plan-exclusion-contract).
+
 ---
 
 ## 1. imageManagement Operator

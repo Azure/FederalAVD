@@ -60,6 +60,16 @@ or image acceptance testing. SideBySide separates deployment readiness from old-
 later scheduled batches can extend the same operation without waiting for prior drains, while
 retirement scope remains explicitly checkpointed and capacity-bounded. DeleteFirst keeps its
 retirement-before-redeployment gates. The canonical design owns the detailed coordination contract.
+Autoscale coordination is a fail-closed configuration contract: enabled scaling plans must honor
+SHR's configured exclusion tag before replacement begins. Only the leased worker repairs an
+unshared plan's exclusion name, preserving existing VM exclusions first; shared mismatches fail.
+The initiator remains read-only. Plan writes are property-only, rechecked and verified, with
+conditional ETag protection when available; without ETags, operators must avoid concurrent edits.
+The scheduled function is `session-host-replacer-initiator`; upgrades explicitly disable its legacy name.
+SHR does not edit shared plans;
+it protects selected retirement hosts before drain, repairs missing protection during retirement,
+and preserves administrator exclusion ownership and the original drain deadline. See the
+[scaling plan exclusion contract](../deployments/add-ons/sessionHostReplacer/README.md#scaling-plan-exclusion-contract).
 Observability uses the durable operation ID as the cycle correlation key, distinct from native
 Application Insights invocation/operation IDs. Both timers emit compact start/outcome events;
 cycle events expose only allowlisted status, pinned image, batch, deployment resource identity,

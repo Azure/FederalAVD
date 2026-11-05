@@ -251,6 +251,7 @@ Describe 'SHR correlated cycle telemetry' {
         $hosts = @(1..50 | ForEach-Object {
             [pscustomobject]@{
                 SessionHostName = "host$_"; FQDN = "host$_"; Sessions = $Sessions
+                Tags = @{ scaling = 'SessionHostReplacer' }
                 AllowNewSession = $false; PoweredOff = $false
                 PendingDrainTimeStamp = [datetime]::UtcNow.AddMinutes(-1)
             }

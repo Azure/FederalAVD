@@ -151,6 +151,21 @@ catch {
     throw
 }
 
+# Validate autoscale protection before any cleanup, tag repair, deployment or retirement.
+$hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+$hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+$hostPoolName = Read-FunctionAppSetting HostPoolName
+$hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+$scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId `
+    -RepairExclusionTag:($replacementMode -ne 'MaintenanceWindow')
+if ($scalingPlanTarget.Source -in @('InvalidExclusionTag', 'Error')) {
+    throw $scalingPlanTarget.ErrorMessage
+}
+if ($replacementMode -eq 'MaintenanceWindow' -and
+    $scalingPlanTarget.ScalingPlanName -and $scalingPlanTarget.Source -ne 'Disabled') {
+    throw "MaintenanceWindow requires autoscale to be disabled. Scaling plan '$($scalingPlanTarget.ScalingPlanName)' is enabled or cannot be safely evaluated."
+}
+
 # Fetch ALL VMs in the resource group once to avoid redundant queries throughout the run
 # Power state will be queried lazily for deletion candidates only
 Write-LogEntry -Message "Fetching all VMs in resource group for caching" -Level Trace
@@ -476,8 +491,7 @@ if ($enableShutdownRetention) {
                 Write-LogEntry -Message "VM $vmName is in shutdown retention - will exclude from replacement processing" -Level Trace
 
                 if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
-                    $scalingPlanExclusionValue = if ($vm.tags.PSObject.Properties.Name -contains $tagScalingPlanExclusionTag) { $vm.tags.$tagScalingPlanExclusionTag } else { $null }
-                    if ($scalingPlanExclusionValue -ne 'SessionHostReplacer') {
+                    if ($vm.tags.PSObject.Properties.Name -notcontains $tagScalingPlanExclusionTag) {
                         try {
                             Write-LogEntry -Message "Restoring scaling plan exclusion tag on shutdown retention VM: $vmName" -Level Warning
                             $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
@@ -735,41 +749,15 @@ if (-not $skipLightweightCheck) {
     }
 }
 
-# Query the scaling plan before either planning path so an up-to-date pool can establish
-# exact-image validation evidence for healthy hosts.
-$scalingPlanTarget = $null
-if ($replacementMode -in @('DeleteFirst', 'SideBySide', 'MaintenanceWindow')) {
-    try {
-        $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
-        $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
-        $hostPoolName = Read-FunctionAppSetting HostPoolName
-        $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
-
-        Write-LogEntry -Message "$replacementMode mode: Querying scaling plan" -Level Trace
-        $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
-
-        if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
-            Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
-        }
-        else {
-            Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
-        }
-    }
-    catch {
-        if ($replacementMode -eq 'MaintenanceWindow') {
-            throw "MaintenanceWindow cannot verify that autoscale is disabled: $($_.Exception.Message)"
-        }
-        Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
-        $scalingPlanTarget = $null
-    }
+if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
+    Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+}
+else {
+    Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
 }
 
 $maintenanceCanStartNewBatch = $true
 if ($replacementMode -eq 'MaintenanceWindow') {
-    if ($scalingPlanTarget.ScalingPlanName -and $scalingPlanTarget.Source -ne 'Disabled') {
-        throw "MaintenanceWindow requires autoscale to be disabled. Scaling plan '$($scalingPlanTarget.ScalingPlanName)' is enabled or cannot be safely evaluated."
-    }
-
     $deploymentState = Get-DeploymentState
     $maintenanceDecision = Get-MaintenanceExecutionDecision `
         -Request $maintenanceRequest `

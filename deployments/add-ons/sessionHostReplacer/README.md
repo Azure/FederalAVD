@@ -247,6 +247,39 @@ request.
 
 ## Prerequisites
 
+### Scaling Plan Exclusion Contract
+
+If autoscale is enabled for the host pool, its scaling plan's **Exclusion tag** must match
+SHR's `tagScalingPlanExclusionTag` (Function App setting `Tag_ScalingPlanExclusionTag`).
+The default tag name is `ScalingPlanExclusion`; `SessionHostReplacer` is the VM tag's
+ownership value, not the name to enter in the scaling plan.
+
+For an enabled plan assigned **only to this host pool**, the leased worker automatically
+repairs a blank or different exclusion name before cleanup or replacement begins. It reads
+the full scaling plan to confirm membership; even a disabled reference to another pool
+makes the plan shared. Initiation discovery stays read-only and hands repairable work to
+the worker. Maintenance overrides do not repair plans; they still require autoscale disabled.
+
+A shared plan with matching names remains supported. A shared mismatch, blank SHR tag name,
+failed read/write, or unverifiable repair stops processing before replacement. Configure
+matching nonempty names manually and use checked recovery if the operation is `NeedsAttention`.
+Disabled or absent plans do not require a match.
+
+When replacing a nonblank plan tag name, SHR first copies existing VM exclusions for this
+pool to the new name and verifies them. Old tags are retained, and administrator ownership
+is preserved so it cannot become a releasable SHR exclusion. Only `properties.exclusionTag`
+is patched on the plan; schedules and assignments are not rewritten. SHR rechecks full
+membership immediately before the patch, uses `If-Match` when an ETag is supplied, and
+verifies the resulting plan. Do not edit plan assignments or exclusion tags concurrently:
+the API does not always provide an ETag, so membership checking and updating are not
+guaranteed atomic.
+
+SHR establishes VM exclusion protection before draining a selected retirement host and
+repairs missing protection on subsequent retirement passes. Existing administrator-owned
+values, including empty values, are preserved. Reasserting drain does not restart an
+existing grace period. `fixSessionHostTags` repairs participation and deployment-timestamp
+tags only; retirement protection is independent of that setting.
+
 ### Required Before Deployment
 
 #### 1. Managed Identity for Function App
@@ -272,6 +305,11 @@ The Session Host Replacer Function App supports two identity options:
 
 - `Desktop Virtualization Contributor` on Host Pool Resource Group
 - `Reader` on Host Pool Subscription (for scaling plan queries)
+- A subscription-scoped `FederalAVD SHR Scaling Plan Configuration (...)` custom role with
+  only `Microsoft.DesktopVirtualization/scalingPlans/read` and `/write`, for unshared-plan
+  exclusion repair. Deployment requires custom-role definition and assignment permissions
+  in the host-pool subscription. RBAC permits plan updates; the unshared/property-only
+  restriction is enforced by SHR's runtime checks, not by RBAC.
 - `Contributor` on Session Host Resource Group  
 - `Reader` on Image Gallery/Marketplace
 
@@ -1020,7 +1058,7 @@ Session hosts use these tags for automation:
 | `AutoReplaceDeployTimestamp` | Birth timestamp for tracking | `2024-12-01T10:00:00Z` | At deployment |
 | `AutoReplacePendingDrainTimestamp` | When draining started | `2024-12-15T14:30:00Z` | When placed in drain mode |
 | `AutoReplaceShutdownTimestamp` | When host was shutdown (SideBySide with retention) | `2024-12-20T16:00:00Z` | When shutdown for retention |
-| `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | Set at deployment, during drain mode, and shutdown retention. Checked and restored on retained VMs each run; removed only from active hosts when the cycle completes or retention begins |
+| `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | Set at deployment and before retirement; missing protection is repaired during retirement and retention. Administrator-owned values are preserved. Only SHR-owned values on exact-image validated, online, non-draining, non-retained hosts are released |
 
 ## Canonical Replacement Flow
 
@@ -1103,7 +1141,7 @@ SHR has one execution model: an initiation timer and a one-minute reconciliation
 Deploy the complete SHR template; changing only an app setting or uploading one script does not
 install this model. See the [execution overview](../../../docs/session-host-replacer.md#the-design-in-one-minute).
 
-The existing `session-host-replacer` timer authorizes a replacement batch and selects an exact image.
+The `session-host-replacer-initiator` timer authorizes a replacement batch and selects an exact image.
 The `session-host-replacer-worker` reconciliation timer then monitors deployment, validates health, releases
 eligible hosts to autoscale and safely removes the approved old hosts without waiting for the next
 initiation tick. It uses the same Function App, identity, storage account and lifecycle engine. Another

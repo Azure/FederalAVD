@@ -63,13 +63,28 @@ Describe 'SHR mandatory two-timer deployment contract' {
 
     It 'preserves the configurable initiation schedule and explicitly enables the reconciler on upgrade' {
         $arm.parameters.timerSchedule.defaultValue | Should Be '0 0,30 * * * *'
-        $initiator.properties.parameters.functionName.value | Should Be 'session-host-replacer'
+        $initiator.properties.parameters.functionName.value | Should Be 'session-host-replacer-initiator'
         $initiator.properties.parameters.schedule.value | Should Be '%TimerSchedule%'
         $settings = $appParameters.functionAppAppSettings.value
         $settings | Should Match "'InitiationEnabled', 'value', string\(parameters\('initiationEnabled'\)\)"
         $settings | Should Match "'ContinuationTimeoutHours', 'value', string\(parameters\('continuationTimeoutHours'\)\)"
         $settings | Should Match "'AzureWebJobs\.session-host-replacer-worker\.Disabled', 'value', 'false'"
+        $settings | Should Match "'AzureWebJobs\.session-host-replacer-initiator\.Disabled', 'value', 'false'"
+        $settings | Should Match "'AzureWebJobs\.session-host-replacer\.Disabled', 'value', 'true'"
         $settings | Should Not Match 'EnableQueueContinuation|extensions__queues'
+    }
+
+    It 'grants only scaling-plan read/write actions and waits for assignment before installing the initiator' {
+        $permissions = $arm.resources.scalingPlanPermissions.properties.template
+        $permissions.resources.role.properties.permissions[0].actions | Should Be @(
+            'Microsoft.DesktopVirtualization/scalingPlans/read'
+            'Microsoft.DesktopVirtualization/scalingPlans/write'
+        )
+        $permissions.resources.role.properties.permissions[0].dataActions.Count | Should Be 0
+        $permissions.resources.role.properties.assignableScopes | Should Be @('[subscription().id]')
+        $permissions.resources.assignment.properties.parameters.principalId.value | Should Be "[parameters('principalId')]"
+        $arm.resources.scalingPlanPermissions.subscriptionId | Should Be "[variables('hostPoolSubscriptionId')]"
+        $initiator.dependsOn | Should Contain 'scalingPlanPermissions'
     }
 
     It 'requires private Blob and Table runtime storage but does not provision queue storage' {

@@ -694,7 +694,7 @@ Describe 'Session Host Replacer shutdown retention scaling protection' {
 
         $restorePosition | Should BeGreaterThan -1
         $retentionFilterPosition | Should BeGreaterThan $restorePosition
-        $runScript | Should Match "scalingPlanExclusionValue -ne 'SessionHostReplacer'[\s\S]+operation\s+= 'Merge'"
+        $runScript | Should Match 'PSObject\.Properties\.Name -notcontains \$tagScalingPlanExclusionTag[\s\S]+operation\s+= ''Merge'''
     }
 
     It 'protects hosts newly placed into retention from same-run tag cleanup' {
@@ -1072,7 +1072,11 @@ Describe 'Session Host Replacer scaling-aware readiness contracts' {
     }
 
     It 'queries a scaling plan and applies readiness in every replacement mode' {
-        $runScript | Should Match ([regex]::Escape('$replacementMode -in @(''DeleteFirst'', ''SideBySide'', ''MaintenanceWindow'')'))
+        $queryPosition = $runScript.IndexOf('$scalingPlanTarget = Get-ScalingPlanCurrentTarget')
+        $inventoryPosition = $runScript.IndexOf('# Fetch ALL VMs')
+        $queryPosition | Should BeGreaterThan -1
+        $queryPosition | Should BeLessThan $inventoryPosition
+        $runScript | Should Match 'InvalidExclusionTag.*Error'
         $runScript | Should Match 'Test-NewSessionHostsAvailable[\s\S]+-ScalingPlanTarget \$scalingPlanTarget'
     }
 
@@ -1536,11 +1540,13 @@ Describe 'Session Host Replacer zero-percent scaling schedule discovery' {
 
     BeforeEach {
         Mock Write-LogEntry -ModuleName SessionHostReplacer.Planning {}
+        Mock Read-FunctionAppSetting -ModuleName SessionHostReplacer.Planning { 'ScalingPlanExclusion' }
         Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Planning {
             @(
                 [PSCustomObject]@{
                     name = 'weekend-plan'
                     properties = [PSCustomObject]@{
+                        exclusionTag = 'ScalingPlanExclusion'
                         timeZone = 'UTC'
                         hostPoolReferences = @(
                             [PSCustomObject]@{

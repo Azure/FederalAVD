@@ -94,7 +94,8 @@ exported logs. Telemetry adds no separate ARM/Table requests or durable-state wr
 
 Run this in the SHR Application Insights resource. It includes both timer names and their `.User`
 categories, plus native exceptions. The exact-category filter
-`Category == "Function.session-host-replacer"` misses the worker and user-category records.
+`Category == "Function.session-host-replacer-initiator"` misses the worker and user-category records.
+The prefix below also includes historical records from the legacy `session-host-replacer` name.
 
 ```kusto
 union traces, exceptions
@@ -136,7 +137,7 @@ Both gates must be open:
    verbose emission from nested modules. Debug output separately needs
    `$global:DebugPreference = 'Continue'`.
 2. Permit Trace in the Functions host for **both** functions. Temporary app-setting overrides
-   can use `AzureFunctionsJobHost__logging__logLevel__Function.session-host-replacer=Trace`
+   can use `AzureFunctionsJobHost__logging__logLevel__Function.session-host-replacer-initiator=Trace`
    and `AzureFunctionsJobHost__logging__logLevel__Function.session-host-replacer-worker=Trace`.
    Check for more-specific category overrides that could still filter `.User` messages.
 3. Apply changes through the controlled deployment/configuration process, account for app

@@ -857,6 +857,13 @@ module roleAssignmentHostPoolSubscription '../../shared/modules/resourceModules/
   }
 }
 
+module scalingPlanPermissions 'modules/scalingPlanPermissions.bicep' = {
+  scope: subscription(hostPoolSubscriptionId)
+  params: {
+    principalId: functionApp.outputs.functionAppPrincipalId
+  }
+}
+
 module roleAssignmentsRGs '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
@@ -940,6 +947,14 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         {
           name: 'InitiationEnabled'
           value: string(initiationEnabled)
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer.Disabled'
+          value: 'true'
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer-initiator.Disabled'
+          value: 'false'
         }
         {
           name: 'AzureWebJobs.session-host-replacer-worker.Disabled'
@@ -1194,9 +1209,10 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
       '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
     }, sharedFunctionFiles)
     functionAppName: functionApp.outputs.functionAppName
-    functionName: 'session-host-replacer'
+    functionName: 'session-host-replacer-initiator'
     schedule: '%TimerSchedule%'
   }
+  dependsOn: [scalingPlanPermissions]
 }
 
 module workerCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
