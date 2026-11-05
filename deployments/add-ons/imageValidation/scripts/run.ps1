@@ -33,7 +33,7 @@ $VirtualMachine = Invoke-RestMethod `
     -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')
 
 
-if ($VirtualMachine.properties.storageProfile.imageReference.version -ne $LatestComputeGalleryImageVersion.name) {
+if ($VirtualMachine.properties.storageProfile.imageReference.exactVersion -ne $LatestComputeGalleryImageVersion.name) {
 	# Delete the virtual machine
 	Invoke-RestMethod `
 		-Headers $AzureManagementHeader `
@@ -49,15 +49,18 @@ if ($VirtualMachine.properties.storageProfile.imageReference.version -ne $Latest
 		properties = @{
 			mode = 'Incremental'
 			parameters = @{
-				DeleteOlderThanDays = @{ value = $([convert]::ToInt32($env:DeleteOlderThanDays, 10)) }
-				DiskName = @{ value = $env:DiskName }
-				FileShareResourceId = @{ value = $env:FileShareResourceId }
-				KeyVaultResourceId = @{ value = $env:KeyVaultResourceId }
-				NicName = @{ value = $env:NicName }
-				SubnetResourceId = @{ value = $env:SubnetResourceId }
-				UserAssignedIdentityResourceId = @{ value = $env:UserAssignedIdentityResourceId }
-				VmName = @{ value = $env:VmName }
-				VmSize = @{ value = $env:VmSize }
+				diskName = @{ value = $env:diskName }
+				imageVersionResourceId = @{ value = $env:imageVersionResourceId }
+				keyVaultResourceId = @{ value = $env:keyVaultResourceId }
+				licenseType = @{ value = $env:licenseType }
+				location = @{ value = $env:location }
+				networkInterfaceName = @{ value = $env:networkInterfaceName }
+				privateIPAddress = @{ value = $env:privateIPAddress }
+				runCommandSettings = @{ value = $env:runCommandSettings }
+				subnetResourceId = @{ value = $env:subnetResourceId }
+				userAssignedIdentityResourceId = @{ value = $env:userAssignedIdentityResourceId }
+				virtualMachineName = @{ value = $env:virtualMachineName }
+				virtualMachineSize = @{ value = $env:virtualMachineSize }
 			}
 			templateLink = @{
 				id = $env:TemplateSpecResourceId
@@ -69,7 +72,7 @@ if ($VirtualMachine.properties.storageProfile.imageReference.version -ne $Latest
 		-Headers $AzureManagementHeader `
 		-Method 'PUT' `
 		-Body $Body `
-		-Uri $($ResourceManagerUriFixed +  '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null
+		-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null
 	
 	Write-Output 'Deployed new image validation virtual machine'
 }
