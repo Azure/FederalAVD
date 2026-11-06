@@ -507,7 +507,7 @@ function Deploy-SessionHosts {
         }
         
         try {
-            $tokenResponse = Invoke-AzureRestMethod `
+            $null = Invoke-AzureRestMethod `
                 -ARMToken $ARMToken `
                 -Body ($Body | ConvertTo-Json -depth 10) `
                 -Method Patch `

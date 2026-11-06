@@ -61,6 +61,29 @@ Describe 'SHR correlated cycle telemetry' {
         $data.DeploymentResourceId | Should Be '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Resources/deployments/shr_cycle_b2'
     }
 
+    It 'accepts -<ParameterName> without overwriting a read-only automatic Event variable' -TestCases @(
+        @{ ParameterName = 'EventName' }
+        @{ ParameterName = 'Event' }
+    ) {
+        param($ParameterName)
+        & (Get-Module SessionHostReplacer.Core -All) {
+            param($Name, $State)
+            Set-Variable -Name Event -Value 'automatic-event-probe' -Option ReadOnly,AllScope -Scope Script
+            try {
+                $parameters = @{ $Name = 'Waiting'; State = $State }
+                Write-ShrEvent @parameters
+                (Get-Variable -Name Event -Scope Script).Value | Should Be 'automatic-event-probe'
+            } finally {
+                Remove-Variable -Name Event -Scope Script -Force
+            }
+        } $ParameterName $global:shrTelemetryState
+        $global:shrTelemetryMessages.Count | Should Be 1
+        $data = [regex]::Match($global:shrTelemetryMessages[0], 'SHR_EVENT \| (\{.*\})$').Groups[1].Value | ConvertFrom-Json
+        $data.Event | Should Be 'Waiting'
+        $data.SchemaVersion | Should Be 1
+        $data.PSObject.Properties.Name | Should Not Contain 'EventName'
+    }
+
     It 'never produces a portal URL for non-resource deployment URIs' {
         $global:shrTelemetryState.DeploymentIntent.Uri = 'https://example.test/invalid?secret=value'
         Write-ShrEvent -Event Waiting -State $global:shrTelemetryState

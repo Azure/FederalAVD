@@ -85,6 +85,7 @@ Describe 'Session Host Replacer real predeployment safety gate' {
                 HostPoolSubscriptionId = 'test'
                 HostPoolResourceGroupName = 'hosts'
                 HostPoolName = 'pool'
+                UserAssignedIdentityClientId = 'configured-client'
                 SessionHostNamePrefix = 'avd-'
                 SessionHostNameIndexLength = 2
                 MinimumHostIndex = 1
@@ -110,6 +111,8 @@ Describe 'Session Host Replacer real predeployment safety gate' {
             Intune = @{ 'avd-01' = @([PSCustomObject]@{ id = 'intune-01'; deviceName = 'avd-01' }) }
             Events = @()
             GraphToken = 'graph-token'
+            TokenExpiryHours = 8
+            DenyTokenGeneration = $false
             DenyGraph = $false
             MalformedGraph = $false
             FailSave = $false
@@ -181,7 +184,13 @@ Describe 'Session Host Replacer real predeployment safety gate' {
             param($Uri, $Method, $Body)
             $path = ([Uri]$Uri).AbsolutePath
             if ($Method -eq 'Post' -and $path.EndsWith('/listRegistrationTokens')) {
-                return [PSCustomObject]@{ expirationTime = [datetime]::UtcNow.AddHours(8).ToString('o') }
+                return [PSCustomObject]@{ expirationTime = [datetime]::UtcNow.AddHours($global:shrPreflight.TokenExpiryHours).ToString('o') }
+            }
+            if ($Method -eq 'Patch' -and $path -eq '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/pool') {
+                $global:shrPreflight.Events += 'Patch registration token'
+                if ($global:shrPreflight.DenyTokenGeneration) { throw 'Registration token update denied' }
+                $global:shrPreflight.TokenUpdateBody = $Body | ConvertFrom-Json
+                return [pscustomobject]@{ token = 'registration-response-must-not-escape' }
             }
             if ($path -match '/virtualMachines$') { return $global:shrPreflight.VMs }
             if ($path -match '/virtualMachines/[^/]+$') {
@@ -276,6 +285,28 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         $result.SessionHostCount | Should Be 20
         @($global:shrPreflight.SubmittedBody.properties.parameters.sessionHostNames.value).Count | Should Be 20
         $result.SessionHostNames | Should Not Contain 'avd-21'
+    }
+
+    It 'preserves registration-token generation without leaking its unused response' {
+        $global:shrPreflight.TokenExpiryHours = 0
+        $results = @(Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1)
+        $results.Count | Should Be 1
+        $results[0].SessionHostNames | Should Be @('avd-01')
+        @($global:shrPreflight.Events | Where-Object { $_ -eq 'Patch registration token' }).Count | Should Be 1
+        $global:shrPreflight.TokenUpdateBody.properties.registrationInfo.registrationTokenOperation | Should Be 'Update'
+        ($results | ConvertTo-Json -Depth 20) | Should Not Match 'registration-response-must-not-escape'
+    }
+
+    It 'does not regenerate a still-valid registration token' {
+        Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 | Out-Null
+        @($global:shrPreflight.Events | Where-Object { $_ -eq 'Patch registration token' }).Count | Should Be 0
+    }
+
+    It 'blocks deployment if registration-token generation fails' {
+        $global:shrPreflight.TokenExpiryHours = 0
+        $global:shrPreflight.DenyTokenGeneration = $true
+        Assert-ReplacerOperationBlocked { Deploy-SessionHosts -ARMToken token -NewSessionHostsCount 1 } 'Registration token update denied'
+        @($global:shrPreflight.Events | Where-Object { $_ -like 'Put deployment *' }).Count | Should Be 0
     }
 
     It 'uses exactly 301 reads for 100 clean names with a <PoolSize>-host registration inventory' -TestCases @(
@@ -622,6 +653,64 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
         $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
         Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It
+    }
+
+    It 'uses the <Identity> managed identity throughout standalone directory cleanup' -TestCases @(
+        @{ Identity = 'configured'; Override = $false; ExpectedClientId = 'configured-client' }
+        @{ Identity = 'explicit'; Override = $true; ExpectedClientId = 'override-client' }
+    ) {
+        param($Identity, $Override, $ExpectedClientId)
+        $hostToRemove = New-ReplacerRemovalTestHost
+        $parameters = @{
+            ARMToken = 'token'
+            VMName = $hostToRemove.VMName
+            VMId = $hostToRemove.ResourceId
+            FQDN = $hostToRemove.FQDN
+        }
+        if ($Override) { $parameters.ClientId = $ExpectedClientId }
+        Remove-VirtualMachine @parameters
+        Assert-MockCalled Get-AccessToken -Times 1 -Exactly -Scope It -ParameterFilter {
+            $ClientId -eq $ExpectedClientId
+        }
+        Assert-MockCalled Wait-SessionHostDeletionVerification -Times 1 -Exactly -Scope It -ParameterFilter {
+            $ClientId -eq $ExpectedClientId
+        }
+        Assert-MockCalled Invoke-GraphApiWithRetry -Times 0 -Exactly -Scope It -ParameterFilter {
+            $ClientId -ne $ExpectedClientId
+        }
+        $global:shrPreflight.Entra['avd-01'].Count | Should Be 0
+        $global:shrPreflight.Intune['avd-01'].Count | Should Be 0
+    }
+
+    It 'uses the <Cloud> ARM endpoint for standalone drain notifications' -TestCases @(
+        @{ Cloud = 'default'; Override = $false; ExpectedEndpoint = 'https://management.azure.com' }
+        @{ Cloud = 'explicit'; Override = $true; ExpectedEndpoint = 'https://management.usgovcloudapi.net' }
+    ) {
+        param($Cloud, $Override, $ExpectedEndpoint)
+        Mock Invoke-AzureRestMethod {
+            param($Method)
+            if ($Method -eq 'Get') {
+                [pscustomobject]@{
+                    name = 'pool/avd-01.contoso.test/3'
+                    properties = @{ userPrincipalName = 'user@contoso.test' }
+                }
+            }
+        } -ParameterFilter { $Uri -like '*/userSessions*' }
+        $parameters = @{
+            ARMToken = 'token'
+            SessionHostName = 'avd-01.contoso.test'
+            DrainGracePeriodHours = 1
+            RequireSuccess = $true
+        }
+        if ($Override) { $parameters.ResourceManagerUri = $ExpectedEndpoint }
+        Send-DrainNotification @parameters
+        $sessionUri = "$ExpectedEndpoint/subscriptions/test/resourceGroups/hosts/providers/Microsoft.DesktopVirtualization/hostPools/pool/sessionHosts/avd-01.contoso.test/userSessions"
+        Assert-MockCalled Invoke-AzureRestMethod -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Method -eq 'Get' -and $Uri -eq "$sessionUri`?api-version=2024-04-03"
+        }
+        Assert-MockCalled Invoke-AzureRestMethod -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Method -eq 'Post' -and $Uri -eq "$sessionUri/3/sendMessage?api-version=2024-04-03"
+        }
     }
 
     It 'persists retirement before unregistering even when the VM delete never starts' {

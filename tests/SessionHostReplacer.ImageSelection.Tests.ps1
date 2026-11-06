@@ -81,6 +81,18 @@ Describe 'Session Host Replacer live regional replica ceiling' {
         Get-ImageReplicaDeploymentLimit @replicaParameters | Should Be 60
     }
 
+    It 'does not overwrite the automatic PROFILE variable when checking replica capacity' {
+        & {
+            Set-Variable -Name PROFILE -Value 'automatic-profile-probe' -Option ReadOnly,AllScope
+            try {
+                Get-ImageReplicaDeploymentLimit @script:replicaParameters | Should Be 40
+                $PROFILE | Should Be 'automatic-profile-probe'
+            } finally {
+                Remove-Variable -Name PROFILE -Force
+            }
+        }
+    }
+
     It 'supports a configured count of <Count> with a ceiling of <Expected>' -TestCases @(
         @{ Count = 1; Expected = 20 }
         @{ Count = 100; Expected = 2000 }

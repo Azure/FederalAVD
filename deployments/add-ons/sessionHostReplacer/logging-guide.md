@@ -86,7 +86,11 @@ does not attach a completed cycle to a new invocation.
 
 Structured records are **JSON in trace message text**, not native `customEvents` or automatically
 populated custom dimensions. Parse the suffix `SHR_TIMER | {json}` or `SHR_EVENT | {json}`.
-The current contract is `SchemaVersion: 1`:
+The current contract is `SchemaVersion: 1`.
+
+The PowerShell helper accepts `Write-ShrEvent -EventName ...`; `-Event` remains a compatibility
+alias. The parameter avoids PowerShell's automatic `$Event` variable. The JSON field remains
+`Event`, so workbook and alert queries do not change.
 
 - Common fields: `Event`, `Trigger`, `CycleId`, `Batch`, `FunctionApp`, `Phase`,
   `InitiationEnabled`, `Reason`.
@@ -150,6 +154,10 @@ the operation's start and latest observation. No rows do not prove health. See
 [suggested alerts](alerts/alerts-guide.md) for structured cycle/timer queries and response guidance.
 They are documentation examples, not deployed rules; the
 [legacy pack](alerts/alerts-guide.md#current-coverage-limitations) does not implement them.
+
+Graph failure diagnostics support both PowerShell 7 HTTP response bodies and legacy response
+streams. If those details cannot be read or emitted, a Trace diagnostic records that limitation;
+the original HTTP failure still controls retry, endpoint fallback, and failure handling.
 
 ## Temporarily Collect Trace Diagnostics
 

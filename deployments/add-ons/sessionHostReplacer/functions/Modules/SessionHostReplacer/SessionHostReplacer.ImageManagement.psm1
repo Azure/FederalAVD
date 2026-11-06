@@ -331,16 +331,16 @@ function Get-ImageReplicaDeploymentLimit {
     if ($regions.Count -ne 1 -or $replication.Count -ne 1 -or $replication[0].state -ne 'Completed') {
         throw "Replica safeguard cannot confirm completed replication of image '$imageId' in region '$Location'."
     }
-    $profile = $version.properties.publishingProfile
-    if ($profile.replicationMode -and $profile.replicationMode -ne 'Full') {
-        throw "Replica safeguard requires Full replication; image '$imageId' uses '$($profile.replicationMode)'."
+    $publishingProfile = $version.properties.publishingProfile
+    if ($publishingProfile.replicationMode -and $publishingProfile.replicationMode -ne 'Full') {
+        throw "Replica safeguard requires Full replication; image '$imageId' uses '$($publishingProfile.replicationMode)'."
     }
 
     # A regional override takes precedence over the version-wide replica count.
     $countValue = $regions[0].regionalReplicaCount
     $countSource = 'Regional'
     if ($null -eq $countValue) {
-        $countValue = $profile.replicaCount
+        $countValue = $publishingProfile.replicaCount
         $countSource = 'VersionDefault'
     }
     $replicas = 0

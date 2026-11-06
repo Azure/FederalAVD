@@ -87,7 +87,10 @@ Describe 'SHR Graph mutation ownership guards' {
 }
 
 Describe 'SHR repeat-safe directory deletion logging' {
-    BeforeAll { Import-Module $modulePath -Force }
+    BeforeAll {
+        Add-Type -AssemblyName System.Net.Http
+        Import-Module $modulePath -Force
+    }
     AfterAll { Remove-Module SessionHostReplacer -Force }
     BeforeEach {
         $global:shrGraphDelete = @{
@@ -95,6 +98,8 @@ Describe 'SHR repeat-safe directory deletion logging' {
             IntegerStatus = $false
             Directory = 'Entra'
             ThrowOnError = $true
+            ResponseShape = 'Legacy'
+            Responses = @()
             Requests = @()
             Logs = @()
         }
@@ -113,8 +118,15 @@ Describe 'SHR repeat-safe directory deletion logging' {
                     $global:shrGraphDelete.Status
                 } else { [Net.HttpStatusCode]$global:shrGraphDelete.Status }
             }
-            $response | Add-Member ScriptMethod GetResponseStream {
-                [IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes('{"error":{"code":"ResourceNotFound"}}'))
+            if ($global:shrGraphDelete.ResponseShape -eq 'HttpResponseMessage') {
+                $response = [Net.Http.HttpResponseMessage]::new([Net.HttpStatusCode]$global:shrGraphDelete.Status)
+                $response.Content = [Net.Http.StringContent]::new('{"error":{"code":"ResourceNotFound"}}')
+                $global:shrGraphDelete.Responses += $response
+            } else {
+                $response | Add-Member ScriptMethod GetResponseStream {
+                    if ($global:shrGraphDelete.ResponseShape -eq 'Unreadable') { throw 'Response stream unavailable' }
+                    [IO.MemoryStream]::new([Text.Encoding]::UTF8.GetBytes('{"error":{"code":"ResourceNotFound"}}'))
+                }
             }
             $exception | Add-Member -NotePropertyName Response -NotePropertyValue $response
             throw $exception
@@ -129,7 +141,38 @@ Describe 'SHR repeat-safe directory deletion logging' {
             $global:shrGraphDelete.Logs += @{ Message = $Message; Level = $Level }
         }
     }
-    AfterEach { Remove-Variable shrGraphDelete -Scope Global }
+    AfterEach {
+        foreach ($response in $global:shrGraphDelete.Responses) { $response.Dispose() }
+        Remove-Variable shrGraphDelete -Scope Global
+    }
+
+    It 'reads <Shape> error bodies without replacing the original HTTP failure' -TestCases @(
+        @{ Shape = 'Legacy' }
+        @{ Shape = 'HttpResponseMessage' }
+    ) {
+        param($Shape)
+        $global:shrGraphDelete.ResponseShape = $Shape
+        $global:shrGraphDelete.Status = 500
+        $global:shrGraphDelete.ThrowOnError = $false
+        {
+            Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                -Method Get -Uri '/v1.0/devices' -ClientId test-client
+        } | Should Throw 'Simulated HTTP 500'
+        $global:shrGraphDelete.Logs.Message | Should Contain 'Graph API error response: {"error":{"code":"ResourceNotFound"}}'
+    }
+
+    It 'reports unreadable error details while preserving the original HTTP failure' {
+        $global:shrGraphDelete.ResponseShape = 'Unreadable'
+        $global:shrGraphDelete.Status = 500
+        $global:shrGraphDelete.ThrowOnError = $false
+        {
+            Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
+                -Method Get -Uri '/v1.0/devices' -ClientId test-client
+        } | Should Throw 'Simulated HTTP 500'
+        @($global:shrGraphDelete.Logs | Where-Object {
+            $_.Level -eq 'Trace' -and $_.Message -like 'Graph error-response details could not*'
+        }).Count | Should Be 1
+    }
 
     It 'logs an already-absent <Directory> device at Information without invoking the error logger' -TestCases @(
         @{ Directory = 'Entra'; DisplayName = 'Entra ID'; Collection = 'devices' }
@@ -208,11 +251,14 @@ Describe 'SHR repeat-safe directory deletion logging' {
     }
 
     It 'retains the GCCH-to-DoD fallback after HTTP <Status> and checks ownership before both DELETEs' -TestCases @(
-        @{ Status = 401; IntegerStatus = $false }
-        @{ Status = 403; IntegerStatus = $true }
+        @{ Status = 401; IntegerStatus = $false; Shape = 'Legacy' }
+        @{ Status = 403; IntegerStatus = $true; Shape = 'Legacy' }
+        @{ Status = 401; IntegerStatus = $false; Shape = 'Unreadable' }
+        @{ Status = 403; IntegerStatus = $false; Shape = 'HttpResponseMessage' }
     ) {
-        param($Status, $IntegerStatus)
+        param($Status, $IntegerStatus, $Shape)
         $global:shrGraphDelete.Status = $Status
+        $global:shrGraphDelete.ResponseShape = $Shape
         $global:shrGraphDelete.IntegerStatus = $IntegerStatus
         $global:shrGraphDelete.SecondStatus = 204
         $global:shrGraphDelete.ThrowOnError = $false

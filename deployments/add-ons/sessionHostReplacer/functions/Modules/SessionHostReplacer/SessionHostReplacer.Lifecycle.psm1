@@ -327,6 +327,7 @@ function Remove-SessionHosts {
                         if ($elapsedMinutes -ge $MaintenanceLogOffDelayMinutes) {
                             $logoffResult = Remove-SessionHostUserSessions `
                                 -ARMToken $ARMToken `
+                                -ResourceManagerUri $ResourceManagerUri `
                                 -SessionHostName $sessionHost.FQDN `
                                 -HostPoolSubscriptionId $HostPoolSubscriptionId `
                                 -HostPoolName $HostPoolName `
@@ -435,7 +436,7 @@ function Remove-SessionHosts {
                         -RequireSuccess
                 }
                 else {
-                    Send-DrainNotification -ARMToken $ARMToken -SessionHostName ($sessionHost.FQDN)
+                    Send-DrainNotification -ARMToken $ARMToken -SessionHostName ($sessionHost.FQDN) -ResourceManagerUri $ResourceManagerUri
                 }
             }
             catch {
@@ -680,7 +681,7 @@ function Remove-VirtualMachine {
     Assert-SessionHostNamesAvailable -ARMToken $ARMToken -GraphToken $GraphToken -SessionHosts @($deletedHost) -WaitForVMDeletion `
         -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice `
         -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
-        -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
+        -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri -ClientId $ClientId
     
     Write-LogEntry -Message "Successfully deleted VM $VMName"
 }
@@ -711,6 +712,9 @@ function Send-DrainNotification {
 
         [Parameter()]
         [string] $MessageBody = "Your session host {0} is being replaced. Please save your work and log off. You will be disconnected in {1} hours.",
+
+        [Parameter()]
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
 
         [Parameter()]
         [switch] $RequireSuccess

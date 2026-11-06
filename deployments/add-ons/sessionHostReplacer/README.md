@@ -318,6 +318,11 @@ The Session Host Replacer Function App supports two identity options:
 - `Device.ReadWrite.All` - For Entra ID device deletion
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
 
+Standalone `Remove-VirtualMachine` calls honor the optional `ClientId` override throughout
+immediate directory cleanup, deletion verification, and Graph endpoint retries. Otherwise,
+cleanup uses the configured managed identity. With `DeferCleanup`, the caller remains
+responsible for subsequent cleanup and its identity.
+
 > [!IMPORTANT]
 > **Every replacement mode:** Native Entra joined hosts require Entra cleanup and, when Intune
 > enrolled, Intune cleanup. SideBySide can reuse vacant names after manual VM deletion, so the same
