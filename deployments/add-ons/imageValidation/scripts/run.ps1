@@ -33,7 +33,7 @@ $VirtualMachine = Invoke-RestMethod `
     -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')
 
 
-if ($VirtualMachine.properties.storageProfile.imageReference.exactVersion -ne $LatestComputeGalleryImageVersion.name) {
+if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {
 	# Delete the virtual machine
 	Invoke-RestMethod `
 		-Headers $AzureManagementHeader `
