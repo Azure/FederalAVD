@@ -507,12 +507,17 @@ Describe 'FSLogix Storage Template Spec deployment VM contract' {
     }
 }
 
-Describe 'Image Build and Session Host Replacer Template Spec size budgets' {
+Describe 'Image Build, Image Validation and Session Host Replacer Template Spec size budgets' {
     It 'fits <Name> serialized ARM and the complete form/package with envelope allowance' -TestCases @(
         @{
             Name = 'Image Build'
             TemplateFile = 'deployments\imageBuild\imageBuild.json'
             FormFile = 'deployments\imageBuild\uiFormDefinition.json'
+        }
+        @{
+            Name = 'Image Validation'
+            TemplateFile = 'deployments\add-ons\imageValidation\main.json'
+            FormFile = 'deployments\add-ons\imageValidation\uiFormDefinition.json'
         }
         @{
             Name = 'SHR'
@@ -538,6 +543,40 @@ Describe 'Image Build and Session Host Replacer Template Spec size budgets' {
 }
 
 Describe 'Template Spec naming conventions' {
+    It 'includes Image Validation only when add-on publication is enabled: <Enabled>' -TestCases @(
+        @{ Enabled = $true }
+        @{ Enabled = $false }
+    ) {
+        param($Enabled)
+
+        $catalogBlock = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+                $node.Extent.Text.StartsWith('if ($CreateAddOns)')
+        }, $true)
+        $catalogBlock | Should Not BeNullOrEmpty
+        $CreateAddOns = $Enabled
+        $templateSpecs = @()
+        $publisherRoot = Split-Path -Parent $scriptPath
+        Invoke-Expression ($catalogBlock.Extent.Text.Replace('$PSScriptRoot', '$publisherRoot'))
+        $imageValidation = @($templateSpecs | Where-Object Purpose -eq 'image-validation')
+        $imageValidation.Count | Should Be ([int]$Enabled)
+        if ($Enabled) {
+            $spec = $imageValidation[0]
+            $spec.DisplayName | Should Be 'AVD Image Validation'
+            [IO.Path]::GetFullPath($spec.TemplateFile) |
+                Should Be (Join-Path $repoRoot 'deployments\add-ons\imageValidation\main.json')
+            [IO.Path]::GetFullPath($spec.UiFormDefinition) |
+                Should Be (Join-Path $repoRoot 'deployments\add-ons\imageValidation\uiFormDefinition.json')
+            (Test-Path -LiteralPath $spec.TemplateFile -PathType Leaf) | Should Be $true
+            (Test-Path -LiteralPath $spec.UiFormDefinition -PathType Leaf) | Should Be $true
+            New-ConventionName -Components @('resourceType', 'workload', 'purpose', 'location') `
+                -Delimiter '-' -ResourceTypeCode 'ts' -Purpose $spec.Purpose `
+                -LocationAbbreviation 'use' -Workload 'avd' |
+                Should Be 'ts-avd-image-validation-use'
+        }
+    }
+
     It 'resolves every registered add-on purpose with delimiter <Delimiter>' -TestCases @(
         @{ Delimiter = '-' }
         @{ Delimiter = '_' }

@@ -20,9 +20,15 @@ Describe 'Image validation Portal form' {
         }
     }
 
-    It 'provides the requested steps plus validation VM, networking and monitoring settings' {
-        ($form.view.properties.steps.name -join ',') | Should Be 'basics,validationVm,functionApp,networking,monitoring,namingAndTags'
+    It 'provides the requested steps with network and monitoring settings under the function app' {
+        ($form.view.properties.steps.name -join ',') | Should Be 'basics,validationVm,functionApp,namingAndTags'
         $steps.functionApp.label | Should Be 'Function App Settings'
+        $networkSection = $steps.functionApp.elements | Where-Object name -eq 'networkSettings'
+        $networkSection.type | Should Be 'Microsoft.Common.Section'
+        $networkSection.label | Should Be 'Network Settings'
+        ($networkSection.elements.name -join ',') | Should Be 'privateEndpoint,publicWarning,prerequisites,integrationSubnetId,endpointSubnetId,blobDnsZone,appDnsZone,vaultDnsZone'
+        @($networkSection.elements | Where-Object type -eq 'Microsoft.Common.Section').Count | Should Be 0
+        (Get-Content -LiteralPath $formPath -Raw) | Should Not Match "steps\('networking'\)|\.privateNetwork\."
         $steps.namingAndTags.label | Should Be 'Naming + Tags'
     }
 
@@ -33,11 +39,11 @@ Describe 'Image validation Portal form' {
         ($form.view.outputs.parameters.PSObject.Properties.Name | Sort-Object) -join ',' |
             Should Be (($template.parameters.PSObject.Properties.Name | Sort-Object) -join ',')
         $form.view.outputs.parameters.imageDefinitionResourceId | Should Be "[steps('basics').imageDefinition.id]"
-        $form.view.outputs.parameters.privateEndpoint | Should Be "[equals(steps('networking').privateEndpoint, 'private')]"
+        $form.view.outputs.parameters.privateEndpoint | Should Be "[equals(steps('functionApp').networkSettings.privateEndpoint, 'private')]"
         $form.view.outputs.parameters.namingConvention | Should Be "[parse('{}')]"
         $template.parameters.functionAppAppSettings.type | Should Be 'array'
         $template.parameters.privateEndpoint.type | Should Be 'bool'
-        $template.parameters.tags.type | Should Be 'object'
+        $template.parameters.tags.type | Should Be 'array'
     }
 
     It 'uses label defaults and preserves the template defaults' {
@@ -48,12 +54,12 @@ Describe 'Image validation Portal form' {
                 }
             }
         }
-        ($steps.networking.elements | Where-Object name -eq 'privateEndpoint').defaultValue |
+        (($steps.functionApp.elements | Where-Object name -eq 'networkSettings').elements | Where-Object name -eq 'privateEndpoint').defaultValue |
             Should Be 'Private endpoints (recommended)'
         $template.parameters.privateEndpoint.defaultValue | Should Be $true
-        ($steps.namingAndTags.elements | Where-Object name -eq 'identifier').defaultValue |
+        (($steps.namingAndTags.elements | Where-Object name -eq 'naming').elements | Where-Object name -eq 'identifier').defaultValue |
             Should Be $template.parameters.identifier.defaultValue
-        ($steps.monitoring.elements | Where-Object name -eq 'enableMonitoring').defaultValue | Should Be 'Disabled'
+        (($steps.functionApp.elements | Where-Object name -eq 'monitoring').elements | Where-Object name -eq 'enableMonitoring').defaultValue | Should Be 'Disabled'
     }
 
     It 'maps the required validation VM inputs and defaults Run Commands to a typed empty array' {
@@ -75,24 +81,65 @@ Describe 'Image validation Portal form' {
     }
 
     It 'requires private inputs only in private mode and clears disabled selections' {
-        $privateSection = $steps.networking.elements | Where-Object name -eq 'privateNetwork'
-        $privateSection.visible | Should Be "[equals(steps('networking').privateEndpoint, 'private')]"
+        $networkSection = $steps.functionApp.elements | Where-Object name -eq 'networkSettings'
+        $privateCondition = "[equals(steps('functionApp').networkSettings.privateEndpoint, 'private')]"
+        ($networkSection.elements | Where-Object name -eq 'prerequisites').visible | Should Be $privateCondition
+        ($networkSection.elements | Where-Object name -eq 'publicWarning').visible |
+            Should Be "[equals(steps('functionApp').networkSettings.privateEndpoint, 'public')]"
+        $form.view.outputs.parameters.privateEndpoint | Should Be $privateCondition
+        $privateOutputs = @{
+            functionAppDelegatedSubnetResourceId = 'integrationSubnetId'
+            privateEndpointSubnetResourceId = 'endpointSubnetId'
+            azureBlobPrivateDnsZoneResourceId = 'blobDnsZone.id'
+            azureFunctionAppPrivateDnsZoneResourceId = 'appDnsZone.id'
+            azureKeyVaultPrivateDnsZoneResourceId = 'vaultDnsZone.id'
+        }
         foreach ($name in @('integrationSubnetId', 'endpointSubnetId', 'blobDnsZone', 'appDnsZone', 'vaultDnsZone')) {
-            ($privateSection.elements | Where-Object name -eq $name).constraints.required |
-                Should Be $privateSection.visible
+            $control = $networkSection.elements | Where-Object name -eq $name
+            $control.visible | Should Be $privateCondition
+            $control.constraints.required | Should Be $privateCondition
         }
-        foreach ($name in @('functionAppDelegatedSubnetResourceId', 'privateEndpointSubnetResourceId', 'azureBlobPrivateDnsZoneResourceId', 'azureFunctionAppPrivateDnsZoneResourceId', 'azureKeyVaultPrivateDnsZoneResourceId')) {
-            $form.view.outputs.parameters.$name | Should Match "^\[if\(equals\(steps\('networking'\)\.privateEndpoint, 'private'\), .+, ''\)\]$"
+        foreach ($name in $privateOutputs.Keys) {
+            $form.view.outputs.parameters.$name |
+                Should Be "[if(equals(steps('functionApp').networkSettings.privateEndpoint, 'private'), steps('functionApp').networkSettings.$($privateOutputs[$name]), '')]"
         }
+        ($networkSection.elements | Where-Object name -eq 'endpointSubnetId').constraints.validations[1].isValid |
+            Should Be "[not(equals(toLower(steps('functionApp').networkSettings.integrationSubnetId), toLower(steps('functionApp').networkSettings.endpointSubnetId)))]"
         $form.view.outputs.parameters.existingAppServicePlanResourceId |
             Should Be "[if(equals(steps('functionApp').hostingPlan, 'existing'), steps('functionApp').existingPlan.id, '')]"
         $form.view.outputs.parameters.privateLinkScopeResourceId |
-            Should Be "[if(and(equals(steps('monitoring').enableMonitoring, 'enabled'), equals(steps('monitoring').privateMonitoring, 'private')), steps('monitoring').privateLinkScope.id, '')]"
+            Should Be "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').monitoring.privateMonitoring, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]"
         $form.view.outputs.parameters.encryptionKeyVaultNameOverride |
-            Should Be "[steps('namingAndTags').overrides.encryptionKeyVault]"
+            Should Be "[steps('namingAndTags').naming.encryptionKeyVault]"
     }
 
-    It 'outputs typed app-setting rows and a flat tag object' {
+    It 'groups monitoring controls and preserves conditional selections and output bindings' {
+        $monitoringSection = $steps.functionApp.elements | Where-Object name -eq 'monitoring'
+        $monitoringSection.type | Should Be 'Microsoft.Common.Section'
+        $monitoringSection.label | Should Be 'Monitoring'
+        ($monitoringSection.elements.name -join ',') | Should Be 'enableMonitoring,workspace,privateMonitoring,monitoringInfo,privateLinkScope'
+        @($monitoringSection.elements | Where-Object type -eq 'Microsoft.Common.Section').Count | Should Be 0
+        (Get-Content -LiteralPath $formPath -Raw) | Should Not Match "steps\('monitoring'\)"
+        $enabled = "[equals(steps('functionApp').monitoring.enableMonitoring, 'enabled')]"
+        foreach ($name in @('workspace', 'privateMonitoring', 'monitoringInfo')) {
+            ($monitoringSection.elements | Where-Object name -eq $name).visible | Should Be $enabled
+        }
+        foreach ($name in @('workspace', 'privateMonitoring')) {
+            ($monitoringSection.elements | Where-Object name -eq $name).constraints.required | Should Be $enabled
+        }
+        foreach ($control in $monitoringSection.elements | Where-Object type -eq 'Microsoft.Common.DropDown') {
+            ($control.defaultValue -in $control.constraints.allowedValues.label) | Should Be $true
+        }
+        $privateScope = $monitoringSection.elements | Where-Object name -eq 'privateLinkScope'
+        $privateScope.visible | Should Be "[and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').monitoring.privateMonitoring, 'private'))]"
+        $privateScope.constraints.required | Should Be $privateScope.visible
+        $form.view.outputs.parameters.logAnalyticsWorkspaceResourceId |
+            Should Be "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]"
+        $form.view.outputs.parameters.privateLinkScopeResourceId |
+            Should Be "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').monitoring.privateMonitoring, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]"
+    }
+
+    It 'outputs typed app-setting rows' {
         $grid = $steps.functionApp.elements | Where-Object name -eq 'appSettings'
         ($grid.constraints.columns.id -join ',') | Should Be 'name,value'
         ($template.parameters.functionAppAppSettings.items.properties.PSObject.Properties.Name | Sort-Object) -join ',' |
@@ -103,8 +150,69 @@ Describe 'Image validation Portal form' {
             ($column.element.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
         }
         $form.view.outputs.parameters.functionAppAppSettings | Should Be "[steps('functionApp').appSettings]"
-        $form.view.outputs.parameters.tags |
-            Should Be "[coalesce(steps('namingAndTags').tags['Microsoft.Resources/resourceGroups'], parse('{}'))]"
+    }
+
+    It 'passes the single tag set without a separate tagsByResource parameter' {
+        $form.view.outputs.parameters.tags | Should Be "[steps('namingAndTags').tagsSection.tags]"
+        ($form.view.outputs.parameters.PSObject.Properties.Name -contains 'tagsByResource') | Should Be $false
+        ($template.parameters.PSObject.Properties.Name -contains 'tagsByResource') | Should Be $false
+        $tagsSection = $steps.namingAndTags.elements | Where-Object name -eq 'tagsSection'
+        $tagsControl = $tagsSection.elements | Where-Object name -eq 'tags'
+        $tagsControl.type | Should Be 'Microsoft.Common.EditableGrid'
+        $tagsControl.constraints.rows.count.min | Should Be 0
+        $tagsControl.constraints.rows.count.max | Should Be $template.parameters.tags.maxLength
+        ($tagsControl.constraints.columns.id -join ',') | Should Be 'key,value'
+        foreach ($column in $tagsControl.constraints.columns) {
+            $column.element.type | Should Be 'Microsoft.Common.TextBox'
+            ($column.element.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
+        }
+        $keyColumn = $tagsControl.constraints.columns | Where-Object id -eq 'key'
+        $valueColumn = $tagsControl.constraints.columns | Where-Object id -eq 'value'
+        $keyColumn.element.constraints.required | Should Be $true
+        $valueColumn.element.constraints.required | Should Be $false
+        $keyRegex = $keyColumn.element.constraints.validations[0].regex
+        ('Environment' -match $keyRegex) | Should Be $true
+        (('a' * 128) -match $keyRegex) | Should Be $true
+        (('a' * 129) -match $keyRegex) | Should Be $false
+        foreach ($key in @('', 'Invalid/Key', 'Invalid\Key', 'Invalid?Key', 'Invalid&Key', 'Invalid%Key', 'Invalid<Key', 'Invalid>Key', "Invalid`nKey")) {
+            ($key -match $keyRegex) | Should Be $false
+        }
+        $keyColumn.element.constraints.validations[1].isValid |
+            Should Be "[equals(length(filter(steps('namingAndTags').tagsSection.tags, (item) => equals(toLower(item.key), toLower(last(take(steps('namingAndTags').tagsSection.tags, `$rowIndex)).key)))), 1)]"
+        $valueRegex = $valueColumn.element.constraints.validations[0].regex
+        ('' -match $valueRegex) | Should Be $true
+        ('Quotes: " and path: C:\Temp' -match $valueRegex) | Should Be $true
+        (('a' * 256) -match $valueRegex) | Should Be $true
+        (('a' * 257) -match $valueRegex) | Should Be $false
+        ($tagsSection.elements | Where-Object name -eq 'tagsInfo').options.text |
+            Should Be 'Enter tags to apply to all add-on resources that support tags.'
+        (Get-Content -LiteralPath $formPath -Raw) | Should Not Match "\[['""]"
+    }
+
+    It 'separates naming and tags into sections with updated bindings' {
+        ($steps.namingAndTags.elements.name -join ',') | Should Be 'naming,tagsSection'
+        ($steps.namingAndTags.elements.label -join ',') | Should Be 'Naming,Tags'
+        foreach ($section in $steps.namingAndTags.elements) {
+            $section.type | Should Be 'Microsoft.Common.Section'
+            @($section.elements | Where-Object type -eq 'Microsoft.Common.Section').Count | Should Be 0
+        }
+        $naming = $steps.namingAndTags.elements | Where-Object name -eq 'naming'
+        ($naming.elements.name -join ',') | Should Be 'namingInfo,identifier,resourceGroup,identity,encryptionKeyVault,plan,functionApp,storage'
+        $bindings = @{
+            identifier = 'identifier'
+            resourceGroupNameOverride = 'resourceGroup'
+            userAssignedIdentityNameOverride = 'identity'
+            encryptionKeyVaultNameOverride = 'encryptionKeyVault'
+            functionAppNameOverride = 'functionApp'
+            storageAccountNameOverride = 'storage'
+        }
+        foreach ($parameter in $bindings.Keys) {
+            $form.view.outputs.parameters.$parameter | Should Be "[steps('namingAndTags').naming.$($bindings[$parameter])]"
+        }
+        $form.view.outputs.parameters.appServicePlanNameOverride |
+            Should Be "[if(equals(steps('functionApp').hostingPlan, 'new'), steps('namingAndTags').naming.plan, '')]"
+        (Get-Content -LiteralPath $formPath -Raw) |
+            Should Not Match "steps\('namingAndTags'\)\.(overrides|identifier|tags)\b"
     }
 
     It 'requires schedule structure without restricting it to a hard-coded schedule' {

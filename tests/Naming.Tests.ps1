@@ -363,7 +363,7 @@ Describe 'Shared naming and module metadata contracts' {
         $purposes = @([regex]::Matches($source, "(?m)^\s*(?:@\{\s*)?Purpose = '([^']+)'") |
             ForEach-Object { $_.Groups[1].Value })
         $expected = @($policy.templateSpecs.PSObject.Properties.Value) +
-            @($policy.identifiers.imageManagement, ($policy.resources.alertsAutomation.purpose -join '-'))
+            @($policy.identifiers.imageManagement, ($policy.resources.alertsAutomation.purpose -join '-'), 'image-validation')
         ($purposes | Sort-Object) -join ',' | Should Be (($expected | Sort-Object) -join ',')
         $source | Should Match ([regex]::Escape("-Purpose '$($policy.resources.operationsResourceGroup.purpose -join '-')'"))
     }
