@@ -1233,7 +1233,6 @@ module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty
   params: {
     workbookName: workbookName
     location: workbookLocation
-    applicationInsightsResourceId: functionApp.outputs.applicationInsightsResourceId
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     tags: union({ 'cm-resource-parent': logAnalyticsWorkspaceResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
   }

@@ -2079,6 +2079,57 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
 5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
    follow the cycle across invocations. The timeline retains the whole selected cycle.
 
+#### Inspect a current SHR invocation
+
+Select **Page > Invocations**. The latest 200 native completed request records show execution
+start/completion, function/app, outcome, duration, request ID, native invocation ID, operation ID
+and role instance. This includes the current initiator and reconciliation worker, including idle ticks.
+The retired single-timer function is excluded. Select an entry in
+**Invocation to inspect** for its request details and latest 500 trace/exception records in
+chronological order. Narrow the time range to reach older executions. Cycle and cycle-invocation
+filters do not constrain this page; component, host-pool and time filters do.
+
+Missing invocation IDs remain missing; the selector uses a separately labeled request-ID key.
+Log correlation falls back to a nonempty native operation ID when invocation identity is absent.
+Host-pool mapping requires a pool-prefixed trace in the time range: use **All Host Pools** when
+that mapping is unavailable. Missing, filtered or sampled telemetry is not proof of success.
+
+#### Test the workspace-scoped workbook
+
+Test against the current main-branch SHR function code. Publish the workbook module to a new
+test workbook ID so the existing workbook is preserved. The workbook-only deployment does not
+upgrade function code or configuration; update the test SHR deployment separately if needed.
+Use PowerShell with an approved Azure context and workload resource IDs:
+
+```powershell
+$WorkspaceId = '/subscriptions/<subscription>/resourceGroups/<workload-rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>'
+$TestWorkbookId = [guid]::NewGuid().ToString()
+New-AzResourceGroupDeployment `
+    -ResourceGroupName '<workload-workspace-rg>' `
+    -TemplateFile '.\deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep' `
+    -workbookName $TestWorkbookId `
+    -location '<approved-workbook-region>' `
+    -logAnalyticsWorkspaceResourceId $WorkspaceId
+```
+
+Select the workspace's subscription before running. Record `$TestWorkbookId` to identify the test
+copy; its display name matches the normal dashboard. The deployment identity needs workbook write
+access to that resource group. Readers need workload workspace query access and component/resource
+visibility for the pickers; no central workspace access is required or granted.
+
+In Azure Government, verify **Operations**, **Configuration** and **Invocations** render. Compare a
+known request ID with one row in the workload workspace and a policy-exported copy centrally:
+the history should show one execution. Select successful, failed and idle executions for both timers,
+confirm outcome/duration and correlated native exceptions and traces, change component/host-pool/
+time selections, and test missing identity/empty results. Cycle pages require emitted cycle events;
+idle ticks need not have an active cycle. Test with an operator lacking central workspace access.
+Check the full exception detail payload only under approved telemetry permissions.
+
+This changes only workbook queries. It does not remove stored copies, modify central diagnostic
+policy, fix duplication within one workspace, or change the Portal's Application Insights-backed
+invocation view. Existing saved workbook copies need their own update. Offline tests do not prove
+live KQL execution, access or Portal rendering.
+
 The timer-health table separates **Initiation** from **Reconciliation** and shows their last
 observed starts, outcomes and failures. It does not mark sparse initiation schedules as delayed
 using a fixed 35/45-minute threshold. A started invocation with no observed completion is not
@@ -2208,8 +2259,8 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
   and resource group
 - **One Application Insights per Function App** deploys into the Function App resource group and
   uses the same host-pool identity components as the Function App
-- **Cross-Resource Queries**: The workbook queries the Application Insights resources selected by
-  the operator, subject to resource visibility and query permissions
+- **Workspace-Scoped Queries**: The workbook queries only its deployed workload workspace's
+  `AppTraces`, `AppRequests` and `AppExceptions`; component IDs filter records within that boundary
 - **Multi-Region Filtering**: Use the **Application Insights** parameter to select instances across regions
 - **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
 
@@ -2221,9 +2272,9 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
   workbook, even when their Function Apps and session hosts use different resource groups
 - **Different Workspaces**: Receive separate workbooks so their monitoring boundaries remain
   independent
-- The Application Insights picker uses Resource Graph discovery. Its query is not restricted to
-  components linked to this workspace; explicitly select the intended SHR resources rather than
-  assuming workbook placement enforces a query boundary.
+- The Application Insights picker uses Resource Graph discovery restricted to components linked
+  to this workspace. The deployment injects the workspace query scope. Telemetry exported by policy
+  to another workspace is not combined into the dashboard; those exports remain untouched.
 - The workbook is associated with the selected Log Analytics workspace and is available from
   **Log Analytics workspace > Workbooks**. It can also be found by display name from
   **Azure Monitor > Workbooks**.

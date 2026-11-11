@@ -328,7 +328,7 @@ Describe 'SHR workbook cycle tracing contract' {
             $parameter = $parameters | Where-Object name -eq $name
             $parameter.value | Should Be '*'
             $parameter.query | Should Match 'timestamp \{TimeRange\}'
-            $parameter.crossComponentResources | Should Contain '{ApplicationInsights}'
+            ($parameter.crossComponentResources -contains '{WorkloadWorkspace}') | Should Be $true
             $parameter.query | Should Match "datatable\(value:string, label:string, selected:bool\)"
         }
         ($parameters | Where-Object name -eq 'Cycle').query | Should Match '^[\s\S]*matches regex'
@@ -352,6 +352,101 @@ Describe 'SHR workbook cycle tracing contract' {
         $query | Should Match "NativeKey !in \('inv:', 'op:'\)"
         $query | Should Match 'Source, NativeKey'
         $query | Should Match 'take 500'
+    }
+
+    It 'queries one deployed workspace rather than the resource-scoped Application Insights view' {
+        $workspace = $parameters | Where-Object name -eq 'WorkloadWorkspace'
+        $workspace.value | Should Be '__SHR_WORKSPACE_RESOURCE_ID__'
+        $workspace.isHidden | Should Be $true
+        $workspace.multiSelect | Should Be $false
+        $picker = $parameters | Where-Object name -eq 'ApplicationInsights'
+        $picker.query | Should Match 'properties.WorkspaceResourceId'
+        $module = Get-Content (Join-Path $shrRoot 'modules\workBook\workbook.bicep') -Raw
+        $module | Should Match "replace\(string\(workbookTemplateWithFallback\), '__SHR_WORKSPACE_RESOURCE_ID__', logAnalyticsWorkspaceResourceId\)"
+        $module | Should Not Match 'param applicationInsightsResourceId'
+    }
+
+    It 'scopes every telemetry query and nested selector to the workspace with component filtering' {
+        function Assert-WorkspaceQuery {
+            param($Node)
+            if ($null -eq $Node) { return }
+            if ($Node -is [array]) {
+                foreach ($child in $Node) { Assert-WorkspaceQuery $child }
+            } elseif ($Node -is [pscustomobject]) {
+                $Node.resourceType | Should Not Be 'microsoft.insights/components'
+                if ($Node.queryType -eq 0 -and $Node.query) {
+                    $Node.resourceType | Should Be 'microsoft.operationalinsights/workspaces'
+                    ($Node.crossComponentResources -contains '{WorkloadWorkspace}') | Should Be $true
+                    if ($Node.query -match '\b(traces|requests|exceptions)\b') {
+                        $Node.query | Should Match '_ResourceId in~ \(\{ApplicationInsights\}\)'
+                        $Node.query | Should Match 'TimeGenerated \{TimeRange\}'
+                        $Node.query | Should Not Match '\b(app|workspace)\('
+                    }
+                }
+                foreach ($property in $Node.PSObject.Properties) {
+                    if ($property.Value -is [array] -or $property.Value -is [pscustomobject]) {
+                        Assert-WorkspaceQuery $property.Value
+                    }
+                }
+            }
+        }
+        Assert-WorkspaceQuery $book
+    }
+
+    It 'normalizes workspace schemas without changing request duration units or resource identity' {
+        $page = $book.items | Where-Object name -eq 'invocations-page'
+        $history = ($page.content.items | Where-Object name -eq 'invocation-history').content.query
+        $history | Should Match 'let requests = AppRequests'
+        $history | Should Match 'duration = DurationMs'
+        $history | Should Match 'customDimensions = Properties'
+        $history | Should Match 'timestamp \+ \(duration \* 1ms\)'
+        $history | Should Match 'Source = tostring\(_ResourceId\)'
+    }
+
+    It 'lists only current initiator and worker invocations including idle ticks' {
+        $page = $book.items | Where-Object name -eq 'invocations-page'
+        $page.conditionalVisibility.value | Should Be 'invocations'
+        $query = ($page.content.items | Where-Object name -eq 'invocation-history').content.query
+        $query | Should Match "FunctionName in \('session-host-replacer-initiator', 'session-host-replacer-worker'\)"
+        $query | Should Not Match "'session-host-replacer'"
+        $query | Should Match 'arg_max\(timestamp, \*\) by Source, FunctionApp, FunctionName, InvocationKey'
+        $query | Should Match 'top 200'
+        $query | Should Match 'ResultCode = resultCode'
+        $query | Should Not Match 'SHR_TIMER|SHR_EVENT|\{Cycle\}|\{Invocation\}'
+        $query | Should Match "'Unavailable'"
+    }
+
+    It 'excludes the retired single-timer function from timer health and frequency views' {
+        foreach ($name in @('schedule-table', 'frequency-chart')) {
+            $query = ($operations.content.items | Where-Object name -eq $name).content.query
+            $query | Should Match "FunctionName in \('session-host-replacer-initiator', 'session-host-replacer-worker'\)"
+            $query | Should Not Match "'session-host-replacer'"
+        }
+    }
+
+    It 'keeps native invocation and request identities distinct in the troubleshooting selector' {
+        $page = $book.items | Where-Object name -eq 'invocations-page'
+        $selector = ($page.content.items | Where-Object name -eq 'invocation-selection').content.parameters[0]
+        $selector.name | Should Be 'TroubleshootingInvocation'
+        $selector.value | Should Be '*'
+        $selector.query | Should Match "strcat\('inv:', InvocationId\)"
+        $selector.query | Should Match "strcat\('req:', id\)"
+        $selector.query | Should Match "strcat\(Source, '\|', InvocationKey\)"
+        ($selector.crossComponentResources -contains '{WorkloadWorkspace}') | Should Be $true
+    }
+
+    It 'drills into traces and exceptions with guarded correlation and bounded chronological output' {
+        $page = $book.items | Where-Object name -eq 'invocations-page'
+        $query = ($page.content.items | Where-Object name -eq 'invocation-logs').content.query
+        $query | Should Match 'let exceptions = AppExceptions'
+        $query | Should Match 'union withsource=RecordType traces, exceptions'
+        $query | Should Match "SelectionKey == '\{TroubleshootingInvocation\}'"
+        $query | Should Match 'join kind=inner selectedRun on Source'
+        $query | Should Match 'isnotempty\(SelectedInvocationId\)'
+        $query | Should Match 'isnotempty\(operation_Id\) and operation_Id == SelectedOperationId'
+        $query | Should Match 'take 500'
+        $query | Should Match 'order by Timestamp asc'
+        $query | Should Match 'Details = details'
     }
 
     It 'shows lease, deadline, observation age and cross-cycle recovery without reading saved state' {

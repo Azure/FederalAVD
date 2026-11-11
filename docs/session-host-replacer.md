@@ -104,7 +104,10 @@ The [Monthly Image Operations guide](monthly-image-operations.md) owns that rele
 When a Log Analytics workspace is supplied, the deployment creates workspace-based Application
 Insights for the Function App. Function telemetry goes through Application Insights; SHR does
 not create the separate Function App diagnostic setting that collects `FunctionAppLogs`.
-The optional shared workbook queries the selected Application Insights resources.
+The optional shared workbook queries the primary workload workspace directly, filtering its
+Application Insights telemetry by selected component IDs. Central policy exports are unchanged.
+Its **Invocations** page lists native executions and provides trace/exception drill-down,
+for the current initiator and reconciliation worker, including idle invocations without cycle events.
 
 Read monitoring as three separate signals:
 

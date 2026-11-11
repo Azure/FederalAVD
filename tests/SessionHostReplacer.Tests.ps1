@@ -2017,7 +2017,7 @@ Describe 'Session Host Replacer centralized workbook placement' {
         Get-Content -LiteralPath $workbookModulePath -Raw |
             Should Match 'sourceId: logAnalyticsWorkspaceResourceId'
         Get-Content -LiteralPath $workbookModulePath -Raw |
-            Should Match 'fallbackResourceIds:\s*\[\s*applicationInsightsResourceId'
+            Should Match 'fallbackResourceIds:\s*\[\s*logAnalyticsWorkspaceResourceId'
     }
 
     It 'explains shared workspace placement in the portal form' {
