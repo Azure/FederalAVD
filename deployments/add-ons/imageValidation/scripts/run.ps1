@@ -49,19 +49,31 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 		properties = @{
 			mode = 'Incremental'
 			parameters = @{
+				artifactsContainerUri = @{ value = $env:artifactsContainerUri }
+				artifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }
+				bootDiagnosticsEnabled = @{ value = $env:bootDiagnosticsEnabled }
+				diskAccessResourceId = @{ value = $env:diskAccessResourceId }
+				diskControllerType = @{ value = $env:diskControllerType }
+				diskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }
 				diskName = @{ value = $env:diskName }
+				enableAcceleratedNetworking = @{ value = $env:enableAcceleratedNetworking }
+				encryptionAtHost = @{ value = $env:encryptionAtHost }
+				hibernationEnabled = @{ value = $env:hibernationEnabled }
 				imageVersionResourceId = @{ value = $env:imageVersionResourceId }
 				keyVaultResourceId = @{ value = $env:keyVaultResourceId }
 				licenseType = @{ value = $env:licenseType }
 				location = @{ value = $env:location }
 				networkInterfaceName = @{ value = $env:networkInterfaceName }
 				privateIPAddress = @{ value = $env:privateIPAddress }
-				runCommandSettings = @{ value = $env:runCommandSettings }
+				secureBootEnabled = @{ value = $env:secureBootEnabled }
+				securityType = @{ value = $env:securityType }
 				subnetResourceId = @{ value = $env:subnetResourceId }
 				tags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }
-				userAssignedIdentityResourceId = @{ value = $env:userAssignedIdentityResourceId }
+				userAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -ErrorAction Stop) }
 				virtualMachineName = @{ value = $env:virtualMachineName }
 				virtualMachineSize = @{ value = $env:virtualMachineSize }
+				vmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -ErrorAction Stop) }
+				vTpmEnabled = @{ value = $env:vTpmEnabled }
 			}
 			templateLink = @{
 				id = $env:TemplateSpecResourceId
