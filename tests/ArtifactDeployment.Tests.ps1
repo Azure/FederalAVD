@@ -1702,7 +1702,7 @@ Describe 'Microsoft WinGet artifact' {
         )
         (@($entry.DestinationFolders) -join ',') | Should Be 'Microsoft-WinGet'
         $updateScript = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\Update-ImageArtifacts.ps1') -Raw
-        $updateScript | Should Match '\$GitHubReleaseCache\[\$Repo\]'
+        $updateScript | Should Match 'Get-GitHubAssetRelease .* -ReleaseCache \$GitHubReleaseCache'
         $updateScript | Should Match '\$MatchingAssets\.Count -ne 1'
         $updateScript | Should Match '-OutputDirectory \$PrimaryDestinationDir'
         $updateScript | Should Match '\$DestFolders = @\(if \(@\(\$Download\.DestinationFolders\)\.Count -gt 0\)'

@@ -340,6 +340,60 @@ function Get-InternetUrl {
     Return [string]$ResolvedUrls[0]
 }
 
+function Get-GitHubAssetRelease {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)][string]$Repo,
+        [Parameter(Mandatory)][string[]]$FileNamePatterns,
+        [Parameter(Mandatory)][string]$SoftwareName,
+        [Parameter(Mandatory)][hashtable]$ReleaseCache
+    )
+
+    $ReleasesUri = "https://api.github.com/repos/$Repo/releases"
+    if (-not $ReleaseCache.ContainsKey($Repo)) {
+        $ReleaseCache[$Repo] = @{
+            Latest = Invoke-RestMethod -Method GET -Uri "$ReleasesUri/latest" -ErrorAction Stop
+        }
+    }
+    $Cached = $ReleaseCache[$Repo]
+    $Candidates = @($Cached.Latest)
+    $CheckingLatest = $true
+    while ($Candidates.Count -gt 0) {
+        foreach ($Candidate in $Candidates) {
+            $MissingPatterns = @()
+            foreach ($Pattern in $FileNamePatterns) {
+                $Matches = @($Candidate.assets | Where-Object name -like $Pattern)
+                if ($Matches.Count -gt 1) {
+                    throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$Pattern' in '$Repo' release '$($Candidate.tag_name)'; found $($Matches.Count)."
+                }
+                if ($Matches.Count -eq 0) {
+                    $MissingPatterns += $Pattern
+                }
+            }
+            if ($MissingPatterns.Count -eq 0) {
+                if (-not $CheckingLatest) {
+                    Write-Warning "[$SoftwareName] Using GitHub release '$($Candidate.tag_name)' from '$Repo' instead of latest '$($Cached.Latest.tag_name)' because the latest release lacks required assets."
+                }
+                return $Candidate
+            }
+        }
+        if (-not $CheckingLatest) {
+            break
+        }
+        Write-Warning "[$SoftwareName] Latest GitHub release '$($Cached.Latest.tag_name)' in '$Repo' is missing asset pattern(s): $($MissingPatterns -join ', '). Checking the 100 most recent releases for a stable release containing all required assets."
+        if (-not $Cached.ContainsKey('Releases')) {
+            $Cached.Releases = Invoke-RestMethod -Method GET -Uri "${ReleasesUri}?per_page=100" -ErrorAction Stop
+        }
+        $Candidates = @(
+            $Cached.Releases |
+                Where-Object { -not $_.draft -and -not $_.prerelease -and $_.tag_name -ne $Cached.Latest.tag_name } |
+                Sort-Object { [datetime]$_.published_at } -Descending
+        )
+        $CheckingLatest = $false
+    }
+    throw "[$SoftwareName] No stable GitHub release in '$Repo' matches every required asset pattern ($($FileNamePatterns -join ', ')) within the 100 most recent releases."
+}
+
 Function Get-InternetFile {
     [CmdletBinding()]
     Param (
@@ -1270,8 +1324,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     $packageCount = ($Downloads.PSObject.Properties.Name).Count
     Write-Output "Processing $packageCount package(s) from '$downloadFilePath'."
 
-    # Cache release metadata by repository so multiple assets requested from the same release
-    # are resolved atomically and do not consume one GitHub API request per asset.
+    # Cache latest and recent releases, but resolve each entry's complete asset set together.
     $GitHubReleaseCache = @{}
 
     # Clean winget's own working directory so stale files from previous runs do not
@@ -1335,15 +1388,13 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
-            $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
             Write-Output "[$SoftwareName] Retrieving URL from GitHub ($Repo)..."
-            If (-not $GitHubReleaseCache.ContainsKey($Repo)) {
-                $GitHubReleaseCache[$Repo] = Invoke-RestMethod -Method GET -Uri $ReleasesUri
-            }
             $FileNamePatterns = @($Download.GitHubFileNamePatterns | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+            $RequiredPatterns = if ($FileNamePatterns.Count -gt 0) { $FileNamePatterns } else { @($Download.GitHubFileNamePattern) }
+            $Release = Get-GitHubAssetRelease -Repo $Repo -FileNamePatterns $RequiredPatterns -SoftwareName $SoftwareName -ReleaseCache $GitHubReleaseCache
             If ($FileNamePatterns.Count -gt 0) {
                 foreach ($FileNamePattern in $FileNamePatterns) {
-                    $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                    $MatchingAssets = @($Release.assets | Where-Object name -like $FileNamePattern)
                     If ($MatchingAssets.Count -ne 1) {
                         Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
                     }
@@ -1353,11 +1404,11 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         Digest = [string]$MatchingAssets[0].digest
                     }
                 }
-                Write-Output "[$SoftwareName] Resolved $($DownloadAssets.Count) asset(s) from release '$($GitHubReleaseCache[$Repo].tag_name)'."
+                Write-Output "[$SoftwareName] Resolved $($DownloadAssets.Count) asset(s) from release '$($Release.tag_name)'."
             }
             Else {
                 $FileNamePattern = $Download.GitHubFileNamePattern
-                $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                $MatchingAssets = @($Release.assets | Where-Object name -like $FileNamePattern)
                 If ($MatchingAssets.Count -ne 1) {
                     Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
                 }
@@ -1594,7 +1645,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $VersionText = @(
                 "SoftwareName = $SoftwareName"
                 "GitHubRepo = $Repo"
-                "GitHubRelease = $($GitHubReleaseCache[$Repo].tag_name)"
+                "GitHubRelease = $($Release.tag_name)"
             )
             foreach ($DownloadAsset in $DownloadAssets) {
                 $DownloadedAssetPath = @(Get-InternetFile `

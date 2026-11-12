@@ -16,7 +16,11 @@ Install is the default. Removal finds a `PowerShell 7*` MSI published by Microso
 HKLM uninstall hive and runs `msiexec.exe /x <ProductCode> /qn /norestart`. Absence is success;
 multiple matches stop removal so side-by-side major versions are not removed arbitrarily.
 
-The `PowerShell7` downloads entry retrieves the latest `*win-x64.msi` release asset from
-`PowerShell/PowerShell` and stages it as `PowerShell7.msi`. For offline packaging, download that
+The `PowerShell7` downloads entry retrieves the latest available stable `*win-x64.msi` release asset
+from [PowerShell releases](https://github.com/PowerShell/PowerShell/releases) and stages it as
+`PowerShell7.msi`. If the latest release has no MSI, the updater warns and searches the 100 most
+recent releases for the most recently published stable release containing it. See the
+[GitHub download selection rules](../../../docs/update-image-artifacts.md#4-github-releases).
+For offline packaging, download that
 asset on a connected system, transfer it through the approved process, and place it in this folder
 with that filename before running `Update-ImageArtifacts.ps1 -SkipDownloadingNewSources`.

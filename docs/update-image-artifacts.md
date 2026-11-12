@@ -298,7 +298,10 @@ Retrieves the latest version from a JSON API endpoint.
 
 #### 4. GitHub Releases
 
-Fetches one or more assets from the latest release of a GitHub repository.
+Fetches one or more assets from the latest release of a GitHub repository. If required assets
+are absent, warns and selects the most recently published stable, non-draft release containing
+all required assets from the 100 most recent releases. For example, a newer PowerShell release
+without MSI assets does not prevent downloading the latest available stable x64 MSI.
 
 ```json
 "PowerShell7": {
@@ -323,8 +326,10 @@ download writes directly to its first artifact destination and verifies any SHA2
 by GitHub. Additional destinations receive the verified files from that first destination.
 
 Release metadata is cached by repository for the duration of the update. Each pattern must match
-exactly one asset; zero or multiple matches stop that download rather than selecting an arbitrary
-file.
+exactly one asset in the selected release. Multiple matches stop the download rather than selecting
+an arbitrary file; missing assets trigger the stable-release search described above. Grouped assets
+are never mixed across releases. If no complete matching release is found within the search limit,
+or the GitHub API request fails, the script stops with an error.
 
 #### 5. Winget
 
