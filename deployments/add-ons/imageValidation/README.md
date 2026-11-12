@@ -73,7 +73,7 @@ The unused draft `namingComponentOrder` parameter is replaced by the shared
 | `azureKeyVaultPrivateDnsZoneResourceId` | Required for private mode; target-cloud Key Vault zone linked to the integration VNet for the new encryption-vault endpoint |
 | `logAnalyticsWorkspaceResourceId` | Empty disables Insights/diagnostics; otherwise uses the existing workspace |
 | `privateLinkScopeResourceId` | Empty uses public Insights ingestion/query when monitoring is enabled; supply an existing configured AMPLS for private monitoring |
-| `tags` | `{}`; flat tags applied through the shared modules' per-resource-type tag interface |
+| `tags` | `{}`; the same key/value pairs apply to all resources that support tags |
 
 ## Runtime storage encryption and sequencing
 
@@ -201,27 +201,46 @@ patterns and maps to the current entry-template parameters:
    Dedicated with VNet integration and Always On; region filtering is not a SKU or
    operating-system compatibility check. Schedule validation checks field count,
    not NCRONTAB ranges or runtime acceptance.
-4. **Networking** defaults to private endpoints and requires separate existing
+   Its **Network Settings** section defaults to private endpoints and requires separate existing
    integration and endpoint subnet IDs plus target-cloud blob, app, and vault DNS zones.
    Public mode explicitly enables public app/storage/encryption-vault access and clears private
    networking inputs, including VNet integration.
-5. **Monitoring** optionally selects an existing workspace and configured Azure
+   Its **Monitoring** section optionally selects an existing workspace and configured Azure
    Monitor Private Link Scope. Private app/storage access alone does not make
    monitoring private.
-6. **Naming + Tags** uses the short `iv` identifier and shared naming defaults,
-   exposes complete name overrides, and applies one flat tag set to all resource
+4. **Naming + Tags** separates its controls into **Naming** and **Tags** sections.
+   **Naming** uses the short `iv` identifier and shared naming defaults and
+   exposes complete name overrides. **Tags** applies the same tags to all resource
    types that accept tags. Custom `namingConvention` objects remain a parameter-file
-   option.
+   option. Both the form and parameter files use the single `tags` parameter.
+   Enter key/value pairs in the editable **Tags** grid, or leave it empty for no tags.
+   Tag keys must be unique ignoring case. The grid allows up to 50 rows, keys up
+   to 128 characters, and values up to 256 characters. Values can be empty.
+   The form converts grid rows to an object before passing the single `tags`
+   parameter. Names and values are JSON-encoded and URI-encoded before combining
+   rows so quotes, backslashes, delimiters, and Unicode are preserved.
+   Resources and shared-module calls use `tags` directly. The shared modules also
+   retain support for resource-type-keyed tag objects used by other deployments
+   through the [shared tag helper](../../shared/modules/resourceModules/types/tags.bicep).
+   The Function App passes the same tags to validation VM deployments; no tags
+   are inherited from the credentials vault.
+   Parameter files use `"tags": { "value": { "Environment": "Production" } }`.
 
 The form does not accept validation code: the current template embeds the
 repository scripts. Review the implementation and arrange workload permissions
 before deployment. Hidden existing-plan, networking, and monitoring selections
 are cleared from outputs when their corresponding options are disabled.
 
-This add-on is not registered with the Template Spec publisher and has no tracked
-ARM counterpart yet. Use Bicep with PowerShell/Azure CLI, or explicitly package the
-compiled template with this form for a Template Spec. Before relying on the Portal
-path, run a live render smoke test through every step, including private/public,
+The [Template Spec publisher](../../../tools/New-TemplateSpecs.ps1) includes this
+add-on when `-CreateAddOns $true` (the default), packaging [main.json](./main.json)
+with this form as **AVD Image Validation**. Its publishing purpose is
+`image-validation`, producing `ts-avd-image-validation-use` with the default naming
+convention in `eastus`. `-CreateAddOns $false` excludes it along with other add-ons.
+Use `-WhatIf` and an isolated `-TemplateSpecNameSuffix` for publication preflight
+before publishing to an authorized test subscription. This only publishes the
+deployment package; it does not deploy the Function App or validation VM.
+
+Before relying on the Portal path, run a live render smoke test through every step, including private/public,
 new/existing-plan, and monitoring transitions; offline checks do not prove Portal
 expression evaluation or deployment success.
 
@@ -231,7 +250,13 @@ expression evaluation or deployment success.
 Invoke-Pester -Script tests\ImageValidation.Tests.ps1,tests\IdentifierNaming.Tests.ps1
 Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1
 Invoke-Pester -Script tests\ImageValidationUi.Tests.ps1
+Invoke-Pester -Script tests\ImageValidationTags.Tests.ps1
 ```
+
+The tag expression tests require Node.js or VS Code. They execute the form's
+grid-to-object expression with empty rows, omitted values, quotes, backslashes,
+delimiters, Unicode, and 50-row inputs, and verify the compiled shared helper
+against both supported tag input shapes.
 
 Offline checks cover compilation, centralized naming wiring, private defaults,
 module sequencing, form parameter bindings, existing-plan selection, and
