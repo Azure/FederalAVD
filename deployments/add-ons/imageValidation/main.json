@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "17475510065608469609"
+      "templateHash": "16461938092449687717"
     },
     "name": "Image validation infrastructure",
     "description": "Deploys private Windows PowerShell timer Function infrastructure. Validation code and workload permissions are supplied by the operator."
@@ -84,6 +84,43 @@
         "description": "Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group, location and cloud. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
+        }
+      }
+    },
+    "artifactCustomizationType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "metadata": {
+            "description": "Unique name for the customization."
+          }
+        },
+        "blobNameOrUri": {
+          "type": "string",
+          "metadata": {
+            "description": "Artifact blob path relative to the configured container, or a full HTTP or HTTPS URI."
+          }
+        },
+        "arguments": {
+          "type": "string",
+          "nullable": true,
+          "metadata": {
+            "description": "Optional arguments passed to the customization artifact."
+          }
+        },
+        "successExitCodes": {
+          "type": "string",
+          "nullable": true,
+          "metadata": {
+            "description": "Optional comma-separated exit codes treated as success. Defaults to 0,3010."
+          }
+        }
+      },
+      "metadata": {
+        "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
         }
       }
     }
@@ -1033,8 +1070,11 @@
       }
     },
     "virtualMachineCustomizations": {
-      "type": "object",
-      "defaultValue": {},
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/artifactCustomizationType"
+      },
+      "defaultValue": [],
       "metadata": {
         "description": "Optional. Customizations applied to the validation VM."
       }

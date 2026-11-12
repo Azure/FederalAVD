@@ -4,6 +4,8 @@ metadata name = 'Image validation infrastructure'
 metadata description = 'Deploys private Windows PowerShell timer Function infrastructure. Validation code and workload permissions are supplied by the operator.'
 
 import { functionAppNames, namingPolicy, resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+
 
 @description('Optional. Complete name override for a new App Service plan. Ignored when using an existing plan ID.')
 param appServicePlanNameOverride string = ''
@@ -138,7 +140,7 @@ param userAssignedIdentityResourceIds array = []
 param userAssignedIdentityNameOverride string = ''
 
 @description('Optional. Customizations applied to the validation VM.')
-param virtualMachineCustomizations object = {}
+param virtualMachineCustomizations artifactCustomizationType[] = []
 
 @description('Required. Windows VM size supported by the selected image and region, including accelerated networking.')
 @minLength(1)
