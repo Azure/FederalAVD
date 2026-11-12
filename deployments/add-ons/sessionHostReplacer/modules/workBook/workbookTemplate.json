@@ -361,11 +361,78 @@
         "groupType": "editable",
         "items": [
           {
+            "type": 1,
             "content": {
-              "json": "### Trace a replacement cycle\r\nSelect a host pool, then an **SHR Cycle**. Use **Invocation (cycle logs)** to narrow the log detail; reset it to **All cycle invocations** when changing cycles.\r\n\r\nA cycle ID is the durable SHR operation ID, not Application Insights' native operation ID. A cycle can span many timer invocations and, in SideBySide, multiple scheduled batches. The summary and timeline remain cycle-wide when an invocation is selected. Deployment links open the existing ARM deployment; they do not submit a deployment.\r\n\r\n**Last reported state is not a live Table read.** Check observation age, lease expiry and the separate timer-health table. A live lease can legitimately defer reconciliation after interruption. Waiting for scheduled authorization does not stop retirement already authorized. Inventory tiles show the last engine observation, not the result of every idle timer tick.\r\n\r\nThese views require the updated runtime and fresh telemetry. No events in the selected time range is **not** proof that a pool is up to date. Expand the time range to include the cycle's start. Sampling, ingestion delay or a missing completion event can leave gaps; a stale observation is not proof of failure."
+              "json": "---\n### 📊 Key Performance Indicators"
             },
-            "name": "cycle-tracing-help",
-            "type": 1
+            "name": "kpi-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend Target = toint(extract(@\"Target:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| extend InDrain = toint(extract(@\"InDrain:\\s*(\\d+)\", 1, message))\n| extend PendingDelete = toint(extract(@\"PendingDelete:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToDeployNow = toint(extract(@\"ToDeployNow:\\s*(\\d+)\", 1, message))\n| extend RunningDeployments = toint(extract(@\"RunningDeployments:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Deploying = coalesce(RunningDeployments, 0)\n| project \n    Column1 = 'Total Hosts', Value1 = Total,\n    Column2 = 'Enabled', Value2 = Enabled,\n    Column3 = 'Target', Value3 = Target,\n    Column4 = 'To Replace', Value4 = ToReplace,\n    Column5 = 'In Drain', Value5 = InDrain,\n    Column6 = 'Pending Delete', Value6 = PendingDelete,\n    Column7 = 'Shutdown Retention', Value7 = ShutdownRetention,\n    Column8 = 'To Deploy', Value8 = ToDeployNow,\n    Column9 = 'Currently Deploying', Value9 = Deploying\n| mv-expand Column = pack_array(Column1, Column2, Column3, Column4, Column5, Column6, Column7, Column8, Column9), Value = pack_array(Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8, Value9)\n| project Column = tostring(Column), Value = toint(Value)",
+              "size": 1,
+              "title": "Last Reported Inventory",
+              "timeContext": {
+                "durationMs": 0
+              },
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{WorkloadWorkspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "tiles",
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Column",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Value",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": false,
+                      "maximumFractionDigits": 2,
+                      "maximumSignificantDigits": 3
+                    }
+                  }
+                },
+                "showBorder": true
+              }
+            },
+            "customWidth": "100",
+            "name": "kpi-tiles"
+          },
+          {
+            "content": {
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{WorkloadWorkspace}"
+              ],
+              "version": "KqlItem/1.0",
+              "query": "let traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = '{HostPool}';\r\ntraces\r\n| where timestamp {TimeRange}\r\n| where message contains 'METRICS |'\r\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\r\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\r\n| summarize ['Last Inventory Observation'] = max(timestamp) by HostPoolName, cloud_RoleName\r\n| project ['Host Pool'] = HostPoolName, ['Function App'] = cloud_RoleName, ['Last Inventory Observation'],\r\n    ['Observation Age (min)'] = datetime_diff('minute', now(), ['Last Inventory Observation'])",
+              "title": "Inventory Freshness - Not a Timer Heartbeat",
+              "visualization": "table",
+              "size": 0,
+              "queryType": 0,
+              "gridSettings": {
+                "formatters": []
+              },
+              "timeContext": {
+                "durationMs": 0
+              }
+            },
+            "name": "inventory-freshness",
+            "type": 3
           },
           {
             "content": {
@@ -398,6 +465,43 @@
             },
             "name": "cycle-summary",
             "type": 3
+          },
+          {
+            "type": 1,
+            "content": {
+              "json": "### ⏰ Schedule Information"
+            },
+            "name": "schedule-header"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    resultCode = ResultCode, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = '{HostPool}';\r\nlet poolNames = traces\r\n| where timestamp {TimeRange}\r\n| where message contains 'SHR_TIMER |' or message contains 'SHR_EVENT |'\r\n| extend HostPoolName = extract(@\"^\\[([^\\]]+)\\]\", 1, message), Source = tostring(column_ifexists('_ResourceId', ''))\r\n| where isnotempty(HostPoolName)\r\n| summarize HostPoolName = take_any(HostPoolName) by Source, FunctionApp = cloud_RoleName;\r\nlet invocations = requests\r\n| where timestamp {TimeRange}\r\n| extend FunctionName = replace_regex(name, @\"^Functions\\.\", ''), Source = tostring(column_ifexists('_ResourceId', '')), FunctionApp = cloud_RoleName,\r\n    InvocationKey = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']), id)\r\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker') and isnotempty(InvocationKey)\r\n| extend Trigger = iff(FunctionName == 'session-host-replacer-worker', 'Reconciliation', 'Initiation')\r\n| summarize arg_max(timestamp, duration, success) by Source, FunctionApp, Trigger, InvocationKey\r\n| extend CompletedUtc = timestamp + (duration * 1ms)\r\n| lookup kind=leftouter poolNames on Source, FunctionApp\r\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter;\r\nlet observations = invocations\r\n| summarize ['Last Started'] = max(timestamp), ['Last Finished'] = max(CompletedUtc), ['Last Failure'] = maxif(CompletedUtc, success == false),\r\n    arg_max(CompletedUtc, success) by Source, HostPoolName, FunctionApp, Trigger;\r\ninvocations\r\n| distinct Source, HostPoolName, FunctionApp\r\n| extend Trigger = dynamic(['Initiation', 'Reconciliation'])\r\n| mv-expand Trigger to typeof(string)\r\n| join kind=leftouter observations on Source, HostPoolName, FunctionApp, Trigger\r\n| project ['Host Pool'] = HostPoolName, ['Function App'] = FunctionApp, Trigger, ['Last Started'], ['Last Finished'], ['Last Failure'],\r\n    Observation = case(isnull(['Last Finished']), 'No completed invocation observed in selected range', isnull(success), 'Outcome unavailable', success == false, 'Failed - inspect invocation logs', 'Succeeded'),\r\n    ['Minutes Since Finish'] = datetime_diff('minute', now(), ['Last Finished'])\r\n| order by ['Host Pool'] asc, Trigger asc",
+              "size": 0,
+              "title": "Timer Health - Last Completed Invocations, Including Idle",
+              "timeContext": {
+                "durationMs": 0
+              },
+              "timeContextFromParameter": "TimeRange",
+              "crossComponentResources": [
+                "{WorkloadWorkspace}"
+              ],
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": []
+              }
+            },
+            "name": "schedule-table"
+          },
+          {
+            "content": {
+              "json": "### Trace a replacement cycle\r\nSelect a host pool, then an **SHR Cycle**. Use **Invocation (cycle logs)** to narrow the log detail; reset it to **All cycle invocations** when changing cycles.\r\n\r\nA cycle ID is the durable SHR operation ID, not Application Insights' native operation ID. A cycle can span many timer invocations and, in SideBySide, multiple scheduled batches. The summary and timeline remain cycle-wide when an invocation is selected. Deployment links open the existing ARM deployment; they do not submit a deployment.\r\n\r\n**Last reported state is not a live Table read.** Check observation age, lease expiry and the separate timer-health table. A live lease can legitimately defer reconciliation after interruption. Waiting for scheduled authorization does not stop retirement already authorized. Inventory tiles show the last engine observation, not the result of every idle timer tick.\r\n\r\nThese views require the updated runtime and fresh telemetry. No events in the selected time range is **not** proof that a pool is up to date. Expand the time range to include the cycle's start. Sampling, ingestion delay or a missing completion event can leave gaps; a stale observation is not proof of failure."
+            },
+            "name": "cycle-tracing-help",
+            "type": 1
           },
           {
             "content": {
@@ -453,110 +557,6 @@
             },
             "name": "cycle-logs",
             "type": 3
-          },
-          {
-            "content": {
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "timeContextFromParameter": "TimeRange",
-              "crossComponentResources": [
-                "{WorkloadWorkspace}"
-              ],
-              "version": "KqlItem/1.0",
-              "query": "let traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = '{HostPool}';\r\ntraces\r\n| where timestamp {TimeRange}\r\n| where message contains 'METRICS |'\r\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\r\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\r\n| summarize ['Last Inventory Observation'] = max(timestamp) by HostPoolName, cloud_RoleName\r\n| project ['Host Pool'] = HostPoolName, ['Function App'] = cloud_RoleName, ['Last Inventory Observation'],\r\n    ['Observation Age (min)'] = datetime_diff('minute', now(), ['Last Inventory Observation'])",
-              "title": "Inventory Freshness - Not a Timer Heartbeat",
-              "visualization": "table",
-              "size": 0,
-              "queryType": 0,
-              "gridSettings": {
-                "formatters": []
-              },
-              "timeContext": {
-                "durationMs": 0
-              }
-            },
-            "name": "inventory-freshness",
-            "type": 3
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "---\n### 📊 Key Performance Indicators"
-            },
-            "name": "kpi-header"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "let traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = '{HostPool}';\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend Target = toint(extract(@\"Target:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| extend InDrain = toint(extract(@\"InDrain:\\s*(\\d+)\", 1, message))\n| extend PendingDelete = toint(extract(@\"PendingDelete:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToDeployNow = toint(extract(@\"ToDeployNow:\\s*(\\d+)\", 1, message))\n| extend RunningDeployments = toint(extract(@\"RunningDeployments:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Deploying = coalesce(RunningDeployments, 0)\n| project \n    Column1 = 'Total Hosts', Value1 = Total,\n    Column2 = 'Enabled', Value2 = Enabled,\n    Column3 = 'Target', Value3 = Target,\n    Column4 = 'To Replace', Value4 = ToReplace,\n    Column5 = 'In Drain', Value5 = InDrain,\n    Column6 = 'Pending Delete', Value6 = PendingDelete,\n    Column7 = 'Shutdown Retention', Value7 = ShutdownRetention,\n    Column8 = 'To Deploy', Value8 = ToDeployNow,\n    Column9 = 'Currently Deploying', Value9 = Deploying\n| mv-expand Column = pack_array(Column1, Column2, Column3, Column4, Column5, Column6, Column7, Column8, Column9), Value = pack_array(Value1, Value2, Value3, Value4, Value5, Value6, Value7, Value8, Value9)\n| project Column = tostring(Column), Value = toint(Value)",
-              "size": 1,
-              "title": "Last Reported Inventory",
-              "timeContext": {
-                "durationMs": 0
-              },
-              "timeContextFromParameter": "TimeRange",
-              "crossComponentResources": [
-                "{WorkloadWorkspace}"
-              ],
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "tiles",
-              "tileSettings": {
-                "titleContent": {
-                  "columnMatch": "Column",
-                  "formatter": 1
-                },
-                "leftContent": {
-                  "columnMatch": "Value",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "auto"
-                  },
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "style": "decimal",
-                      "useGrouping": false,
-                      "maximumFractionDigits": 2,
-                      "maximumSignificantDigits": 3
-                    }
-                  }
-                },
-                "showBorder": true
-              }
-            },
-            "customWidth": "100",
-            "name": "kpi-tiles"
-          },
-          {
-            "type": 1,
-            "content": {
-              "json": "### ⏰ Schedule Information"
-            },
-            "name": "schedule-header"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "let traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ ({ApplicationInsights})\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    resultCode = ResultCode, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = '{HostPool}';\r\nlet poolNames = traces\r\n| where timestamp {TimeRange}\r\n| where message contains 'SHR_TIMER |' or message contains 'SHR_EVENT |'\r\n| extend HostPoolName = extract(@\"^\\[([^\\]]+)\\]\", 1, message), Source = tostring(column_ifexists('_ResourceId', ''))\r\n| where isnotempty(HostPoolName)\r\n| summarize HostPoolName = take_any(HostPoolName) by Source, FunctionApp = cloud_RoleName;\r\nlet invocations = requests\r\n| where timestamp {TimeRange}\r\n| extend FunctionName = replace_regex(name, @\"^Functions\\.\", ''), Source = tostring(column_ifexists('_ResourceId', '')), FunctionApp = cloud_RoleName,\r\n    InvocationKey = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']), id)\r\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker') and isnotempty(InvocationKey)\r\n| extend Trigger = iff(FunctionName == 'session-host-replacer-worker', 'Reconciliation', 'Initiation')\r\n| summarize arg_max(timestamp, duration, success) by Source, FunctionApp, Trigger, InvocationKey\r\n| extend CompletedUtc = timestamp + (duration * 1ms)\r\n| lookup kind=leftouter poolNames on Source, FunctionApp\r\n| where hostPoolFilter == '*' or HostPoolName == hostPoolFilter;\r\nlet observations = invocations\r\n| summarize ['Last Started'] = max(timestamp), ['Last Finished'] = max(CompletedUtc), ['Last Failure'] = maxif(CompletedUtc, success == false),\r\n    arg_max(CompletedUtc, success) by Source, HostPoolName, FunctionApp, Trigger;\r\ninvocations\r\n| distinct Source, HostPoolName, FunctionApp\r\n| extend Trigger = dynamic(['Initiation', 'Reconciliation'])\r\n| mv-expand Trigger to typeof(string)\r\n| join kind=leftouter observations on Source, HostPoolName, FunctionApp, Trigger\r\n| project ['Host Pool'] = HostPoolName, ['Function App'] = FunctionApp, Trigger, ['Last Started'], ['Last Finished'], ['Last Failure'],\r\n    Observation = case(isnull(['Last Finished']), 'No completed invocation observed in selected range', isnull(success), 'Outcome unavailable', success == false, 'Failed - inspect invocation logs', 'Succeeded'),\r\n    ['Minutes Since Finish'] = datetime_diff('minute', now(), ['Last Finished'])\r\n| order by ['Host Pool'] asc, Trigger asc",
-              "size": 0,
-              "title": "Timer Health - Last Completed Invocations, Including Idle",
-              "timeContext": {
-                "durationMs": 0
-              },
-              "timeContextFromParameter": "TimeRange",
-              "crossComponentResources": [
-                "{WorkloadWorkspace}"
-              ],
-              "queryType": 0,
-              "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "table",
-              "gridSettings": {
-                "formatters": []
-              }
-            },
-            "name": "schedule-table"
           },
           {
             "type": 1,

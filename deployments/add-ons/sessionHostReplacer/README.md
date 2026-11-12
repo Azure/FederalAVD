@@ -2064,6 +2064,11 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
   **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
 
+The default **Operations** page starts with the **Last Reported Inventory** snapshot,
+inventory observation age, cycle status, and timer health. Detailed cycle guidance,
+timelines, and logs follow those summaries. The snapshot is the last engine observation,
+not live host inventory; check freshness before interpreting the counts.
+
 #### Trace one replacement cycle
 
 1. Select the host pool and a time range that includes the cycle's initiation and latest progress.

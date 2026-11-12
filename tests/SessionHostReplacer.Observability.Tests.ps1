@@ -325,6 +325,18 @@ Describe 'SHR workbook cycle tracing contract' {
         $parameters = ($book.items | Where-Object name -eq 'parameters').content.parameters
     }
 
+    It 'opens Operations with status snapshots and timer health before detailed investigation' {
+        $navigation = ($book.items | Where-Object name -eq 'page-navigation').content.parameters |
+            Where-Object name -eq 'DashboardPage'
+        $navigation.value | Should -Be 'operations'
+        $expectedOrder = @(
+            'kpi-header', 'kpi-tiles', 'inventory-freshness', 'cycle-summary',
+            'schedule-header', 'schedule-table', 'cycle-tracing-help', 'cycle-timeline', 'cycle-logs'
+        )
+        ($operations.content.items.name | Select-Object -First $expectedOrder.Count) -join ',' |
+            Should -Be ($expectedOrder -join ',')
+    }
+
     It 'offers cycle and invocation selection with bounded queries and explicit all selections' {
         foreach ($name in @('Cycle', 'Invocation')) {
             $parameter = $parameters | Where-Object name -eq $name
