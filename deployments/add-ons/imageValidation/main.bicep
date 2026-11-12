@@ -31,12 +31,6 @@ param encryptionKeyVaultNameOverride string = ''
 @description('Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan.')
 param existingAppServicePlanResourceId string = ''
 
-@description('Optional. Additional non-secret Function App settings. Image-validation settings cannot be overridden.')
-param functionAppAppSettings {
-  name: string
-  value: string
-}[] = []
-
 @description('Required for private mode. Existing Microsoft.Web/serverFarms-delegated integration subnet in the app region, separate from the endpoint subnet.')
 param functionAppDelegatedSubnetResourceId string = ''
 
@@ -47,9 +41,6 @@ param functionAppNameOverride string = ''
 @description('Optional. Short add-on identifier used by the centralized naming policy. Use distinct identifiers for independent instances.')
 @minLength(1)
 param identifier string = 'iv'
-
-@description('Required. Existing Azure Compute Gallery image definition resource ID.')
-param imageDefinitionResourceId string
 
 @description('Required. License type for the image.')
 @allowed([
@@ -106,7 +97,7 @@ param storageAccountNameOverride string = ''
 @minLength(1)
 param subnetResourceId string
 
-@description('Optional. Flat tags applied to all add-on resource types.')
+@description('Optional. Tags applied to all resources that support tags.')
 param tags object = {}
 
 @description('Optional. Complete name override for the Function App identity.')
@@ -166,16 +157,6 @@ var appDnsZoneId = privateEndpoint && empty(trim(azureFunctionAppPrivateDnsZoneR
 var vaultDnsZoneId = privateEndpoint && empty(trim(azureKeyVaultPrivateDnsZoneResourceId))
   ? fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.')
   : azureKeyVaultPrivateDnsZoneResourceId
-var resourceTags = {
-  'Microsoft.KeyVault/vaults': tags
-  'Microsoft.ManagedIdentity/userAssignedIdentities': tags
-  'Microsoft.Web/serverfarms': tags
-  'Microsoft.Web/sites': tags
-  'Microsoft.Storage/storageAccounts': tags
-  'Microsoft.Insights/components': tags
-  'Microsoft.Network/privateEndpoints': tags
-  'Microsoft.Network/networkInterfaces': tags
-}
 
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: names.resourceGroup
@@ -195,8 +176,9 @@ module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentit
 module templateSpec 'modules/templateSpec.bicep' = {
   scope: rg
   params: {
-    imageDefinitionName: last(split(imageDefinitionResourceId, '/'))
+    imageDefinitionName: split(imageVersionResourceId, '/')[10]
     location: location
+    tags: tags
     templateSpecName: names.templateSpecName
   }
 }
@@ -216,7 +198,7 @@ module encryptionKeyVault '../../shared/modules/orchestration/keyVaults/keyVault
     privateEndpointNameConv: names.privateEndpointNameConv
     privateEndpointNICNameConv: names.privateEndpointNICNameConv
     paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    tags: resourceTags
+    tags: tags
   }
 }
 
@@ -228,7 +210,7 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/custom
     keyNames: [names.storageAccountName]
     identityName: names.storageEncryptionIdentityName
     location: location
-    tags: resourceTags
+    tags: tags
   }
 }
 
@@ -240,7 +222,7 @@ module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppH
     location: location
     name: names.appServicePlanName
     planPricing: 'PremiumV3_P0v3'
-    tags: resourceTags
+    tags: tags
     zoneRedundant: false
   }
 }
@@ -294,6 +276,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: subnetResourceId
       }
       {
+        name: 'tags'
+        value: string(tags)
+      }
+      {
         name: 'userAssignedIdentityResourceId'
         value: userAssignedIdentity.outputs.resourceId
       }
@@ -305,7 +291,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         name: 'virtualMachineSize'
         value: virtualMachineSize
       }
-    ], additionalAppSettings)
+    ])
     functionAppDelegatedSubnetResourceId: integrationSubnetId
     functionAppName: names.functionAppName
     functionAppUserAssignedIdentityResourceId: userAssignedIdentity.outputs.resourceId
@@ -322,30 +308,13 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     serverFarmId: !empty(existingAppServicePlanResourceId) ? existingAppServicePlanResourceId : serverFarm!.outputs.hostingPlanId
     storageAccountName: names.storageAccountName
     storageEncryptionIdentityName: names.storageEncryptionIdentityName
-    tags: resourceTags
+    tags: tags
   }
   // The shared app module computes the encryption identity ID from its name, so gate key/RBAC completion explicitly.
   dependsOn: [
     storageCmk
   ]
 }
-
-var additionalAppSettings = !empty(filter(functionAppAppSettings, setting => contains([
-  'diskname'
-  'imageversionresourceid'
-  'keyvaultresourceid'
-  'licensetype'
-  'location'
-  'networkinterfacename'
-  'privateipaddress'
-  'runcommandsettings'
-  'subnetresourceid'
-  'userassignedidentityresourceid'
-  'virtualmachinename'
-  'virtualmachinesize'
-], toLower(setting.name))))
-  ? fail('Additional Function App settings cannot override image-validation settings.')
-  : functionAppAppSettings
 
 module function '../../shared/modules/resourceModules/functionApp/function.bicep' = {
   scope: rg

@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "10669609011829683655"
+      "version": "0.49.2.45890",
+      "templateHash": "7724290170600594136"
     },
     "name": "Image validation infrastructure",
     "description": "Deploys private Windows PowerShell timer Function infrastructure. Validation code and workload permissions are supplied by the operator."
@@ -834,24 +834,6 @@
         "description": "Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan."
       }
     },
-    "functionAppAppSettings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          }
-        }
-      },
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Additional non-secret Function App settings. Image-validation settings cannot be overridden."
-      }
-    },
     "functionAppDelegatedSubnetResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -873,12 +855,6 @@
       "minLength": 1,
       "metadata": {
         "description": "Optional. Short add-on identifier used by the centralized naming policy. Use distinct identifiers for independent instances."
-      }
-    },
-    "imageDefinitionResourceId": {
-      "type": "string",
-      "metadata": {
-        "description": "Required. Existing Azure Compute Gallery image definition resource ID."
       }
     },
     "imageLicenseType": {
@@ -998,7 +974,7 @@
       "type": "object",
       "defaultValue": {},
       "metadata": {
-        "description": "Optional. Flat tags applied to all add-on resource types."
+        "description": "Optional. Tags applied to all resources that support tags."
       }
     },
     "userAssignedIdentityNameOverride": {
@@ -1018,7 +994,7 @@
   },
   "variables": {
     "$fxv#0": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, please uncomment the line below.\r\n    # 'Az' = '7.*'\r\n}",
-    "$fxv#1": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n# Get an access token for Azure resources\r\n$AzureManagementAccessToken = (Invoke-RestMethod `\r\n    -Headers @{Metadata=\"true\"} `\r\n    -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/galleries/' + $env:ComputeGalleryName + '/images/' + $env:ComputeGalleryImageName + '/versions?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\n# Get virtual machine\r\n$VirtualMachine = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')\r\n\r\n\r\nif ($VirtualMachine.properties.storageProfile.imageReference.exactVersion -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Deleted existing virtual machine'\r\n\r\n\t# Deploy the virtual machine to run the tool\r\n\t$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n\t$Body = @{\r\n\t\tproperties = @{\r\n\t\t\tmode = 'Incremental'\r\n\t\t\tparameters = @{\r\n\t\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\t\timageVersionResourceId = @{ value = $env:imageVersionResourceId }\r\n\t\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\t\tlocation = @{ value = $env:location }\r\n\t\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\t\trunCommandSettings = @{ value = $env:runCommandSettings }\r\n\t\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\t\tuserAssignedIdentityResourceId = @{ value = $env:userAssignedIdentityResourceId }\r\n\t\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\t}\r\n\t\t\ttemplateLink = @{\r\n\t\t\t\tid = $env:TemplateSpecResourceId\r\n\t\t\t}\r\n\t\t}\r\n\t} | ConvertTo-Json -Depth 5\r\n\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'PUT' `\r\n\t\t-Body $Body `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\t\r\n\tWrite-Output 'Deployed new image validation virtual machine'\r\n}",
+    "$fxv#1": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n# Get an access token for Azure resources\r\n$AzureManagementAccessToken = (Invoke-RestMethod `\r\n    -Headers @{Metadata=\"true\"} `\r\n    -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/galleries/' + $env:ComputeGalleryName + '/images/' + $env:ComputeGalleryImageName + '/versions?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\n# Get virtual machine\r\n$VirtualMachine = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')\r\n\r\n\r\nif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Deleted existing virtual machine'\r\n\r\n\t# Deploy the virtual machine to run the tool\r\n\t$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n\t$Body = @{\r\n\t\tproperties = @{\r\n\t\t\tmode = 'Incremental'\r\n\t\t\tparameters = @{\r\n\t\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\t\timageVersionResourceId = @{ value = $env:imageVersionResourceId }\r\n\t\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\t\tlocation = @{ value = $env:location }\r\n\t\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\t\trunCommandSettings = @{ value = $env:runCommandSettings }\r\n\t\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\t\ttags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tuserAssignedIdentityResourceId = @{ value = $env:userAssignedIdentityResourceId }\r\n\t\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\t}\r\n\t\t\ttemplateLink = @{\r\n\t\t\t\tid = $env:TemplateSpecResourceId\r\n\t\t\t}\r\n\t\t}\r\n\t} | ConvertTo-Json -Depth 5\r\n\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'PUT' `\r\n\t\t-Body $Body `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\t\r\n\tWrite-Output 'Deployed new image validation virtual machine'\r\n}",
     "$fxv#2": "# Authentication is provided in the script",
     "groupContext": {
       "subscriptionId": "[subscription().subscriptionId]",
@@ -1035,17 +1011,6 @@
     "blobDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureBlobPrivateDnsZoneResourceId')))), fail('Private mode requires azureBlobPrivateDnsZoneResourceId.'), parameters('azureBlobPrivateDnsZoneResourceId'))]",
     "appDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureFunctionAppPrivateDnsZoneResourceId')))), fail('Private mode requires azureFunctionAppPrivateDnsZoneResourceId.'), parameters('azureFunctionAppPrivateDnsZoneResourceId'))]",
     "vaultDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureKeyVaultPrivateDnsZoneResourceId')))), fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.'), parameters('azureKeyVaultPrivateDnsZoneResourceId'))]",
-    "resourceTags": {
-      "Microsoft.KeyVault/vaults": "[parameters('tags')]",
-      "Microsoft.ManagedIdentity/userAssignedIdentities": "[parameters('tags')]",
-      "Microsoft.Web/serverfarms": "[parameters('tags')]",
-      "Microsoft.Web/sites": "[parameters('tags')]",
-      "Microsoft.Storage/storageAccounts": "[parameters('tags')]",
-      "Microsoft.Insights/components": "[parameters('tags')]",
-      "Microsoft.Network/privateEndpoints": "[parameters('tags')]",
-      "Microsoft.Network/networkInterfaces": "[parameters('tags')]"
-    },
-    "additionalAppSettings": "[if(not(empty(filter(parameters('functionAppAppSettings'), lambda('setting', contains(createArray('diskname', 'imageversionresourceid', 'keyvaultresourceid', 'licensetype', 'location', 'networkinterfacename', 'privateipaddress', 'runcommandsettings', 'subnetresourceid', 'userassignedidentityresourceid', 'virtualmachinename', 'virtualmachinesize'), toLower(lambdaVariables('setting').name)))))), fail('Additional Function App settings cannot override image-validation settings.'), parameters('functionAppAppSettings'))]",
     "_1._2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
@@ -1897,8 +1862,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7465970199175626474"
+              "version": "0.49.2.45890",
+              "templateHash": "4675357121791106424"
             },
             "name": "User-assigned managed identity",
             "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -1982,10 +1947,13 @@
         "mode": "Incremental",
         "parameters": {
           "imageDefinitionName": {
-            "value": "[last(split(parameters('imageDefinitionResourceId'), '/'))]"
+            "value": "[split(parameters('imageVersionResourceId'), '/')[10]]"
           },
           "location": {
             "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
           },
           "templateSpecName": {
             "value": "[variables('names').templateSpecName]"
@@ -1997,8 +1965,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "14506325705674762082"
+              "version": "0.49.2.45890",
+              "templateHash": "12397959460734864024"
             }
           },
           "parameters": {
@@ -2007,6 +1975,9 @@
             },
             "location": {
               "type": "string"
+            },
+            "tags": {
+              "type": "object"
             },
             "templateSpecName": {
               "type": "string"
@@ -2020,40 +1991,43 @@
               "metadata": {
                 "_generator": {
                   "name": "bicep",
-                  "version": "0.48.1.52935",
-                  "templateHash": "16917877374550428767"
+                  "version": "0.49.2.45890",
+                  "templateHash": "14153031719411595505"
                 }
               },
               "definitions": {
-                "runCommandSettingType": {
+                "artifactCustomizationType": {
                   "type": "object",
                   "properties": {
                     "name": {
-                      "type": "string"
-                    },
-                    "script": {
-                      "type": "string"
-                    },
-                    "parameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
+                      "type": "string",
+                      "metadata": {
+                        "description": "Unique name for the customization."
                       }
-                    }
-                  }
-                },
-                "runCommandParameterType": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
                     },
-                    "value": {
-                      "type": "string"
+                    "blobNameOrUri": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Artifact blob path relative to the configured container, or a full HTTP or HTTPS URI."
+                      }
+                    },
+                    "arguments": {
+                      "type": "string",
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional arguments passed to the customization artifact."
+                      }
+                    },
+                    "successExitCodes": {
+                      "type": "string",
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional comma-separated exit codes treated as success. Defaults to 0,3010."
+                      }
                     }
                   },
                   "metadata": {
-                    "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
+                    "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                     "__bicep_imported_from!": {
                       "sourceTemplate": "../../../shared/modules/resourceModules/types/customizationTypes.bicep"
                     }
@@ -2061,8 +2035,35 @@
                 }
               },
               "parameters": {
+                "artifactsContainerUri": {
+                  "type": "string"
+                },
+                "artifactsUserAssignedIdentityClientId": {
+                  "type": "string"
+                },
+                "bootDiagnosticsEnabled": {
+                  "type": "bool"
+                },
+                "diskAccessResourceId": {
+                  "type": "string"
+                },
+                "diskControllerType": {
+                  "type": "string"
+                },
+                "diskEncryptionSetResourceId": {
+                  "type": "string"
+                },
                 "diskName": {
                   "type": "string"
+                },
+                "enableAcceleratedNetworking": {
+                  "type": "bool"
+                },
+                "encryptionAtHost": {
+                  "type": "bool"
+                },
+                "hibernationEnabled": {
+                  "type": "bool"
                 },
                 "imageVersionResourceId": {
                   "type": "string"
@@ -2082,11 +2083,20 @@
                 "privateIPAddress": {
                   "type": "string"
                 },
+                "secureBootEnabled": {
+                  "type": "bool"
+                },
+                "securityType": {
+                  "type": "string"
+                },
                 "subnetResourceId": {
                   "type": "string"
                 },
-                "userAssignedIdentityResourceId": {
-                  "type": "string"
+                "tags": {
+                  "type": "object"
+                },
+                "userAssignedIdentityResourceIds": {
+                  "type": "array"
                 },
                 "virtualMachineName": {
                   "type": "string"
@@ -2094,11 +2104,14 @@
                 "virtualMachineSize": {
                   "type": "string"
                 },
-                "runCommandSettings": {
+                "vmCustomizations": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/definitions/runCommandSettingType"
+                    "$ref": "#/definitions/artifactCustomizationType"
                   }
+                },
+                "vTpmEnabled": {
+                  "type": "bool"
                 }
               },
               "resources": {
@@ -2120,40 +2133,7 @@
                     },
                     "mode": "Incremental",
                     "parameters": {
-                      "diskName": {
-                        "value": "[[parameters('diskName')]"
-                      },
-                      "licenseType": {
-                        "value": "[[parameters('licenseType')]"
-                      },
-                      "imageVersionResourceId": {
-                        "value": "[[parameters('imageVersionResourceId')]"
-                      },
-                      "location": {
-                        "value": "[[parameters('location')]"
-                      },
-                      "networkInterfaceName": {
-                        "value": "[[parameters('networkInterfaceName')]"
-                      },
-                      "privateIPAddress": {
-                        "value": "[[parameters('privateIPAddress')]"
-                      },
-                      "runCommandSettings": {
-                        "value": "[[parameters('runCommandSettings')]"
-                      },
-                      "subnetResourceId": {
-                        "value": "[[parameters('subnetResourceId')]"
-                      },
-                      "tags": {
-                        "value": "[[reference('keyVault', '2022-07-01', 'full').tags]"
-                      },
-                      "userAssignedIdentityResourceId": {
-                        "value": "[[parameters('userAssignedIdentityResourceId')]"
-                      },
-                      "virtualMachineName": {
-                        "value": "[[parameters('virtualMachineName')]"
-                      },
-                      "virtualMachinePassword": {
+                      "adminPassword": {
                         "reference": {
                           "keyVault": {
                             "id": "[[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('keyVaultResourceId'), '/')[2], split(parameters('keyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('keyVaultResourceId'), '/')))]"
@@ -2161,16 +2141,82 @@
                           "secretName": "LocalAdminPassword"
                         }
                       },
-                      "virtualMachineSize": {
-                        "value": "[[parameters('virtualMachineSize')]"
-                      },
-                      "virtualMachineUsername": {
+                      "adminUsername": {
                         "reference": {
                           "keyVault": {
                             "id": "[[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('keyVaultResourceId'), '/')[2], split(parameters('keyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('keyVaultResourceId'), '/')))]"
                           },
                           "secretName": "LocalAdminUsername"
                         }
+                      },
+                      "bootDiagnosticsEnabled": {
+                        "value": "[[parameters('bootDiagnosticsEnabled')]"
+                      },
+                      "customImageResourceId": {
+                        "value": "[[parameters('imageVersionResourceId')]"
+                      },
+                      "diskAccessId": {
+                        "value": "[[parameters('diskAccessResourceId')]"
+                      },
+                      "diskControllerType": {
+                        "value": "[[parameters('diskControllerType')]"
+                      },
+                      "diskEncryptionSetResourceId": {
+                        "value": "[[parameters('diskEncryptionSetResourceId')]"
+                      },
+                      "enableAcceleratedNetworking": {
+                        "value": "[[parameters('enableAcceleratedNetworking')]"
+                      },
+                      "encryptionAtHost": {
+                        "value": "[[parameters('encryptionAtHost')]"
+                      },
+                      "hibernationEnabled": {
+                        "value": "[[parameters('hibernationEnabled')]"
+                      },
+                      "licenseType": {
+                        "value": "[[parameters('licenseType')]"
+                      },
+                      "location": {
+                        "value": "[[parameters('location')]"
+                      },
+                      "name": {
+                        "value": "[[parameters('virtualMachineName')]"
+                      },
+                      "nicDeleteOption": {
+                        "value": "Detach"
+                      },
+                      "nicName": {
+                        "value": "[[parameters('networkInterfaceName')]"
+                      },
+                      "nicPrivateIPAddress": {
+                        "value": "[[parameters('privateIPAddress')]"
+                      },
+                      "nicPrivateIPAllocationMethod": {
+                        "value": "Static"
+                      },
+                      "osDiskName": {
+                        "value": "[[parameters('diskName')]"
+                      },
+                      "secureBootEnabled": {
+                        "value": "[[parameters('secureBootEnabled')]"
+                      },
+                      "securityType": {
+                        "value": "[[parameters('securityType')]"
+                      },
+                      "subnetResourceId": {
+                        "value": "[[parameters('subnetResourceId')]"
+                      },
+                      "tags": {
+                        "value": "[[parameters('tags')]"
+                      },
+                      "userAssignedIdentityResourceIds": {
+                        "value": "[[parameters('userAssignedIdentityResourceIds')]"
+                      },
+                      "vmSize": {
+                        "value": "[[parameters('virtualMachineSize')]"
+                      },
+                      "vTpmEnabled": {
+                        "value": "[[parameters('vTpmEnabled')]"
                       }
                     },
                     "template": {
@@ -2180,211 +2226,658 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.48.1.52935",
-                          "templateHash": "10531834001857259877"
-                        }
+                          "version": "0.49.2.45890",
+                          "templateHash": "16154729554409593475"
+                        },
+                        "name": "Windows virtual machine",
+                        "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
                       },
                       "definitions": {
-                        "runCommandSettingType": {
+                        "extensionType": {
                           "type": "object",
                           "properties": {
                             "name": {
-                              "type": "string"
+                              "type": "string",
+                              "metadata": {
+                                "description": "Extension resource name. Must be unique within the VM."
+                              }
                             },
-                            "script": {
-                              "type": "string"
+                            "publisher": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Extension handler publisher."
+                              }
                             },
-                            "parameters": {
+                            "type": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Extension type name."
+                              }
+                            },
+                            "typeHandlerVersion": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Major.minor version string. E.g. \"1.3\". autoUpgradeMinorVersion applies to the minor part."
+                              }
+                            },
+                            "autoUpgradeMinorVersion": {
+                              "type": "bool",
+                              "nullable": true
+                            },
+                            "enableAutomaticUpgrade": {
+                              "type": "bool",
+                              "nullable": true
+                            },
+                            "forceUpdateTag": {
+                              "type": "string",
+                              "nullable": true,
+                              "metadata": {
+                                "description": "Change this value to force the extension to re-run on an already-deployed VM."
+                              }
+                            },
+                            "settings": {
+                              "type": "object",
+                              "nullable": true,
+                              "metadata": {
+                                "description": "Extension-specific public settings object."
+                              }
+                            },
+                            "protectedSettings": {
+                              "type": "secureObject",
+                              "nullable": true,
+                              "metadata": {
+                                "description": "Extension-specific protected (secret) settings. Not logged or returned in ARM responses."
+                              }
+                            },
+                            "suppressFailures": {
+                              "type": "bool",
+                              "nullable": true
+                            },
+                            "provisionAfterExtensions": {
                               "type": "array",
                               "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                                "type": "string"
+                              },
+                              "nullable": true,
+                              "metadata": {
+                                "description": "Optional. Names of extensions in the same array that must be provisioned before this one."
                               }
-                            }
-                          }
-                        },
-                        "runCommandParameterType": {
-                          "type": "object",
-                          "properties": {
-                            "name": {
-                              "type": "string"
-                            },
-                            "value": {
-                              "type": "string"
                             }
                           },
                           "metadata": {
-                            "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
+                            "description": "VM extension handler, upgrade options and public or protected settings.",
                             "__bicep_imported_from!": {
-                              "sourceTemplate": "../../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                              "sourceTemplate": "../../types/computeTypes.bicep"
                             }
                           }
                         }
                       },
                       "parameters": {
-                        "diskName": {
-                          "type": "string"
+                        "adminPassword": {
+                          "type": "securestring",
+                          "metadata": {
+                            "description": "Required. Local administrator password for the Windows VM, passed as a secure value."
+                          }
                         },
-                        "imageVersionResourceId": {
-                          "type": "string"
+                        "adminUsername": {
+                          "type": "securestring",
+                          "metadata": {
+                            "description": "Required. Local administrator account name for the Windows VM."
+                          }
                         },
-                        "licenseType": {
-                          "type": "string"
+                        "availabilitySetResourceId": {
+                          "type": "string",
+                          "defaultValue": "",
+                          "metadata": {
+                            "description": "Availability set resource ID. Empty = no availability set."
+                          }
                         },
-                        "location": {
-                          "type": "string"
+                        "bootDiagnosticsEnabled": {
+                          "type": "bool",
+                          "defaultValue": true,
+                          "metadata": {
+                            "description": "Optional. Enable boot diagnostics with managed storage account."
+                          }
                         },
-                        "networkInterfaceName": {
-                          "type": "string"
+                        "customImageResourceId": {
+                          "type": "string",
+                          "defaultValue": "",
+                          "metadata": {
+                            "description": "Optional. Custom image resource ID. Overrides imagePublisher/imageOffer/imageSku when provided."
+                          }
                         },
-                        "privateIPAddress": {
-                          "type": "string"
+                        "diskAccessId": {
+                          "type": "string",
+                          "defaultValue": "",
+                          "metadata": {
+                            "description": "Disk access resource ID for restricting disk network access."
+                          }
                         },
-                        "runCommandSettings": {
+                        "diskControllerType": {
+                          "type": "string",
+                          "defaultValue": "",
+                          "allowedValues": [
+                            "SCSI",
+                            "NVMe",
+                            ""
+                          ],
+                          "metadata": {
+                            "description": "Optional. The disk controller type. When empty, Azure selects automatically based on the VM SKU."
+                          }
+                        },
+                        "diskEncryptionSetResourceId": {
+                          "type": "string",
+                          "defaultValue": "",
+                          "metadata": {
+                            "description": "Disk encryption set resource ID for customer-managed key encryption."
+                          }
+                        },
+                        "enableAcceleratedNetworking": {
+                          "type": "bool",
+                          "defaultValue": true,
+                          "metadata": {
+                            "description": "Optional. Enable accelerated networking on the NIC; the consuming VM size and OS must support it."
+                          }
+                        },
+                        "encryptionAtHost": {
+                          "type": "bool",
+                          "defaultValue": true,
+                          "metadata": {
+                            "description": "Optional. Enable host-level VM encryption; the selected VM size must support it."
+                          }
+                        },
+                        "extensions": {
                           "type": "array",
                           "items": {
-                            "$ref": "#/definitions/runCommandSettingType"
+                            "$ref": "#/definitions/extensionType"
+                          },
+                          "defaultValue": [],
+                          "metadata": {
+                            "description": "VM extensions to install."
+                          }
+                        },
+                        "hibernationEnabled": {
+                          "type": "bool",
+                          "defaultValue": false,
+                          "metadata": {
+                            "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
+                          }
+                        },
+                        "imageOffer": {
+                          "type": "string",
+                          "defaultValue": "windows-11",
+                          "metadata": {
+                            "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
+                          }
+                        },
+                        "imagePublisher": {
+                          "type": "string",
+                          "defaultValue": "MicrosoftWindowsDesktop",
+                          "metadata": {
+                            "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
+                          }
+                        },
+                        "imageSku": {
+                          "type": "string",
+                          "defaultValue": "win11-25h2-avd",
+                          "metadata": {
+                            "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
+                          }
+                        },
+                        "licenseType": {
+                          "type": "string",
+                          "defaultValue": "None",
+                          "allowedValues": [
+                            "Windows_Server",
+                            "Windows_Client",
+                            "None"
+                          ],
+                          "metadata": {
+                            "description": "Optional. Windows Server license type for Azure Hybrid Benefit."
+                          }
+                        },
+                        "location": {
+                          "type": "string",
+                          "defaultValue": "[[resourceGroup().location]",
+                          "metadata": {
+                            "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
+                          }
+                        },
+                        "name": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the windows virtual machine to deploy."
+                          }
+                        },
+                        "nicDeleteOption": {
+                          "type": "string",
+                          "defaultValue": "Delete",
+                          "allowedValues": [
+                            "Delete",
+                            "Detach"
+                          ],
+                          "metadata": {
+                            "description": "Optional. NIC delete option when the VM is deleted."
+                          }
+                        },
+                        "nicName": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the private network interface created for the VM."
+                          }
+                        },
+                        "nicPrivateIPAddress": {
+                          "type": "string",
+                          "defaultValue": "",
+                          "metadata": {
+                            "description": "Optional. Private IP address for the VM NIC; used only when nicPrivateIPAllocationMethod is Static."
+                          }
+                        },
+                        "nicPrivateIPAllocationMethod": {
+                          "type": "string",
+                          "defaultValue": "Dynamic",
+                          "allowedValues": [
+                            "Dynamic",
+                            "Static"
+                          ],
+                          "metadata": {
+                            "description": "Optional. Private IP allocation method for the VM NIC."
+                          }
+                        },
+                        "osDiskDeleteOption": {
+                          "type": "string",
+                          "defaultValue": "Delete",
+                          "allowedValues": [
+                            "Delete",
+                            "Detach"
+                          ],
+                          "metadata": {
+                            "description": "Optional. OS disk delete option when the VM is deleted."
+                          }
+                        },
+                        "osDiskName": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the managed OS disk created from the selected image."
+                          }
+                        },
+                        "osDiskSizeGB": {
+                          "type": "int",
+                          "defaultValue": 0,
+                          "metadata": {
+                            "description": "OS disk size in GB. 0 uses the image default."
+                          }
+                        },
+                        "osDiskSku": {
+                          "type": "string",
+                          "defaultValue": "Premium_LRS",
+                          "allowedValues": [
+                            "Premium_LRS",
+                            "StandardSSD_LRS",
+                            "Standard_LRS",
+                            "UltraSSD_LRS"
+                          ],
+                          "metadata": {
+                            "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
+                          }
+                        },
+                        "secureBootEnabled": {
+                          "type": "bool",
+                          "defaultValue": true,
+                          "metadata": {
+                            "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
+                          }
+                        },
+                        "securityType": {
+                          "type": "string",
+                          "defaultValue": "TrustedLaunch",
+                          "allowedValues": [
+                            "Standard",
+                            "TrustedLaunch",
+                            "ConfidentialVM"
+                          ],
+                          "metadata": {
+                            "description": "Optional. VM security model; the image and VM size must support the selected model."
                           }
                         },
                         "subnetResourceId": {
-                          "type": "string"
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Resource ID of the existing subnet used by the VM NIC."
+                          }
+                        },
+                        "systemAssignedIdentity": {
+                          "type": "bool",
+                          "defaultValue": false,
+                          "metadata": {
+                            "description": "Optional. Enable system-assigned managed identity in addition to any user-assigned identities."
+                          }
                         },
                         "tags": {
-                          "type": "object"
+                          "type": "object",
+                          "defaultValue": {},
+                          "metadata": {
+                            "description": "Optional. Tags applied to the windows virtual machine."
+                          }
                         },
-                        "userAssignedIdentityResourceId": {
-                          "type": "string"
+                        "userAssignedIdentityResourceIds": {
+                          "type": "array",
+                          "defaultValue": [],
+                          "metadata": {
+                            "description": "User-assigned managed identity resource IDs."
+                          }
                         },
-                        "virtualMachineName": {
-                          "type": "string"
+                        "vmSize": {
+                          "type": "string",
+                          "defaultValue": "Standard_D4ads_v6",
+                          "metadata": {
+                            "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
+                          }
                         },
-                        "virtualMachinePassword": {
-                          "type": "securestring"
-                        },
-                        "virtualMachineSize": {
-                          "type": "string"
-                        },
-                        "virtualMachineUsername": {
-                          "type": "securestring"
+                        "vTpmEnabled": {
+                          "type": "bool",
+                          "defaultValue": true,
+                          "metadata": {
+                            "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
+                          }
                         }
+                      },
+                      "variables": {
+                        "imageReference": "[[if(not(empty(parameters('customImageResourceId'))), createObject('id', parameters('customImageResourceId')), createObject('publisher', parameters('imagePublisher'), 'offer', parameters('imageOffer'), 'sku', parameters('imageSku'), 'version', 'latest'))]",
+                        "securityProfile": "[[if(not(equals(parameters('securityType'), 'Standard')), createObject('securityType', parameters('securityType'), 'uefiSettings', createObject('secureBootEnabled', parameters('secureBootEnabled'), 'vTpmEnabled', parameters('vTpmEnabled')), 'encryptionAtHost', parameters('encryptionAtHost')), createObject('encryptionAtHost', parameters('encryptionAtHost')))]",
+                        "userAssignedIdentities": "[[reduce(parameters('userAssignedIdentityResourceIds'), createObject(), lambda('cur', 'id', union(lambdaVariables('cur'), createObject(format('{0}', lambdaVariables('id')), createObject()))))]",
+                        "identityType": "[[if(and(parameters('systemAssignedIdentity'), not(empty(parameters('userAssignedIdentityResourceIds')))), 'SystemAssigned, UserAssigned', if(parameters('systemAssignedIdentity'), 'SystemAssigned', if(not(empty(parameters('userAssignedIdentityResourceIds'))), 'UserAssigned', 'None')))]"
                       },
                       "resources": {
                         "networkInterface": {
                           "type": "Microsoft.Network/networkInterfaces",
-                          "apiVersion": "2020-05-01",
-                          "name": "[[parameters('networkInterfaceName')]",
+                          "apiVersion": "2023-05-01",
+                          "name": "[[parameters('nicName')]",
                           "location": "[[parameters('location')]",
                           "tags": "[[parameters('tags')]",
                           "properties": {
+                            "enableAcceleratedNetworking": "[[parameters('enableAcceleratedNetworking')]",
                             "ipConfigurations": [
                               {
-                                "name": "ipconfig",
+                                "name": "ipconfig1",
                                 "properties": {
-                                  "primary": true,
-                                  "privateIPAddress": "[[parameters('privateIPAddress')]",
-                                  "privateIPAddressVersion": "IPv4",
-                                  "privateIPAllocationMethod": "Static",
+                                  "privateIPAllocationMethod": "[[parameters('nicPrivateIPAllocationMethod')]",
+                                  "privateIPAddress": "[[if(equals(parameters('nicPrivateIPAllocationMethod'), 'Static'), parameters('nicPrivateIPAddress'), null())]",
                                   "subnet": {
                                     "id": "[[parameters('subnetResourceId')]"
                                   }
                                 }
                               }
-                            ],
-                            "enableAcceleratedNetworking": true,
-                            "enableIPForwarding": false
+                            ]
                           }
                         },
                         "virtualMachine": {
                           "type": "Microsoft.Compute/virtualMachines",
-                          "apiVersion": "2021-11-01",
-                          "name": "[[parameters('virtualMachineName')]",
+                          "apiVersion": "2023-09-01",
+                          "name": "[[parameters('name')]",
                           "location": "[[parameters('location')]",
                           "tags": "[[parameters('tags')]",
                           "identity": {
-                            "type": "UserAssigned",
-                            "userAssignedIdentities": {
-                              "[[format('{0}', parameters('userAssignedIdentityResourceId'))]": {}
-                            }
+                            "type": "[[variables('identityType')]",
+                            "userAssignedIdentities": "[[if(not(empty(parameters('userAssignedIdentityResourceIds'))), variables('userAssignedIdentities'), null())]"
                           },
                           "properties": {
                             "hardwareProfile": {
-                              "vmSize": "[[parameters('virtualMachineSize')]"
+                              "vmSize": "[[parameters('vmSize')]"
                             },
+                            "availabilitySet": "[[if(not(empty(parameters('availabilitySetResourceId'))), createObject('id', parameters('availabilitySetResourceId')), null())]",
+                            "securityProfile": "[[variables('securityProfile')]",
                             "storageProfile": {
-                              "imageReference": {
-                                "id": "[[parameters('imageVersionResourceId')]"
-                              },
+                              "imageReference": "[[variables('imageReference')]",
                               "osDisk": {
-                                "deleteOption": "Delete",
-                                "osType": "Windows",
+                                "name": "[[parameters('osDiskName')]",
                                 "createOption": "FromImage",
-                                "caching": "ReadWrite",
+                                "deleteOption": "[[parameters('osDiskDeleteOption')]",
                                 "managedDisk": {
-                                  "storageAccountType": "Premium_LRS"
+                                  "storageAccountType": "[[parameters('osDiskSku')]",
+                                  "diskEncryptionSet": "[[if(not(empty(parameters('diskEncryptionSetResourceId'))), createObject('id', parameters('diskEncryptionSetResourceId')), null())]",
+                                  "securityProfile": "[[if(equals(parameters('securityType'), 'ConfidentialVM'), createObject('securityEncryptionType', 'VMGuestStateOnly'), null())]"
                                 },
-                                "name": "[[parameters('diskName')]"
+                                "diskSizeGB": "[[if(greater(parameters('osDiskSizeGB'), 0), parameters('osDiskSizeGB'), null())]"
                               },
-                              "dataDisks": []
+                              "diskControllerType": "[[if(empty(parameters('diskControllerType')), null(), parameters('diskControllerType'))]"
                             },
-                            "osProfile": {
-                              "computerName": "[[parameters('virtualMachineName')]",
-                              "adminUsername": "[[parameters('virtualMachineUsername')]",
-                              "adminPassword": "[[parameters('virtualMachinePassword')]",
-                              "windowsConfiguration": {
-                                "provisionVMAgent": true,
-                                "enableAutomaticUpdates": false
-                              },
-                              "secrets": [],
-                              "allowExtensionOperations": true
-                            },
+                            "additionalCapabilities": "[[if(parameters('hibernationEnabled'), createObject('hibernationEnabled', true()), if(not(empty(parameters('diskAccessId'))), createObject('ultraSSDEnabled', false()), null()))]",
                             "networkProfile": {
                               "networkInterfaces": [
                                 {
-                                  "id": "[[resourceId('Microsoft.Network/networkInterfaces', parameters('networkInterfaceName'))]",
+                                  "id": "[[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]",
                                   "properties": {
-                                    "deleteOption": "Detach"
+                                    "deleteOption": "[[parameters('nicDeleteOption')]"
                                   }
                                 }
                               ]
                             },
-                            "diagnosticsProfile": {
-                              "bootDiagnostics": {
-                                "enabled": false
+                            "osProfile": {
+                              "computerName": "[[take(parameters('name'), 15)]",
+                              "adminUsername": "[[parameters('adminUsername')]",
+                              "adminPassword": "[[parameters('adminPassword')]",
+                              "windowsConfiguration": {
+                                "enableAutomaticUpdates": false,
+                                "patchSettings": {
+                                  "patchMode": "Manual"
+                                }
                               }
                             },
-                            "licenseType": "[[parameters('licenseType')]"
+                            "diagnosticsProfile": {
+                              "bootDiagnostics": {
+                                "enabled": "[[parameters('bootDiagnosticsEnabled')]"
+                              }
+                            },
+                            "licenseType": "[[if(not(equals(parameters('licenseType'), 'None')), parameters('licenseType'), null())]"
                           },
                           "dependsOn": [
                             "networkInterface"
                           ]
                         },
-                        "runCommand": {
+                        "vmExtensions": {
                           "[string('copy')]": {
-                            "name": "runCommand",
-                            "count": "[[length(parameters('runCommandSettings'))]"
+                            "name": "vmExtensions",
+                            "count": "[[length(parameters('extensions'))]"
                           },
-                          "condition": "[[not(empty(parameters('runCommandSettings')))]",
-                          "type": "Microsoft.Compute/virtualMachines/runCommands",
+                          "type": "Microsoft.Compute/virtualMachines/extensions",
                           "apiVersion": "2023-09-01",
-                          "name": "[[format('{0}/{1}', parameters('virtualMachineName'), parameters('runCommandSettings')[copyIndex()].name)]",
+                          "name": "[[format('{0}/{1}', parameters('name'), parameters('extensions')[copyIndex()].name)]",
                           "location": "[[parameters('location')]",
                           "tags": "[[parameters('tags')]",
                           "properties": {
-                            "asyncExecution": false,
-                            "parameters": "[[parameters('runCommandSettings')[copyIndex()].parameters]",
-                            "source": {
-                              "script": "[[parameters('runCommandSettings')[copyIndex()].script]"
-                            },
-                            "treatFailureAsDeploymentFailure": true
+                            "publisher": "[[parameters('extensions')[copyIndex()].publisher]",
+                            "type": "[[parameters('extensions')[copyIndex()].type]",
+                            "typeHandlerVersion": "[[parameters('extensions')[copyIndex()].typeHandlerVersion]",
+                            "autoUpgradeMinorVersion": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'autoUpgradeMinorVersion'), true())]",
+                            "enableAutomaticUpgrade": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'enableAutomaticUpgrade'), false())]",
+                            "settings": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'settings'), null())]",
+                            "protectedSettings": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'protectedSettings'), null())]"
                           },
                           "dependsOn": [
                             "virtualMachine"
                           ]
                         }
+                      },
+                      "outputs": {
+                        "resourceId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Resource ID of the windows virtual machine."
+                          },
+                          "value": "[[resourceId('Microsoft.Compute/virtualMachines', parameters('name'))]"
+                        },
+                        "name": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Azure resource name of the windows virtual machine."
+                          },
+                          "value": "[[parameters('name')]"
+                        },
+                        "principalId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
+                          },
+                          "value": "[[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
+                        }
+                      }
+                    }
+                  }
+                },
+                "customizations": {
+                  "type": "Microsoft.Resources/deployments",
+                  "apiVersion": "2025-04-01",
+                  "name": "[[format('customizations-{0}', uniqueString('customizations', deployment().name))]",
+                  "properties": {
+                    "expressionEvaluationOptions": {
+                      "scope": "inner"
+                    },
+                    "mode": "Incremental",
+                    "parameters": {
+                      "artifactsContainerUri": {
+                        "value": "[[parameters('artifactsContainerUri')]"
+                      },
+                      "customizations": {
+                        "value": "[[parameters('vmCustomizations')]"
+                      },
+                      "userAssignedIdentityClientId": {
+                        "value": "[[parameters('artifactsUserAssignedIdentityClientId')]"
+                      },
+                      "virtualMachineName": {
+                        "value": "[[parameters('virtualMachineName')]"
+                      }
+                    },
+                    "template": {
+                      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                      "languageVersion": "2.0",
+                      "contentVersion": "1.0.0.0",
+                      "metadata": {
+                        "_generator": {
+                          "name": "bicep",
+                          "version": "0.49.2.45890",
+                          "templateHash": "8394745655747289777"
+                        },
+                        "name": "Session host customization orchestration",
+                        "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
+                      },
+                      "definitions": {
+                        "artifactCustomizationType": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Unique name for the customization."
+                              }
+                            },
+                            "blobNameOrUri": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Artifact blob path relative to the configured container, or a full HTTP or HTTPS URI."
+                              }
+                            },
+                            "arguments": {
+                              "type": "string",
+                              "nullable": true,
+                              "metadata": {
+                                "description": "Optional arguments passed to the customization artifact."
+                              }
+                            },
+                            "successExitCodes": {
+                              "type": "string",
+                              "nullable": true,
+                              "metadata": {
+                                "description": "Optional comma-separated exit codes treated as success. Defaults to 0,3010."
+                              }
+                            }
+                          },
+                          "metadata": {
+                            "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
+                            "__bicep_imported_from!": {
+                              "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
+                            }
+                          }
+                        }
+                      },
+                      "parameters": {
+                        "artifactsContainerUri": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Base URI of the existing artifact container used to resolve relative customization blob names."
+                          }
+                        },
+                        "customizations": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/artifactCustomizationType"
+                          },
+                          "metadata": {
+                            "description": "Required. Ordered objects with name and blobNameOrUri, plus optional arguments and comma-separated successExitCodes; relative blob names use artifactsContainerUri."
+                          }
+                        },
+                        "location": {
+                          "type": "string",
+                          "defaultValue": "[[resourceGroup().location]",
+                          "metadata": {
+                            "description": "Optional. Azure region for the resources deployed by this module."
+                          }
+                        },
+                        "userAssignedIdentityClientId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Client ID of the identity attached to the VM and authorized for the requested operations."
+                          }
+                        },
+                        "virtualMachineName": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the existing VM in the deployment resource group."
+                          }
+                        }
+                      },
+                      "variables": {
+                        "[string('copy')]": [
+                          {
+                            "name": "customizers",
+                            "count": "[[length(parameters('customizations'))]",
+                            "input": "[[union(createObject('name', replace(parameters('customizations')[copyIndex('customizers')].name, ' ', '-'), 'uri', if(or(startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'https://'), startsWith(parameters('customizations')[copyIndex('customizers')].blobNameOrUri, 'http://')), parameters('customizations')[copyIndex('customizers')].blobNameOrUri, format('{0}/{1}', parameters('artifactsContainerUri'), parameters('customizations')[copyIndex('customizers')].blobNameOrUri))), if(empty(coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'arguments'), '')), createObject(), createObject('arguments', parameters('customizations')[copyIndex('customizers')].arguments)), if(empty(coalesce(tryGet(parameters('customizations')[copyIndex('customizers')], 'successExitCodes'), '')), createObject(), createObject('successExitCodes', parameters('customizations')[copyIndex('customizers')].successExitCodes)))]"
+                          }
+                        ],
+                        "$fxv#0": "param(\r\n  [string]$APIVersion,\r\n  [string]$Arguments = '',\r\n  [string]$BlobStorageSuffix,\r\n  [string]$BuildDir = '',\r\n  [string]$Name,\r\n  [string]$SuccessExitCodes = '0,3010',\r\n  [string]$Uri,\r\n  [string]$UserAssignedIdentityClientId\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$LogFile = \"$env:SystemRoot\\Logs\\$Name.log\"\r\n\r\nfunction Write-Log {\r\n  param([string]$Message)\r\n  $Entry = \"[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')] $Message\"\r\n  Add-Content -Path $LogFile -Value $Entry -ErrorAction SilentlyContinue\r\n  Write-Output $Entry\r\n}\r\n\r\nfunction Get-WebException {\r\n  param([System.Management.Automation.ErrorRecord]$ErrorRecord)\r\n\r\n  $exception = $ErrorRecord.Exception\r\n  while ($exception.InnerException -and -not ($exception -is [System.Net.WebException])) {\r\n    $exception = $exception.InnerException\r\n  }\r\n  return $exception\r\n}\r\n\r\nfunction Get-WebFailureDetail {\r\n  param(\r\n    [System.Management.Automation.ErrorRecord]$ErrorRecord,\r\n    [ValidateSet('ManagedIdentity', 'Download')]\r\n    [string]$Operation\r\n  )\r\n\r\n  $exception = Get-WebException -ErrorRecord $ErrorRecord\r\n  $response = $exception.Response\r\n  $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }\r\n  $webStatus = if ($exception -is [System.Net.WebException]) { $exception.Status } else { $null }\r\n  $category = if ($Operation -eq 'ManagedIdentity' -and $statusCode -eq 400) {\r\n    'IdentityUnavailable'\r\n  }\r\n  elseif ($webStatus -in @('ConnectFailure', 'ConnectionClosed', 'NameResolutionFailure', 'ProxyNameResolutionFailure', 'ReceiveFailure', 'SendFailure', 'Timeout')) {\r\n    if ($Operation -eq 'ManagedIdentity') { 'ImdsConnectivity' } else { 'StorageConnectivity' }\r\n  }\r\n  elseif ($null -ne $statusCode) {\r\n    \"Http$statusCode\"\r\n  }\r\n  else {\r\n    'UnexpectedError'\r\n  }\r\n\r\n  $parts = @(\"Category=$category\")\r\n  if ($null -ne $statusCode) { $parts += \"HTTP=$statusCode\" }\r\n  if ($null -ne $webStatus) { $parts += \"WebStatus=$webStatus\" }\r\n  $parts += \"Message=$($exception.Message)\"\r\n  if ($response) {\r\n    try {\r\n      $responseStream = $response.GetResponseStream()\r\n      if ($responseStream) {\r\n        $reader = New-Object System.IO.StreamReader($responseStream)\r\n        $responseBody = ($reader.ReadToEnd() -replace '\\s+', ' ').Trim()\r\n        $reader.Dispose()\r\n        if (-not [string]::IsNullOrWhiteSpace($responseBody)) {\r\n          if ($responseBody.Length -gt 1000) { $responseBody = $responseBody.Substring(0, 1000) }\r\n          $parts += \"Response=$responseBody\"\r\n        }\r\n      }\r\n    }\r\n    catch {\r\n      # Preserve the original failure when the response stream cannot be read.\r\n    }\r\n  }\r\n  return $parts -join '; '\r\n}\r\n\r\nfunction Test-TransientManagedIdentityFailure {\r\n  param(\r\n    [System.Management.Automation.ErrorRecord]$ErrorRecord,\r\n    [string]$FailureDetail\r\n  )\r\n\r\n  $exception = Get-WebException -ErrorRecord $ErrorRecord\r\n  $response = $exception.Response\r\n  $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }\r\n  if ($statusCode -eq 400 -and $FailureDetail -match '\"error_description\"\\s*:\\s*\"Identity not found\"') { return $true }\r\n  if ($statusCode -in @(404, 408, 410, 429, 500, 502, 503, 504)) { return $true }\r\n  if ($exception -is [System.Net.WebException]) {\r\n    return $exception.Status -in @(\r\n      'ConnectFailure',\r\n      'ConnectionClosed',\r\n      'KeepAliveFailure',\r\n      'NameResolutionFailure',\r\n      'PipelineFailure',\r\n      'ProxyNameResolutionFailure',\r\n      'ReceiveFailure',\r\n      'RequestCanceled',\r\n      'SendFailure',\r\n      'Timeout'\r\n    )\r\n  }\r\n  return $false\r\n}\r\n\r\nfunction Get-ManagedIdentityRetryDelaySeconds {\r\n  param([int]$Attempt)\r\n\r\n  return [int]([math]::Pow(2, $Attempt + 1) - 2)\r\n}\r\n\r\nfunction Test-TransientDownloadFailure {\r\n  param([System.Management.Automation.ErrorRecord]$ErrorRecord)\r\n\r\n  $exception = Get-WebException -ErrorRecord $ErrorRecord\r\n  $response = $exception.Response\r\n  $statusCode = if ($response -and $null -ne $response.StatusCode) { [int]$response.StatusCode } else { $null }\r\n  if ($statusCode -in @(400, 403, 408, 429, 500, 502, 503, 504)) { return $true }\r\n  if ($exception -is [System.Net.WebException]) {\r\n    return $exception.Status -in @(\r\n      'ConnectFailure',\r\n      'ConnectionClosed',\r\n      'KeepAliveFailure',\r\n      'NameResolutionFailure',\r\n      'PipelineFailure',\r\n      'ProxyNameResolutionFailure',\r\n      'ReceiveFailure',\r\n      'RequestCanceled',\r\n      'SendFailure',\r\n      'Timeout'\r\n    )\r\n  }\r\n  return $false\r\n}\r\n\r\nfunction Get-ManagedIdentityTokenResponse {\r\n  param(\r\n    [string]$TokenUri,\r\n    [int]$MaxAttempts = 5\r\n  )\r\n\r\n  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {\r\n    $responseReceived = $false\r\n    $imdsClient = New-Object System.Net.WebClient\r\n    try {\r\n      $imdsClient.Proxy = $null\r\n      $imdsClient.Headers.Add('Metadata', 'true')\r\n      $responseContent = $imdsClient.DownloadString($TokenUri)\r\n      $responseReceived = $true\r\n      $tokenResponse = $responseContent | ConvertFrom-Json\r\n      if ([string]::IsNullOrWhiteSpace($tokenResponse.access_token)) {\r\n        throw 'Managed identity endpoint returned an empty access token.'\r\n      }\r\n      return $tokenResponse\r\n    }\r\n    catch {\r\n      $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation ManagedIdentity\r\n      $isTransient = $responseReceived -or (Test-TransientManagedIdentityFailure -ErrorRecord $_ -FailureDetail $failureDetail)\r\n      if (-not $isTransient) {\r\n        throw \"Managed identity token request failed without retry. $failureDetail\"\r\n      }\r\n      if ($attempt -eq $MaxAttempts) {\r\n        throw \"Managed identity token request failed after $MaxAttempts attempts. $failureDetail\"\r\n      }\r\n      $retryDelaySeconds = Get-ManagedIdentityRetryDelaySeconds -Attempt $attempt\r\n      Write-Log \"Managed identity token request attempt $attempt of $MaxAttempts failed. $failureDetail Retrying in $retryDelaySeconds seconds.\"\r\n      Start-Sleep -Seconds $retryDelaySeconds\r\n    }\r\n    finally {\r\n      $imdsClient.Dispose()\r\n    }\r\n  }\r\n}\r\n\r\nfunction Invoke-ArtifactDownload {\r\n  param(\r\n    [string]$Uri,\r\n    [string]$DestinationPath,\r\n    [string]$TokenUri = '',\r\n    [int]$MaxAttempts = 6,\r\n    [int]$RetryDelaySeconds = 10\r\n  )\r\n\r\n  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {\r\n    $webClient = New-Object System.Net.WebClient\r\n    try {\r\n      if (-not [string]::IsNullOrWhiteSpace($TokenUri)) {\r\n        Write-Log \"Getting access token for artifact download attempt $attempt of $MaxAttempts.\"\r\n        $tokenResponse = Get-ManagedIdentityTokenResponse -TokenUri $TokenUri\r\n        Write-Log \"Managed identity token acquired. Resource=$($tokenResponse.resource); NotBefore=$($tokenResponse.not_before); ExpiresOn=$($tokenResponse.expires_on)\"\r\n        $webClient.Headers.Add('x-ms-version', '2017-11-09')\r\n        $webClient.Headers.Add('Authorization', \"Bearer $($tokenResponse.access_token)\")\r\n      }\r\n\r\n      try {\r\n        $webClient.DownloadFile($Uri, $DestinationPath)\r\n        return\r\n      }\r\n      catch {\r\n        $failureDetail = Get-WebFailureDetail -ErrorRecord $_ -Operation Download\r\n        $isTransient = Test-TransientDownloadFailure -ErrorRecord $_\r\n        Remove-Item -Path $DestinationPath -Force -ErrorAction SilentlyContinue\r\n        if (-not $isTransient) {\r\n          throw \"Artifact download failed without retry. $failureDetail\"\r\n        }\r\n        if ($attempt -eq $MaxAttempts) {\r\n          throw \"Artifact download failed after $MaxAttempts attempts. $failureDetail\"\r\n        }\r\n        Write-Log \"Artifact download attempt $attempt of $MaxAttempts failed. $failureDetail Retrying with a newly requested token in $RetryDelaySeconds seconds.\"\r\n        Start-Sleep -Seconds $RetryDelaySeconds\r\n      }\r\n    }\r\n    finally {\r\n      $webClient.Dispose()\r\n    }\r\n  }\r\n}\r\n\r\nfunction Split-ArgumentString {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @() }\r\n\r\n  $arguments = @()\r\n  $currentArg = ''\r\n  $inQuotes = $false\r\n  $quoteChar = $null\r\n  $parenDepth = 0  # tracks @(...) nesting; spaces inside are not token separators\r\n\r\n  for ($i = 0; $i -lt $ArgumentString.Length; $i++) {\r\n    $char = $ArgumentString[$i]\r\n    if (!$inQuotes -and (($char -eq '\"' -and ($i -eq 0 -or $ArgumentString[$i - 1] -ne '\\')) -or $char -eq \"'\")) {\r\n      $inQuotes = $true\r\n      $quoteChar = $char\r\n      $currentArg += $char\r\n    }\r\n    elseif ($inQuotes -and $char -eq $quoteChar) {\r\n      $inQuotes = $false\r\n      $quoteChar = $null\r\n      $currentArg += $char\r\n    }\r\n    elseif (!$inQuotes -and $char -eq '(' -and $currentArg -match '@$') {\r\n      $parenDepth++\r\n      $currentArg += $char\r\n    }\r\n    elseif (!$inQuotes -and $char -eq ')' -and $parenDepth -gt 0) {\r\n      $parenDepth--\r\n      $currentArg += $char\r\n    }\r\n    elseif ($char -eq ' ' -and !$inQuotes -and $parenDepth -eq 0) {\r\n      if ($currentArg.Length -gt 0) {\r\n        $value = $currentArg.Trim('\"').Trim(\"'\")\r\n        if ($value -eq 'true') { $arguments += '$true' }\r\n        elseif ($value -eq 'false') { $arguments += '$false' }\r\n        else { $arguments += $value }\r\n        $currentArg = ''\r\n      }\r\n    }\r\n    else {\r\n      $currentArg += $char\r\n    }\r\n  }\r\n  if ($currentArg.Length -gt 0) {\r\n    $value = $currentArg.Trim('\"').Trim(\"'\")\r\n    if ($value -eq 'true') { $arguments += '$true' }\r\n    elseif ($value -eq 'false') { $arguments += '$false' }\r\n    else { $arguments += $value }\r\n  }\r\n  return $arguments\r\n}\r\n\r\nfunction Split-MsiArgumentString {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @() }\r\n\r\n  $arguments = @()\r\n  $currentArgument = [System.Text.StringBuilder]::new()\r\n  $inQuotes = $false\r\n\r\n  for ($index = 0; $index -lt $ArgumentString.Length; $index++) {\r\n    $character = $ArgumentString[$index]\r\n    if ($character -eq '\"') {\r\n      $inQuotes = -not $inQuotes\r\n    }\r\n    elseif ([char]::IsWhiteSpace($character) -and -not $inQuotes) {\r\n      if ($currentArgument.Length -gt 0) {\r\n        $arguments += $currentArgument.ToString()\r\n        $null = $currentArgument.Clear()\r\n      }\r\n    }\r\n    else {\r\n      $null = $currentArgument.Append($character)\r\n    }\r\n  }\r\n\r\n  if ($inQuotes) { throw 'MSI arguments contain an unterminated double quote.' }\r\n  if ($currentArgument.Length -gt 0) { $arguments += $currentArgument.ToString() }\r\n  return $arguments\r\n}\r\n\r\nfunction ConvertTo-WindowsCommandLineArgument {\r\n  param([AllowEmptyString()][string]$Argument)\r\n\r\n  if ($Argument.Length -gt 0 -and $Argument -notmatch '[\\s\"]') { return $Argument }\r\n\r\n  $quotedArgument = [System.Text.StringBuilder]::new()\r\n  $null = $quotedArgument.Append('\"')\r\n  $backslashCount = 0\r\n  foreach ($character in $Argument.ToCharArray()) {\r\n    if ($character -eq '\\') {\r\n      $backslashCount++\r\n    }\r\n    elseif ($character -eq '\"') {\r\n      $null = $quotedArgument.Append(('\\' * (($backslashCount * 2) + 1)))\r\n      $null = $quotedArgument.Append('\"')\r\n      $backslashCount = 0\r\n    }\r\n    else {\r\n      $null = $quotedArgument.Append(('\\' * $backslashCount))\r\n      $null = $quotedArgument.Append($character)\r\n      $backslashCount = 0\r\n    }\r\n  }\r\n  $null = $quotedArgument.Append(('\\' * ($backslashCount * 2)))\r\n  $null = $quotedArgument.Append('\"')\r\n  return $quotedArgument.ToString()\r\n}\r\n\r\nfunction Get-MsiArgumentList {\r\n  param(\r\n    [string]$InstallerPath,\r\n    [string]$ArgumentString\r\n  )\r\n\r\n  [string[]]$msiArguments = @(\r\n    Split-MsiArgumentString -ArgumentString $ArgumentString |\r\n      Where-Object { -not [string]::IsNullOrEmpty($_) }\r\n  )\r\n  if ($msiArguments | Where-Object { $_ -match '^/(i|package|x|uninstall)$' }) {\r\n    throw 'Do not specify an MSI package operation or path. The downloaded MSI is installed automatically.'\r\n  }\r\n  if ($msiArguments | Where-Object { $_ -match '^/(forcerestart|promptrestart)$' }) {\r\n    throw 'MSI arguments cannot request or prompt for a restart.'\r\n  }\r\n\r\n  $msiArguments = @('/i', $InstallerPath) + $msiArguments\r\n  if (-not ($msiArguments | Where-Object { $_ -match '^/(qn|quiet)$' })) {\r\n    $msiArguments += '/quiet'\r\n  }\r\n  if (-not ($msiArguments | Where-Object { $_ -ieq '/norestart' })) {\r\n    $msiArguments += '/norestart'\r\n  }\r\n  return $msiArguments\r\n}\r\n\r\nfunction ConvertTo-ParametersSplat {\r\n  param([string]$ArgumentString)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($ArgumentString)) { return @{} }\r\n\r\n  $tokens = @(Split-ArgumentString -ArgumentString $ArgumentString)\r\n  $parameters = @{}\r\n  $i = 0\r\n  while ($i -lt $tokens.Count) {\r\n    $token = $tokens[$i]\r\n    if ($token -match '^-(\\w+)$') {\r\n      $paramName = $matches[1]\r\n      if (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n        $i++\r\n        $value = $tokens[$i]\r\n        if ($value -eq '$true') { $parameters[$paramName] = $true }\r\n        elseif ($value -eq '$false') { $parameters[$paramName] = $false }\r\n        elseif ($value -match '^@\\((.+)\\)$') {\r\n          # @('val1', 'val2') or @(\"val1\", \"val2\") array literal.\r\n          # Split-ArgumentString keeps the whole @(...) as one token via paren-depth tracking.\r\n          $parameters[$paramName] = [string[]]($matches[1] -split ',' |\r\n            ForEach-Object { $_.Trim().Trim(\"'\").Trim('\"') } |\r\n            Where-Object { $_ -ne '' })\r\n        }\r\n        elseif ($value.EndsWith(',')) {\r\n          # \"val1\", \"val2\" style: first token ended with a comma; collect the rest.\r\n          $items = [System.Collections.Generic.List[string]]::new()\r\n          $items.Add($value.TrimEnd(',').Trim('\"').Trim(\"'\"))\r\n          while (($i + 1) -lt $tokens.Count -and $tokens[$i + 1] -notmatch '^-\\w+$') {\r\n            $i++\r\n            $nextVal = $tokens[$i]\r\n            $items.Add($nextVal.TrimEnd(',').Trim('\"').Trim(\"'\"))\r\n            if (-not $nextVal.EndsWith(',')) { break }\r\n          }\r\n          $parameters[$paramName] = [string[]]$items\r\n        }\r\n        else { $parameters[$paramName] = $value.Trim('\"') }\r\n      }\r\n      else {\r\n        $parameters[$paramName] = $true\r\n      }\r\n    }\r\n    $i++\r\n  }\r\n  return $parameters\r\n}\r\n\r\nfunction ConvertTo-SuccessExitCodes {\r\n  param([string]$Value)\r\n\r\n  if ([string]::IsNullOrWhiteSpace($Value)) {\r\n    throw 'SuccessExitCodes cannot be empty.'\r\n  }\r\n\r\n  $exitCodes = [System.Collections.Generic.List[int]]::new()\r\n  foreach ($item in $Value.Split(',')) {\r\n    $exitCode = 0\r\n    if (-not [int]::TryParse($item.Trim(), [ref]$exitCode)) {\r\n      throw \"SuccessExitCodes contains invalid integer '$($item.Trim())'.\"\r\n    }\r\n    if (-not $exitCodes.Contains($exitCode)) {\r\n      $exitCodes.Add($exitCode)\r\n    }\r\n  }\r\n  return [int[]]$exitCodes\r\n}\r\n\r\nfunction Test-ArtifactExecutionSuccess {\r\n  param(\r\n    [int]$ExitCode,\r\n    [int[]]$AcceptedExitCodes,\r\n    [bool]$InvocationSucceeded,\r\n    [bool]$IsPowerShellScript = $false\r\n  )\r\n\r\n  # A PowerShell invocation can fail without setting LASTEXITCODE. Do not allow the initialized\r\n  # value of 0 to mask that failure. An explicit nonzero exit sets $? to false but remains valid\r\n  # when the exit code is accepted.\r\n  if ($IsPowerShellScript -and -not $InvocationSucceeded -and $ExitCode -eq 0) {\r\n    return $false\r\n  }\r\n  return $ExitCode -in $AcceptedExitCodes\r\n}\r\n\r\ntry {\r\n  Write-Log \"Starting '$Name' customization.\"\r\n  Write-Log ($PSBoundParameters | Format-Table -AutoSize | Out-String)\r\n\r\n  $AcceptedExitCodes = ConvertTo-SuccessExitCodes -Value $SuccessExitCodes\r\n  Write-Log \"Accepted success exit codes: $($AcceptedExitCodes -join ', ').\"\r\n\r\n  If ($Arguments -eq '') { $Arguments = $null }\r\n\r\n  If ($BuildDir -ne '') {\r\n    $TempDir = Join-Path $BuildDir -ChildPath $Name\r\n  }\r\n  Else {\r\n    $TempDir = Join-Path $Env:TEMP -ChildPath $Name\r\n  }\r\n  New-Item -Path $TempDir -ItemType Directory -Force | Out-Null\r\n\r\n  # Force TLS 1.2  -  fresh marketplace images default to TLS 1.0/1.1 which Azure Storage rejects.\r\n  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n  $TokenUri = ''\r\n  If ($Uri -match $BlobStorageSuffix -and $UserAssignedIdentityClientId -ne '') {\r\n    $StorageEndpoint = ($Uri -split '://')[0] + '://' + ($Uri -split '/')[2] + '/'\r\n    $TokenUri = \"http://169.254.169.254/metadata/identity/oauth2/token?api-version=$APIVersion&resource=$StorageEndpoint&client_id=$UserAssignedIdentityClientId\"\r\n  }\r\n\r\n  $SourceFileName = ($Uri -split '/')[-1]\r\n  Write-Log \"Downloading '$Uri' to '$TempDir'.\"\r\n  $DestFile = Join-Path -Path $TempDir -ChildPath $SourceFileName\r\n  Invoke-ArtifactDownload -Uri $Uri -DestinationPath $DestFile -TokenUri $TokenUri\r\n  Start-Sleep -Seconds 10\r\n\r\n  If (!(Test-Path -Path $DestFile)) {\r\n    Write-Log \"Download completed but '$DestFile' not found on disk.\"\r\n    Exit 1\r\n  }\r\n  Write-Log 'Download complete.'\r\n\r\n  Set-Location -Path $TempDir\r\n  $Ext = [System.IO.Path]::GetExtension($DestFile).ToLower().Replace('.', '')\r\n  $env:SUPPRESS_FILELOG = '1'\r\n  try {\r\n    switch ($Ext) {\r\n      'exe' {\r\n        If ($Arguments) {\r\n          Write-Log \"Executing '`\"$DestFile`\" $Arguments'\"\r\n          $Install = Start-Process -FilePath \"$DestFile\" -ArgumentList (Split-ArgumentString -ArgumentString $Arguments) -NoNewWindow -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n        }\r\n        Else {\r\n          Write-Log \"Executing '$DestFile'\"\r\n          $Install = Start-Process -FilePath \"$DestFile\" -NoNewWindow -Wait -PassThru\r\n          Write-Log \"Installation ended with exit code $($Install.ExitCode).\"\r\n        }\r\n        if (-not (Test-ArtifactExecutionSuccess -ExitCode $Install.ExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $true)) {\r\n          throw \"EXE installation failed with exit code $($Install.ExitCode).\"\r\n        }\r\n        if ($Install.ExitCode -in @(1641, 3010)) {\r\n          Write-Log \"EXE installation completed successfully with exit code $($Install.ExitCode). A reboot is required.\"\r\n        }\r\n      }\r\n      'msi' {\r\n        $MsiArguments = Get-MsiArgumentList -InstallerPath $DestFile -ArgumentString $Arguments\r\n        $MsiCommandLine = ($MsiArguments | ForEach-Object { ConvertTo-WindowsCommandLineArgument -Argument $_ }) -join ' '\r\n        Write-Log \"Executing 'msiexec.exe $MsiCommandLine'\"\r\n        $MsiExec = Start-Process -FilePath msiexec.exe -ArgumentList $MsiCommandLine -Wait -PassThru\r\n        Write-Log \"Installation ended with exit code $($MsiExec.ExitCode).\"\r\n        if (-not (Test-ArtifactExecutionSuccess -ExitCode $MsiExec.ExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $true)) {\r\n          throw \"MSI installation failed with exit code $($MsiExec.ExitCode).\"\r\n        }\r\n        if ($MsiExec.ExitCode -in @(1641, 3010)) {\r\n          Write-Log \"MSI installation completed successfully with exit code $($MsiExec.ExitCode). A reboot is required.\"\r\n        }\r\n      }\r\n      'bat' {\r\n        If ($Arguments) {\r\n          Write-Log \"Executing 'cmd.exe `\"$DestFile`\" $Arguments'\"\r\n          $BatArgs = Split-ArgumentString -ArgumentString $Arguments\r\n          If ($BatArgs -notcontains $DestFile) { $BatArgs = @(\"$DestFile\") + $BatArgs }\r\n          $BatProcess = Start-Process -FilePath cmd.exe -ArgumentList $BatArgs -Wait -PassThru\r\n        }\r\n        Else {\r\n          Write-Log \"Executing 'cmd.exe `\"$DestFile`\"'\"\r\n          $BatProcess = Start-Process -FilePath cmd.exe -ArgumentList \"`\"$DestFile`\"\" -Wait -PassThru\r\n        }\r\n        Write-Log \"Batch script ended with exit code $($BatProcess.ExitCode).\"\r\n        if (-not (Test-ArtifactExecutionSuccess -ExitCode $BatProcess.ExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $true)) {\r\n          throw \"Batch script failed with exit code $($BatProcess.ExitCode).\"\r\n        }\r\n        if ($BatProcess.ExitCode -in @(1641, 3010)) {\r\n          Write-Log \"Batch script completed successfully with exit code $($BatProcess.ExitCode). A reboot is required.\"\r\n        }\r\n      }\r\n      'ps1' {\r\n        If ($Arguments) {\r\n          Write-Log \"Calling '$DestFile' with arguments '$Arguments'\"\r\n          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n          $LASTEXITCODE = 0\r\n          & $DestFile @parameterSplat *>&1 | ForEach-Object { $line = \"$_\"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }\r\n        }\r\n        Else {\r\n          Write-Log \"Calling '$DestFile'\"\r\n          $LASTEXITCODE = 0\r\n          & $DestFile *>&1 | ForEach-Object { $line = \"$_\"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }\r\n        }\r\n        $ScriptSucceeded = $?\r\n        $ScriptExitCode = $LASTEXITCODE\r\n        if (-not (Test-ArtifactExecutionSuccess -ExitCode $ScriptExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $ScriptSucceeded -IsPowerShellScript $true)) {\r\n          throw \"Script '$DestFile' failed with exit code $ScriptExitCode.\"\r\n        }\r\n        if ($ScriptExitCode -in @(1641, 3010)) {\r\n          Write-Log \"Script '$DestFile' completed successfully with exit code $ScriptExitCode. A reboot is required.\"\r\n        }\r\n      }\r\n      'zip' {\r\n        $DestinationPath = Join-Path -Path $TempDir -ChildPath ([System.IO.Path]::GetFileNameWithoutExtension($SourceFileName))\r\n        Write-Log \"Extracting '$DestFile' to '$DestinationPath'.\"\r\n        Expand-Archive -Path $DestFile -DestinationPath $DestinationPath -Force\r\n        Write-Log \"Finding PowerShell script in '$DestinationPath'.\"\r\n        $PSScript = (Get-ChildItem -Path $DestinationPath -Filter '*.ps1').FullName\r\n        If ($PSScript.Count -gt 1) { $PSScript = $PSScript[0] }\r\n        If ($Arguments) {\r\n          Write-Log \"Calling '$PSScript' with arguments '$Arguments'\"\r\n          $parameterSplat = ConvertTo-ParametersSplat -ArgumentString $Arguments\r\n          $LASTEXITCODE = 0\r\n          & $PSScript @parameterSplat *>&1 | ForEach-Object { $line = \"$_\"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }\r\n        }\r\n        Else {\r\n          Write-Log \"Calling '$PSScript'\"\r\n          $LASTEXITCODE = 0\r\n          & $PSScript *>&1 | ForEach-Object { $line = \"$_\"; Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue; $line }\r\n        }\r\n        $ScriptSucceeded = $?\r\n        $ScriptExitCode = $LASTEXITCODE\r\n        if (-not (Test-ArtifactExecutionSuccess -ExitCode $ScriptExitCode -AcceptedExitCodes $AcceptedExitCodes -InvocationSucceeded $ScriptSucceeded -IsPowerShellScript $true)) {\r\n          throw \"Script '$PSScript' failed with exit code $ScriptExitCode.\"\r\n        }\r\n        if ($ScriptExitCode -in @(1641, 3010)) {\r\n          Write-Log \"Script '$PSScript' completed successfully with exit code $ScriptExitCode. A reboot is required.\"\r\n        }\r\n      }\r\n    }\r\n  }\r\n  finally {\r\n    $env:SUPPRESS_FILELOG = $null\r\n  }\r\n\r\n  If ((Split-Path $TempDir -Parent) -eq $Env:TEMP) {\r\n    Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue\r\n  }\r\n  Write-Log \"'$Name' customization complete.\"\r\n}\r\ncatch {\r\n  Write-Log \"FATAL: $($_.Exception.GetType().FullName): $($_.Exception.Message)\"\r\n  If ($_.Exception.InnerException) {\r\n    Write-Log \"Inner exception: $($_.Exception.InnerException.Message)\"\r\n  }\r\n  Write-Log $_.ScriptStackTrace\r\n  Exit 1\r\n}",
+                        "apiVersion": "[[if(startsWith(environment().name, 'USN'), '2017-08-01', '2018-02-01')]"
+                      },
+                      "resources": {
+                        "virtualMachine": {
+                          "existing": true,
+                          "type": "Microsoft.Compute/virtualMachines",
+                          "apiVersion": "2022-03-01",
+                          "name": "[[parameters('virtualMachineName')]"
+                        },
+                        "runCommands": {
+                          "[string('copy')]": {
+                            "name": "runCommands",
+                            "count": "[[length(variables('customizers'))]",
+                            "mode": "serial",
+                            "batchSize": 1
+                          },
+                          "type": "Microsoft.Compute/virtualMachines/runCommands",
+                          "apiVersion": "2023-03-01",
+                          "name": "[[format('{0}/{1}', parameters('virtualMachineName'), variables('customizers')[copyIndex()].name)]",
+                          "location": "[[parameters('location')]",
+                          "properties": {
+                            "parameters": "[[union(createArray(createObject('name', 'APIVersion', 'value', variables('apiVersion')), createObject('name', 'BlobStorageSuffix', 'value', format('blob.{0}', environment().suffixes.storage)), createObject('name', 'UserAssignedIdentityClientId', 'value', parameters('userAssignedIdentityClientId')), createObject('name', 'Name', 'value', variables('customizers')[copyIndex()].name), createObject('name', 'Uri', 'value', variables('customizers')[copyIndex()].uri)), if(empty(coalesce(tryGet(variables('customizers')[copyIndex()], 'arguments'), '')), createArray(), createArray(createObject('name', 'Arguments', 'value', variables('customizers')[copyIndex()].arguments))), if(empty(coalesce(tryGet(variables('customizers')[copyIndex()], 'successExitCodes'), '')), createArray(), createArray(createObject('name', 'SuccessExitCodes', 'value', tryGet(variables('customizers')[copyIndex()], 'successExitCodes')))))]",
+                            "source": {
+                              "script": "[[variables('$fxv#0')]"
+                            },
+                            "treatFailureAsDeploymentFailure": true
+                          }
+                        }
                       }
                     }
                   },
                   "dependsOn": [
-                    "keyVault"
+                    "virtualMachine"
                   ]
                 }
               }
@@ -2396,6 +2889,7 @@
               "apiVersion": "2021-05-01",
               "name": "[parameters('templateSpecName')]",
               "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
               "properties": {
                 "description": "Deploys a virtual machine to validate a new image version.",
                 "displayName": "[format('Image Validation for {0}', parameters('imageDefinitionName'))]"
@@ -2406,6 +2900,7 @@
               "apiVersion": "2021-05-01",
               "name": "[format('{0}/{1}', parameters('templateSpecName'), '1.0')]",
               "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
               "properties": {
                 "mainTemplate": "[variables('$fxv#0')]"
               },
@@ -2472,7 +2967,7 @@
           },
           "paasPublicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "tags": {
-            "value": "[variables('resourceTags')]"
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -2482,8 +2977,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "11675223020124370102"
+              "version": "0.49.2.45890",
+              "templateHash": "702649277781049029"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -2695,7 +3190,7 @@
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "virtualMachineAdminPassword": {
@@ -2807,7 +3302,7 @@
                     "value": "[parameters('secretsKeyVaultName')]"
                   },
                   "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
+                    "value": "[parameters('tags')]"
                   },
                   "sku": {
                     "value": "standard"
@@ -2839,8 +3334,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "10106478664532957708"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9378564306394925568"
                     },
                     "name": "Key Vault",
                     "description": "Deploys a Key Vault in the subscription tenant with caller-controlled protection, authorization, network access and optional diagnostics."
@@ -3151,7 +3646,7 @@
                     "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('secretsKeyVaultName'), 'vault', variables('privateEndpointVnetName'))]"
                   },
                   "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
+                    "value": "[parameters('tags')]"
                   },
                   "location": {
                     "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
@@ -3173,8 +3668,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -3340,8 +3835,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "11962983282251478937"
+                      "version": "0.49.2.45890",
+                      "templateHash": "7370490485787908267"
                     },
                     "name": "Key Vault secret",
                     "description": "Writes a caller-supplied secure secret value to an existing Key Vault in the deployment resource group; returns the secret resource ID and name, not its value."
@@ -3430,7 +3925,7 @@
                     "value": "[parameters('encryptionKeyVaultName')]"
                   },
                   "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
+                    "value": "[parameters('tags')]"
                   },
                   "sku": {
                     "value": "premium"
@@ -3462,8 +3957,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "10106478664532957708"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9378564306394925568"
                     },
                     "name": "Key Vault",
                     "description": "Deploys a Key Vault in the subscription tenant with caller-controlled protection, authorization, network access and optional diagnostics."
@@ -3774,7 +4269,7 @@
                     "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), parameters('encryptionKeyVaultName'), 'vault', variables('privateEndpointVnetName'))]"
                   },
                   "tags": {
-                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
+                    "value": "[parameters('tags')]"
                   },
                   "location": {
                     "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
@@ -3796,8 +4291,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -3990,7 +4485,7 @@
             "value": "[parameters('location')]"
           },
           "tags": {
-            "value": "[variables('resourceTags')]"
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -4000,8 +4495,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7403143418049330961"
+              "version": "0.49.2.45890",
+              "templateHash": "13216237602243314353"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -4057,6 +4552,34 @@
               }
             }
           },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "getTagsForResource": {
+                  "parameters": [
+                    {
+                      "type": "object",
+                      "name": "tags"
+                    },
+                    {
+                      "type": "string",
+                      "name": "resourceType"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": "[coalesce(tryGet(parameters('tags'), parameters('resourceType')), if(empty(filter(items(parameters('tags')), lambda('item', contains(lambdaVariables('item').key, '/')))), parameters('tags'), createObject()))]"
+                  },
+                  "metadata": {
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../../resourceModules/types/tags.bicep"
+                    }
+                  }
+                }
+              }
+            }
+          ],
           "parameters": {
             "keyVaultResourceId": {
               "type": "string",
@@ -4095,7 +4618,7 @@
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "parentResourceId": {
@@ -4205,7 +4728,7 @@
                     "value": "[variables('rotationPolicy')]"
                   },
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[parameters('tags')]"
                   }
                 },
                 "template": {
@@ -4214,8 +4737,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -4358,7 +4881,7 @@
                     "value": "[parameters('location')]"
                   },
                   "tags": {
-                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject()))]"
+                    "value": "[parameters('tags')]"
                   }
                 },
                 "template": {
@@ -4367,8 +4890,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -4476,8 +4999,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -4649,7 +5172,7 @@
                   "rotationPolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject()), createObject('value', variables('rotationPolicy')))]",
                   "keyReleasePolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject('data', variables('cvmKeyReleasePolicy'), 'contentType', 'application/json; charset=utf-8')), createObject('value', createObject()))]",
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[parameters('tags')]"
                   }
                 },
                 "template": {
@@ -4658,8 +5181,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -4816,7 +5339,7 @@
                     "value": true
                   },
                   "tags": {
-                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/diskEncryptionSets'), createObject()))]"
+                    "value": "[parameters('tags')]"
                   }
                 },
                 "template": {
@@ -4825,8 +5348,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12759822695435844990"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10565702832032312147"
                     },
                     "name": "Disk encryption set",
                     "description": "Deploys a disk encryption set referencing an existing Key Vault key, optionally resolving its current version. Key access permissions are managed separately."
@@ -4991,8 +5514,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -5164,8 +5687,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -5361,7 +5884,7 @@
             "value": "PremiumV3_P0v3"
           },
           "tags": {
-            "value": "[variables('resourceTags')]"
+            "value": "[parameters('tags')]"
           },
           "zoneRedundant": {
             "value": false
@@ -5373,8 +5896,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "119132171161697502"
+              "version": "0.49.2.45890",
+              "templateHash": "440138261585539619"
             },
             "name": "Function App hosting plan",
             "description": "Creates or updates an App Service plan in the deployment resource group. The caller decides whether to invoke this module or use an existing plan; it does not deploy Function Apps or code."
@@ -5412,8 +5935,9 @@
             },
             "tags": {
               "type": "object",
+              "defaultValue": {},
               "metadata": {
-                "description": "Required. Tags keyed by resource type. Applies the Microsoft.Web/serverfarms entry when present."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "zoneRedundant": {
@@ -5437,7 +5961,7 @@
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "sku": "[variables('sku')]",
-              "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Web/serverfarms'), createObject())]",
+              "tags": "[parameters('tags')]",
               "properties": {
                 "maximumElasticWorkerCount": "[if(contains(parameters('hostingPlanType'), 'Consumption'), null(), if(equals(parameters('hostingPlanType'), 'FunctionsPremium'), 20, 1))]",
                 "reserved": "[if(contains(parameters('functionAppKind'), 'linux'), true(), false())]",
@@ -5496,7 +6020,7 @@
             "value": "[reference('encryptionKeyVault').outputs.encryptionKeyVaultResourceId.value]"
           },
           "functionAppAppSettings": {
-            "value": "[concat(createArray(createObject('name', 'diskName', 'value', variables('names').diskName), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', variables('names').networkInterfaceName), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'runCommandSettings', 'value', string(parameters('runCommandSettings'))), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'userAssignedIdentityResourceId', 'value', reference('userAssignedIdentity').outputs.resourceId.value), createObject('name', 'virtualMachineName', 'value', variables('names').virtualMachineName), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize'))), variables('additionalAppSettings'))]"
+            "value": "[concat(createArray(createObject('name', 'diskName', 'value', variables('names').diskName), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', variables('names').networkInterfaceName), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'runCommandSettings', 'value', string(parameters('runCommandSettings'))), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'tags', 'value', string(parameters('tags'))), createObject('name', 'userAssignedIdentityResourceId', 'value', reference('userAssignedIdentity').outputs.resourceId.value), createObject('name', 'virtualMachineName', 'value', variables('names').virtualMachineName), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize'))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[variables('integrationSubnetId')]"
@@ -5543,7 +6067,7 @@
             "value": "[variables('names').storageEncryptionIdentityName]"
           },
           "tags": {
-            "value": "[variables('resourceTags')]"
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -5553,8 +6077,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "3562169308594000860"
+              "version": "0.49.2.45890",
+              "templateHash": "5955820813442750003"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -5874,8 +6398,9 @@
             },
             "tags": {
               "type": "object",
+              "defaultValue": {},
               "metadata": {
-                "description": "Required. Tag object with resource-type keys used to stamp deployed resources."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             }
           },
@@ -5976,7 +6501,7 @@
               "apiVersion": "2024-01-01",
               "name": "[parameters('storageAccountName')]",
               "location": "[parameters('location')]",
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject()))]",
+              "tags": "[parameters('tags')]",
               "sku": {
                 "name": "Standard_LRS"
               },
@@ -6042,7 +6567,7 @@
                   "id": "[parameters('privateEndpointSubnetResourceId')]"
                 }
               },
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
+              "tags": "[parameters('tags')]",
               "dependsOn": [
                 "storageAccount"
               ]
@@ -6076,7 +6601,7 @@
               "apiVersion": "2020-02-02",
               "name": "[parameters('applicationInsightsName')]",
               "location": "[parameters('location')]",
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/components'), createObject()))]",
+              "tags": "[parameters('tags')]",
               "properties": {
                 "Application_Type": "web",
                 "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), 'Enabled', 'Disabled')]",
@@ -6090,7 +6615,7 @@
               "apiVersion": "2024-11-01",
               "name": "[parameters('functionAppName')]",
               "location": "[parameters('location')]",
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Web/sites'), createObject()))]",
+              "tags": "[parameters('tags')]",
               "kind": "functionapp",
               "identity": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('functionAppUserAssignedIdentityResourceId')), createObject())), createObject('type', 'SystemAssigned'))]",
               "properties": {
@@ -6174,7 +6699,7 @@
                   "id": "[parameters('privateEndpointSubnetResourceId')]"
                 }
               },
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
+              "tags": "[parameters('tags')]",
               "dependsOn": [
                 "functionApp"
               ]
@@ -6227,8 +6752,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "18081871710595372247"
+                      "version": "0.49.2.45890",
+                      "templateHash": "1967036401960478131"
                     },
                     "name": "Cross-scope Azure Monitor resource links",
                     "description": "Uses subscription scope to route linked-resource deployment to the subscription and resource group parsed from an existing Azure Monitor Private Link Scope ID."
@@ -6273,8 +6798,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "4394776920666586811"
+                              "version": "0.49.2.45890",
+                              "templateHash": "13985939954447630976"
                             },
                             "name": "Azure Monitor scoped resources",
                             "description": "Adds linked resources to an existing Azure Monitor Private Link Scope in the deployment resource group. The caller must select the resource group containing the scope."
@@ -6347,8 +6872,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7464833657221451085"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15889666481930604460"
                     },
                     "name": "Storage account role assignments",
                     "description": "Applies deterministic role assignments at an existing storage account in the deployment resource group."
@@ -6538,8 +7063,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "16923462681873130707"
+              "version": "0.49.2.45890",
+              "templateHash": "7350563085639854759"
             },
             "name": "Timer Function definition",
             "description": "Deploys a native timer-triggered function and code into an existing Function App. App, hosting plan, identity and host storage remain caller-owned."
