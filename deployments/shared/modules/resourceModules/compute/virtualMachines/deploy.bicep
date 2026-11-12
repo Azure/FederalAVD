@@ -7,6 +7,7 @@ import { extensionType } from '../../types/computeTypes.bicep'
 @description('Required. Local administrator password for the Windows VM, passed as a secure value.')
 param adminPassword string
 
+@secure()
 @description('Required. Local administrator account name for the Windows VM.')
 param adminUsername string
 
