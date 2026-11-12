@@ -43,7 +43,7 @@ Describe 'Image validation Portal form' {
         $form.view.outputs.parameters.namingConvention | Should Be "[parse('{}')]"
         $template.parameters.functionAppAppSettings.type | Should Be 'array'
         $template.parameters.privateEndpoint.type | Should Be 'bool'
-        $template.parameters.tags.type | Should Be 'array'
+        $template.parameters.tags.type | Should Be 'object'
     }
 
     It 'uses label defaults and preserves the template defaults' {
@@ -153,14 +153,16 @@ Describe 'Image validation Portal form' {
     }
 
     It 'passes the single tag set without a separate tagsByResource parameter' {
-        $form.view.outputs.parameters.tags | Should Be "[steps('namingAndTags').tagsSection.tags]"
+        $template.parameters.tags.type | Should Be 'object'
+        $form.view.outputs.parameters.tags | Should Match "^\[if\(empty\(steps\('namingAndTags'\)\.tagsSection\.tags\), parse\('\{\}'\), parse\(concat\("
+        $form.view.outputs.parameters.tags | Should Not Match 'toObject|tagsByResource'
         ($form.view.outputs.parameters.PSObject.Properties.Name -contains 'tagsByResource') | Should Be $false
         ($template.parameters.PSObject.Properties.Name -contains 'tagsByResource') | Should Be $false
         $tagsSection = $steps.namingAndTags.elements | Where-Object name -eq 'tagsSection'
         $tagsControl = $tagsSection.elements | Where-Object name -eq 'tags'
         $tagsControl.type | Should Be 'Microsoft.Common.EditableGrid'
         $tagsControl.constraints.rows.count.min | Should Be 0
-        $tagsControl.constraints.rows.count.max | Should Be $template.parameters.tags.maxLength
+        $tagsControl.constraints.rows.count.max | Should Be 50
         ($tagsControl.constraints.columns.id -join ',') | Should Be 'key,value'
         foreach ($column in $tagsControl.constraints.columns) {
             $column.element.type | Should Be 'Microsoft.Common.TextBox'
@@ -185,7 +187,7 @@ Describe 'Image validation Portal form' {
         (('a' * 256) -match $valueRegex) | Should Be $true
         (('a' * 257) -match $valueRegex) | Should Be $false
         ($tagsSection.elements | Where-Object name -eq 'tagsInfo').options.text |
-            Should Be 'Enter tags to apply to all add-on resources that support tags.'
+            Should Be 'Enter tags to apply to all the resources that support tags in this solution.'
         (Get-Content -LiteralPath $formPath -Raw) | Should Not Match "\[['""]"
     }
 
