@@ -1,4 +1,7 @@
 {
+    "pester.testFilePath": [
+        "tests/**/*.Tests.ps1"
+    ],
     "chat.tools.terminal.autoApprove": {
         "Test-Path": true,
         "Get-Item": true,

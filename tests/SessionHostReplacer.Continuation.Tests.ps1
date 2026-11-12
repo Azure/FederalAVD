@@ -1,5 +1,7 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+}
 
 Describe 'SHR continuation coordination' {
     BeforeAll {
@@ -104,17 +106,17 @@ if ($global:shrContinuationTest.Action) {
 
     It 'continues a waiting operation without throwing or completing it' {
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 1
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
-        $global:shrContinuationTest.Operation.State.LockOwner | Should Be ''
+        $global:shrContinuationTest.Cycles | Should -Be 1
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+        $global:shrContinuationTest.Operation.State.LockOwner | Should -Be ''
 
     }
 
     It 'does only the operation read when no work is active' {
         $global:shrContinuationTest.Operation = $null
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Cycles | Should -Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
         Assert-MockCalled Get-ShrOperation -ModuleName SessionHostReplacer.Continuation -Times 1 -Exactly -Scope It
         Assert-MockCalled Get-ShrInitiationImage -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
         Assert-MockCalled Get-ShrConfigurationHash -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
@@ -131,33 +133,33 @@ if ($global:shrContinuationTest.Action) {
         $deadline = [DateTimeOffset]$state.DeadlineUtc
         Invoke-ShrContinuation -CyclePath $cyclePath
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 2
+        $global:shrContinuationTest.Cycles | Should -Be 2
         $after = $global:shrContinuationTest.Operation.State
-        $after.Image.Version | Should Be '1.0.0'
-        $after.Generation | Should Be 17
-        ([DateTimeOffset]$after.DeadlineUtc) | Should Be $deadline
-        $after.NextBatchAuthorization | Should BeNullOrEmpty
-        $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 0
+        $after.Image.Version | Should -Be '1.0.0'
+        $after.Generation | Should -Be 17
+        ([DateTimeOffset]$after.DeadlineUtc) | Should -Be $deadline
+        $after.NextBatchAuthorization | Should -BeNullOrEmpty
+        $global:shrContinuationTest.AuthorizationSaves.Count | Should -Be 0
         Assert-MockCalled Get-ShrInitiationImage -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
     }
 
     It 'retries a transient state read on the next timer tick without rewriting the operation' {
         Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation { throw 'Table unavailable' }
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'Table unavailable'
-        $global:shrContinuationTest.Saves.Count | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*Table unavailable*'
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
         Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation {
             $global:shrContinuationTest.Operation | ConvertTo-Json -Depth 40 | ConvertFrom-Json -AsHashtable
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 1
+        $global:shrContinuationTest.Cycles | Should -Be 1
     }
 
     It 'fails closed on an unrecognized durable status' {
         $global:shrContinuationTest.Operation.State.Status = 'Unknown'
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'Invalid SHR operation state'
-        $global:shrContinuationTest.Saves.Count | Should Be 0
-        $global:shrContinuationTest.Cycles | Should Be 0
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*Invalid SHR operation state*'
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
+        $global:shrContinuationTest.Cycles | Should -Be 0
     }
 
     It 'checkpoints an intentional cleanup yield and resumes exact cleanup before the next engine run' {
@@ -170,31 +172,31 @@ if ($global:shrContinuationTest.Action) {
             Request-ShrWorkerYield -Message 'cleanup is pending'
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
 
-        $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should Be 'avd-03'
+        $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should -Be 'avd-03'
         Mock Assert-SessionHostNamesAvailable -ModuleName SessionHostReplacer.Continuation {
             param($SessionHosts, $WaitForVMDeletion, $RemoveEntraDevice, $RemoveIntuneDevice)
-            $SessionHosts[0].SessionHostName | Should Be 'avd-03'
-            $SessionHosts[0].ResourceId | Should Be '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-avd-03'
-            [bool]$WaitForVMDeletion | Should Be $true
-            $RemoveEntraDevice | Should Be $true
-            $RemoveIntuneDevice | Should Be $false
+            $SessionHosts[0].SessionHostName | Should -Be 'avd-03'
+            $SessionHosts[0].ResourceId | Should -Be '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-avd-03'
+            [bool]$WaitForVMDeletion | Should -Be $true
+            $RemoveEntraDevice | Should -Be $true
+            $RemoveIntuneDevice | Should -Be $false
             $global:shrContinuationTest.Order += 'cleanup'
             (Get-ShrWorkerState).CleanupIntent = $null
             Save-ShrContinuationCheckpoint
         }
         $global:shrContinuationTest.Action = {
             param($State, $Result)
-            $State.CleanupIntent | Should BeNullOrEmpty
+            $State.CleanupIntent | Should -BeNullOrEmpty
             $Result.Completed = $true
         }
         $global:shrContinuationTest.Order = @()
         Invoke-ShrContinuation -CyclePath $cyclePath
 
         $global:shrContinuationTest.Order.IndexOf('cleanup') |
-            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
+            Should -BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Completed'
     }
 
     It 'does not mask a failed cleanup checkpoint as a normal yield' {
@@ -204,10 +206,10 @@ if ($global:shrContinuationTest.Action) {
             $State.CleanupIntent = @{ Hosts = @(@{ SessionHostName = 'avd-01'; ResourceId = '/vm/avd-01' }) }
             Request-ShrWorkerYield -Message 'cleanup is pending'
         }
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'cleanup checkpoint unavailable'
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*cleanup checkpoint unavailable*'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'NeedsAttention'
 
-        $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should Be 'avd-01'
+        $global:shrContinuationTest.Operation.State.CleanupIntent.Hosts[0].SessionHostName | Should -Be 'avd-01'
     }
 
     It 'resumes exact retirement before cleanup and planning when the VM is <VMStatus>' -TestCases @(
@@ -226,12 +228,12 @@ if ($global:shrContinuationTest.Action) {
         Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Continuation {
             param($Uri, $Method)
             $global:shrContinuationTest.Order += "vm-$Method"
-            $Uri | Should Match '/virtualMachines/vm-avd-01\?'
+            $Uri | Should -Match '/virtualMachines/vm-avd-01\?'
             if ($Method -eq 'GET') {
                 if ($global:shrContinuationTest.VMStatus -eq 'Absent') {
-                    $error = [Exception]::new('VM is absent')
-                    $error | Add-Member Response ([PSCustomObject]@{ StatusCode = 404 })
-                    throw $error
+                    $notFoundException = [Exception]::new('VM is absent')
+                    $notFoundException | Add-Member Response ([PSCustomObject]@{ StatusCode = 404 })
+                    throw $notFoundException
                 }
                 [PSCustomObject]@{
                     id = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/vm-avd-01'
@@ -245,12 +247,12 @@ if ($global:shrContinuationTest.Action) {
         }
         $global:shrContinuationTest.Action = { param($State, $Result) $Result.Completed = $true }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        @($global:shrContinuationTest.Order | Where-Object { $_ -eq 'vm-DELETE' }).Count | Should Be $Deletes
+        @($global:shrContinuationTest.Order | Where-Object { $_ -eq 'vm-DELETE' }).Count | Should -Be $Deletes
         $global:shrContinuationTest.Order.IndexOf('vm-GET') |
-            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cleanup')
+            Should -BeLessThan $global:shrContinuationTest.Order.IndexOf('cleanup')
         $global:shrContinuationTest.Order.IndexOf('cleanup') |
-            Should BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
+            Should -BeLessThan $global:shrContinuationTest.Order.IndexOf('cycle')
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Completed'
     }
 
     It 'does not abandon retirement or invoke planning after a VM deletion is denied' {
@@ -262,10 +264,10 @@ if ($global:shrContinuationTest.Action) {
         Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Continuation {
             throw 'Retirement access denied'
         }
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'Retirement access denied'
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
-        $global:shrContinuationTest.Operation.State.CleanupIntent.VMDeletions | Should Be @($id)
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*Retirement access denied*'
+        $global:shrContinuationTest.Cycles | Should -Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'NeedsAttention'
+        $global:shrContinuationTest.Operation.State.CleanupIntent.VMDeletions | Should -Be @($id)
     }
     It 'finishes checkpointed cleanup after initiation expiry without authorizing a new batch' {
         $global:shrContinuationTest.Operation.State.InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o')
@@ -276,9 +278,9 @@ if ($global:shrContinuationTest.Action) {
             Save-ShrContinuationCheckpoint
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Order | Should Contain 'cleanup'
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
+        $global:shrContinuationTest.Order | Should -Contain 'cleanup'
+        $global:shrContinuationTest.Cycles | Should -Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Completed'
     }
 
     It 'keeps a replayed cleanup wait running instead of invoking the engine or completing the operation' {
@@ -287,93 +289,93 @@ if ($global:shrContinuationTest.Action) {
             Request-ShrWorkerYield -Message 'cleanup is still pending'
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
-        $global:shrContinuationTest.Operation.State.CleanupIntent | Should Not BeNullOrEmpty
+        $global:shrContinuationTest.Cycles | Should -Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+        $global:shrContinuationTest.Operation.State.CleanupIntent | Should -Not -BeNullOrEmpty
 
     }
 
     It 'persists the operation lease before running the lifecycle engine' {
         Invoke-ShrContinuation -CyclePath $cyclePath
 
-        $global:shrContinuationTest.Saves[0].State.LockOwner | Should Not BeNullOrEmpty
+        $global:shrContinuationTest.Saves[0].State.LockOwner | Should -Not -BeNullOrEmpty
         ([DateTimeOffset]$global:shrContinuationTest.Saves[0].State.LockExpiresUtc -
-            [DateTimeOffset]::UtcNow).TotalMinutes | Should BeGreaterThan 29
+            [DateTimeOffset]::UtcNow).TotalMinutes | Should -BeGreaterThan 29
     }
 
     It 'completes only when the lifecycle engine explicitly reports readiness and cleanup complete' {
         $global:shrContinuationTest.Action = { param($State, $Result) $Result.Completed = $true }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Completed'
 
     }
 
     It 'exits cheaply on reconciliation ticks after completion' {
         $global:shrContinuationTest.Operation.State.Status = 'Completed'
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
+        $global:shrContinuationTest.Cycles | Should -Be 0
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
     }
 
     It 'defers duplicates while another worker owns the lease' {
         $global:shrContinuationTest.Operation.State.LockOwner = 'another-worker'
         $global:shrContinuationTest.Operation.State.LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(20).ToString('o')
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
+        $global:shrContinuationTest.Cycles | Should -Be 0
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
     }
 
     It 'defers an ETag acquisition loser without invoking the engine' {
         $global:shrContinuationTest.Conflict = $true
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
+        $global:shrContinuationTest.Cycles | Should -Be 0
 
     }
 
     It 'reacquires an expired crash lease' {
         $global:shrContinuationTest.Operation.State.LockOwner = 'crashed-worker'
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 1
+        $global:shrContinuationTest.Cycles | Should -Be 1
     }
 
     It 'stops an expired operation without changing its deadline or calling the engine' {
         $deadline = [DateTimeOffset]::UtcNow.AddHours(-1).ToString('o')
         $global:shrContinuationTest.Operation.State.DeadlineUtc = $deadline
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'deadline expired'
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*deadline expired*'
+        $global:shrContinuationTest.Cycles | Should -Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'NeedsAttention'
         ([DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc) |
-            Should Be ([DateTimeOffset]$deadline)
+            Should -Be ([DateTimeOffset]$deadline)
     }
 
     It 'stops when immutable configuration changes' {
         $global:shrContinuationTest.Operation.State.ConfigurationHash = 'old-configuration'
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'configuration changed'
-        $global:shrContinuationTest.Cycles | Should Be 0
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*configuration changed*'
+        $global:shrContinuationTest.Cycles | Should -Be 0
     }
 
     It 'treats a bounded invocation timeout as continuation rather than operation failure' {
         $global:shrContinuationTest.Action = { throw [TimeoutException]::new('bounded wait') }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
 
     }
 
     It 'persists and surfaces unexpected lifecycle failures' {
         $global:shrContinuationTest.Action = { throw 'unsafe lifecycle state' }
-        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should Throw 'unsafe lifecycle state'
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'NeedsAttention'
-        $global:shrContinuationTest.Operation.State.LastError | Should Be 'unsafe lifecycle state'
-        $global:shrContinuationTest.Operation.State.LockOwner | Should Be ''
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw -ExpectedMessage '*unsafe lifecycle state*'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'NeedsAttention'
+        $global:shrContinuationTest.Operation.State.LastError | Should -Be 'unsafe lifecycle state'
+        $global:shrContinuationTest.Operation.State.LockOwner | Should -Be ''
     }
 
     It 'does not initiate a replacement from an authorization delayed beyond its initiation window' {
         $global:shrContinuationTest.Operation.State.InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o')
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 0
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Completed'
+        $global:shrContinuationTest.Cycles | Should -Be 0
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Completed'
     }
 
     It 'does not initiate new work while held' {
@@ -381,7 +383,7 @@ if ($global:shrContinuationTest.Action) {
         $global:shrContinuationTest.Operation.State.Status = 'Completed'
         Start-ShrContinuation
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
     }
 
     It 'does not persist an operation when the read-only preflight finds no work' {
@@ -395,7 +397,7 @@ if ($global:shrContinuationTest.Action) {
             Start-ShrContinuation
         }
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
         Assert-MockCalled Get-ShrOperation -ModuleName SessionHostReplacer.Continuation `
             -ParameterFilter { $EnsureTable } -Times 0 -Exactly -Scope It
     }
@@ -411,7 +413,7 @@ if ($global:shrContinuationTest.Action) {
             $global:shrContinuationTest.Operation.State.Status = 'Completed'
         }
         Start-ShrContinuation
-        $global:shrContinuationTest.Saves.Count | Should Be 1
+        $global:shrContinuationTest.Saves.Count | Should -Be 1
 
     }
 
@@ -425,31 +427,31 @@ if ($global:shrContinuationTest.Action) {
             $false
         }
         Start-ShrContinuation
-        $global:shrContinuationTest.Operation.State.Id | Should Be ('b' * 32)
+        $global:shrContinuationTest.Operation.State.Id | Should -Be ('b' * 32)
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
     }
 
     It 'surfaces an idle-check failure without recording a successful operation' {
         $global:shrContinuationTest.Operation.State.Status = 'Completed'
         Mock Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation { throw 'inventory unavailable' }
-        { Start-ShrContinuation } | Should Throw 'inventory unavailable'
+        { Start-ShrContinuation } | Should -Throw -ExpectedMessage '*inventory unavailable*'
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
     }
 
     It 'still resumes existing work while initiation is held' {
         $global:shrContinuationTest.Settings.InitiationEnabled = $false
         Start-ShrContinuation
 
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
         Assert-MockCalled Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
     }
 
     It 'does not silently restart an operation that needs attention' {
         $global:shrContinuationTest.Operation.State.Status = 'NeedsAttention'
         $global:shrContinuationTest.Operation.State.LastError = 'inspect capacity'
-        { Start-ShrContinuation } | Should Throw 'requires operator recovery'
+        { Start-ShrContinuation } | Should -Throw -ExpectedMessage '*requires operator recovery*'
 
     }
 
@@ -462,12 +464,12 @@ if ($global:shrContinuationTest.Action) {
         $state.LockOwner = 'active-worker'
         $state.LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(30).ToString('o')
         Start-ShrContinuation
-        $global:shrContinuationTest.Authorization.State.OperationId | Should Be $state.Id
-        $global:shrContinuationTest.Authorization.State.AfterBatchNumber | Should Be 1
+        $global:shrContinuationTest.Authorization.State.OperationId | Should -Be $state.Id
+        $global:shrContinuationTest.Authorization.State.AfterBatchNumber | Should -Be 1
         ([DateTimeOffset]$global:shrContinuationTest.Authorization.State.ExpiresUtc) |
-            Should BeGreaterThan ([DateTimeOffset]::UtcNow)
-        $global:shrContinuationTest.Saves.Count | Should Be 0
-        $state.LockOwner | Should Be 'active-worker'
+            Should -BeGreaterThan ([DateTimeOffset]::UtcNow)
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
+        $state.LockOwner | Should -Be 'active-worker'
 
     }
 
@@ -485,8 +487,8 @@ if ($global:shrContinuationTest.Action) {
             $state.MoreDeploymentsAllowed = $scenario.More
             Start-ShrContinuation
         }
-        $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 0
-        $global:shrContinuationTest.Saves.Count | Should Be 0
+        $global:shrContinuationTest.AuthorizationSaves.Count | Should -Be 0
+        $global:shrContinuationTest.Saves.Count | Should -Be 0
     }
 
     It 'delivers a fresh scheduled authorization to the leased worker without resetting its deadline' {
@@ -500,21 +502,21 @@ if ($global:shrContinuationTest.Action) {
         Start-ShrContinuation
         $global:shrContinuationTest.Action = {
             param($State, $Result)
-            $State.NextBatchAuthorization.AfterBatchNumber | Should Be 1
+            $State.NextBatchAuthorization.AfterBatchNumber | Should -Be 1
             $State.LastBatchAuthorizationId = $State.NextBatchAuthorization.Id
             $State.NextBatchAuthorization = $null
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
         ([DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc).UtcTicks |
-            Should Be ([DateTimeOffset]$deadline).UtcTicks
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+            Should -Be ([DateTimeOffset]$deadline).UtcTicks
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
         $global:shrContinuationTest.Action = {
             param($State, $Result)
-            $State.NextBatchAuthorization | Should BeNullOrEmpty
+            $State.NextBatchAuthorization | Should -BeNullOrEmpty
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 2
-        $global:shrContinuationTest.AuthorizationSaves.Count | Should Be 1
+        $global:shrContinuationTest.Cycles | Should -Be 2
+        $global:shrContinuationTest.AuthorizationSaves.Count | Should -Be 1
     }
 
     It 'does not use expired, obsolete-operation or obsolete-batch authorizations' {
@@ -526,7 +528,7 @@ if ($global:shrContinuationTest.Action) {
         $state.MoreDeploymentsAllowed = $true
         $global:shrContinuationTest.Action = {
             param($State, $Result)
-            $State.NextBatchAuthorization | Should BeNullOrEmpty
+            $State.NextBatchAuthorization | Should -BeNullOrEmpty
         }
         foreach ($request in @(
             @{ Id = 'expired'; OperationId = $state.Id; AfterBatchNumber = 2; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o') },
@@ -536,7 +538,7 @@ if ($global:shrContinuationTest.Action) {
             $global:shrContinuationTest.Authorization = @{ State = $request }
             Invoke-ShrContinuation -CyclePath $cyclePath
         }
-        $global:shrContinuationTest.Cycles | Should Be 3
+        $global:shrContinuationTest.Cycles | Should -Be 3
     }
 
     It 'revokes an unconsumed SideBySide authorization when initiation is held' {
@@ -550,12 +552,12 @@ if ($global:shrContinuationTest.Action) {
         $state.NextBatchAuthorized = $true
         $global:shrContinuationTest.Action = {
             param($State, $Result)
-            $State.NextBatchAuthorization | Should BeNullOrEmpty
-            $State.NextBatchAuthorized | Should Be $false
+            $State.NextBatchAuthorization | Should -BeNullOrEmpty
+            $State.NextBatchAuthorized | Should -Be $false
         }
         Invoke-ShrContinuation -CyclePath $cyclePath
-        $global:shrContinuationTest.Cycles | Should Be 1
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        $global:shrContinuationTest.Cycles | Should -Be 1
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
     }
 
     It 'surfaces an authorization storage failure without modifying the active operation' {
@@ -564,17 +566,17 @@ if ($global:shrContinuationTest.Action) {
         $state.DeploymentBatchReady = $true
         $state.MoreDeploymentsAllowed = $true
         Mock Save-ShrOperation -ModuleName SessionHostReplacer.Continuation { throw 'authorization storage unavailable' }
-        { Start-ShrContinuation } | Should Throw 'authorization storage unavailable'
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
+        { Start-ShrContinuation } | Should -Throw -ExpectedMessage '*authorization storage unavailable*'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
 
     }
 
     It 'persists a fresh operation for the reconciliation timer' {
         $global:shrContinuationTest.Operation = $null
         Start-ShrContinuation
-        $global:shrContinuationTest.Operation.State.Id | Should Match '^[a-f0-9]{32}$'
-        $global:shrContinuationTest.Operation.State.Status | Should Be 'Running'
-        $global:shrContinuationTest.Order[0] | Should Be 'save'
+        $global:shrContinuationTest.Operation.State.Id | Should -Match '^[a-f0-9]{32}$'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+        $global:shrContinuationTest.Order[0] | Should -Be 'save'
 
     }
 
@@ -603,10 +605,10 @@ Describe 'SHR continuation storage protocol' {
     It 'uses conditional replacement rather than wildcard table updates' {
         InModuleScope SessionHostReplacer.Continuation {
             $operation = @{ Key = 'key'; ETag = 'version-1'; State = @{ Id = 'operation' } }
-            Save-ShrOperation -Operation $operation | Should Be $true
-            $global:shrStorageRequests[0].Method | Should Be 'PUT'
-            $global:shrStorageRequests[0].ETag | Should Be 'version-1'
-            $operation.ETag | Should Be 'version-2'
+            Save-ShrOperation -Operation $operation | Should -Be $true
+            $global:shrStorageRequests[0].Method | Should -Be 'PUT'
+            $global:shrStorageRequests[0].ETag | Should -Be 'version-1'
+            $operation.ETag | Should -Be 'version-2'
         }
     }
 
@@ -614,14 +616,14 @@ Describe 'SHR continuation storage protocol' {
         Mock Get-ShrOperationKey -ModuleName SessionHostReplacer.Continuation { 'pool-key' }
         Mock Invoke-ShrStorageRequest -ModuleName SessionHostReplacer.Continuation {
             param($Path)
-            $Path | Should Be "shrContinuation(PartitionKey='SHR',RowKey='pool-key-initiation')"
+            $Path | Should -Be "shrContinuation(PartitionKey='SHR',RowKey='pool-key-initiation')"
             @{ StatusCode = 200; Headers = @{ ETag = @('auth-version') }; Content = '{"State":"{\"Id\":\"request\"}"}' }
         }
         InModuleScope SessionHostReplacer.Continuation {
             $authorization = Get-ShrOperation -BatchAuthorization
-            $authorization.Key | Should Be 'pool-key-initiation'
-            $authorization.ETag | Should Be 'auth-version'
-            $authorization.State.Id | Should Be 'request'
+            $authorization.Key | Should -Be 'pool-key-initiation'
+            $authorization.ETag | Should -Be 'auth-version'
+            $authorization.State.Id | Should -Be 'request'
         }
     }
 
@@ -629,16 +631,16 @@ Describe 'SHR continuation storage protocol' {
         InModuleScope SessionHostReplacer.Continuation {
             $global:shrStorageStatus = 412
             $operation = @{ Key = 'key'; ETag = 'version-1'; State = @{ Id = 'operation' } }
-            Save-ShrOperation -Operation $operation -AllowConflict | Should Be $false
-            { Save-ShrOperation -Operation $operation } | Should Throw 'ownership changed'
+            Save-ShrOperation -Operation $operation -AllowConflict | Should -Be $false
+            { Save-ShrOperation -Operation $operation } | Should -Throw -ExpectedMessage '*ownership changed*'
         }
     }
 
     It 'rejects oversized UTF-16 table properties before sending them' {
         InModuleScope SessionHostReplacer.Continuation {
             $operation = @{ Key = 'key'; ETag = 'version-1'; State = @{ Payload = ('x' * 31000) } }
-            { Save-ShrOperation -Operation $operation } | Should Throw 'safe Table entity size'
-            $global:shrStorageRequests.Count | Should Be 0
+            { Save-ShrOperation -Operation $operation } | Should -Throw -ExpectedMessage '*safe Table entity size*'
+            $global:shrStorageRequests.Count | Should -Be 0
         }
     }
 
@@ -687,24 +689,24 @@ Describe 'SHR continuation storage protocol' {
             param($Status)
             $global:shrReplayState.Status = $Status
             $result = Invoke-ShrDeploymentIntent -ARMToken token
-            $result.DeploymentName | Should Be 'shr_operation'
-            $result.SessionHostCount | Should Be 1
-            $global:shrReplayState.Submitted.Count | Should Be 0
+            $result.DeploymentName | Should -Be 'shr_operation'
+            $result.SessionHostCount | Should -Be 1
+            $global:shrReplayState.Submitted.Count | Should -Be 0
         }
 
         It 'replays the exact persisted URI and body after interruption before ARM submission' {
             $global:shrReplayState.Status = 'Absent'
             Invoke-ShrDeploymentIntent -ARMToken token | Out-Null
-            $global:shrReplayState.Submitted.Count | Should Be 1
-            $global:shrReplayState.Submitted[0].Uri | Should Be $global:shrReplayState.DeploymentIntent.Uri
-            $global:shrReplayState.Submitted[0].Body | Should Be $global:shrReplayState.DeploymentIntent.Body
+            $global:shrReplayState.Submitted.Count | Should -Be 1
+            $global:shrReplayState.Submitted[0].Uri | Should -Be $global:shrReplayState.DeploymentIntent.Uri
+            $global:shrReplayState.Submitted[0].Body | Should -Be $global:shrReplayState.DeploymentIntent.Body
         }
 
         It 'retries a failed deployment with the same operation name and host names' {
             $global:shrReplayState.Status = 'Failed'
             $result = Invoke-ShrDeploymentIntent -ARMToken token
-            $result.SessionHostNames[0] | Should Be 'avd-new'
-            $global:shrReplayState.Submitted[0].Uri | Should Match '/shr_operation$'
+            $result.SessionHostNames[0] | Should -Be 'avd-new'
+            $global:shrReplayState.Submitted[0].Uri | Should -Match '/shr_operation$'
         }
 
         It 'blocks an oversized persisted retry without splitting or submitting its body' {
@@ -719,17 +721,17 @@ Describe 'SHR continuation storage protocol' {
             } | ConvertTo-Json -Depth 10 -Compress
             $originalBody = $global:shrReplayState.DeploymentIntent.Body
             { Invoke-ShrDeploymentIntent -ARMToken token -ImageReplicaDeploymentLimit 20 } |
-                Should Throw 'exceeding the live image replica ceiling'
-            $global:shrReplayState.Submitted.Count | Should Be 0
-            $global:shrReplayState.DeploymentIntent.Body | Should Be $originalBody
+                Should -Throw -ExpectedMessage '*exceeding the live image replica ceiling*'
+            $global:shrReplayState.Submitted.Count | Should -Be 0
+            $global:shrReplayState.DeploymentIntent.Body | Should -Be $originalBody
             Assert-MockCalled Save-ShrContinuationCheckpoint -ModuleName SessionHostReplacer.Continuation -Times 0 -Exactly -Scope It
         }
 
         It 'observes an already accepted deployment even when the current replica count is lower' {
             $global:shrReplayState.DeploymentIntent.HostNames = @(1..21 | ForEach-Object { "avd-$_" })
             $result = Invoke-ShrDeploymentIntent -ARMToken token -ImageReplicaDeploymentLimit 20
-            $result.SessionHostCount | Should Be 21
-            $global:shrReplayState.Submitted.Count | Should Be 0
+            $result.SessionHostCount | Should -Be 21
+            $global:shrReplayState.Submitted.Count | Should -Be 0
         }
 
         It 'checkpoints a deterministic retry of only unresolved names and aligned placement arrays' {
@@ -746,19 +748,19 @@ Describe 'SHR continuation storage protocol' {
                 }
             } | ConvertTo-Json -Depth 20 -Compress
             $result = Invoke-ShrDeploymentIntent -ARMToken token -RegisteredSessionHostNames @('avd-one')
-            $result.DeploymentName | Should Be 'shr_operation_r1'
-            $result.SessionHostCount | Should Be 1
+            $result.DeploymentName | Should -Be 'shr_operation_r1'
+            $result.SessionHostCount | Should -Be 1
             $body = $global:shrReplayState.Submitted[0].Body | ConvertFrom-Json
-            @($body.properties.parameters.sessionHostNames.value).Count | Should Be 1
-            $body.properties.parameters.sessionHostNames.value[0] | Should Be 'avd-two'
-            $body.properties.parameters.dedicatedHostResourceIds.value[0] | Should Be 'host-two'
-            $body.properties.parameters.preferredZones.value.Count | Should Be 1
-            $body.properties.parameters.preferredZones.value[0].Count | Should Be 2
+            @($body.properties.parameters.sessionHostNames.value).Count | Should -Be 1
+            $body.properties.parameters.sessionHostNames.value[0] | Should -Be 'avd-two'
+            $body.properties.parameters.dedicatedHostResourceIds.value[0] | Should -Be 'host-two'
+            $body.properties.parameters.preferredZones.value.Count | Should -Be 1
+            $body.properties.parameters.preferredZones.value[0].Count | Should -Be 2
             Assert-MockCalled Save-ShrContinuationCheckpoint -ModuleName SessionHostReplacer.Continuation -Times 1 -Exactly -Scope It
 
             Invoke-ShrDeploymentIntent -ARMToken token -RegisteredSessionHostNames @('avd-one') | Out-Null
-            $global:shrReplayState.Submitted[1].Uri | Should Be $global:shrReplayState.Submitted[0].Uri
-            $global:shrReplayState.Submitted[1].Body | Should Be $global:shrReplayState.Submitted[0].Body
+            $global:shrReplayState.Submitted[1].Uri | Should -Be $global:shrReplayState.Submitted[0].Uri
+            $global:shrReplayState.Submitted[1].Body | Should -Be $global:shrReplayState.Submitted[0].Body
         }
     }
 
@@ -788,7 +790,7 @@ Describe 'SHR scaling handoff health gate' {
 
     It 'permits an online healthy exact-image host with persisted validation' {
         Test-SessionHostScalingRelease -SessionHost $hostInfo -LatestImageVersion $image `
-            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should Be $true
+            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should -Be $true
     }
 
     It 'rejects <Condition> even when a cached validation marker exists' -TestCases @(
@@ -802,25 +804,25 @@ Describe 'SHR scaling handoff health gate' {
         param($Condition, $Field, $Value)
         $hostInfo.$Field = $Value
         Test-SessionHostScalingRelease -SessionHost $hostInfo -LatestImageVersion $image `
-            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should Be $false
+            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should -Be $false
     }
 
     It 'rejects a failed health check despite Available status' {
         $hostInfo.SessionHostHealthCheckResults[0].healthCheckResult = 'HealthCheckFailed'
         Test-SessionHostScalingRelease -SessionHost $hostInfo -LatestImageVersion $image `
-            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should Be $false
+            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should -Be $false
     }
 
     It 'preserves retention identified only by VM tag' {
         $hostInfo.Tags.Retained = '2026-01-01T00:00:00Z'
         Test-SessionHostScalingRelease -SessionHost $hostInfo -LatestImageVersion $image `
-            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should Be $false
+            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should -Be $false
     }
 
     It 'rejects missing or stale exact-image evidence' {
         $hostInfo.Tags.Validated = 'stale'
         Test-SessionHostScalingRelease -SessionHost $hostInfo -LatestImageVersion $image `
-            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should Be $false
+            -TagValidatedImage Validated -TagShutdownTimestamp Retained | Should -Be $false
     }
 }
 
@@ -844,8 +846,8 @@ Describe 'SHR cross-module mutation guards' {
     AfterAll { Remove-Module SessionHostReplacer -Force }
 
     It 'shares the worker context with exported lifecycle helpers' {
-        (Get-ShrWorkerState).Id | Should Be 'guard-test'
-        { Assert-ShrWorkerLease } | Should Throw 'deadline expired'
+        (Get-ShrWorkerState).Id | Should -Be 'guard-test'
+        { Assert-ShrWorkerLease } | Should -Throw -ExpectedMessage '*deadline expired*'
     }
 
     It 'interrupts an actual VM deletion wait at the invocation budget before issuing a resource read' {
@@ -857,18 +859,18 @@ Describe 'SHR cross-module mutation guards' {
         {
             Wait-SessionHostVMDeletions -ARMToken token -ResourceManagerUri 'http://127.0.0.1:1' `
                 -SessionHosts @([PSCustomObject]@{ SessionHostName = 'avd-01'; ResourceId = '/vm/avd-01' })
-        } | Should Throw 'invocation budget reached'
+        } | Should -Throw -ExpectedMessage '*invocation budget reached*'
         Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.DeviceCleanup -Times 0 -Exactly -Scope It
     }
 
     It 'blocks an ARM mutation before sending an HTTP request after the operation deadline' {
         { Invoke-AzureRestMethod -ARMToken token -Method DELETE -Uri 'http://127.0.0.1:1/guard-test' } |
-            Should Throw 'deadline expired'
+            Should -Throw -ExpectedMessage '*deadline expired*'
     }
 
     It 'blocks Graph mutation before sending an HTTP request after the operation deadline' {
         { Invoke-GraphRestMethod -GraphToken token -Method DELETE -Uri 'http://127.0.0.1:1/guard-test' } |
-            Should Throw 'deadline expired'
+            Should -Throw -ExpectedMessage '*deadline expired*'
     }
 
     It 'shares operation state with a real child script without mock-module scope rewriting' {
@@ -901,6 +903,6 @@ $CycleResult.Completed = $true
             Invoke-ShrContinuation -CyclePath $Path
             return $script:ProbeOperation.State.Status
         } $probePath
-        $status | Should Be 'Completed'
+        $status | Should -Be 'Completed'
     }
 }

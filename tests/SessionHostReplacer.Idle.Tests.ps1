@@ -1,5 +1,7 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+}
 
 Describe 'SHR read-only timer idle assessment' {
     BeforeAll {
@@ -111,14 +113,14 @@ Describe 'SHR read-only timer idle assessment' {
     ) {
         param($Mode)
         $global:shrIdleTest.Settings.ReplacementMode = $Mode
-        Invoke-IdleAssessment | Should Be $true
+        Invoke-IdleAssessment | Should -Be $true
         Assert-MockCalled Save-DeploymentState -ModuleName SessionHostReplacer.Planning -Times 0 -Exactly -Scope It
         Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
     }
 
     It 'does not initialize or clear auto-target state during a read-only plan' {
         $global:shrIdleTest.Settings.TargetSessionHostCount = 0
-        Invoke-IdleAssessment | Should Be $true
+        Invoke-IdleAssessment | Should -Be $true
         Assert-MockCalled Save-DeploymentState -ModuleName SessionHostReplacer.Planning -Times 0 -Exactly -Scope It
         Assert-MockCalled Get-DeploymentState -ModuleName SessionHostReplacer.Planning -ParameterFilter { $ReadOnly } -Times 1 -Exactly -Scope It
     }
@@ -132,81 +134,81 @@ Describe 'SHR read-only timer idle assessment' {
     ) {
         param($Kind, $Field, $Value)
         $global:shrIdleTest.State.$Field = $Value
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off a configured maintenance request without bypassing its engine checks' {
         $global:shrIdleTest.Settings.MaintenanceRequest = '{"RequestId":"request-1"}'
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'surfaces unreadable recovery state' {
         $global:shrIdleTest.State.LastStatus = 'Error'
-        { Invoke-IdleAssessment } | Should Throw 'readable deployment recovery state'
+        { Invoke-IdleAssessment } | Should -Throw -ExpectedMessage '*readable deployment recovery state*'
     }
 
     It 'surfaces malformed pending mappings' {
         $global:shrIdleTest.State.PendingHostMappings = '[]'
-        { Invoke-IdleAssessment } | Should Throw 'PendingHostMappings must be a JSON object'
+        { Invoke-IdleAssessment } | Should -Throw -ExpectedMessage '*PendingHostMappings must be a JSON object*'
     }
 
     It 'surfaces inventory failure rather than declaring the pool idle' {
         Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Continuation { throw 'inventory unavailable' }
-        { Invoke-IdleAssessment } | Should Throw 'inventory unavailable'
+        { Invoke-IdleAssessment } | Should -Throw -ExpectedMessage '*inventory unavailable*'
     }
 
     It 'surfaces scaling query failures rather than declaring the pool idle' {
         $global:shrIdleTest.ScalingTarget.Source = 'Error'
-        { Invoke-IdleAssessment } | Should Throw 'scaling plan query failed'
+        { Invoke-IdleAssessment } | Should -Throw -ExpectedMessage '*scaling plan query failed*'
     }
 
     It 'surfaces an invalid scaling exclusion rather than declaring the pool idle' {
         $global:shrIdleTest.ScalingTarget.Source = 'InvalidExclusionTag'
         $global:shrIdleTest.ScalingTarget | Add-Member ErrorMessage 'Configure matching nonempty scaling exclusion tags.'
-        { Invoke-IdleAssessment } | Should Throw 'Configure matching nonempty scaling exclusion tags'
+        { Invoke-IdleAssessment } | Should -Throw -ExpectedMessage '*Configure matching nonempty scaling exclusion tags*'
     }
 
     It 'hands repairable unshared plan configuration to the worker without performing timer mutations' {
         $global:shrIdleTest.ScalingTarget.Source = 'InvalidExclusionTag'
         $global:shrIdleTest.ScalingTarget | Add-Member CanRepairExclusionTag $true
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
         Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
     }
 
     It 'hands off retained inventory even when it is no longer registered' {
         $global:shrIdleTest.VMs[0].tags | Add-Member ShutdownTimestamp '2026-01-01T00:00:00Z'
         $global:shrIdleTest.Registrations = @()
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off empty pools instead of inferring successful auto-capacity' {
         $global:shrIdleTest.Registrations = @()
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off missing registrations or failed health checks' {
         $global:shrIdleTest.Registrations[0].properties.sessionHostHealthCheckResults[0].healthCheckResult = 'HealthCheckFailed'
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off draining hosts' {
         $global:shrIdleTest.Registrations[0].properties.allowNewSession = $false
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off missing validation evidence without writing it in the timer' {
         $global:shrIdleTest.VMs[0].tags.AutoReplaceValidatedImage = ''
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off SHR-owned scaling exclusions' {
         $global:shrIdleTest.VMs[0].tags | Add-Member ScalingPlanExclusion 'SessionHostReplacer'
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off configured VM tag repairs' {
         $global:shrIdleTest.VMs[0].tags.IncludeInAutomation = ''
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off <Kind> deployments' -TestCases @(
@@ -215,28 +217,28 @@ Describe 'SHR read-only timer idle assessment' {
     ) {
         param($Kind, $Field)
         $global:shrIdleTest.Deployments[$Field] = @([PSCustomObject]@{ DeploymentName = 'pending' })
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'handles null deployment collections as empty rather than as one deployment' {
         $global:shrIdleTest.Deployments = @{ RunningDeployments = $null; FailedDeployments = $null }
-        Invoke-IdleAssessment | Should Be $true
+        Invoke-IdleAssessment | Should -Be $true
     }
 
     It 'hands off capacity deficits' {
         $global:shrIdleTest.Settings.TargetSessionHostCount = 2
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'hands off a newer eligible image through the shared image policy' {
         $global:shrIdleTest.Image.Version = '3.0.0'
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'does not count a stopped host as ready when its scaling plan is disabled' {
         $global:shrIdleTest.Registrations[0].properties.status = 'Shutdown'
         $global:shrIdleTest.PowerStates[$global:shrIdleTest.VMs[0].id] = $true
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 
     It 'accepts validated scalable standby only while the shared online floor is met' {
@@ -252,9 +254,9 @@ Describe 'SHR read-only timer idle assessment' {
         $global:shrIdleTest.Settings.TargetSessionHostCount = 2
         $global:shrIdleTest.ScalingTarget = [PSCustomObject]@{ Source = 'ScalingPlan'; CapacityPercentage = 50 }
         $global:shrIdleTest.PowerStates[$standbyVM.id] = $true
-        Invoke-IdleAssessment | Should Be $true
+        Invoke-IdleAssessment | Should -Be $true
         $global:shrIdleTest.ScalingTarget.CapacityPercentage = 100
-        Invoke-IdleAssessment | Should Be $false
+        Invoke-IdleAssessment | Should -Be $false
     }
 }
 
@@ -282,11 +284,11 @@ Describe 'SHR read-only deployment state retrieval' {
     }
     It 'only reads the state entity and does not create its table' {
         $state = Get-DeploymentState -HostPoolName 'hp' -ClientId 'identity' -ReadOnly
-        $state.LastStatus | Should Be 'Success'
+        $state.LastStatus | Should -Be 'Success'
         Assert-MockCalled Invoke-RestMethod -ModuleName SessionHostReplacer.Deployment -Times 1 -Exactly -Scope It
     }
     It 'throws storage failures instead of returning default success-shaped state' {
         Mock Invoke-RestMethod -ModuleName SessionHostReplacer.Deployment { throw 'storage unavailable' }
-        { Get-DeploymentState -HostPoolName 'hp' -ClientId 'identity' -ReadOnly } | Should Throw 'storage unavailable'
+        { Get-DeploymentState -HostPoolName 'hp' -ClientId 'identity' -ReadOnly } | Should -Throw -ExpectedMessage '*storage unavailable*'
     }
 }

@@ -2125,6 +2125,10 @@ time selections, and test missing identity/empty results. Cycle pages require em
 idle ticks need not have an active cycle. Test with an operator lacking central workspace access.
 Check the full exception detail payload only under approved telemetry permissions.
 
+Offline workbook tests require exactly one workload-workspace scope for every telemetry query
+and reject `FunctionAppLogs`, `AzureDiagnostics`, and cross-resource `app()`/`workspace()` queries.
+This keeps diagnostic-log copies out of the workbook's Application Insights result sets.
+
 This changes only workbook queries. It does not remove stored copies, modify central diagnostic
 policy, fix duplication within one workspace, or change the Portal's Application Insights-backed
 invocation view. Existing saved workbook copies need their own update. Offline tests do not prove

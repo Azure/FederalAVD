@@ -1,9 +1,11 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
-$formPath = Join-Path $repoRoot 'deployments\imageManagement\uiFormDefinition.json'
-$bicepPath = Join-Path $repoRoot 'deployments\imageManagement\imageManagement.bicep'
-$armPath = Join-Path $repoRoot 'deployments\imageManagement\imageManagement.json'
-$locationsPath = Join-Path $repoRoot 'deployments\shared\data\locations.json'
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
+    $formPath = Join-Path $repoRoot 'deployments\imageManagement\uiFormDefinition.json'
+    $bicepPath = Join-Path $repoRoot 'deployments\imageManagement\imageManagement.bicep'
+    $armPath = Join-Path $repoRoot 'deployments\imageManagement\imageManagement.json'
+    $locationsPath = Join-Path $repoRoot 'deployments\shared\data\locations.json'
+}
 
 Describe 'Image Management storage account prefix' {
     BeforeAll {
@@ -17,21 +19,21 @@ Describe 'Image Management storage account prefix' {
     }
 
     It 'accepts one optional shared lowercase alphanumeric prefix up to 5 characters' {
-        $prefix.constraints.required | Should Be $false
-        $prefix.constraints.regex | Should Be '^[a-z0-9]{0,5}$'
-        $prefix.visible | Should Match "deployArtifactsStorageAccount"
-        $prefix.visible | Should Match "deployBuildLogsStorageAccount"
-        '' | Should Match $prefix.constraints.regex
-        'cont1' | Should Match $prefix.constraints.regex
-        'cont12' | Should Not Match $prefix.constraints.regex
-        'contoso-avd' | Should Not Match $prefix.constraints.regex
-        ([regex]::IsMatch('CONTOSO', $prefix.constraints.regex)) | Should Be $false
-        ('cont1' + 'imgassets' + 'use2' + 'abcdef').Length | Should Be 24
-        $locationError.visible | Should Match 'imageManagementStoragePrefix'
-        $locationError.visible | Should Match 'locationAbbreviationOverride'
-        $locationError.visible | Should Match 'deployArtifactsStorageAccount'
-        $locationError.visible | Should Match 'deployBuildLogsStorageAccount'
-        $locationError.options.text | Should Match 'no more than 4 characters'
+        $prefix.constraints.required | Should -Be $false
+        $prefix.constraints.regex | Should -Be '^[a-z0-9]{0,5}$'
+        $prefix.visible | Should -Match "deployArtifactsStorageAccount"
+        $prefix.visible | Should -Match "deployBuildLogsStorageAccount"
+        '' | Should -Match $prefix.constraints.regex
+        'cont1' | Should -Match $prefix.constraints.regex
+        'cont12' | Should -Not -Match $prefix.constraints.regex
+        'contoso-avd' | Should -Not -Match $prefix.constraints.regex
+        ([regex]::IsMatch('CONTOSO', $prefix.constraints.regex)) | Should -Be $false
+        ('cont1' + 'imgassets' + 'use2' + 'abcdef').Length | Should -Be 24
+        $locationError.visible | Should -Match 'imageManagementStoragePrefix'
+        $locationError.visible | Should -Match 'locationAbbreviationOverride'
+        $locationError.visible | Should -Match 'deployArtifactsStorageAccount'
+        $locationError.visible | Should -Match 'deployBuildLogsStorageAccount'
+        $locationError.options.text | Should -Match 'no more than 4 characters'
     }
 
     It 'fits every built-in location abbreviation within the custom naming budget' {
@@ -42,30 +44,30 @@ Describe 'Image Management storage account prefix' {
             }
         }
 
-        (($abbreviationLengths | Measure-Object -Maximum).Maximum -le 4) | Should Be $true
+        (($abbreviationLengths | Measure-Object -Maximum).Maximum -le 4) | Should -Be $true
     }
 
     It 'maps the form value into the naming convention object' {
-        $form.view.outputs.parameters.namingConvention | Should Match 'imageManagementStoragePrefix'
-        $form.view.outputs.parameters.namingConvention | Should Match "steps\('tagsAndNaming'\)\.naming\.imageManagementStoragePrefix"
+        $form.view.outputs.parameters.namingConvention | Should -Match 'imageManagementStoragePrefix'
+        $form.view.outputs.parameters.namingConvention | Should -Match "steps\('tagsAndNaming'\)\.naming\.imageManagementStoragePrefix"
     }
 
     It 'preserves default names and uses deterministic custom-prefix names' {
         $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep') -Raw
         $policy = Get-TestNamingPolicy
-        $bicep | Should Match "namingConvention\.\?imageManagementStoragePrefix"
-        $bicep | Should Match "validateImageStoragePrefix\(imageManagementStoragePrefix, cnv_loc\)"
-        $bicep | Should Match "imageStorageName\(namingConvention, 'artifacts', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
-        $bicep | Should Match "imageStorageName\(namingConvention, 'logs', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
-        $functions | Should Match "fail\('namingConvention.imageManagementStoragePrefix"
-        $functions | Should Match 'length\(prefix\) > namingPolicy.limits.imageManagementStoragePrefix'
-        $functions | Should Match 'length\(region\) > namingPolicy.limits.imageManagementStorageLocation'
-        $functions | Should Match 'uniqueString\(subscriptionId, resourceGroupName, region\)'
-        $policy.limits.imageManagementStoragePrefix | Should Be 5
-        $policy.limits.imageManagementStorageLocation | Should Be 4
-        $policy.limits.uniqueSuffix | Should Be 6
-        $arm | Should Match 'imageManagementStoragePrefix'
-        $arm | Should Match 'imgassets'
-        $arm | Should Match 'imglogs'
+        $bicep | Should -Match "namingConvention\.\?imageManagementStoragePrefix"
+        $bicep | Should -Match "validateImageStoragePrefix\(imageManagementStoragePrefix, cnv_loc\)"
+        $bicep | Should -Match "imageStorageName\(namingConvention, 'artifacts', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
+        $bicep | Should -Match "imageStorageName\(namingConvention, 'logs', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
+        $functions | Should -Match "fail\('namingConvention.imageManagementStoragePrefix"
+        $functions | Should -Match 'length\(prefix\) > namingPolicy.limits.imageManagementStoragePrefix'
+        $functions | Should -Match 'length\(region\) > namingPolicy.limits.imageManagementStorageLocation'
+        $functions | Should -Match 'uniqueString\(subscriptionId, resourceGroupName, region\)'
+        $policy.limits.imageManagementStoragePrefix | Should -Be 5
+        $policy.limits.imageManagementStorageLocation | Should -Be 4
+        $policy.limits.uniqueSuffix | Should -Be 6
+        $arm | Should -Match 'imageManagementStoragePrefix'
+        $arm | Should -Match 'imgassets'
+        $arm | Should -Match 'imglogs'
     }
 }
