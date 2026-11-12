@@ -3,12 +3,32 @@ metadata description = 'Deploys a managed Run Command on an existing VM in the d
 
 import { runCommandParameterType } from '../../../types/customizationTypes.bicep'
 
-@description('Required. Name of the existing virtual machine in the deployment resource group.')
-param virtualMachineName string
-@description('Required. Name of the virtual machine Run Command to deploy.')
-param name string
+@description('Run the command asynchronously (fire and forget).')
+param asyncExecution bool = false
+
+@description('Client ID of the user-assigned managed identity used to access the error blob.')
+param errorBlobManagedIdentityClientId string = ''
+
+@description('SAS URI or managed identity accessible blob URI to stream stderr to.')
+param errorBlobUri string = ''
+
 @description('Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region.')
 param location string = resourceGroup().location
+
+@description('Required. Name of the virtual machine Run Command to deploy.')
+param name string
+
+@description('Client ID of the user-assigned managed identity used to access the output blob.')
+param outputBlobManagedIdentityClientId string = ''
+
+@description('SAS URI or managed identity accessible blob URI to stream stdout to.')
+param outputBlobUri string = ''
+
+@description('Named parameters to pass to the script.')
+param parameters runCommandParameterType[] = []
+
+@description('Named protected (secure) parameters to pass to the script.')
+param protectedParameters runCommandParameterType[] = []
 
 @description('PowerShell script content to execute. Provide either script or scriptUri, not both.')
 param script string = ''
@@ -19,32 +39,14 @@ param scriptUri string = ''
 @description('Client ID of the user-assigned managed identity used to access the script URI.')
 param scriptUriManagedIdentityClientId string = ''
 
-@description('Named parameters to pass to the script.')
-param parameters runCommandParameterType[] = []
-
-@description('Named protected (secure) parameters to pass to the script.')
-param protectedParameters runCommandParameterType[] = []
-
 @description('Maximum execution time in seconds. 0 = platform default (~1.5 hours).')
 param timeoutInSeconds int = 0
-
-@description('Run the command asynchronously (fire and forget).')
-param asyncExecution bool = false
 
 @description('Treat a non-zero exit code as a deployment failure.')
 param treatFailureAsDeploymentFailure bool = false
 
-@description('SAS URI or managed identity accessible blob URI to stream stdout to.')
-param outputBlobUri string = ''
-
-@description('SAS URI or managed identity accessible blob URI to stream stderr to.')
-param errorBlobUri string = ''
-
-@description('Client ID of the user-assigned managed identity used to access the output blob.')
-param outputBlobManagedIdentityClientId string = ''
-
-@description('Client ID of the user-assigned managed identity used to access the error blob.')
-param errorBlobManagedIdentityClientId string = ''
+@description('Required. Name of the existing virtual machine in the deployment resource group.')
+param virtualMachineName string
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2023-09-01' existing = {
   name: virtualMachineName
