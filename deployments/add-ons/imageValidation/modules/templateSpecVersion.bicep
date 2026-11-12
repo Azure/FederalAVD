@@ -1,30 +1,30 @@
 import { artifactCustomizationType } from '../../../shared/modules/resourceModules/types/customizationTypes.bicep'
 
-param artifactsContainerUri string
-param artifactsUserAssignedIdentityClientId string
-param bootDiagnosticsEnabled bool
-param diskAccessResourceId string
-param diskControllerType string
-param diskEncryptionSetResourceId string
+param artifactsContainerUri string = ''
+param artifactsUserAssignedIdentityClientId string = ''
+param bootDiagnosticsEnabled bool = true
+param diskAccessResourceId string = ''
+param diskControllerType string = 'SCSI'
+param diskEncryptionSetResourceId string = ''
 param diskName string
-param enableAcceleratedNetworking bool
-param encryptionAtHost bool
-param hibernationEnabled bool
+param enableAcceleratedNetworking bool = true
+param encryptionAtHost bool = true
+param hibernationEnabled bool = false
 param imageVersionResourceId string
 param keyVaultResourceId string
-param licenseType string
-param location string
+param licenseType string = 'Windows_Client'
+param location string = resourceGroup().location
 param networkInterfaceName string
 param privateIPAddress string
-param secureBootEnabled bool
-param securityType string
+param secureBootEnabled bool = true
+param securityType string = 'TrustedLaunch'
 param subnetResourceId string
-param tags object
-param userAssignedIdentityResourceIds array
+param tags object = {}
+param userAssignedIdentityResourceIds array = []
 param virtualMachineName string
 param virtualMachineSize string
-param vmCustomizations artifactCustomizationType[]
-param vTpmEnabled bool
+param vmCustomizations artifactCustomizationType[] = []
+param vTpmEnabled bool = true
 
 resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
   scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
