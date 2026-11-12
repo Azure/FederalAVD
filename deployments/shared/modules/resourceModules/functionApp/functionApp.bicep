@@ -107,8 +107,8 @@ param permittedIPs array = []
 @description('Optional. Shared app/storage public-access mode. Auto preserves legacy private-endpoint/IP inference. Monitoring access remains separately configured.')
 param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 
-@description('Required. Tag object with resource-type keys used to stamp deployed resources.')
-param tags object
+@description('Optional. Key-value pairs to apply as tags to the Azure resources.')
+param tags object = {}
 
 var cloudSuffix = replace(replace(environment().resourceManager, 'https://management.', ''), '/', '')
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
@@ -210,7 +210,7 @@ var cmkUaiResourceId = useCmk ? storageEncryptionUaiResourceId : ''
 resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   name: storageAccountName
   location: location
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
+  tags: tags
   sku: {
     name: 'Standard_LRS'
   }
@@ -310,7 +310,7 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
         id: privateEndpointSubnetResourceId
       }
     }
-    tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+    tags: tags
   }
 ]
 
@@ -335,7 +335,7 @@ resource privateDnsZoneGroups_storage 'Microsoft.Network/privateEndpoints/privat
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (enableApplicationInsights) {
   name: applicationInsightsName
   location: location
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Insights/components'] ?? {})
+  tags: tags
   properties: {
     Application_Type: 'web'
     // Enable public ingestion when no Private Link Scope is configured
@@ -360,7 +360,7 @@ module updatePrivateLinkScope '../privateLinkScope/get-PrivateLinkScope.bicep' =
 resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
   name: functionAppName
   location: location
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Web/sites'] ?? {})
+  tags: tags
   kind: 'functionapp'
   identity: !empty(functionAppUserAssignedIdentityResourceId)
     ? {
@@ -533,7 +533,7 @@ resource privateEndpoint_functionApp 'Microsoft.Network/privateEndpoints@2023-04
       id: privateEndpointSubnetResourceId
     }
   }
-  tags: union({ 'cm-resource-parent': hostPoolResourceId }, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
+  tags: tags
 }
 
 resource privateDnsZoneGroup_functionApp 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-08-01' = if (privateEndpoint && !empty(azureFunctionAppPrivateDnsZoneResourceId)) {
