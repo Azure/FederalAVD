@@ -162,21 +162,12 @@ Describe 'Image validation infrastructure' {
     }
 
     It 'applies one tag set from Portal or parameter files to all supported resources' {
-        $template.parameters.tags.type | Should Be 'array'
-        @($template.parameters.tags.defaultValue).Count | Should Be 0
-        $template.parameters.tags.maxLength | Should Be 49
-        $tagType = ($template.parameters.tags.items.'$ref' -split '/')[-1]
-        ($template.definitions.$tagType.properties.PSObject.Properties.Name -join ',') | Should Be 'key,value'
-        $template.definitions.$tagType.properties.key.type | Should Be 'string'
-        $template.definitions.$tagType.properties.key.minLength | Should Be 1
-        $template.definitions.$tagType.properties.key.maxLength | Should Be 128
-        $template.definitions.$tagType.properties.value.type | Should Be 'string'
-        $template.definitions.$tagType.properties.value.nullable | Should Be $true
-        $template.definitions.$tagType.properties.value.maxLength | Should Be 256
+        $template.parameters.tags.type | Should Be 'object'
+        @($template.parameters.tags.defaultValue.PSObject.Properties).Count | Should Be 0
         ($template.parameters.PSObject.Properties.Name -contains 'tagsByResource') | Should Be $false
         ($template.variables.PSObject.Properties.Name -contains 'commonTags') | Should Be $false
         ($template.variables.PSObject.Properties.Name -contains 'resourceTags') | Should Be $false
-        $tagExpression = "[toObject(parameters('tags'), lambda('tag', lambdaVariables('tag').key), lambda('tag', coalesce(tryGet(lambdaVariables('tag'), 'value'), '')))]"
+        $tagExpression = "[parameters('tags')]"
         $template.resources.rg.tags | Should Be $tagExpression
         $template.resources.userAssignedIdentity.properties.parameters.tags.value | Should Be $tagExpression
         $template.resources.templateSpec.properties.parameters.tags.value | Should Be $tagExpression
@@ -189,22 +180,14 @@ Describe 'Image validation infrastructure' {
         if ($vmTemplate -is [string] -and $vmTemplate -match "^\[variables\('([^']+)'\)\]$") {
             $vmTemplate = $specTemplate.variables.($Matches[1])
         }
-        $vmTemplate.parameters.tags.defaultValue | Should Be "[[coalesce(resourceGroup().tags, createObject())]"
+        ($vmTemplate.parameters.tags.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
         $vmTemplate.resources.virtualMachine.properties.parameters.tags.value | Should Be "[[parameters('tags')]"
-        $moduleTagKeys = @{
-            encryptionKeyVault = @('Microsoft.KeyVault/vaults', 'Microsoft.Network/privateEndpoints')
-            storageCmk = @('Microsoft.ManagedIdentity/userAssignedIdentities')
-            serverFarm = @('Microsoft.Web/serverfarms')
-            functionApp = @('Microsoft.Web/sites', 'Microsoft.Storage/storageAccounts', 'Microsoft.Insights/components', 'Microsoft.Network/privateEndpoints', 'Microsoft.Network/networkInterfaces')
+        foreach ($moduleName in @('encryptionKeyVault', 'storageCmk', 'serverFarm', 'functionApp')) {
+            $template.resources.$moduleName.properties.parameters.tags.value | Should Be $tagExpression
         }
-        foreach ($moduleName in $moduleTagKeys.Keys) {
-            $moduleTags = $template.resources.$moduleName.properties.parameters.tags.value
-            ($moduleTags.PSObject.Properties.Name | Sort-Object) -join ',' |
-                Should Be (($moduleTagKeys[$moduleName] | Sort-Object) -join ',')
-            foreach ($property in $moduleTags.PSObject.Properties) {
-                $property.Value | Should Be $tagExpression
-            }
-        }
+        $app.functionAppAppSettings.value | Should Match "string\(parameters\('tags'\)\)"
+        $runContent = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1') -Raw
+        $runContent | Should Match 'tags = @\{ value = \(\$env:tags \| ConvertFrom-Json -ErrorAction Stop\) \}'
     }
 
     It 'fits conservative ARM and no-form Template Spec publishing budgets including the SDK envelope' {
