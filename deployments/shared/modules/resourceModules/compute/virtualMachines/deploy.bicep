@@ -61,8 +61,23 @@ param location string = resourceGroup().location
 @description('Required. Name of the windows virtual machine to deploy.')
 param name string
 
+@description('Optional. NIC delete option when the VM is deleted.')
+@allowed(['Delete', 'Detach'])
+param nicDeleteOption string = 'Delete'
+
 @description('Required. Name of the private network interface created for the VM.')
 param nicName string
+
+@description('Optional. Private IP address for the VM NIC; used only when nicPrivateIPAllocationMethod is Static.')
+param nicPrivateIPAddress string = ''
+
+@description('Optional. Private IP allocation method for the VM NIC.')
+@allowed(['Dynamic', 'Static'])
+param nicPrivateIPAllocationMethod string = 'Dynamic'
+
+@description('Optional. OS disk delete option when the VM is deleted.')
+@allowed(['Delete', 'Detach'])
+param osDiskDeleteOption string = 'Delete'
 
 @description('Required. Name of the managed OS disk created from the selected image.')
 param osDiskName string
@@ -143,7 +158,8 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2023-05-01' = {
       {
         name: 'ipconfig1'
         properties: {
-          privateIPAllocationMethod: 'Dynamic'
+          privateIPAllocationMethod: nicPrivateIPAllocationMethod
+          privateIPAddress: nicPrivateIPAllocationMethod == 'Static' ? nicPrivateIPAddress : null
           subnet: {
             id: subnetResourceId
           }
@@ -174,7 +190,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       osDisk: {
         name: osDiskName
         createOption: 'FromImage'
-        deleteOption: 'Delete'
+        deleteOption: osDiskDeleteOption
         managedDisk: {
           storageAccountType: osDiskSku
           diskEncryptionSet: !empty(diskEncryptionSetResourceId)
@@ -195,7 +211,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2023-09-01' = {
       networkInterfaces: [
         {
           id: networkInterface.id
-          properties: { deleteOption: 'Delete' }
+          properties: { deleteOption: nicDeleteOption }
         }
       ]
     }
@@ -239,7 +255,9 @@ resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' 
 
 @description('Resource ID of the windows virtual machine.')
 output resourceId string = virtualMachine.id
+
 @description('Azure resource name of the windows virtual machine.')
 output name string = virtualMachine.name
+
 @description('VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string.')
 output principalId string = (systemAssignedIdentity || empty(userAssignedIdentityResourceIds)) ? virtualMachine.identity.principalId : ''
