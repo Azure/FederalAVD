@@ -6,29 +6,12 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "7724290170600594136"
+      "templateHash": "17475510065608469609"
     },
     "name": "Image validation infrastructure",
     "description": "Deploys private Windows PowerShell timer Function infrastructure. Validation code and workload permissions are supplied by the operator."
   },
   "definitions": {
-    "runCommandSettingType": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "script": {
-          "type": "string"
-        },
-        "parameters": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/runCommandParameterType"
-          }
-        }
-      }
-    },
     "_1.functionAppNameOverrides": {
       "type": "object",
       "properties": {
@@ -101,23 +84,6 @@
         "description": "Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group, location and cloud. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-        }
-      }
-    },
-    "runCommandParameterType": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "metadata": {
-        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-        "__bicep_imported_from!": {
-          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
         }
       }
     }
@@ -798,6 +764,20 @@
         "description": "Optional. Complete name override for a new App Service plan. Ignored when using an existing plan ID."
       }
     },
+    "artifactsContainerUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. URI of the storage container containing the customization artifacts."
+      }
+    },
+    "artifactsUserAssignedIdentityClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Client ID of the user-assigned identity used to access the customization artifacts."
+      }
+    },
     "azureBlobPrivateDnsZoneResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -819,12 +799,58 @@
         "description": "Required for private mode. Existing target-cloud Key Vault private DNS zone ID, linked to the integration VNet."
       }
     },
+    "bootDiagnosticsEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable boot diagnostics for the validation VM."
+      }
+    },
+    "diskAccessResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing disk access resource ID for the validation VM."
+      }
+    },
+    "diskControllerType": {
+      "type": "string",
+      "defaultValue": "SCSI",
+      "allowedValues": [
+        "SCSI",
+        "NVMe"
+      ],
+      "metadata": {
+        "description": "Optional. Disk controller type for the validation VM."
+      }
+    },
+    "diskEncryptionSetResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Existing disk encryption set resource ID for the validation VM."
+      }
+    },
     "encryptionKeyVaultNameOverride": {
       "type": "string",
       "defaultValue": "",
       "maxLength": 24,
       "metadata": {
         "description": "Optional. Complete name override for the new storage encryption Key Vault."
+      }
+    },
+    "enableAcceleratedNetworking": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable accelerated networking for the validation VM network interface."
+      }
+    },
+    "encryptionAtHost": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable encryption at host for the validation VM."
       }
     },
     "existingAppServicePlanResourceId": {
@@ -847,6 +873,13 @@
       "maxLength": 60,
       "metadata": {
         "description": "Optional. Complete Function App name override."
+      }
+    },
+    "hibernationEnabled": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Enable hibernation for the validation VM."
       }
     },
     "identifier": {
@@ -938,14 +971,22 @@
         "description": "Optional. Complete resource group name override. The deployment manages this group."
       }
     },
-    "runCommandSettings": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/runCommandSettingType"
-      },
-      "defaultValue": [],
+    "secureBootEnabled": {
+      "type": "bool",
+      "defaultValue": true,
       "metadata": {
-        "description": "Optional. Validation Run Commands with unique names, inline scripts, and regular name/value parameters. Do not include secrets."
+        "description": "Optional. Enable secure boot for the validation VM."
+      }
+    },
+    "securityType": {
+      "type": "string",
+      "defaultValue": "TrustedLaunch",
+      "allowedValues": [
+        "TrustedLaunch",
+        "ConfidentialVM"
+      ],
+      "metadata": {
+        "description": "Optional. Security type for the validation VM."
       }
     },
     "schedule": {
@@ -977,11 +1018,25 @@
         "description": "Optional. Tags applied to all resources that support tags."
       }
     },
+    "userAssignedIdentityResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional. Existing user-assigned identity resource IDs for the validation VM."
+      }
+    },
     "userAssignedIdentityNameOverride": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
         "description": "Optional. Complete name override for the Function App identity."
+      }
+    },
+    "virtualMachineCustomizations": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Customizations applied to the validation VM."
       }
     },
     "virtualMachineSize": {
@@ -990,11 +1045,18 @@
       "metadata": {
         "description": "Required. Windows VM size supported by the selected image and region, including accelerated networking."
       }
+    },
+    "vTpmEnabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable vTPM for the validation VM."
+      }
     }
   },
   "variables": {
     "$fxv#0": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, please uncomment the line below.\r\n    # 'Az' = '7.*'\r\n}",
-    "$fxv#1": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n# Get an access token for Azure resources\r\n$AzureManagementAccessToken = (Invoke-RestMethod `\r\n    -Headers @{Metadata=\"true\"} `\r\n    -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/galleries/' + $env:ComputeGalleryName + '/images/' + $env:ComputeGalleryImageName + '/versions?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\n# Get virtual machine\r\n$VirtualMachine = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')\r\n\r\n\r\nif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Deleted existing virtual machine'\r\n\r\n\t# Deploy the virtual machine to run the tool\r\n\t$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n\t$Body = @{\r\n\t\tproperties = @{\r\n\t\t\tmode = 'Incremental'\r\n\t\t\tparameters = @{\r\n\t\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\t\timageVersionResourceId = @{ value = $env:imageVersionResourceId }\r\n\t\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\t\tlocation = @{ value = $env:location }\r\n\t\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\t\trunCommandSettings = @{ value = $env:runCommandSettings }\r\n\t\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\t\ttags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tuserAssignedIdentityResourceId = @{ value = $env:userAssignedIdentityResourceId }\r\n\t\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\t}\r\n\t\t\ttemplateLink = @{\r\n\t\t\t\tid = $env:TemplateSpecResourceId\r\n\t\t\t}\r\n\t\t}\r\n\t} | ConvertTo-Json -Depth 5\r\n\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'PUT' `\r\n\t\t-Body $Body `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\t\r\n\tWrite-Output 'Deployed new image validation virtual machine'\r\n}",
+    "$fxv#1": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n# Get an access token for Azure resources\r\n$AzureManagementAccessToken = (Invoke-RestMethod `\r\n    -Headers @{Metadata=\"true\"} `\r\n    -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/galleries/' + $env:ComputeGalleryName + '/images/' + $env:ComputeGalleryImageName + '/versions?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\n# Get virtual machine\r\n$VirtualMachine = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')\r\n\r\n\r\nif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Deleted existing virtual machine'\r\n\r\n\t# Deploy the virtual machine to run the tool\r\n\t$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n\t$Body = @{\r\n\t\tproperties = @{\r\n\t\t\tmode = 'Incremental'\r\n\t\t\tparameters = @{\r\n\t\t\t\tartifactsContainerUri = @{ value = $env:artifactsContainerUri }\r\n\t\t\t\tartifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }\r\n\t\t\t\tbootDiagnosticsEnabled = @{ value = $env:bootDiagnosticsEnabled }\r\n\t\t\t\tdiskAccessResourceId = @{ value = $env:diskAccessResourceId }\r\n\t\t\t\tdiskControllerType = @{ value = $env:diskControllerType }\r\n\t\t\t\tdiskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }\r\n\t\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\t\tenableAcceleratedNetworking = @{ value = $env:enableAcceleratedNetworking }\r\n\t\t\t\tencryptionAtHost = @{ value = $env:encryptionAtHost }\r\n\t\t\t\thibernationEnabled = @{ value = $env:hibernationEnabled }\r\n\t\t\t\timageVersionResourceId = @{ value = $env:imageVersionResourceId }\r\n\t\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\t\tlocation = @{ value = $env:location }\r\n\t\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\t\tsecureBootEnabled = @{ value = $env:secureBootEnabled }\r\n\t\t\t\tsecurityType = @{ value = $env:securityType }\r\n\t\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\t\ttags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tuserAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\t\tvmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tvTpmEnabled = @{ value = $env:vTpmEnabled }\r\n\t\t\t}\r\n\t\t\ttemplateLink = @{\r\n\t\t\t\tid = $env:TemplateSpecResourceId\r\n\t\t\t}\r\n\t\t}\r\n\t} | ConvertTo-Json -Depth 5\r\n\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'PUT' `\r\n\t\t-Body $Body `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\t\r\n\tWrite-Output 'Deployed new image validation virtual machine'\r\n}",
     "$fxv#2": "# Authentication is provided in the script",
     "groupContext": {
       "subscriptionId": "[subscription().subscriptionId]",
@@ -6020,7 +6082,7 @@
             "value": "[reference('encryptionKeyVault').outputs.encryptionKeyVaultResourceId.value]"
           },
           "functionAppAppSettings": {
-            "value": "[concat(createArray(createObject('name', 'diskName', 'value', variables('names').diskName), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', variables('names').networkInterfaceName), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'runCommandSettings', 'value', string(parameters('runCommandSettings'))), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'tags', 'value', string(parameters('tags'))), createObject('name', 'userAssignedIdentityResourceId', 'value', reference('userAssignedIdentity').outputs.resourceId.value), createObject('name', 'virtualMachineName', 'value', variables('names').virtualMachineName), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize'))))]"
+            "value": "[concat(createArray(createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityClientId', 'value', parameters('artifactsUserAssignedIdentityClientId')), createObject('name', 'bootDiagnosticsEnabled', 'value', string(parameters('bootDiagnosticsEnabled'))), createObject('name', 'diskAccessResourceId', 'value', parameters('diskAccessResourceId')), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', parameters('diskEncryptionSetResourceId')), createObject('name', 'diskName', 'value', variables('names').diskName), createObject('name', 'enableAcceleratedNetworking', 'value', string(parameters('enableAcceleratedNetworking'))), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'hibernationEnabled', 'value', string(parameters('hibernationEnabled'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', variables('names').networkInterfaceName), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'secureBootEnabled', 'value', string(parameters('secureBootEnabled'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'tags', 'value', string(parameters('tags'))), createObject('name', 'userAssignedIdentityResourceIds', 'value', string(union(parameters('userAssignedIdentityResourceIds'), createArray(reference('userAssignedIdentity').outputs.resourceId.value)))), createObject('name', 'virtualMachineName', 'value', variables('names').virtualMachineName), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpmEnabled', 'value', string(parameters('vTpmEnabled')))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[variables('integrationSubnetId')]"
