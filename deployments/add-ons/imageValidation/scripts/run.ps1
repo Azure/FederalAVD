@@ -58,6 +58,7 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 				privateIPAddress = @{ value = $env:privateIPAddress }
 				runCommandSettings = @{ value = $env:runCommandSettings }
 				subnetResourceId = @{ value = $env:subnetResourceId }
+				tags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }
 				userAssignedIdentityResourceId = @{ value = $env:userAssignedIdentityResourceId }
 				virtualMachineName = @{ value = $env:virtualMachineName }
 				virtualMachineSize = @{ value = $env:virtualMachineSize }
