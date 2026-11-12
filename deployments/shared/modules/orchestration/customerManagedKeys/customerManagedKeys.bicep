@@ -1,5 +1,6 @@
 metadata name = 'Customer-managed encryption orchestration'
 metadata description = 'Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions.'
+import { getTagsForResource } from '../../resourceModules/types/tags.bicep'
 
 // ============================================================================
 // Unified Customer-Managed Keys Module
@@ -43,7 +44,7 @@ param keyExpirationInDays int = 180
 @description('Optional. Azure region for UAIs and DiskEncryptionSets. Defaults to resource group location.')
 param location string = resourceGroup().location
 
-@description('Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern.')
+@description('Optional. Key-value pairs to apply as tags to the Azure resources.')
 param tags object = {}
 
 @description('Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities.')
@@ -141,7 +142,7 @@ module paasKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
       attributesEnabled: true
       attributesExportable: false
       rotationPolicy: rotationPolicy
-      tags: parentTag
+      tags: tags
     }
   }
 ]
@@ -154,7 +155,7 @@ module paasIdentity '../../resourceModules/managedIdentity/userAssignedIdentitie
   params: {
     name: identityName
     location: location
-    tags: union(parentTag, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
+    tags: tags
   }
 }
 
@@ -206,7 +207,7 @@ module diskKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
       keyReleasePolicy: (config.?confidentialVMOSDiskEncryption ?? false)
         ? { data: cvmKeyReleasePolicy, contentType: 'application/json; charset=utf-8' }
         : {}
-      tags: parentTag
+      tags: tags
     }
   }
 ]
@@ -227,7 +228,7 @@ module diskEncryptionSets '../../resourceModules/compute/diskEncryptionSets/depl
             : 'EncryptionAtRestWithPlatformAndCustomerKeys')
       rotationToLatestKeyVersionEnabled: (config.?confidentialVMOSDiskEncryption ?? false) ? false : true
       systemAssignedIdentity: true
-      tags: union(parentTag, tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {})
+      tags: tags
     }
     dependsOn: [
       diskKeys[i]
