@@ -581,6 +581,90 @@ $redirectionsXMLEnd = @'
 
 #endregion FSLogix Redirections XML Templates
 
+function Set-StorageAccountCredential {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$TargetName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$UserName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Password
+    )
+
+    if (-not ('FederalAVD.StorageCredential' -as [type])) {
+        Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+namespace FederalAVD
+{
+    public static class StorageCredential
+    {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct Credential
+        {
+            public uint Flags;
+            public uint Type;
+            public string TargetName;
+            public string Comment;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+            public uint CredentialBlobSize;
+            public IntPtr CredentialBlob;
+            public uint Persist;
+            public uint AttributeCount;
+            public IntPtr Attributes;
+            public string TargetAlias;
+            public string UserName;
+        }
+
+        [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CredWrite(ref Credential credential, uint flags);
+
+        public static void Write(string targetName, string userName, string password)
+        {
+            if (String.IsNullOrEmpty(targetName) || String.IsNullOrEmpty(userName) || String.IsNullOrEmpty(password))
+                throw new ArgumentException("Credential target, user name and password must not be empty.");
+            if (password.Length > 1280)
+                throw new ArgumentException("Credential password exceeds the Windows credential size limit.");
+
+            IntPtr passwordBuffer = Marshal.StringToCoTaskMemUni(password);
+            try
+            {
+                Credential credential = new Credential();
+                credential.Type = 2; // CRED_TYPE_DOMAIN_PASSWORD: used by SMB authentication.
+                credential.TargetName = targetName;
+                credential.UserName = userName;
+                credential.CredentialBlobSize = (uint)(password.Length * 2);
+                credential.CredentialBlob = passwordBuffer;
+                credential.Persist = 2; // CRED_PERSIST_LOCAL_MACHINE: same identity, across logon sessions.
+
+                if (!CredWrite(ref credential, 0))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    throw new Win32Exception(error, "Writing the storage credential failed (Win32 error " + error + ").");
+                }
+            }
+            finally
+            {
+                Marshal.ZeroFreeCoTaskMemUnicode(passwordBuffer);
+            }
+        }
+    }
+}
+'@
+    }
+
+    [FederalAVD.StorageCredential]::Write($TargetName, $UserName, $Password)
+}
+
 #region Main Script
 
 try {
@@ -680,11 +764,6 @@ try {
                     $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "Local storage [$i]: $SAFQDN"
 
-                    If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
-                        Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
-                        Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$SAFQDN /user:localhost\$($LocalStorageAccountNamesArray[$i]) /pass:$($LocalStorageAccountKeysArray[$i])" -NoNewWindow -Wait
-                    }
-                    
                     If ($OfficeShareName) {
                         $LocalOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
                         $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
@@ -700,11 +779,6 @@ try {
                         $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
 
-                        If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
-                            Write-Log -message "Adding storage key for '$SAFQDN' to Credential Manager"
-                            Start-Process -FilePath 'cmdkey.exe' -ArgumentList "/add:$($SAFQDN) /user:localhost\$($RemoteStorageAccountNamesArray[$i]) /pass:$($RemoteStorageAccountKeysArray[$i])" -NoNewWindow -Wait
-                        }
-                        
                         If ($OfficeShareName) {
                             $RemoteOfficeContainerPaths.Add("\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
                             $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
@@ -911,14 +985,8 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'LoadCredKeyFromProfile'; Path = 'HKLM:\Software\Policies\Microsoft\AzureADAccount'; PropertyType = 'DWord'; Value = 1 })
         }
 
-        # Cloud-only identity with storage keys (EntraId) requires credentials to be stored
-        # in Credential Manager via cmdkey so FSLogix can authenticate to Azure Files.
-        # "Network Access: Do not allow storage of passwords and credentials for network
-        # authentication" (DisableDomainCreds) is an older STIG control not commonly seen
-        # in current STIG releases, but may still be enforced by legacy baselines or other
-        # policy. This is a belt-and-suspenders measure: applying Disabled (0) via secedit
-        # ensures the Security Configuration Engine does not silently revert the setting on
-        # the next policy refresh, keeping cmdkey credentials intact across reboots.
+        # Preserve the existing EntraId credential-storage policy setup before writing keys.
+        # Domain/MDM policy may override local configuration; policy changes may require a restart.
         If ($IdentitySolution -eq 'EntraId') {
             Write-Log -message "EntraId identity with storage keys detected - setting 'DisableDomainCreds' to 0 (Disabled) via secedit so FSLogix storage key credentials can be stored in Credential Manager."
             $seceditInf = Join-Path -Path $env:TEMP -ChildPath 'avd-disable-domain-creds.inf'
@@ -942,6 +1010,26 @@ try {
                 Write-Log -Category Warning -Message "secedit returned a non-zero exit code. Review log at '$seceditLog'."
             }
             Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
+        }
+
+        If ($StorageService -eq 'AzureFiles' -and
+            ($LocalStorageAccountKeysArray.Count -gt 0 -or $RemoteStorageAccountKeysArray.Count -gt 0)) {
+            For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
+                If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
+                    $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                    Write-Log -Message "Adding storage key for '$SAFQDN' to Credential Manager"
+                    Set-StorageAccountCredential -TargetName $SAFQDN `
+                        -UserName "localhost\$($LocalStorageAccountNamesArray[$i])" -Password $LocalStorageAccountKeysArray[$i]
+                }
+            }
+            For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
+                If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
+                    $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                    Write-Log -Message "Adding storage key for '$SAFQDN' to Credential Manager"
+                    Set-StorageAccountCredential -TargetName $SAFQDN `
+                        -UserName "localhost\$($RemoteStorageAccountNamesArray[$i])" -Password $RemoteStorageAccountKeysArray[$i]
+                }
+            }
         }
 
         # Microsoft Defender Antivirus Local Group Policy exclusions for FSLogix

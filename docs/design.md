@@ -8,6 +8,35 @@ This page describes the Azure resource topology. See [Secure Endpoint Architectu
 for the control-layer, shared-responsibility, lifecycle, evidence, and AI access model implemented
 through that topology.
 
+## FSLogix storage-key credentials
+
+Standard Entra ID host pools using Azure Files store their FSLogix storage credentials through
+a native `Set-StorageAccountCredential` function defined directly in `Initialize-SessionHost.ps1`.
+The storage-key update script contains its own identical function, with regression tests keeping
+the implementations aligned. Both scripts are self-contained and embedded unchanged into Run
+Command with `loadTextContent()`: no sibling helper file, ARM string replacement, download,
+external module, or password-bearing child-process command line is required.
+
+The writer uses [CredWriteW](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-credwritew)
+with a domain-password credential, the existing storage FQDN and `localhost\<account>` identity,
+and local-machine persistence for the executing identity. Run Command retains its default SYSTEM
+context; this does not create credentials in every user's credential set. Password bytes are
+Unicode without a trailing terminator, and the unmanaged password buffer is cleared and freed
+even when the API fails. Native failures stop initialization/rotation with a Win32 error code
+without including the key.
+
+Initialization writes credentials after the existing credential-storage policy setup. This
+preserves the policy value, not a guarantee of effective domain/MDM policy or immediate activation:
+an enforced policy or a required restart can still prevent credential storage. Native credential
+writing requires PowerShell FullLanguage with `Add-Type` permitted; it does not bypass application
+control or credential-storage policy. Keys remain protected Run Command parameters and sensitive
+in process memory and PowerShell telemetry; removing child-process arguments is not a guarantee
+that every logging configuration is secret-safe.
+
+See the [key-update add-on](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md)
+for rotation precautions and live validation. Shared account keys are unchanged for existing
+deployments until an operator deliberately rotates them.
+
 ## Air-gapped prerequisite packaging
 
 The [combined transfer bundle](air-gapped-clouds.md#combined-prerequisite-transfer-zip)
