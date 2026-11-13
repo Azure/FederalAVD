@@ -17,6 +17,32 @@ Install is the default so existing image-build and session-host customizations r
 .\Deploy-AdobeReaderDC.ps1 -DeploymentType Install
 ```
 
+Both update modes install silently and suppress installer-initiated reboots. Automatic updates
+are disabled by default:
+
+```powershell
+.\Deploy-AdobeReaderDC.ps1 -DeploymentType Install -DisableUpdates $true
+.\Deploy-AdobeReaderDC.ps1 -DeploymentType Install -DisableUpdates $false
+```
+
+With `-DisableUpdates $true`, the installer receives `UPDATE_MODE=0` (manual updates) and
+`DISABLE_ARM_SERVICE_INSTALL=1` (do not install the updater service). After successful installation,
+the script also disables an existing Adobe ARM service and removes matching updater tasks.
+With `-DisableUpdates $false`, the installer receives `UPDATE_MODE=3` (automatic updates), and
+the script does not perform that cleanup. This mode is intended for fresh installations; it does
+not explicitly restore services or tasks disabled by a previous deployment.
+
+The installer arguments omit disk optimization to avoid adding defragmentation work and omit the
+unverified thumbnail-preview value. The existing ten-minute timeout and success exit codes
+`0` and `3010` are unchanged. Verify both modes with the exact staged EXE on a representative VM;
+these command-line changes do not establish the cause of a previous timeout.
+
+Official Adobe references:
+
+- [Bootstrapper and MSI command-line switches](https://www.adobe.com/devnet-docs/acrobatetk/tools/AdminGuide/cmdline.html#msi-switches)
+- [Adobe MSI properties](https://www.adobe.com/devnet-docs/acrobatetk/tools/DesktopDeployment/properties.html)
+- [Reader EXE wrapper example](https://www.adobe.com/devnet-docs/acrobatetk/tools/Wizard/basics.html#expand-exe-packages)
+
 Remove the application with the same artifact entry script:
 
 ```powershell
