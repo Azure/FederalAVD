@@ -338,7 +338,8 @@ Downloads the installer for a Winget package by its package identifier or produc
 ```json
 "AdobeAcrobatReaderDC": {
     "Description": "Adobe Acrobat Reader DC",
-    "WingetId": "XPDP273C0XHQH2",
+    "WingetId": "Adobe.Acrobat.Reader.64-bit",
+    "WingetSource": "winget",
     "DestinationFileName": "AcrobatRdrDCx64.exe",
     "DestinationFolders": [ "Adobe-Acrobat-Reader-DC" ]
 }
@@ -347,6 +348,13 @@ Downloads the installer for a Winget package by its package identifier or produc
 | Field | Description |
 | --- | --- |
 | `WingetId` | Winget package identifier or Microsoft Store product code |
+| `WingetSource` | Optional explicit source: `winget` or `msstore` |
+
+The Adobe example deliberately selects the full installer from the `winget` source rather than
+the Store download bootstrapper. Installer variants can require different silent switches;
+renaming a downloaded file does not make the variants interchangeable. See the
+[Adobe artifact instructions](../customer-examples/artifacts/Adobe-Acrobat-Reader-DC/README.md)
+before replacing an existing payload.
 
 #### Automatic Store fallback after WinGet failure
 

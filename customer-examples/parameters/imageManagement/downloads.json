@@ -1,7 +1,8 @@
 {
     "AdobeAcrobatReaderDC": {
         "Description": "Adobe Acrobat Reader DC Installer",
-        "WingetId": "XPDP273C0XHQH2",
+        "WingetId": "Adobe.Acrobat.Reader.64-bit",
+        "WingetSource": "winget",
         "DestinationFileName": "AcrobatRdrDCx64.exe",
         "DestinationFolders": [
             "Adobe-Acrobat-Reader-DC"

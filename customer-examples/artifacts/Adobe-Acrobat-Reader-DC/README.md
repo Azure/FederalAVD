@@ -65,8 +65,21 @@ treats an application that is not installed as success.
 ## Connected Packaging
 
 The `AdobeAcrobatReaderDC` entry in
-`customer-examples/parameters/imageManagement/downloads.json` downloads Microsoft Store product
-`XPDP273C0XHQH2` with winget and stages it in this folder as `AcrobatRdrDCx64.exe`.
+`customer-examples/parameters/imageManagement/downloads.json` downloads the full x64 installer
+using `WingetId: Adobe.Acrobat.Reader.64-bit` and `WingetSource: winget`, then stages it in this
+folder as `AcrobatRdrDCx64.exe`. The
+[WinGet installer manifest](https://github.com/microsoft/winget-pkgs/tree/master/manifests/a/Adobe/Acrobat/Reader/64-bit)
+identifies the versioned Adobe CDN payload and publishes `-sfx_nu /sAll /rs /msi` as its silent
+switches.
+
+Do not substitute Microsoft Store product `XPDP273C0XHQH2`. Its manifest currently resolves to
+the small `readerdc64_mui_install.exe` download bootstrapper and specifies a different silent
+command, including `/msstore headless=true`. Renaming that file does not turn it into the full
+installer expected by this artifact.
+
+For an existing customer manifest, update the Adobe entry's `WingetId` and `WingetSource`
+without replacing unrelated entries. Redownload and repackage the artifact to replace any
+previously staged Store bootstrapper; updating the manifest alone does not update an existing ZIP.
 
 After copying this folder and the downloads manifest into `customer/`, run:
 
@@ -81,18 +94,39 @@ On a connected system, download the configured package with winget:
 
 ```powershell
 winget download `
-  --id XPDP273C0XHQH2 `
-  --source msstore `
+  --id Adobe.Acrobat.Reader.64-bit `
+  --source winget `
+  --exact `
+  --architecture x64 `
+  --download-directory .\ReaderDownload `
+  --skip-license `
   --accept-package-agreements `
-  --accept-source-agreements
+  --accept-source-agreements `
+  --disable-interactivity
 ```
 
-Transfer the downloaded installer through the approved process and place it in
-`customer/artifacts/Adobe-Acrobat-Reader-DC` as `AcrobatRdrDCx64.exe`. Then package the pre-staged
-file without downloading a replacement:
+Alternatively, download an approved full-installer version directly from Adobe. This is a pinned
+example; obtain the URL and SHA256 for your approved version from its WinGet installer manifest:
+
+```powershell
+Invoke-WebRequest `
+  -Uri 'https://ardownload2.adobe.com/pub/adobe/acrobat/win/AcrobatDC/2600322075/AcroRdrDCx642600322075_MUI.exe' `
+  -OutFile '.\customer\artifacts\Adobe-Acrobat-Reader-DC\AcrobatRdrDCx64.exe'
+```
+
+Verify a directly downloaded file's SHA256 against the manifest before transferring it. Transfer
+the full installer through the approved process and place it in
+`customer/artifacts/Adobe-Acrobat-Reader-DC` as `AcrobatRdrDCx64.exe`, replacing the previous payload.
+Keep exactly one root-level EXE. WinGet runs only on the connected preparation system; do not
+transfer the low-side downloads manifest into an air-gapped environment. Package the pre-staged
+file without downloading a replacement after all required base files are also staged:
 
 ```powershell
 .\deployments\Update-ImageArtifacts.ps1 `
   -StorageAccountResourceId '<artifactsStorageAccountResourceId>' `
   -SkipDownloadingNewSources
 ```
+
+Validate installation under SYSTEM on a representative image-build VM, including with installer
+download endpoints unavailable. Source and command-line checks do not prove that the earlier
+ten-minute timeout is resolved.

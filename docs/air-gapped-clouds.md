@@ -668,6 +668,7 @@ do not transfer it into the high-side customer location. For example:
 
 | Artifact | What to pre-stage | Public source (download on a connected system) |
 | --- | --- | --- |
+| [Adobe-Acrobat-Reader-DC](../customer-examples/artifacts/Adobe-Acrobat-Reader-DC/README.md) | Full x64 installer as `AcrobatRdrDCx64.exe`, not the Store download bootstrapper | WinGet `Adobe.Acrobat.Reader.64-bit` from source `winget`, resolving to Adobe's versioned CDN installer; see the artifact README for direct download and transfer instructions |
 | [Configure-AVDSessionHostPolicy](../customer-examples/artifacts/Configure-AVDSessionHostPolicy/README.md) | `AVDGPTemplate.cab` | `https://aka.ms/avdgpo`; bundle it beside the script when installing the administrative template |
 | [Configure-EdgePolicy](../customer-examples/artifacts/Configure-EdgePolicy/README.md) | `MicrosoftEdgePolicyTemplates.cab` | Edge Updates API; use the README's PowerShell resolver because the API endpoint is not the CAB URL |
 | [Configure-ChromePolicy](../customer-examples/artifacts/Configure-ChromePolicy/README.md) | Chrome Enterprise ADMX/ADML ZIP | `https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip` |
