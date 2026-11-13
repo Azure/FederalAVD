@@ -6,7 +6,6 @@ metadata description = 'Deploys private Windows PowerShell timer Function infras
 import { functionAppNames, namingPolicy, resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 
-
 @description('Optional. Complete name override for a new App Service plan. Ignored when using an existing plan ID.')
 param appServicePlanNameOverride string = ''
 
@@ -41,15 +40,15 @@ param diskControllerType string = 'SCSI'
 @description('Optional. Existing disk encryption set resource ID for the validation VM.')
 param diskEncryptionSetResourceId string = ''
 
-@description('Optional. Complete name override for the new storage encryption Key Vault.')
-@maxLength(24)
-param encryptionKeyVaultNameOverride string = ''
-
 @description('Optional. Enable accelerated networking for the validation VM network interface.')
 param enableAcceleratedNetworking bool = true
 
 @description('Optional. Enable encryption at host for the validation VM.')
 param encryptionAtHost bool = true
+
+@description('Optional. Complete name override for the new storage encryption Key Vault.')
+@maxLength(24)
+param encryptionKeyVaultNameOverride string = ''
 
 @description('Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan.')
 param existingAppServicePlanResourceId string = ''
@@ -108,6 +107,10 @@ param privateIPAddress string
 @description('Optional. Complete resource group name override. The deployment manages this group.')
 param resourceGroupNameOverride string = ''
 
+@description('Required. Timer schedule in six-field Functions NCRONTAB format or a supported app-setting reference.')
+@minLength(1)
+param schedule string
+
 @description('Optional. Enable secure boot for the validation VM.')
 param secureBootEnabled bool = true
 
@@ -117,10 +120,6 @@ param secureBootEnabled bool = true
   'ConfidentialVM'
 ])
 param securityType string = 'TrustedLaunch'
-
-@description('Required. Timer schedule in six-field Functions NCRONTAB format or a supported app-setting reference.')
-@minLength(1)
-param schedule string
 
 @description('Optional. Complete runtime storage name override, also useful when generated storage names exceed 24 characters.')
 @maxLength(24)
@@ -133,18 +132,18 @@ param subnetResourceId string
 @description('Optional. Tags applied to all resources that support tags.')
 param tags object = {}
 
-@description('Optional. Existing user-assigned identity resource IDs for the validation VM.')
-param userAssignedIdentityResourceIds array = []
-
 @description('Optional. Complete name override for the Function App identity.')
 param userAssignedIdentityNameOverride string = ''
+
+@description('Optional. Existing user-assigned identity resource IDs for the validation VM.')
+param userAssignedIdentityResourceIds array = []
 
 @description('Optional. Customizations applied to the validation VM.')
 param virtualMachineCustomizations artifactCustomizationType[] = []
 
 @description('Required. Windows VM size supported by the selected image and region, including accelerated networking.')
 @minLength(1)
-param virtualMachineSize string 
+param virtualMachineSize string
 
 @description('Optional. Enable vTPM for the validation VM.')
 param vTpmEnabled bool = true
