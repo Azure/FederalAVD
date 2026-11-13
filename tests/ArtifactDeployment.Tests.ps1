@@ -1613,6 +1613,28 @@ Describe 'Customization success exit codes' {
     }
 }
 
+Describe 'Adobe Reader download definition' {
+    BeforeAll {
+        $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+        $downloads = Get-Content -LiteralPath (Join-Path $repoRoot 'customer-examples\parameters\imageManagement\downloads.json') -Raw | ConvertFrom-Json
+    }
+
+    It 'selects the full installer instead of the Store download bootstrapper' {
+        if ($downloads.AdobeAcrobatReaderDC.WingetId -ne 'Adobe.Acrobat.Reader.64-bit' -or
+            $downloads.AdobeAcrobatReaderDC.WingetSource -ne 'winget') {
+            throw 'Adobe Reader must download the full Adobe.Acrobat.Reader.64-bit installer from the winget source.'
+        }
+    }
+
+    It 'preserves the Adobe artifact destination and staging filename' {
+        if ($downloads.AdobeAcrobatReaderDC.DestinationFileName -ne 'AcrobatRdrDCx64.exe' -or
+            @($downloads.AdobeAcrobatReaderDC.DestinationFolders).Count -ne 1 -or
+            $downloads.AdobeAcrobatReaderDC.DestinationFolders[0] -ne 'Adobe-Acrobat-Reader-DC') {
+            throw 'Adobe Reader must stage AcrobatRdrDCx64.exe in the Adobe-Acrobat-Reader-DC artifact folder.'
+        }
+    }
+}
+
 Describe 'Built-in UWP app download definitions' {
     BeforeAll {
         $repoRoot = Split-Path -Path $PSScriptRoot -Parent
