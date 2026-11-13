@@ -320,7 +320,7 @@ Describe 'ArtifactDeployment script regression checks' {
             }
             $installCall = $global:adobeProcessCalls[0]
             if ($installCall.FilePath -ne (Join-Path $packagePath 'reader-current.exe') -or
-                $installCall.ArgumentList -ne '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=YES DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=0 DISABLE_ARM_SERVICE_INSTALL=1') {
+                $installCall.ArgumentList -ne '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=0 DISABLE_ARM_SERVICE_INSTALL=1') {
                 throw "Unexpected Adobe install invocation: $($installCall | ConvertTo-Json -Compress)"
             }
             if (($global:adobeUpdaterLookups -join ',') -ne 'AdobeARMservice,Adobe Acrobat Update Task*') {
@@ -335,7 +335,7 @@ Describe 'ArtifactDeployment script regression checks' {
             }
             $installCall = $global:adobeProcessCalls[0]
             if ($installCall.FilePath -ne (Join-Path $packagePath 'reader-current.exe') -or
-                $installCall.ArgumentList -ne '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=YES DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=3') {
+                $installCall.ArgumentList -ne '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=3') {
                 throw "Unexpected update-enabled Adobe install invocation: $($installCall | ConvertTo-Json -Compress)"
             }
             if ($global:adobeUpdaterLookups.Count -ne 0) {
