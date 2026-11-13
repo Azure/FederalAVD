@@ -109,8 +109,9 @@ Application Insights telemetry by component IDs automatically discovered for the
 pool. Operators choose **Host Pool** and **Time Range**; no Application Insights selection is
 required. Discovery uses the components' `cm-resource-parent` tags, so native idle invocations
 can be mapped without recent SHR application messages. Central policy exports are unchanged.
-Its **Invocations** page lists native executions and provides trace/exception drill-down,
-for the current initiator and reconciliation worker, including idle invocations without cycle events.
+Its default **Operations** page puts inventory KPIs, freshness and image consistency before
+compact cycle status and timer health. **Investigation** separates cycle timelines/logs, native
+invocations (including idle runs), and errors/recovery. Cycle filters do not constrain Operations.
 
 Read monitoring as three separate signals:
 

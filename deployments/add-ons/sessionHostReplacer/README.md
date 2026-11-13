@@ -2064,19 +2064,25 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
   **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
 5. **Select Time Range**: Application Insights sources are resolved automatically; no component
-   selection is required. Cycle and cycle-invocation controls appear only on **Operations**.
+   selection is required. Cycle and cycle-invocation controls appear only under
+   **Investigation > Cycles**.
    The internal workspace and telemetry-source parameters are hidden in normal viewing mode;
    they remain available in edit mode.
 
-The default **Operations** page starts with the **Last Reported Inventory** snapshot,
-inventory observation age, cycle status, and timer health. Detailed cycle guidance,
-timelines, and logs follow those summaries. The snapshot is the last engine observation,
-not live host inventory; check freshness before interpreting the counts.
+The default **Operations** page starts with **Last Reported Inventory** KPIs and freshness,
+then **Host Pool Consistency**, compact latest-cycle status and timer health. KPI counts sum
+the latest reported snapshot for each selected host pool; an empty selection does not become
+zero-valued health tiles. Image consistency is not host health/readiness, and pools without
+eligible hosts have no meaningful image percentage. These are observations, not live inventory.
+Use **Show trends and activity** for secondary charts; the engine action mix counts action
+observations, not successful deployments. Cycle timelines, logs and detailed errors are on
+**Investigation**, not Operations.
 
 #### Trace one replacement cycle
 
 1. Select the host pool and a time range that includes the cycle's initiation and latest progress.
-2. Select its **Cycle** ID. This is the durable SHR operation ID, shared across both timers and
+2. Open **Page > Investigation**, choose **Investigate > Cycles**, and select its **Cycle** ID.
+   This is the durable SHR operation ID, shared across both timers and
    successive invocations, not Application Insights' native operation ID.
 3. Read the cycle summary: status, activity/reason, batch, pinned image definition/version, target,
    deadline, initiation hold, last observation and lease expiry. **Waiting** is not automatically
@@ -2087,16 +2093,23 @@ not live host inventory; check freshness before interpreting the counts.
    existing ARM deployment resource; it does not deploy anything.
 5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
    follow the cycle across invocations. The timeline retains the whole selected cycle.
+   Cycle invocation logs show **Timestamp**, **Level** and **Message**; click a message to read
+   it in full. Use **Show technical cycle-log details** for correlation IDs and exception payloads.
 
 #### Inspect a current SHR invocation
 
-Select **Page > Invocations**. The latest 200 native completed request records show execution
-start/completion, function/app, outcome, duration, request ID, native invocation ID, operation ID
-and role instance. This includes the current initiator and reconciliation worker, including idle ticks.
+Select **Page > Investigation**, then **Investigate > Invocations**. The latest 200 native
+completed request records show timestamp,
+host pool, role (Initiator or Worker), outcome and duration. This includes the current initiator
+and reconciliation worker, including idle ticks.
 The retired single-timer function is excluded. Select an entry in
-**Invocation to inspect** for its request details and latest 500 trace/exception records in
-chronological order. Narrow the time range to reach older executions. Cycle and cycle-invocation
+**Invocation to inspect** for its latest 500 trace/exception records in chronological order,
+showing only **Timestamp**, **Level** and **Message**. Click a message to read it in full.
+**Show technical details** loads the request's Function App, correlation IDs, role instance and
+full exception payloads on demand; these fields remain in the query logic but do not clutter the
+normal list or selector. Narrow the time range to reach older executions. Cycle and cycle-invocation
 filters do not constrain this page; host-pool and time filters do.
+Use **Investigate > Errors and Recovery** for detailed error logs and failed-deployment activity.
 
 Missing invocation IDs remain missing; the selector uses a separately labeled request-ID key.
 Log correlation falls back to a nonempty native operation ID when invocation identity is absent.
@@ -2130,7 +2143,9 @@ copy; its display name matches the normal dashboard. The deployment identity nee
 access to that resource group. Readers need workload workspace query access and component/resource
 visibility for the pickers; no central workspace access is required or granted.
 
-In Azure Government, verify **Operations**, **Configuration** and **Invocations** render. Compare a
+In Azure Government, verify **Operations**, **Configuration** and all three **Investigation**
+views render. Confirm image consistency appears near the KPIs, Operations has no cycle/log
+selectors, and changing the selected cycle does not filter the Operations status. Compare a
 known request ID with one row in the workload workspace and a policy-exported copy centrally:
 the history should show one execution. Select successful, failed and idle executions for both timers,
 confirm outcome/duration and correlated native exceptions and traces, change host-pool/time
@@ -2175,10 +2190,9 @@ logs are not backfilled. See [logging and correlation](logging-guide.md#cycle-co
   - Hosts in shutdown retention (SideBySide mode)
 
 - **🎯 Host Pool Consistency**
-  - Hosts by image version
-  - Hosts by age distribution
-  - Replacement status breakdown
-  - Replacement mode indicator
+  - Latest-reported image configuration
+  - Hosts on the latest image and needing replacement
+  - Image alignment percentage and observation time, distinct from health/readiness
 
 - **🔄 Deployment Progress**
   - Deployment activity timeline
