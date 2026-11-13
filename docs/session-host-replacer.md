@@ -105,7 +105,10 @@ When a Log Analytics workspace is supplied, the deployment creates workspace-bas
 Insights for the Function App. Function telemetry goes through Application Insights; SHR does
 not create the separate Function App diagnostic setting that collects `FunctionAppLogs`.
 The optional shared workbook queries the primary workload workspace directly, filtering its
-Application Insights telemetry by selected component IDs. Central policy exports are unchanged.
+Application Insights telemetry by component IDs automatically discovered for the selected host
+pool. Operators choose **Host Pool** and **Time Range**; no Application Insights selection is
+required. Discovery uses the components' `cm-resource-parent` tags, so native idle invocations
+can be mapped without recent SHR application messages. Central policy exports are unchanged.
 Its **Invocations** page lists native executions and provides trace/exception drill-down,
 for the current initiator and reconciliation worker, including idle invocations without cycle events.
 

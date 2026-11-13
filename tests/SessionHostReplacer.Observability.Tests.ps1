@@ -322,7 +322,43 @@ Describe 'SHR workbook cycle tracing contract' {
     BeforeAll {
         $book = Get-Content (Join-Path $shrRoot 'modules\workBook\workbookTemplate.json') -Raw | ConvertFrom-Json
         $operations = $book.items | Where-Object name -eq 'operations-page'
-        $parameters = ($book.items | Where-Object name -eq 'parameters').content.parameters
+        $parameters = @(
+            ($book.items | Where-Object name -eq 'parameters').content.parameters
+            ($book.items | Where-Object name -eq 'cycle-selection').content.parameters
+        )
+    }
+
+    It 'shows only host pool and time range as global workload controls' {
+        $globalParameters = ($book.items | Where-Object name -eq 'parameters').content.parameters
+        (@($globalParameters | Where-Object { -not $_.isHidden }).name -join ',') |
+            Should -Be 'HostPool,TimeRange'
+        @($parameters | Where-Object name -eq 'ApplicationInsights').Count | Should -Be 0
+        $cycleSelection = $book.items | Where-Object name -eq 'cycle-selection'
+        $cycleSelection.conditionalVisibility.parameterName | Should -Be 'DashboardPage'
+        $cycleSelection.conditionalVisibility.value | Should -Be 'operations'
+        ($cycleSelection.content.parameters.name -join ',') | Should -Be 'Cycle,Invocation'
+    }
+
+    It 'discovers host pools and telemetry sources by workspace and resource identity' {
+        $hostPool = $parameters | Where-Object name -eq 'HostPool'
+        $hostPool.query | Should -Match 'properties.WorkspaceResourceId'
+        $hostPool.query | Should -Match "tags\['cm-resource-parent'\]"
+        $hostPool.query | Should -Match "value = PoolId"
+        $hostPool.value | Should -Be '*'
+        $sources = $parameters | Where-Object name -eq 'HostPoolSources'
+        $sources.isHidden | Should -Be $true
+        $sources.multiSelect | Should -Be $false
+        $sources.query | Should -Match "properties.WorkspaceResourceId"
+        $sources.query | Should -Match "ParentResourceId =~ '\{HostPool\}'"
+        $sources.query | Should -Match "Source = tolower\(id\)"
+        $sources.query | Should -Match "make_list\(pack\('Source', Source, 'HostPoolName', HostPoolName\)\)"
+        $sources.query | Should -Match 'value = tostring\(Sources\)'
+        $sources.query | Should -Match 'selected = true'
+        $sources.query | Should -Not -Match 'sessionhostreplacer|endswith|AppTraces|TimeRange'
+        $warning = $book.items | Where-Object name -eq 'source-discovery-warning'
+        $warning.conditionalVisibility.parameterName | Should -Be 'HostPoolSources'
+        $warning.conditionalVisibility.value | Should -Be '[]'
+        $warning.content.json | Should -Match 'Resource Graph access'
     }
 
     It 'opens Operations with status snapshots and timer health before detailed investigation' {
@@ -373,7 +409,7 @@ Describe 'SHR workbook cycle tracing contract' {
         $workspace.value | Should -Be '__SHR_WORKSPACE_RESOURCE_ID__'
         $workspace.isHidden | Should -Be $true
         $workspace.multiSelect | Should -Be $false
-        $picker = $parameters | Where-Object name -eq 'ApplicationInsights'
+        $picker = $parameters | Where-Object name -eq 'HostPoolSources'
         $picker.query | Should -Match 'properties.WorkspaceResourceId'
         $module = Get-Content (Join-Path $shrRoot 'modules\workBook\workbook.bicep') -Raw
         $module | Should -Match "replace\(string\(workbookTemplateWithFallback\), '__SHR_WORKSPACE_RESOURCE_ID__', logAnalyticsWorkspaceResourceId\)"
@@ -394,7 +430,11 @@ Describe 'SHR workbook cycle tracing contract' {
                     @($Node.crossComponentResources).Count | Should -Be 1
                     $Node.query | Should -Not -Match '\b(FunctionAppLogs|AzureDiagnostics)\b|\b(app|workspace)\s*\('
                     if ($Node.query -match '\b(traces|requests|exceptions)\b') {
-                        $Node.query | Should -Match '_ResourceId in~ \(\{ApplicationInsights\}\)'
+                        $Node.query | Should -Match '_ResourceId in~ \(poolSources\)'
+                        $Node.query | Should -Match 'dynamic\(\{HostPoolSources\}\)'
+                        $Node.query | Should -Match 'let poolSources = poolNames \| project Source'
+                        $Node.query | Should -Match "split\('\{HostPool\}', '/'\)\[-1\]"
+                        $Node.query | Should -Not -Match '\{ApplicationInsights\}'
                         $Node.query | Should -Match 'TimeGenerated \{TimeRange\}'
                         $Node.query | Should -Not -Match '\b(app|workspace)\('
                     }
@@ -416,7 +456,7 @@ Describe 'SHR workbook cycle tracing contract' {
         $history | Should -Match 'duration = DurationMs'
         $history | Should -Match 'customDimensions = Properties'
         $history | Should -Match 'timestamp \+ \(duration \* 1ms\)'
-        $history | Should -Match 'Source = tostring\(_ResourceId\)'
+        $history | Should -Match 'Source = tolower\(tostring\(_ResourceId\)\)'
     }
 
     It 'lists only current initiator and worker invocations including idle ticks' {
@@ -490,9 +530,25 @@ Describe 'SHR workbook cycle tracing contract' {
             $query | Should -Match 'session-host-replacer-worker'
             $query | Should -Match 'isnotempty\(InvocationKey\)'
             $query | Should -Match 'by Source, FunctionApp, Trigger, InvocationKey'
-            $query | Should -Match 'lookup kind=leftouter poolNames on Source, FunctionApp'
-            $query | Should -Match "HostPoolName == hostPoolFilter"
+            $query | Should -Match 'lookup kind=leftouter poolNames on Source'
+            $query | Should -Not -Match 'poolNames on Source, FunctionApp|let poolNames = traces'
+            $query | Should -Match "HostPoolName =~ hostPoolFilter"
             $query | Should -Not -Match "Data.Event\) == 'Started'"
+        }
+    }
+
+    It 'maps all native invocation views without needing application traces in the time range' {
+        $page = $book.items | Where-Object name -eq 'invocations-page'
+        $queries = @(
+            ($operations.content.items | Where-Object name -in @('schedule-table', 'frequency-chart')).content.query
+            ($page.content.items | Where-Object name -in @('invocation-history', 'invocation-details', 'invocation-logs')).content.query
+            ($page.content.items | Where-Object name -eq 'invocation-selection').content.parameters[0].query
+        )
+        @($queries | Where-Object { $_ -match 'lookup kind=leftouter poolNames on Source' }).Count |
+            Should -Be 6
+        foreach ($query in $queries) {
+            $query | Should -Match 'let poolNames = print Sources = dynamic\(\{HostPoolSources\}\)'
+            $query | Should -Not -Match 'let poolNames = traces'
         }
     }
 
