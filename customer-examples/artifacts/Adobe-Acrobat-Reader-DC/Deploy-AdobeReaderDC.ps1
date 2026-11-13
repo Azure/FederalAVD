@@ -142,10 +142,10 @@ else {
     $PathExe = $InstallerFiles[0].FullName
 
     If ($DisableUpdates) {
-        $InstallArgs = '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=YES DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=0 DISABLE_ARM_SERVICE_INSTALL=1'
+        $InstallArgs = '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=0 DISABLE_ARM_SERVICE_INSTALL=1'
     }
     Else {
-        $InstallArgs = '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=YES DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=3'
+        $InstallArgs = '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=3'
     }
 
     Write-Log -Category Info -message "Installing '$SoftwareName' via cmdline: '$PathExe $InstallArgs'."

@@ -32,6 +32,8 @@ With `-DisableUpdates $false`, the installer receives `UPDATE_MODE=3` (automatic
 the script does not perform that cleanup. This mode is intended for fresh installations; it does
 not explicitly restore services or tasks disabled by a previous deployment.
 
+Neither update mode passes the legacy `DISABLE_BROWSER_INTEGRATION` property.
+
 The installer arguments omit disk optimization to avoid adding defragmentation work and omit the
 unverified thumbnail-preview value. The existing ten-minute timeout and success exit codes
 `0` and `3010` are unchanged. Verify both modes with the exact staged EXE on a representative VM;
