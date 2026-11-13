@@ -330,8 +330,11 @@ Describe 'SHR workbook cycle tracing contract' {
 
     It 'shows only host pool and time range as global workload controls' {
         $globalParameters = ($book.items | Where-Object name -eq 'parameters').content.parameters
-        (@($globalParameters | Where-Object { -not $_.isHidden }).name -join ',') |
+        (@($globalParameters | Where-Object { -not $_.isHiddenWhenLocked }).name -join ',') |
             Should -Be 'HostPool,TimeRange'
+        foreach ($parameter in $globalParameters) {
+            ($parameter.PSObject.Properties.Name -contains 'isHidden') | Should -Be $false
+        }
         @($parameters | Where-Object name -eq 'ApplicationInsights').Count | Should -Be 0
         $cycleSelection = $book.items | Where-Object name -eq 'cycle-selection'
         $cycleSelection.conditionalVisibility.parameterName | Should -Be 'DashboardPage'
@@ -346,7 +349,7 @@ Describe 'SHR workbook cycle tracing contract' {
         $hostPool.query | Should -Match "value = PoolId"
         $hostPool.value | Should -Be '*'
         $sources = $parameters | Where-Object name -eq 'HostPoolSources'
-        $sources.isHidden | Should -Be $true
+        $sources.isHiddenWhenLocked | Should -Be $true
         $sources.multiSelect | Should -Be $false
         $sources.query | Should -Match "properties.WorkspaceResourceId"
         $sources.query | Should -Match "ParentResourceId =~ '\{HostPool\}'"
@@ -407,7 +410,7 @@ Describe 'SHR workbook cycle tracing contract' {
     It 'queries one deployed workspace rather than the resource-scoped Application Insights view' {
         $workspace = $parameters | Where-Object name -eq 'WorkloadWorkspace'
         $workspace.value | Should -Be '__SHR_WORKSPACE_RESOURCE_ID__'
-        $workspace.isHidden | Should -Be $true
+        $workspace.isHiddenWhenLocked | Should -Be $true
         $workspace.multiSelect | Should -Be $false
         $picker = $parameters | Where-Object name -eq 'HostPoolSources'
         $picker.query | Should -Match 'properties.WorkspaceResourceId'

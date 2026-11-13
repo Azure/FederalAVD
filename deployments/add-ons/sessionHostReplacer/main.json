@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "13851839207134649842"
+      "templateHash": "10821542933479573034"
     }
   },
   "definitions": {
@@ -11989,7 +11989,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "441918286245044460"
+              "templateHash": "12642686315780976825"
             }
           },
           "parameters": {
@@ -12040,7 +12040,7 @@
                         "type": 5,
                         "version": "KqlParameterItem/1.0",
                         "isRequired": true,
-                        "isHidden": true,
+                        "isHiddenWhenLocked": true,
                         "multiSelect": false,
                         "value": "__SHR_WORKSPACE_RESOURCE_ID__",
                         "typeSettings": {
@@ -12110,7 +12110,7 @@
                         "type": 2,
                         "version": "KqlParameterItem/1.0",
                         "isRequired": true,
-                        "isHidden": true,
+                        "isHiddenWhenLocked": true,
                         "multiSelect": false,
                         "query": "resources\n| where type =~ 'microsoft.insights/components'\n| where tostring(properties.WorkspaceResourceId) =~ '{WorkloadWorkspace}'\n| extend ParentResourceId = tostring(tags['cm-resource-parent'])\n| where tolower(ParentResourceId) contains '/providers/microsoft.desktopvirtualization/hostpools/'\n| where '{HostPool}' == '*' or ParentResourceId =~ '{HostPool}'\n| project Source = tolower(id), HostPoolName = tostring(split(ParentResourceId, '/')[-1])\n| summarize Sources = make_list(pack('Source', Source, 'HostPoolName', HostPoolName))\n| project value = tostring(Sources), label = 'Host pool telemetry sources', selected = true",
                         "queryType": 1,

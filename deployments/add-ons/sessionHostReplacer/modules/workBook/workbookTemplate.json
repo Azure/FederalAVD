@@ -18,7 +18,7 @@
             "type": 5,
             "version": "KqlParameterItem/1.0",
             "isRequired": true,
-            "isHidden": true,
+            "isHiddenWhenLocked": true,
             "multiSelect": false,
             "value": "__SHR_WORKSPACE_RESOURCE_ID__",
             "typeSettings": {
@@ -88,7 +88,7 @@
             "type": 2,
             "version": "KqlParameterItem/1.0",
             "isRequired": true,
-            "isHidden": true,
+            "isHiddenWhenLocked": true,
             "multiSelect": false,
             "query": "resources\n| where type =~ 'microsoft.insights/components'\n| where tostring(properties.WorkspaceResourceId) =~ '{WorkloadWorkspace}'\n| extend ParentResourceId = tostring(tags['cm-resource-parent'])\n| where tolower(ParentResourceId) contains '/providers/microsoft.desktopvirtualization/hostpools/'\n| where '{HostPool}' == '*' or ParentResourceId =~ '{HostPool}'\n| project Source = tolower(id), HostPoolName = tostring(split(ParentResourceId, '/')[-1])\n| summarize Sources = make_list(pack('Source', Source, 'HostPoolName', HostPoolName))\n| project value = tostring(Sources), label = 'Host pool telemetry sources', selected = true",
             "queryType": 1,

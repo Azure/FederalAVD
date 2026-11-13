@@ -2065,6 +2065,8 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
 5. **Select Time Range**: Application Insights sources are resolved automatically; no component
    selection is required. Cycle and cycle-invocation controls appear only on **Operations**.
+   The internal workspace and telemetry-source parameters are hidden in normal viewing mode;
+   they remain available in edit mode.
 
 The default **Operations** page starts with the **Last Reported Inventory** snapshot,
 inventory observation age, cycle status, and timer health. Detailed cycle guidance,
