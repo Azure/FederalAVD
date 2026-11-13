@@ -231,6 +231,7 @@ Describe 'ArtifactDeployment script regression checks' {
             $env:SystemRoot = $tempRoot
             $env:SUPPRESS_FILELOG = '1'
             $global:adobeProcessCalls = @()
+            $global:adobeUpdaterLookups = @()
             $global:adobeInstalledApplicationCount = 1
 
             function global:Test-Path {
@@ -283,10 +284,14 @@ Describe 'ArtifactDeployment script regression checks' {
             }
 
             function global:Get-Service {
+                param([string]$Name, [string]$ErrorAction)
+                $global:adobeUpdaterLookups += $Name
                 return $null
             }
 
             function global:Get-ScheduledTask {
+                param([string]$TaskName, [string]$ErrorAction)
+                $global:adobeUpdaterLookups += $TaskName
                 return $null
             }
 
@@ -315,8 +320,26 @@ Describe 'ArtifactDeployment script regression checks' {
             }
             $installCall = $global:adobeProcessCalls[0]
             if ($installCall.FilePath -ne (Join-Path $packagePath 'reader-current.exe') -or
-                $installCall.ArgumentList -notlike '*UPDATE_MODE=0*') {
+                $installCall.ArgumentList -ne '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=YES DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=0 DISABLE_ARM_SERVICE_INSTALL=1') {
                 throw "Unexpected Adobe install invocation: $($installCall | ConvertTo-Json -Compress)"
+            }
+            if (($global:adobeUpdaterLookups -join ',') -ne 'AdobeARMservice,Adobe Acrobat Update Task*') {
+                throw 'Default Adobe install did not check the updater service and tasks for cleanup.'
+            }
+
+            $global:adobeProcessCalls = @()
+            $global:adobeUpdaterLookups = @()
+            & $deployScriptPath -DeploymentType Install -DisableUpdates $false
+            if ($global:adobeProcessCalls.Count -ne 1) {
+                throw "Expected one update-enabled Adobe install process, received $($global:adobeProcessCalls.Count)."
+            }
+            $installCall = $global:adobeProcessCalls[0]
+            if ($installCall.FilePath -ne (Join-Path $packagePath 'reader-current.exe') -or
+                $installCall.ArgumentList -ne '-sfx_nu /sAll /rs /msi EULA_ACCEPT=YES ENABLE_CHROMEEXT=0 DISABLE_BROWSER_INTEGRATION=YES DISABLEDESKTOPSHORTCUT=1 UPDATE_MODE=3') {
+                throw "Unexpected update-enabled Adobe install invocation: $($installCall | ConvertTo-Json -Compress)"
+            }
+            if ($global:adobeUpdaterLookups.Count -ne 0) {
+                throw 'Update-enabled Adobe install attempted updater cleanup.'
             }
 
             Set-Content -LiteralPath (Join-Path $packagePath 'second-installer.exe') -Value '' -Encoding ASCII
@@ -368,6 +391,7 @@ Describe 'ArtifactDeployment script regression checks' {
             Remove-Item function:\Get-ScheduledTask -ErrorAction SilentlyContinue
             Remove-Item function:\Start-Process -ErrorAction SilentlyContinue
             Remove-Variable adobeProcessCalls -Scope Global -ErrorAction SilentlyContinue
+            Remove-Variable adobeUpdaterLookups -Scope Global -ErrorAction SilentlyContinue
             Remove-Variable adobeInstalledApplicationCount -Scope Global -ErrorAction SilentlyContinue
             $env:SystemRoot = $originalSystemRoot
             $env:SUPPRESS_FILELOG = $null
