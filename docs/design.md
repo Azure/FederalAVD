@@ -51,6 +51,21 @@ any remaining DCR validation error rather than masking it with a fixed delay.
 
 ## Shared module contracts
 
+### SHR workbook telemetry boundary
+
+SHR retains Application Insights instrumentation but queries its primary workload workspace
+directly through `AppTraces`, `AppRequests` and `AppExceptions`. The workspace ID is injected
+at workbook deployment; component selection filters records within that workspace, not the
+resource-scoped Application Insights query path. This prevents a policy-exported copy in a
+central workspace from being aggregated into the workload dashboard. Central retention/export
+policy and the Portal invocation blade are unchanged. Operators need query access to the
+workload workspace, not the central workspace. Native-schema adapters preserve existing
+dashboard parsers, including millisecond request duration and component resource identity.
+The standalone invocation page correlates by component and native invocation identity with
+guarded operation-ID fallback; it does not depend on newer cycle events.
+See the [workbook-only test procedure](../deployments/add-ons/sessionHostReplacer/README.md#test-the-workspace-scoped-workbook)
+for deployment and live Azure Government checks.
+
 Session Host Replacer uses one mandatory two-timer design in the same Function App: the configurable
 initiation schedule authorizes batches, and a fixed one-minute timer reconciles authorized work.
 The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#two-timer-execution)

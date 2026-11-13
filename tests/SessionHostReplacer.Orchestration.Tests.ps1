@@ -1,82 +1,80 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$functionRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions'
-$runPath = Join-Path $functionRoot 'run.ps1'
-$modulePath = Join-Path $functionRoot 'Modules\SessionHostReplacer\SessionHostReplacer.psd1'
-
-function New-OrchestrationTestHost {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string] $Name,
-        [string] $ImageVersion = '1.0.0',
-        [string] $Status = 'Available',
-        [bool] $AllowNewSession = $true
-    )
-
-    [PSCustomObject]@{
-        SessionHostName = $Name
-        VMName = $Name
-        FQDN = "$Name.contoso.test"
-        ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/$Name"
-        ImageDefinition = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd'
-        ImageVersion = $ImageVersion
-        Status = $Status
-        AllowNewSession = $AllowNewSession
-        Sessions = 0
-        IncludeInAutomation = $true
-        ShutdownTimestamp = $null
-        PendingDrainTimeStamp = $null
-        IsUnavailable = $false
-        HostId = $null
-        HostGroupId = $null
-        Zones = @('1')
-        Tags = @{}
-        SessionHostHealthCheckResults = @(
-            [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $functionRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions'
+    $runPath = Join-Path $functionRoot 'run.ps1'
+    $modulePath = Join-Path $functionRoot 'Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+    function New-OrchestrationTestHost {
+        param (
+            [Parameter(Mandatory = $true)]
+            [string] $Name,
+            [string] $ImageVersion = '1.0.0',
+            [string] $Status = 'Available',
+            [bool] $AllowNewSession = $true
         )
-    }
-}
 
-function New-OrchestrationDeploymentState {
-    [PSCustomObject]@{
-        LastDeploymentName = ''
-        LastDeploymentCount = 0
-        LastDeploymentNeeded = 0
-        LastDeploymentPercentage = 0
-        LastStatus = 'None'
-        LastTimestamp = '2026-09-20T00:00:00Z'
-        ConsecutiveSuccesses = 0
-        CurrentPercentage = 20
-        TargetSessionHostCount = 10
-        LastImageVersion = '1.0.0'
-        LastTotalToReplace = 10
-        PendingHostMappings = '{}'
-        ActiveMaintenanceRequestId = ''
-        CompletedMaintenanceRequestId = ''
-        MaintenanceWindowEndUtc = ''
-    }
-}
-
-function Copy-OrchestrationValue {
-    param ($Value)
-
-    $Value | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-}
-
-function Invoke-OrchestrationCycle {
-    param ([int] $RunNumber)
-
-    $global:shrSimulation.RunNumber = $RunNumber
-    if (-not $global:shrSimulation.Context) {
-        $global:shrSimulation.Context = @{
-            Id = 'orchestration-test'
-            Image = $null
-            BatchHostNames = $null
-            InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+        [PSCustomObject]@{
+            SessionHostName = $Name
+            VMName = $Name
+            FQDN = "$Name.contoso.test"
+            ResourceId = "/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/$Name"
+            ImageDefinition = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/avd'
+            ImageVersion = $ImageVersion
+            Status = $Status
+            AllowNewSession = $AllowNewSession
+            Sessions = 0
+            IncludeInAutomation = $true
+            ShutdownTimestamp = $null
+            PendingDrainTimeStamp = $null
+            IsUnavailable = $false
+            HostId = $null
+            HostGroupId = $null
+            Zones = @('1')
+            Tags = @{}
+            SessionHostHealthCheckResults = @(
+                [PSCustomObject]@{ healthCheckResult = 'HealthCheckSucceeded' }
+            )
         }
     }
-    $global:shrSimulation.CycleResult = @{ Completed = $false }
-    & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
-        -ContinuationContext $global:shrSimulation.Context -CycleResult $global:shrSimulation.CycleResult
+    function New-OrchestrationDeploymentState {
+        [PSCustomObject]@{
+            LastDeploymentName = ''
+            LastDeploymentCount = 0
+            LastDeploymentNeeded = 0
+            LastDeploymentPercentage = 0
+            LastStatus = 'None'
+            LastTimestamp = '2026-09-20T00:00:00Z'
+            ConsecutiveSuccesses = 0
+            CurrentPercentage = 20
+            TargetSessionHostCount = 10
+            LastImageVersion = '1.0.0'
+            LastTotalToReplace = 10
+            PendingHostMappings = '{}'
+            ActiveMaintenanceRequestId = ''
+            CompletedMaintenanceRequestId = ''
+            MaintenanceWindowEndUtc = ''
+        }
+    }
+    function Copy-OrchestrationValue {
+        param ($Value)
+
+        $Value | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    }
+    function Invoke-OrchestrationCycle {
+        param ([int] $RunNumber)
+
+        $global:shrSimulation.RunNumber = $RunNumber
+        if (-not $global:shrSimulation.Context) {
+            $global:shrSimulation.Context = @{
+                Id = 'orchestration-test'
+                Image = $null
+                BatchHostNames = $null
+                InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+            }
+        }
+        $global:shrSimulation.CycleResult = @{ Completed = $false }
+        & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+            -ContinuationContext $global:shrSimulation.Context -CycleResult $global:shrSimulation.CycleResult
+    }
 }
 
 Describe 'Session Host Replacer deterministic orchestration failures' {
@@ -447,7 +445,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             Source = $Source
             ErrorMessage = 'Scaling exclusion configuration must be corrected before retrying.'
         }
-        { Invoke-OrchestrationCycle -RunNumber 1 } | Should Throw 'Scaling exclusion configuration must be corrected'
+        { Invoke-OrchestrationCycle -RunNumber 1 } | Should -Throw -ExpectedMessage '*Scaling exclusion configuration must be corrected*'
         Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It
         Assert-MockCalled Get-SessionHosts -Times 0 -Exactly -Scope It
         Assert-MockCalled Deploy-SessionHosts -Times 0 -Exactly -Scope It
@@ -487,13 +485,13 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $result = @{ Completed = $false }
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult $result
-        $context.BatchHostNames.Count | Should Be 1
-        $context.BatchHostNames[0] | Should Be 'avd-01'
-        $context.BatchDeploymentLimit | Should Be 1
-        $context.Image.Version | Should Be '2.0.0'
-        $global:shrSimulation.DeploymentCalls[0].Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].ImageReference.id | Should Match '/versions/2\.0\.0$'
-        $result.Completed | Should Be $false
+        $context.BatchHostNames.Count | Should -Be 1
+        $context.BatchHostNames[0] | Should -Be 'avd-01'
+        $context.BatchDeploymentLimit | Should -Be 1
+        $context.Image.Version | Should -Be '2.0.0'
+        $global:shrSimulation.DeploymentCalls[0].Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].ImageReference.id | Should -Match '/versions/2\.0\.0$'
+        $result.Completed | Should -Be $false
     }
 
     It 'does not select a newly published image while completing a previously approved batch' {
@@ -519,9 +517,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $result = @{ Completed = $false }
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult $result
-        $result.Completed | Should Be $true
-        $global:shrSimulation.DeploymentState.TargetSessionHostCount | Should Be 2
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $result.Completed | Should -Be $true
+        $global:shrSimulation.DeploymentState.TargetSessionHostCount | Should -Be 2
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
         Assert-MockCalled Get-LatestImageVersion -Times 0 -Exactly -Scope It
         Assert-MockCalled Update-HostPoolStatus -Times 1 -Exactly -Scope It -ParameterFilter {
             $HostsToReplace -eq 1
@@ -531,18 +529,18 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
     It 'blocks replacement planning and deployment when the live replica query fails' {
         $global:shrSimulation.ReplicaFailure = $true
         Invoke-OrchestrationCycle -RunNumber 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
         Assert-MockCalled Get-SessionHostReplacementPlan -Times 0 -Exactly -Scope It
-        ($global:shrSimulation.Logs -join "`n") | Should Match 'IMAGE_REPLICA_CAP.*blocked.*Live regional replication unavailable'
+        ($global:shrSimulation.Logs -join "`n") | Should -Match 'IMAGE_REPLICA_CAP.*blocked.*Live regional replication unavailable'
     }
 
     It 'rechecks the pinned image on each continuation pass before planning' {
         Invoke-OrchestrationCycle -RunNumber 1
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.ReplicaQueries.Count | Should Be 2
-        $global:shrSimulation.ReplicaQueries[0].Version | Should Be '2.0.0'
-        $global:shrSimulation.ReplicaQueries[1].Version | Should Be '2.0.0'
+        $global:shrSimulation.ReplicaQueries.Count | Should -Be 2
+        $global:shrSimulation.ReplicaQueries[0].Version | Should -Be '2.0.0'
+        $global:shrSimulation.ReplicaQueries[1].Version | Should -Be '2.0.0'
         Assert-MockCalled Get-LatestImageVersion -Times 1 -Exactly -Scope It
         Assert-MockCalled Get-SessionHostReplacementPlan -Scope It -ParameterFilter {
             $ImageReplicaDeploymentLimit -eq 100
@@ -608,10 +606,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.RunNumber = 1
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].Count | Should Be 10
-        $context.BatchHostNames.Count | Should Be 10
-        $context.DeploymentBatchReady | Should Be $false
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].Count | Should -Be 10
+        $context.BatchHostNames.Count | Should -Be 10
+        $context.DeploymentBatchReady | Should -Be $false
 
         $firstReplacements = @($global:shrSimulation.AllocatedNames | ForEach-Object {
             $newHost = New-OrchestrationTestHost -Name $_ -ImageVersion '2.0.0'
@@ -625,15 +623,15 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.DeploymentStatuses[2] = 'Succeeded'
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $context.DeploymentBatchReady | Should Be $true
-        $context.MoreDeploymentsAllowed | Should Be $true
-        @($firstReplacements | Where-Object { $_.Tags.ScalingPlanExclusion }).Count | Should Be 0
-        @($global:shrSimulation.Hosts | Where-Object { -not $_.AllowNewSession }).Count | Should Be 10
+        $context.DeploymentBatchReady | Should -Be $true
+        $context.MoreDeploymentsAllowed | Should -Be $true
+        @($firstReplacements | Where-Object { $_.Tags.ScalingPlanExclusion }).Count | Should -Be 0
+        @($global:shrSimulation.Hosts | Where-Object { -not $_.AllowNewSession }).Count | Should -Be 10
 
         # Worker-only follow-up cannot expand the authorization.
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
 
         $context.NextBatchAuthorization = @{
             Id = 'scheduled-second-batch'; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
@@ -642,13 +640,13 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.RunNumber = 3
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
-        $global:shrSimulation.DeploymentCalls[1].Count | Should Be 10
-        $context.BatchHostNames.Count | Should Be 20
-        $context.BatchNumber | Should Be 2
-        $context.LastBatchAuthorizationId | Should Be 'scheduled-second-batch'
-        $context.DeploymentBatchReady | Should Be $false
-        @($global:shrSimulation.Hosts | Where-Object { $_.ImageVersion -eq '1.0.0' }).Count | Should Be 20
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+        $global:shrSimulation.DeploymentCalls[1].Count | Should -Be 10
+        $context.BatchHostNames.Count | Should -Be 20
+        $context.BatchNumber | Should -Be 2
+        $context.LastBatchAuthorizationId | Should -Be 'scheduled-second-batch'
+        $context.DeploymentBatchReady | Should -Be $false
+        @($global:shrSimulation.Hosts | Where-Object { $_.ImageVersion -eq '1.0.0' }).Count | Should -Be 20
 
         $global:shrSimulation.Hosts += @($global:shrSimulation.AllocatedNames | ForEach-Object {
             New-OrchestrationTestHost -Name $_ -ImageVersion '2.0.0'
@@ -658,10 +656,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.DeploymentStatuses[4] = 'Succeeded'
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.Hosts.Count | Should Be 40
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
-        $context.DeploymentBatchReady | Should Be $true
-        $context.MoreDeploymentsAllowed | Should Be $false
+        $global:shrSimulation.Hosts.Count | Should -Be 40
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+        $context.DeploymentBatchReady | Should -Be $true
+        $context.MoreDeploymentsAllowed | Should -Be $false
     }
 
     It 'does not release unhealthy up-to-date hosts or mark their continuation complete' {
@@ -683,8 +681,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $result = @{ Completed = $false }
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult $result
-        $result.Completed | Should Be $false
-        $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        $result.Completed | Should -Be $false
+        $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should -Be 'SessionHostReplacer'
         Assert-MockCalled Invoke-AzureRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PATCH' }
     }
 
@@ -734,10 +732,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $context.BatchNumber | Should Be 1
-        $context.LastBatchAuthorizationId | Should BeNullOrEmpty
-        $context.DeploymentIntent.Name | Should Be 'first'
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $context.BatchNumber | Should -Be 1
+        $context.LastBatchAuthorizationId | Should -BeNullOrEmpty
+        $context.DeploymentIntent.Name | Should -Be 'first'
     }
 
     It 'does not report completion when exact-image validation prevents scaling handoff' {
@@ -759,8 +757,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $result = @{ Completed = $false }
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult $result
-        $result.Completed | Should Be $false
-        $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        $result.Completed | Should -Be $false
+        $global:shrSimulation.Hosts[0].Tags.ScalingPlanExclusion | Should -Be 'SessionHostReplacer'
     }
 
     It 'does not start a new queued DeleteFirst batch during Peak' {
@@ -773,10 +771,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $result = @{ Completed = $false }
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult $result
-        $result.Completed | Should Be $true
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $context.BatchHostNames | Should BeNullOrEmpty
+        $result.Completed | Should -Be $true
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $context.BatchHostNames | Should -BeNullOrEmpty
     }
 
     It 'SideBySide recovers a ghost despite image cooldown and retries the same name after cleanup failure' {
@@ -797,19 +795,19 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $failure = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
-        $failure | Should Not BeNullOrEmpty
-        $failure.Exception.Message | Should Match 'Required directory cleanup failed'
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $failure | Should -Not -BeNullOrEmpty
+        $failure.Exception.Message | Should -Match 'Required directory cleanup failed'
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
         ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
-            Should Be $ghost.ResourceId
+            Should -Be $ghost.ResourceId
 
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
         ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-01'.ResourceId |
-            Should Be $ghost.ResourceId
+            Should -Be $ghost.ResourceId
     }
 
     It 'DeleteFirst does not clear a ghost recovery mapping or delete another host' {
@@ -826,10 +824,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             TotalSessionHostsToReplace = 1
         }
         Invoke-OrchestrationCycle -RunNumber 1
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
-        $global:shrSimulation.VerificationCalls[0].Names | Should Be @('avd-01')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01')
+        $global:shrSimulation.VerificationCalls[0].Names | Should -Be @('avd-01')
     }
 
     It 'DeleteFirst fills an administrator-deleted slot with required directory cleanup and no deletion of surviving hosts' {
@@ -850,18 +848,18 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.FailPreflightRuns = @(1)
         $failure = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
-        $failure | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $failure | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
 
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
-        $global:shrSimulation.DeploymentCalls[0].WaitForVMDeletion | Should Be $false
-        $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 1
-        $global:shrSimulation.DirectoryCleanupCalls[0].Name | Should Be 'avd-01'
-        $global:shrSimulation.VerificationCalls.Count | Should Be 1
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01')
+        $global:shrSimulation.DeploymentCalls[0].WaitForVMDeletion | Should -Be $false
+        $global:shrSimulation.DirectoryCleanupCalls.Count | Should -Be 1
+        $global:shrSimulation.DirectoryCleanupCalls[0].Name | Should -Be 'avd-01'
+        $global:shrSimulation.VerificationCalls.Count | Should -Be 1
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
     }
 
     It 'SideBySide performs no deployment or deletion when ghost recovery cannot be checkpointed' {
@@ -869,21 +867,21 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.FailRequiredSave = $true
         $failure = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
-        $failure | Should Not BeNullOrEmpty
-        $failure.Exception.Message | Should Match 'state write failure'
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 0
+        $failure | Should -Not -BeNullOrEmpty
+        $failure.Exception.Message | Should -Match 'state write failure'
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DirectoryCleanupCalls.Count | Should -Be 0
     }
 
     It 'SideBySide fails closed on unreadable recovery state with progressive batching disabled' {
         $global:shrSimulation.DeploymentState.LastStatus = 'Error'
         $failure = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
-        $failure | Should Not BeNullOrEmpty
-        $failure.Exception.Message | Should Match 'recovery state could not be read'
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $failure | Should -Not -BeNullOrEmpty
+        $failure.Exception.Message | Should -Match 'recovery state could not be read'
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
     }
 
     It 'SideBySide waits for live AVD registration after ARM succeeds without redeploying or deleting' {
@@ -909,13 +907,13 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             Succeeded = $true; Failed = $false; Running = $false; ProvisioningState = 'Succeeded'
         }
         Invoke-OrchestrationCycle -RunNumber 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.VerificationCalls.Count | Should Be 0
-        $global:shrSimulation.CycleResult.Completed | Should Be $false
-        $global:shrSimulation.Context.DeploymentIntent.Name | Should Be 'deployment-previous'
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.VerificationCalls.Count | Should -Be 0
+        $global:shrSimulation.CycleResult.Completed | Should -Be $false
+        $global:shrSimulation.Context.DeploymentIntent.Name | Should -Be 'deployment-previous'
         ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).'avd-03'.ResourceId |
-            Should Not BeNullOrEmpty
+            Should -Not -BeNullOrEmpty
     }
 
     It 'does not resolve a pending name against a live registration for a different VM' {
@@ -923,11 +921,11 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.Hosts[0].ResourceId = '/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Compute/virtualMachines/avd-99'
         $failure = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $failure = $_ }
-        $failure | Should Not BeNullOrEmpty
-        $failure.Exception.Message | Should Match 'different VM resource ID'
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DirectoryCleanupCalls.Count | Should Be 0
+        $failure | Should -Not -BeNullOrEmpty
+        $failure.Exception.Message | Should -Match 'different VM resource ID'
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DirectoryCleanupCalls.Count | Should -Be 0
     }
 
     It 'passes the default production exclusion policy to image selection' {
@@ -962,13 +960,13 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         if ($global:shrSimulation.DeploymentCalls.Count -eq 0) {
             throw "Deployment boundary was not reached. Error: $caughtError Logs: $($global:shrSimulation.Logs -join ' | ')"
         }
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $caughtError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $caughtError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
 
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
 
         $global:shrSimulation.Plan = [PSCustomObject]@{
             PossibleDeploymentsCount = 0
@@ -987,7 +985,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
 
         Invoke-OrchestrationCycle -RunNumber 3
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
 
         $global:shrSimulation.Readiness = [PSCustomObject]@{
             TotalNewHosts = 2
@@ -998,8 +996,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
 
         Invoke-OrchestrationCycle -RunNumber 4
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01', 'avd-02')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeletionCalls[0].Names | Should -Be @('avd-01', 'avd-02')
     }
 
     It 'SideBySide walks through readiness, final safety, and removal during Peak' {
@@ -1029,14 +1027,14 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         Invoke-OrchestrationCycle -RunNumber 1
 
-        $global:shrSimulation.DeletionSafetyCalls.Count | Should Be 1
-        $global:shrSimulation.DeletionSafetyCalls[0].ReplacementMode | Should Be 'SideBySide'
-        $global:shrSimulation.DeletionSafetyCalls[0].Phase | Should Be 'Peak'
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01', 'avd-02')
+        $global:shrSimulation.DeletionSafetyCalls.Count | Should -Be 1
+        $global:shrSimulation.DeletionSafetyCalls[0].ReplacementMode | Should -Be 'SideBySide'
+        $global:shrSimulation.DeletionSafetyCalls[0].Phase | Should -Be 'Peak'
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeletionCalls[0].Names | Should -Be @('avd-01', 'avd-02')
         @($global:shrSimulation.Logs | Where-Object {
             $_ -like 'DeleteFirst destructive replacement is frozen*'
-        }).Count | Should Be 0
+        }).Count | Should -Be 0
     }
 
     It 'DeleteFirst does not start a new destructive batch during the pre-RampUp freeze' {
@@ -1060,8 +1058,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         Invoke-OrchestrationCycle -RunNumber 1
 
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
     }
 
     It 'MaintenanceWindow performs no destructive work before the one-time window' {
@@ -1089,10 +1087,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
             Invoke-OrchestrationCycle -RunNumber 1
 
-            $global:shrSimulation.DeletionCalls.Count | Should Be 0
-            $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-            $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should Be ''
-            $global:shrSimulation.DeploymentState.CompletedMaintenanceRequestId | Should Be ''
+            $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+            $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+            $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should -Be ''
+            $global:shrSimulation.DeploymentState.CompletedMaintenanceRequestId | Should -Be ''
         }
 
     It 'rejects a maintenance request on a SideBySide replacer' {
@@ -1112,9 +1110,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $caughtError = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $caughtError = $_ }
         $caughtError.Exception.Message |
-            Should Be "Maintenance override requires configured ReplacementMode DeleteFirst. Found 'SideBySide'."
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+            Should -Be "Maintenance override requires configured ReplacementMode DeleteFirst. Found 'SideBySide'."
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
     }
 
     It 'limits pending DeleteFirst recovery without deleting more hosts or dropping mappings' {
@@ -1142,11 +1140,11 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         Invoke-OrchestrationCycle -RunNumber 1
 
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].Count | Should Be 20
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].Count | Should -Be 20
         @((($global:shrSimulation.DeploymentState.PendingHostMappings |
-            ConvertFrom-Json).PSObject.Properties.Name)).Count | Should Be 21
+            ConvertFrom-Json).PSObject.Properties.Name)).Count | Should -Be 21
         Assert-MockCalled Deploy-SessionHosts -Times 1 -Exactly -Scope It -ParameterFilter {
             $ImageReplicaDeploymentLimit -eq 20 -and $NewSessionHostsCount -eq 20
         }
@@ -1184,10 +1182,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         Invoke-OrchestrationCycle -RunNumber 1
 
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
-        $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should Be ''
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01')
+        $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId | Should -Be ''
     }
 
     It 'MaintenanceWindow replaces a one-host pool only with explicit full-outage authorization' {
@@ -1227,12 +1225,12 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             Assert-MockCalled Get-ScalingPlanCurrentTarget -Times 1 -Exactly -Scope It -ParameterFilter {
                 -not $RepairExclusionTag
             }
-            $global:shrSimulation.DeletionCalls.Count | Should Be 1
-            $global:shrSimulation.DeletionCalls[0].Names | Should Be @('avd-01')
-            $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-            $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
+            $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+            $global:shrSimulation.DeletionCalls[0].Names | Should -Be @('avd-01')
+            $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+            $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01')
             $global:shrSimulation.DeploymentState.ActiveMaintenanceRequestId |
-                Should Be '22222222-2222-2222-2222-222222222222'
+                Should -Be '22222222-2222-2222-2222-222222222222'
     }
 
     It 'resumes the configured mode after a maintenance request completes' {
@@ -1262,9 +1260,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         Invoke-OrchestrationCycle -RunNumber 1
 
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01')
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
     }
 
     It 'blocks maintenance while a shutdown-retention VM exists' {
@@ -1287,9 +1285,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $caughtError = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $caughtError = $_ }
-        $caughtError.Exception.Message | Should Match 'shutdown-retention VMs exist'
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $caughtError.Exception.Message | Should -Match 'shutdown-retention VMs exist'
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
     }
 
     It 'preserves nonalphabetical planner priority through pending-mapping serialization and reload' {
@@ -1306,15 +1304,15 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             ExistingSessionHostNames = $priority; TargetSessionHostCount = 5; TotalSessionHostsToReplace = 5
         }
         $global:shrSimulation.FailDeploymentRuns = @(1)
-        { Invoke-OrchestrationCycle -RunNumber 1 } | Should Throw
+        { Invoke-OrchestrationCycle -RunNumber 1 } | Should -Throw
         @((($global:shrSimulation.DeploymentState.PendingHostMappings |
-            ConvertFrom-Json -AsHashtable).Keys)) | Should Be $priority
+            ConvertFrom-Json -AsHashtable).Keys)) | Should -Be $priority
         $global:shrSimulation.Plan.PossibleSessionHostDeleteCount = 0
         $global:shrSimulation.Plan.SessionHostsPendingDelete = @()
         $global:shrSimulation.Plan.ExistingSessionHostNames = @()
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should Be $priority
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should -Be $priority
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
     }
 
     It 'does not record a normal cleanup continuation yield as a progressive deployment failure' {
@@ -1333,9 +1331,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
                 ConvertTo-Json -Depth 20 | ConvertFrom-Json
             throw [TimeoutException]::new('VM cleanup is pending')
         }
-        { Invoke-OrchestrationCycle -RunNumber 1 } | Should Throw 'VM cleanup is pending'
+        { Invoke-OrchestrationCycle -RunNumber 1 } | Should -Throw -ExpectedMessage '*VM cleanup is pending*'
         foreach ($field in @('ConsecutiveSuccesses', 'CurrentPercentage', 'LastStatus', 'LastDeploymentName')) {
-            $global:shrSimulation.DeploymentState.$field | Should Be $global:shrSimulation.BeforeYield.$field
+            $global:shrSimulation.DeploymentState.$field | Should -Be $global:shrSimulation.BeforeYield.$field
         }
     }
 
@@ -1358,11 +1356,11 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         if ($global:shrSimulation.DeploymentCalls.Count -eq 0) {
             throw "Deployment boundary was not reached. Error: $caughtError Logs: $($global:shrSimulation.Logs -join ' | ')"
         }
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $caughtError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.Hosts.Count | Should Be 0
-        ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).PSObject.Properties.Name.Count | Should Be 2
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $caughtError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.Hosts.Count | Should -Be 0
+        ($global:shrSimulation.DeploymentState.PendingHostMappings | ConvertFrom-Json).PSObject.Properties.Name.Count | Should -Be 2
 
         $global:shrSimulation.Plan = [PSCustomObject]@{
             PossibleDeploymentsCount = 2
@@ -1373,14 +1371,14 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             TotalSessionHostsToReplace = 2
         }
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should Be @('avd-01', 'avd-02')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should -Be @('avd-01', 'avd-02')
 
         $global:shrSimulation.Hosts += New-OrchestrationTestHost -Name 'avd-01' -ImageVersion '2.0.0'
         $global:shrSimulation.Plan.PossibleDeploymentsCount = 1
         Invoke-OrchestrationCycle -RunNumber 3
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should Be @('avd-02')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should -Be @('avd-02')
 
         $global:shrSimulation.Hosts += New-OrchestrationTestHost -Name 'avd-02' -ImageVersion '2.0.0'
         $global:shrSimulation.Plan = [PSCustomObject]@{
@@ -1392,8 +1390,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
             TotalSessionHostsToReplace = 0
         }
         Invoke-OrchestrationCycle -RunNumber 4
-        $global:shrSimulation.DeploymentState.PendingHostMappings | Should Be '{}'
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentState.PendingHostMappings | Should -Be '{}'
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
     }
 
     It 'DeleteFirst cleans up an asynchronously failed deployment and retries the exact unresolved hosts without deleting again' {
@@ -1411,8 +1409,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
 
         Invoke-OrchestrationCycle -RunNumber 1
-        $global:shrSimulation.DeploymentState.LastDeploymentName | Should Be 'deployment-1'
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentState.LastDeploymentName | Should -Be 'deployment-1'
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
 
         $global:shrSimulation.DeploymentStatuses[2] = 'Failed'
         $global:shrSimulation.Plan = [PSCustomObject]@{
@@ -1425,13 +1423,13 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
 
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.CleanupCalls.Count | Should Be 1
-        $global:shrSimulation.CleanupCalls[0].DeploymentName | Should Be 'deployment-1'
-        $global:shrSimulation.CleanupCalls[0].SessionHostNames | Should Be @('avd-01', 'avd-02')
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
-        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should Be @('avd-01', 'avd-02')
-        $global:shrSimulation.DeploymentState.PendingHostMappings | Should Not Be '{}'
+        $global:shrSimulation.CleanupCalls.Count | Should -Be 1
+        $global:shrSimulation.CleanupCalls[0].DeploymentName | Should -Be 'deployment-1'
+        $global:shrSimulation.CleanupCalls[0].SessionHostNames | Should -Be @('avd-01', 'avd-02')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+        $global:shrSimulation.DeploymentCalls[-1].PreferredNames | Should -Be @('avd-01', 'avd-02')
+        $global:shrSimulation.DeploymentState.PendingHostMappings | Should -Not -Be '{}'
     }
 
     It 'DeleteFirst does not redeploy after asynchronous failure until orphan cleanup succeeds' {
@@ -1462,16 +1460,16 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $cleanupError = $null
         try { Invoke-OrchestrationCycle -RunNumber 2 } catch { $cleanupError = $_ }
-        $cleanupError | Should Not BeNullOrEmpty
-        $global:shrSimulation.CleanupCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentState.LastDeploymentName | Should Be 'deployment-1'
+        $cleanupError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.CleanupCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentState.LastDeploymentName | Should -Be 'deployment-1'
 
         $global:shrSimulation.DeploymentStatuses[3] = 'Failed'
         Invoke-OrchestrationCycle -RunNumber 3
-        $global:shrSimulation.CleanupCalls.Count | Should Be 2
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 2
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.CleanupCalls.Count | Should -Be 2
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
     }
 
     It 'DeleteFirst does not submit or delete again while the previous deployment remains running' {
@@ -1489,7 +1487,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
 
         Invoke-OrchestrationCycle -RunNumber 1
-        $global:shrSimulation.DeploymentState.LastDeploymentName | Should Be 'deployment-1'
+        $global:shrSimulation.DeploymentState.LastDeploymentName | Should -Be 'deployment-1'
 
         $global:shrSimulation.Plan = [PSCustomObject]@{
             PossibleDeploymentsCount = 2
@@ -1505,9 +1503,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         Invoke-OrchestrationCycle -RunNumber 2
         Invoke-OrchestrationCycle -RunNumber 3
 
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentState.LastDeploymentName | Should Be 'deployment-1'
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentState.LastDeploymentName | Should -Be 'deployment-1'
     }
 
     It 'DeleteFirst does not clean up or redeploy hosts after ARM succeeds while AVD registration is pending' {
@@ -1539,9 +1537,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         Invoke-OrchestrationCycle -RunNumber 2
 
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        @($global:shrSimulation.DirectoryCleanupCalls | Where-Object Run -eq 2).Count | Should Be 0
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        @($global:shrSimulation.DirectoryCleanupCalls | Where-Object Run -eq 2).Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
     }
 
     It 'DeleteFirst discovers an accepted deployment after caller interruption and does not submit or delete again' {
@@ -1560,10 +1558,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $submissionError = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $submissionError = $_ }
-        $submissionError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentState.LastDeploymentName | Should Be ''
+        $submissionError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentState.LastDeploymentName | Should -Be ''
 
         $global:shrSimulation.RunningDeployments[2] = @(
             [PSCustomObject]@{
@@ -1583,9 +1581,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
 
         Invoke-OrchestrationCycle -RunNumber 2
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentState.PendingHostMappings | Should Not Be '{}'
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentState.PendingHostMappings | Should -Not -Be '{}'
     }
 
     It 'DeleteFirst recovers when the function is interrupted after host removal and before deployment submission' {
@@ -1604,11 +1602,11 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $interruptionError = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $interruptionError = $_ }
-        $interruptionError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
-        $global:shrSimulation.Hosts.Count | Should Be 0
-        $global:shrSimulation.DeploymentState.PendingHostMappings | Should Not Be '{}'
+        $interruptionError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.Hosts.Count | Should -Be 0
+        $global:shrSimulation.DeploymentState.PendingHostMappings | Should -Not -Be '{}'
 
         $global:shrSimulation.Plan = [PSCustomObject]@{
             PossibleDeploymentsCount = 2
@@ -1620,9 +1618,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
         Invoke-OrchestrationCycle -RunNumber 2
 
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01', 'avd-02')
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01', 'avd-02')
     }
 
     It 'DeleteFirst blocks hostname reuse when host registration is removed but the old VM still exists' {
@@ -1666,10 +1664,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $recoveryError = $null
         try { Invoke-OrchestrationCycle -RunNumber 2 } catch { $recoveryError = $_ }
 
-        $recoveryError | Should Not BeNullOrEmpty
-        $global:shrSimulation.VerificationCalls.Count | Should Be 1
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $recoveryError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.VerificationCalls.Count | Should -Be 1
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
     }
 
     It 'DeleteFirst does not duplicate an accepted deployment when its state save fails and replacement VMs exist' {
@@ -1689,10 +1687,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $stateSaveError = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $stateSaveError = $_ }
-        $stateSaveError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentState.LastDeploymentName | Should Be ''
-        $global:shrSimulation.DeploymentState.PendingHostMappings | Should Not Be '{}'
+        $stateSaveError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentState.LastDeploymentName | Should -Be ''
+        $global:shrSimulation.DeploymentState.PendingHostMappings | Should -Not -Be '{}'
 
         $global:shrSimulation.VerificationResults[2] = [PSCustomObject]@{
             TotalHosts = 2
@@ -1715,9 +1713,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $recoveryError = $null
         try { Invoke-OrchestrationCycle -RunNumber 2 } catch { $recoveryError = $_ }
-        $recoveryError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
+        $recoveryError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
     }
 
     It 'DeleteFirst rechecks partial directory cleanup and blocks hostname reuse until all systems confirm deletion' {
@@ -1760,9 +1758,9 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
 
         $firstError = $null
         try { Invoke-OrchestrationCycle -RunNumber 1 } catch { $firstError = $_ }
-        $firstError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $firstError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
 
         $global:shrSimulation.Plan = [PSCustomObject]@{
             PossibleDeploymentsCount = 2
@@ -1774,16 +1772,16 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
         $secondError = $null
         try { Invoke-OrchestrationCycle -RunNumber 2 } catch { $secondError = $_ }
-        $secondError | Should Not BeNullOrEmpty
-        $global:shrSimulation.VerificationCalls.Count | Should Be 2
-        @($global:shrSimulation.DirectoryCleanupCalls | Where-Object Run -eq 2).Count | Should Be 2
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $secondError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.VerificationCalls.Count | Should -Be 2
+        @($global:shrSimulation.DirectoryCleanupCalls | Where-Object Run -eq 2).Count | Should -Be 2
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
 
         Invoke-OrchestrationCycle -RunNumber 3
-        $global:shrSimulation.VerificationCalls.Count | Should Be 3
-        $global:shrSimulation.DeletionCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 1
-        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should Be @('avd-01', 'avd-02')
+        $global:shrSimulation.VerificationCalls.Count | Should -Be 3
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].PreferredNames | Should -Be @('avd-01', 'avd-02')
     }
 
     It 'DeleteFirst performs no destructive operation when the recovery checkpoint cannot be saved' {
@@ -1805,10 +1803,10 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         if (@($global:shrSimulation.SaveCalls | Where-Object Required).Count -eq 0) {
             throw "Required save boundary was not reached. Error: $caughtError Logs: $($global:shrSimulation.Logs -join ' | ')"
         }
-        @($global:shrSimulation.SaveCalls | Where-Object Required).Count | Should Be 1
-        $caughtError | Should Not BeNullOrEmpty
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        @($global:shrSimulation.SaveCalls | Where-Object Required).Count | Should -Be 1
+        $caughtError | Should -Not -BeNullOrEmpty
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
     }
 
     It 'DeleteFirst fails closed when pending recovery mappings are invalid: <Value>' -TestCases @(
@@ -1834,7 +1832,7 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         if (-not $caughtError) {
             throw "Malformed recovery state did not fail closed. Mode: $($global:shrSettings.ReplacementMode) State: $($global:shrSimulation.DeploymentState.PendingHostMappings) Logs: $($global:shrSimulation.Logs -join ' | ')"
         }
-        $global:shrSimulation.DeletionCalls.Count | Should Be 0
-        $global:shrSimulation.DeploymentCalls.Count | Should Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
     }
 }

@@ -1,12 +1,12 @@
 metadata name = 'Central naming bundle regression vectors'
-metadata description = 'Evaluates centralized host-pool and FSLogix functions against frozen outputs captured from the former naming deployment.'
+metadata description = 'Evaluates current centralized host-pool and FSLogix functions across cloud and convention scenarios.'
 
 import { hostPoolNames, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
 @description('Optional. Selects an invalid workspace-subscription case for local runtime validation.')
 param invalidCase string = ''
 
-var profiles = loadJsonContent('./naming-bundles-legacy.json')
+var profiles = loadJsonContent('./naming-bundles-cases.json')
 var cases = map(profiles, profile => {
   name: profile.name
   hostPool: hostPoolNames(profile.convention, profile.identifier, union(profile.context, {

@@ -947,19 +947,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         {
           name: 'InitiationEnabled'
           value: string(initiationEnabled)
-        }
-        {
-          name: 'AzureWebJobs.session-host-replacer.Disabled'
-          value: 'true'
-        }
-        {
-          name: 'AzureWebJobs.session-host-replacer-initiator.Disabled'
-          value: 'false'
-        }
-        {
-          name: 'AzureWebJobs.session-host-replacer-worker.Disabled'
-          value: 'false'
-        }
+        }       
         {
           name: 'ContinuationTimeoutHours'
           value: string(continuationTimeoutHours)
@@ -1233,7 +1221,6 @@ module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty
   params: {
     workbookName: workbookName
     location: workbookLocation
-    applicationInsightsResourceId: functionApp.outputs.applicationInsightsResourceId
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     tags: union({ 'cm-resource-parent': logAnalyticsWorkspaceResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
   }
