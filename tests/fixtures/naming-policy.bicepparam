@@ -1,7 +1,6 @@
 using none
 
 import { namingPolicy, resourceName, resolveConvention, resourceTypeFirst, regionAbbreviation, shortScopedUnique, scopeIdUnique, fslogixNames, imageStorageName, legacyConvention, imageBuildRunId, privateEndpointPattern, privateEndpointNicPattern, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
-import { legacyName, legacyScopedUnique, legacyStorage } from './naming-legacy.bicep'
 
 var conventions = [
   {}
@@ -18,35 +17,30 @@ var conventions = [
   { components: [] }
   { delimiter: '--' }
 ]
-var rules = toObject(filter(items(loadJsonContent('./naming-legacy-rules.json')), role => contains(namingPolicy.resources, role.key)), role => role.key, role => role.value)
 var subscriptionId = '00000000-1111-2222-3333-444444444444'
 
-param roleParity = flatten(map(range(0, length(conventions)), index => map(items(rules), role => {
+param roleNames = flatten(map(range(0, length(conventions)), index => map(items(namingPolicy.resources), role => {
   scenario: index
   role: role.key
   actual: resourceName(conventions[index], role.key, 'use2', 'finance-01', 'abc123')
-  expected: legacyName(conventions[index], role.value, 'use2', 'finance-01', 'abc123')
 })))
-param emptyContextParity = flatten(map(conventions, convention => map(filter(items(rules), role => contains([
-  'deploymentResourceGroup'
-  'hostsResourceGroup'
-  'storageResourceGroup'
-  'identityPattern'
-  'diskEncryptionSetPattern'
-  'quotaAutomation'
-], role.key)), role => {
-  role: role.key
-  actual: resourceName(convention, role.key, 'use2', '', 'abc123')
-  expected: legacyName(convention, role.value, 'use2', '', 'abc123')
-})))
-param storageParity = flatten(map(conventions, convention => flatten(map(['artifacts', 'logs'], kind => map(['', 'cont1'], prefix => {
+param emptyIdentifierNames = {
+  deploymentResourceGroup: resourceName({}, 'deploymentResourceGroup', 'use2', '', 'abc123')
+  hostsResourceGroup: resourceName({}, 'hostsResourceGroup', 'use2', '', 'abc123')
+  storageResourceGroup: resourceName({}, 'storageResourceGroup', 'use2', '', 'abc123')
+  identityPattern: resourceName({}, 'identityPattern', 'use2', '', 'abc123')
+  diskEncryptionSetPattern: resourceName({}, 'diskEncryptionSetPattern', 'use2', '', 'abc123')
+  quotaAutomation: resourceName({}, 'quotaAutomation', 'use2', '', 'abc123')
+}
+param storageNames = flatten(map(conventions, convention => flatten(map(['artifacts', 'logs'], kind => map(['', 'cont1'], prefix => {
   actual: imageStorageName(convention, kind, 'use2', subscriptionId, 'rg-avd-image-management-use2', 'eastus2', prefix)
-  expected: legacyStorage(convention, kind, 'use2', subscriptionId, 'rg-avd-image-management-use2', 'eastus2', prefix)
 })))))
-param seedParity = map(conventions, convention => {
-  actual: shortScopedUnique(convention, subscriptionId, 'rg-avd-operations-use2', 'eastus2')
-  expected: take(legacyScopedUnique(convention, subscriptionId, 'rg-avd-operations-use2', 'eastus2'), 6)
-})
+param scopedSeeds = {
+  withLocation: shortScopedUnique({}, subscriptionId, 'rg-avd-operations-use2', 'eastus2')
+  withoutLocation: shortScopedUnique({ components: ['resourceType', 'purpose'] }, subscriptionId, 'rg-avd-operations-use2', 'eastus2')
+  expectedWithLocation: take(uniqueString(subscriptionId, 'rg-avd-operations-use2'), 6)
+  expectedWithoutLocation: take(uniqueString(subscriptionId, 'rg-avd-operations-use2', 'eastus2'), 6)
+}
 param defaultConvention = resolveConvention({})
 param partialCodes = resolveConvention({ resourceTypeCodes: { keyVaults: 'vault' } }).resourceTypeCodes
 param emptyDelimiter = resourceName({ delimiter: '' }, 'secretsKeyVault', 'va', '', 'abc123')

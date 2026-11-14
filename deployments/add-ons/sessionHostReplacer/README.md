@@ -2063,11 +2063,26 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
 3. Or open the resource group containing the selected Log Analytics workspace and select the
   **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
+5. **Select Time Range**: Application Insights sources are resolved automatically; no component
+   selection is required. Cycle and cycle-invocation controls appear only under
+   **Investigation > Cycles**.
+   The internal workspace and telemetry-source parameters are hidden in normal viewing mode;
+   they remain available in edit mode.
+
+The default **Operations** page starts with **Last Reported Inventory** KPIs and freshness,
+then **Host Pool Consistency**, compact latest-cycle status and timer health. KPI counts sum
+the latest reported snapshot for each selected host pool; an empty selection does not become
+zero-valued health tiles. Image consistency is not host health/readiness, and pools without
+eligible hosts have no meaningful image percentage. These are observations, not live inventory.
+Use **Show trends and activity** for secondary charts; the engine action mix counts action
+observations, not successful deployments. Cycle timelines, logs and detailed errors are on
+**Investigation**, not Operations.
 
 #### Trace one replacement cycle
 
 1. Select the host pool and a time range that includes the cycle's initiation and latest progress.
-2. Select its **Cycle** ID. This is the durable SHR operation ID, shared across both timers and
+2. Open **Page > Investigation**, choose **Investigate > Cycles**, and select its **Cycle** ID.
+   This is the durable SHR operation ID, shared across both timers and
    successive invocations, not Application Insights' native operation ID.
 3. Read the cycle summary: status, activity/reason, batch, pinned image definition/version, target,
    deadline, initiation hold, last observation and lease expiry. **Waiting** is not automatically
@@ -2078,6 +2093,75 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
    existing ARM deployment resource; it does not deploy anything.
 5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
    follow the cycle across invocations. The timeline retains the whole selected cycle.
+   Cycle invocation logs show **Timestamp**, **Level** and **Message**; click a message to read
+   it in full. Use **Show technical cycle-log details** for correlation IDs and exception payloads.
+
+#### Inspect a current SHR invocation
+
+Select **Page > Investigation**, then **Investigate > Invocations**. The latest 200 native
+completed request records show timestamp,
+host pool, role (Initiator or Worker), outcome and duration. This includes the current initiator
+and reconciliation worker, including idle ticks.
+The retired single-timer function is excluded. Select an entry in
+**Invocation to inspect** for its latest 500 trace/exception records in chronological order,
+showing only **Timestamp**, **Level** and **Message**. Click a message to read it in full.
+**Show technical details** loads the request's Function App, correlation IDs, role instance and
+full exception payloads on demand; these fields remain in the query logic but do not clutter the
+normal list or selector. Narrow the time range to reach older executions. Cycle and cycle-invocation
+filters do not constrain this page; host-pool and time filters do.
+Use **Investigate > Errors and Recovery** for detailed error logs and failed-deployment activity.
+
+Missing invocation IDs remain missing; the selector uses a separately labeled request-ID key.
+Log correlation falls back to a nonempty native operation ID when invocation identity is absent.
+Host-pool mapping uses the Application Insights component's `cm-resource-parent` resource tag,
+not a recent pool-prefixed trace. Idle invocations therefore remain visible when a specific host
+pool is selected, even if the time range contains no SHR application messages. Components must
+be linked to the deployed workspace and tagged with their host-pool resource ID; missing tags or
+Resource Graph visibility can prevent discovery. Missing, filtered or sampled telemetry is not
+proof of success.
+
+#### Test the workspace-scoped workbook
+
+Test against the current main-branch SHR function code. Publish the workbook module to a new
+test workbook ID so the existing workbook is preserved. The workbook-only deployment does not
+upgrade function code or configuration; update the test SHR deployment separately if needed.
+Use PowerShell with an approved Azure context and workload resource IDs:
+
+```powershell
+$WorkspaceId = '/subscriptions/<subscription>/resourceGroups/<workload-rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>'
+$TestWorkbookId = [guid]::NewGuid().ToString()
+New-AzResourceGroupDeployment `
+    -ResourceGroupName '<workload-workspace-rg>' `
+    -TemplateFile '.\deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep' `
+    -workbookName $TestWorkbookId `
+    -location '<approved-workbook-region>' `
+    -logAnalyticsWorkspaceResourceId $WorkspaceId
+```
+
+Select the workspace's subscription before running. Record `$TestWorkbookId` to identify the test
+copy; its display name matches the normal dashboard. The deployment identity needs workbook write
+access to that resource group. Readers need workload workspace query access and component/resource
+visibility for the pickers; no central workspace access is required or granted.
+
+In Azure Government, verify **Operations**, **Configuration** and all three **Investigation**
+views render. Confirm image consistency appears near the KPIs, Operations has no cycle/log
+selectors, and changing the selected cycle does not filter the Operations status. Compare a
+known request ID with one row in the workload workspace and a policy-exported copy centrally:
+the history should show one execution. Select successful, failed and idle executions for both timers,
+confirm outcome/duration and correlated native exceptions and traces, change host-pool/time
+selections, and test missing identity/empty results. Include an idle-only time range with no SHR
+messages and verify filtering by host pool still shows the native executions. Cycle pages require emitted cycle events;
+idle ticks need not have an active cycle. Test with an operator lacking central workspace access.
+Check the full exception detail payload only under approved telemetry permissions.
+
+Offline workbook tests require exactly one workload-workspace scope for every telemetry query
+and reject `FunctionAppLogs`, `AzureDiagnostics`, and cross-resource `app()`/`workspace()` queries.
+This keeps diagnostic-log copies out of the workbook's Application Insights result sets.
+
+This changes only workbook queries. It does not remove stored copies, modify central diagnostic
+policy, fix duplication within one workspace, or change the Portal's Application Insights-backed
+invocation view. Existing saved workbook copies need their own update. Offline tests do not prove
+live KQL execution, access or Portal rendering.
 
 The timer-health table separates **Initiation** from **Reconciliation** and shows their last
 observed starts, outcomes and failures. It does not mark sparse initiation schedules as delayed
@@ -2106,10 +2190,9 @@ logs are not backfilled. See [logging and correlation](logging-guide.md#cycle-co
   - Hosts in shutdown retention (SideBySide mode)
 
 - **🎯 Host Pool Consistency**
-  - Hosts by image version
-  - Hosts by age distribution
-  - Replacement status breakdown
-  - Replacement mode indicator
+  - Latest-reported image configuration
+  - Hosts on the latest image and needing replacement
+  - Image alignment percentage and observation time, distinct from health/readiness
 
 - **🔄 Deployment Progress**
   - Deployment activity timeline
@@ -2208,10 +2291,10 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
   and resource group
 - **One Application Insights per Function App** deploys into the Function App resource group and
   uses the same host-pool identity components as the Function App
-- **Cross-Resource Queries**: The workbook queries the Application Insights resources selected by
-  the operator, subject to resource visibility and query permissions
-- **Multi-Region Filtering**: Use the **Application Insights** parameter to select instances across regions
-- **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
+- **Workspace-Scoped Queries**: The workbook queries only its deployed workload workspace's
+  `AppTraces`, `AppRequests` and `AppExceptions`; component IDs filter records within that boundary
+- **Host Pool Filtering**: Select a host pool or view all monitored pools across regions; the
+  workbook automatically resolves the associated Application Insights components
 
 **Deployment Behavior:**
 
@@ -2221,9 +2304,11 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
   workbook, even when their Function Apps and session hosts use different resource groups
 - **Different Workspaces**: Receive separate workbooks so their monitoring boundaries remain
   independent
-- The Application Insights picker uses Resource Graph discovery. Its query is not restricted to
-  components linked to this workspace; explicitly select the intended SHR resources rather than
-  assuming workbook placement enforces a query boundary.
+- Hidden Resource Graph discovery resolves components linked to this workspace using their
+  `cm-resource-parent` host-pool resource IDs. The visible picker lists the associated host pools
+  using resource-ID values, so same-named pools do not share a telemetry scope. The deployment
+  injects the workspace query scope. Telemetry exported by policy
+  to another workspace is not combined into the dashboard; those exports remain untouched.
 - The workbook is associated with the selected Log Analytics workspace and is available from
   **Log Analytics workspace > Workbooks**. It can also be found by display name from
   **Azure Monitor > Workbooks**.

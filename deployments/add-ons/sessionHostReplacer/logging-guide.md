@@ -7,7 +7,12 @@ model and [Trace one replacement cycle](README.md#trace-one-replacement-cycle) f
 
 When `logAnalyticsWorkspaceResourceId` is nonempty, SHR creates workspace-based Application
 Insights and configures the Function App's `APPLICATIONINSIGHTS_CONNECTION_STRING`.
-The optional workbook queries selected Application Insights resources.
+The optional workbook queries only the selected workload workspace's `AppTraces`,
+`AppRequests` and `AppExceptions`, filtering by selected Application Insights component IDs.
+It does not query the components' resource-scoped views, which can include additional
+copies exported to other workspaces by policy. Application Insights integration and central
+diagnostic exports remain unchanged. Workspace read access is required; access to a component
+alone is not a substitute. See the [workbook test procedure](README.md#test-the-workspace-scoped-workbook).
 
 ```text
 Both timers + shared lifecycle engine

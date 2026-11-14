@@ -1,5 +1,7 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+}
 
 Describe 'SHR scaling exclusion configuration' {
     BeforeAll { Import-Module $modulePath -Force }
@@ -36,10 +38,10 @@ Describe 'SHR scaling exclusion configuration' {
         $target = Get-ScalingPlanCurrentTarget -ARMToken token `
             -HostPoolResourceId $global:shrScalingPlan.properties.hostPoolReferences[0].hostPoolArmPath `
             -ResourceManagerUri 'https://management.azure.com' -TagScalingPlanExclusionTag $Expected
-        $target.Source | Should Be 'InvalidExclusionTag'
-        $target.ErrorMessage | Should Match 'shared-plan'
-        $target.ErrorMessage | Should Match 'same nonempty tag name'
-        $global:shrScalingPlan.properties.exclusionTag | Should Be $Actual
+        $target.Source | Should -Be 'InvalidExclusionTag'
+        $target.ErrorMessage | Should -Match 'shared-plan'
+        $target.ErrorMessage | Should -Match 'same nonempty tag name'
+        $global:shrScalingPlan.properties.exclusionTag | Should -Be $Actual
         Assert-MockCalled Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Planning -Times 1 -Exactly -Scope It
     }
 
@@ -52,7 +54,7 @@ Describe 'SHR scaling exclusion configuration' {
         $target = Get-ScalingPlanCurrentTarget -ARMToken token `
             -HostPoolResourceId $global:shrScalingPlan.properties.hostPoolReferences[0].hostPoolArmPath `
             -ResourceManagerUri 'https://management.azure.com' -TagScalingPlanExclusionTag $Tag
-        $target.Source | Should Be 'NoTimeZone'
+        $target.Source | Should -Be 'NoTimeZone'
     }
 
     It 'does not require an exclusion tag on a disabled plan' {
@@ -61,22 +63,22 @@ Describe 'SHR scaling exclusion configuration' {
         $target = Get-ScalingPlanCurrentTarget -ARMToken token `
             -HostPoolResourceId $global:shrScalingPlan.properties.hostPoolReferences[0].hostPoolArmPath `
             -ResourceManagerUri 'https://management.azure.com' -TagScalingPlanExclusionTag ''
-        $target.Source | Should Be 'Disabled'
+        $target.Source | Should -Be 'Disabled'
     }
 
     It 'allows a pool with no scaling plan' {
         Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Planning { @() }
         $target = Get-ScalingPlanCurrentTarget -ARMToken token -HostPoolResourceId '/pool' `
             -ResourceManagerUri 'https://management.azure.com' -TagScalingPlanExclusionTag ''
-        $target.Source | Should BeNullOrEmpty
+        $target.Source | Should -BeNullOrEmpty
     }
 
     It 'reports a failed scaling query without making it look like no plan exists' {
         Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Planning { throw 'Access denied' }
         $target = Get-ScalingPlanCurrentTarget -ARMToken token -HostPoolResourceId '/pool' `
             -ResourceManagerUri 'https://management.azure.com' -TagScalingPlanExclusionTag 'ScalingPlanExclusion'
-        $target.Source | Should Be 'Error'
-        $target.ErrorMessage | Should Match 'Access denied'
+        $target.Source | Should -Be 'Error'
+        $target.ErrorMessage | Should -Match 'Access denied'
     }
 }
 
@@ -167,21 +169,21 @@ Describe 'SHR unshared scaling plan repair' {
         param($Previous)
         $global:shrPlanRepair.Plan.properties.exclusionTag = $Previous
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'NoTimeZone'
-        $global:shrPlanRepair.Plan.properties.exclusionTag | Should Be 'ScalingPlanExclusion'
+        $target.Source | Should -Be 'NoTimeZone'
+        $global:shrPlanRepair.Plan.properties.exclusionTag | Should -Be 'ScalingPlanExclusion'
         $writes = @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch')
-        $writes.Count | Should Be 1
-        $writes[0].Body.properties.PSObject.Properties.Name | Should Be @('exclusionTag')
-        $writes[0].Headers['If-Match'] | Should Be '"v1"'
-        $global:shrPlanRepair.DirectReads | Should Be 3
+        $writes.Count | Should -Be 1
+        $writes[0].Body.properties.PSObject.Properties.Name | Should -Be @('exclusionTag')
+        $writes[0].Headers['If-Match'] | Should -Be '"v1"'
+        $global:shrPlanRepair.DirectReads | Should -Be 3
     }
 
     It 'leaves discovery read-only and marks unshared mismatches for worker repair' {
         $repairParameters.RepairExclusionTag = $false
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'InvalidExclusionTag'
-        $target.CanRepairExclusionTag | Should Be $true
-        @($global:shrPlanRepair.Requests | Where-Object Method -ne 'Get').Count | Should Be 0
+        $target.Source | Should -Be 'InvalidExclusionTag'
+        $target.CanRepairExclusionTag | Should -Be $true
+        @($global:shrPlanRepair.Requests | Where-Object Method -ne 'Get').Count | Should -Be 0
     }
 
     It 'rejects a shared mismatch even when the other assignment is enabled=<Enabled>' -TestCases @(
@@ -193,9 +195,9 @@ Describe 'SHR unshared scaling plan repair' {
             hostPoolArmPath = '/another/pool'; scalingPlanEnabled = $Enabled
         }
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'InvalidExclusionTag'
-        $target.CanRepairExclusionTag | Should Be $false
-        @($global:shrPlanRepair.Requests | Where-Object Method -ne 'Get').Count | Should Be 0
+        $target.Source | Should -Be 'InvalidExclusionTag'
+        $target.CanRepairExclusionTag | Should -Be $false
+        @($global:shrPlanRepair.Requests | Where-Object Method -ne 'Get').Count | Should -Be 0
     }
 
     It 'accepts an already-matching shared plan without updating it' {
@@ -204,23 +206,23 @@ Describe 'SHR unshared scaling plan repair' {
             hostPoolArmPath = '/another/pool'; scalingPlanEnabled = $true
         }
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'NoTimeZone'
-        @($global:shrPlanRepair.Requests | Where-Object Method -ne 'Get').Count | Should Be 0
+        $target.Source | Should -Be 'NoTimeZone'
+        @($global:shrPlanRepair.Requests | Where-Object Method -ne 'Get').Count | Should -Be 0
     }
 
     It 'blocks a plan that becomes shared before the update' {
         $global:shrPlanRepair.ShareAtRead = 2
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'Error'
-        $target.ErrorMessage | Should Match 'shared'
-        @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch').Count | Should Be 0
+        $target.Source | Should -Be 'Error'
+        $target.ErrorMessage | Should -Match 'shared'
+        @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch').Count | Should -Be 0
     }
 
     It 'blocks unknown or changed full-plan membership' {
         $global:shrPlanRepair.Plan.properties.hostPoolReferences = @()
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'Error'
-        @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch').Count | Should Be 0
+        $target.Source | Should -Be 'Error'
+        @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch').Count | Should -Be 0
     }
 
     It 'surfaces permission failures and unsuccessful read-back verification' -TestCases @(
@@ -230,8 +232,8 @@ Describe 'SHR unshared scaling plan repair' {
         param($Failure)
         $global:shrPlanRepair[$Failure] = $true
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'Error'
-        $global:shrPlanRepair.Plan.properties.exclusionTag | Should Be ''
+        $target.Source | Should -Be 'Error'
+        $global:shrPlanRepair.Plan.properties.exclusionTag | Should -Be ''
     }
 
     It 'preserves existing VM exclusion value "<Value>" before changing a nonblank plan tag' -TestCases @(
@@ -246,13 +248,13 @@ Describe 'SHR unshared scaling plan repair' {
             properties = @{ resourceId = $global:shrPlanRepair.Vm.id }
         })
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'NoTimeZone'
-        $global:shrPlanRepair.Vm.tags.LegacyMaintenance | Should Be $Value
-        $global:shrPlanRepair.Vm.tags.ScalingPlanExclusion | Should Be $Value
+        $target.Source | Should -Be 'NoTimeZone'
+        $global:shrPlanRepair.Vm.tags.LegacyMaintenance | Should -Be $Value
+        $global:shrPlanRepair.Vm.tags.ScalingPlanExclusion | Should -Be $Value
         $writes = @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch')
-        $writes.Count | Should Be 2
-        $writes[0].Uri | Should Match '/tags/default'
-        $writes[1].Uri | Should Match '/scalingPlans/plan'
+        $writes.Count | Should -Be 2
+        $writes[0].Uri | Should -Match '/tags/default'
+        $writes[1].Uri | Should -Match '/scalingPlans/plan'
     }
 
     It 'preserves existing administrator ownership under the new tag name' {
@@ -260,9 +262,9 @@ Describe 'SHR unshared scaling plan repair' {
         $global:shrPlanRepair.Vm.tags = @{ LegacyMaintenance = 'SessionHostReplacer'; ScalingPlanExclusion = 'Administrator' }
         $global:shrPlanRepair.Registrations = @([pscustomobject]@{ properties = @{ resourceId = $global:shrPlanRepair.Vm.id } })
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'NoTimeZone'
-        $global:shrPlanRepair.Vm.tags.ScalingPlanExclusion | Should Be 'Administrator'
-        @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch').Count | Should Be 1
+        $target.Source | Should -Be 'NoTimeZone'
+        $global:shrPlanRepair.Vm.tags.ScalingPlanExclusion | Should -Be 'Administrator'
+        @($global:shrPlanRepair.Requests | Where-Object Method -eq 'Patch').Count | Should -Be 1
     }
 
     It 'does not turn a legacy administrator exclusion into a releasable SHR exclusion' {
@@ -270,8 +272,8 @@ Describe 'SHR unshared scaling plan repair' {
         $global:shrPlanRepair.Vm.tags = @{ LegacyMaintenance = ''; ScalingPlanExclusion = 'SessionHostReplacer' }
         $global:shrPlanRepair.Registrations = @([pscustomobject]@{ properties = @{ resourceId = $global:shrPlanRepair.Vm.id } })
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'NoTimeZone'
-        $global:shrPlanRepair.Vm.tags.ScalingPlanExclusion | Should Be ''
+        $target.Source | Should -Be 'NoTimeZone'
+        $global:shrPlanRepair.Vm.tags.ScalingPlanExclusion | Should -Be ''
     }
 
     It 'does not update the plan if VM exclusion migration fails or cannot be verified' -TestCases @(
@@ -284,10 +286,10 @@ Describe 'SHR unshared scaling plan repair' {
         $global:shrPlanRepair.Registrations = @([pscustomobject]@{ properties = @{ resourceId = $global:shrPlanRepair.Vm.id } })
         $global:shrPlanRepair[$Failure] = $true
         $target = Get-ScalingPlanCurrentTarget @repairParameters
-        $target.Source | Should Be 'Error'
+        $target.Source | Should -Be 'Error'
         @($global:shrPlanRepair.Requests | Where-Object {
             $_.Method -eq 'Patch' -and $_.Uri -like '*/scalingPlans/plan?*'
-        }).Count | Should Be 0
+        }).Count | Should -Be 0
     }
 }
 
@@ -345,11 +347,11 @@ Describe 'SHR retirement scaling protection' {
         $retirementParameters.ReplacementMode = $Mode
         $result = Remove-SessionHosts @retirementParameters
         $requests = $global:shrRetirement.Requests
-        $requests.Count | Should Be 3
-        $requests[0].Body.properties.tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
-        $requests[1].Body.properties.allowNewSession | Should Be $false
-        $requests[2].Body.properties.tags.Drain | Should Not BeNullOrEmpty
-        $result.SuccessfulDeletions.Count | Should Be 0
+        $requests.Count | Should -Be 3
+        $requests[0].Body.properties.tags.ScalingPlanExclusion | Should -Be 'SessionHostReplacer'
+        $requests[1].Body.properties.allowNewSession | Should -Be $false
+        $requests[2].Body.properties.tags.Drain | Should -Not -BeNullOrEmpty
+        $result.SuccessfulDeletions.Count | Should -Be 0
     }
 
     It 'repairs missing protection during an existing drain without resetting the grace period in <Mode>' -TestCases @(
@@ -364,11 +366,11 @@ Describe 'SHR retirement scaling protection' {
         $hostInfo.PendingDrainTimeStamp = [datetime]::UtcNow.AddMinutes(-1)
         $originalTimestamp = $hostInfo.PendingDrainTimeStamp
         Remove-SessionHosts @retirementParameters | Out-Null
-        $global:shrRetirement.Requests.Count | Should Be 1
-        $hostInfo.PendingDrainTimeStamp | Should Be $originalTimestamp
-        $hostInfo.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        $global:shrRetirement.Requests.Count | Should -Be 1
+        $hostInfo.PendingDrainTimeStamp | Should -Be $originalTimestamp
+        $hostInfo.Tags.ScalingPlanExclusion | Should -Be 'SessionHostReplacer'
         Remove-SessionHosts @retirementParameters | Out-Null
-        $global:shrRetirement.Requests.Count | Should Be 1
+        $global:shrRetirement.Requests.Count | Should -Be 1
         Assert-MockCalled Send-DrainNotification -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
     }
 
@@ -380,23 +382,23 @@ Describe 'SHR retirement scaling protection' {
         param($Value)
         $global:shrRetirement.Host.Tags.ScalingPlanExclusion = $Value
         Remove-SessionHosts @retirementParameters | Out-Null
-        $global:shrRetirement.Host.Tags.ScalingPlanExclusion | Should Be $Value
-        $global:shrRetirement.Requests.Count | Should Be 2
-        @($global:shrRetirement.Requests | Where-Object { $_.Body.properties.tags.ScalingPlanExclusion }).Count | Should Be 0
+        $global:shrRetirement.Host.Tags.ScalingPlanExclusion | Should -Be $Value
+        $global:shrRetirement.Requests.Count | Should -Be 2
+        @($global:shrRetirement.Requests | Where-Object { $_.Body.properties.tags.ScalingPlanExclusion }).Count | Should -Be 0
     }
 
     It 'preserves the original timestamp when reasserting drain after external interference' {
         $originalTimestamp = [datetime]::UtcNow.AddHours(-2)
         $global:shrRetirement.Host.PendingDrainTimeStamp = $originalTimestamp
         Remove-SessionHosts @retirementParameters | Out-Null
-        $global:shrRetirement.Host.PendingDrainTimeStamp | Should Be $originalTimestamp
-        ([datetime]$global:shrRetirement.Requests[2].Body.properties.tags.Drain).ToUniversalTime() | Should Be $originalTimestamp
+        $global:shrRetirement.Host.PendingDrainTimeStamp | Should -Be $originalTimestamp
+        ([datetime]$global:shrRetirement.Requests[2].Body.properties.tags.Drain).ToUniversalTime() | Should -Be $originalTimestamp
     }
 
     It 'stops before drain, notification or deletion when protection cannot be written' {
         $global:shrRetirement.FailProtection = $true
-        { Remove-SessionHosts @retirementParameters } | Should Throw 'Exclusion tag write denied'
-        $global:shrRetirement.Requests.Count | Should Be 0
+        { Remove-SessionHosts @retirementParameters } | Should -Throw -ExpectedMessage '*Exclusion tag write denied*'
+        $global:shrRetirement.Requests.Count | Should -Be 0
         Assert-MockCalled Send-DrainNotification -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
         Assert-MockCalled Remove-VirtualMachine -ModuleName SessionHostReplacer.Lifecycle -Times 0 -Exactly -Scope It
     }
@@ -409,7 +411,7 @@ Describe 'SHR retirement scaling protection' {
         $retirementParameters.SessionHostsPendingDelete = @($deletedHost, $global:shrRetirement.Host)
         Mock Remove-VirtualMachine -ModuleName SessionHostReplacer.Lifecycle { @{ SessionHostName = 'old-08' } }
         $global:shrRetirement.FailProtection = $true
-        { Remove-SessionHosts @retirementParameters } | Should Throw 'Exclusion tag write denied'
+        { Remove-SessionHosts @retirementParameters } | Should -Throw -ExpectedMessage '*Exclusion tag write denied*'
         Assert-MockCalled Assert-SessionHostNamesAvailable -ModuleName SessionHostReplacer.Lifecycle -Times 1 -Exactly -Scope It
     }
 
@@ -429,13 +431,13 @@ Describe 'SHR retirement scaling protection' {
             @{ SessionHostName = $VMName }
         }
         $result = Remove-SessionHosts @retirementParameters
-        $result.SuccessfulDeletions.Count | Should Be 7
-        $result.SuccessfulDeletions | Should Not Contain 'old-08'
-        $global:shrRetirement.Host.Tags.ScalingPlanExclusion | Should Be 'SessionHostReplacer'
+        $result.SuccessfulDeletions.Count | Should -Be 7
+        $result.SuccessfulDeletions | Should -Not -Contain 'old-08'
+        $global:shrRetirement.Host.Tags.ScalingPlanExclusion | Should -Be 'SessionHostReplacer'
         @($global:shrRetirement.Requests | Where-Object {
             $_.Uri -like '*/sessionHosts/old-08.example.test?*' -and
             $_.Body.properties.allowNewSession -eq $false
-        }).Count | Should Be 1
+        }).Count | Should -Be 1
     }
 
     It 'preserves administrator exclusion "<Value>" when placing a host into shutdown retention' -TestCases @(
@@ -448,11 +450,11 @@ Describe 'SHR retirement scaling protection' {
         $global:shrRetirement.Host.Tags.ScalingPlanExclusion = $Value
         $retirementParameters.EnableShutdownRetention = $true
         $result = Remove-SessionHosts @retirementParameters
-        $result.SuccessfulShutdowns.Count | Should Be 1
-        $global:shrRetirement.Host.Tags.ScalingPlanExclusion | Should Be $Value
+        $result.SuccessfulShutdowns.Count | Should -Be 1
+        $global:shrRetirement.Host.Tags.ScalingPlanExclusion | Should -Be $Value
         $tagWrites = @($global:shrRetirement.Requests | Where-Object { $_.Method -eq 'PATCH' })
-        $tagWrites.Count | Should Be 1
-        $tagWrites[0].Body.properties.tags.Retained | Should Not BeNullOrEmpty
-        @($tagWrites[0].Body.properties.tags.PSObject.Properties.Name) | Should Not Contain 'ScalingPlanExclusion'
+        $tagWrites.Count | Should -Be 1
+        $tagWrites[0].Body.properties.tags.Retained | Should -Not -BeNullOrEmpty
+        @($tagWrites[0].Body.properties.tags.PSObject.Properties.Name) | Should -Not -Contain 'ScalingPlanExclusion'
     }
 }

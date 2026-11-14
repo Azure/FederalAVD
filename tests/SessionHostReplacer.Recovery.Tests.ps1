@@ -1,13 +1,14 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$recoveryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1'
-$modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
-
-function New-RecoveryResponse {
-    param([object] $Content, [int] $StatusCode = 200, [string] $ETag = 'version-1')
-    [PSCustomObject]@{
-        StatusCode = $StatusCode
-        Content = if ($null -ne $Content) { $Content | ConvertTo-Json -Depth 60 -Compress } else { '' }
-        Headers = @{ ETag = @($ETag) }
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $recoveryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1'
+    $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+    function New-RecoveryResponse {
+        param([object] $Content, [int] $StatusCode = 200, [string] $ETag = 'version-1')
+        [PSCustomObject]@{
+            StatusCode = $StatusCode
+            Content = if ($null -ne $Content) { $Content | ConvertTo-Json -Depth 60 -Compress } else { '' }
+            Headers = @{ ETag = @($ETag) }
+        }
     }
 }
 
@@ -15,6 +16,27 @@ Describe 'SHR checked operator recovery' {
     BeforeAll {
         Import-Module Az.Accounts
         Import-Module $modulePath -Force
+
+        function Set-TestRecoveryState {
+            param([scriptblock] $Change)
+            $value = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+            & $Change $value
+            $global:shrRecoveryTest.Entity.State = $value | ConvertTo-Json -Depth 40 -Compress
+        }
+
+        function Set-TestWrongTemplate {
+            $prior = @{}
+            foreach ($key in $global:shrRecoveryTest.Settings.Keys) { $prior[$key] = $global:shrRecoveryTest.Settings[$key] }
+            $prior.SessionHostTemplate = '/subscriptions/subscription/resourceGroups/rg-ops/providers/Microsoft.Resources/templateSpecs/replacer'
+            $oldHash = & $script:recoveryCoordinator { param($Values) Get-ShrConfigurationHash -Settings $Values } $prior
+            Set-TestRecoveryState {
+                param($value)
+                $value.ConfigurationHash = $oldHash
+                $body = $value.DeploymentIntent.Body | ConvertFrom-Json -AsHashtable
+                $body.properties.templateLink.id = "$($prior.SessionHostTemplate)/versions/15.0.0"
+                $value.DeploymentIntent.Body = $body | ConvertTo-Json -Depth 20 -Compress
+            }
+        }
     }
     BeforeEach {
         $script:recoveryCoordinator = Get-Module SessionHostReplacer.Continuation -All | Select-Object -First 1
@@ -194,63 +216,42 @@ Describe 'SHR checked operator recovery' {
     AfterEach { Remove-Variable shrRecoveryTest -Scope Global -ErrorAction SilentlyContinue }
     AfterAll { Remove-Module SessionHostReplacer -Force }
 
-    function Set-TestRecoveryState {
-        param([scriptblock] $Change)
-        $value = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
-        & $Change $value
-        $global:shrRecoveryTest.Entity.State = $value | ConvertTo-Json -Depth 40 -Compress
-    }
-
-    function Set-TestWrongTemplate {
-        $prior = @{}
-        foreach ($key in $global:shrRecoveryTest.Settings.Keys) { $prior[$key] = $global:shrRecoveryTest.Settings[$key] }
-        $prior.SessionHostTemplate = '/subscriptions/subscription/resourceGroups/rg-ops/providers/Microsoft.Resources/templateSpecs/replacer'
-        $oldHash = & $script:recoveryCoordinator { param($Values) Get-ShrConfigurationHash -Settings $Values } $prior
-        Set-TestRecoveryState {
-            param($value)
-            $value.ConfigurationHash = $oldHash
-            $body = $value.DeploymentIntent.Body | ConvertFrom-Json -AsHashtable
-            $body.properties.templateLink.id = "$($prior.SessionHostTemplate)/versions/15.0.0"
-            $value.DeploymentIntent.Body = $body | ConvertTo-Json -Depth 20 -Compress
-        }
-    }
-
     It 'previews by default without Azure mutations or backup files' {
         $result = & $recoveryPath @recoveryArguments
-        $result.Status | Should Be 'NeedsAttention'
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -ne 'GET' -and $_.Path -notlike '*/config/appsettings/list?*' }).Count | Should Be 0
-        Test-Path $recoveryArguments.BackupDirectory | Should Be $false
+        $result.Status | Should -Be 'NeedsAttention'
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -ne 'GET' -and $_.Path -notlike '*/config/appsettings/list?*' }).Count | Should -Be 0
+        Test-Path $recoveryArguments.BackupDirectory | Should -Be $false
     }
 
     It 'honors WhatIf even when Apply is supplied' {
         & $recoveryPath @recoveryArguments -Apply -WhatIf
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Path -like '*/stop?*' -or $_.Method -eq 'MERGE' }).Count | Should Be 0
-        Test-Path $recoveryArguments.BackupDirectory | Should Be $false
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Path -like '*/stop?*' -or $_.Method -eq 'MERGE' }).Count | Should -Be 0
+        Test-Path $recoveryArguments.BackupDirectory | Should -Be $false
     }
 
     It 'backs up both records and resumes the same operation with an exact ETag' {
         $before = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
         & $recoveryPath @recoveryArguments -Apply -Confirm:$false
         $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
-        $after.Status | Should Be 'Running'
-        $after.Id | Should Be $before.Id
-        $after.Image.Version | Should Be $before.Image.Version
-        $after.Generation | Should Be 3
-        ($after.BatchHostNames -join ',') | Should Be ($before.BatchHostNames -join ',')
-        $after.DeploymentIntent.Body | Should Be $before.DeploymentIntent.Body
-        $after.DeadlineUtc | Should Be $before.DeadlineUtc
-        $after.LastError | Should Be ''
+        $after.Status | Should -Be 'Running'
+        $after.Id | Should -Be $before.Id
+        $after.Image.Version | Should -Be $before.Image.Version
+        $after.Generation | Should -Be 3
+        ($after.BatchHostNames -join ',') | Should -Be ($before.BatchHostNames -join ',')
+        $after.DeploymentIntent.Body | Should -Be $before.DeploymentIntent.Body
+        $after.DeadlineUtc | Should -Be $before.DeadlineUtc
+        $after.LastError | Should -Be ''
         $write = @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' })
-        $write.Count | Should Be 1
-        $write[0].ETag | Should Be 'version-1'
-        $global:shrRecoveryTest.AppState | Should Be 'Running'
+        $write.Count | Should -Be 1
+        $write[0].ETag | Should -Be 'version-1'
+        $global:shrRecoveryTest.AppState | Should -Be 'Running'
         $files = @(Get-ChildItem $recoveryArguments.BackupDirectory -Filter state.json -Recurse)
-        $files.Count | Should Be 1
+        $files.Count | Should -Be 1
         $backup = Get-Content $files[0].FullName -Raw | ConvertFrom-Json -AsHashtable
-        $backup.Operation.State.Status | Should Be 'NeedsAttention'
-        $backup.DeploymentRecoveryRecord.PendingHostMappings | Should Be '{"old":"new"}'
+        $backup.Operation.State.Status | Should -Be 'NeedsAttention'
+        $backup.DeploymentRecoveryRecord.PendingHostMappings | Should -Be '{"old":"new"}'
         if ($IsWindows) {
-            (Get-Acl $files[0].DirectoryName).AreAccessRulesProtected | Should Be $true
+            (Get-Acl $files[0].DirectoryName).AreAccessRulesProtected | Should -Be $true
         }
     }
 
@@ -261,177 +262,177 @@ Describe 'SHR checked operator recovery' {
         $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
         $oldBody = $before.DeploymentIntent.Body | ConvertFrom-Json -AsHashtable
         $newBody = $after.DeploymentIntent.Body | ConvertFrom-Json -AsHashtable
-        $newBody.properties.templateLink.id | Should Be "$($global:shrRecoveryTest.Settings.SessionHostTemplate)/versions/2.0.0"
-        ($newBody.properties.parameters | ConvertTo-Json -Depth 20 -Compress) | Should Be ($oldBody.properties.parameters | ConvertTo-Json -Depth 20 -Compress)
-        $after.ConfigurationHash | Should Not Be $before.ConfigurationHash
-        $after.Id | Should Be $before.Id
-        $after.DeploymentIntent.Name | Should Be $before.DeploymentIntent.Name
-        $after.Generation | Should Be $before.Generation
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Surface -eq 'ARM' -and $_.Method -in @('PUT','PATCH','DELETE') }).Count | Should Be 0
+        $newBody.properties.templateLink.id | Should -Be "$($global:shrRecoveryTest.Settings.SessionHostTemplate)/versions/2.0.0"
+        ($newBody.properties.parameters | ConvertTo-Json -Depth 20 -Compress) | Should -Be ($oldBody.properties.parameters | ConvertTo-Json -Depth 20 -Compress)
+        $after.ConfigurationHash | Should -Not -Be $before.ConfigurationHash
+        $after.Id | Should -Be $before.Id
+        $after.DeploymentIntent.Name | Should -Be $before.DeploymentIntent.Name
+        $after.Generation | Should -Be $before.Generation
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Surface -eq 'ARM' -and $_.Method -in @('PUT','PATCH','DELETE') }).Count | Should -Be 0
     }
 
     It 'blocks a configuration change unless explicitly repaired' {
         $global:shrRecoveryTest.Settings.TargetSessionHostCount = '11'
-        { & $recoveryPath @recoveryArguments } | Should Throw 'Configuration changed'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*Configuration changed*'
     }
 
     It 'blocks unrelated configuration changes during template repair' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.Settings.TargetSessionHostCount = '11'
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'other than SessionHostTemplate'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*other than SessionHostTemplate*'
     }
 
     It 'blocks recovery of a running operation' {
         Set-TestRecoveryState { param($value) $value.Status = 'Running' }
-        { & $recoveryPath @recoveryArguments } | Should Throw 'not NeedsAttention'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*not NeedsAttention*'
     }
 
     It 'blocks a worker lease that has not expired' {
         Set-TestRecoveryState { param($value) $value.LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(10).ToString('o') }
-        { & $recoveryPath @recoveryArguments } | Should Throw 'lease has not expired'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*lease has not expired*'
     }
 
     It 'blocks cleanup recovery rather than clearing cleanup state' {
         Set-TestRecoveryState { param($value) $value.CleanupIntent = @{ Hosts = @('old') } }
-        { & $recoveryPath @recoveryArguments } | Should Throw 'Pending cleanup'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*Pending cleanup*'
     }
 
     It 'requires explicit approval to extend an expired deadline' {
         Set-TestRecoveryState { param($value) $value.DeadlineUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o') }
-        { & $recoveryPath @recoveryArguments } | Should Throw 'deadline expired'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*deadline expired*'
         $result = & $recoveryPath @recoveryArguments -ExtendDeadlineHours 12 -Apply -Confirm:$false
-        ([DateTimeOffset]$result.DeadlineUtc -gt [DateTimeOffset]::UtcNow.AddHours(11)) | Should Be $true
+        ([DateTimeOffset]$result.DeadlineUtc -gt [DateTimeOffset]::UtcNow.AddHours(11)) | Should -Be $true
         ([DateTimeOffset]($global:shrRecoveryTest.Entity.State | ConvertFrom-Json).DeadlineUtc).ToUniversalTime() |
-            Should Be ([DateTimeOffset]$result.DeadlineUtc).ToUniversalTime()
+            Should -Be ([DateTimeOffset]$result.DeadlineUtc).ToUniversalTime()
     }
 
     It 'blocks active related ARM deployments' {
         $global:shrRecoveryTest.Deployments = @(@{ name = "shr_$('a' * 32)_b2"; properties = @{ provisioningState = 'Running' } })
-        { & $recoveryPath @recoveryArguments } | Should Throw 'still active'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*still active*'
     }
 
     It 'refuses a template change after ARM accepted a deployment' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.ExistingDeployment = @{ properties = @{ provisioningState = 'Failed' } }
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'before deployment acceptance'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*before deployment acceptance*'
     }
 
     It 'refuses template repair if a target VM exists on a later inventory page' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.VmNextPage = $true
         $global:shrRecoveryTest.Vms = @(@{ name = 'avd04' })
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'target VM or AVD registration'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*target VM or AVD registration*'
     }
 
     It 'refuses template repair if a target AVD registration exists' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.Hosts = @(@{ name = 'pool/avd04.contoso.test' })
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'target VM or AVD registration'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*target VM or AVD registration*'
     }
 
     It 'requires template parameters that match the saved request' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.TemplateParameters.Remove('subnetResourceId')
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'session-host VM parameters'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*session-host VM parameters*'
     }
 
     It 'rejects a corrected template with additional required parameters' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.TemplateParameters.Add('requiredInput', @{ type = 'string' })
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw "missing required template parameter 'requiredInput'"
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*missing required template parameter ''requiredInput''*'
     }
 
     It 'refuses a concurrent operation update after stopping the app' {
         $global:shrRecoveryTest.Race = $true
-        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw 'Operation changed after preview'
-        $global:shrRecoveryTest.AppState | Should Be 'Stopped'
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should Be 0
+        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw -ExpectedMessage '*Operation changed after preview*'
+        $global:shrRecoveryTest.AppState | Should -Be 'Stopped'
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should -Be 0
     }
 
     It 'refuses changed settings after stopping the app' {
         $global:shrRecoveryTest.SettingsRace = $true
-        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw 'App settings changed after preview'
-        $global:shrRecoveryTest.AppState | Should Be 'Stopped'
+        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw -ExpectedMessage '*App settings changed after preview*'
+        $global:shrRecoveryTest.AppState | Should -Be 'Stopped'
     }
 
     It 'refuses a newly published template version after confirmation' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.TemplateRace = $true
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw 'version changed after preview'
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should Be 0
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw -ExpectedMessage '*version changed after preview*'
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should -Be 0
     }
 
     It 'leaves the app stopped when the conditional write conflicts' {
         $global:shrRecoveryTest.MergeFailure = $true
-        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw 'HTTP 412'
-        $global:shrRecoveryTest.AppState | Should Be 'Stopped'
-        @(Get-ChildItem $recoveryArguments.BackupDirectory -Filter state.json -Recurse).Count | Should Be 1
+        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw -ExpectedMessage '*HTTP 412*'
+        $global:shrRecoveryTest.AppState | Should -Be 'Stopped'
+        @(Get-ChildItem $recoveryArguments.BackupDirectory -Filter state.json -Recurse).Count | Should -Be 1
     }
 
     It 'does not restart the app when readback differs from the exact submitted state' {
         $global:shrRecoveryTest.VerificationFailure = $true
-        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw 'could not be verified'
-        $global:shrRecoveryTest.AppState | Should Be 'Stopped'
+        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw -ExpectedMessage '*could not be verified*'
+        $global:shrRecoveryTest.AppState | Should -Be 'Stopped'
     }
 
     It 'surfaces Table authorization failures without creating a backup or stopping the app' {
         $global:shrRecoveryTest.ReadFailure = $true
-        { & $recoveryPath @recoveryArguments } | Should Throw 'HTTP 403'
-        $global:shrRecoveryTest.AppState | Should Be 'Running'
-        Test-Path $recoveryArguments.BackupDirectory | Should Be $false
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*HTTP 403*'
+        $global:shrRecoveryTest.AppState | Should -Be 'Running'
+        Test-Path $recoveryArguments.BackupDirectory | Should -Be $false
     }
 
     It 'rejects a Table endpoint outside the active cloud before acquiring a token' {
         $global:shrRecoveryTest.Settings.AzureWebJobsStorage__tableServiceUri = 'https://untrusted.example'
-        { & $recoveryPath @recoveryArguments } | Should Throw 'active Azure cloud'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*active Azure cloud*'
         Assert-MockCalled Get-AzAccessToken -Times 0 -Exactly -Scope It
     }
 
     It 'does not switch the shared Azure context' {
-        { & $recoveryPath @recoveryArguments -SubscriptionId 'another-subscription' } | Should Throw 'match the active Az context'
+        { & $recoveryPath @recoveryArguments -SubscriptionId 'another-subscription' } | Should -Throw -ExpectedMessage '*match the active Az context*'
     }
 
     It 'requires a usable operation ETag even for preview' {
         $global:shrRecoveryTest.ETag = '*'
-        { & $recoveryPath @recoveryArguments } | Should Throw 'usable ETag'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*usable ETag*'
     }
 
     It 'does not create new batch authorization for an unstarted operation' {
         Set-TestRecoveryState { param($value) $value.BatchHostNames = $null }
-        { & $recoveryPath @recoveryArguments } | Should Throw 'No batch was checkpointed'
+        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*No batch was checkpointed*'
     }
 
     It 'rejects template repair for later SideBySide batches' {
         Set-TestWrongTemplate
         Set-TestRecoveryState { param($value) $value.BatchNumber = 2 }
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'first SideBySide'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*first SideBySide*'
     }
 
     It 'rejects template repair for failures other than validation or HTTP 400' {
         Set-TestWrongTemplate
         Set-TestRecoveryState { param($value) $value.LastError = 'HTTP 403' }
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'template-validation or HTTP 400'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*template-validation or HTTP 400*'
     }
 
     It 'rejects saved deployment scopes that differ from app settings' {
         Set-TestWrongTemplate
         Set-TestRecoveryState { param($value) $value.DeploymentIntent.Uri = 'https://untrusted.example/deployment' }
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'configured VM scope'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*configured VM scope*'
     }
 
     It 'rejects mismatched saved host-name lists before changing the template' {
         Set-TestWrongTemplate
         Set-TestRecoveryState { param($value) $value.DeploymentIntent.HostNames = @('avd99') }
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'do not match its request'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*do not match its request*'
     }
 
     It 'does not update state or restart the app if backup creation fails' {
         $blockedPath = Join-Path $TestDrive "$([guid]::NewGuid().ToString('N')).txt"
         Set-Content -LiteralPath $blockedPath -Value 'A file cannot be used as a backup directory.' -Encoding ascii
         $recoveryArguments.BackupDirectory = $blockedPath
-        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw
-        $global:shrRecoveryTest.AppState | Should Be 'Stopped'
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should Be 0
+        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw
+        $global:shrRecoveryTest.AppState | Should -Be 'Stopped'
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should -Be 0
     }
 
     It 'supports secure-string access tokens without printing their contents' {
@@ -439,19 +440,19 @@ Describe 'SHR checked operator recovery' {
             [PSCustomObject]@{ Token = (ConvertTo-SecureString 'unit-test-token' -AsPlainText -Force) }
         }
         $result = & $recoveryPath @recoveryArguments
-        $result.OperationId | Should Be ('a' * 32)
+        $result.OperationId | Should -Be ('a' * 32)
     }
 
     It 'does not treat an empty successful ARM response as proof of deployment absence' {
         Set-TestWrongTemplate
         $global:shrRecoveryTest.EmptyDeploymentResponse = $true
-        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should Throw 'resource absence cannot be established'
+        { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*resource absence cannot be established*'
     }
 
     It 'refuses a state write if another operator restarts the app during recovery' {
         $global:shrRecoveryTest.ConcurrentStart = $true
-        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should Throw 'restarted during recovery'
-        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should Be 0
+        { & $recoveryPath @recoveryArguments -Apply -Confirm:$false -WarningAction SilentlyContinue } | Should -Throw -ExpectedMessage '*restarted during recovery*'
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' }).Count | Should -Be 0
     }
 }
 
@@ -473,7 +474,7 @@ Describe 'Shared SHR recovery fingerprints' {
             $fromEnvironment = & $script:hashCoordinator { Get-ShrConfigurationHash }
             $runtimeSettings = [Environment]::GetEnvironmentVariables()
             $fromSettings = & $script:hashCoordinator { param($Values) Get-ShrConfigurationHash -Settings $Values } $runtimeSettings
-            $fromSettings | Should Be $fromEnvironment
+            $fromSettings | Should -Be $fromEnvironment
         } finally {
             foreach ($name in $values.Keys) { [Environment]::SetEnvironmentVariable($name, $original[$name]) }
         }
@@ -483,6 +484,6 @@ Describe 'Shared SHR recovery fingerprints' {
         $settings = @{ HostPoolSubscriptionId = 'Subscription'; HostPoolResourceGroupName = 'RG'; HostPoolName = 'Pool' }
         $actual = & $script:hashCoordinator { param($Values) Get-ShrOperationKey -Settings $Values } $settings
         $expected = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes('subscription/rg/pool'))).ToLowerInvariant()
-        $actual | Should Be $expected
+        $actual | Should -Be $expected
     }
 }

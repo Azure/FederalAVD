@@ -1,5 +1,7 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
+}
 
 Describe 'SHR Graph mutation ownership guards' {
     BeforeAll { Import-Module $modulePath -Force }
@@ -44,15 +46,15 @@ Describe 'SHR Graph mutation ownership guards' {
         {
             Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Method $Method -Uri '/v1.0/devices/nonexistent' -ClientId test-client
-        } | Should Throw 'Worker ownership lost'
-        $global:shrGraphGuard.Requests.Count | Should Be 0
+        } | Should -Throw -ExpectedMessage '*Worker ownership lost*'
+        $global:shrGraphGuard.Requests.Count | Should -Be 0
     }
 
     It 'allows read-only directory discovery without requiring an active worker lease' {
         Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
             -Method Get -Uri '/v1.0/devices' -ClientId test-client | Out-Null
-        $global:shrGraphGuard.Requests.Count | Should Be 1
-        $global:shrGraphGuard.LeaseChecks | Should Be 0
+        $global:shrGraphGuard.Requests.Count | Should -Be 1
+        $global:shrGraphGuard.LeaseChecks | Should -Be 0
     }
 
     It 'blocks the directory deletion call path after worker ownership is lost' {
@@ -60,9 +62,9 @@ Describe 'SHR Graph mutation ownership guards' {
             {
                 Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                     -Name nonexistent -Id nonexistent -Directory Entra -ClientId test-client
-            } | Should Throw 'Worker ownership lost'
+            } | Should -Throw -ExpectedMessage '*Worker ownership lost*'
         }
-        $global:shrGraphGuard.Requests.Count | Should Be 0
+        $global:shrGraphGuard.Requests.Count | Should -Be 0
     }
 
     It 'rechecks ownership after token acquisition before <Helper> retries a Graph mutation' -TestCases @(
@@ -80,9 +82,9 @@ Describe 'SHR Graph mutation ownership guards' {
                 Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.us' -GraphToken test-token `
                     -Method Delete -Uri '/v1.0/devices/nonexistent' -ClientId test-client
             }
-        } | Should Throw 'Worker ownership lost'
-        $global:shrGraphGuard.Requests.Count | Should Be 1
-        $global:shrGraphGuard.LeaseChecks | Should Be 2
+        } | Should -Throw -ExpectedMessage '*Worker ownership lost*'
+        $global:shrGraphGuard.Requests.Count | Should -Be 1
+        $global:shrGraphGuard.LeaseChecks | Should -Be 2
     }
 }
 
@@ -157,8 +159,8 @@ Describe 'SHR repeat-safe directory deletion logging' {
         {
             Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Method Get -Uri '/v1.0/devices' -ClientId test-client
-        } | Should Throw 'Simulated HTTP 500'
-        $global:shrGraphDelete.Logs.Message | Should Contain 'Graph API error response: {"error":{"code":"ResourceNotFound"}}'
+        } | Should -Throw -ExpectedMessage '*Simulated HTTP 500*'
+        $global:shrGraphDelete.Logs.Message | Should -Contain 'Graph API error response: {"error":{"code":"ResourceNotFound"}}'
     }
 
     It 'reports unreadable error details while preserving the original HTTP failure' {
@@ -168,10 +170,10 @@ Describe 'SHR repeat-safe directory deletion logging' {
         {
             Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Method Get -Uri '/v1.0/devices' -ClientId test-client
-        } | Should Throw 'Simulated HTTP 500'
+        } | Should -Throw -ExpectedMessage '*Simulated HTTP 500*'
         @($global:shrGraphDelete.Logs | Where-Object {
             $_.Level -eq 'Trace' -and $_.Message -like 'Graph error-response details could not*'
-        }).Count | Should Be 1
+        }).Count | Should -Be 1
     }
 
     It 'logs an already-absent <Directory> device at Information without invoking the error logger' -TestCases @(
@@ -184,13 +186,13 @@ Describe 'SHR repeat-safe directory deletion logging' {
             Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Name old-host -Id old-id -Directory $global:shrGraphDelete.Directory -ClientId test-client
         }
-        $global:shrGraphDelete.Requests.Count | Should Be 1
-        $global:shrGraphDelete.Requests[0].Uri | Should Be "https://graph.microsoft.com/v1.0/$Collection/old-id"
-        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should Be 0
+        $global:shrGraphDelete.Requests.Count | Should -Be 1
+        $global:shrGraphDelete.Requests[0].Uri | Should -Be "https://graph.microsoft.com/v1.0/$Collection/old-id"
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should -Be 0
         $info = @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Information')
-        $info.Count | Should Be 1
-        $info[0].Message | Should Be "Device old-host is already absent from $DisplayName; cleanup verification is still required."
-        $global:shrGraphDelete.Logs.Message -join "`n" | Should Not Match 'Successfully removed'
+        $info.Count | Should -Be 1
+        $info[0].Message | Should -Be "Device old-host is already absent from $DisplayName; cleanup verification is still required."
+        $global:shrGraphDelete.Logs.Message -join "`n" | Should -Not -Match 'Successfully removed'
     }
 
     It 'preserves a DELETE 404 exception for its caller when suppression is explicitly enabled' {
@@ -200,9 +202,9 @@ Describe 'SHR repeat-safe directory deletion logging' {
             Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Method Delete -Uri '/v1.0/devices/old-id' -ClientId test-client -SuppressNotFoundError
         } catch { $failure = $_ }
-        $failure.Exception.Message | Should Be 'Simulated HTTP 404.'
-        [int]$failure.Exception.Response.StatusCode | Should Be 404
-        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should Be 0
+        $failure.Exception.Message | Should -Be 'Simulated HTTP 404.'
+        [int]$failure.Exception.Response.StatusCode | Should -Be 404
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should -Be 0
     }
 
     It 'retains error logging for a <Method> 404 without a device-delete opt-in' -TestCases @(
@@ -214,8 +216,8 @@ Describe 'SHR repeat-safe directory deletion logging' {
         {
             Invoke-GraphApiWithRetry -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Method $Method -Uri '/v1.0/devices/old-id' -ClientId test-client -SuppressNotFoundError:$Suppress
-        } | Should Throw 'Simulated HTTP 404'
-        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should BeGreaterThan 0
+        } | Should -Throw -ExpectedMessage '*Simulated HTTP 404*'
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should -BeGreaterThan 0
     }
 
     It 'does not classify HTTP <Status> as an already-absent device' -TestCases @(
@@ -232,10 +234,10 @@ Describe 'SHR repeat-safe directory deletion logging' {
             {
                 Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                     -Name old-host -Id old-id -Directory Entra -ClientId test-client
-            } | Should Throw 'Simulated HTTP'
+            } | Should -Throw -ExpectedMessage '*Simulated HTTP*'
         }
-        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should BeGreaterThan 0
-        $global:shrGraphDelete.Logs.Message -join "`n" | Should Not Match 'already absent|Successfully removed'
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should -BeGreaterThan 0
+        $global:shrGraphDelete.Logs.Message -join "`n" | Should -Not -Match 'already absent|Successfully removed'
     }
 
     It 'preserves transport failures as errors' {
@@ -245,9 +247,9 @@ Describe 'SHR repeat-safe directory deletion logging' {
             {
                 Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                     -Name old-host -Id old-id -Directory Entra -ClientId test-client
-            } | Should Throw 'Simulated transport failure'
+            } | Should -Throw -ExpectedMessage '*Simulated transport failure*'
         }
-        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should BeGreaterThan 0
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should -BeGreaterThan 0
     }
 
     It 'retains the GCCH-to-DoD fallback after HTTP <Status> and checks ownership before both DELETEs' -TestCases @(
@@ -267,13 +269,13 @@ Describe 'SHR repeat-safe directory deletion logging' {
             Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.us' -GraphToken test-token `
                 -Name old-host -Id old-id -Directory Entra -ClientId test-client
         }
-        $global:shrGraphDelete.Requests.Count | Should Be 2
-        $global:shrGraphDelete.Requests[1].Uri | Should Be 'https://dod-graph.microsoft.us/v1.0/devices/old-id'
+        $global:shrGraphDelete.Requests.Count | Should -Be 2
+        $global:shrGraphDelete.Requests[1].Uri | Should -Be 'https://dod-graph.microsoft.us/v1.0/devices/old-id'
         Assert-MockCalled Get-AccessToken -ModuleName SessionHostReplacer.Core -Scope It -Times 1 -Exactly -ParameterFilter {
             $ResourceUri -eq 'https://dod-graph.microsoft.us' -and $ClientId -eq 'test-client'
         }
         Assert-MockCalled Assert-ShrWorkerLease -ModuleName SessionHostReplacer.Core -Scope It -Times 2 -Exactly
-        $global:shrGraphDelete.Logs.Message | Should Contain 'Successfully removed device old-host from Entra ID'
+        $global:shrGraphDelete.Logs.Message | Should -Contain 'Successfully removed device old-host from Entra ID'
     }
 
     It 'retains the successful deletion message after HTTP 204' {
@@ -282,8 +284,8 @@ Describe 'SHR repeat-safe directory deletion logging' {
             Remove-SessionHostDirectoryDevice -GraphEndpoint 'https://graph.microsoft.com' -GraphToken test-token `
                 -Name old-host -Id old-id -Directory Entra -ClientId test-client
         }
-        $global:shrGraphDelete.Logs.Message | Should Contain 'Successfully removed device old-host from Entra ID'
-        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should Be 0
+        $global:shrGraphDelete.Logs.Message | Should -Contain 'Successfully removed device old-host from Entra ID'
+        @($global:shrGraphDelete.Logs | Where-Object Level -eq 'Error').Count | Should -Be 0
     }
 }
 
@@ -325,8 +327,8 @@ Describe 'SHR recovery-state mutation boundaries' {
         {
             Save-DeploymentState -DeploymentState ([PSCustomObject]@{ LastStatus = 'Succeeded' }) `
                 -HostPoolName test-pool -ClientId test-client -RequireSuccess
-        } | Should Throw 'Worker ownership lost'
-        $global:shrRecoveryGuard.Writes.Count | Should Be 0
+        } | Should -Throw -ExpectedMessage '*Worker ownership lost*'
+        $global:shrRecoveryGuard.Writes.Count | Should -Be 0
     }
 
     It 'preserves an invocation-budget timeout so the continuation worker can yield safely' {
@@ -336,8 +338,8 @@ Describe 'SHR recovery-state mutation boundaries' {
             Save-DeploymentState -DeploymentState ([PSCustomObject]@{ LastStatus = 'Succeeded' }) `
                 -HostPoolName test-pool -ClientId test-client -RequireSuccess
         } catch { $exception = $_.Exception }
-        $exception -is [TimeoutException] | Should Be $true
-        $global:shrRecoveryGuard.Writes.Count | Should Be 0
+        $exception -is [TimeoutException] | Should -Be $true
+        $global:shrRecoveryGuard.Writes.Count | Should -Be 0
     }
 }
 
@@ -377,9 +379,9 @@ Describe 'SHR deadlines across ownership storage reads' {
                 return @{ State = $script:WorkerContext.Operation.State }
             }
             try {
-                { Assert-ShrWorkerLease } | Should Throw $global:shrBoundaryMessage
+                { Assert-ShrWorkerLease } | Should -Throw -ExpectedMessage ("*" + [WildcardPattern]::Escape($global:shrBoundaryMessage) + "*")
                 Assert-MockCalled Get-ShrOperation -Times 1 -Exactly -Scope It
-                if ($global:shrBoundary -eq 'InvocationBudget') { $script:WorkerContext.YieldRequested | Should Be $true }
+                if ($global:shrBoundary -eq 'InvocationBudget') { $script:WorkerContext.YieldRequested | Should -Be $true }
             } finally {
                 $script:WorkerContext = $null
                 Remove-Variable shrBoundary,shrBoundaryMessage -Scope Global

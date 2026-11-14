@@ -104,7 +104,14 @@ The [Monthly Image Operations guide](monthly-image-operations.md) owns that rele
 When a Log Analytics workspace is supplied, the deployment creates workspace-based Application
 Insights for the Function App. Function telemetry goes through Application Insights; SHR does
 not create the separate Function App diagnostic setting that collects `FunctionAppLogs`.
-The optional shared workbook queries the selected Application Insights resources.
+The optional shared workbook queries the primary workload workspace directly, filtering its
+Application Insights telemetry by component IDs automatically discovered for the selected host
+pool. Operators choose **Host Pool** and **Time Range**; no Application Insights selection is
+required. Discovery uses the components' `cm-resource-parent` tags, so native idle invocations
+can be mapped without recent SHR application messages. Central policy exports are unchanged.
+Its default **Operations** page puts inventory KPIs, freshness and image consistency before
+compact cycle status and timer health. **Investigation** separates cycle timelines/logs, native
+invocations (including idle runs), and errors/recovery. Cycle filters do not constrain Operations.
 
 Read monitoring as three separate signals:
 

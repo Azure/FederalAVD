@@ -98,14 +98,66 @@ dependencies are affected. Read the selected tests for additional prerequisites.
 For example, after following the Bicep skill's build and synchronization steps:
 
 ```powershell
+Import-Module Pester -RequiredVersion 5.7.1
+
 # Select the component test relevant to your change.
-Invoke-Pester -Script tests\HostPool.Tests.ps1
+Invoke-Pester -Path tests\HostPool.Tests.ps1
 
 # For changes affecting generated templates and publication size:
-Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1
+Invoke-Pester -Path tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1
 
 git diff --check
 ```
+
+### Pester tests in VS Code
+
+The repository test suite uses Pester 5.7.1. The validated local environment is
+Windows with PowerShell 7.6. Tests that compile templates require Azure CLI and
+Bicep; publishing-package checks require Az.Resources, and mocked Azure workflows
+may also require Az.Accounts. Read individual tests for additional prerequisites.
+No Azure sign-in is needed for these offline checks.
+
+Naming tests validate the current centralized policy and bundle behavior, not
+compatibility with the former naming implementation. Bundle scenario fixtures
+contain inputs only; assert intended current behavior in the tests.
+
+Install Pester for the PowerShell 7 account used by VS Code:
+
+```powershell
+Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser
+```
+
+Install the recommended **PowerShell** (`ms-vscode.powershell`) and **Pester Tests**
+(`pspester.pester-test`) extensions. Use **PowerShell: Show Session Menu** to
+select PowerShell 7.6. Reload the VS Code
+window after installation, open **Testing**, and refresh the tests. Workspace
+settings discover all `tests/**/*.Tests.ps1` files. Run or debug individual cases,
+groups, files, or the entire suite from Testing. Identifier naming discovery
+compiles a local naming-policy fixture to generate boundary cases, so Azure CLI
+and Bicep must be available when refreshing the full test tree.
+
+The equivalent CLI run from the repository root is:
+
+```powershell
+Import-Module Pester -RequiredVersion 5.7.1
+Invoke-Pester -Path '.\tests' -Output Detailed
+
+# Limit a run to Session Host Replacer tests.
+Invoke-Pester -Path '.\tests\SessionHostReplacer*.Tests.ps1' -Output Detailed
+```
+
+Tests keep runtime setup and helpers in `BeforeAll` and use Pester 5 assertion
+switches. Generate discovery data in `BeforeDiscovery` and use `-ForEach` or
+`-TestCases` rather than closing over discovery-loop variables. Keep discovery
+free of Azure requests and runtime side effects so both the Testing tree and
+filtered individual runs work. Script-style regression checks are exposed as
+`It` cases, not executed while discovering the test tree.
+Use descriptive local names instead of PowerShell automatic variables such as
+`$PROFILE`, `$Matches`, `$Error`, or `$Event`; intentional reads and native
+exit-code simulation in mocks are different from accidental shadowing.
+These are offline tests; passing them does not establish live Azure behavior.
+
+### Deployment validation
 
 Template Spec checks measure the complete serialized package, including linked
 artifacts, the Portal form, and envelope allowance. Report remaining headroom;
