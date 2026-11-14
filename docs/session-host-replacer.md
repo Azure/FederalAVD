@@ -112,6 +112,17 @@ can be mapped without recent SHR application messages. Central policy exports ar
 Its default **Operations** page puts inventory KPIs, freshness and image consistency before
 compact cycle status and timer health. **Investigation** separates cycle timelines/logs, native
 invocations (including idle runs), and errors/recovery. Cycle filters do not constrain Operations.
+Native invocation investigation shows a selected-request summary and a readable event timeline.
+The timeline formats structured messages without changing collected telemetry; original JSON,
+Verbose records and full correlation/exception details remain in the explicit raw-detail drill-down.
+The Azure Portal's native invocation logs are unchanged.
+Inventory freshness, both image-consistency grids, latest cycle status, timer health and the
+selected-invocation summary use Tiny-height panels rather than the Medium preset used for
+longer log views. Their queries and row limits are unchanged.
+In **Show trends and activity**, progressive scale-up and drain summaries also use Tiny
+height and share a 50/50 row beneath a combined heading. They and the full-width Small-height
+deletion chart sit under **Deployment Progress**; **Historical Trends** is a separate section.
+**Replacement Cycle Status** and **Timer Health** have their own headings outside image consistency.
 
 Read monitoring as three separate signals:
 

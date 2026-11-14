@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "13831775831091836159"
+      "version": "0.49.2.45890",
+      "templateHash": "3808304311751227478"
     }
   },
   "definitions": {
@@ -792,8 +792,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "3562857783434377092"
+              "version": "0.49.2.45890",
+              "templateHash": "13372235908747318984"
             },
             "name": "Session host deployment orchestration",
             "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
@@ -1379,8 +1379,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12699174301409301535"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9428460447385678609"
                     },
                     "name": "Availability set",
                     "description": "Deploys an availability set with caller-selected fault and update domains; virtual machines are associated separately."
@@ -1496,8 +1496,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "3025370682010211907"
+                      "version": "0.49.2.45890",
+                      "templateHash": "5633820431252324412"
                     },
                     "name": "NetApp SMB endpoint lookup",
                     "description": "Reads the first mount-target SMB FQDN for existing local and remote NetApp volumes across resource groups, enforcing one volume per share in each nonempty input array."
@@ -1770,8 +1770,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "4198771185535715484"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10792252720089923895"
                     },
                     "name": "Session host VM batch orchestration",
                     "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
@@ -2763,8 +2763,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "12951260404466020760"
+                              "version": "0.49.2.45890",
+                              "templateHash": "8394745655747289777"
                             },
                             "name": "Session host customization orchestration",
                             "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
@@ -2924,8 +2924,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "5781275916356412343"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7608463353112696962"
                             },
                             "name": "OS disk network update orchestration",
                             "description": "Reads creation data from an existing managed OS disk and forwards it to the disk network-access update in the deployment resource group."
@@ -2986,8 +2986,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.48.1.52935",
-                                      "templateHash": "5495749589252458864"
+                                      "version": "0.49.2.45890",
+                                      "templateHash": "8417223263571053867"
                                     },
                                     "name": "OS disk network access update",
                                     "description": "Updates a managed disk using preserved creation data, disables public network access, and selects private-only or deny-all network access according to the supplied disk access resource ID."
@@ -3086,8 +3086,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "17455206039178087163"
+                              "version": "0.49.2.45890",
+                              "templateHash": "8908867272805435155"
                             },
                             "name": "Session host VM backup registration",
                             "description": "Protects named existing session-host VMs using an existing Recovery Services vault and VM backup policy in the deployment resource group."
@@ -3197,8 +3197,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "16642941783329896103"
+                      "version": "0.49.2.45890",
+                      "templateHash": "7002496395134164902"
                     },
                     "name": "Session host batch output adapter",
                     "description": "Flattens per-batch VM name arrays into one ordered VM name array without deploying resources."

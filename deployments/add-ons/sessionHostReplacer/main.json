@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "885787604159027283"
+      "templateHash": "15608006274516011252"
     }
   },
   "definitions": {
@@ -1705,8 +1705,8 @@
       "metadata": {
         "_generator": {
           "name": "bicep",
-          "version": "0.48.1.52935",
-          "templateHash": "13831775831091836159"
+          "version": "0.49.2.45890",
+          "templateHash": "3808304311751227478"
         }
       },
       "definitions": {
@@ -2492,8 +2492,8 @@
               "metadata": {
                 "_generator": {
                   "name": "bicep",
-                  "version": "0.48.1.52935",
-                  "templateHash": "3562857783434377092"
+                  "version": "0.49.2.45890",
+                  "templateHash": "13372235908747318984"
                 },
                 "name": "Session host deployment orchestration",
                 "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
@@ -3079,8 +3079,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.48.1.52935",
-                          "templateHash": "12699174301409301535"
+                          "version": "0.49.2.45890",
+                          "templateHash": "9428460447385678609"
                         },
                         "name": "Availability set",
                         "description": "Deploys an availability set with caller-selected fault and update domains; virtual machines are associated separately."
@@ -3196,8 +3196,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.48.1.52935",
-                          "templateHash": "3025370682010211907"
+                          "version": "0.49.2.45890",
+                          "templateHash": "5633820431252324412"
                         },
                         "name": "NetApp SMB endpoint lookup",
                         "description": "Reads the first mount-target SMB FQDN for existing local and remote NetApp volumes across resource groups, enforcing one volume per share in each nonempty input array."
@@ -3470,8 +3470,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.48.1.52935",
-                          "templateHash": "4198771185535715484"
+                          "version": "0.49.2.45890",
+                          "templateHash": "10792252720089923895"
                         },
                         "name": "Session host VM batch orchestration",
                         "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
@@ -4463,8 +4463,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.48.1.52935",
-                                  "templateHash": "12951260404466020760"
+                                  "version": "0.49.2.45890",
+                                  "templateHash": "8394745655747289777"
                                 },
                                 "name": "Session host customization orchestration",
                                 "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
@@ -4624,8 +4624,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.48.1.52935",
-                                  "templateHash": "5781275916356412343"
+                                  "version": "0.49.2.45890",
+                                  "templateHash": "7608463353112696962"
                                 },
                                 "name": "OS disk network update orchestration",
                                 "description": "Reads creation data from an existing managed OS disk and forwards it to the disk network-access update in the deployment resource group."
@@ -4686,8 +4686,8 @@
                                       "metadata": {
                                         "_generator": {
                                           "name": "bicep",
-                                          "version": "0.48.1.52935",
-                                          "templateHash": "5495749589252458864"
+                                          "version": "0.49.2.45890",
+                                          "templateHash": "8417223263571053867"
                                         },
                                         "name": "OS disk network access update",
                                         "description": "Updates a managed disk using preserved creation data, disables public network access, and selects private-only or deny-all network access according to the supplied disk access resource ID."
@@ -4786,8 +4786,8 @@
                               "metadata": {
                                 "_generator": {
                                   "name": "bicep",
-                                  "version": "0.48.1.52935",
-                                  "templateHash": "17455206039178087163"
+                                  "version": "0.49.2.45890",
+                                  "templateHash": "8908867272805435155"
                                 },
                                 "name": "Session host VM backup registration",
                                 "description": "Protects named existing session-host VMs using an existing Recovery Services vault and VM backup policy in the deployment resource group."
@@ -4897,8 +4897,8 @@
                       "metadata": {
                         "_generator": {
                           "name": "bicep",
-                          "version": "0.48.1.52935",
-                          "templateHash": "16642941783329896103"
+                          "version": "0.49.2.45890",
+                          "templateHash": "7002496395134164902"
                         },
                         "name": "Session host batch output adapter",
                         "description": "Flattens per-batch VM name arrays into one ordered VM name array without deploying resources."
@@ -11989,7 +11989,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17171663854657838237"
+              "templateHash": "7230091518852295517"
             }
           },
           "parameters": {
@@ -12411,7 +12411,7 @@
                           "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\r\ntraces\r\n| where timestamp {TimeRange}\r\n| where message contains 'METRICS |'\r\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\r\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\r\n| summarize ['Last Inventory Observation'] = max(timestamp) by HostPoolName, cloud_RoleName\r\n| project ['Host Pool'] = HostPoolName, ['Function App'] = cloud_RoleName, ['Last Inventory Observation'],\r\n    ['Observation Age (min)'] = datetime_diff('minute', now(), ['Last Inventory Observation'])",
                           "title": "Inventory Freshness - Not a Timer Heartbeat",
                           "visualization": "table",
-                          "size": 0,
+                          "size": 4,
                           "queryType": 0,
                           "gridSettings": {
                             "formatters": []
@@ -12435,7 +12435,7 @@
                         "content": {
                           "version": "KqlItem/1.0",
                           "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\nlet results = traces\n| where timestamp {TimeRange}\n| where message contains \"IMAGE_INFO\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\n| extend ImageType = extract(@\"Type:\\s*([^\\|]+)\", 1, message)\n| extend Publisher = extract(@\"Publisher:\\s*([^\\|]+)\", 1, message)\n| extend Offer = extract(@\"Offer:\\s*([^\\|]+)\", 1, message)\n| extend Sku = extract(@\"Sku:\\s*([^\\|]+)\", 1, message)\n| extend Gallery = extract(@\"Gallery:\\s*([^\\|]+)\", 1, message)\n| extend ImageDefinition = extract(@\"ImageDefinition:\\s*([^\\|]+)\", 1, message)\n| extend Version = extract(@\"Version:\\s*([^\\s]+)\", 1, message)\n| where isnotempty(ImageType)\n| summarize arg_max(timestamp, *) by HostPoolName\n| project \n    HostPool = HostPoolName,\n    ['Image Type'] = trim_end(@\"\\s\", ImageType),\n    ['Image Details'] = case(\n        trim_end(@\"\\s\", ImageType) == \"Marketplace\", strcat(trim_end(@\"\\s\", Publisher), \"/\", trim_end(@\"\\s\", Offer), \"/\", trim_end(@\"\\s\", Sku)),\n        trim_end(@\"\\s\", ImageType) == \"Gallery\", strcat(trim_end(@\"\\s\", Gallery), \"/\", trim_end(@\"\\s\", ImageDefinition)),\n        \"Unknown\"\n    ),\n    Version = trim_end(@\"\\s\", Version),\n    ['Last Updated'] = timestamp;\nresults\n| union (datatable(HostPool:string, ['Image Type']:string, ['Image Details']:string, Version:string, ['Last Updated']:datetime) ['No Data', 'N/A', 'N/A', 'N/A', datetime(null)])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
-                          "size": 0,
+                          "size": 4,
                           "title": "Current Image Configuration",
                           "timeContext": {
                             "durationMs": 0
@@ -12491,7 +12491,7 @@
                         "content": {
                           "version": "KqlItem/1.0",
                           "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\ntraces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\n| extend Total = toint(extract(@\"Total:\\s*(\\d+)\", 1, message))\n| extend Enabled = toint(extract(@\"Enabled:\\s*(\\d+)\", 1, message))\n| extend ShutdownRetention = toint(extract(@\"ShutdownRetention:\\s*(\\d+)\", 1, message))\n| extend ToReplace = toint(extract(@\"ToReplace:\\s*(\\d+)\", 1, message))\n| where isnotempty(Total)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend ActiveHosts = Total - coalesce(ShutdownRetention, 0)\n| extend OnLatestImage = ActiveHosts - ToReplace\n| extend PercentGood = iff(ActiveHosts > 0, round(todouble(OnLatestImage) / todouble(ActiveHosts) * 100.0, 2), real(null))\n| project ['Host Pool'] = HostPoolName, ['On Latest Image'] = OnLatestImage, ['Needs Replacement'] = ToReplace, ['% On Latest Image'] = PercentGood, ['Last Observed'] = timestamp\n| order by ['Host Pool'] asc",
-                          "size": 0,
+                          "size": 4,
                           "title": "Latest-Reported Image Consistency",
                           "timeContext": {
                             "durationMs": 0
@@ -12567,6 +12567,13 @@
                         "name": "consistency-table"
                       },
                       {
+                        "type": 1,
+                        "content": {
+                          "json": "### Replacement Cycle Status"
+                        },
+                        "name": "cycle-status-header"
+                      },
+                      {
                         "content": {
                           "resourceType": "microsoft.operationalinsights/workspaces",
                           "timeContextFromParameter": "TimeRange",
@@ -12577,7 +12584,7 @@
                           "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\r\ntraces\r\n| where timestamp {TimeRange}\r\n| where message contains 'SHR_EVENT |'\r\n| extend Data = parse_json(extract(@\"SHR_EVENT \\| (\\{.*\\})$\", 1, message))\r\n| where toint(Data.SchemaVersion) == 1\r\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message), CycleId = tostring(Data.CycleId), FunctionApp = coalesce(tostring(Data.FunctionApp), cloud_RoleName)\r\n| where CycleId matches regex @\"^[a-f0-9]{32}$\"\r\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\n\r\n| summarize arg_max(timestamp, *) by CycleId\n| summarize arg_max(timestamp, *) by HostPoolName, FunctionApp\r\n| extend LeaseExpires = todatetime(Data.LeaseExpiresUtc), Deadline = todatetime(Data.DeadlineUtc)\r\n| project ['Host Pool'] = HostPoolName, Status = tostring(Data.Status),\r\n    Activity = replace_regex(tostring(Data.Phase), @\"([a-z])([A-Z])\", @\"\\1 \\2\"),\r\n    Reason = tostring(Data.Reason), ['Last Observed'] = timestamp,\r\n    ['Observation Age (min)'] = datetime_diff('minute', now(), timestamp)\r\n| order by ['Host Pool'] asc",
                           "title": "Latest Cycle Status",
                           "visualization": "table",
-                          "size": 0,
+                          "size": 4,
                           "queryType": 0,
                           "gridSettings": {
                             "formatters": []
@@ -12592,7 +12599,7 @@
                       {
                         "type": 1,
                         "content": {
-                          "json": "### ⏰ Schedule Information"
+                          "json": "### Timer Health"
                         },
                         "name": "schedule-header"
                       },
@@ -12601,7 +12608,7 @@
                         "content": {
                           "version": "KqlItem/1.0",
                           "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    resultCode = ResultCode, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\r\nlet invocations = requests\r\n| where timestamp {TimeRange}\r\n| extend FunctionName = replace_regex(name, @\"^Functions\\.\", ''), Source = tolower(tostring(column_ifexists('_ResourceId', ''))), FunctionApp = cloud_RoleName,\r\n    InvocationKey = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']), id)\r\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker') and isnotempty(InvocationKey)\r\n| extend Trigger = iff(FunctionName == 'session-host-replacer-worker', 'Reconciliation', 'Initiation')\r\n| summarize arg_max(timestamp, duration, success) by Source, FunctionApp, Trigger, InvocationKey\r\n| extend CompletedUtc = timestamp + (duration * 1ms)\r\n| lookup kind=leftouter poolNames on Source\r\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter;\r\nlet observations = invocations\r\n| summarize ['Last Started'] = max(timestamp), ['Last Finished'] = max(CompletedUtc), ['Last Failure'] = maxif(CompletedUtc, success == false),\r\n    arg_max(CompletedUtc, success) by Source, HostPoolName, FunctionApp, Trigger;\r\ninvocations\r\n| distinct Source, HostPoolName, FunctionApp\r\n| extend Trigger = dynamic(['Initiation', 'Reconciliation'])\r\n| mv-expand Trigger to typeof(string)\r\n| join kind=leftouter observations on Source, HostPoolName, FunctionApp, Trigger\r\n| project ['Host Pool'] = HostPoolName, Role = iff(Trigger == 'Reconciliation', 'Worker', 'Initiator'),\r\n    ['Last Completed'] = ['Last Finished'],\r\n    Outcome = case(isnull(['Last Finished']), 'No completed invocation observed in selected range', isnull(success), 'Outcome unavailable', success == false, 'Failed - inspect invocation logs', 'Succeeded'),\r\n    ['Minutes Since Finish'] = datetime_diff('minute', now(), ['Last Finished'])\r\n| order by ['Host Pool'] asc, Role asc",
-                          "size": 0,
+                          "size": 4,
                           "title": "Timer Health",
                           "timeContext": {
                             "durationMs": 0
@@ -12675,11 +12682,18 @@
                               "name": "consistency-pie"
                             },
                             {
+                              "type": 1,
+                              "content": {
+                                "json": "#### Progressive Deployment and Session Drain Status"
+                              },
+                              "name": "drain-header"
+                            },
+                            {
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
                                 "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\nlet results = traces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\n| where message contains \"ConsecutiveSuccesses\"\n| extend ConsecutiveSuccesses = toint(extract(@\"ConsecutiveSuccesses: (\\d+)\", 1, message))\n| where isnotempty(ConsecutiveSuccesses)\n| summarize arg_max(timestamp, *) by HostPoolName\n| extend Status = case(\n    ConsecutiveSuccesses == 0, \"🔴 Starting\",\n    ConsecutiveSuccesses < 3, \"🟡 In Progress\",\n    \"🟢 Stable\"\n)\n| project HostPool = HostPoolName, ['Consecutive Successes'] = ConsecutiveSuccesses, Status, ['Last Updated'] = timestamp;\nresults\n| union (datatable(HostPool:string, ['Consecutive Successes']:int, Status:string, ['Last Updated']:datetime) ['No Data', 0, 'ℹ️ No deployment activity', datetime(null)])\n| where HostPool != 'No Data' or toscalar(results | count) == 0\n| order by HostPool asc",
-                                "size": 0,
+                                "size": 4,
                                 "title": "Progressive Scale-Up Status",
                                 "timeContext": {
                                   "durationMs": 0
@@ -12738,18 +12752,11 @@
                               "name": "scaleup-table"
                             },
                             {
-                              "type": 1,
-                              "content": {
-                                "json": "### ⏱️ Session Drain Status"
-                              },
-                              "name": "drain-header"
-                            },
-                            {
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
                                 "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\nlet results = traces\n| where timestamp {TimeRange}\n| where message contains \"METRICS\"\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where isnotempty(HostPoolName)\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\n| extend InDrain = toint(extract(@\"InDrain:\\s*(\\d+)\", 1, message))\n| where isnotempty(InDrain) and InDrain > 0\n| summarize arg_max(timestamp, *) by HostPoolName\n| project ['Host Pool'] = HostPoolName, ['Hosts in Drain'] = InDrain, ['As Of'] = timestamp;\nresults\n| union (datatable(['Host Pool']:string, ['Hosts in Drain']:int, ['As Of']:datetime) ['No hosts in drain', 0, datetime(null)])\n| where ['Host Pool'] != 'No hosts in drain' or toscalar(results | count) == 0\n| order by ['Hosts in Drain'] desc",
-                                "size": 0,
+                                "size": 4,
                                 "title": "Hosts Currently in Drain Mode",
                                 "timeContext": {
                                   "durationMs": 0
@@ -12777,12 +12784,13 @@
                                   ]
                                 }
                               },
+                              "customWidth": "50",
                               "name": "drain-table"
                             },
                             {
                               "type": 1,
                               "content": {
-                                "json": "### �🗑️ Deletion Activity"
+                                "json": "#### Deletion Activity"
                               },
                               "name": "deletion-header"
                             },
@@ -12791,7 +12799,7 @@
                               "content": {
                                 "version": "KqlItem/1.0",
                                 "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet hostPoolFilter = tostring(split('{HostPool}', '/')[-1]);\ntraces\n| where timestamp {TimeRange}\n| extend HostPoolName = extract(@\"\\[([^\\]]+)\\]\", 1, message)\n| where hostPoolFilter == '*' or HostPoolName =~ hostPoolFilter\n| where message contains \"Deleting session host\"\n| summarize Count = count() by bin(timestamp, 1h)\n| render areachart",
-                                "size": 0,
+                                "size": 1,
                                 "title": "Deletion Operations Over Time",
                                 "timeContext": {
                                   "durationMs": 0
@@ -12931,7 +12939,7 @@
                               "type": 1,
                               "name": "invocations-help",
                               "content": {
-                                "json": "### Invocations\n\nChoose a run by timestamp, role, outcome and duration. Its logs show **Timestamp**, **Level** and **Message**; click a message to read it in full. **Show technical details** opens correlation IDs, request metadata and full exception payloads only when needed.\n\nIncludes idle runs. Cycle filters do not apply here. Shows the latest 200 invocations and 500 log records; narrow the time range to find older runs. Missing or sampled telemetry does not prove health."
+                                "json": "### Invocations\n\nChoose a run by timestamp, role, outcome and duration. **Selected Invocation** shows its native request outcome and duration in seconds, including idle runs. **Readable Invocation Timeline** turns structured events into short event names and details, removes repeated context prefixes, and omits routine Verbose records, trigger metadata and duplicate SHR timer start/success messages. Warnings, errors, exceptions and unrecognized messages remain visible; click details to read them in full.\n\n**Show technical details and raw logs** retains the original messages/JSON, correlation IDs, request metadata and full exception payloads. This is a presentation change only: telemetry collection and the Portal's raw invocation logs are unchanged. Invocation success is not cycle completion.\n\nCycle filters do not apply here. Shows the latest 200 invocations and up to 500 timeline/raw records; narrow the time range to find older runs. An empty timeline does not prove no work occurred. Missing or sampled telemetry does not prove health."
                               }
                             },
                             {
@@ -12983,11 +12991,34 @@
                             },
                             {
                               "type": 3,
+                              "name": "invocation-summary",
+                              "content": {
+                                "version": "KqlItem/1.0",
+                                "title": "Selected Invocation",
+                                "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    customDimensions = Properties, cloud_RoleName = AppRoleName;\nrequests\n| extend Source = tolower(tostring(_ResourceId)), FunctionApp = cloud_RoleName,\n    FunctionName = replace_regex(name, @\"^Functions\\.\", ''),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker')\n| extend InvocationKey = iff(isnotempty(InvocationId), strcat('inv:', InvocationId), strcat('req:', id))\n| where InvocationKey !in ('inv:', 'req:')\n| summarize arg_max(timestamp, *) by Source, FunctionApp, FunctionName, InvocationKey\n| lookup kind=leftouter poolNames on Source\n| where '{HostPool}' == '*' or HostPoolName =~ tostring(split('{HostPool}', '/')[-1])\n| extend SelectionKey = strcat(Source, '|', InvocationKey)\n| where SelectionKey == '{TroubleshootingInvocation}'\n| project ['Started'] = timestamp, ['Host Pool'] = HostPoolName,\n    Role = iff(FunctionName == 'session-host-replacer-worker', 'Worker', 'Initiator'),\n    Outcome = case(isnull(success), 'Unavailable', success, 'Succeeded', 'Failed'),\n    ['Duration (seconds)'] = round(duration / 1000.0, 2)",
+                                "queryType": 0,
+                                "resourceType": "microsoft.operationalinsights/workspaces",
+                                "crossComponentResources": [
+                                  "{WorkloadWorkspace}"
+                                ],
+                                "timeContextFromParameter": "TimeRange",
+                                "timeContext": {
+                                  "durationMs": 0
+                                },
+                                "visualization": "table",
+                                "size": 4,
+                                "gridSettings": {
+                                  "formatters": []
+                                }
+                              }
+                            },
+                            {
+                              "type": 3,
                               "name": "invocation-logs",
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "title": "Invocation Logs",
-                                "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    resultCode = ResultCode, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet exceptions = AppExceptions\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, outerMessage = OuterMessage, innermostMessage = InnermostMessage,\n    severityLevel = SeverityLevel, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, type = ExceptionType, details = Details;\nlet runs = requests\n| where timestamp {TimeRange}\n| extend Source = tolower(tostring(_ResourceId)), FunctionApp = cloud_RoleName,\n    FunctionName = replace_regex(name, @\"^Functions\\.\", ''),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker')\n| extend InvocationKey = iff(isnotempty(InvocationId), strcat('inv:', InvocationId), strcat('req:', id))\n| where InvocationKey !in ('inv:', 'req:')\n| summarize arg_max(timestamp, *) by Source, FunctionApp, FunctionName, InvocationKey\n| lookup kind=leftouter poolNames on Source\n| where '{HostPool}' == '*' or HostPoolName =~ tostring(split('{HostPool}', '/')[-1])\n| extend SelectionKey = strcat(Source, '|', InvocationKey), CompletedUtc = timestamp + (duration * 1ms),\n    Outcome = case(isnull(success), 'Unavailable', success, 'Succeeded', 'Failed');\nlet selectedRun = runs\n| where SelectionKey == '{TroubleshootingInvocation}'\n| project Source, SelectedInvocationId = InvocationId, SelectedOperationId = operation_Id;\nunion withsource=RecordType traces, exceptions\n| where timestamp {TimeRange}\n| extend Source = tolower(tostring(_ResourceId)),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| join kind=inner selectedRun on Source\n| where (isnotempty(InvocationId) and isnotempty(SelectedInvocationId) and InvocationId == SelectedInvocationId)\n    or ((isempty(InvocationId) or isempty(SelectedInvocationId)) and isnotempty(operation_Id) and operation_Id == SelectedOperationId)\n| project Timestamp = timestamp,\r\n    Level = case(severityLevel == 0, 'Verbose', severityLevel == 1, 'Information',\r\n        severityLevel == 2, 'Warning', severityLevel == 3, 'Error', severityLevel == 4, 'Critical', 'Unknown'),\r\n    Message = coalesce(message, outerMessage, innermostMessage)\n| order by Timestamp desc\n| take 500\n| order by Timestamp asc",
+                                "title": "Readable Invocation Timeline",
+                                "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    resultCode = ResultCode, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet exceptions = AppExceptions\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, outerMessage = OuterMessage, innermostMessage = InnermostMessage,\n    severityLevel = SeverityLevel, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, type = ExceptionType, details = Details;\nlet runs = requests\n| where timestamp {TimeRange}\n| extend Source = tolower(tostring(_ResourceId)), FunctionApp = cloud_RoleName,\n    FunctionName = replace_regex(name, @\"^Functions\\.\", ''),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker')\n| extend InvocationKey = iff(isnotempty(InvocationId), strcat('inv:', InvocationId), strcat('req:', id))\n| where InvocationKey !in ('inv:', 'req:')\n| summarize arg_max(timestamp, *) by Source, FunctionApp, FunctionName, InvocationKey\n| lookup kind=leftouter poolNames on Source\n| where '{HostPool}' == '*' or HostPoolName =~ tostring(split('{HostPool}', '/')[-1])\n| extend SelectionKey = strcat(Source, '|', InvocationKey), CompletedUtc = timestamp + (duration * 1ms),\n    Outcome = case(isnull(success), 'Unavailable', success, 'Succeeded', 'Failed');\nlet selectedRun = runs\n| where SelectionKey == '{TroubleshootingInvocation}'\n| project Source, SelectedInvocationId = InvocationId, SelectedOperationId = operation_Id;\nunion withsource=RecordType traces, exceptions\n| where timestamp {TimeRange}\n| extend Source = tolower(tostring(_ResourceId)),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| join kind=inner selectedRun on Source\n| where (isnotempty(InvocationId) and isnotempty(SelectedInvocationId) and InvocationId == SelectedInvocationId)\n    or ((isempty(InvocationId) or isempty(SelectedInvocationId)) and isnotempty(operation_Id) and operation_Id == SelectedOperationId)\n| extend Body = replace_regex(coalesce(message, outerMessage, innermostMessage), @\"^(?:(?:INFORMATION|WARNING|ERROR|VERBOSE|DEBUG):\\s*)?(?:\\[[^\\]]+\\]\\s*)+\", '')\n| extend Category = extract(@\"^(SHR_TIMER|SHR_EVENT) \\| (\\{.*\\})$\", 1, Body),\n    Data = parse_json(extract(@\"^(SHR_TIMER|SHR_EVENT) \\| (\\{.*\\})$\", 2, Body)),\n    NativeStart = Body matches regex @\"^Executing 'Functions\\.session-host-replacer-(initiator|worker)'\",\n    NativeEnd = Body matches regex @\"^Executed 'Functions\\.session-host-replacer-(initiator|worker)' \\([^,]+, Id=[^,]+, Duration=\\d+ms\\)$\",\n    ImageVersion = extract(@\"^Image version (.+) is replicated to region (.+)$\", 1, Body),\n    ImageRegion = extract(@\"^Image version (.+) is replicated to region (.+)$\", 2, Body)\n| extend IsStructured = isnotempty(Category) and toint(Data.SchemaVersion) == 1,\n    PreserveDiagnostic = RecordType == 'exceptions' or isnull(severityLevel) or severityLevel >= 2 or (NativeEnd and Body contains '(Failed,')\n| where PreserveDiagnostic or severityLevel != 0\n| where PreserveDiagnostic or not(Body startswith 'Trigger Details:')\n| where PreserveDiagnostic or not(NativeEnd)\n| where PreserveDiagnostic or not(coalesce(IsStructured, false) and Category == 'SHR_TIMER' and tostring(Data.Event) in ('Started', 'Succeeded'))\n| extend Event = case(RecordType == 'exceptions', 'Exception',\n    IsStructured and Category == 'SHR_TIMER', strcat('Timer ', tostring(Data.Event)),\n    IsStructured and Category == 'SHR_EVENT' and tostring(Data.Event) == 'Initiated', 'New cycle initiated',\n    IsStructured and tostring(Data.Phase) == 'WaitingForCleanup', 'Waiting for cleanup',\n    IsStructured and tostring(Data.Phase) == 'WaitingForDeployment', 'Waiting for deployment',\n    IsStructured and tostring(Data.Phase) == 'WaitingForHealth', 'Waiting for host readiness',\n    IsStructured and tostring(Data.Phase) == 'WaitingForScheduledAuthorization', 'Waiting for next authorized batch',\n    IsStructured and tostring(Data.Status) == 'NeedsAttention', 'Operator attention required',\n    IsStructured and tostring(Data.Status) == 'Completed', 'Cycle completed',\n    IsStructured and tostring(Data.Status) == 'Superseded', 'Cycle superseded',\n    IsStructured, strcat('Cycle ', tostring(Data.Event)),\n    NativeStart, 'Invocation started', NativeEnd, 'Invocation finished',\n    isnotempty(ImageVersion), 'Image ready', severityLevel >= 2, 'Diagnostic', 'Log message'),\n    Details = case(RecordType == 'exceptions', Body,\n    IsStructured, trim_start(@\"[ |]+\", strcat(\n        iff(isnotempty(tostring(Data.CycleId)), strcat('Cycle ', substring(tostring(Data.CycleId), 0, 8), '...'), ''),\n        iff(isnotempty(tostring(Data.ImageVersion)), strcat(' | Image ', tostring(Data.ImageVersion)), ''),\n        iff(isnotempty(tostring(Data.Status)), strcat(' | Status ', tostring(Data.Status)), ''),\n        iff(isnotempty(tostring(Data.Reason)), strcat(' | ', tostring(Data.Reason)), ''))),\n    NativeStart, iff(Body contains 'session-host-replacer-worker', 'Worker', 'Initiator'),\n    NativeEnd, strcat(extract(@\"\\(([^,]+), Id=\", 1, Body), ' | ', tostring(round(todouble(extract(@\"Duration=(\\d+)ms\", 1, Body)) / 1000.0, 2)), ' seconds'),\n    isnotempty(ImageVersion), strcat(ImageVersion, ' | Region ', ImageRegion), Body)\n| project Timestamp = timestamp,\n    Level = case(severityLevel == 0, 'Verbose', severityLevel == 1, 'Information',\n        severityLevel == 2, 'Warning', severityLevel == 3, 'Error', severityLevel == 4, 'Critical', 'Unknown'),\n    Event, Details\n| order by Timestamp desc\n| take 500\n| order by Timestamp asc",
                                 "queryType": 0,
                                 "resourceType": "microsoft.operationalinsights/workspaces",
                                 "crossComponentResources": [
@@ -13002,7 +13033,7 @@
                                 "gridSettings": {
                                   "formatters": [
                                     {
-                                      "columnMatch": "Message",
+                                      "columnMatch": "Details",
                                       "formatter": 7,
                                       "formatOptions": {
                                         "linkTarget": "GenericDetails"
@@ -13018,7 +13049,7 @@
                                 "version": "NotebookGroup/1.0",
                                 "groupType": "editable",
                                 "loadType": "explicit",
-                                "loadButtonText": "Show technical details",
+                                "loadButtonText": "Show technical details and raw logs",
                                 "items": [
                                   {
                                     "type": 3,
@@ -13048,7 +13079,7 @@
                                     "name": "invocation-log-details",
                                     "content": {
                                       "version": "KqlItem/1.0",
-                                      "title": "Technical Log Details",
+                                      "title": "Raw Invocation Logs - Latest 500 Records",
                                       "query": "let poolNames = print Sources = dynamic({HostPoolSources})\r\n| mv-expand Sources\r\n| project Source = tostring(Sources.Source), HostPoolName = tostring(Sources.HostPoolName);\r\nlet poolSources = poolNames | project Source;\nlet traces = AppTraces\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, message = Message, severityLevel = SeverityLevel,\n    customDimensions = Properties, cloud_RoleName = AppRoleName, cloud_RoleInstance = AppRoleInstance,\n    operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet requests = AppRequests\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, name = Name, id = Id, duration = DurationMs, success = Success,\n    resultCode = ResultCode, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, operation_Name = OperationName, itemCount = ItemCount;\nlet exceptions = AppExceptions\n| where TimeGenerated {TimeRange}\n| where _ResourceId in~ (poolSources)\n| extend timestamp = TimeGenerated, outerMessage = OuterMessage, innermostMessage = InnermostMessage,\n    severityLevel = SeverityLevel, customDimensions = Properties, cloud_RoleName = AppRoleName,\n    cloud_RoleInstance = AppRoleInstance, operation_Id = OperationId, type = ExceptionType, details = Details;\nlet runs = requests\n| where timestamp {TimeRange}\n| extend Source = tolower(tostring(_ResourceId)), FunctionApp = cloud_RoleName,\n    FunctionName = replace_regex(name, @\"^Functions\\.\", ''),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| where FunctionName in ('session-host-replacer-initiator', 'session-host-replacer-worker')\n| extend InvocationKey = iff(isnotempty(InvocationId), strcat('inv:', InvocationId), strcat('req:', id))\n| where InvocationKey !in ('inv:', 'req:')\n| summarize arg_max(timestamp, *) by Source, FunctionApp, FunctionName, InvocationKey\n| lookup kind=leftouter poolNames on Source\n| where '{HostPool}' == '*' or HostPoolName =~ tostring(split('{HostPool}', '/')[-1])\n| extend SelectionKey = strcat(Source, '|', InvocationKey), CompletedUtc = timestamp + (duration * 1ms),\n    Outcome = case(isnull(success), 'Unavailable', success, 'Succeeded', 'Failed');\nlet selectedRun = runs\n| where SelectionKey == '{TroubleshootingInvocation}'\n| project Source, SelectedInvocationId = InvocationId, SelectedOperationId = operation_Id;\nunion withsource=RecordType traces, exceptions\n| where timestamp {TimeRange}\n| extend Source = tolower(tostring(_ResourceId)),\n    InvocationId = coalesce(tostring(customDimensions.InvocationId), tostring(customDimensions['prop__InvocationId']))\n| join kind=inner selectedRun on Source\n| where (isnotempty(InvocationId) and isnotempty(SelectedInvocationId) and InvocationId == SelectedInvocationId)\n    or ((isempty(InvocationId) or isempty(SelectedInvocationId)) and isnotempty(operation_Id) and operation_Id == SelectedOperationId)\n| project Timestamp = timestamp, RecordType, InvocationId, NativeOperationId = operation_Id,\n    Category = tostring(customDimensions.Category), Severity = severityLevel,\n    Message = coalesce(message, outerMessage, innermostMessage),\n    ExceptionType = type, Details = details, RoleInstance = cloud_RoleInstance\n| order by Timestamp desc\n| take 500\n| order by Timestamp asc",
                                       "queryType": 0,
                                       "resourceType": "microsoft.operationalinsights/workspaces",
@@ -13402,7 +13433,7 @@
                             {
                               "type": 1,
                               "content": {
-                                "json": "### � Failed Deployment Cleanup"
+                                "json": "### Failed Deployment Activity"
                               },
                               "name": "failed-deployment-header"
                             },

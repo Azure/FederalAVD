@@ -379,7 +379,7 @@ Describe 'SHR workbook cycle tracing contract' {
         $navigation.value | Should -Be 'operations'
         $expectedOrder = @(
             'kpi-header', 'kpi-tiles', 'inventory-freshness', 'consistency-header',
-            'image-table', 'consistency-table', 'cycle-status', 'schedule-header', 'schedule-table'
+            'image-table', 'consistency-table', 'cycle-status-header', 'cycle-status', 'schedule-header', 'schedule-table'
         )
         ($operations.content.items.name | Select-Object -First $expectedOrder.Count) -join ',' |
             Should -Be ($expectedOrder -join ',')
@@ -582,11 +582,10 @@ Describe 'SHR workbook cycle tracing contract' {
         $label | Should -Match 'tostring\(duration\)'
     }
 
-    It 'shows only Timestamp Level and Message in both normal log views' {
+    It 'keeps the cycle log view unchanged while invocation investigation uses a readable timeline' {
         $page = $book.items | Where-Object name -eq 'invocations-page'
         $logItems = @(
             Get-WorkbookItem 'cycle-logs'
-            Get-WorkbookItem 'invocation-logs'
         )
         foreach ($item in $logItems) {
             $projection = [regex]::Match($item.content.query, '(?s)\| project Timestamp = timestamp,.*?\| order by Timestamp desc').Value
@@ -600,6 +599,175 @@ Describe 'SHR workbook cycle tracing contract' {
             $formatter = $item.content.gridSettings.formatters | Where-Object columnMatch -eq 'Message'
             $formatter.formatOptions.linkTarget | Should -Be 'GenericDetails'
         }
+        $timeline = Get-WorkbookItem 'invocation-logs'
+        $timeline.content.title | Should -Be 'Readable Invocation Timeline'
+        $projection = [regex]::Match($timeline.content.query, '(?s)\| project Timestamp = timestamp,.*?\| order by Timestamp desc').Value
+        $projection | Should -Match 'Level = case\(severityLevel == 0'
+        $projection | Should -Match 'Event, Details'
+        $projection | Should -Not -Match 'Message|InvocationId|operation_Id|CycleId|HostPoolName|RecordType|RoleInstance'
+        ($timeline.content.gridSettings.formatters | Where-Object columnMatch -eq 'Details').formatOptions.linkTarget |
+            Should -Be 'GenericDetails'
+    }
+
+    It 'uses tiny summary panels without imposing row limits or shrinking log panels' {
+        foreach ($name in @('inventory-freshness', 'image-table', 'consistency-table', 'cycle-status', 'schedule-table', 'scaleup-table', 'drain-table', 'invocation-summary')) {
+            $item = Get-WorkbookItem $name
+            $item.content.visualization | Should -Be 'table'
+            $item.content.size | Should -Be 4
+            ($item.content.gridSettings.PSObject.Properties.Name -contains 'rowLimit') | Should -Be $false
+        }
+        foreach ($name in @('invocation-history', 'invocation-logs', 'invocation-log-details', 'cycle-timeline', 'cycle-logs')) {
+            (Get-WorkbookItem $name).content.size | Should -Be 0
+        }
+    }
+
+    It 'pairs progressive deployment and drain summaries below one shared heading' {
+        $items = @((Get-WorkbookItem 'operations-trends').content.items)
+        $index = [array]::IndexOf(@($items.name), 'scaleup-table')
+        $index | Should -BeGreaterThan 0
+        $items[$index - 1].name | Should -Be 'drain-header'
+        $items[$index - 1].content.json | Should -Match 'Progressive Deployment and Session Drain Status'
+        $items[$index + 1].name | Should -Be 'drain-table'
+        foreach ($name in @('scaleup-table', 'drain-table')) {
+            (Get-WorkbookItem $name).customWidth | Should -Be '50'
+        }
+        foreach ($name in @('deployment-timeline', 'consistency-pie')) {
+            (Get-WorkbookItem $name).content.size | Should -Be 0
+            (Get-WorkbookItem $name).customWidth | Should -Be '50'
+        }
+    }
+
+    It 'groups operational panels under accurate headings and keeps deletion activity compact' {
+        $items = @((Get-WorkbookItem 'operations-page').content.items)
+        $cycleIndex = [array]::IndexOf(@($items.name), 'cycle-status')
+        $cycleIndex | Should -BeGreaterThan 0
+        $items[$cycleIndex - 1].name | Should -Be 'cycle-status-header'
+        $items[$cycleIndex - 1].content.json | Should -Be '### Replacement Cycle Status'
+        $timerIndex = [array]::IndexOf(@($items.name), 'schedule-table')
+        $timerIndex | Should -BeGreaterThan 0
+        $items[$timerIndex - 1].name | Should -Be 'schedule-header'
+        $items[$timerIndex - 1].content.json | Should -Be '### Timer Health'
+        (Get-WorkbookItem 'deployment-header').content.json | Should -Match '^### '
+        (Get-WorkbookItem 'drain-header').content.json | Should -Match '^#### '
+        (Get-WorkbookItem 'deletion-header').content.json | Should -Be '#### Deletion Activity'
+        (Get-WorkbookItem 'trends-header').content.json | Should -Match '^### '
+        (Get-WorkbookItem 'failed-deployment-header').content.json | Should -Be '### Failed Deployment Activity'
+        $deletion = Get-WorkbookItem 'deletion-chart'
+        $deletion.content.size | Should -Be 1
+        ($deletion.PSObject.Properties.Name -contains 'customWidth') | Should -Be $false
+    }
+
+    It 'summarizes the selected native request without depending on application logs or cycle state' {
+        $summary = Get-WorkbookItem 'invocation-summary'
+        $summary.content.title | Should -Be 'Selected Invocation'
+        $query = $summary.content.query
+        $query | Should -Match 'let requests = AppRequests'
+        $query | Should -Not -Match 'AppTraces|AppExceptions|SHR_TIMER|SHR_EVENT|\{Cycle\}|\{Invocation\}'
+        $query | Should -Match "SelectionKey == '\{TroubleshootingInvocation\}'"
+        $query | Should -Match "strcat\('inv:', InvocationId\)"
+        $query | Should -Match "strcat\('req:', id\)"
+        $query | Should -Match 'arg_max\(timestamp, \*\) by Source, FunctionApp, FunctionName, InvocationKey'
+        $query | Should -Match "Outcome = case\(isnull\(success\), 'Unavailable', success, 'Succeeded', 'Failed'\)"
+        $query | Should -Match "\['Duration \(seconds\)'\] = round\(duration / 1000\.0, 2\)"
+        $projection = [regex]::Match($query, '(?s)\| project \[''Started''\].*$').Value
+        $projection | Should -Not -Match 'FunctionApp|InvocationId|CycleId|Completed|Lease|Deadline'
+        $help = (Get-WorkbookItem 'invocations-help').content.json
+        $help | Should -Match 'Invocation success is not cycle completion'
+        $help | Should -Match 'empty timeline does not prove no work occurred'
+    }
+
+    It 'formats supported cycle events and leaves malformed or future schemas as ordinary messages' {
+        $query = (Get-WorkbookItem 'invocation-logs').content.query
+        $query | Should -Match 'toint\(Data.SchemaVersion\) == 1'
+        $query | Should -Match "New cycle initiated|Waiting for cleanup|Waiting for deployment|Waiting for host readiness"
+        $query | Should -Match 'Operator attention required'
+        $query | Should -Match "Event = case\(RecordType == 'exceptions', 'Exception'"
+        $query | Should -Match 'Details = case\(RecordType == ''exceptions'', Body'
+        $query | Should -Match 'substring\(tostring\(Data.CycleId\), 0, 8\)'
+        $query | Should -Match 'isnotempty\(tostring\(Data.ImageVersion\)\)'
+        $query | Should -Match 'isnotempty\(tostring\(Data.Status\)\)'
+        $query | Should -Match 'isnotempty\(tostring\(Data.Reason\)\)'
+        $query | Should -Match "Image ready"
+        $query | Should -Match 'ImageRegion'
+        $query | Should -Match "ImageRegion\), Body\)"
+        $query | Should -Match "not\(coalesce\(IsStructured, false\)"
+    }
+
+    It 'keeps exceptions warnings errors and unknown severities outside presentation noise filters' {
+        $query = (Get-WorkbookItem 'invocation-logs').content.query
+        $query | Should -Match "PreserveDiagnostic = RecordType == 'exceptions' or isnull\(severityLevel\) or severityLevel >= 2"
+        $filters = @($query -split '\r?\n' | Where-Object { $_ -match '^\| where PreserveDiagnostic' })
+        $filters.Count | Should -Be 4
+        $query | Should -Match "PreserveDiagnostic or severityLevel != 0"
+        $query | Should -Match "PreserveDiagnostic or not\(Body startswith 'Trigger Details:'\)"
+        $query | Should -Match 'PreserveDiagnostic or not\(NativeEnd\)'
+        $query | Should -Match "NativeEnd and Body contains '\(Failed,'"
+        $query | Should -Match "Category == 'SHR_TIMER' and tostring\(Data.Event\) in \('Started', 'Succeeded'\)"
+        $query | Should -Not -Match "Data.Event\) in \('Started', 'Succeeded', 'Failed'\)"
+        $raw = (Get-WorkbookItem 'invocation-log-details').content
+        $raw.title | Should -Be 'Raw Invocation Logs - Latest 500 Records'
+        $raw.query | Should -Not -Match 'PreserveDiagnostic|IsStructured|replace_regex\(coalesce|severityLevel != 0'
+        $raw.query | Should -Match 'Message = coalesce\(message, outerMessage, innermostMessage\)'
+        $raw.query | Should -Match 'Severity = severityLevel'
+    }
+
+    It 'extracts the displayed image and cycle fields from representative emitted records' {
+        $query = (Get-WorkbookItem 'invocation-logs').content.query
+        $prefixPattern = [regex]::Match($query, 'Body = replace_regex\([^\r\n]+, @"([^"]+)",').Groups[1].Value
+        $payloadPattern = [regex]::Match($query, 'Category = extract\(@"([^"]+)", 1, Body\)').Groups[1].Value
+        $imagePattern = [regex]::Match($query, 'ImageVersion = extract\(@"([^"]+)", 1, Body\)').Groups[1].Value
+        $prefixPattern | Should -Not -BeNullOrEmpty
+        $payloadPattern | Should -Not -BeNullOrEmpty
+        $imagePattern | Should -Not -BeNullOrEmpty
+        $message = 'INFORMATION: [test-pool] [Cycle:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] [Batch:0] [Trigger:Initiation] SHR_EVENT | {"SchemaVersion":1,"Event":"Initiated","CycleId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ImageVersion":"1.2.3","Status":"Running","DeploymentName":null}'
+        $body = [regex]::Replace($message, $prefixPattern, '')
+        $body | Should -Match '^SHR_EVENT \|'
+        $data = [regex]::Match($body, $payloadPattern).Groups[2].Value | ConvertFrom-Json
+        $data.SchemaVersion | Should -Be 1
+        $data.Event | Should -Be 'Initiated'
+        $data.CycleId.Substring(0, 8) | Should -Be 'aaaaaaaa'
+        $data.ImageVersion | Should -Be '1.2.3'
+        $data.Status | Should -Be 'Running'
+        $image = [regex]::Match('Image version 1.2.3 is replicated to region westus2', $imagePattern)
+        $image.Groups[1].Value | Should -Be '1.2.3'
+        $image.Groups[2].Value | Should -Be 'westus2'
+        [regex]::IsMatch('SHR_EVENT | {"SchemaVersion":2,"Event":"Future"}', $payloadPattern) | Should -Be $true
+        [regex]::IsMatch('SHR_EVENT | invalid JSON', $payloadPattern) | Should -Be $false
+    }
+
+    It 'reduces the seven-record initiation example to three readable records without modifying the originals' {
+        $query = (Get-WorkbookItem 'invocation-logs').content.query
+        $prefixPattern = [regex]::Match($query, 'Body = replace_regex\([^\r\n]+, @"([^"]+)",').Groups[1].Value
+        $payloadPattern = [regex]::Match($query, 'Category = extract\(@"([^"]+)", 1, Body\)').Groups[1].Value
+        $completionPattern = [regex]::Match($query, 'NativeEnd = Body matches regex @"([^"]+)"').Groups[1].Value
+        $completionPattern | Should -Not -BeNullOrEmpty
+        $messages = @(
+            "Executing 'Functions.session-host-replacer-initiator' (Reason='Timer fired', Id=test-invocation)"
+            'Trigger Details: ScheduleStatus: {"Last":"2026-01-01T00:00:00Z"}'
+            '[test-pool] [Trigger:Initiation] SHR_TIMER | {"SchemaVersion":1,"Event":"Started"}'
+            '[test-pool] [Trigger:Initiation] Image version 1.2.3 is replicated to region westus2'
+            '[test-pool] [Cycle:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] [Batch:0] [Trigger:Initiation] SHR_EVENT | {"SchemaVersion":1,"Event":"Initiated","CycleId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ImageVersion":"1.2.3","Status":"Running"}'
+            '[test-pool] [Cycle:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] [Batch:0] [Trigger:Initiation] SHR_TIMER | {"SchemaVersion":1,"Event":"Succeeded"}'
+            "Executed 'Functions.session-host-replacer-initiator' (Succeeded, Id=test-invocation, Duration=4832ms)"
+        )
+        $original = $messages | ConvertTo-Json -Compress
+        $readable = @($messages | ForEach-Object {
+            $body = [regex]::Replace($_, $prefixPattern, '')
+            if ($body.StartsWith('Trigger Details:') -or [regex]::IsMatch($body, $completionPattern)) { return }
+            $payload = [regex]::Match($body, $payloadPattern)
+            if ($payload.Success) {
+                $data = $payload.Groups[2].Value | ConvertFrom-Json
+                if ($data.SchemaVersion -eq 1 -and $payload.Groups[1].Value -eq 'SHR_TIMER' -and
+                    $data.Event -in @('Started', 'Succeeded')) { return }
+            }
+            $body
+        })
+        $readable.Count | Should -Be 3
+        $readable[0] | Should -Match '^Executing'
+        $readable[1] | Should -Be 'Image version 1.2.3 is replicated to region westus2'
+        $readable[2] | Should -Match '^SHR_EVENT \|'
+        ($messages | ConvertTo-Json -Compress) | Should -Be $original
+        [math]::Round(4832 / 1000.0, 2) | Should -Be 4.83
     }
 
     It 'keeps full request and exception details in explicit-load groups with the same correlation inputs' {
@@ -618,7 +786,7 @@ Describe 'SHR workbook cycle tracing contract' {
             @{ Normal = (Get-WorkbookItem 'cycle-logs').content.query; Technical = ($cycleTechnical.content.items | Where-Object name -eq 'cycle-log-details').content.query }
         )
         foreach ($pair in $queries) {
-            $normalInput = [regex]::Split($pair.Normal, '\| project Timestamp = timestamp,')[0]
+            $normalInput = [regex]::Split($pair.Normal, '\| extend Body =|\| project Timestamp = timestamp,')[0]
             $technicalInput = [regex]::Split($pair.Technical, '\| project Timestamp = timestamp,')[0]
             $normalInput | Should -Be $technicalInput
             $pair.Technical | Should -Match 'Details = details'

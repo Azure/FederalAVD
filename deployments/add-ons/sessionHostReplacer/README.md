@@ -2103,11 +2103,21 @@ completed request records show timestamp,
 host pool, role (Initiator or Worker), outcome and duration. This includes the current initiator
 and reconciliation worker, including idle ticks.
 The retired single-timer function is excluded. Select an entry in
-**Invocation to inspect** for its latest 500 trace/exception records in chronological order,
-showing only **Timestamp**, **Level** and **Message**. Click a message to read it in full.
-**Show technical details** loads the request's Function App, correlation IDs, role instance and
-full exception payloads on demand; these fields remain in the query logic but do not clutter the
-normal list or selector. Narrow the time range to reach older executions. Cycle and cycle-invocation
+**Invocation to inspect** to open **Selected Invocation**, a native request summary with the
+host pool, role, outcome, start time and duration in seconds. **Readable Invocation Timeline**
+shows up to 500 correlated records as **Timestamp**, **Level**, **Event** and **Details**.
+Structured cycle events become short descriptions with abbreviated cycle IDs, image versions,
+status and wait reasons; repeated context prefixes and empty metadata no longer clutter each row.
+Routine Verbose records, trigger metadata, native completion messages already represented in the
+summary, and duplicate SHR timer start/success messages are omitted only from this presentation.
+Warnings, errors, exceptions and unrecognized normal-level messages
+remain visible. Click details to read them in full.
+**Show technical details and raw logs** loads the original messages and JSON, request's Function App,
+full correlation IDs, role instance and exception payloads on demand. Its raw records retain the
+original severity and are not subject to the readable timeline's presentation filters.
+Telemetry emission, collection, other workbook views and the Portal's native invocation logs are
+unchanged. Invocation success is not cycle completion; an empty timeline does not prove no work
+occurred. Narrow the time range to reach older executions. Cycle and cycle-invocation
 filters do not constrain this page; host-pool and time filters do.
 Use **Investigate > Errors and Recovery** for detailed error logs and failed-deployment activity.
 
@@ -2121,6 +2131,19 @@ Resource Graph visibility can prevent discovery. Missing, filtered or sampled te
 proof of success.
 
 #### Test the workspace-scoped workbook
+
+The Inventory Freshness, Current Image Configuration, Latest-Reported Image Consistency,
+Latest Cycle Status, Timer Health, Progressive Scale-Up Status, Hosts Currently in Drain Mode
+and Selected Invocation grids use the Tiny panel preset to reduce reserved space below short
+summaries. Workbook `content.size` values are Tiny `4`, Small `1`,
+Medium `0`, Large `2`, and Full `3`; they are presets, not pixel heights. These summary panels
+do not add a query or grid row limit. History, timeline and raw-log panels retain Medium sizing.
+Progressive scale-up and drain summaries share a 50/50 row below one combined heading.
+The deletion chart uses Small sizing at full width; other activity charts retain their
+existing Medium sizing and side-by-side layout. Replacement Cycle Status and Timer Health
+have separate section headings. Progressive deployment/drain and deletion are subsections of
+Deployment Progress; Historical Trends remains a separate section.
+Edit sizing in the advanced JSON editor when individual controls inside a group are unavailable.
 
 Test against the current main-branch SHR function code. Publish the workbook module to a new
 test workbook ID so the existing workbook is preserved. The workbook-only deployment does not
@@ -2149,8 +2172,21 @@ selectors, and changing the selected cycle does not filter the Operations status
 known request ID with one row in the workload workspace and a policy-exported copy centrally:
 the history should show one execution. Select successful, failed and idle executions for both timers,
 confirm outcome/duration and correlated native exceptions and traces, change host-pool/time
-selections, and test missing identity/empty results. Include an idle-only time range with no SHR
-messages and verify filtering by host pool still shows the native executions. Cycle pages require emitted cycle events;
+selections, and test missing identity/empty results. For a known initiation,
+compare the readable timeline with the raw logs: native start, image readiness and cycle initiation
+should be readable without JSON; routine start/success duplicates belong in raw details.
+Verify warnings, errors, exceptions, malformed payloads and unfamiliar schema versions remain
+inspectable. Confirm full IDs/JSON and original severity survive in the raw-detail drill-down.
+Check all Tiny summary panels with empty, one-row and multi-row results:
+short summaries should no longer reserve Medium-height panels, and overflowing results must
+remain accessible by scrolling. Static sizing checks do not establish the rendered height.
+Expand **Show trends and activity** and verify the progressive scale-up and drain summaries
+share a row on a wide viewport; check wrapped columns and access to all results on narrow screens.
+Check the smaller deletion chart's axes and labels remain readable, and confirm cycle status
+is outside Host Pool Consistency with deployment subsections below Deployment Progress.
+Also verify that a successful invocation for a Running cycle is not presented as cycle completion.
+Include an idle-only time range with no SHR messages and verify filtering by host pool still shows
+the native executions and selected-request summary. Cycle pages require emitted cycle events;
 idle ticks need not have an active cycle. Test with an operator lacking central workspace access.
 Check the full exception detail payload only under approved telemetry permissions.
 
