@@ -8,7 +8,6 @@ BeforeDiscovery {
         'customer-examples\artifacts\Microsoft-AVD-Multimedia-Redirection\Install-MicrosoftAVDMultimediaRedirection.ps1'
         'customer-examples\artifacts\Microsoft-AzCLI\Deploy-AzCLI.ps1'
         'customer-examples\artifacts\Microsoft-Edge-Enterprise\Deploy-MicrosoftEdgeEnterprise.ps1'
-        'customer-examples\artifacts\Microsoft-PowerShell-7\Deploy-PowerShell7.ps1'
         'customer-examples\artifacts\PuTTY\Deploy-PuTTY.ps1'
     )
 }
@@ -24,7 +23,6 @@ BeforeAll {
         'customer-examples\artifacts\Microsoft-AVD-Multimedia-Redirection\Install-MicrosoftAVDMultimediaRedirection.ps1'
         'customer-examples\artifacts\Microsoft-AzCLI\Deploy-AzCLI.ps1'
         'customer-examples\artifacts\Microsoft-Edge-Enterprise\Deploy-MicrosoftEdgeEnterprise.ps1'
-        'customer-examples\artifacts\Microsoft-PowerShell-7\Deploy-PowerShell7.ps1'
         'customer-examples\artifacts\PuTTY\Deploy-PuTTY.ps1'
     )
 }
@@ -63,11 +61,14 @@ Describe 'ArtifactDeployment script regression checks' {
         }
 
         $scriptText = Get-Content -LiteralPath $sourceScriptPath -Raw
-        if ($scriptText -notmatch "PSChildName -match '\^\\\{\[0-9A-Fa-f-\]\{36\}\\\}\$'") {
+        if (-not $scriptText.Contains('$_.PSChildName -match $ProductCodePattern') -or
+            -not $scriptText.Contains("-ProductCodePattern '^\{[0-9A-Fa-f-]{36}\}$'") -or
+            -not $scriptText.Contains('-WindowsInstaller')) {
             throw 'MSI uninstall does not require a GUID ProductCode registry subkey.'
         }
-        if (-not $scriptText.Contains("Start-Process -FilePath 'msiexec.exe'") -or
-            -not $scriptText.Contains('-ArgumentList "/x $($installedApplication.ProductCode)')) {
+        if (-not $scriptText.Contains("-FilePath 'msiexec.exe'") -or
+            -not $scriptText.Contains("-ArgumentListFormat = '/x {0} /qn /norestart'") -and
+            -not $scriptText.Contains("`$ArgumentListFormat = '/x {0} /qn /norestart'")) {
             throw 'MSI uninstall does not invoke msiexec.exe with /x.'
         }
 
@@ -141,7 +142,7 @@ Describe 'ArtifactDeployment script regression checks' {
                     [string]$ErrorAction
                 )
 
-                return [pscustomobject]@{ DisplayName = '7-Zip 26.00 (x64 edition)' }
+                return [pscustomobject]@{ DisplayName = '7-Zip 26.00 (x64 edition)'; WindowsInstaller = 1 }
             }
 
             function global:Get-Process {
@@ -276,6 +277,7 @@ Describe 'ArtifactDeployment script regression checks' {
                 return [pscustomobject]@{
                     DisplayName = 'Adobe Acrobat (64-bit)'
                     Publisher = 'Adobe'
+                    WindowsInstaller = 1
                 }
             }
 
@@ -378,7 +380,7 @@ Describe 'ArtifactDeployment script regression checks' {
             catch {
                 $ambiguityError = $_
             }
-            if (-not $ambiguityError -or $ambiguityError.Exception.Message -notlike 'Multiple Adobe Acrobat MSI installations matched:*') {
+            if (-not $ambiguityError -or $ambiguityError.Exception.Message -notlike 'Multiple MSI installations matched:*') {
                 throw 'Multiple Adobe MSI registrations did not stop removal with an ambiguity error.'
             }
         }
@@ -460,6 +462,7 @@ Describe 'ArtifactDeployment script regression checks' {
 
                 return [pscustomobject]@{
                     DisplayName = 'Microsoft Azure CLI'
+                    WindowsInstaller = 1
                     DisplayVersion = '2.77.0'
                     Publisher = 'Microsoft Corporation'
                     PSPath = 'Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Test'
@@ -491,7 +494,7 @@ Describe 'ArtifactDeployment script regression checks' {
             . $sourceScriptPath -DeploymentType Uninstall
 
             if ($global:azCliProcessCalls.Count -ne 1) {
-                $detectedApplication = Get-InstalledApplication -Name 'Microsoft Azure CLI'
+                $detectedApplication = Get-InstalledApplications -Name 'Microsoft Azure CLI'
                 throw "Expected one Azure CLI uninstall process, received $($global:azCliProcessCalls.Count). Detected application: $($detectedApplication | ConvertTo-Json -Compress)"
             }
             $uninstallCall = $global:azCliProcessCalls[0]
@@ -607,7 +610,7 @@ Describe 'ArtifactDeployment script regression checks' {
             }
             function global:Get-ItemProperty {
                 param ([string]$LiteralPath, [string]$ErrorAction)
-                [pscustomobject]@{ DisplayName = 'Google Chrome'; Publisher = 'Google LLC' }
+                [pscustomobject]@{ DisplayName = 'Google Chrome'; Publisher = 'Google LLC'; WindowsInstaller = 1 }
             }
             function global:Get-Process { return $null }
             function global:Start-Process {
@@ -675,7 +678,7 @@ Describe 'ArtifactDeployment script regression checks' {
                 }
                 function global:Get-ItemProperty {
                     param ([string]$LiteralPath, [string]$ErrorAction)
-                    [pscustomobject]@{ DisplayName = $global:msiTestDisplayName; Publisher = $global:msiTestPublisher }
+                    [pscustomobject]@{ DisplayName = $global:msiTestDisplayName; Publisher = $global:msiTestPublisher; WindowsInstaller = 1 }
                 }
                 function global:Start-Process {
                     param ([string]$FilePath, [string]$ArgumentList, [switch]$PassThru)
@@ -753,11 +756,6 @@ Describe 'ArtifactDeployment script regression checks' {
                 -DisplayName 'PuTTY release 0.83 (64-bit)' `
                 -Publisher 'Simon Tatham' `
                 -ProductCode '{00000000-0000-0000-0000-000000000004}'
-            Test-MsiApplicationRemoval `
-                -ScriptPath (Join-Path $repoRoot 'customer-examples\artifacts\Microsoft-PowerShell-7\Deploy-PowerShell7.ps1') `
-                -DisplayName 'PowerShell 7-x64' `
-                -Publisher 'Microsoft Corporation' `
-                -ProductCode '{00000000-0000-0000-0000-000000000005}'
             Test-MsiApplicationRemoval `
                 -ScriptPath (Join-Path $repoRoot 'customer-examples\artifacts\Amazon-Workspaces-Client\Deploy-AmazonWorkspacesClient.ps1') `
                 -DisplayName 'Amazon WorkSpaces' `
@@ -1052,7 +1050,8 @@ Describe 'InstallRoot MSI application lifecycle' {
 
     It 'uses configurable success codes for install and uninstall' {
         $content | Should -Match '\[int\[\]\]\$SuccessExitCodes = @\(0, 3010\)'
-        ([regex]::Matches($content, '-notin \$SuccessExitCodes|-in \$SuccessExitCodes')).Count | Should -Be 2
+        $content | Should -Match 'Remove-MsiApplications -Applications \$applications -SuccessExitCodes \$SuccessExitCodes'
+        $content | Should -Match '\$installer\.ExitCode -in \$SuccessExitCodes'
     }
 }
 

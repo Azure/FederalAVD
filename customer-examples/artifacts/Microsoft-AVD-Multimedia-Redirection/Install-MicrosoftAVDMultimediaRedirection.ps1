@@ -17,21 +17,34 @@ $InstallerFileName = 'MsMMRHostInstaller_x64.msi'
 $EdgeExtension = 'joeclbldhdmoijbaagobkhlpfjglcihd;https://edge.microsoft.com/extensionwebstorebase/v1/crx'
 $ChromeExtension = 'lfmemoeeciijgkjkgbgikoonlkabmlno;https://clients2.google.com/service/update2/crx'
 
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000
+    )
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
+        throw "$Action failed with exit code $($process.ExitCode)."
+    }
+    return $process
+}
+
 function Write-Log {
     param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet('Info', 'Warning', 'Error')]
-        [string]$Category = 'Info',
-
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$Message
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
     )
-
     $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content -LiteralPath $Script:Log -Value $content -ErrorAction SilentlyContinue
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
     }
-
     switch ($Category) {
         'Info' { Write-Host $content }
         'Warning' { Write-Warning $content }
@@ -41,21 +54,21 @@ function Write-Log {
 
 function New-Log {
     param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string]$Path
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
     )
-
-    if ($env:SUPPRESS_FILELOG -eq '1') {
-        return
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        $null = New-Item -Path $Path -ItemType Directory
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
     }
-
-    $date = Get-Date -UFormat '%Y-%m-%d %H-%M-%S'
-    $Script:Log = Join-Path $Path "$Script:Name-$date.log"
-    Add-Content -LiteralPath $Script:Log -Value "Date`t`t`tCategory`t`tDetails"
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
 function Invoke-MsiProcess {
@@ -66,13 +79,9 @@ function Invoke-MsiProcess {
         [int]$MaxAttempts = 11,
         [int]$RetryDelaySeconds = 30
     )
-
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -PassThru
-        if (-not $process.WaitForExit($TimeoutMs)) {
-            $process.Kill()
-            throw "$Action timed out after $($TimeoutMs / 60000) minutes and was terminated."
-        }
+        $process = Invoke-ApplicationProcess -FilePath 'msiexec.exe' -ArgumentList $ArgumentList `
+            -Action $Action -TimeoutMs $TimeoutMs -SuccessExitCodes @()
         if ($process.ExitCode -ne 1618) { return $process }
         if ($attempt -eq $MaxAttempts) {
             throw "$Action failed after $MaxAttempts attempts with exit code 1618 (another installation is already in progress)."
@@ -128,7 +137,7 @@ function Add-ExtensionInstallPolicy {
 }
 
 $ErrorActionPreference = 'Stop'
-New-Log -Path (Join-Path $env:SystemRoot 'Logs')
+New-Log -Path (Join-Path $env:SystemRoot 'Logs') -Name 'Install-MicrosoftAVDMultimediaRedirection'
 Write-Log -Message "Starting '$PSCommandPath'."
 
 $installerPath = Join-Path $PSScriptRoot $InstallerFileName

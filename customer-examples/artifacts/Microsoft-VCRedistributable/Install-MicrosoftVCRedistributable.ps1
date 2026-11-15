@@ -18,100 +18,87 @@ $DownloadUrls = @{
 #endregion
 
 #region Supporting Functions
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
-        $Category = 'Info',
-        [Parameter(Mandatory = $true, Position = 1)]
-        $Message
+function Write-Log {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
     )
-
-    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
     }
-    Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
-        'Warning' { Write-Warning $Content }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
     }
 }
 
 function New-Log {
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Path
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
     )
-
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
-    Set-Variable logFile -Scope Script
-    $script:logFile = "$Script:Name-$date.log"
-
-    if ((Test-Path $path) -eq $false) {
-        $null = New-Item -Path $path -type directory
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $script:Log = Join-Path $path $logfile
-    Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
-function Install-VCRedist {
+function Get-InstallerFile {
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$Arch
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$FileName,
+        [Parameter(Mandatory = $true)][string]$DownloadUrl,
+        [Parameter(Mandatory = $true)][string]$DownloadDirectory
     )
-
-    $FileName    = "vc_redist.$Arch.exe"
-    $DisplayName = "$SoftwareName ($Arch)"
-
-    # Use a pre-staged installer if present (supports air-gapped image builds).
-    # If none is found, download the latest release from Microsoft via aka.ms.
-    $PathExe = (Get-ChildItem -Path $PSScriptRoot -Filter $FileName | Select-Object -First 1).FullName
-
-    if ($PathExe) {
-        Write-Log -Category Info -Message "Using pre-staged installer: '$PathExe'."
+    $installer = Get-ChildItem -LiteralPath $Directory -Filter $FileName -File -ErrorAction Stop | Select-Object -First 1
+    if ($installer) {
+        Write-Log -Message "Using pre-staged installer: '$($installer.FullName)'."
+        return $installer.FullName
     }
-    else {
-        $DownloadUrl  = $DownloadUrls[$Arch]
-        $DownloadPath = Join-Path $env:TEMP $FileName
-        Write-Log -Category Info -Message "No local '$FileName' found in '$PSScriptRoot'. Downloading from '$DownloadUrl'..."
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $wc = New-Object System.Net.WebClient
-        $wc.DownloadFile($DownloadUrl, $DownloadPath)
-        Write-Log -Category Info -Message "Downloaded to '$DownloadPath' ($('{0:N1}' -f ((Get-Item $DownloadPath).Length / 1MB)) MB)."
-        $PathExe = $DownloadPath
-    }
+    $downloadPath = Join-Path $DownloadDirectory $FileName
+    Write-Log -Message "No local '$FileName' found in '$Directory'. Downloading from '$DownloadUrl'..."
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $client = New-Object System.Net.WebClient
+    try { $client.DownloadFile($DownloadUrl, $downloadPath) }
+    finally { $client.Dispose() }
+    Write-Log -Message "Downloaded to '$downloadPath' ($('{0:N1}' -f ((Get-Item $downloadPath).Length / 1MB)) MB)."
+    return $downloadPath
+}
 
-    $InstallerTimeoutMs = 600000 # 10 minutes
-    Write-Log -Category Info -Message "Installing '$DisplayName': '$PathExe /install /quiet /norestart'."
-    $Installer = Start-Process -FilePath $PathExe -ArgumentList '/install /quiet /norestart' -PassThru
-    if (-not $Installer.WaitForExit($InstallerTimeoutMs)) {
-        $Installer.Kill()
-        Write-Log -Category Error -Message "'$DisplayName' installer timed out after $($InstallerTimeoutMs / 60000) minutes and was terminated."
-        return $false
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000
+    )
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
+        throw "$Action failed with exit code $($process.ExitCode)."
     }
-
-    if ($Installer.ExitCode -in $SuccessExitCodes) {
-        switch ($Installer.ExitCode) {
-            3010    { Write-Log -Category Info -Message "'$DisplayName' installed successfully. A reboot is required." }
-            1638    { Write-Log -Category Info -Message "'$DisplayName': a higher or equal version is already installed. Skipped." }
-            default { Write-Log -Category Info -Message "'$DisplayName' installed successfully." }
-        }
-        return $true
-    }
-    else {
-        Write-Log -Category Error -Message "'$DisplayName' installer failed with exit code $($Installer.ExitCode)."
-        return $false
-    }
+    return $process
 }
 #endregion
 
 ## MAIN
 
 #region Initialization
-New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
+New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs') -Name 'Install-MicrosoftVCRedistributable'
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 #endregion
@@ -122,8 +109,23 @@ $Architectures = if ($Architecture -eq 'Both') { @('x64', 'x86') } else { @($Arc
 $Failed = @()
 
 foreach ($Arch in $Architectures) {
-    if (-not (Install-VCRedist -Arch $Arch)) {
+    $displayName = "$SoftwareName ($Arch)"
+    $pathExe = Get-InstallerFile -Directory $PSScriptRoot -FileName "vc_redist.$Arch.exe" `
+        -DownloadUrl $DownloadUrls[$Arch] -DownloadDirectory $env:TEMP
+    Write-Log -Message "Installing '$displayName': '$pathExe /install /quiet /norestart'."
+    try {
+        $installer = Invoke-ApplicationProcess -FilePath $pathExe -ArgumentList '/install /quiet /norestart' `
+            -Action "'$displayName' installer" -SuccessExitCodes $SuccessExitCodes
+    }
+    catch {
+        Write-Log -Category Error -Message $_
         $Failed += $Arch
+        continue
+    }
+    switch ($installer.ExitCode) {
+        3010    { Write-Log -Message "'$displayName' installed successfully. A reboot is required." }
+        1638    { Write-Log -Message "'$displayName': a higher or equal version is already installed. Skipped." }
+        default { Write-Log -Message "'$displayName' installed successfully." }
     }
 }
 

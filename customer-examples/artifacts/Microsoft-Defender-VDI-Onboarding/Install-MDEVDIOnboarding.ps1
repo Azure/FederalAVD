@@ -38,33 +38,52 @@ $StageRoot = Join-Path $env:ProgramData 'MDEVDIOnboarding'
 $RunnerName = 'Invoke-MDEVDIOnboarding.ps1'
 $LogPath = Join-Path $env:SystemRoot 'Logs\MDEVDIOnboarding.log'
 
+function New-Log {
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
+    )
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
+    }
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
+}
+
 function Write-Log {
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$Message
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
     )
-
-    $entry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message"
-    Write-Host $entry
-    Add-Content -LiteralPath $LogPath -Value $entry -ErrorAction SilentlyContinue
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
+    }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
+    }
 }
 
 function Get-SingleFile {
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$Root,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Filter,
-
+        [Parameter(Mandatory = $true)][Alias('Root')][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Filter,
+        [string]$Description = 'file',
         [switch]$Recurse
     )
-
-    $files = @(Get-ChildItem -LiteralPath $Root -Filter $Filter -File -Recurse:$Recurse)
+    $files = @(Get-ChildItem -LiteralPath $Path -Filter $Filter -File -Recurse:$Recurse -ErrorAction Stop)
     if ($files.Count -ne 1) {
-        throw "Expected exactly one '$Filter' file under '$Root'; found $($files.Count)."
+        throw "Expected exactly one $Description matching '$Filter' in '$Path'; found $($files.Count)."
     }
-
     return $files[0]
 }
 
@@ -100,6 +119,7 @@ if (-not [Environment]::Is64BitOperatingSystem) {
     throw 'Microsoft Defender for Endpoint VDI onboarding requires a supported 64-bit Windows operating system.'
 }
 
+New-Log -FilePath $LogPath
 $packageFile = Get-SingleFile -Root $PSScriptRoot -Filter '*.zip'
 
 Write-Log "Staging tenant onboarding package '$($packageFile.FullName)'."

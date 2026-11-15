@@ -30,74 +30,80 @@ $Script:Name = 'Install-MicrosoftWSL2'
 $Script:Log = $null
 
 function New-Log {
-    $logDirectory = Join-Path -Path $env:SystemRoot -ChildPath 'Logs\Software'
-    if (-not (Test-Path -LiteralPath $logDirectory)) {
-        New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
+    )
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $Script:Log = Join-Path -Path $logDirectory -ChildPath "$Script:Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
 function Write-Log {
-    param(
-        [ValidateSet('Info', 'Warning', 'Error')]
-        [string]$Category = 'Info',
-
-        [Parameter(Mandatory = $true)]
-        [string]$Message
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
     )
-
-    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t$Message"
-    if ($Script:Log) {
-        Add-Content -LiteralPath $Script:Log -Value $content -ErrorAction SilentlyContinue
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
     }
-    Write-Output $content
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
+    }
 }
 
 function Assert-SupportedHost {
+    param (
+        [int]$MinimumBuild = 0,
+        [switch]$ClientOnly
+    )
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         throw 'Administrator or SYSTEM privileges are required.'
     }
-
-    if (-not [Environment]::Is64BitOperatingSystem) {
-        throw 'WSL 2 requires a 64-bit operating system.'
-    }
-
+    if (-not [Environment]::Is64BitOperatingSystem) { throw 'A 64-bit Windows operating system is required.' }
     $build = [Environment]::OSVersion.Version.Build
-    if ($build -lt 19041) {
-        throw "Windows build $build is unsupported. WSL 2 requires build 19041 or later for this artifact."
+    if ($build -lt $MinimumBuild) { throw "Windows build $build is unsupported; build $MinimumBuild or later is required." }
+    if ($ClientOnly) {
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+        $edition = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop).EditionID
+        if ([int]$os.ProductType -ne 1 -and -not ([int]$os.ProductType -eq 3 -and $edition -eq 'ServerRdsh')) {
+            throw "Windows client or Enterprise multi-session is required; detected '$($os.Caption)' (EditionID '$edition')."
+        }
+        Write-Log -Message "Detected '$($os.Caption)' (EditionID '$edition') build $build."
     }
 }
 
-function Invoke-Process {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$FilePath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ArgumentList,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Action,
-
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
         [int[]]$SuccessExitCodes = @(0, 3010),
-
-        [int]$TimeoutMilliseconds = 1800000
+        [int]$TimeoutMs = 600000
     )
-
-    Write-Log -Message "$Action command: $FilePath $ArgumentList"
-    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru
-    if (-not $process.WaitForExit($TimeoutMilliseconds)) {
-        $process.Kill()
-        throw "$Action timed out after $($TimeoutMilliseconds / 60000) minutes."
-    }
-    if ($process.ExitCode -notin $SuccessExitCodes) {
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
         throw "$Action failed with exit code $($process.ExitCode)."
     }
-
-    Write-Log -Message "$Action completed with exit code $($process.ExitCode)."
+    return $process
 }
 
 function Get-AppxIdentityName {
@@ -154,11 +160,11 @@ function Enable-WSLPlatform {
         Write-Log -Message "Feature '$featureName' state is '$($result.State)'; restart needed: $($result.RestartNeeded)."
     }
 
-    Invoke-Process `
+    $null = Invoke-ApplicationProcess `
         -FilePath 'msiexec.exe' `
         -ArgumentList "/i `"$installer`" /qn /norestart" `
         -Action 'Install Microsoft WSL' `
-        -SuccessExitCodes @(0, 1638, 3010)
+        -SuccessExitCodes @(0, 1638, 3010) -TimeoutMs 1800000
 
     if (-not (Get-Command -Name 'wsl.exe' -ErrorAction SilentlyContinue)) {
         throw 'wsl.exe was not found after the Microsoft WSL installation.'
@@ -219,11 +225,11 @@ function Install-WSLFileDistribution {
 
     $stagingDirectory = Join-Path -Path $env:ProgramData -ChildPath "WSL\$Name"
     New-Item -Path $stagingDirectory -ItemType Directory -Force | Out-Null
-    Invoke-Process `
+    $null = Invoke-ApplicationProcess `
         -FilePath 'icacls.exe' `
         -ArgumentList "`"$stagingDirectory`" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX" `
         -Action "Secure the $Name staging directory" `
-        -SuccessExitCodes @(0)
+        -SuccessExitCodes @(0) -TimeoutMs 1800000
 
     $stagedImagePath = Join-Path -Path $stagingDirectory -ChildPath 'Distribution.wsl'
     Copy-Item -LiteralPath $packages[0].FullName -Destination $stagedImagePath -Force
@@ -374,9 +380,9 @@ function Install-WSLDistribution {
     Write-Log -Message 'Each user completes distribution initialization and creates a Linux account on first launch.'
 }
 
-New-Log
+New-Log -Path (Join-Path $env:SystemRoot 'Logs\Software') -Name 'Install-MicrosoftWSL2'
 Write-Log -Message "Starting phase '$Phase' with distribution '$Distribution'."
-Assert-SupportedHost
+Assert-SupportedHost -MinimumBuild 19041
 
 switch ($Phase) {
     'EnablePlatform' {

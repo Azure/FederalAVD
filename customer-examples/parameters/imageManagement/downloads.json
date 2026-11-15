@@ -185,8 +185,8 @@
     "PowerShell7": {
         "Description": "PowerShell 7",
         "GitHubRepo": "PowerShell/PowerShell",
-        "GitHubFileNamePattern": "*win-x64.msi",
-        "DestinationFileName": "PowerShell7.msi",
+        "GitHubFileNamePattern": "PowerShell-7.*-win-x64.zip",
+        "DestinationFileName": "PowerShell7.zip",
         "DestinationFolders": [
             "Microsoft-PowerShell-7"
         ]

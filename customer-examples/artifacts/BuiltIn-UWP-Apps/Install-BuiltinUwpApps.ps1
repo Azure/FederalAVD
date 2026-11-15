@@ -73,21 +73,38 @@ $ErrorActionPreference = 'Stop'
 #region Helpers
 
 function Write-Log {
-    param([string]$Message)
-    $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $Content = "[$ts] $Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content -Path $Script:Log -Value $Content -ErrorAction SilentlyContinue
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
+    )
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
     }
-    Write-Output $Content
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
+    }
 }
 
 function New-Log {
-    param([string]$Path)
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
+    )
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat '%Y-%m-%d %H-%M-%S'
-    if (-not (Test-Path $Path)) { New-Item -Path $Path -ItemType Directory -Force | Out-Null }
-    $Script:Log = Join-Path $Path "$Script:Name-$date.log"
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
+    }
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
 function Get-PackageFileVersion {
@@ -160,7 +177,7 @@ function Repair-MislabeledBundleExtension {
 
 #endregion Helpers
 
-New-Log (Join-Path $Env:SystemRoot 'Logs')
+New-Log (Join-Path $Env:SystemRoot 'Logs') -Name 'Install-BuiltinUwpApps'
 Write-Log "Install-BuiltinUwpApps: Starting"
 Write-Log "Script location : $PSScriptRoot"
 Write-Log "Install missing apps: $($InstallMissing.IsPresent)"

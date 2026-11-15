@@ -37,6 +37,38 @@ See the [key-update add-on](../deployments/add-ons/updateStorageAccountKeyOnSess
 for rotation precautions and live validation. Shared account keys are unchanged for existing
 deployments until an operator deliberately rotates them.
 
+## PowerShell 7 artifact packaging
+
+The [PowerShell 7 artifact](../customer-examples/artifacts/Microsoft-PowerShell-7/README.md) uses
+the official stable x64 ZIP for both image customization and VM Application delivery. PowerShell
+7.7 no longer provides an official MSI, while MSIX system-context/remoting gaps remain tracked
+upstream. ZIP installation preserves a machine-wide executable path usable by SYSTEM without
+per-user package activation; it does not reproduce MSIX servicing or MSI registration automatically.
+
+The artifact owns PATH, the all-users Start Menu shortcut, event-manifest registration, and its
+Installed Apps uninstall entry. Both install and uninstall intentionally remove stable and preview
+PowerShell 7 EXE bundles, MSI/AppX installations, and recognized Program Files ZIP locations.
+EXE bundles are removed natively before rediscovering MSIs; only registrations with
+`WindowsInstaller=1` and a matching ProductCode subkey are treated as MSI packages. Customer content in
+recognized ZIP installation folders must be backed up; user-profile directories and Windows
+PowerShell 5.1 are outside the removal scope. This is explicit replacement, not an atomic update.
+Run with Windows PowerShell 5.1 after draining hosts/closing `pwsh`, and validate the target image
+and VM Application lifecycle before production use.
+
+## Self-contained application helper contracts
+
+Application artifacts embed reusable, explicitly parameterized helpers in their single root
+script. Main owns product selectors and lifecycle sequencing; helper code does not depend on
+product-specific script state or an external shared module. This keeps packaged image builds,
+VM Applications, and offline delivery independent of sibling artifacts. The 23 software installer
+examples embed identical implementations from the authoring-only
+[`ArtifactFramework.ps1`](../tools/ArtifactFramework.ps1). The
+[`AST synchronization tool`](../tools/Sync-ArtifactFramework.ps1) updates these copies while
+preserving product configuration; parity and idempotence tests prevent helper drift.
+No shared runtime module is packaged or downloaded. See the
+[artifact authoring contract](artifacts-guide.md#reusable-application-helpers) for matching,
+ambiguity, success-code, and error-handling requirements.
+
 ## Air-gapped prerequisite packaging
 
 The [combined transfer bundle](air-gapped-clouds.md#combined-prerequisite-transfer-zip)
