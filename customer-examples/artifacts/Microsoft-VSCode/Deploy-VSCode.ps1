@@ -37,105 +37,79 @@ param (
     [int[]]$SuccessExitCodes = @(0, 3010)
 )
 #region functions
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
-        $Category = 'Info',
-        [Parameter(Mandatory = $true, Position = 1)]
-        $Message
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000
     )
-    
-    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
+        throw "$Action failed with exit code $($process.ExitCode)."
     }
-    Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
-        'Warning' { Write-Warning $Content }
+    return $process
+}
+
+function Write-Log {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
+    )
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
+    }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
     }
 }
 
 function New-Log {
-    Param (
-        [Parameter(Mandatory = $true, Position=0)]
-        [string] $Path
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
     )
-
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
-    Set-Variable logFile -Scope Script
-    $script:logFile = "$Script:Name-$date.log"
-
-    if ((Test-Path $path ) -eq $false) {
-        $null = New-Item -Path $path -type directory
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $script:Log = Join-Path $path $logfile
-
-    Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
-Function Set-RegistryValue {
+function Set-RegistryValue {
     [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullorEmpty()]
-        [string]$Key,
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$Name,
-        [Parameter(Mandatory = $true)]
-        $Value,
-        [Parameter(Mandatory = $false)]
-        [ValidateSet('Binary', 'DWord', 'ExpandString', 'MultiString', 'None', 'QWord', 'String', 'Unknown')]
-        [Microsoft.Win32.RegistryValueKind]$Type = 'String'
+    param (
+        [Parameter(Mandatory = $true)][Alias('Key')][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)]$Value,
+        [Alias('Type')][Microsoft.Win32.RegistryValueKind]$PropertyType = 'String'
     )
-
-    [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-
-    If (-not (Get-ItemProperty -LiteralPath $key -Name $Name -ErrorAction 'SilentlyContinue')) {
-        If (-not (Test-Path -LiteralPath $key -ErrorAction 'Stop')) {
-            Try {
-                Write-Log -Category Info -Message "${CmdletName}: Create registry key [$key]."
-                # No forward slash found in Key. Use New-Item cmdlet to create registry key
-                If ((($Key -split '/').Count - 1) -eq 0) {
-                    $null = New-Item -Path $key -ItemType 'Registry' -Force -ErrorAction 'Stop'
-                }
-                # Forward slash was found in Key. Use REG.exe ADD to create registry key
-                Else {
-                    $null = & reg.exe Add "$($Key.Substring($Key.IndexOf('::') + 2))"
-                    If ($global:LastExitCode -ne 0) {
-                        Throw "Failed to create registry key [$Key]"
-                    }
-                }
-            }
-            Catch {
-                Throw
-            }
-        }
-        Write-Log -category Info -Message "${CmdletName}: Set registry key value: [$key] [$name = $value]."
-        $null = New-ItemProperty -LiteralPath $key -Name $name -Value $value -PropertyType $Type -ErrorAction 'Stop'
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-Item -Path $Path -Force -ErrorAction Stop | Out-Null
     }
-    ## Update registry value if it does exist
-    Else {
-        If ($Name -eq '(Default)') {
-            ## Set Default registry key value with the following workaround, because Set-ItemProperty contains a bug and cannot set Default registry key value
-            $null = $(Get-Item -LiteralPath $key -ErrorAction 'Stop').OpenSubKey('', 'ReadWriteSubTree').SetValue($null, $value)
-        }
-        Else {
-            Write-Log -category Info -Message "${CmdletName}: Update registry key value: [$key] [$name = $value]."
-            $null = Set-ItemProperty -LiteralPath $key -Name $name -Value $value -ErrorAction 'Stop'
-        }
-    }
+    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType $PropertyType -Force -ErrorAction Stop | Out-Null
 }
 
 #endregion Functions
 
 #region Initialization
 $Script:Name = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
-New-Log 'C:\Windows\Logs'
+New-Log 'C:\Windows\Logs' -Name 'Deploy-VSCode'
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 #endregion
@@ -149,8 +123,8 @@ if ($DeploymentType -eq 'Uninstall') {
     else {
         $Arguments = '/VERYSILENT /NORESTART'
         Write-Log -Message "Removing Visual Studio Code with '$UninstallerPath $Arguments'."
-        $Process = Start-Process -FilePath $UninstallerPath -ArgumentList $Arguments -PassThru
-        if (-not $Process.WaitForExit($ProcessTimeoutMs)) { $Process.Kill(); throw 'Visual Studio Code uninstaller timed out.' }
+        $Process = Invoke-ApplicationProcess -FilePath $UninstallerPath -ArgumentList $Arguments `
+            -Action 'Visual Studio Code uninstaller' -TimeoutMs $ProcessTimeoutMs -SuccessExitCodes @()
         if ($Process.ExitCode -notin $SuccessExitCodes) { throw "Visual Studio Code uninstaller failed with exit code $($Process.ExitCode)." }
     }
 }
@@ -161,8 +135,8 @@ else {
     $VSCodeExe = $InstallerFiles[0].FullName
     $Arguments = '/VERYSILENT /NORESTART /MERGETASKS=!runcode'
     Write-Log -Message "Installing Visual Studio Code with '$VSCodeExe $Arguments'."
-    $Process = Start-Process -FilePath $VSCodeExe -ArgumentList $Arguments -PassThru
-    if (-not $Process.WaitForExit($ProcessTimeoutMs)) { $Process.Kill(); throw 'Visual Studio Code installer timed out.' }
+    $Process = Invoke-ApplicationProcess -FilePath $VSCodeExe -ArgumentList $Arguments `
+        -Action 'Visual Studio Code installer' -TimeoutMs $ProcessTimeoutMs -SuccessExitCodes @()
     if ($Process.ExitCode -notin $SuccessExitCodes) { throw "Visual Studio Code installer failed with exit code $($Process.ExitCode)." }
     Write-Log -Message 'Visual Studio Code installed successfully.'
 
@@ -173,4 +147,3 @@ else {
 }
 
 Write-Log -Message "Completed Visual Studio Code $DeploymentType."
-

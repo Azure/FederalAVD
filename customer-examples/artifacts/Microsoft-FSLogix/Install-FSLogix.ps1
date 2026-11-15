@@ -4,132 +4,86 @@
 
 #region Initialization
 $DownloadUrl = "https://aka.ms/fslogix_download"
+$SoftwareName = 'Microsoft FSLogix Apps'
 $Script:Name = 'Install-FSLogix'
 #endregion
 
 #region Supporting Functions
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
-        $Category = 'Info',
-        [Parameter(Mandatory = $true, Position = 1)]
-        $Message
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000
     )
-    
-    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
+        throw "$Action failed with exit code $($process.ExitCode)."
     }
-    Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
-        'Warning' { Write-Warning $Content }
+    return $process
+}
+
+function Write-Log {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
+    )
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
+    }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
     }
 }
 
-function New-Log {    
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Path
+function New-Log {
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
     )
-
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
-    Set-Variable logFile -Scope Script
-    $script:logFile = "$Script:Name-$date.log"
-
-    if ((Test-Path $path ) -eq $false) {
-        $null = New-Item -Path $path -type directory
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $script:Log = Join-Path $path $logfile
-
-    Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
-Function Get-InternetFile {
+function Get-InternetFile {
     [CmdletBinding()]
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [uri]$Url,
-        [Parameter(Mandatory = $true, Position = 1)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory = $false, Position = 2)]
+    param (
+        [Parameter(Mandatory = $true)][uri]$Url,
+        [Parameter(Mandatory = $true)][string]$OutputDirectory,
         [string]$OutputFileName
     )
-
-    Begin {
-        ## Get the name of this function and write header
-        [string]${CmdletName} = $PSCmdlet.MyInvocation.MyCommand.Name
-        Write-Log -Message "Starting ${CmdletName} with the following parameters: $PSBoundParameters"
-    }
-    Process {
-
-        $start_time = Get-Date
-
-        If (!$OutputFileName) {
-            Write-Log -Message "${CmdletName}: No OutputFileName specified. Trying to get file name from URL."
-            If ((split-path -path $Url -leaf).Contains('.')) {
-
-                $OutputFileName = split-path -path $url -leaf
-                Write-Log -Message "${CmdletName}: Url contains file name - '$OutputFileName'."
-            }
-            Else {
-                Write-Log -Message "${CmdletName}: Url does not contain file name. Trying 'Location' Response Header."
-                $request = [System.Net.WebRequest]::Create($url)
-                $request.AllowAutoRedirect = $false
-                $response = $request.GetResponse()
-                $Location = $response.GetResponseHeader("Location")
-                If ($Location) {
-                    $OutputFileName = [System.IO.Path]::GetFileName($Location)
-                    Write-Log -Message "${CmdletName}: File Name from 'Location' Response Header is '$OutputFileName'."
-                }
-                Else {
-                    Write-Log -Message "${CmdletName}: No 'Location' Response Header returned. Trying 'Content-Disposition' Response Header."
-                    $result = Invoke-WebRequest -Method GET -Uri $Url -UseBasicParsing
-                    $contentDisposition = $result.Headers.'Content-Disposition'
-                    If ($contentDisposition) {
-                        $OutputFileName = $contentDisposition.Split("=")[1].Replace("`"", "")
-                        Write-Log -Message "${CmdletName}: File Name from 'Content-Disposition' Response Header is '$OutputFileName'."
-                    }
-                }
-            }
-        }
-
-        If ($OutputFileName) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 
-            $wc = New-Object System.Net.WebClient
-            $OutputFile = Join-Path $OutputDirectory $OutputFileName
-            Write-Log -Message "${CmdletName}: Downloading file at '$url' to '$OutputFile'."
-            Try {
-                $wc.DownloadFile($url, $OutputFile)
-                $time = (Get-Date).Subtract($start_time).Seconds
-                
-                Write-Log -Message "${CmdletName}: Time taken: '$time' seconds."
-                if (Test-Path -Path $outputfile) {
-                    $totalSize = (Get-Item $outputfile).Length / 1MB
-                    Write-Log -Message "${CmdletName}: Download was successful. Final file size: '$totalsize' mb"
-                    Return $OutputFile
-                }
-            }
-            Catch {
-                Write-Log -Category Error -Message "${CmdletName}: Error downloading file. Please check url."
-                Return $Null
-            }
-        }
-        Else {
-            Write-Log -Category Error -Message "${CmdletName}: No OutputFileName specified. Unable to download file."
-            Return $Null
-        }
-    }
-    End {
-        Write-Log -Message "Ending ${CmdletName}"
-    }
+    if (-not $OutputFileName) { $OutputFileName = [IO.Path]::GetFileName($Url.AbsolutePath) }
+    if ([string]::IsNullOrWhiteSpace($OutputFileName)) { throw 'An output filename is required for this URL.' }
+    New-Item -Path $OutputDirectory -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    $outputFile = Join-Path $OutputDirectory $OutputFileName
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $client = New-Object System.Net.WebClient
+    try { $client.DownloadFile($Url, $outputFile) }
+    finally { $client.Dispose() }
+    if (-not (Test-Path -LiteralPath $outputFile -PathType Leaf)) { throw "Download did not create '$outputFile'." }
+    return $outputFile
 }
 #endregion
 
-New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
+New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs') -Name 'Install-FSLogix'
 $ErrorActionPreference = 'Stop'
 Write-Log -message "Starting '$PSCommandPath'."
 $PathZip = (Get-ChildItem -Path $PSScriptRoot -Filter '*.zip' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
@@ -146,7 +100,8 @@ Write-Log -Message "Extracting Contents of Zip File"
 Expand-Archive -Path $pathZip -DestinationPath $TempDir -Force
 $Installer = (Get-ChildItem -Path $TempDir -File -Recurse -Filter 'FSLogixAppsSetup.exe' | Where-Object { $_.FullName -like '*x64*' } | Select-Object -First 1).FullName
 Write-Log -Message "Installation file found: [$Installer], executing installation."
-$Install = Start-Process -FilePath $Installer -ArgumentList "/install /quiet /norestart" -Wait -PassThru
+$Install = Invoke-ApplicationProcess -FilePath $Installer -ArgumentList '/install /quiet /norestart' `
+    -Action "'$SoftwareName' installer" -TimeoutMs -1 -SuccessExitCodes @()
 If ($Install.ExitCode -in $SuccessExitCodes) {
     if ($Install.ExitCode -eq 3010) { Write-Log -Message "'Microsoft FSLogix Apps' installed successfully. A reboot is required." }
     else { Write-Log -Message "'Microsoft FSLogix Apps' installed successfully." }

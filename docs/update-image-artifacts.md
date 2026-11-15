@@ -300,15 +300,15 @@ Retrieves the latest version from a JSON API endpoint.
 
 Fetches one or more assets from the latest release of a GitHub repository. If required assets
 are absent, warns and selects the most recently published stable, non-draft release containing
-all required assets from the 100 most recent releases. For example, a newer PowerShell release
-without MSI assets does not prevent downloading the latest available stable x64 MSI.
+all required assets from the 100 most recent releases. PowerShell 7 uses the official x64 ZIP
+for machine-wide image/VM Application deployment rather than falling back to an older MSI release.
 
 ```json
 "PowerShell7": {
     "Description": "PowerShell 7",
     "GitHubRepo": "PowerShell/PowerShell",
-    "GitHubFileNamePattern": "*win-x64.msi",
-    "DestinationFileName": "PowerShell7.msi",
+    "GitHubFileNamePattern": "PowerShell-7.*-win-x64.zip",
+    "DestinationFileName": "PowerShell7.zip",
     "DestinationFolders": [ "Microsoft-PowerShell-7" ]
 }
 ```
@@ -318,12 +318,18 @@ without MSI assets does not prevent downloading the latest available stable x64 
 | `GitHubRepo` | `owner/repo` path on GitHub |
 | `GitHubFileNamePattern` | Wildcard pattern that must match exactly one release asset |
 | `GitHubFileNamePatterns` | Array of wildcard patterns for a grouped download; every pattern must match exactly one asset from the same release |
-| `DestinationCleanupPatterns` | Optional wildcard patterns for stale payload files to remove from each destination before copying grouped assets; authored files are preserved |
+| `DestinationCleanupPatterns` | Optional wildcard patterns for stale payload files to remove from grouped-download destinations before copying the selected release assets |
 
 Use either `GitHubFileNamePattern` with `DestinationFileName` for one asset, or
 `GitHubFileNamePatterns` for a group whose original release filenames must be preserved. A grouped
 download writes directly to its first artifact destination and verifies any SHA256 digest published
-by GitHub. Additional destinations receive the verified files from that first destination.
+by GitHub before copying to additional destinations. Single-file downloads use the existing
+download, rename, and copy flow without automatic stale-payload cleanup.
+
+The [PowerShell 7 artifact](../customer-examples/artifacts/Microsoft-PowerShell-7/README.md)
+owns ZIP installation, native MSI/AppX migration, PATH/shortcut registration, and removal.
+The uploader only downloads and packages its payload; it does not install PowerShell on the
+preparation machine.
 
 Release metadata is cached by repository for the duration of the update. Each pattern must match
 exactly one asset in the selected release. Multiple matches stop the download rather than selecting

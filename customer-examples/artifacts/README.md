@@ -72,6 +72,20 @@ command-line syntax instead of PowerShell parameter splatting.
 
 ---
 
+## Application script structure
+
+All 23 software installer examples keep canonical discovery/removal/process/logging helpers embedded
+in their root script, authored in [`ArtifactFramework.ps1`](../../tools/ArtifactFramework.ps1).
+The main script passes product matching rules, arguments, timeouts, and success codes explicitly;
+no external module is required. See the
+[reusable application helper contract](../../docs/artifacts-guide.md#reusable-application-helpers).
+
+Update embedded definitions with
+`& .\tools\Sync-ArtifactFramework.ps1 -ArtifactPath <package directories>` from the repository root.
+[`ArtifactFramework.Tests.ps1`](../../tests/ArtifactFramework.Tests.ps1) enforces identical helper
+implementations. Use framework-only synchronization for customized customer scripts, preserving
+product configuration, READMEs, and staged installers.
+
 ## Available packages
 
 | Package | Description | downloads.json key(s) |

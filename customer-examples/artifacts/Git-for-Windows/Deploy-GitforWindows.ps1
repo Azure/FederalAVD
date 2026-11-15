@@ -10,57 +10,58 @@ $SoftwareName = 'Git for Windows'
 #endregion
 
 #region Functions
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
-        $Category = 'Info',
-        [Parameter(Mandatory = $true, Position = 1)]
-        $Message
+function Write-Log {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
     )
-
-    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
     }
-    Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
-        'Warning' { Write-Warning $Content }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
     }
 }
 
 function New-Log {
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Path
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
     )
-
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
-    Set-Variable logFile -Scope Script
-    $script:logFile = "$Script:Name-$date.log"
-
-    if ((Test-Path $path ) -eq $false) {
-        $null = New-Item -Path $path -type directory
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $script:Log = Join-Path $path $logfile
-
-    Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
-function Remove-GitForWindows {
-    param ([int]$TimeoutMs = 600000)
-    $UninstallerPath = Join-Path -Path $Env:ProgramFiles -ChildPath 'Git\unins000.exe'
-    if (-not (Test-Path -LiteralPath $UninstallerPath -PathType Leaf)) {
-        Write-Log -Message "'$SoftwareName' is not installed."
-        return
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000
+    )
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
+        throw "$Action failed with exit code $($process.ExitCode)."
     }
-    Write-Log -Message "Removing '$SoftwareName' with '$UninstallerPath /VERYSILENT /NORESTART'."
-    $process = Start-Process -FilePath $UninstallerPath -ArgumentList '/VERYSILENT /NORESTART' -PassThru -ErrorAction Stop
-    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "'$SoftwareName' uninstaller timed out." }
-    if ($process.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' uninstaller failed with exit code $($process.ExitCode)." }
+    return $process
 }
 
 #endregion
@@ -93,7 +94,7 @@ EnableFSMonitor=Disabled
 
 ## MAIN
 $Script:Name = [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)
-New-Log -Path (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs\Software')
+New-Log -Path (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs\Software') -Name 'Deploy-GitforWindows'
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
@@ -101,13 +102,20 @@ $TempDir = Join-Path -Path $env:SystemRoot -ChildPath 'Temp\Git'
 $TempDirCreated = $false
 
 try {
+    $uninstallerPath = Join-Path $env:ProgramFiles 'Git\unins000.exe'
+    if (Test-Path -LiteralPath $uninstallerPath -PathType Leaf) {
+        Write-Log -Message "Removing '$SoftwareName' with '$uninstallerPath /VERYSILENT /NORESTART'."
+        $null = Invoke-ApplicationProcess -FilePath $uninstallerPath -ArgumentList '/VERYSILENT /NORESTART' `
+            -Action "'$SoftwareName' uninstaller" -SuccessExitCodes $SuccessExitCodes
+    }
+    else {
+        Write-Log -Message "'$SoftwareName' is not installed."
+    }
     if ($DeploymentType -eq 'Uninstall') {
-        Remove-GitForWindows
         Write-Log -Message "Completed '$SoftwareName' Uninstall."
         return
     }
 
-    Remove-GitForWindows
     $InstallerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.exe' -File)
     if ($InstallerFiles.Count -eq 0) { throw "No EXE installer found for '$SoftwareName' in '$PSScriptRoot'." }
     if ($InstallerFiles.Count -gt 1) { throw "Expected one EXE installer for '$SoftwareName', but found: $($InstallerFiles.Name -join ', ')" }
@@ -123,9 +131,8 @@ try {
     # Install
     $ArgumentList = "/VERYSILENT /NORESTART /CLOSEAPPLICATIONS /FORCECLOSEAPPLICATIONS /LOADINF=`"$InfPath`""
     Write-Log -Message "Installing '$SoftwareName' via: '$GitInstaller $ArgumentList'."
-    $installerProcess = Start-Process -FilePath $GitInstaller -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
-    if (-not $installerProcess.WaitForExit(600000)) { $installerProcess.Kill(); throw "'$SoftwareName' installer timed out." }
-    if ($installerProcess.ExitCode -notin $SuccessExitCodes) { throw "'$SoftwareName' installer exited with code $($installerProcess.ExitCode)." }
+    $null = Invoke-ApplicationProcess -FilePath $GitInstaller -ArgumentList $ArgumentList `
+        -Action "'$SoftwareName' installer" -SuccessExitCodes $SuccessExitCodes
     Write-Log -Message "'$SoftwareName' installed successfully."
 
     Write-Log -Message "Completed '$SoftwareName' Install."

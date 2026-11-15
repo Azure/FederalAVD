@@ -6,7 +6,18 @@ BeforeAll {
         $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-GitHubAssetRelease'
     }, $true)
     . ([scriptblock]::Create($definition.Extent.Text))
-
+    $singleDownloadClause = @(
+        $ast.FindAll({ param($node) $node -is [Management.Automation.Language.IfStatementAst] }, $true) |
+            ForEach-Object { $_.Clauses } |
+            Where-Object { $_.Item1.Extent.Text -eq "(`$DownloadUrl -ne '') -and (`$null -ne `$DownloadUrl)" }
+    )
+    if ($singleDownloadClause.Count -ne 1) { throw 'Expected exactly one single-file download branch.' }
+    $blockText = $singleDownloadClause[0].Item2.Extent.Text
+    $singleDownloadBlock = [scriptblock]::Create($blockText.Substring(1, $blockText.Length - 2))
+    function Get-InternetFile {
+        [CmdletBinding()] param ([uri]$Url, [string]$OutputDirectory, [string]$OutputFileName)
+        throw 'Unexpected actual download.'
+    }
     function New-TestRelease {
         param([string]$Tag, [string[]]$Names, [string]$Published = '2026-11-01T00:00:00Z')
         [pscustomobject]@{
@@ -20,6 +31,7 @@ BeforeAll {
                     browser_download_url = "https://github.com/example/app/releases/download/$Tag/$_"
                     digest = 'sha256:example'
                 }
+
             })
         }
     }
@@ -118,5 +130,56 @@ Describe 'GitHub release asset selection' {
         Mock Invoke-RestMethod { throw 'GitHub history unavailable' } -ParameterFilter { $Uri -like '*per_page=100' }
         { Get-GitHubAssetRelease example/app '*win-x64.msi' Example $cache -WarningAction SilentlyContinue } |
             Should -Throw '*GitHub history unavailable*'
+    }
+}
+
+Describe 'Existing single-file GitHub downloader with a ZIP payload' {
+    BeforeEach {
+        $SoftwareName = 'PowerShell7'
+        $DownloadUrl = 'https://github.com/PowerShell/PowerShell/releases/download/v7.7.0/PowerShell-7.7.0-win-x64.zip'
+        $DownloadDir = Join-Path $TestDrive "downloads-$([guid]::NewGuid())"
+        $ArtifactsDir = Join-Path $TestDrive "artifacts-$([guid]::NewGuid())"
+        $CustomerArtifactsDir = Join-Path $TestDrive "customer-$([guid]::NewGuid())"
+        $CopyDownloadsToCustomerArtifacts = $true
+        $FileVersionInfoFile = Join-Path $TestDrive 'versions.txt'
+        $Download = [pscustomobject]@{
+            DestinationFileName = 'PowerShell7.zip'
+            DestinationFolders = @('Microsoft-PowerShell-7')
+        }
+        $script:sourceZip = Join-Path $TestDrive 'source.zip'
+        Set-Content -LiteralPath $script:sourceZip -Value 'ZIP content'
+        foreach ($root in @($ArtifactsDir, $CustomerArtifactsDir)) {
+            $destination = Join-Path $root 'Microsoft-PowerShell-7'
+            New-Item -Path $destination -ItemType Directory -Force | Out-Null
+            Set-Content (Join-Path $destination 'PowerShell7.msi') -Value 'old MSI'
+            Set-Content (Join-Path $destination 'PowerShell-7.6.10-win-x64.zip') -Value 'old ZIP'
+            Set-Content (Join-Path $destination 'Deploy-PowerShell7.ps1') -Value 'authored script'
+            Set-Content (Join-Path $destination 'README.md') -Value 'authored documentation'
+        }
+        Mock Get-InternetFile {
+            $path = Join-Path $OutputDirectory 'PowerShell-7.7.0-win-x64.zip'
+            Copy-Item -LiteralPath $script:sourceZip -Destination $path
+            $path
+        }
+    }
+
+    It 'renames and copies the ZIP to both destinations without deleting existing files' {
+        $null = & $singleDownloadBlock
+        foreach ($root in @($ArtifactsDir, $CustomerArtifactsDir)) {
+            $destination = Join-Path $root 'Microsoft-PowerShell-7'
+            Test-Path (Join-Path $destination 'PowerShell7.msi') | Should -BeTrue
+            Test-Path (Join-Path $destination 'PowerShell-7.6.10-win-x64.zip') | Should -BeTrue
+            Test-Path (Join-Path $destination 'Deploy-PowerShell7.ps1') | Should -BeTrue
+            Test-Path (Join-Path $destination 'README.md') | Should -BeTrue
+            (Get-FileHash (Join-Path $destination 'PowerShell7.zip')).Hash |
+                Should -Be (Get-FileHash $script:sourceZip).Hash
+        }
+    }
+
+    It 'does not copy the ZIP to customer artifacts unless requested' {
+        $CopyDownloadsToCustomerArtifacts = $false
+        $null = & $singleDownloadBlock
+        Test-Path (Join-Path $ArtifactsDir 'Microsoft-PowerShell-7\PowerShell7.zip') | Should -BeTrue
+        Test-Path (Join-Path $CustomerArtifactsDir 'Microsoft-PowerShell-7\PowerShell7.zip') | Should -BeFalse
     }
 }
