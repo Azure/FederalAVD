@@ -29,7 +29,7 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: name
   location: location
   sku: sku
-  tags: tags
+  tags: tags[?'Microsoft.Web/serverfarms'] ?? {}
   properties: {
     maximumElasticWorkerCount: contains(hostingPlanType, 'Consumption') ? null : hostingPlanType == 'FunctionsPremium' ? 20 : 1
     reserved: contains(functionAppKind, 'linux') ? true : false

@@ -122,7 +122,7 @@ module secretsKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' = if
   scope: resourceGroup(resourceGroupName)
   params: {
     name: secretsKeyVaultName
-    tags: tags
+    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'standard'
     enableSoftDelete: secretsKeyVaultEnableSoftDelete
     softDeleteRetentionInDays: secretsKeyVaultRetentionInDays
@@ -141,7 +141,7 @@ module secretsKeyVault_pe '../../resourceModules/network/privateEndpoints/deploy
   params: {
     name: privateEndpointName(privateEndpointNameConv, secretsKeyVaultName, 'vault', privateEndpointVnetName)
     customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, secretsKeyVaultName, 'vault', privateEndpointVnetName)
-    tags: tags
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
     location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId
     privateLinkServiceId: secretsKeyVault!.outputs.resourceId
@@ -168,7 +168,7 @@ module encryptionKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' =
   scope: resourceGroup(resourceGroupName)
   params: {
     name: encryptionKeyVaultName
-    tags: tags
+    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'premium'
     enableSoftDelete: true
     softDeleteRetentionInDays: encryptionKeyVaultRetentionInDays
@@ -187,7 +187,7 @@ module encryptionKeyVault_pe '../../resourceModules/network/privateEndpoints/dep
   params: {
     name: privateEndpointName(privateEndpointNameConv, encryptionKeyVaultName, 'vault', privateEndpointVnetName)
     customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, encryptionKeyVaultName, 'vault', privateEndpointVnetName)
-    tags: tags
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
     location: privateEndpointVirtualNetwork!.location
     subnetResourceId: privateEndpointSubnetResourceId
     privateLinkServiceId: encryptionKeyVault!.outputs.resourceId
