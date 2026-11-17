@@ -1,6 +1,5 @@
 metadata name = 'Customer-managed encryption orchestration'
 metadata description = 'Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions.'
-import { getTagsForResource } from '../../resourceModules/types/tags.bicep'
 
 // ============================================================================
 // Unified Customer-Managed Keys Module
@@ -142,7 +141,7 @@ module paasKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
       attributesEnabled: true
       attributesExportable: false
       rotationPolicy: rotationPolicy
-      tags: tags
+      tags: union(parentTag, tags[?'Microsoft.KeyVault/vaults'] ?? {})
     }
   }
 ]
@@ -155,7 +154,7 @@ module paasIdentity '../../resourceModules/managedIdentity/userAssignedIdentitie
   params: {
     name: identityName
     location: location
-    tags: tags
+    tags: union(parentTag, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
   }
 }
 
@@ -207,7 +206,7 @@ module diskKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
       keyReleasePolicy: (config.?confidentialVMOSDiskEncryption ?? false)
         ? { data: cvmKeyReleasePolicy, contentType: 'application/json; charset=utf-8' }
         : {}
-      tags: tags
+      tags: union(parentTag, tags[?'Microsoft.KeyVault/vaults/keys'] ?? {})
     }
   }
 ]
@@ -228,7 +227,7 @@ module diskEncryptionSets '../../resourceModules/compute/diskEncryptionSets/depl
             : 'EncryptionAtRestWithPlatformAndCustomerKeys')
       rotationToLatestKeyVersionEnabled: (config.?confidentialVMOSDiskEncryption ?? false) ? false : true
       systemAssignedIdentity: true
-      tags: tags
+      tags: union(parentTag, tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {})
     }
     dependsOn: [
       diskKeys[i]
