@@ -51,29 +51,30 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 			parameters = @{
 				artifactsContainerUri = @{ value = $env:artifactsContainerUri }
 				artifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }
-				bootDiagnosticsEnabled = @{ value = $env:bootDiagnosticsEnabled }
+				bootDiagnosticsEnabled = @{ value = [bool]$env:bootDiagnosticsEnabled }
 				diskAccessResourceId = @{ value = $env:diskAccessResourceId }
 				diskControllerType = @{ value = $env:diskControllerType }
 				diskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }
 				diskName = @{ value = $env:diskName }
-				enableAcceleratedNetworking = @{ value = $env:enableAcceleratedNetworking }
-				encryptionAtHost = @{ value = $env:encryptionAtHost }
-				hibernationEnabled = @{ value = $env:hibernationEnabled }
+				enableAcceleratedNetworking = @{ value = [bool]$env:enableAcceleratedNetworking }
+				encryptionAtHost = @{ value = [bool]$env:encryptionAtHost }
+				hibernationEnabled = @{ value = $false }
 				imageVersionResourceId = @{ value = $env:imageVersionResourceId }
+				integrityMonitoring = @{ value = [bool]$env:integrityMonitoring }
 				keyVaultResourceId = @{ value = $env:keyVaultResourceId }
 				licenseType = @{ value = $env:licenseType }
 				location = @{ value = $env:location }
 				networkInterfaceName = @{ value = $env:networkInterfaceName }
 				privateIPAddress = @{ value = $env:privateIPAddress }
-				secureBootEnabled = @{ value = $env:secureBootEnabled }
+				secureBoot = @{ value = [bool]$env:secureBoot }
 				securityType = @{ value = $env:securityType }
 				subnetResourceId = @{ value = $env:subnetResourceId }
-				tags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }
-				userAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -ErrorAction Stop) }
+				tags = @{ value = ($env:tags | ConvertFrom-Json -Depth 5) }
+				userAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -Depth 5) }
 				virtualMachineName = @{ value = $env:virtualMachineName }
 				virtualMachineSize = @{ value = $env:virtualMachineSize }
-				vmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -ErrorAction Stop) }
-				vTpmEnabled = @{ value = $env:vTpmEnabled }
+				vmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -Depth 5) }
+				vTpm = @{ value = [bool]$env:vTpm }
 			}
 			templateLink = @{
 				id = $env:TemplateSpecResourceId
