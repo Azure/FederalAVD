@@ -1,13 +1,30 @@
 targetScope = 'subscription'
 
-metadata name = 'Image validation infrastructure'
-metadata description = 'Deploys private Windows PowerShell timer Function infrastructure. Validation code and workload permissions are supplied by the operator.'
+metadata name = 'Image Validation Add-On'
+metadata description = 'The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release.'
 
-import { functionAppNames, namingPolicy, resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 
-@description('Optional. Complete name override for a new App Service plan. Ignored when using an existing plan ID.')
-param appServicePlanNameOverride string = ''
+@description('Required. Complete name for the Application Insights resource.')
+@minLength(1)
+@maxLength(260)
+param applicationInsightsName string
+
+@description('Optional. The name for a new App Service plan. Ignored when using an existing plan ID.')
+@maxLength(40)
+param appServicePlanName string = ''
+
+@description('Optional. The SKU for a new App Service plan. Ignored when using an existing plan ID.')
+@allowed([
+  'P0v3'
+  'P1v3'
+  'P2v3'
+  'P3v3'
+])
+param appServicePlanSku string = 'P0v3'
+
+@description('Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan.')
+param appServicePlanResourceId string = ''
 
 @description('Optional. URI of the storage container containing the customization artifacts.')
 param artifactsContainerUri string = ''
@@ -40,32 +57,24 @@ param diskControllerType string = 'SCSI'
 @description('Optional. Existing disk encryption set resource ID for the validation VM.')
 param diskEncryptionSetResourceId string = ''
 
+@description('Required. Complete name for the validation VM disk.')
+@minLength(1)
+@maxLength(80)
+param diskName string
+
 @description('Optional. Enable accelerated networking for the validation VM network interface.')
 param enableAcceleratedNetworking bool = true
 
 @description('Optional. Enable encryption at host for the validation VM.')
 param encryptionAtHost bool = true
 
-@description('Optional. Complete name override for the new storage encryption Key Vault.')
-@maxLength(24)
-param encryptionKeyVaultNameOverride string = ''
-
-@description('Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan.')
-param existingAppServicePlanResourceId string = ''
-
 @description('Required for private mode. Existing Microsoft.Web/serverFarms-delegated integration subnet in the app region, separate from the endpoint subnet.')
 param functionAppDelegatedSubnetResourceId string = ''
 
-@description('Optional. Complete Function App name override.')
+@description('Required. Complete Function App name.')
+@minLength(2)
 @maxLength(60)
-param functionAppNameOverride string = ''
-
-@description('Optional. Enable hibernation for the validation VM.')
-param hibernationEnabled bool = false
-
-@description('Optional. Short add-on identifier used by the centralized naming policy. Use distinct identifiers for independent instances.')
-@minLength(1)
-param identifier string = 'iv'
+param functionAppName string
 
 @description('Required. License type for the image.')
 @allowed([
@@ -78,6 +87,14 @@ param imageLicenseType string = 'Windows_Client'
 @minLength(1)
 param imageVersionResourceId string
 
+@description('Optional. Enable hardware integrity monitoring for the validation VM.')
+param integrityMonitoring bool = true
+
+@description('Required. Complete name for the credentials Key Vault.')
+@minLength(3)
+@maxLength(24)
+param keyVaultName string
+
 @description('Required. Existing credentials Key Vault ID containing LocalAdminUsername and LocalAdminPassword secrets. Enable template deployment and authorize the deployment principal.')
 @minLength(1)
 param keyVaultResourceId string
@@ -88,8 +105,10 @@ param location string = deployment().location
 @description('Optional. Existing workspace ID. Nonempty enables Application Insights and FunctionAppLogs diagnostics.')
 param logAnalyticsWorkspaceResourceId string = ''
 
-@description('Optional. Shared naming convention overrides. Empty uses the centralized FederalAVD defaults.')
-param namingConvention object = {}
+@description('Required. Complete name for the validation VM network interface.')
+@minLength(1)
+@maxLength(80)
+param networkInterfaceName string
 
 @description('Optional. Create private endpoints and disable public app/storage access. Requires existing subnets and private DNS zones.')
 param privateEndpoint bool = true
@@ -104,26 +123,30 @@ param privateLinkScopeResourceId string = ''
 @minLength(1)
 param privateIPAddress string
 
-@description('Optional. Complete resource group name override. The deployment manages this group.')
-param resourceGroupNameOverride string = ''
+@description('Required. Complete resource group name. The deployment manages this group.')
+@minLength(1)
+@maxLength(90)
+param resourceGroupName string
 
 @description('Required. Timer schedule in six-field Functions NCRONTAB format or a supported app-setting reference.')
 @minLength(1)
 param schedule string
 
 @description('Optional. Enable secure boot for the validation VM.')
-param secureBootEnabled bool = true
+param secureBoot bool = true
 
 @description('Optional. Security type for the validation VM.')
 @allowed([
   'TrustedLaunch'
   'ConfidentialVM'
+  'Standard'
 ])
 param securityType string = 'TrustedLaunch'
 
-@description('Optional. Complete runtime storage name override, also useful when generated storage names exceed 24 characters.')
+@description('Required. Complete runtime storage name, also useful when generated storage names exceed 24 characters.')
+@minLength(3)
 @maxLength(24)
-param storageAccountNameOverride string = ''
+param storageAccountName string
 
 @description('Required. Existing subnet resource ID for the validation VM, separate from Function App integration networking.')
 @minLength(1)
@@ -132,8 +155,15 @@ param subnetResourceId string
 @description('Optional. Tags applied to all resources that support tags.')
 param tags object = {}
 
-@description('Optional. Complete name override for the Function App identity.')
-param userAssignedIdentityNameOverride string = ''
+@description('Required. Complete name for the template spec.')
+@minLength(1)
+@maxLength(90)
+param templateSpecName string
+
+@description('Required. Complete name for the Function App identity.')
+@minLength(3)
+@maxLength(128)
+param userAssignedIdentityName string
 
 @description('Optional. Existing user-assigned identity resource IDs for the validation VM.')
 param userAssignedIdentityResourceIds array = []
@@ -141,50 +171,16 @@ param userAssignedIdentityResourceIds array = []
 @description('Optional. Customizations applied to the validation VM.')
 param virtualMachineCustomizations artifactCustomizationType[] = []
 
-@description('Required. Windows VM size supported by the selected image and region, including accelerated networking.')
+@description('Required. The name for the validation VM.')
 @minLength(1)
+@maxLength(15)
+param virtualMachineName string
+
+@description('Required. The size of the virtual machine supported by the selected image and region.')
 param virtualMachineSize string
 
 @description('Optional. Enable vTPM for the validation VM.')
-param vTpmEnabled bool = true
-
-var groupContext = {
-  subscriptionId: subscription().subscriptionId
-  resourceGroupName: ''
-  location: location
-  cloud: environment().name
-}
-var resourceGroupName = !empty(resourceGroupNameOverride)
-  ? resourceGroupNameOverride
-  : resourceNameForType(namingConvention, 'resourceGroups', identifier, groupContext)
-var namingContext = union(groupContext, { resourceGroupName: resourceGroupName })
-var validationVirtualMachineName = resourceNameForType(namingConvention, 'virtualMachines', identifier, namingContext)
-var names = union(
-  functionAppNames(namingConvention, identifier, namingContext, {
-    functionAppName: functionAppNameOverride
-    storageAccountName: storageAccountNameOverride
-  }),
-  {
-    resourceGroup: resourceGroupName
-    diskName: resourceNameForType(namingConvention, 'osdisks', identifier, namingContext)
-    networkInterfaceName: resourceNameForType(namingConvention, 'networkInterfaces', identifier, namingContext)
-    encryptionKeyVaultName: !empty(encryptionKeyVaultNameOverride)
-      ? encryptionKeyVaultNameOverride
-      : resourceNameForType(namingConvention, 'keyVaults', identifier, namingContext)
-    templateSpecName: resourceNameForType(namingConvention, 'templateSpecs', identifier, namingContext)
-    virtualMachineName: length(validationVirtualMachineName) > namingPolicy.limits.deploymentVm
-      ? fail('Generated validation VM name exceeds the shared Windows computer-name limit. Shorten the identifier or naming-convention values.')
-      : validationVirtualMachineName
-    userAssignedIdentity: !empty(userAssignedIdentityNameOverride)
-      ? userAssignedIdentityNameOverride
-      : resourceNameForType(namingConvention, 'userAssignedIdentities', identifier, namingContext)
-    appServicePlanName: !empty(existingAppServicePlanResourceId)
-      ? last(split(existingAppServicePlanResourceId, '/'))
-      : !empty(appServicePlanNameOverride)
-          ? appServicePlanNameOverride
-          : resourceNameForType(namingConvention, 'appServicePlans', identifier, namingContext)
-  }
-)
+param vTpm bool = true
 
 var integrationSubnetId = privateEndpoint && empty(trim(functionAppDelegatedSubnetResourceId))
   ? fail('Private mode requires functionAppDelegatedSubnetResourceId.')
@@ -203,7 +199,7 @@ var vaultDnsZoneId = privateEndpoint && empty(trim(azureKeyVaultPrivateDnsZoneRe
   : azureKeyVaultPrivateDnsZoneResourceId
 
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: names.resourceGroup
+  name: resourceGroupName
   location: location
   tags: tags
 }
@@ -212,7 +208,7 @@ module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentit
   scope: rg
   params: {
     location: location
-    name: names.userAssignedIdentity
+    name: userAssignedIdentityName
     tags: tags
   }
 }
@@ -223,7 +219,7 @@ module templateSpec 'modules/templateSpec.bicep' = {
     imageDefinitionName: split(imageVersionResourceId, '/')[10]
     location: location
     tags: tags
-    templateSpecName: names.templateSpecName
+    templateSpecName: templateSpecName
   }
 }
 
@@ -234,13 +230,13 @@ module encryptionKeyVault '../../shared/modules/orchestration/keyVaults/keyVault
     deploySecretsKeyVault: false
     secretsKeyVaultName: ''
     deployEncryptionKeyVault: true
-    encryptionKeyVaultName: names.encryptionKeyVaultName
+    encryptionKeyVaultName: '${keyVaultName}-enc'
     azureKeyVaultPrivateDnsZoneResourceId: vaultDnsZoneId
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateEndpoint: privateEndpoint
     privateEndpointSubnetResourceId: endpointSubnetId
-    privateEndpointNameConv: names.privateEndpointNameConv
-    privateEndpointNICNameConv: names.privateEndpointNICNameConv
+    privateEndpointNameConv: 'pe-${keyVaultName}'
+    privateEndpointNICNameConv: 'nic-pe-${keyVaultName}'
     paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     tags: tags
   }
@@ -251,21 +247,21 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/custom
   params: {
     keyVaultResourceId: encryptionKeyVault.outputs.encryptionKeyVaultResourceId
     keyManagementType: 'CustomerManagedHSM'
-    keyNames: [names.storageAccountName]
-    identityName: names.storageEncryptionIdentityName
+    keyNames: [storageAccountName]
+    identityName: '${userAssignedIdentityName}-enc'
     location: location
     tags: tags
   }
 }
 
-module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
+module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
   scope: rg
   params: {
     functionAppKind: 'functionapp'
     hostingPlanType: 'Dedicated'
     location: location
-    name: names.appServicePlanName
-    planPricing: 'PremiumV3_P0v3'
+    name: appServicePlanName
+    planPricing: 'PremiumV3_${appServicePlanSku}'
     tags: tags
     zoneRedundant: false
   }
@@ -274,13 +270,13 @@ module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppH
 module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
   scope: rg
   params: {
-    applicationInsightsName: names.applicationInsightsName
+    applicationInsightsName: applicationInsightsName
     azureBlobPrivateDnsZoneResourceId: blobDnsZoneId
     azureFunctionAppPrivateDnsZoneResourceId: appDnsZoneId
     enableApplicationInsights: !empty(logAnalyticsWorkspaceResourceId)
     enableQueueStorage: false
     enableTableStorage: false
-    encryptionKeyName: names.storageAccountName
+    encryptionKeyName: storageAccountName
     encryptionKeyVaultResourceId: encryptionKeyVault.outputs.encryptionKeyVaultResourceId
     functionAppAppSettings: concat([
       {
@@ -309,7 +305,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'diskName'
-        value: names.diskName
+        value: diskName
       }
       {
         name: 'enableAcceleratedNetworking'
@@ -320,12 +316,12 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: string(encryptionAtHost)
       }
       {
-        name: 'hibernationEnabled'
-        value: string(hibernationEnabled)
-      }
-      {
         name: 'imageVersionResourceId'
         value: imageVersionResourceId
+      }
+      {
+        name: 'integrityMonitoring'
+        value: string(integrityMonitoring)
       }
       {
         name: 'keyVaultResourceId'
@@ -341,15 +337,15 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'networkInterfaceName'
-        value: names.networkInterfaceName
+        value: networkInterfaceName
       }
       {
         name: 'privateIPAddress'
         value: privateIPAddress
       }
       {
-        name: 'secureBootEnabled'
-        value: string(secureBootEnabled)
+        name: 'secureBoot'
+        value: string(secureBoot)
       }
       {
         name: 'securityType'
@@ -361,7 +357,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'tags'
-        value: string(tags)
+        value: string(tags[?'Microsoft.Compute/virtualMachines'] ?? {})
       }
       {
         name: 'userAssignedIdentityResourceIds'
@@ -369,7 +365,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'virtualMachineName'
-        value: names.virtualMachineName
+        value: virtualMachineName
       }
       {
         name: 'virtualMachineSize'
@@ -380,12 +376,12 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: string(virtualMachineCustomizations)
       }
       {
-        name: 'vTpmEnabled'
-        value: string(vTpmEnabled)
+        name: 'vTpm'
+        value: string(vTpm)
       }
     ])
     functionAppDelegatedSubnetResourceId: integrationSubnetId
-    functionAppName: names.functionAppName
+    functionAppName: functionAppName
     functionAppUserAssignedIdentityResourceId: userAssignedIdentity.outputs.resourceId
     hostPoolResourceId: ''
     keyManagementStorageAccounts: 'CustomerManagedHSM'
@@ -393,18 +389,17 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     privateEndpoint: privateEndpoint
-    privateEndpointNameConv: names.privateEndpointNameConv
-    privateEndpointNICNameConv: names.privateEndpointNICNameConv
+    privateEndpointNameConv: 'pe-${functionAppName}'
+    privateEndpointNICNameConv: 'nic-pe-${functionAppName}'
     privateEndpointSubnetResourceId: endpointSubnetId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    serverFarmId: !empty(existingAppServicePlanResourceId)
-      ? existingAppServicePlanResourceId
-      : serverFarm!.outputs.hostingPlanId
-    storageAccountName: names.storageAccountName
-    storageEncryptionIdentityName: names.storageEncryptionIdentityName
+    serverFarmId: empty(appServicePlanResourceId)
+      ? serverFarm!.outputs.hostingPlanId
+      : appServicePlanResourceId
+    storageAccountName: storageAccountName
+    storageEncryptionIdentityName: '${userAssignedIdentityName}-enc'
     tags: tags
   }
-  // The shared app module computes the encryption identity ID from its name, so gate key/RBAC completion explicitly.
   dependsOn: [
     storageCmk
   ]
@@ -418,15 +413,8 @@ module function '../../shared/modules/resourceModules/functionApp/function.bicep
       'run.ps1': loadTextContent('./scripts/run.ps1')
       '../profile.ps1': loadTextContent('./scripts/profile.ps1')
     }
-
     functionAppName: functionApp.outputs.functionAppName
     functionName: 'ImageValidation'
     schedule: schedule
   }
 }
-
-@description('Resolved infrastructure and validation VM names from the shared naming policy.')
-output generatedNames object = names
-
-@description('Managed identity principal ID for granting validation workload permissions.')
-output userAssignedIdentityPrincipalId string = userAssignedIdentity.outputs.principalId
