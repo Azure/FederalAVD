@@ -11,12 +11,13 @@ param enableAcceleratedNetworking bool = true
 param encryptionAtHost bool = true
 param hibernationEnabled bool = false
 param imageVersionResourceId string
+param integrityMonitoring bool = true
 param keyVaultResourceId string
 param licenseType string = 'Windows_Client'
 param location string = resourceGroup().location
 param networkInterfaceName string
 param privateIPAddress string
-param secureBootEnabled bool = true
+param secureBoot bool = true
 param securityType string = 'TrustedLaunch'
 param subnetResourceId string
 param tags object = {}
@@ -24,7 +25,7 @@ param userAssignedIdentityResourceIds array = []
 param virtualMachineName string
 param virtualMachineSize string
 param vmCustomizations artifactCustomizationType[] = []
-param vTpmEnabled bool = true
+param vTpm bool = true
 
 resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
   scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
@@ -51,13 +52,21 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
     nicPrivateIPAddress: privateIPAddress
     nicPrivateIPAllocationMethod: 'Static'
     osDiskName: diskName
-    secureBootEnabled: secureBootEnabled
+    secureBootEnabled: secureBoot
     securityType: securityType
     subnetResourceId: subnetResourceId
     tags: tags
     userAssignedIdentityResourceIds: userAssignedIdentityResourceIds
     vmSize: virtualMachineSize
-    vTpmEnabled: vTpmEnabled
+    vTpmEnabled: vTpm
+  }
+}
+
+module extension_GuestAttestation '../../../shared/modules/resourceModules/extensions/guestAttestation.bicep' = if (integrityMonitoring) {
+  params: {
+    location: location
+    tags: tags
+    virtualMachineName: virtualMachine.outputs.name
   }
 }
 
