@@ -204,6 +204,17 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
 }
 
+module networkInterface '../../shared/modules/resourceModules/network/networkInterfaces/deploy.bicep' = {
+  scope: rg
+  params: {
+    location: location
+    name: networkInterfaceName
+    subnetResourceId: subnetResourceId
+    privateIPAddress: privateIPAddress
+    tags: tags[?'Microsoft.Network/networkInterfaces'] ?? {}
+  }
+}
+
 module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
   scope: rg
   params: {
@@ -241,6 +252,9 @@ module keyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' =
     paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     tags: tags
   }
+  dependsOn: [
+    networkInterface
+  ]
 }
 
 module keys '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
@@ -403,6 +417,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
   }
   dependsOn: [
     keys
+    networkInterface
   ]
 }
 

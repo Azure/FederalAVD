@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "8847467197729780570"
+      "templateHash": "4563034352727137362"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -1435,6 +1435,152 @@
       "name": "[parameters('resourceGroupName')]",
       "location": "[parameters('location')]",
       "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+    },
+    "networkInterface": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('networkInterface-{0}', uniqueString('networkInterface', deployment().name))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "name": {
+            "value": "[parameters('networkInterfaceName')]"
+          },
+          "subnetResourceId": {
+            "value": "[parameters('subnetResourceId')]"
+          },
+          "privateIPAddress": {
+            "value": "[parameters('privateIPAddress')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/networkInterfaces'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "12142420493609789881"
+            },
+            "name": "Network interface",
+            "description": "Deploys a private NIC in an existing subnet with optional static addressing, accelerated networking and an existing network security group."
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the network interface to deploy."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the network interface; defaults to the deployment resource group region."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the network interface."
+              }
+            },
+            "subnetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the subnet to attach this NIC to."
+              }
+            },
+            "privateIPAllocationMethod": {
+              "type": "string",
+              "defaultValue": "Dynamic",
+              "allowedValues": [
+                "Dynamic",
+                "Static"
+              ],
+              "metadata": {
+                "description": "Optional. Private address allocation mode; Static requires privateIPAddress."
+              }
+            },
+            "privateIPAddress": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Static private IP address. Required when privateIPAllocationMethod is Static."
+              }
+            },
+            "nsgResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of a Network Security Group to associate with this NIC."
+              }
+            },
+            "enableAcceleratedNetworking": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enable accelerated networking on the NIC; the consuming VM size and OS must support it."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "enableAcceleratedNetworking": "[parameters('enableAcceleratedNetworking')]",
+                "networkSecurityGroup": "[if(not(empty(parameters('nsgResourceId'))), createObject('id', parameters('nsgResourceId')), null())]",
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "subnet": {
+                        "id": "[parameters('subnetResourceId')]"
+                      },
+                      "privateIPAllocationMethod": "[parameters('privateIPAllocationMethod')]",
+                      "privateIPAddress": "[if(equals(parameters('privateIPAllocationMethod'), 'Static'), parameters('privateIPAddress'), null())]"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the network interface."
+              },
+              "value": "[resourceId('Microsoft.Network/networkInterfaces', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the network interface."
+              },
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
     },
     "userAssignedIdentity": {
       "type": "Microsoft.Resources/deployments",
@@ -3222,6 +3368,7 @@
         }
       },
       "dependsOn": [
+        "networkInterface",
         "rg"
       ]
     },
@@ -5766,6 +5913,7 @@
       "dependsOn": [
         "keys",
         "keyVault",
+        "networkInterface",
         "rg",
         "serverFarm",
         "userAssignedIdentity"
