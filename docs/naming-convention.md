@@ -8,12 +8,12 @@ This document describes how FederalAVD names every Azure resource it creates, ho
 
 Use one of these complete entry-template examples in `deployments/add-ons/<name>/main.bicep`:
 
-- **Any combination of supported resource types:** call `resourceNameForType` once per resource, then pass the resolved names to your resource modules. The Automation Account example demonstrates one such call.
+- **Any combination of supported resource types:** call `resourceNameForType` once per resource, then pass the resolved names to your resource modules. The Automation Account example combines an account and a Log Analytics workspace in a local `names` object.
 - **A predefined bundle, when useful:** call `functionAppNames` for Function App infrastructure, then pass the bundle's properties to the shared Function App module.
 
 `resourceNameForType` returns one name per call, not one resource type per add-on.
-For example, the same add-on can name an Automation Account, storage accounts,
-identities and a Key Vault with separate calls using the same convention. You can
+For example, the same add-on can name an Automation Account, a Log Analytics
+workspace, storage accounts, identities and a Key Vault with separate calls using the same convention. You can
 group those results in a local `names` object or mix direct calls with a predefined
 bundle. Bundles are optional conveniences, not a requirement or a limit on which
 supported resource types an add-on can use; no new adapter is needed for other combinations.
@@ -44,13 +44,30 @@ Explicit name overrides must satisfy Azure's resource naming rules; an override
 does not automatically adopt or rename an existing resource.
 
 <details>
-<summary>Automation Account: one generated name and an optional override</summary>
+<summary>Automation Account: combine an account and workspace with optional overrides</summary>
 
-This example reuses the existing [AVD Alerts Automation Account module](../deployments/add-ons/avdAlerts/modules/automationAccount.bicep).
-Supply an existing Log Analytics workspace resource ID. The module creates an
-account, system-assigned identity, Automation variables and diagnostic settings.
-Its storage-collector runbook and schedule remain disabled because no storage
-accounts are supplied. For a different workload, use your own resource module
+An Automation Account can be combined with other supported resource types:
+
+| Companion resource | Typical use |
+| --- | --- |
+| Log Analytics workspace | Collect Automation job logs and streams |
+| Storage account | Store runbook inputs, reports or processing results |
+| Key Vault | Hold secrets or certificates needed by the workload |
+| User-assigned managed identity | Provide an identity for workloads that support it |
+
+This example **creates and connects the first pair**: it reuses the
+[Log Analytics workspace module](../deployments/shared/modules/resourceModules/operationalInsights/workspaces/deploy.bicep)
+and the [AVD Alerts Automation Account module](../deployments/add-ons/avdAlerts/modules/automationAccount.bicep).
+Both names use the same convention and context, with independent optional overrides.
+The workspace module's resource ID output is passed to the Automation module for
+diagnostic settings; Bicep orders the deployments through that dependency.
+
+The Automation module also creates a system-assigned identity and Automation
+variables. Its storage-collector runbook and schedule remain disabled because no
+storage accounts are supplied. The storage, vault and user-assigned identity rows
+above are other possible combinations, not extra resources in this example.
+Naming those resources alone would not wire their integrations, attach identities
+or grant permissions. For a different workload, use your own resource modules
 with the same name-parameter pattern.
 
 ```bicep
@@ -60,11 +77,13 @@ import { namingConventionConfig, resourceNameForType } from '../../shared/module
 
 param namingConvention namingConventionConfig = {}
 param location string = resourceGroup().location
-param logAnalyticsWorkspaceResourceId string
 param deploymentTime string = utcNow()
 
 @description('Optional. Complete Automation Account name. Leave empty to generate.')
 param automationAccountNameOverride string = ''
+
+@description('Optional. Complete Log Analytics workspace name. Leave empty to generate.')
+param logAnalyticsWorkspaceNameOverride string = ''
 
 var context = {
   subscriptionId: subscription().subscriptionId
@@ -73,26 +92,42 @@ var context = {
   cloud: environment().name
 }
 
-var automationAccountName = !empty(automationAccountNameOverride)
-  ? automationAccountNameOverride
-  : resourceNameForType(namingConvention, 'automationAccounts', '<purpose>', context)
+var names = {
+  automationAccountName: !empty(automationAccountNameOverride)
+    ? automationAccountNameOverride
+    : resourceNameForType(namingConvention, 'automationAccounts', '<purpose>', context)
+  logAnalyticsWorkspaceName: !empty(logAnalyticsWorkspaceNameOverride)
+    ? logAnalyticsWorkspaceNameOverride
+    : resourceNameForType(namingConvention, 'logAnalyticsWorkspaces', '<purpose>', context)
+}
+
+module workspace '../../shared/modules/resourceModules/operationalInsights/workspaces/deploy.bicep' = {
+  params: {
+    name: names.logAnalyticsWorkspaceName
+    location: location
+    diagnosticSettings: null
+  }
+}
 
 module automationAccount '../avdAlerts/modules/automationAccount.bicep' = {
   params: {
-    automationAccountName: automationAccountName
+    automationAccountName: names.automationAccountName
     location: location
     resourceManagerUri: environment().resourceManager
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    logAnalyticsWorkspaceResourceId: workspace.outputs.resourceId
     deploymentTime: deploymentTime
   }
 }
 
-output automationAccountName string = automationAccountName
+output generatedNames object = names
 output automationAccountResourceId string = automationAccount.outputs.resourceId
+output logAnalyticsWorkspaceResourceId string = workspace.outputs.resourceId
 ```
 
-The override is selected **before** calling the naming helper. The resource module
-receives the finished name; it does not calculate another abbreviation or hash.
+Each override is selected **before** its naming-helper call. The resource modules
+receive finished names; they do not rebuild the convention. The local `names`
+object simply groups two direct calls for different resource types; it is not a
+new shared adapter or a separate naming engine.
 
 </details>
 

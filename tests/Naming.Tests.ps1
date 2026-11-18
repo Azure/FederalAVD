@@ -214,9 +214,16 @@ Describe 'Shared naming and module metadata contracts' {
         $template.parameters.namingConvention.defaultValue | Should -Not -BeOfType [string]
         $moduleParameters = $template.resources.$Module.properties.parameters
         if ($Example -eq 'Automation Account') {
-            $template.variables.automationAccountName | Should -Match "parameters\('automationAccountNameOverride'\)"
-            $moduleParameters.automationAccountName.value | Should -Be "[variables('automationAccountName')]"
+            $template.variables.names.automationAccountName | Should -Match "parameters\('automationAccountNameOverride'\)"
+            $template.variables.names.automationAccountName | Should -Match "'automationAccounts'"
+            $template.variables.names.logAnalyticsWorkspaceName | Should -Match "parameters\('logAnalyticsWorkspaceNameOverride'\)"
+            $template.variables.names.logAnalyticsWorkspaceName | Should -Match "'logAnalyticsWorkspaces'"
+            $moduleParameters.automationAccountName.value | Should -Be "[variables('names').automationAccountName]"
+            $template.resources.workspace.properties.parameters.name.value | Should -Be "[variables('names').logAnalyticsWorkspaceName]"
+            $moduleParameters.logAnalyticsWorkspaceResourceId.value | Should -Match "reference\('workspace'\)\.outputs\.resourceId"
+            $template.resources.automationAccount.dependsOn | Should -Contain 'workspace'
             $template.outputs.automationAccountResourceId.value | Should -Match "reference\('automationAccount'\)"
+            $template.outputs.logAnalyticsWorkspaceResourceId.value | Should -Match "reference\('workspace'\)"
         }
         else {
             $template.variables.names | Should -Match "parameters\('functionAppNameOverride'\)"
