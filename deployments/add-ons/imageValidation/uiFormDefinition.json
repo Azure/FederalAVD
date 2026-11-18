@@ -1138,7 +1138,7 @@
                   }
                 },
                 {
-                  "name": "storage_checkNameAvailability",
+                  "name": "storageCheckNameAvailabilityApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
                   "request": {
                     "method": "POST",
@@ -1162,8 +1162,8 @@
                         "message": "The value must use 3 - 24 lowercase letters or numbers."
                       },
                       {
-                        "isValid": "[or(steps('namingAndTags').naming.storage_checkNameAvailability.nameAvailable, equals(steps('namingAndTags').naming.storage_checkNameAvailability.reason, 'AlreadyExists'))]",
-                        "message": "[steps('namingAndTags').naming.storage_checkNameAvailability.message]"
+                        "isValid": "[steps('namingAndTags').naming.storageCheckNameAvailabilityApi.nameAvailable]",
+                        "message": "[steps('namingAndTags').naming.storageCheckNameAvailabilityApi.message]"
                       }
                     ]
                   }
