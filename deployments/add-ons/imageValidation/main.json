@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "15706894198912182536"
+      "templateHash": "12180979997965941030"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -1434,7 +1434,7 @@
       "apiVersion": "2021-04-01",
       "name": "[parameters('resourceGroupName')]",
       "location": "[parameters('location')]",
-      "tags": "[parameters('tags')]"
+      "tags": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
     },
     "userAssignedIdentity": {
       "type": "Microsoft.Resources/deployments",
@@ -1454,7 +1454,7 @@
             "value": "[parameters('userAssignedIdentityName')]"
           },
           "tags": {
-            "value": "[parameters('tags')]"
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject())]"
           }
         },
         "template": {
@@ -1563,7 +1563,7 @@
             "value": "[parameters('templateSpecName')]"
           },
           "tags": {
-            "value": "[parameters('tags')]"
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/templateSpecs'), createObject())]"
           }
         },
         "template": {
@@ -4819,7 +4819,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "5685841693708309065"
+              "templateHash": "2869430009876096841"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -5185,6 +5185,7 @@
             "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
             "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
             "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
+            "parentTag": "[if(empty(parameters('hostPoolResourceId')), createObject(), createObject('cm-resource-parent', parameters('hostPoolResourceId')))]",
             "restrictPublicAccess": "[equals(variables('networkAccess').defaultAction, 'Deny')]",
             "azureCloudRestriction": [
               {
@@ -5242,7 +5243,7 @@
               "apiVersion": "2024-01-01",
               "name": "[parameters('storageAccountName')]",
               "location": "[parameters('location')]",
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject()))]",
+              "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject()))]",
               "sku": {
                 "name": "Standard_LRS"
               },
@@ -5308,7 +5309,7 @@
                   "id": "[parameters('privateEndpointSubnetResourceId')]"
                 }
               },
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
+              "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
               "dependsOn": [
                 "storageAccount"
               ]
@@ -5342,7 +5343,7 @@
               "apiVersion": "2020-02-02",
               "name": "[parameters('applicationInsightsName')]",
               "location": "[parameters('location')]",
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/components'), createObject()))]",
+              "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Insights/components'), createObject()))]",
               "properties": {
                 "Application_Type": "web",
                 "publicNetworkAccessForIngestion": "[if(empty(parameters('privateLinkScopeResourceId')), 'Enabled', 'Disabled')]",
@@ -5356,7 +5357,7 @@
               "apiVersion": "2024-11-01",
               "name": "[parameters('functionAppName')]",
               "location": "[parameters('location')]",
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Web/sites'), createObject()))]",
+              "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Web/sites'), createObject()))]",
               "kind": "functionapp",
               "identity": "[if(not(empty(parameters('functionAppUserAssignedIdentityResourceId'))), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('functionAppUserAssignedIdentityResourceId')), createObject())), createObject('type', 'SystemAssigned'))]",
               "properties": {
@@ -5440,7 +5441,7 @@
                   "id": "[parameters('privateEndpointSubnetResourceId')]"
                 }
               },
-              "tags": "[union(createObject('cm-resource-parent', parameters('hostPoolResourceId')), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
+              "tags": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]",
               "dependsOn": [
                 "functionApp"
               ]

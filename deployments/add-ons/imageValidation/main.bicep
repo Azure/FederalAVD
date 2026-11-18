@@ -201,7 +201,7 @@ var vaultDnsZoneId = privateEndpoint && empty(trim(azureKeyVaultPrivateDnsZoneRe
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
   location: location
-  tags: tags
+  tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
 }
 
 module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
@@ -209,7 +209,7 @@ module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentit
   params: {
     location: location
     name: userAssignedIdentityName
-    tags: tags
+    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
   }
 }
 
@@ -221,7 +221,7 @@ module templateSpec '../../shared/modules/resourceModules/resources/templateSpec
     location: location
     mainTemplate: loadJsonContent('modules/validationVirtualMachine.json')
     name: templateSpecName
-    tags: tags
+    tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
   }
 }
 
