@@ -213,18 +213,19 @@ module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentit
   }
 }
 
-module templateSpec 'modules/templateSpec.bicep' = {
+module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = {
   scope: rg
   params: {
-    imageDefinitionName: split(imageVersionResourceId, '/')[10]
+    description: 'Deploys a virtual machine to validate a new image version.'
+    displayName: 'Image Validation for ${split(imageVersionResourceId, '/')[10]}'
     location: location
+    mainTemplate: loadJsonContent('modules/validationVirtualMachine.json')
+    name: templateSpecName
     tags: tags
-    templateSpecName: templateSpecName
   }
 }
 
-// Shared vault orchestration also owns private endpoints, DNS zone groups and diagnostics.
-module encryptionKeyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
+module keyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
   params: {
     resourceGroupName: rg.name
     deploySecretsKeyVault: false
@@ -242,10 +243,10 @@ module encryptionKeyVault '../../shared/modules/orchestration/keyVaults/keyVault
   }
 }
 
-module storageCmk '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
+module keys '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
   scope: rg
   params: {
-    keyVaultResourceId: encryptionKeyVault.outputs.encryptionKeyVaultResourceId
+    keyVaultResourceId: keyVault.outputs.encryptionKeyVaultResourceId
     keyManagementType: 'CustomerManagedHSM'
     keyNames: [storageAccountName]
     identityName: '${userAssignedIdentityName}-enc'
@@ -277,7 +278,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     enableQueueStorage: false
     enableTableStorage: false
     encryptionKeyName: storageAccountName
-    encryptionKeyVaultResourceId: encryptionKeyVault.outputs.encryptionKeyVaultResourceId
+    encryptionKeyVaultResourceId: keyVault.outputs.encryptionKeyVaultResourceId
     functionAppAppSettings: concat([
       {
         name: 'artifactsContainerUri'
@@ -401,7 +402,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     tags: tags
   }
   dependsOn: [
-    storageCmk
+    keys
   ]
 }
 
