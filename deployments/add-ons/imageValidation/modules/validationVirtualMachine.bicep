@@ -1,5 +1,6 @@
 import { artifactCustomizationType } from '../../../shared/modules/resourceModules/types/customizationTypes.bicep'
 
+param acceleratedNetworking bool = true
 param artifactsContainerUri string = ''
 param artifactsUserAssignedIdentityClientId string = ''
 param bootDiagnostics bool = true
@@ -7,7 +8,6 @@ param diskAccessResourceId string = ''
 param diskControllerType string = 'SCSI'
 param diskEncryptionSetResourceId string = ''
 param diskName string
-param enableAcceleratedNetworking bool = true
 param encryptionAtHost bool = true
 param hibernation bool = false
 param imageVersionResourceId string
@@ -41,7 +41,7 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
     diskAccessId: diskAccessResourceId
     diskControllerType: diskControllerType
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
-    enableAcceleratedNetworking: enableAcceleratedNetworking
+    enableAcceleratedNetworking: acceleratedNetworking
     encryptionAtHost: encryptionAtHost
     hibernationEnabled: hibernation
     licenseType: licenseType

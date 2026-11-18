@@ -1274,12 +1274,12 @@
         "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.blobDnsZone.id, '')]",
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.appDnsZone.id, '')]",
         "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.vaultDnsZone.id, '')]",
-        "bootDiagnosticsEnabled": "[steps('virtualMachine').general.bootDiagnostics]",
+        "bootDiagnostics": "[steps('virtualMachine').general.bootDiagnostics]",
         "diskAccessResourceId": "[steps('virtualMachine').disk.diskAccess.id]",
         "diskControllerType": "[steps('virtualMachine').disk.controllerType]",
         "diskEncryptionSetResourceId": "[steps('virtualMachine').disk.diskEncryptionSet.id]",
         "diskName": "[steps('namingAndTags').naming.disk]",
-        "enableAcceleratedNetworking": "[steps('virtualMachine').network.acceleratedNetworking]",
+        "acceleratedNetworking": "[steps('virtualMachine').network.acceleratedNetworking]",
         "encryptionAtHost": "[steps('virtualMachine').disk.encryptionAtHost]",
         "functionAppDelegatedSubnetResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.delegatedSubnet, '')]",
         "functionAppName": "[steps('namingAndTags').naming.functionApp]",
@@ -1296,7 +1296,7 @@
         "privateLinkScopeResourceId": "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]",
         "resourceGroupName": "[steps('namingAndTags').naming.resourceGroup]",
         "schedule": "[steps('functionApp').general.schedule]",
-        "secureBootEnabled": "[steps('virtualMachine').security.secureBoot]",
+        "secureBoot": "[steps('virtualMachine').security.secureBoot]",
         "securityType": "[steps('virtualMachine').security.securityType]",
         "storageAccountName": "[steps('namingAndTags').naming.storage]",
         "subnetResourceId": "[steps('virtualMachine').network.subnet]",
@@ -1307,7 +1307,7 @@
         "virtualMachineCustomizations": "[if(steps('virtualMachine').customizations.addCustomScripts, steps('virtualMachine').customizations.customScripts, parse('[]'))]",
         "virtualMachineName": "[steps('namingAndTags').naming.virtualMachine]",
         "virtualMachineSize": "[steps('virtualMachine').general.size]",
-        "vTpmEnabled": "[steps('virtualMachine').security.vTpm]"
+        "vTpm": "[steps('virtualMachine').security.vTpm]"
       }
     }
   }

@@ -49,6 +49,7 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 		properties = @{
 			mode = 'Incremental'
 			parameters = @{
+				acceleratedNetworking = @{ value = [bool]$env:acceleratedNetworking }
 				artifactsContainerUri = @{ value = $env:artifactsContainerUri }
 				artifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }
 				bootDiagnostics = @{ value = [bool]$env:bootDiagnostics }
@@ -56,7 +57,6 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 				diskControllerType = @{ value = $env:diskControllerType }
 				diskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }
 				diskName = @{ value = $env:diskName }
-				enableAcceleratedNetworking = @{ value = [bool]$env:enableAcceleratedNetworking }
 				encryptionAtHost = @{ value = [bool]$env:encryptionAtHost }
 				hibernation = @{ value = $false }
 				imageVersionResourceId = @{ value = $env:imageVersionResourceId }

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4140392328353995120"
+      "templateHash": "16554968559648220553"
     }
   },
   "definitions": {
@@ -49,6 +49,10 @@
     }
   },
   "parameters": {
+    "acceleratedNetworking": {
+      "type": "bool",
+      "defaultValue": true
+    },
     "artifactsContainerUri": {
       "type": "string",
       "defaultValue": ""
@@ -75,10 +79,6 @@
     },
     "diskName": {
       "type": "string"
-    },
-    "enableAcceleratedNetworking": {
-      "type": "bool",
-      "defaultValue": true
     },
     "encryptionAtHost": {
       "type": "bool",
@@ -200,7 +200,7 @@
             "value": "[parameters('diskEncryptionSetResourceId')]"
           },
           "enableAcceleratedNetworking": {
-            "value": "[parameters('enableAcceleratedNetworking')]"
+            "value": "[parameters('acceleratedNetworking')]"
           },
           "encryptionAtHost": {
             "value": "[parameters('encryptionAtHost')]"

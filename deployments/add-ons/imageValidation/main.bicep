@@ -63,7 +63,7 @@ param diskEncryptionSetResourceId string = ''
 param diskName string
 
 @description('Optional. Enable accelerated networking for the validation VM network interface.')
-param enableAcceleratedNetworking bool = true
+param acceleratedNetworking bool = true
 
 @description('Optional. Enable encryption at host for the validation VM.')
 param encryptionAtHost bool = true
@@ -207,10 +207,12 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
 module networkInterface '../../shared/modules/resourceModules/network/networkInterfaces/deploy.bicep' = {
   scope: rg
   params: {
+    enableAcceleratedNetworking: acceleratedNetworking
     location: location
     name: networkInterfaceName
     subnetResourceId: subnetResourceId
     privateIPAddress: privateIPAddress
+    privateIPAllocationMethod: 'Static'
     tags: tags[?'Microsoft.Network/networkInterfaces'] ?? {}
   }
 }
@@ -323,8 +325,8 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: diskName
       }
       {
-        name: 'enableAcceleratedNetworking'
-        value: string(enableAcceleratedNetworking)
+        name: 'acceleratedNetworking'
+        value: string(acceleratedNetworking)
       }
       {
         name: 'encryptionAtHost'
