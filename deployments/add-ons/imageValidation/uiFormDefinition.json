@@ -1287,7 +1287,6 @@
         "imageVersionResourceId": "[first(map(steps('virtualMachine').image.versionsApi.transformed.list, (item) => item.value))]",
         "keyVaultName": "[steps('namingAndTags').naming.keyVault]",
         "keyVaultResourceId": "[steps('virtualMachine').credentials.keyVault.id]",
-        "location": "[steps('basics').scope.location.name]",
         "logAnalyticsWorkspaceResourceId": "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]",
         "networkInterfaceName": "[steps('namingAndTags').naming.networkInterface]",
         "privateEndpoint": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
