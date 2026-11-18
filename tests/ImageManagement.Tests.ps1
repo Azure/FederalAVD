@@ -53,16 +53,18 @@ Describe 'Image Management storage account prefix' {
     }
 
     It 'preserves default names and uses deterministic custom-prefix names' {
-        $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep') -Raw
+        $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep') -Raw
         $policy = Get-TestNamingPolicy
-        $bicep | Should -Match "namingConvention\.\?imageManagementStoragePrefix"
-        $bicep | Should -Match "validateImageStoragePrefix\(imageManagementStoragePrefix, cnv_loc\)"
-        $bicep | Should -Match "imageStorageName\(namingConvention, 'artifacts', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
-        $bicep | Should -Match "imageStorageName\(namingConvention, 'logs', cnv_loc, subscription\(\).subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix\)"
+        $bicep | Should -Match 'var naming = imageManagementNames\(namingConvention,'
+        $bicep | Should -Match 'var artifactsStorageAccountName = naming.artifactsStorageAccountName'
+        $bicep | Should -Match 'var logsStorageName = naming.logsStorageAccountName'
+        $functions | Should -Match "validateImageStoragePrefix\(string\(convention\.\?imageManagementStoragePrefix"
+        $functions | Should -Match "imageStorageName\(convention, 'artifacts', abbreviation, union\(context, \{ resourceGroupName: groupName \}\), prefix\)"
+        $functions | Should -Match "imageStorageName\(convention, 'logs', abbreviation, union\(context, \{ resourceGroupName: groupName \}\), prefix\)"
         $functions | Should -Match "fail\('namingConvention.imageManagementStoragePrefix"
         $functions | Should -Match 'length\(prefix\) > namingPolicy.limits.imageManagementStoragePrefix'
         $functions | Should -Match 'length\(region\) > namingPolicy.limits.imageManagementStorageLocation'
-        $functions | Should -Match 'uniqueString\(subscriptionId, resourceGroupName, region\)'
+        $functions | Should -Match 'imageStorageNameResolved\(resolveConvention\(convention\), kind, abbreviation, scopeUnique\(validateNamingContext\(context'
         $policy.limits.imageManagementStoragePrefix | Should -Be 5
         $policy.limits.imageManagementStorageLocation | Should -Be 4
         $policy.limits.uniqueSuffix | Should -Be 6

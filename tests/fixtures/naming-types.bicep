@@ -1,4 +1,5 @@
-import { namingPolicy as policy, functionAppNames, resourceNameForType, privateEndpointName, shortScopedUnique, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames, resourceNameForType, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy as policy, privateEndpointName, scopeUnique } from '../../deployments/shared/modules/orchestration/naming/internal.bicep'
 
 var context = {
   subscriptionId: '00000000-1111-2222-3333-444444444444'
@@ -29,7 +30,7 @@ var cases = flatten(map(profiles, profile => map(types, type => {
   identifier: profile.identifier
   actual: resourceNameForType(profile.convention, type, profile.identifier, context)
   hash: (policy.resourceTypes[type].?globallyUnique ?? false)
-    ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(profile.identifier)), policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
+    ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
     : ''
 })))
 var abbreviations = loadJsonContent('../../deployments/shared/data/resourceAbbreviations.json')
@@ -50,7 +51,7 @@ var seeds = map([
 ], target => {
   name: resourceNameForType({}, 'functionApps', 'inventory', target)
   storage: resourceNameForType({}, 'storageAccounts', 'inventory', target)
-  hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location), toLower(target.cloud), 'inventory'), policy.limits.defaultUniqueLength)
+  hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location)), policy.limits.defaultUniqueLength)
 })
 var caseOnly = functionAppNames({}, 'INVENTORY', {
   subscriptionId: toUpper(context.subscriptionId)
@@ -89,6 +90,11 @@ output encodedResults string = base64(string({
   bundle: bundle
   identityExpected: identityExpected
   seeds: seeds
+  cloudOnlyTypes: map(['keyVaults', 'storageAccounts', 'functionApps'], type => {
+    type: type
+    baseline: resourceNameForType({ locationAbbreviation: 'e1' }, type, 'fin', context)
+    alternateCloud: resourceNameForType({ locationAbbreviation: 'e1' }, type, 'fin', union(context, { cloud: 'AzureUSGovernment' }))
+  })
   caseOnly: caseOnly
   caseOnlyTypes: map(types, type => {
     type: type
@@ -102,7 +108,7 @@ output encodedResults string = base64(string({
   applications: map(['finance-shr', 'hr-shr', 'finance-job'], identifier => {
     names: functionAppNames({}, identifier, context, {})
     sharedPlan: resourceNameForType({}, 'appServicePlans', 'shr', context)
-    hash: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), identifier), policy.limits.defaultUniqueLength)
+    hash: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), policy.limits.defaultUniqueLength)
   })
   locationTag: functionAppNames({ vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
   locationPrecedence: functionAppNames({ locationAbbreviation: 'e2', vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
@@ -122,16 +128,16 @@ output encodedResults string = base64(string({
   })))
   prefixes: map(['', 'customer-prefix', 'CUSTOMER-LONG-STORAGE-PREFIX'], prefix => {
     actual: fslogixNames({ fslogixStoragePrefix: prefix }, 'finance', { subscriptionId: context.subscriptionId, cloud: context.cloud, location: context.location }).fslogixStorageAccountNamePrefix
-    expected: empty(prefix) ? 'fslogix${take(uniqueString(context.subscriptionId, 'rg-avd-finance-storage-use'), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
+    expected: empty(prefix) ? 'fslogix${take(uniqueString(toLower(context.subscriptionId), 'rg-avd-finance-storage-use', toLower(context.location)), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
   })
   shortSeeds: [
     {
-      actual: shortScopedUnique({}, context.subscriptionId, context.resourceGroupName, context.location)
-      expected: take(uniqueString(context.subscriptionId, context.resourceGroupName), 6)
+      actual: take(scopeUnique(context), 6)
+      expected: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), 6)
     }
     {
-      actual: shortScopedUnique({ components: ['resourceType', 'purpose'] }, context.subscriptionId, context.resourceGroupName, context.location)
-      expected: take(uniqueString(context.subscriptionId, context.resourceGroupName, context.location), 6)
+      actual: take(scopeUnique({ subscriptionId: toUpper(context.subscriptionId), resourceGroupName: toUpper(context.resourceGroupName), location: toUpper(context.location), cloud: toLower(context.cloud) }), 6)
+      expected: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), 6)
     }
   ]
 }))

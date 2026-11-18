@@ -30,6 +30,7 @@ Describe 'Identifier-based shared resource naming' {
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             'deployments\shared\modules\orchestration\naming\naming.bicep'
+            'deployments\shared\modules\orchestration\naming\internal.bicep'
             'tests\fixtures\naming-types.bicep'
             'tests\fixtures\naming-types.bicepparam'
         )) {
@@ -207,11 +208,15 @@ Describe 'Identifier-based shared resource naming' {
         }
     }
 
-    It 'distinguishes normalized identifiers without hashing scope-local names' {
-        foreach ($name in @('functionAppName', 'storageAccountName')) {
-            $values.normalizationCollision[0].$name | Should -Not -Be $values.normalizationCollision[1].$name
+    It 'does not change globally named resources for cloud alone with a fixed location abbreviation' {
+        $values.cloudOnlyTypes.Count | Should -Be 3
+        foreach ($case in $values.cloudOnlyTypes) {
+            $case.alternateCloud | Should -Be $case.baseline
         }
-        foreach ($name in @('applicationInsightsName', 'storageEncryptionIdentityName')) {
+    }
+
+    It 'requires distinct formatted purposes rather than hiding normalization collisions in a hash' {
+        foreach ($name in @('functionAppName', 'storageAccountName', 'applicationInsightsName', 'storageEncryptionIdentityName')) {
             $values.normalizationCollision[0].$name | Should -Be $values.normalizationCollision[1].$name
         }
     }
@@ -227,7 +232,9 @@ Describe 'Identifier-based shared resource naming' {
             $app.names.functionAppName.Contains($app.hash) | Should -Be $true
             $app.names.storageAccountName.Contains($app.hash) | Should -Be $true
         }
-        @($values.applications.hash | Select-Object -Unique).Count | Should -Be 3
+        @($values.applications.hash | Select-Object -Unique).Count | Should -Be 1
+        @($values.applications.names.functionAppName | Select-Object -Unique).Count | Should -Be 3
+        @($values.applications.names.storageAccountName | Select-Object -Unique).Count | Should -Be 3
         $values.applications[2].names.applicationInsightsName | Should -Be 'appi-avd-finance-job-use'
     }
 
@@ -272,7 +279,7 @@ Describe 'Identifier-based shared resource naming' {
     }
 
     It 'propagates numeric type limits and the default hash length without changing type overrides' {
-        $policyPath = Join-Path $testDirectory 'deployments\shared\modules\orchestration\naming\naming.bicep'
+        $policyPath = Join-Path $testDirectory 'deployments\shared\modules\orchestration\naming\internal.bicep'
         $original = [IO.File]::ReadAllText($policyPath)
         try {
             $changedPolicy = $original.Replace(
@@ -318,6 +325,8 @@ Describe 'Identifier-based shared resource naming' {
         @{ Name = 'invalid delimiter'; Convention = "{ delimiter: '*' }" }
         @{ Name = 'overlong delimiter'; Convention = "{ delimiter: '----' }" }
         @{ Name = 'invalid workload'; Convention = "{ workload: 'my workload' }" }
+        @{ Name = 'conflicting token aliases'; Convention = "{ customToken1: 'new', freeform1: 'old' }"; ExpectedError = 'aliases and must agree' }
+        @{ Name = 'conflicting second token aliases'; Convention = "{ customToken2: 'new', freeform2: 'old' }"; ExpectedError = 'aliases and must agree' }
         @{ Name = 'unbudgetable static components'; Convention = "{ workload: 'abcdefghijklmnopqrstuvwxyz' }"; Type = 'storageAccounts' }
         @{ Name = 'invalid type code'; Convention = "{ resourceTypeCodes: { functionApps: '' } }" }
         @{ Name = 'invalid region abbreviation'; Convention = "{ locationAbbreviation: 'east/us' }" }
@@ -357,8 +366,9 @@ Describe 'Identifier-based shared resource naming' {
         [IO.File]::WriteAllLines($fixture, @(
             "targetScope = 'local'"
             "import { resourceNameForType } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
+            "param convention object = $Convention"
             "var context = { subscriptionId: '00000000-1111-2222-3333-444444444444', resourceGroupName: 'rg-addons', location: 'eastus', cloud: 'AzureCloud' }"
-            "var rejectedName = resourceNameForType($Convention, '$Type', $Identifier, $Context)"
+            "var rejectedName = resourceNameForType(convention, '$Type', $Identifier, $Context)"
             "output rejected string = rejectedName"
         ))
         $parameters = Join-Path $testDirectory 'tests\fixtures\rejected.bicepparam'

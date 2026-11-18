@@ -142,7 +142,7 @@ module workspace '../../resourceModules/desktopVirtualization/workspaces/deploy.
 var workspaceFeedVnetName = !empty(workspaceFeedVirtualNetworkResourceId)
   ? last(split(workspaceFeedVirtualNetworkResourceId, '/'))
   : ''
-import { privateEndpointName } from '../naming/naming.bicep'
+import { privateEndpointName } from '../naming/internal.bicep'
 
 var workspaceFeedPrivateEndpointName = privateEndpointName(privateEndpointNameConv, effectiveWorkspaceName, 'feed', workspaceFeedVnetName)
 var workspaceFeedPrivateEndpointNICName = privateEndpointName(privateEndpointNICNameConv, effectiveWorkspaceName, 'feed', workspaceFeedVnetName)

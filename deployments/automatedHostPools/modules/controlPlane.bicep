@@ -154,7 +154,7 @@ resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetwork
   scope: resourceGroup(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[2], split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/')[4])
 }
 
-import { privateEndpointName } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { privateEndpointName } from '../../shared/modules/orchestration/naming/internal.bicep'
 
 module hostPool '../../shared/modules/resourceModules/desktopVirtualization/hostPools/deployAutomated.bicep' = {
   scope: resourceGroup(resourceGroupName)

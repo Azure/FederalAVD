@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "11153631691621274188"
+      "version": "0.49.2.45890",
+      "templateHash": "5979238672875371567"
     }
   },
   "definitions": {
@@ -139,7 +139,7 @@
       "metadata": {
         "description": "Explicit subscription, cloud and deployment location for legacy FSLogix naming. Existing resource-group overrides are applied after naming and do not change its uniqueness seed.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -195,7 +195,7 @@
       "metadata": {
         "description": "Storage, private-endpoint and temporary deployment-resource names shared by standalone FSLogix and host pools, including raw and effective location abbreviations.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -227,7 +227,7 @@
       "metadata": {
         "description": "Parameter-only VM, control-plane, feed and subscription context for host-pool naming. Empty globalFeedLocation disables the feed group; an existing workspace must belong to sharedServicesSubscriptionId.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -379,7 +379,134 @@
       "metadata": {
         "description": "Host-pool naming contract containing consumed names and the shared FSLogix bundle. Retained names and uniqueness seeds are preserved for identical context and convention inputs.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.namingContext": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        },
+        "resourceGroupName": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "cloud": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group and location; cloud selects the region map only. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.namingConventionConfig": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "type": "array",
+          "allowedValues": [
+            "customToken1",
+            "customToken2",
+            "environment",
+            "freeform1",
+            "freeform2",
+            "location",
+            "none",
+            "purpose",
+            "resourceType",
+            "workload"
+          ],
+          "nullable": true
+        },
+        "delimiter": {
+          "type": "string",
+          "nullable": true
+        },
+        "workload": {
+          "type": "string",
+          "nullable": true
+        },
+        "environment": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken1": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken2": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform1": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform2": {
+          "type": "string",
+          "nullable": true
+        },
+        "resourceTypeCodes": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "nullable": true
+        },
+        "locationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "cpLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "vmsLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "imageManagementStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "secretsKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "encryptionKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineDiskNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNicNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "description": "Shared optional convention settings. Custom tokens can appear anywhere in components; freeform1/freeform2 remain supported aliases. Explicit resource-name patterns are not reformatted.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -440,6 +567,15 @@
         "description": "Reference to an existing Microsoft Entra group by object ID and display name.",
         "__bicep_imported_from!": {
           "sourceTemplate": "../shared/modules/resourceModules/types/identityTypes.bicep"
+        }
+      }
+    },
+    "namingConventionConfig": {
+      "$ref": "#/definitions/_1.namingConventionConfig",
+      "metadata": {
+        "description": "Optional shared convention properties, including customToken1/customToken2 and their legacy freeform aliases. Partial overrides are supported; unknown properties and wrong value types are rejected.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
         }
       }
     },
@@ -529,7 +665,7 @@
         "hostPoolNames": {
           "parameters": [
             {
-              "type": "object",
+              "$ref": "#/definitions/namingConventionConfig",
               "name": "convention"
             },
             {
@@ -543,10 +679,10 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[_1.hostPoolNamesForLocation(parameters('convention'), parameters('identifier'), parameters('context'), _1.fslogixNames(parameters('convention'), parameters('identifier'), createObject('subscriptionId', parameters('context').subscriptionId, 'cloud', parameters('context').cloud, 'location', parameters('context').virtualMachinesLocation)), if(not(empty(coalesce(tryGet(parameters('convention'), 'cpLocationAbbreviation'), ''))), parameters('convention').cpLocationAbbreviation, _1.regionAbbreviation(parameters('context').controlPlaneLocation, parameters('context').cloud)))]"
+            "value": "[_1.hostPoolNames(parameters('convention'), parameters('identifier'), parameters('context'))]"
           },
           "metadata": {
-            "description": "Returns the complete legacy-compatible host-pool bundle by composing FSLogix names with compute and control-plane names. All locations and scope seeds are explicit; no VNet lookup or naming deployment is required.",
+            "description": "Names host-pool compute, control-plane and shared FSLogix resources using explicit target locations and subscriptions.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
@@ -557,6 +693,27 @@
     {
       "namespace": "_1",
       "members": {
+        "applyTypeFormat": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('rule').format, 'storage'), _1.stripSeps(parameters('value')), if(equals(parameters('rule').format, 'gallery'), replace(parameters('value'), '-', '_'), if(equals(parameters('rule').format, 'hyphen'), _1.kvSanitize(parameters('value')), if(equals(parameters('rule').format, 'literal'), parameters('value'), fail('Unsupported resource-type naming format.')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "buildCustomName": {
           "parameters": [
             {
@@ -603,7 +760,24 @@
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "canonicalNamingCloud": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(toLower(parameters('cloud')), 'azurecloud'), 'AzureCloud', if(equals(toLower(parameters('cloud')), 'azureusgovernment'), 'AzureUSGovernment', if(startsWith(toLower(parameters('cloud')), 'us'), parameters('cloud'), fail('Identifier-based naming supports AzureCloud, AzureUSGovernment and US-prefixed air-gapped cloud environments.'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -653,7 +827,44 @@
           "metadata": {
             "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "composeTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.formatTypeName(_1.cnv(parameters('convention').components, parameters('convention').delimiter, parameters('code'), if(empty(parameters('unique')), parameters('identifier'), format('{0}{1}{2}', parameters('identifier'), parameters('convention').delimiter, parameters('unique'))), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -679,15 +890,15 @@
           "metadata": {
             "description": "Names the temporary deployment VM using the existing separator-removal, uniqueness and Windows computer-name length rule.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "formatName": {
+        "formatTypeName": {
           "parameters": [
             {
               "type": "string",
-              "name": "name"
+              "name": "value"
             },
             {
               "type": "object",
@@ -696,11 +907,11 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('_1.namingPolicy').resourceTypes.keyVaults.lengthLimit), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('_1.namingPolicy').resourceTypes.functionApps.lengthLimit), parameters('name'))))]"
+            "value": "[if(or(coalesce(tryGet(parameters('rule'), 'preserveCase'), false()), equals(parameters('rule').format, 'literal')), _1.applyTypeFormat(parameters('value'), parameters('rule')), toLower(_1.applyTypeFormat(parameters('value'), parameters('rule'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -726,7 +937,7 @@
           "metadata": {
             "description": "Returns the legacy-compatible FSLogix bundle without a naming deployment or a host-pool dependency. Explicit caller overrides remain outside this bundle.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -755,7 +966,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -784,11 +995,11 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.fslogixNamingResult",
-            "value": "[_1.fslogixNamesWithSeed(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.shortScopedUnique(parameters('convention'), parameters('context').subscriptionId, parameters('storageGroupName'), parameters('context').location))]"
+            "value": "[_1.fslogixNamesWithSeed(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), take(_1.scopeUnique(union(parameters('context'), createObject('resourceGroupName', parameters('storageGroupName')))), variables('_1.namingPolicy').limits.uniqueSuffix))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -845,7 +1056,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -882,7 +1093,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -904,7 +1115,7 @@
           "metadata": {
             "description": "Preserves FSLogix domain-compatible storage-prefix normalization and length budgeting, or uses the central default pattern.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -933,7 +1144,33 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "hostPoolNames": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.hostPoolNamingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.hostPoolNamingResult",
+            "value": "[_1.hostPoolNamesForLocation(parameters('convention'), parameters('identifier'), parameters('context'), _1.fslogixNames(parameters('convention'), parameters('identifier'), createObject('subscriptionId', parameters('context').subscriptionId, 'cloud', parameters('context').cloud, 'location', parameters('context').virtualMachinesLocation)), if(not(empty(coalesce(tryGet(parameters('convention'), 'cpLocationAbbreviation'), ''))), parameters('convention').cpLocationAbbreviation, _1.regionAbbreviation(parameters('context').controlPlaneLocation, parameters('context').cloud)))]"
+          },
+          "metadata": {
+            "description": "Returns the complete legacy-compatible host-pool bundle by composing FSLogix names with compute and control-plane names. All locations and scope seeds are explicit; no VNet lookup or naming deployment is required.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -966,7 +1203,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1007,44 +1244,28 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', _1.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('sharedOperationsGroup'), 'sharedResourceGroupMonitoring', _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.hostPoolVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedKeyVaultNameEncryption', _1.hostPoolVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedRecoveryServicesVaultNameFSLogix', _1.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), parameters('identifier'), ''), 'sharedDataCollectionEndpointName', _1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', _1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), _1.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', _1.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', _1.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', _1.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', _1.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', _1.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', _1.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('_1.namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('_1.namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('_1.namingPolicy').patterns.nic), 'diskAccessName', _1.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
+            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', _1.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('sharedOperationsGroup'), 'sharedResourceGroupMonitoring', _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.sharedVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('sharedOperationsGroup'), 'location', parameters('context').controlPlaneLocation, 'cloud', parameters('context').cloud)), 'sharedKeyVaultNameEncryption', _1.sharedVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('sharedOperationsGroup'), 'location', parameters('context').controlPlaneLocation, 'cloud', parameters('context').cloud)), 'sharedRecoveryServicesVaultNameFSLogix', _1.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), parameters('identifier'), ''), 'sharedDataCollectionEndpointName', _1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', _1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), _1.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', _1.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', _1.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', _1.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', _1.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', _1.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', _1.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('_1.namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('_1.namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('_1.namingPolicy').patterns.nic), 'diskAccessName', _1.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "hostPoolVaultName": {
+        "isNamingToken": {
           "parameters": [
             {
-              "type": "object",
-              "name": "convention"
-            },
-            {
               "type": "string",
-              "name": "role"
-            },
-            {
-              "type": "string",
-              "name": "abbreviation"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "type": "string",
-              "name": "unique"
+              "name": "value"
             }
           ],
           "output": {
-            "type": "string",
-            "value": "[if(not(empty(if(equals(parameters('role'), 'secretsKeyVault'), coalesce(tryGet(parameters('convention'), 'secretsKeyVaultNameOverride'), ''), coalesce(tryGet(parameters('convention'), 'encryptionKeyVaultNameOverride'), '')))), if(equals(parameters('role'), 'secretsKeyVault'), parameters('convention').secretsKeyVaultNameOverride, parameters('convention').encryptionKeyVaultNameOverride), _1.resourceName(parameters('convention'), parameters('role'), parameters('abbreviation'), parameters('identifier'), parameters('unique')))]"
+            "type": "bool",
+            "value": "[and(and(and(not(empty(parameters('value'))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(first(parameters('value'))))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(last(parameters('value'))))), empty(filter(map(range(0, length(parameters('value'))), lambda('i', toLower(substring(parameters('value'), lambdaVariables('i'), 1)))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789-_.', lambdaVariables('character')))))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1062,7 +1283,7 @@
           "metadata": {
             "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1084,7 +1305,7 @@
           "metadata": {
             "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1110,7 +1331,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1132,7 +1353,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1154,7 +1375,7 @@
           "metadata": {
             "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1175,7 +1396,28 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "requireNamingToken": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "string",
+              "name": "label"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(_1.isNamingToken(parameters('value')), parameters('value'), fail(format('{0} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.', parameters('label'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1216,11 +1458,11 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(contains(createArray('freeform1', 'customToken1'), parameters('comp')), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(contains(createArray('freeform2', 'customToken2'), parameters('comp')), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1233,12 +1475,37 @@
           ],
           "output": {
             "type": "object",
-            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
+            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', map(coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), lambda('component', if(equals(lambdaVariables('component'), 'customToken1'), 'freeform1', if(equals(lambdaVariables('component'), 'customToken2'), 'freeform2', lambdaVariables('component'))))), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', _1.resolveCustomToken(parameters('convention'), 'customToken1', 'freeform1'), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', _1.resolveCustomToken(parameters('convention'), 'customToken2', 'freeform2'), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
           },
           "metadata": {
-            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
+            "description": "Resolves shared defaults, custom-token aliases and partial abbreviation overrides. Conflicting alias values fail; explicit empty delimiters and existing default-workload behavior are preserved.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolveCustomToken": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "preferred"
+            },
+            {
+              "type": "string",
+              "name": "legacy"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(and(and(not(equals(tryGet(parameters('convention'), parameters('preferred')), null())), not(equals(tryGet(parameters('convention'), parameters('legacy')), null()))), not(equals(parameters('convention')[parameters('preferred')], parameters('convention')[parameters('legacy')]))), fail(format('namingConvention.{0} and {1} are aliases and must agree when both are supplied.', parameters('preferred'), parameters('legacy'))), coalesce(coalesce(tryGet(parameters('convention'), parameters('preferred')), tryGet(parameters('convention'), parameters('legacy'))), ''))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1267,11 +1534,48 @@
           ],
           "output": {
             "type": "string",
-            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+            "value": "[_1.resolvedTypeName(union(_1.validateConvention(parameters('convention'), not(empty(parameters('rule').purpose))), createObject('components', if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components))), if(empty(parameters('rule').type), createObject('format', 'literal', 'fragment', true()), union(variables('_1.namingPolicy').resourceTypes[parameters('rule').type], createObject('format', if(contains(createArray('keyVaults', 'computeGalleries'), parameters('rule').type), variables('_1.namingPolicy').resourceTypes[parameters('rule').type].format, 'literal'), 'preserveCase', true()))), if(empty(parameters('rule').type), '', _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('rule').type], 'Resource type abbreviation')), if(empty(parameters('region')), '', _1.requireNamingToken(parameters('region'), 'Location abbreviation')), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, if(empty(parameters('identifier')), '', _1.requireNamingToken(parameters('identifier'), 'Resource identifier')), parameters('unique')), '')]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolvedTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.validateTypeName(_1.composeTypeName(parameters('convention'), parameters('rule'), parameters('code'), parameters('region'), parameters('identifier'), parameters('unique')), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1303,9 +1607,39 @@
             "value": "[_1.resolvedResourceName(_1.resolveConvention(parameters('convention')), variables('_1.namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
           },
           "metadata": {
-            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault or Function App formatting rule.",
+            "description": "Internal role adapter to the common naming engine. Roles supply purpose, workload exceptions and established casing/formatting; all actual resource names use the shared convention and type validators.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resourceNameForType": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.scopedTypeName(_1.validateConvention(_1.resolveConvention(parameters('convention')), true()), parameters('resourceType'), parameters('identifier'), _1.validateNamingContext(parameters('context'), parameters('resourceType')))]"
+          },
+          "metadata": {
+            "description": "Names a resource type from its readable purpose and target context. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1334,7 +1668,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1352,11 +1686,11 @@
           "metadata": {
             "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "scopedUnique": {
+        "scopedTypeName": {
           "parameters": [
             {
               "type": "object",
@@ -1364,29 +1698,46 @@
             },
             {
               "type": "string",
-              "name": "subscriptionId"
+              "name": "resourceType"
             },
             {
               "type": "string",
-              "name": "resourceGroupName"
+              "name": "identifier"
             },
             {
-              "type": "string",
-              "name": "region"
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[if(not(contains(_1.resolveConvention(parameters('convention')).components, 'location')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName')))]"
+            "value": "[if(not(contains(variables('_1.namingPolicy').resourceTypes, parameters('resourceType'))), fail('Unsupported identifier-based resource type. Use a resource type registered in namingPolicy.resourceTypes.'), _1.resolvedTypeName(parameters('convention'), variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('resourceType')], 'Resource type abbreviation'), _1.typeLocationAbbreviation(parameters('convention'), parameters('context')), _1.requireNamingToken(parameters('identifier'), 'Add-on identifier'), if(coalesce(tryGet(variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], 'globallyUnique'), false()), take(_1.scopeUnique(parameters('context')), coalesce(tryGet(variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], 'uniqueLength'), variables('_1.namingPolicy').limits.defaultUniqueLength)), '')))]"
           },
           "metadata": {
-            "description": "Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "shortScopedUnique": {
+        "scopeUnique": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[uniqueString(toLower(parameters('context').subscriptionId), toLower(parameters('context').resourceGroupName), toLower(parameters('context').location))]"
+          },
+          "metadata": {
+            "description": "One stable resource-scope hash: lowercase subscription, owning resource group and full location. Cloud, purpose, resource type and naming-convention choices never participate. Callers apply their suffix budget.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "sharedVaultName": {
           "parameters": [
             {
               "type": "object",
@@ -1394,25 +1745,24 @@
             },
             {
               "type": "string",
-              "name": "subscriptionId"
+              "name": "role"
             },
             {
               "type": "string",
-              "name": "resourceGroupName"
+              "name": "abbreviation"
             },
             {
-              "type": "string",
-              "name": "region"
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[take(_1.scopedUnique(parameters('convention'), parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), variables('_1.namingPolicy').limits.uniqueSuffix)]"
+            "value": "[if(not(empty(if(equals(parameters('role'), 'secretsKeyVault'), coalesce(tryGet(parameters('convention'), 'secretsKeyVaultNameOverride'), ''), coalesce(tryGet(parameters('convention'), 'encryptionKeyVaultNameOverride'), '')))), if(equals(parameters('role'), 'secretsKeyVault'), parameters('convention').secretsKeyVaultNameOverride, parameters('convention').encryptionKeyVaultNameOverride), _1.resourceNameForType(union(parameters('convention'), createObject('locationAbbreviation', parameters('abbreviation'))), 'keyVaults', first(variables('_1.namingPolicy').resources[parameters('role')].purpose), parameters('context')))]"
           },
           "metadata": {
-            "description": "Applies the existing six-character scope uniqueness suffix without requiring adapters to own the policy limit.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1430,7 +1780,7 @@
           "metadata": {
             "description": "Removes hyphens, underscores, and dots. Callers separately enforce case, length, uniqueness, and the remaining resource naming rules.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1447,7 +1797,91 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "typeLocationAbbreviation": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.requireNamingToken(if(not(empty(coalesce(tryGet(parameters('convention'), 'locationAbbreviation'), ''))), parameters('convention').locationAbbreviation, if(not(empty(coalesce(tryGet(parameters('convention'), 'vmsLocationAbbreviation'), ''))), parameters('convention').vmsLocationAbbreviation, _1.regionAbbreviation(toLower(parameters('context').location), parameters('context').cloud))), 'Location abbreviation')]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateConvention": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "bool",
+              "name": "requirePurpose"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[if(or(and(parameters('requirePurpose'), not(equals(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1))), greater(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1)), fail('Naming requires exactly one purpose component for resources with a purpose.'), if(empty(filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), fail('Naming requires at least one non-none component.'), if(not(empty(filter(parameters('convention').components, lambda('component', not(contains(createArray('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'), lambdaVariables('component'))))))), fail('Naming contains an unsupported naming-convention component.'), if(or(greater(length(parameters('convention').delimiter), 3), not(empty(filter(map(range(0, length(parameters('convention').delimiter)), lambda('i', substring(parameters('convention').delimiter, lambdaVariables('i'), 1))), lambda('character', not(contains('-_.', lambdaVariables('character')))))))), fail('Naming delimiter must be empty or contain at most three hyphens, underscores or dots.'), if(not(empty(filter(createArray('workload', 'environment', 'freeform1', 'freeform2'), lambda('component', and(and(contains(parameters('convention').components, lambdaVariables('component')), not(empty(parameters('convention')[lambdaVariables('component')]))), not(_1.isNamingToken(parameters('convention')[lambdaVariables('component')]))))))), fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.'), parameters('convention'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateNamingContext": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.namingContext",
+            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateTypeName": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "name"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(coalesce(tryGet(parameters('rule'), 'fragment'), false()), parameters('name'), if(empty(parameters('name')), fail('Generated name must not be empty.'), if(greater(length(parameters('name')), parameters('rule').lengthLimit), fail(format('Generated name exceeds the {0}-character limit. Shorten the identifier or naming-convention values.', parameters('rule').lengthLimit)), if(and(coalesce(tryGet(parameters('rule'), 'startWithLetter'), false()), not(contains('abcdefghijklmnopqrstuvwxyz', toLower(first(parameters('name')))))), fail('This resource type requires a name starting with a letter. Change the first selected component.'), if(and(coalesce(tryGet(parameters('rule'), 'noConsecutiveHyphens'), false()), contains(parameters('name'), '--')), fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.'), parameters('name'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         }
@@ -1476,7 +1910,7 @@
       }
     },
     "namingConvention": {
-      "type": "object",
+      "$ref": "#/definitions/namingConventionConfig",
       "defaultValue": {
         "components": [
           "resourceType",
@@ -2588,7 +3022,7 @@
     "parentResourceTag": {
       "cm-resource-parent": "[variables('hostPoolResourceId')]"
     },
-    "hostPoolCustomTags": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('naming').resourceGroupHosts), 'hostPoolManagementType', 'Automated', 'hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', variables('naming').vmLocationAbbreviation))), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('naming').resourceGroupStorage)), createObject()))]",
+    "hostPoolCustomTags": "[union(createObject('hostsResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('naming').resourceGroupHosts), 'hostPoolManagementType', 'Automated', 'hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), coalesce(tryGet(parameters('namingConvention'), 'workload'), 'avd'), 'avd'), 'vmsLocationAbbreviation', variables('naming').vmLocationAbbreviation))), if(parameters('deployFSLogixStorage'), createObject('storageResourceGroupId', format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('naming').resourceGroupStorage)), createObject()))]",
     "_1._2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
@@ -3444,8 +3878,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "11370532900403625353"
+              "version": "0.49.2.45890",
+              "templateHash": "10072681946756026613"
             },
             "name": "AVD monitoring orchestration",
             "description": "Creates a Log Analytics workspace, data collection endpoint, and AVD Insights data collection rule in an existing monitoring resource group, optionally adding them to an existing Azure Monitor Private Link Scope."
@@ -3543,8 +3977,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "17280748657464142888"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15815859330126784059"
                     },
                     "name": "Log Analytics workspace",
                     "description": "Deploys a Log Analytics workspace with caller-selected pricing, retention and optional diagnostics; data collection rules and resource diagnostic sources are configured separately."
@@ -3816,8 +4250,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7681794930764384368"
+                      "version": "0.49.2.45890",
+                      "templateHash": "14541027909289879795"
                     },
                     "name": "Data collection endpoint",
                     "description": "Deploys a regional Azure Monitor data collection endpoint with configurable public network access; rule associations and private links are managed separately."
@@ -3918,8 +4352,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "14845614713441773250"
+                      "version": "0.49.2.45890",
+                      "templateHash": "2744081351174256081"
                     },
                     "name": "AVD Insights data collection rule",
                     "description": "Deploys the regional AVD Insights Windows performance and event collection rule targeting an existing Log Analytics workspace. Agent installation and VM associations are managed separately."
@@ -4090,8 +4524,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "18081871710595372247"
+                      "version": "0.49.2.45890",
+                      "templateHash": "1967036401960478131"
                     },
                     "name": "Cross-scope Azure Monitor resource links",
                     "description": "Uses subscription scope to route linked-resource deployment to the subscription and resource group parsed from an existing Azure Monitor Private Link Scope ID."
@@ -4136,8 +4570,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "4394776920666586811"
+                              "version": "0.49.2.45890",
+                              "templateHash": "13985939954447630976"
                             },
                             "name": "Azure Monitor scoped resources",
                             "description": "Adds linked resources to an existing Azure Monitor Private Link Scope in the deployment resource group. The caller must select the resource group containing the scope."
@@ -4302,8 +4736,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "11675223020124370102"
+              "version": "0.49.2.45890",
+              "templateHash": "8869330643200660930"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -4355,7 +4789,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 },
@@ -4407,7 +4841,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -4659,8 +5093,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "10106478664532957708"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9378564306394925568"
                     },
                     "name": "Key Vault",
                     "description": "Deploys a Key Vault in the subscription tenant with caller-controlled protection, authorization, network access and optional diagnostics."
@@ -4993,8 +5427,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -5160,8 +5594,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "11962983282251478937"
+                      "version": "0.49.2.45890",
+                      "templateHash": "7370490485787908267"
                     },
                     "name": "Key Vault secret",
                     "description": "Writes a caller-supplied secure secret value to an existing Key Vault in the deployment resource group; returns the secret resource ID and name, not its value."
@@ -5282,8 +5716,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "10106478664532957708"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9378564306394925568"
                     },
                     "name": "Key Vault",
                     "description": "Deploys a Key Vault in the subscription tenant with caller-controlled protection, authorization, network access and optional diagnostics."
@@ -5616,8 +6050,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -5860,8 +6294,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "16299680285327182833"
+              "version": "0.49.2.45890",
+              "templateHash": "14470143987845243080"
             },
             "name": "AVD workspace orchestration",
             "description": "Creates or updates AVD feed and global workspaces across resource groups with optional private endpoints and diagnostics."
@@ -5908,7 +6342,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -5931,7 +6365,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -6179,8 +6613,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "9072655300844897940"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15575170420369594572"
                     },
                     "name": "Resource group",
                     "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -6267,8 +6701,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "14662253317121929692"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11001646228907067917"
                     },
                     "name": "AVD workspace",
                     "description": "Deploys an AVD workspace with caller-supplied application group links and optional diagnostics. Application groups and user access are managed separately."
@@ -6533,8 +6967,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -6694,8 +7128,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "9072655300844897940"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15575170420369594572"
                     },
                     "name": "Resource group",
                     "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -6788,8 +7222,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "14662253317121929692"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11001646228907067917"
                     },
                     "name": "AVD workspace",
                     "description": "Deploys an AVD workspace with caller-supplied application group links and optional diagnostics. Application groups and user access are managed separately."
@@ -7055,8 +7489,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -7311,8 +7745,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "18375868205953141735"
+              "version": "0.49.2.45890",
+              "templateHash": "7365231393870551114"
             },
             "name": "FSLogix Azure Files backup vault",
             "description": "Creates or adopts a Recovery Services vault and optionally manages a daily Azure Files snapshot policy."
@@ -7497,8 +7931,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "10433590796871694637"
+                      "version": "0.49.2.45890",
+                      "templateHash": "5342044481972282498"
                     },
                     "name": "Recovery Services vault",
                     "description": "Deploys a Recovery Services vault with backup storage, security settings and optional diagnostics or CMK. Key access must be granted separately; system-identity CMK can require staged deployment."
@@ -7829,8 +8263,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7438556704380147079"
+                      "version": "0.49.2.45890",
+                      "templateHash": "5233015135582439641"
                     },
                     "name": "Recovery Services backup policy",
                     "description": "Creates or updates a backup policy under an existing Recovery Services vault in the deployment resource group using caller-supplied workload-specific properties."
@@ -7928,8 +8362,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -8122,8 +8556,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -8205,8 +8639,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -8288,8 +8722,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -8368,8 +8802,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -8455,8 +8889,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "8783699980003863657"
+              "version": "0.49.2.45890",
+              "templateHash": "5611057328871116178"
             }
           },
           "parameters": {
@@ -8523,8 +8957,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12699174301409301535"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9428460447385678609"
                     },
                     "name": "Availability set",
                     "description": "Deploys an availability set with caller-selected fault and update domains; virtual machines are associated separately."
@@ -8652,8 +9086,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -8734,8 +9168,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -8814,8 +9248,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "3721234878770549646"
+              "version": "0.49.2.45890",
+              "templateHash": "16293888750841741798"
             },
             "name": "AVD service principal subscription roles",
             "description": "Assigns subscription-scoped roles to an existing AVD service principal for start VM on connect and the selected scaling method. Does not create the service principal or configure host-pool scaling."
@@ -8934,8 +9368,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "8292150141700693086"
+              "version": "0.49.2.45890",
+              "templateHash": "15672571372059259250"
             },
             "name": "Disk encryption key orchestration",
             "description": "Creates a Key Vault key, a disk encryption set in an existing target resource group, and key-scoped encryption permissions across subscription deployment scopes."
@@ -9072,8 +9506,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -9238,8 +9672,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12759822695435844990"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10565702832032312147"
                     },
                     "name": "Disk encryption set",
                     "description": "Deploys a disk encryption set referencing an existing Key Vault key, optionally resolving its current version. Key access permissions are managed separately."
@@ -9400,8 +9834,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -9650,8 +10084,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "930422993439574361"
+              "version": "0.49.2.45890",
+              "templateHash": "3642337555392518616"
             },
             "name": "Deployment helper orchestration",
             "description": "Deploys a temporary Windows helper VM and managed identity in an existing deployment resource group, with feature-dependent permissions and optional domain join for deployment-time operations."
@@ -9915,8 +10349,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -10016,8 +10450,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "888486078838877110"
+                      "version": "0.49.2.45890",
+                      "templateHash": "3881104354286983188"
                     },
                     "name": "Resource group role assignment",
                     "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -10178,8 +10612,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "9387348923559673592"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16602256035273770271"
                     },
                     "name": "Windows virtual machine",
                     "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -10845,8 +11279,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "634353586125122237"
+              "version": "0.49.2.45890",
+              "templateHash": "14153855487954740830"
             }
           },
           "definitions": {
@@ -10923,7 +11357,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
+                      "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
                     }
                   }
                 }
@@ -10946,7 +11380,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
+                      "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
                     }
                   }
                 }
@@ -11315,8 +11749,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13323398609340548365"
+                      "version": "0.49.2.45890",
+                      "templateHash": "2761668385601610404"
                     },
                     "name": "Automated AVD host pool",
                     "description": "Deploys an automated pooled host pool with a system-assigned identity and optional diagnostics. Session host configuration and management settings are deployed separately."
@@ -11627,8 +12061,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "14017799336030213363"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11898904266335818397"
                     }
                   },
                   "definitions": {
@@ -11769,8 +12203,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -11870,8 +12304,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -11972,8 +12406,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -12079,8 +12513,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3671964223659038964"
+                              "version": "0.49.2.45890",
+                              "templateHash": "6270867002431670131"
                             },
                             "name": "Compute gallery role assignments",
                             "description": "Applies deterministic role assignments at an existing compute gallery in the deployment resource group."
@@ -12223,8 +12657,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2714867371028172045"
+                              "version": "0.49.2.45890",
+                              "templateHash": "15159205930694731146"
                             },
                             "name": "Key Vault role assignments",
                             "description": "Applies deterministic role assignments at an existing Key Vault in the deployment resource group."
@@ -12368,8 +12802,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "6157060696543482148"
+                              "version": "0.49.2.45890",
+                              "templateHash": "12186462738620009574"
                             },
                             "name": "Disk encryption set role assignments",
                             "description": "Applies deterministic role assignments at an existing disk encryption set in the deployment resource group; does not grant access to its encryption key."
@@ -12510,8 +12944,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "105840287898195442"
+                              "version": "0.49.2.45890",
+                              "templateHash": "14549009545885961804"
                             }
                           },
                           "parameters": {
@@ -12612,8 +13046,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2221754051824373100"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11947828355218345379"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -12828,8 +13262,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "3000928749210301413"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15578148042083993612"
                     }
                   },
                   "parameters": {
@@ -12880,8 +13314,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "9027516656020837992"
+                              "version": "0.49.2.45890",
+                              "templateHash": "14450582238434012954"
                             },
                             "name": "Automated session host configuration",
                             "description": "Creates or updates the default session host configuration under an existing automated host pool in the deployment resource group using caller-supplied properties."
@@ -12987,8 +13421,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "11095404057226088028"
+                      "version": "0.49.2.45890",
+                      "templateHash": "3802429766654531747"
                     },
                     "name": "Dynamic AVD scaling plan",
                     "description": "Deploys a pooled scaling plan linked to one existing host pool and optional create-delete-power-management schedules. Automated host configuration and autoscale permissions are caller prerequisites."
@@ -13230,8 +13664,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "11415135905629521146"
+                              "version": "0.49.2.45890",
+                              "templateHash": "17915390717998010314"
                             },
                             "name": "Dynamic pooled scaling schedules",
                             "description": "Deploys create-delete-power-management schedules under an existing scaling plan in the deployment resource group; returns schedule IDs in input order."
@@ -13514,8 +13948,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2911062082945906275"
+                      "version": "0.49.2.45890",
+                      "templateHash": "18209227421158673572"
                     }
                   },
                   "parameters": {
@@ -13566,8 +14000,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "12190133723766550787"
+                              "version": "0.49.2.45890",
+                              "templateHash": "17420164458191368667"
                             },
                             "name": "Automated session host management",
                             "description": "Creates or updates the default session host management settings under an existing automated host pool in the deployment resource group using caller-supplied properties."
@@ -13670,8 +14104,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15245018200911253295"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
                     },
                     "name": "Private endpoint",
                     "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -13845,8 +14279,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "581953826154076846"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11678916539242592785"
                     },
                     "name": "AVD application group",
                     "description": "Deploys a Desktop or RemoteApp application group referencing an existing host pool, with optional diagnostics. Workspace links and user assignments are managed separately."
@@ -14125,8 +14559,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2221754051824373100"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11947828355218345379"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -14353,8 +14787,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "14662253317121929692"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11001646228907067917"
                     },
                     "name": "AVD workspace",
                     "description": "Deploys an AVD workspace with caller-supplied application group links and optional diagnostics. Application groups and user access are managed separately."
@@ -14609,8 +15043,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "10813593188464850165"
+                      "version": "0.49.2.45890",
+                      "templateHash": "13185181212065103584"
                     },
                     "name": "AVD application group role assignments",
                     "description": "Applies deterministic role assignments at an existing AVD application group in the deployment resource group."
@@ -14822,8 +15256,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "17640825629248537893"
+              "version": "0.49.2.45890",
+              "templateHash": "7503997528097933719"
             },
             "name": "Storage encryption key orchestration",
             "description": "Creates keys in an existing Key Vault and a shared user-assigned encryption identity in an existing target resource group, granting that identity encryption access to every requested key."
@@ -14965,8 +15399,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -15118,8 +15552,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -15227,8 +15661,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -15519,8 +15953,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "4010463689510992149"
+              "version": "0.49.2.45890",
+              "templateHash": "11340627022736772075"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -15955,8 +16389,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7699324728070872197"
+                      "version": "0.49.2.45890",
+                      "templateHash": "2951853416885464102"
                     },
                     "name": "FSLogix NetApp storage orchestration",
                     "description": "Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials."
@@ -16139,8 +16573,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "12104887770743477087"
+                              "version": "0.49.2.45890",
+                              "templateHash": "13556530955191286577"
                             },
                             "name": "Azure NetApp Files account",
                             "description": "Deploys an Azure NetApp Files account with optional Active Directory settings for SMB; capacity pools, volumes and required directory connectivity are managed separately."
@@ -16241,8 +16675,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "15589236324051125991"
+                              "version": "0.49.2.45890",
+                              "templateHash": "5363648465388347039"
                             },
                             "name": "NetApp capacity pool",
                             "description": "Deploys a capacity pool under an existing NetApp account in the deployment resource group, converting the caller-supplied TiB capacity to bytes."
@@ -16374,8 +16808,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "14336045670379251652"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7840306197007635803"
                             },
                             "name": "NetApp volume",
                             "description": "Deploys a volume under an existing NetApp capacity pool using an existing delegated subnet. SMB requires account-level Active Directory setup; the module returns the first mount target SMB FQDN."
@@ -16570,8 +17004,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2221754051824373100"
+                              "version": "0.49.2.45890",
+                              "templateHash": "11947828355218345379"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -16910,8 +17344,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5201920815306186560"
+                      "version": "0.49.2.45890",
+                      "templateHash": "1384374400907396021"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -16963,7 +17397,7 @@
                           "metadata": {
                             "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                             "__bicep_imported_from!": {
-                              "sourceTemplate": "../../naming/naming.bicep"
+                              "sourceTemplate": "../../naming/internal.bicep"
                             }
                           }
                         },
@@ -17015,7 +17449,7 @@
                           "metadata": {
                             "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                             "__bicep_imported_from!": {
-                              "sourceTemplate": "../../naming/naming.bicep"
+                              "sourceTemplate": "../../naming/internal.bicep"
                             }
                           }
                         }
@@ -17360,8 +17794,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "17785469489675376614"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3600459726864579106"
                             },
                             "name": "Storage account",
                             "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
@@ -17789,8 +18223,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3900645463067201551"
+                              "version": "0.49.2.45890",
+                              "templateHash": "9980807172211792049"
                             },
                             "name": "Azure Files service settings",
                             "description": "Configures the default File service on an existing storage account with optional SMB settings, share soft delete and diagnostics. File shares and identity authentication are managed separately."
@@ -18085,8 +18519,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "11265457987428241804"
+                              "version": "0.49.2.45890",
+                              "templateHash": "17471207199695942862"
                             },
                             "name": "FSLogix file share orchestration",
                             "description": "Creates each named SMB share in an existing storage account using a shared quota and a SKU-dependent access tier."
@@ -18149,8 +18583,8 @@
                                   "metadata": {
                                     "_generator": {
                                       "name": "bicep",
-                                      "version": "0.48.1.52935",
-                                      "templateHash": "5447232275492829994"
+                                      "version": "0.49.2.45890",
+                                      "templateHash": "1655762631050578612"
                                     },
                                     "name": "Azure file share",
                                     "description": "Deploys a share in the default File service of an existing storage account with caller-selected quota, tier and protocol; the account must support those settings."
@@ -18284,8 +18718,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "15245018200911253295"
+                              "version": "0.49.2.45890",
+                              "templateHash": "9996145834195031428"
                             },
                             "name": "Private endpoint",
                             "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -18451,8 +18885,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -18620,8 +19054,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2221754051824373100"
+                              "version": "0.49.2.45890",
+                              "templateHash": "11947828355218345379"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -18900,8 +19334,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2221754051824373100"
+                              "version": "0.49.2.45890",
+                              "templateHash": "11947828355218345379"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -19148,8 +19582,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2221754051824373100"
+                              "version": "0.49.2.45890",
+                              "templateHash": "11947828355218345379"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -19426,8 +19860,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2221754051824373100"
+                              "version": "0.49.2.45890",
+                              "templateHash": "11947828355218345379"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -19669,8 +20103,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "2221754051824373100"
+                              "version": "0.49.2.45890",
+                              "templateHash": "11947828355218345379"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -19915,8 +20349,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "81005314628540276"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10352049559264767359"
                     },
                     "name": "FSLogix file share backup registration",
                     "description": "Registers existing Azure Files storage accounts and every requested share with an existing Recovery Services vault and backup policy in the deployment resource group."
@@ -20088,8 +20522,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "3025370682010211907"
+              "version": "0.49.2.45890",
+              "templateHash": "5633820431252324412"
             },
             "name": "NetApp SMB endpoint lookup",
             "description": "Reads the first mount-target SMB FQDN for existing local and remote NetApp volumes across resource groups, enforcing one volume per share in each nonempty input array."
@@ -20214,8 +20648,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "11561472995765468036"
+              "version": "0.49.2.45890",
+              "templateHash": "9537065098776501770"
             }
           },
           "definitions": {
@@ -20590,8 +21024,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "9072655300844897940"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15575170420369594572"
                     },
                     "name": "Resource group",
                     "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -20675,8 +21109,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -20763,8 +21197,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "3315917416438750662"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9853403787462976523"
                     },
                     "name": "OS disk encryption set policy definition",
                     "description": "Defines a subscription Modify policy assigning a supplied disk encryption set to VM OS disks; the caller owns assignment and permissions within the session-host resource group."
@@ -20892,8 +21326,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "3482053685126821836"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11941178769319903904"
                     },
                     "name": "Session host configuration policy definition",
                     "description": "Defines a subscription DeployIfNotExists policy for the session-host initialization Run Command."
@@ -21363,8 +21797,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12321016888719207992"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4999728261729723606"
                     },
                     "name": "Private customization policy definition",
                     "description": "Defines a subscription DeployIfNotExists policy for artifact identity attachment and ordered private customization Run Commands."
@@ -21906,8 +22340,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "3808131372155982707"
+                      "version": "0.49.2.45890",
+                      "templateHash": "14739341244569528939"
                     },
                     "name": "Session host compute policy definition",
                     "description": "Defines a subscription Modify policy that can enable encryption at host and set a positive OS disk size on Windows or unspecified-OS VM requests."
@@ -22077,8 +22511,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "3768575289579689506"
+                      "version": "0.49.2.45890",
+                      "templateHash": "17434182858337378882"
                     },
                     "name": "Availability set policy definition",
                     "description": "Defines a subscription Modify policy for a selected VM availability set with deny-on-conflict behavior; the caller owns creation-time assignment within a dedicated session-host resource group."
@@ -22202,8 +22636,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2448076473703730583"
+                      "version": "0.49.2.45890",
+                      "templateHash": "8767206405141619102"
                     },
                     "name": "VM system identity policy definition",
                     "description": "Defines a subscription Modify policy adding system-assigned identity to VMs while retaining user-assigned identity type; the caller owns assignment and remediation permissions."
@@ -22305,8 +22739,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "15261678707681648920"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10990352361506205011"
                     },
                     "name": "Accelerated networking policy definition",
                     "description": "Defines a subscription Modify policy for the selected accelerated networking setting on NICs; its broad type predicate requires assignment within a dedicated session-host resource group."
@@ -22438,8 +22872,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "888486078838877110"
+                      "version": "0.49.2.45890",
+                      "templateHash": "3881104354286983188"
                     },
                     "name": "Resource group role assignment",
                     "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -22542,8 +22976,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "888486078838877110"
+                      "version": "0.49.2.45890",
+                      "templateHash": "3881104354286983188"
                     },
                     "name": "Resource group role assignment",
                     "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -22646,8 +23080,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "888486078838877110"
+                      "version": "0.49.2.45890",
+                      "templateHash": "3881104354286983188"
                     },
                     "name": "Resource group role assignment",
                     "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -22753,8 +23187,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1194352554742438555"
+                      "version": "0.49.2.45890",
+                      "templateHash": "1808584453457603169"
                     },
                     "name": "Managed identity resource role assignments",
                     "description": "Applies role assignments scoped to an existing user-assigned identity resource; these authorize principals over the identity rather than granting the identity access to other resources."
@@ -22930,8 +23364,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -23091,8 +23525,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -23252,8 +23686,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -23413,8 +23847,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -23562,8 +23996,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "11529537720838451368"
+                      "version": "0.49.2.45890",
+                      "templateHash": "5449791183883803103"
                     },
                     "name": "Managed disk network policy orchestration",
                     "description": "Creates the subscription managed-disk network-access policy definition and optionally provisions resource-group assignment, remediation identity permissions, and remediation."
@@ -23632,8 +24066,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "5922102044400521638"
+                              "version": "0.49.2.45890",
+                              "templateHash": "13979714683883884060"
                             },
                             "name": "Managed disk network policy definition",
                             "description": "Defines a subscription Modify policy that sets managed disk public network access to Disabled and network access policy to DenyAll; assign only within the dedicated session-host resource group."
@@ -23761,8 +24195,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -23881,8 +24315,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "1760680025927106016"
+                              "version": "0.49.2.45890",
+                              "templateHash": "16974669378416000663"
                             },
                             "name": "Session host policy assignment",
                             "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -24013,8 +24447,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3866258938335596994"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7376166935610720218"
                             },
                             "name": "Session host policy remediation task",
                             "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
@@ -24147,8 +24581,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -24303,8 +24737,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "14878786381988423075"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9634498246269658124"
                     },
                     "name": "Session host monitoring policy orchestration",
                     "description": "Composes monitoring definitions, an initiative, scoped identity permissions, and assignments for a dedicated session-host resource group, with optional system identity assignment and remediation tasks."
@@ -24396,8 +24830,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "9183363769846850671"
+                              "version": "0.49.2.45890",
+                              "templateHash": "16018760068489106281"
                             },
                             "name": "Azure Monitor Agent policy definition",
                             "description": "Defines a subscription DeployIfNotExists policy for Azure Monitor Agent on VMs with system-assigned identity; assignment and remediation permissions are owned by the caller."
@@ -24568,8 +25002,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "198065477472137362"
+                              "version": "0.49.2.45890",
+                              "templateHash": "15331808399924264588"
                             },
                             "name": "Monitoring association policy definition",
                             "description": "Defines a subscription DeployIfNotExists policy associating VMs with a selected data collection rule or endpoint through an embedded remediation template."
@@ -24764,8 +25198,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "16611394882521868833"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7133565535771150694"
                             },
                             "name": "Session host monitoring initiative",
                             "description": "Creates a subscription initiative combining supplied Agent and association definitions for Azure Monitor Agent, a data collection rule, and an optional data collection endpoint."
@@ -24920,8 +25354,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -25020,8 +25454,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -25115,8 +25549,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "14344446969397153080"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7967521379307527511"
                             },
                             "name": "Data collection rule policy permissions",
                             "description": "Grants Reader on an existing data collection rule in the deployment resource group to the supplied policy identity principal."
@@ -25178,8 +25612,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "7857031043293745810"
+                              "version": "0.49.2.45890",
+                              "templateHash": "14867303679596145766"
                             },
                             "name": "Data collection endpoint policy permissions",
                             "description": "Grants Monitoring Contributor on an existing data collection endpoint in the deployment resource group to the supplied policy identity principal."
@@ -25265,8 +25699,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "1760680025927106016"
+                              "version": "0.49.2.45890",
+                              "templateHash": "16974669378416000663"
                             },
                             "name": "Session host policy assignment",
                             "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -25429,8 +25863,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "1760680025927106016"
+                              "version": "0.49.2.45890",
+                              "templateHash": "16974669378416000663"
                             },
                             "name": "Session host policy assignment",
                             "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -25565,8 +25999,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3866258938335596994"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7376166935610720218"
                             },
                             "name": "Session host policy remediation task",
                             "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
@@ -25647,8 +26081,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3866258938335596994"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7376166935610720218"
                             },
                             "name": "Session host policy remediation task",
                             "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
@@ -25730,8 +26164,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3866258938335596994"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7376166935610720218"
                             },
                             "name": "Session host policy remediation task",
                             "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
@@ -25813,8 +26247,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3866258938335596994"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7376166935610720218"
                             },
                             "name": "Session host policy remediation task",
                             "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
@@ -25941,8 +26375,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13401529006567641089"
+                      "version": "0.49.2.45890",
+                      "templateHash": "6565995476571319103"
                     },
                     "name": "Guest Attestation policy orchestration",
                     "description": "Creates the subscription Guest Attestation policy definition, grants remediation permissions, assigns it to a dedicated session-host resource group, and optionally creates a remediation task."
@@ -26004,8 +26438,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3263178543152150426"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3532324267175023402"
                             },
                             "name": "Guest Attestation policy definition",
                             "description": "Defines a subscription DeployIfNotExists policy for a successfully provisioned Guest Attestation extension on Trusted Launch and Confidential VMs; the caller owns assignment and permissions."
@@ -26206,8 +26640,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -26325,8 +26759,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "1760680025927106016"
+                              "version": "0.49.2.45890",
+                              "templateHash": "16974669378416000663"
                             },
                             "name": "Session host policy assignment",
                             "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -26457,8 +26891,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3866258938335596994"
+                              "version": "0.49.2.45890",
+                              "templateHash": "7376166935610720218"
                             },
                             "name": "Session host policy remediation task",
                             "description": "Creates a resource-group remediation task that reevaluates compliance for a supplied policy assignment or a selected initiative member."
@@ -26577,8 +27011,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13100686071530401455"
+                      "version": "0.49.2.45890",
+                      "templateHash": "5704653602020627713"
                     },
                     "name": "VM Applications policy orchestration",
                     "description": "Validates an authoritative Gallery application list and resource-group ownership, creates its Modify definition and assignment, grants scoped permissions, and optionally remediates existing session hosts."
@@ -26716,8 +27150,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "9072655300844897940"
+                              "version": "0.49.2.45890",
+                              "templateHash": "15575170420369594572"
                             },
                             "name": "Resource group",
                             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -26791,8 +27225,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "10548625128021386802"
+                              "version": "0.49.2.45890",
+                              "templateHash": "12835964120346351507"
                             },
                             "name": "VM Applications policy definition",
                             "description": "Defines a subscription Modify policy maintaining the authoritative ordered Gallery application references, including latest-version matching, on VMs; the caller owns assignment and permissions."
@@ -26979,8 +27413,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "888486078838877110"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3881104354286983188"
                             },
                             "name": "Resource group role assignment",
                             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -27086,8 +27520,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "3671964223659038964"
+                              "version": "0.49.2.45890",
+                              "templateHash": "6270867002431670131"
                             },
                             "name": "Compute gallery role assignments",
                             "description": "Applies deterministic role assignments at an existing compute gallery in the deployment resource group."
@@ -27239,8 +27673,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "14019292255609123995"
+                              "version": "0.49.2.45890",
+                              "templateHash": "3010124637031311835"
                             },
                             "name": "VM Applications policy assignment",
                             "description": "Assigns the supplied VM Application Modify definition at the dedicated session-host resource group with ownership metadata and an optional deterministic remediation task."
@@ -27529,8 +27963,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -27702,8 +28136,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "1760680025927106016"
+                      "version": "0.49.2.45890",
+                      "templateHash": "16974669378416000663"
                     },
                     "name": "Session host policy assignment",
                     "description": "Assigns a supplied definition or initiative at the dedicated session-host resource-group scope using an existing user-assigned identity and deterministic ownership metadata."
@@ -27914,8 +28348,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "11414656881974618006"
+              "version": "0.49.2.45890",
+              "templateHash": "8692655899955331150"
             }
           },
           "parameters": {
@@ -27979,8 +28413,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2221754051824373100"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11947828355218345379"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -28221,8 +28655,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "2911062082945906275"
+              "version": "0.49.2.45890",
+              "templateHash": "18209227421158673572"
             }
           },
           "parameters": {
@@ -28273,8 +28707,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12190133723766550787"
+                      "version": "0.49.2.45890",
+                      "templateHash": "17420164458191368667"
                     },
                     "name": "Automated session host management",
                     "description": "Creates or updates the default session host management settings under an existing automated host pool in the deployment resource group using caller-supplied properties."
@@ -28378,8 +28812,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "15711015767023757584"
+              "version": "0.49.2.45890",
+              "templateHash": "11569005659669622142"
             }
           },
           "parameters": {
@@ -28473,8 +28907,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "11095404057226088028"
+                      "version": "0.49.2.45890",
+                      "templateHash": "3802429766654531747"
                     },
                     "name": "Dynamic AVD scaling plan",
                     "description": "Deploys a pooled scaling plan linked to one existing host pool and optional create-delete-power-management schedules. Automated host configuration and autoscale permissions are caller prerequisites."
@@ -28716,8 +29150,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "11415135905629521146"
+                              "version": "0.49.2.45890",
+                              "templateHash": "17915390717998010314"
                             },
                             "name": "Dynamic pooled scaling schedules",
                             "description": "Deploys create-delete-power-management schedules under an existing scaling plan in the deployment resource group; returns schedule IDs in input order."
@@ -29024,8 +29458,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "12092829155552066875"
+              "version": "0.49.2.45890",
+              "templateHash": "5838579585111959549"
             },
             "name": "Deployment helper cleanup orchestration",
             "description": "Runs cleanup on an existing helper VM for session-host Run Commands, supplied role assignments, and the deployment resource group."
@@ -29149,8 +29583,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2221754051824373100"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11947828355218345379"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -29387,8 +29821,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2221754051824373100"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11947828355218345379"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -29625,8 +30059,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "2221754051824373100"
+                      "version": "0.49.2.45890",
+                      "templateHash": "11947828355218345379"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."

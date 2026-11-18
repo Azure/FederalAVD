@@ -65,7 +65,7 @@ param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
-import { privateEndpointName } from '../naming/naming.bicep'
+import { privateEndpointName } from '../naming/internal.bicep'
 
 var secretList = union(
   !empty(domainJoinUserPassword) ? [{ name: 'DomainJoinUserPassword', value: domainJoinUserPassword }] : [],

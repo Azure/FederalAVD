@@ -4,6 +4,209 @@
 
 This document describes how FederalAVD names every Azure resource it creates, how to configure a custom naming convention that is consistent across all solutions, and how the built-in default aligns with Microsoft's [Cloud Adoption Framework (CAF) naming guidance](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming).
 
+## Add-on developer quick start
+
+Use one of these complete entry-template examples in `deployments/add-ons/<name>/main.bicep`:
+
+- **Any combination of supported resource types:** call `resourceNameForType` once per resource, then pass the resolved names to your resource modules. The Automation Account example demonstrates one such call.
+- **A predefined bundle, when useful:** call `functionAppNames` for Function App infrastructure, then pass the bundle's properties to the shared Function App module.
+
+`resourceNameForType` returns one name per call, not one resource type per add-on.
+For example, the same add-on can name an Automation Account, storage accounts,
+identities and a Key Vault with separate calls using the same convention. You can
+group those results in a local `names` object or mix direct calls with a predefined
+bundle. Bundles are optional conveniences, not a requirement or a limit on which
+supported resource types an add-on can use; no new adapter is needed for other combinations.
+
+Both expose `param namingConvention namingConventionConfig = {}`. An empty object
+uses the centralized defaults; customers can pass the same convention object used
+by their other FederalAVD deployments. An empty name-override parameter generates
+a name; a nonempty override takes precedence.
+
+**What is `context`?** It is a local object describing the resources' actual destination,
+not another customer parameter:
+
+| Field | Supply |
+| --- | --- |
+| `subscriptionId` | Subscription that will own the resources |
+| `resourceGroupName` | Resource group that will own the resources |
+| `location` | Full Azure region where the resources will be deployed |
+| `cloud` | Azure environment name, from `environment().name` |
+
+These examples deploy at resource-group scope, so their context uses the current
+subscription and resource group. If your orchestrator deploys modules elsewhere,
+set the module's `scope` and the naming context to that same destination.
+
+**Before deploying:** replace `'<purpose>'` with your add-on's short, stable purpose.
+The angle brackets are documentation placeholders, not valid naming characters.
+Use distinct purposes for multiple resources of the same type in the same scope.
+Explicit name overrides must satisfy Azure's resource naming rules; an override
+does not automatically adopt or rename an existing resource.
+
+<details>
+<summary>Automation Account: one generated name and an optional override</summary>
+
+This example reuses the existing [AVD Alerts Automation Account module](../deployments/add-ons/avdAlerts/modules/automationAccount.bicep).
+Supply an existing Log Analytics workspace resource ID. The module creates an
+account, system-assigned identity, Automation variables and diagnostic settings.
+Its storage-collector runbook and schedule remain disabled because no storage
+accounts are supplied. For a different workload, use your own resource module
+with the same name-parameter pattern.
+
+```bicep
+targetScope = 'resourceGroup'
+
+import { namingConventionConfig, resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
+
+param namingConvention namingConventionConfig = {}
+param location string = resourceGroup().location
+param logAnalyticsWorkspaceResourceId string
+param deploymentTime string = utcNow()
+
+@description('Optional. Complete Automation Account name. Leave empty to generate.')
+param automationAccountNameOverride string = ''
+
+var context = {
+  subscriptionId: subscription().subscriptionId
+  resourceGroupName: resourceGroup().name
+  location: location
+  cloud: environment().name
+}
+
+var automationAccountName = !empty(automationAccountNameOverride)
+  ? automationAccountNameOverride
+  : resourceNameForType(namingConvention, 'automationAccounts', '<purpose>', context)
+
+module automationAccount '../avdAlerts/modules/automationAccount.bicep' = {
+  params: {
+    automationAccountName: automationAccountName
+    location: location
+    resourceManagerUri: environment().resourceManager
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    deploymentTime: deploymentTime
+  }
+}
+
+output automationAccountName string = automationAccountName
+output automationAccountResourceId string = automationAccount.outputs.resourceId
+```
+
+The override is selected **before** calling the naming helper. The resource module
+receives the finished name; it does not calculate another abbreviation or hash.
+
+</details>
+
+<details>
+<summary>Function App: a names bundle and optional overrides</summary>
+
+This example calls the existing [shared Function App module](../deployments/shared/modules/resourceModules/functionApp/functionApp.bicep).
+Before deployment, supply:
+
+- An existing compatible Windows App Service plan in the target region.
+- An existing host pool resource ID for traceability tags and a Log Analytics workspace.
+- A delegated Function App integration subnet, a private-endpoint subnet, and the
+  blob, queue, table and Function App private DNS zones for your target cloud.
+- An existing Azure Monitor Private Link Scope with its network/DNS connectivity
+  already configured for private Application Insights access.
+
+The example creates Function App infrastructure, runtime storage, Application
+Insights, private endpoints and storage RBAC. It disables public app/storage access
+and uses **platform-managed storage encryption** to keep the naming example focused.
+The plan, networking, DNS zones and monitoring prerequisites are not created here.
+Function code deployment is separate. If your deployment requires CMK, provision
+the storage encryption identity, Key Vault key and permissions before calling the
+module; a generated identity name alone does not provision them.
+
+```bicep
+targetScope = 'resourceGroup'
+
+import { namingConventionConfig, functionAppNames } from '../../shared/modules/orchestration/naming/naming.bicep'
+
+param namingConvention namingConventionConfig = {}
+param location string = resourceGroup().location
+param serverFarmId string
+param hostPoolResourceId string
+param logAnalyticsWorkspaceResourceId string
+param privateLinkScopeResourceId string
+param functionAppDelegatedSubnetResourceId string
+param privateEndpointSubnetResourceId string
+param azureBlobPrivateDnsZoneResourceId string
+param azureQueuePrivateDnsZoneResourceId string
+param azureTablePrivateDnsZoneResourceId string
+param azureFunctionAppPrivateDnsZoneResourceId string
+
+@description('Optional. Complete Function App name. Leave empty to generate.')
+param functionAppNameOverride string = ''
+
+var context = {
+  subscriptionId: subscription().subscriptionId
+  resourceGroupName: resourceGroup().name
+  location: location
+  cloud: environment().name
+}
+var names = functionAppNames(namingConvention, '<purpose>', context, {
+  functionAppName: functionAppNameOverride
+})
+
+module app '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
+  params: {
+    functionAppName: names.functionAppName
+    storageAccountName: names.storageAccountName
+    applicationInsightsName: names.applicationInsightsName
+    privateEndpointNameConv: names.privateEndpointNameConv
+    privateEndpointNICNameConv: names.privateEndpointNICNameConv
+    location: location
+    serverFarmId: serverFarmId
+    hostPoolResourceId: hostPoolResourceId
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    enableApplicationInsights: true
+    privateLinkScopeResourceId: privateLinkScopeResourceId
+    functionAppDelegatedSubnetResourceId: functionAppDelegatedSubnetResourceId
+    privateEndpoint: true
+    privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
+    azureBlobPrivateDnsZoneResourceId: azureBlobPrivateDnsZoneResourceId
+    azureQueuePrivateDnsZoneResourceId: azureQueuePrivateDnsZoneResourceId
+    azureTablePrivateDnsZoneResourceId: azureTablePrivateDnsZoneResourceId
+    azureFunctionAppPrivateDnsZoneResourceId: azureFunctionAppPrivateDnsZoneResourceId
+    paasPublicNetworkAccess: 'Disabled'
+    keyManagementStorageAccounts: 'PlatformManaged'
+    encryptionKeyName: ''
+    encryptionKeyVaultResourceId: ''
+    functionAppAppSettings: []
+    tags: {}
+  }
+}
+
+output functionAppName string = app.outputs.functionAppName
+output storageAccountName string = names.storageAccountName
+```
+
+The bundle accepts its own overrides object. For example, setting
+`functionAppNameOverride` to `func-contoso-custom` uses that app name while
+storage and Insights still use the convention. The module consumes the returned
+names and endpoint patterns; it does not rebuild the convention.
+
+</details>
+
+To check either example without deploying, save it in the entry-template location
+above and run:
+
+```powershell
+az bicep build --file deployments\add-ons\<name>\main.bicep --outfile "$env:TEMP\addon-naming-example.json"
+```
+
+Replace `<name>` with your add-on folder. Compilation checks the module contracts;
+it does not verify Azure resource availability, permissions, networking or successful
+deployment. These module calls create resources when deployed; naming helpers alone do not.
+
+**No new adapter file, resource role or policy edit is required for a supported
+resource type.** A deployment bundle is simply an optional thin adapter: it
+chooses purposes and supplies context to the same naming engine. It does not
+reimplement formatting, validation or hashing. Explicit overrides and resource
+creation/adoption remain the deployment's responsibility.
+
+For another layout, pass explicit component overrides in `namingConvention`.
+
 ---
 
 ## Contents
@@ -38,7 +241,7 @@ For each resource, the engine substitutes:
 | `location` | The region abbreviation (e.g., `use`, `usw2`, `use2`) |
 | `workload` | A static solution label (e.g., `avd`) |
 | `environment` | A static environment label (e.g., `prod`, `dev`) |
-| `freeform1` / `freeform2` | Static free-text slots (e.g., organisation name, team) |
+| `customToken1` / `customToken2` | Optional static tokens at any position (legacy aliases: `freeform1` / `freeform2`) |
 | `none` | Ignored — removed from the output entirely |
 
 Empty-valued top-level components are removed before joining. Separators inside component values are not removed by this step.
@@ -46,6 +249,35 @@ Empty-valued top-level components are removed before joining. Separators inside 
 Convention-generated names are driven by the shared naming policy and the `namingConvention` parameter. The policy owns defaults, role purposes, patterns, constraints and uniqueness recipes; the parameter supplies customer overrides. Explicit names, existing-resource IDs, provider-required names and lifecycle identifiers are not automatically rewritten.
 
 Portal forms provide naming controls, validation and explicit overrides. Names are resolved at deployment time.
+
+### One scope, one hash
+
+The readable purpose says **what** a resource does. The hash says **where** it
+belongs: subscription + resource group + full Azure region, all lowercased.
+Cloud, purpose, host-pool identifier and resource type are not hash inputs.
+Cloud still selects the region-abbreviation map. The default suffix is six characters.
+
+For example, the shared secrets and encryption vaults in the same scope use:
+
+```text
+kv-avd-sec-abc123-use
+kv-avd-enc-abc123-use
+```
+
+`abc123` is illustrative. Both vaults share the real computed hash, regardless
+of whether the consuming host pool is `finance` or `hr`. A different region is
+a different scope, even within the same resource group. Storage and Function
+Apps use this same scope rule; scope-local resource types do not need an
+automatic hash.
+
+> **Existing deployments:** This replaces earlier hash recipes; generated vault,
+> storage and Function App names can change. Azure resources are not renamed or
+> migrated automatically. Before redeployment, use existing-resource IDs or
+> supported complete-name overrides to retain resources, and review Azure
+> what-if output. For FSLogix, retaining the old explicit storage prefix retains
+> its account naming. Image Management has no per-account name override: plan
+> migration of artifacts, access and downstream references before redeploying an
+> existing stack with this recipe. Do not assume it will rediscover old names.
 
 Standard and automated Host Pool and Shared Services forms select the delimiter
 from **Hyphen (-)** or **Underscore (_)**, defaulting to Hyphen. Image Management
@@ -138,8 +370,8 @@ Key abbreviations:
   "delimiter":               "-",
   "workload":                "avd",
   "environment":             "prod",
-  "freeform1":               "",
-  "freeform2":               "",
+  "customToken1":            "",
+  "customToken2":            "",
   "locationAbbreviation":    "",
   "imageManagementStoragePrefix": "",
   "vmsLocationAbbreviation": "",
@@ -153,18 +385,32 @@ Key abbreviations:
 
 | Property | Type | Required | Description |
 | --- | --- | --- | --- |
-| `components` | `string[]` | Yes | Ordered array of component names. Each element must be one of the [eight component names](#the-eight-naming-components). |
-| `delimiter` | `string` | Yes | Character inserted between non-empty components. Typically `-`. |
+| `components` | `string[]` | No | Ordered array of supported [component names](#the-eight-naming-components). Omit to use the default layout. |
+| `delimiter` | `string` | No | Character inserted between non-empty components. Defaults to `-`; an empty string is supported. |
 | `workload` | `string` | No | Static label for the solution workload. Fills the `workload` component. Example: `avd`. |
 | `environment` | `string` | No | Static environment label. Fills the `environment` component. Example: `prod`, `dev`, `test`. |
-| `freeform1` | `string` | No | First free-text slot. Use for organisation or team prefix. |
-| `freeform2` | `string` | No | Second free-text slot. Use for any additional static token. |
+| `customToken1` | `string` | No | First optional static token, for example an organisation or team. Its position is selected in `components`, not fixed as a prefix. |
+| `customToken2` | `string` | No | Second optional static token at any selected position. |
+| `freeform1` / `freeform2` | `string` | No | Backward-compatible aliases for the corresponding custom token, both as properties and component names. |
 | `locationAbbreviation` | `string` | No | Override for the deployment region abbreviation in Shared Services, Image Management, and the Template Spec publishing script. Leave blank to auto-derive. |
 | `imageManagementStoragePrefix` | `string` | No | Shared prefix for Image Management artifacts and build-logs storage accounts. Use 1-5 lowercase letters or numbers. The generated names append `imgassets` or `imglogs`, the location abbreviation, and a deterministic 6-character uniqueness suffix. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. Leave blank to derive names from the standard Image Management storage naming pattern. |
 | `vmsLocationAbbreviation` | `string` | No | Override for the session hosts (VMs) region abbreviation. Leave blank to auto-derive from the deployment location. |
 | `cpLocationAbbreviation` | `string` | No | Override for the control plane region abbreviation. Leave blank to auto-derive. |
 | `fslogixStoragePrefix` | `string` | No | Custom prefix for FSLogix storage accounts (≤ 13 lowercase alphanumeric characters, no hyphens). Leave blank to use the auto-derived prefix `fslogix{unique}`. |
 | `resourceTypeCodes` | `object` | No | Per-resource-type abbreviation overrides. Keys must match the abbreviation file (e.g., `keyVaults`, `virtualMachines`). Values replace the default abbreviation for that type only. |
+
+Deployment parameters and the public API use the shared `namingConventionConfig`
+Bicep type. Every property is optional; partial abbreviation overrides remain
+supported. Wrong types, unknown top-level properties and unsupported component
+names are rejected by the typed deployment schema. Runtime validation checks
+selected tokens, delimiters, purposes and type-specific name budgets.
+
+Old parameter files and Portal outputs using `freeform1`/`freeform2` still work.
+Either component spelling reads the same token. If both property spellings are
+supplied, their values must agree, including explicit empty strings; conflicting
+values fail rather than silently selecting one. Renaming aliases alone does not
+change generated names. Existing Portal labels and stored host-pool tags do not
+need to be rewritten.
 
 ### Passing the parameter
 
@@ -181,8 +427,8 @@ Key abbreviations:
         "delimiter": "-",
         "workload": "avd",
         "environment": "",
-        "freeform1": "",
-        "freeform2": ""
+        "customToken1": "",
+        "customToken2": ""
       }
     }
   }
@@ -197,8 +443,8 @@ param namingConvention = {
   delimiter: '-'
   workload: 'avd'
   environment: ''
-  freeform1: ''
-  freeform2: ''
+  customToken1: ''
+  customToken2: ''
 }
 ```
 
@@ -208,11 +454,11 @@ param namingConvention = {
 
 ```powershell
 $namingConvention = @{
-  components = @('freeform1', 'workload', 'purpose', 'environment', 'location', 'resourceType')
+  components = @('customToken1', 'workload', 'purpose', 'environment', 'location', 'resourceType')
   delimiter = '-'
   workload = 'avd'
   environment = 'prod'
-  freeform1 = 'contoso'
+  customToken1 = 'contoso'
   locationAbbreviation = 'use2'
   resourceTypeCodes = @{
     resourceGroups = 'rg'
@@ -257,8 +503,8 @@ Each element of `components` must be one of these values:
 | `location` | Region abbreviation | `use`, `usw2`, `use2` |
 | `workload` | The static `workload` property value | `avd` |
 | `environment` | The static `environment` property value | `prod`, `dev` |
-| `freeform1` | The static `freeform1` property value | `contoso`, `team-a` |
-| `freeform2` | The static `freeform2` property value | anything |
+| `customToken1` (alias `freeform1`) | First static custom token | `contoso`, `team-a` |
+| `customToken2` (alias `freeform2`) | Second static custom token | `01` |
 | `none` | Placeholder that is always removed — use to hold a slot in the Portal UI without including it in the output | — |
 
 ### Minimum required components
@@ -267,7 +513,7 @@ Each element of `components` must be one of these values:
 | --- | --- | --- |
 | `purpose` | **Required** | Multiple resources of the same type share an identical name → ARM conflict error. Every deployment creates several same-type resources (multiple RGs, two Key Vaults, two UAIs, etc.). The Portal UI blocks submission with an **Error** when `purpose` is absent. |
 | `resourceType` | Strongly recommended | Resource names carry no type identifier, making them hard to distinguish in the portal. |
-| `location` | Optional | The location abbreviation is still embedded in storage account names and added to Key Vault unique-string seeds, so cross-region deployments remain collision-free. Other resource names simply won't contain a location segment. The Portal UI shows a **Warning** (not an error) when `location` is absent. |
+| `location` | Optional | The full region always participates in the scope hash, even when the location component is omitted. Image storage also retains its readable location token. Scope-local names still need distinct formatted purposes across regions. The Portal UI shows a **Warning** (not an error) when `location` is absent. |
 | `workload` | Optional | Names are scoped less tightly to your application; collisions with other deployments using the same convention become more likely. The Portal UI shows a **Warning** when `workload` is absent. |
 
 ### RT-first vs RT-last
@@ -280,6 +526,14 @@ The position of `resourceType` in the array controls the naming style for **all*
 | **RT-last** (suffix) | `avd-prod-use-vm` | Some organisations prefer alphabetic sorting by workload |
 
 RT-last is detected when `resourceType` is the **last non-`none` component** in the array. Any other position (first, middle) is treated as RT-first.
+
+Networking uses this same typed `namingConvention` object, not a separate resource-type-at-end
+switch. Its Portal form offers these two layouts; parameter files accept the full convention.
+To migrate an old `nameConvResTypeAtEnd: true` setting, remove that parameter and set
+`components` to `["workload", "purpose", "location", "resourceType"]`. The default and
+equivalent resource-type-last settings preserve the existing network names. Explicit
+resource group, VNet and subnet names are not rewritten; see the
+[Networking parameter reference](../deployments/networking/README.md#namingconvention).
 
 > **Important for add-ons:** The Session Host Replacer, Session Hosts, and Storage Quota Manager add-ons infer RT-first/RT-last from the existing host pool name. They detect RT-last by checking whether the host pool name ends with `-vdpool` or `-hp`. They will default to RT-first for any other pattern.
 
@@ -338,23 +592,32 @@ The shared engine first assembles components and purpose parts using the
 configured delimiter, then converts `_` and `.` to `-` and applies the length
 limit. Thus `-`, `_`, and `.` conventions produce hyphen-separated vault names;
 an empty delimiter produces joined components without inserted separators.
-This formatting is not complete name validation: arbitrary delimiters such as
-`--`, invalid component characters, or truncation can still produce invalid names.
+Generated vault names reject invalid characters and consecutive hyphens.
 Complete name overrides must independently satisfy Azure's rules.
 
-Key Vault names are capped at **24 characters**. The unique suffix is **embedded in the `purpose` slot** rather than appended after assembly. This guarantees a consistent position for the unique token in the final name regardless of the component ordering:
+Generated Key Vault names must fit within **24 characters**; overlength names fail deployment instead of being shortened. The unique suffix is **embedded in the `purpose` slot** rather than appended after assembly. This guarantees a consistent position for the unique token in the final name regardless of the component ordering:
 
 - RT-first default: `kv-avd-sec-d527e9-use` (unique is the 3rd component, before location)
 - RT-last: `avd-sec-d527e9-use2-kv` (unique is part of the 2nd component, before location and RT)
 
-The purpose joins `sec` or `enc` with the unique token using the configured delimiter (`sec-{unique}` or `enc-{unique}` with the default `-`). The full name is assembled, normalized for Key Vault, then capped at 24 characters with `take(name, 24)`. For short conventions (default CAF), the assembled name is ≤ 24 characters and no truncation occurs. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
+The purpose joins `sec` or `enc` with the unique token using the configured delimiter (`sec-{unique}` or `enc-{unique}` with the default `-`). The full name is assembled, normalized for Key Vault, then checked against the 24-character limit. Conventions that previously depended on silent truncation must be shortened or given explicit names before redeployment; generated names are not automatically migrated. When a portal naming convention would exceed 24 characters, the form requires complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. ARM/Bicep deployments can set `secretsKeyVaultNameOverride` and `encryptionKeyVaultNameOverride` directly. Overrides are applied before generating the vault name, so they bypass an overlength default. The portal validates override syntax and global availability with the Key Vault `checkNameAvailability` API. An existing name fails validation; select the existing Key Vault instead of deploying a new one.
 
-The `uniqueString()` seed is:
+Both purposes use the same scope hash:
 
-- With a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName)`
-- Without a `location` component: `uniqueString(subscriptionId, operationsResourceGroupName, region)` — the region is added to prevent cross-region collisions when location is not in the name.
+```bicep
+take(uniqueString(
+  toLower(subscriptionId),
+  toLower(operationsResourceGroupName),
+  toLower(location)
+), 6)
+```
 
-> **Parity guarantee:** The hostpool deployment's inline Key Vault names use the **same seed** as the standalone `sharedServices.bicep` deployment. Deploy `sharedServices.bicep` first, then reference its outputs — or re-run the hostpool deployment and it will find the existing vaults by name.
+This rule does not change when the convention omits `location`. Standalone
+Shared Services, inline host-pool vaults and `resourceNameForType` produce the
+same vault names for the same convention and target scope. A consolidated
+Shared Services deployment uses its effective consolidated group. A host-pool
+identifier never participates. This is parity between current entry points,
+not compatibility with names generated by an older release.
 
 ### Storage Account — alphanumeric only, max 24
 
@@ -447,7 +710,10 @@ When CP and VMs are in different regions, both locations appear in the name:
 - Control plane resources (Host Pool, DAG, Workspace, Scaling Plan, CP RG) use `cpLocationAbbreviation`.
 - VMs, disks, storage, operations RGs use `vmsLocationAbbreviation`.
 
-If your convention omits `location`, set **both** `vmsLocationAbbreviation` and `cpLocationAbbreviation` in `namingConvention` to ensure the uniqueString seed for Key Vaults remains stable across regions.
+The hash always uses the full target region, not its display abbreviation.
+Changing `vmsLocationAbbreviation` or `cpLocationAbbreviation` does not replace
+that region input. Changing an abbreviation can still change a generated
+resource-group name, which in turn changes its scope hash.
 
 ---
 
@@ -530,15 +796,17 @@ avd-sec-75d05c-use2-kv
 SHNAME  →  avdhost001
 ```
 
-### Example 4 — Organisation prefix with freeform1
+### Example 4 — Organisation token with explicit vault names
 
 ```json
 {
-  "components": ["freeform1", "workload", "purpose", "location", "resourceType"],
+  "components": ["customToken1", "workload", "purpose", "location", "resourceType"],
   "delimiter": "-",
-  "freeform1": "contoso",
+  "customToken1": "contoso",
   "workload": "avd",
-  "environment": ""
+  "environment": "",
+  "secretsKeyVaultNameOverride": "contoso-sec-use",
+  "encryptionKeyVaultNameOverride": "contoso-enc-use"
 }
 ```
 
@@ -547,11 +815,11 @@ Results (identifier = `avd`, region = `eastus`):
 ```text
 contoso-avd-avd-use-vdpool
 contoso-avd-control-plane-use-rg
-contoso-avd-sec-9ef5b1-u
+contoso-sec-use
 SHNAME  →  avdhost001
 ```
 
-> **Note:** The generated KV name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). Portal deployments require complete Key Vault name overrides so meaningful trailing components are not silently lost.
+> **Note:** The generated vault name exceeds 24 characters (`contoso-avd-sec-{unique}-use-kv` = 29 chars). This example supplies complete overrides; generated names are never shortened. Replace illustrative explicit names with globally available names.
 
 ### Example 5 — Underscore delimiter with resource-specific exceptions
 
@@ -601,12 +869,20 @@ vdpool-avd-desktop-01-use   ← other types unchanged
 
 ## Maintaining the shared naming policy
 
-The authoritative rule catalog is the exported `namingPolicy` object in
-[`naming.bicep`](../deployments/shared/modules/orchestration/naming/naming.bicep).
-The same file is the single public Bicep entry point for composition, resource formatting,
-location lookup, uniqueness and runtime naming patterns. Host pools, Shared
-Services, Image Management, Image Build, networking and add-ons all consume it,
-directly or through context/output adapters.
+The authoritative rule catalog is the internal `namingPolicy` object in
+[`internal.bicep`](../deployments/shared/modules/orchestration/naming/internal.bicep).
+The public [`naming.bicep`](../deployments/shared/modules/orchestration/naming/naming.bicep)
+interface exports the shared `namingConventionConfig` type and six functions: `resourceNameForType`, `functionAppNames`,
+`hostPoolNames`, `fslogixNames`, `sharedServicesNames` and `imageManagementNames`.
+Deployment bundles own location lookup and uniqueness seeds. Shared Services and
+Image Management pass deployment context instead of constructing region codes
+and hash seeds locally. Existing specialized callers and resource modules use
+internal role adapters; these are not an extension API for new add-ons. Roles and
+type-based calls share composition, convention validation and type-budget checks.
+Role rules retain established casing/delimiters and intentional empty-purpose or
+workload-free patterns. Invalid configurations that previously produced an empty,
+malformed or overlength name now fail. Explicit resource-name patterns and
+temporary-computer-name fragments have separate lifecycle contracts.
 Host pools import `hostPoolNames` directly; standalone FSLogix imports
 `fslogixNames`, not a host-pool module. The standard host pool accepts
 `virtualMachinesLocation`, defaulting to `controlPlaneLocation` (which defaults
@@ -627,7 +903,7 @@ There is no synchronization script or hidden Portal policy snapshot. After chang
 the native policy, update any corresponding literals and run the drift checks:
 
 ```powershell
-Invoke-Pester -Script tests\Naming.Tests.ps1,tests\NamingBundles.Tests.ps1,tests\IdentifierNaming.Tests.ps1
+Invoke-Pester -Path tests\Naming.Tests.ps1,tests\NamingBundles.Tests.ps1,tests\IdentifierNaming.Tests.ps1
 ```
 
 Tests evaluate the exported policy with Bicep, then check component order,
@@ -656,14 +932,16 @@ Use the same interface regardless of deployment family:
 import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
-var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier}-secrets', context)
+var vaultName = resourceNameForType(namingConvention, 'keyVaults', 'sec', context)
 ```
 
 The example import is relative to an add-on entry template. `context` supplies
 the actual target subscription, owning resource group, location and cloud. To
 name a subscription-scoped resource group, pass `resourceGroupName: ''`; that
 field does not affect its unhashed name, avoiding circular naming dependencies.
-Use distinct identifiers for multiple same-type resources in one scope.
+Use distinct formatted purposes for multiple same-type resources in one scope.
+For shared resources, use a shared purpose such as `sec`, not the consuming
+host-pool identifier.
 
 For new add-ons, use the
 [identifier-based shared interface](../deployments/shared/modules/orchestration/naming/README.md#adding-a-function-app-add-on)
@@ -677,13 +955,18 @@ uniqueness suffix or a policy update for each add-on.
 
 The interface adds a deterministic hash only for globally named Storage accounts,
 Key Vaults and Function Apps (`globallyUnique: true` in the policy). Hashes are
-six characters by default. Their seed includes the full application identifier
-and target scope, not the resource type: Function App and runtime storage share
-one token. Names preserve the full formatted identifier and static components.
+six characters by default. Their seed includes only the lowercased subscription,
+owning resource group and full region. Cloud is used for region-abbreviation
+lookup, not hashing. Different purposes and resource
+types in that scope share one token. Names preserve the full formatted
+identifier and static components.
 Scope-local types have no automatic hash and retain the full formatted identifier;
 overlength names fail with an instruction to shorten the identifier or convention.
 Callers must distinguish names within their scope, including identifiers that
-normalize identically or conventions that omit location. The generic Function
+normalize identically or conventions that omit location. For example, `inv_app`
+and `inv-app` produce the same formatted Function App name and the same scope
+hash; use genuinely distinct purposes such as `inventory` and `cleanup`.
+The generic Function
 App bundle leaves Insights and storage-CMK identity names unhashed. Shared plans
 also have no hash. SHR uses this same bundle with `${hostPoolIdentifier}-shr`,
 not a separate compatibility recipe. Its plan uses the shared `shr` purpose;
@@ -695,7 +978,10 @@ produce `fa-avd-finance-shr-abc123-use`, `saavdfinanceshrabc123use`,
 The shared plan is `asp-avd-shr-use`. Generated storage must fit 24 characters;
 provide `storageAccountNameOverride` if the complete name is too long. Bundle
 overrides are applied before default generation, so this escape path does not
-evaluate an invalid default. Other production role-based recipes are unchanged.
+evaluate an invalid default. Image Management and generated FSLogix prefixes
+use the common scope hash too, while retaining their specialized readable
+patterns. Per-build IDs and private-endpoint VNet shortening have separate
+lifecycles and are not stable service-scope hashes.
 
 VM resource names and OS computer names are distinct: the generic API supports
 a 64-character resource name, while Windows computer-name patterns have a

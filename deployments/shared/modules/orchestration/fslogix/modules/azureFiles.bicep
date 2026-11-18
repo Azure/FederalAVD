@@ -93,7 +93,7 @@ var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && private
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
 
-import { privateEndpointName } from '../../naming/naming.bicep'
+import { privateEndpointName } from '../../naming/internal.bicep'
 
 resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
   name: privateEndpointVnetName

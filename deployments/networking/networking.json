@@ -5,14 +5,150 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "8924692842590644706"
+      "version": "0.49.2.45890",
+      "templateHash": "13084805137274458318"
+    }
+  },
+  "definitions": {
+    "_1.namingConventionConfig": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "type": "array",
+          "allowedValues": [
+            "customToken1",
+            "customToken2",
+            "environment",
+            "freeform1",
+            "freeform2",
+            "location",
+            "none",
+            "purpose",
+            "resourceType",
+            "workload"
+          ],
+          "nullable": true
+        },
+        "delimiter": {
+          "type": "string",
+          "nullable": true
+        },
+        "workload": {
+          "type": "string",
+          "nullable": true
+        },
+        "environment": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken1": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken2": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform1": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform2": {
+          "type": "string",
+          "nullable": true
+        },
+        "resourceTypeCodes": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "nullable": true
+        },
+        "locationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "cpLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "vmsLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "imageManagementStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "secretsKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "encryptionKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineDiskNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNicNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "description": "Shared optional convention settings. Custom tokens can appear anywhere in components; freeform1/freeform2 remain supported aliases. Explicit resource-name patterns are not reformatted.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "namingConventionConfig": {
+      "$ref": "#/definitions/_1.namingConventionConfig",
+      "metadata": {
+        "description": "Optional shared convention properties, including customToken1/customToken2 and their legacy freeform aliases. Partial overrides are supported; unknown properties and wrong value types are rejected.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+        }
+      }
     }
   },
   "functions": [
     {
       "namespace": "_1",
       "members": {
+        "applyTypeFormat": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('rule').format, 'storage'), _1.stripSeps(parameters('value')), if(equals(parameters('rule').format, 'gallery'), replace(parameters('value'), '-', '_'), if(equals(parameters('rule').format, 'hyphen'), _1.kvSanitize(parameters('value')), if(equals(parameters('rule').format, 'literal'), parameters('value'), fail('Unsupported resource-type naming format.')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "buildCustomName": {
           "parameters": [
             {
@@ -59,7 +195,7 @@
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -109,15 +245,52 @@
           "metadata": {
             "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "formatName": {
+        "composeTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.formatTypeName(_1.cnv(parameters('convention').components, parameters('convention').delimiter, parameters('code'), if(empty(parameters('unique')), parameters('identifier'), format('{0}{1}{2}', parameters('identifier'), parameters('convention').delimiter, parameters('unique'))), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "formatTypeName": {
           "parameters": [
             {
               "type": "string",
-              "name": "name"
+              "name": "value"
             },
             {
               "type": "object",
@@ -126,11 +299,28 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('_1.namingPolicy').resourceTypes.keyVaults.lengthLimit), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('_1.namingPolicy').resourceTypes.functionApps.lengthLimit), parameters('name'))))]"
+            "value": "[if(or(coalesce(tryGet(parameters('rule'), 'preserveCase'), false()), equals(parameters('rule').format, 'literal')), _1.applyTypeFormat(parameters('value'), parameters('rule')), toLower(_1.applyTypeFormat(parameters('value'), parameters('rule'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "isNamingToken": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            }
+          ],
+          "output": {
+            "type": "bool",
+            "value": "[and(and(and(not(empty(parameters('value'))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(first(parameters('value'))))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(last(parameters('value'))))), empty(filter(map(range(0, length(parameters('value'))), lambda('i', toLower(substring(parameters('value'), lambdaVariables('i'), 1)))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789-_.', lambdaVariables('character')))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -148,7 +338,7 @@
           "metadata": {
             "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -169,7 +359,28 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "requireNamingToken": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "string",
+              "name": "label"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(_1.isNamingToken(parameters('value')), parameters('value'), fail(format('{0} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.', parameters('label'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -210,11 +421,11 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(contains(createArray('freeform1', 'customToken1'), parameters('comp')), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(contains(createArray('freeform2', 'customToken2'), parameters('comp')), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -227,12 +438,37 @@
           ],
           "output": {
             "type": "object",
-            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
+            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', map(coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), lambda('component', if(equals(lambdaVariables('component'), 'customToken1'), 'freeform1', if(equals(lambdaVariables('component'), 'customToken2'), 'freeform2', lambdaVariables('component'))))), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', _1.resolveCustomToken(parameters('convention'), 'customToken1', 'freeform1'), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', _1.resolveCustomToken(parameters('convention'), 'customToken2', 'freeform2'), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
           },
           "metadata": {
-            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
+            "description": "Resolves shared defaults, custom-token aliases and partial abbreviation overrides. Conflicting alias values fail; explicit empty delimiters and existing default-workload behavior are preserved.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolveCustomToken": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "preferred"
+            },
+            {
+              "type": "string",
+              "name": "legacy"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(and(and(not(equals(tryGet(parameters('convention'), parameters('preferred')), null())), not(equals(tryGet(parameters('convention'), parameters('legacy')), null()))), not(equals(parameters('convention')[parameters('preferred')], parameters('convention')[parameters('legacy')]))), fail(format('namingConvention.{0} and {1} are aliases and must agree when both are supplied.', parameters('preferred'), parameters('legacy'))), coalesce(coalesce(tryGet(parameters('convention'), parameters('preferred')), tryGet(parameters('convention'), parameters('legacy'))), ''))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -261,11 +497,48 @@
           ],
           "output": {
             "type": "string",
-            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+            "value": "[_1.resolvedTypeName(union(_1.validateConvention(parameters('convention'), not(empty(parameters('rule').purpose))), createObject('components', if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components))), if(empty(parameters('rule').type), createObject('format', 'literal', 'fragment', true()), union(variables('_1.namingPolicy').resourceTypes[parameters('rule').type], createObject('format', if(contains(createArray('keyVaults', 'computeGalleries'), parameters('rule').type), variables('_1.namingPolicy').resourceTypes[parameters('rule').type].format, 'literal'), 'preserveCase', true()))), if(empty(parameters('rule').type), '', _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('rule').type], 'Resource type abbreviation')), if(empty(parameters('region')), '', _1.requireNamingToken(parameters('region'), 'Location abbreviation')), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, if(empty(parameters('identifier')), '', _1.requireNamingToken(parameters('identifier'), 'Resource identifier')), parameters('unique')), '')]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolvedTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.validateTypeName(_1.composeTypeName(parameters('convention'), parameters('rule'), parameters('code'), parameters('region'), parameters('identifier'), parameters('unique')), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -294,7 +567,67 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "stripSeps": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "s"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[replace(replace(replace(parameters('s'), '-', ''), '_', ''), '.', '')]"
+          },
+          "metadata": {
+            "description": "Removes hyphens, underscores, and dots. Callers separately enforce case, length, uniqueness, and the remaining resource naming rules.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateConvention": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "bool",
+              "name": "requirePurpose"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[if(or(and(parameters('requirePurpose'), not(equals(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1))), greater(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1)), fail('Naming requires exactly one purpose component for resources with a purpose.'), if(empty(filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), fail('Naming requires at least one non-none component.'), if(not(empty(filter(parameters('convention').components, lambda('component', not(contains(createArray('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'), lambdaVariables('component'))))))), fail('Naming contains an unsupported naming-convention component.'), if(or(greater(length(parameters('convention').delimiter), 3), not(empty(filter(map(range(0, length(parameters('convention').delimiter)), lambda('i', substring(parameters('convention').delimiter, lambdaVariables('i'), 1))), lambda('character', not(contains('-_.', lambdaVariables('character')))))))), fail('Naming delimiter must be empty or contain at most three hyphens, underscores or dots.'), if(not(empty(filter(createArray('workload', 'environment', 'freeform1', 'freeform2'), lambda('component', and(and(contains(parameters('convention').components, lambdaVariables('component')), not(empty(parameters('convention')[lambdaVariables('component')]))), not(_1.isNamingToken(parameters('convention')[lambdaVariables('component')]))))))), fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.'), parameters('convention'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateTypeName": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "name"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(coalesce(tryGet(parameters('rule'), 'fragment'), false()), parameters('name'), if(empty(parameters('name')), fail('Generated name must not be empty.'), if(greater(length(parameters('name')), parameters('rule').lengthLimit), fail(format('Generated name exceeds the {0}-character limit. Shorten the identifier or naming-convention values.', parameters('rule').lengthLimit)), if(and(coalesce(tryGet(parameters('rule'), 'startWithLetter'), false()), not(contains('abcdefghijklmnopqrstuvwxyz', toLower(first(parameters('name')))))), fail('This resource type requires a name starting with a letter. Change the first selected component.'), if(and(coalesce(tryGet(parameters('rule'), 'noConsecutiveHyphens'), false()), contains(parameters('name'), '--')), fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.'), parameters('name'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         }
@@ -303,24 +636,6 @@
     {
       "namespace": "__bicep",
       "members": {
-        "legacyConvention": {
-          "parameters": [
-            {
-              "type": "bool",
-              "name": "resourceTypeAtEnd"
-            }
-          ],
-          "output": {
-            "type": "object",
-            "value": "[union(variables('_1.namingPolicy').defaults, createObject('components', if(parameters('resourceTypeAtEnd'), concat(filter(variables('_1.namingPolicy').defaults.components, lambda('component', not(equals(lambdaVariables('component'), 'resourceType')))), createArray('resourceType')), variables('_1.namingPolicy').defaults.components)))]"
-          },
-          "metadata": {
-            "description": "Adapts the legacy resource-type-at-end switch to the shared default convention without adding a deployment or changing its public parameter.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
         "regionAbbreviation": {
           "parameters": [
             {
@@ -339,7 +654,7 @@
           "metadata": {
             "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -371,9 +686,9 @@
             "value": "[_1.resolvedResourceName(_1.resolveConvention(parameters('convention')), variables('_1.namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
           },
           "metadata": {
-            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault or Function App formatting rule.",
+            "description": "Internal role adapter to the common naming engine. Roles supply purpose, workload exceptions and established casing/formatting; all actual resource names use the shared convention and type validators.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         }
@@ -463,11 +778,20 @@
         "description": "Optional. Enables RDP Shortpath for public networks using STUN/ICE. Deploys a NAT Gateway for cone-shaped NAT, adds AVD service bypass routes on NVA deployments, and adds an NSG rule allowing inbound UDP 3390 from Internet."
       }
     },
-    "nameConvResTypeAtEnd": {
-      "type": "bool",
-      "defaultValue": false,
+    "namingConvention": {
+      "$ref": "#/definitions/namingConventionConfig",
+      "defaultValue": {
+        "components": [
+          "resourceType",
+          "workload",
+          "purpose",
+          "location"
+        ],
+        "delimiter": "-",
+        "workload": "avd"
+      },
       "metadata": {
-        "description": "Optional. Determines if the resources should be named with the resource type at the end."
+        "description": "Optional. Shared naming convention for generated network resource names. Explicit resource group, VNet and subnet names remain unchanged."
       }
     },
     "nvaIPAddress": {
@@ -1195,13 +1519,12 @@
     "cloud": "[toLower(environment().name)]",
     "cloudSuffix": "[replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')]",
     "locations": "[if(startsWith(variables('cloud'), 'us'), variables('$fxv#0').other, variables('$fxv#1')[environment().name])]",
-    "locationAbbreviation": "[__bicep.regionAbbreviation(parameters('location'), environment().name)]",
+    "locationAbbreviation": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''), __bicep.regionAbbreviation(parameters('location'), environment().name))]",
     "recoveryServicesGeo": "[if(startsWith(variables('cloud'), 'us'), parameters('azureRecoveryServicesGeoCode'), variables('locations')[parameters('location')].recoveryServicesGeo)]",
-    "namingConvention": "[__bicep.legacyConvention(parameters('nameConvResTypeAtEnd'))]",
-    "natGatewayName": "[__bicep.resourceName(variables('namingConvention'), 'networkNatGateway', variables('locationAbbreviation'), '', '')]",
-    "publicIPName": "[__bicep.resourceName(variables('namingConvention'), 'networkPublicIP', variables('locationAbbreviation'), '', '')]",
-    "routeTableName": "[__bicep.resourceName(variables('namingConvention'), 'networkRouteTable', variables('locationAbbreviation'), '', '')]",
-    "nsgName": "[__bicep.resourceName(variables('namingConvention'), 'networkSecurityGroup', variables('locationAbbreviation'), '', '')]",
+    "natGatewayName": "[__bicep.resourceName(parameters('namingConvention'), 'networkNatGateway', variables('locationAbbreviation'), '', '')]",
+    "publicIPName": "[__bicep.resourceName(parameters('namingConvention'), 'networkPublicIP', variables('locationAbbreviation'), '', '')]",
+    "routeTableName": "[__bicep.resourceName(parameters('namingConvention'), 'networkRouteTable', variables('locationAbbreviation'), '', '')]",
+    "nsgName": "[__bicep.resourceName(parameters('namingConvention'), 'networkSecurityGroup', variables('locationAbbreviation'), '', '')]",
     "privateDnsZones_AzureVirtualDesktop": {
       "AzureCloud": "privatelink.wvd.microsoft.com",
       "AzureUSGovernment": "privatelink.wvd.azure.us"
@@ -2149,8 +2472,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "17912357300475645508"
+              "version": "0.49.2.45890",
+              "templateHash": "8964133074514929807"
             }
           },
           "parameters": {
@@ -2320,8 +2643,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "8853976165305831842"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12015431321016469171"
                     }
                   },
                   "parameters": {
@@ -2596,8 +2919,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "1456743040429825759"
+                              "version": "0.49.2.45890",
+                              "templateHash": "10745960818363242784"
                             }
                           },
                           "parameters": {
@@ -2690,8 +3013,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "1456743040429825759"
+                              "version": "0.49.2.45890",
+                              "templateHash": "10745960818363242784"
                             }
                           },
                           "parameters": {
@@ -2831,8 +3154,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "618425977677697218"
+              "version": "0.49.2.45890",
+              "templateHash": "9921101466887931396"
             }
           },
           "parameters": {
@@ -2895,8 +3218,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "17731635354050486200"
+                      "version": "0.49.2.45890",
+                      "templateHash": "14894433061634134215"
                     }
                   },
                   "parameters": {
@@ -2960,8 +3283,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "6356786979145766174"
+                      "version": "0.49.2.45890",
+                      "templateHash": "15476152480047961303"
                     }
                   },
                   "parameters": {
@@ -3002,8 +3325,8 @@
                           "metadata": {
                             "_generator": {
                               "name": "bicep",
-                              "version": "0.48.1.52935",
-                              "templateHash": "4320047789187130456"
+                              "version": "0.49.2.45890",
+                              "templateHash": "645209060002668122"
                             }
                           },
                           "parameters": {

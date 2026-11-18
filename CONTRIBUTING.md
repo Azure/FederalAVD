@@ -74,6 +74,10 @@ Read every skill that applies to the change, including overlapping workflows.
 
 ## Make a focused change
 
+For a new add-on, start with the [shared naming quick start](docs/naming-convention.md#add-on-developer-quick-start).
+Its expandable Automation Account and Function App examples include the typed convention
+parameter, target context, optional name overrides and complete resource-module calls.
+
 1. Trace the entry point, shared modules, callers, parameters, and outputs before
    editing. Prefer shared-module reuse for capabilities used by multiple solutions.
 2. Edit Bicep sources, not generated ARM JSON. Rebuild affected tracked ARM files,

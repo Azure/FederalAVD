@@ -1,12 +1,12 @@
 targetScope = 'subscription'
 
-import { functionAppNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames, namingConventionConfig } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
 
 param identifier string = 'inventory'
 param location string = 'eastus'
 param targetSubscriptionId string = subscription().subscriptionId
 param targetResourceGroupName string = 'rg-addons'
-param namingConvention object = {}
+param namingConvention namingConventionConfig = {}
 param functionAppNameOverride string = ''
 param storageAccountNameOverride string = ''
 param serverFarmId string

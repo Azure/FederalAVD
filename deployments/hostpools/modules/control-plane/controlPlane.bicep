@@ -51,7 +51,7 @@ resource hostPoolPrivateEndpointVirtualNetwork 'Microsoft.Network/virtualNetwork
 }
 
 var hostPoolVnetName = last(split(hostPoolPrivateEndpointVirtualNetworkResourceId, '/'))
-import { privateEndpointName } from '../../../shared/modules/orchestration/naming/naming.bicep'
+import { privateEndpointName } from '../../../shared/modules/orchestration/naming/internal.bicep'
 
 var hostPoolPrivateEndpointName = privateEndpointName(privateEndpointNameConv, hostPoolName, 'connection', hostPoolVnetName)
 var hostPoolPrivateEndpointNICName = privateEndpointName(privateEndpointNICNameConv, hostPoolName, 'connection', hostPoolVnetName)

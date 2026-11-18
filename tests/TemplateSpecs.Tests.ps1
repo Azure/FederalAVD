@@ -377,6 +377,32 @@ Describe 'Networking Template Spec form parameter contract' {
         $form.view.outputs.parameters.defaultRouting | Should -Match 'deploy\.defaultRouteType'
     }
 
+    It 'uses the shared typed convention instead of a resource-type-at-end boolean' {
+        ($template.parameters.PSObject.Properties.Name -contains 'nameConvResTypeAtEnd') | Should -Be $false
+        ($form.view.outputs.parameters.PSObject.Properties.Name -contains 'nameConvResTypeAtEnd') | Should -Be $false
+        $schema = $template.parameters.namingConvention
+        while ($schema.'$ref') {
+            $schema = $template.definitions.($schema.'$ref'.Split('/')[-1])
+        }
+        $schema.type | Should -Be 'object'
+        $schema.additionalProperties | Should -Be $false
+        $schema.properties.customToken1.type | Should -Be 'string'
+        $schema.properties.resourceTypeCodes.additionalProperties.type | Should -Be 'string'
+        $template.variables.namingConvention | Should -BeNullOrEmpty
+        ($template.functions.members.PSObject.Properties.Name -contains 'legacyConvention') | Should -Be $false
+        $layout = $deploymentSection.elements | Where-Object name -eq 'namingComponents'
+        $layout.type | Should -Be 'Microsoft.Common.DropDown'
+        @($layout.constraints.allowedValues).Count | Should -Be 2
+        $layout.defaultValue | Should -Be 'Resource type first (CAF-aligned)'
+        $orders = @($layout.constraints.allowedValues | ForEach-Object {
+            ,@($_.value | ConvertFrom-Json)
+        })
+        ($orders[0] -join ',') | Should -Be 'resourceType,workload,purpose,location'
+        ($orders[1] -join ',') | Should -Be 'workload,purpose,location,resourceType'
+        $form.view.outputs.parameters.namingConvention |
+            Should -Be "[if(steps('virtualNetwork').deployVnet, parse(concat('{`"components`":', steps('virtualNetwork').deploy.namingComponents, '}')), parse('{}'))]"
+    }
+
     It 'limits NAT creation to NAT routing or NVA bypass and public Shortpath' {
         $networkTemplate.variables.deployNatGateway |
             Should -Be "[or(equals(parameters('defaultRouting'), 'nat'), and(equals(parameters('defaultRouting'), 'nva'), or(parameters('includeAvdBypassRoutes'), parameters('rdpShortpathPublicNetworks'))))]"
@@ -634,6 +660,26 @@ Describe 'Template Spec naming conventions' {
             -LocationAbbreviation 'usw'
 
         $name | Should -Be 'ts-networking-usw'
+    }
+
+    It 'supports custom token aliases in publishing conventions' {
+        $convention = @{ customToken1 = 'org'; freeform1 = 'org'; customToken2 = 'x' }
+        $first = Get-ConventionCustomToken -Convention $convention -Index 1
+        $second = Get-ConventionCustomToken -Convention $convention -Index 2
+        $name = New-ConventionName -Components @('customToken1', 'purpose', 'customToken2', 'resourceType') `
+            -Delimiter '-' -ResourceTypeCode 'ts' -Purpose 'hostpool' -LocationAbbreviation 'use' `
+            -Freeform1 $first -Freeform2 $second
+        $name | Should -Be 'org-hostpool-x-ts'
+        (Get-ConventionCustomToken -Convention ([pscustomobject]@{ freeform1 = 'legacy' }) -Index 1) | Should -Be 'legacy'
+        (Get-ConventionCustomToken -Convention @{} -Index 2) | Should -Be ''
+        (Get-ConventionCustomToken -Convention @{ customToken1 = '' } -Index 1) | Should -Be ''
+    }
+
+    It 'rejects conflicting or non-string publishing token aliases' {
+        { Get-ConventionCustomToken -Convention @{ customToken1 = 'new'; freeform1 = 'old' } -Index 1 } |
+            Should -Throw -ExpectedMessage '*aliases and must agree*'
+        { Get-ConventionCustomToken -Convention @{ customToken2 = 42 } -Index 2 } |
+            Should -Throw -ExpectedMessage '*must be strings*'
     }
 
     It 'accepts hashtable and PSCustomObject property sources' {

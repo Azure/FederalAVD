@@ -44,6 +44,18 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 - How to align naming across hostpool, sharedServices, imageManagement, and add-ons
 - Named examples for six common conventions
 
+The parameter uses the shared `namingConventionConfig` type; `{}` and partial
+overrides are supported. Prefer `customToken1`/`customToken2` for static custom
+slots. Existing `freeform1`/`freeform2` properties and component names remain
+aliases; if both spellings are supplied, their values must agree. See the
+[add-on quick start](naming-convention.md#add-on-developer-quick-start) for a
+complete naming-only Bicep example. No named preset selector is currently provided.
+
+Networking also accepts this typed object. Its former `nameConvResTypeAtEnd` boolean
+has been removed; see the [Networking migration example](../deployments/networking/README.md#namingconvention)
+for the equivalent resource-type-last component order. Explicit network resource group,
+VNet and subnet names remain explicit.
+
 ---
 
 ## Standard Host-Pool Locations

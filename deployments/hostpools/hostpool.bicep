@@ -4,7 +4,7 @@ import { publicNetworkAccessMode } from '../shared/modules/orchestration/network
 import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
-import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
+import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -94,7 +94,7 @@ param index int = -1
 // Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the
 // defaults.
 @description('Optional. Shared naming-convention overrides; omitted properties retain defaults. Include purpose to distinguish same-type resources. Abbreviations may be supplied separately.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -1582,7 +1582,7 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
       hpNamingConvention: string({
         components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
         delimiter: namingConvention.?delimiter ?? '-'
-        workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+        workload: !empty(namingConvention.?workload ?? '') ? namingConvention.?workload ?? 'avd' : 'avd'
         vmsLocationAbbreviation: naming.vmLocationAbbreviation
       })
     })

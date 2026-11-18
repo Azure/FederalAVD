@@ -2,7 +2,7 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
-import { fslogixNames } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { fslogixNames, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string
@@ -11,7 +11,7 @@ param location string
 param identifier string = 'fslogix'
 
 @description('Optional. Naming convention used to derive resource names when explicit overrides are not supplied.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'

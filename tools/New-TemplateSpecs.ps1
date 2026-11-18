@@ -67,8 +67,9 @@ file path or JSON string. The parameter declares these defaults:
   workload = 'avd'
 
 The components array must include purpose so each Template Spec has a distinct name.
-Other supported component values are environment, freeform1, freeform2, and none.
-Optional properties include environment, freeform1, freeform2, locationAbbreviation,
+Other supported component values are environment, customToken1, customToken2, and none.
+The freeform1/freeform2 names remain aliases; conflicting alias values are rejected.
+Optional properties include environment, customToken1, customToken2, locationAbbreviation,
 and resourceTypeCodes (for example @{ resourceGroups = 'rg'; templateSpecs = 'ts' }).
 Missing properties use defaults; empty component values are omitted from names.
 This controls publishing names only, not the naming of resources later deployed
@@ -174,6 +175,30 @@ function Get-ObjectPropertyValue {
     return $DefaultValue
 }
 
+function Get-ConventionCustomToken {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Convention,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet(1, 2)]
+        [int]$Index
+    )
+
+    $preferred = Get-ObjectPropertyValue -InputObject $Convention -PropertyName "customToken$Index"
+    $legacy = Get-ObjectPropertyValue -InputObject $Convention -PropertyName "freeform$Index"
+    foreach ($value in @($preferred, $legacy)) {
+        if ($null -ne $value -and $value -isnot [string]) {
+            throw "NamingConvention customToken$Index and freeform$Index must be strings."
+        }
+    }
+    if ($null -ne $preferred -and $null -ne $legacy -and $preferred -cne $legacy) {
+        throw "NamingConvention.customToken$Index and freeform$Index are aliases and must agree when both are supplied."
+    }
+    if ($null -ne $preferred) { return $preferred }
+    if ($null -ne $legacy) { return $legacy }
+    return ''
+}
+
 function New-ConventionName {
     param (
         [Parameter(Mandatory = $true)]
@@ -205,6 +230,8 @@ function New-ConventionName {
         environment = $Environment
         freeform1 = $Freeform1
         freeform2 = $Freeform2
+        customToken1 = $Freeform1
+        customToken2 = $Freeform2
     }
 
     $nameParts = foreach ($component in $Components) {
@@ -539,7 +566,7 @@ if ($null -eq $locationAbbr) {
 }
 
 $components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue @('resourceType', 'workload', 'purpose', 'location'))
-$allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none')
+$allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'customToken1', 'customToken2', 'freeform1', 'freeform2', 'none')
 $invalidComponents = @($components | Where-Object { $_ -notin $allowedComponents })
 if ($invalidComponents.Count -gt 0) {
     throw "NamingConvention.components contains unsupported values: $($invalidComponents -join ', ')."
@@ -551,8 +578,8 @@ if ($components -notcontains 'purpose') {
 $delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue '-')
 $workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue 'avd')
 $environment = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'environment' -DefaultValue '')
-$freeform1 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform1' -DefaultValue '')
-$freeform2 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform2' -DefaultValue '')
+$freeform1 = Get-ConventionCustomToken -Convention $NamingConvention -Index 1
+$freeform2 = Get-ConventionCustomToken -Convention $NamingConvention -Index 2
 $locationAbbreviationOverride = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'locationAbbreviation' -DefaultValue '')
 if (-not [string]::IsNullOrWhiteSpace($locationAbbreviationOverride)) {
     $locationAbbr = $locationAbbreviationOverride

@@ -5,7 +5,7 @@ import { artifactCustomizationType } from '../shared/modules/resourceModules/typ
 import { vmApplicationAssignmentType } from '../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
-import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
+import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 
 type scalingTimeType = {
   hour: int
@@ -48,7 +48,7 @@ param location string
 param controlPlaneLocation string = location
 
 @description('Optional. Naming convention shared with the standard host-pool deployment.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -860,7 +860,7 @@ var hostPoolCustomTags = union(
     hpNamingConvention: string({
       components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
       delimiter: namingConvention.?delimiter ?? '-'
-      workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+      workload: !empty(namingConvention.?workload ?? '') ? namingConvention.?workload ?? 'avd' : 'avd'
       vmsLocationAbbreviation: naming.vmLocationAbbreviation
     })
   },

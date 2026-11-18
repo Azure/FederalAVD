@@ -8,7 +8,7 @@ BeforeAll {
     $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
     $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
     $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
-    $namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
+    $namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep'
     $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
     $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
     $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'

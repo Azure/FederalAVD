@@ -404,8 +404,42 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 The authoritative naming policy and executable deployment naming logic are native
 Bicep behind the single
 [naming.bicep entry point](../deployments/shared/modules/orchestration/naming/naming.bicep).
-All deployment families consume it. Host pools call its `hostPoolNames` bundle
-directly; standalone FSLogix calls `fslogixNames`, without a host-pool dependency.
+The public interface has six functions: `resourceNameForType`, `functionAppNames`,
+`hostPoolNames`, `fslogixNames`, `sharedServicesNames` and `imageManagementNames`.
+The shared sealed `namingConventionConfig` type defines optional settings and
+supported component names. `customToken1`/`customToken2` are position-neutral
+names for the existing freeform slots; old property and component spellings remain
+aliases. Supplying conflicting alias values fails. No named preset selector is
+provided until distinct layouts are agreed.
+Networking accepts this same typed object. Its former resource-type-at-end boolean
+and translation helper have been removed; component order selects the layout.
+Equivalent first/last component orders retain its generated names, while explicit
+resource group, VNet and subnet names remain caller-owned.
+Host pools, standalone FSLogix, Shared Services and Image Management call their
+bundles directly; the library owns their location lookup and uniqueness seeds.
+Policy data, role composition and resource-module helpers live in
+[internal.bicep](../deployments/shared/modules/orchestration/naming/internal.bicep);
+its Bicep exports support repository-internal composition, not a public extension
+contract. Internal roles are thin adapters to the same composer, formatter and
+convention/type validators used by `resourceNameForType`. They retain explicit
+role-specific purposes, casing/delimiters and workload exceptions; adapters do not
+implement another naming engine. A new add-on can call the public generic API or
+Function App bundle directly, without adding a role or adapter file. See the
+[copyable quick start](naming-convention.md#add-on-developer-quick-start).
+Stable resource hashes use one recipe: lowercased subscription, owning
+resource group and full location. Cloud selects the region-abbreviation map,
+but cloud, purpose, host-pool identifier, resource type and convention are not
+hash inputs. Shared `sec` and `enc` vaults share a
+suffix; their names do not depend on the consuming host pool. Image Management
+and generated FSLogix storage prefixes use the same scope recipe with their
+specialized readable patterns. Per-run build IDs, operation IDs and endpoint
+shortening remain separate lifecycle identifiers.
+This intentionally changes older generated hash-based names; there is no
+automatic rename, resource adoption or data migration. Existing-resource IDs and
+supported explicit names take precedence. Review the
+[migration guidance](naming-convention.md#one-scope-one-hash) before redeployment.
+Key Vault and Function App generation fails on overlength names instead of
+silently truncating; explicit overrides are resolved first.
 Standard host pools take an explicit `virtualMachinesLocation`, defaulting to
 `controlPlaneLocation`.
 Replacer uses the common Function App naming bundle, not a separate naming engine.
@@ -419,9 +453,8 @@ adopted-resource identities take precedence. See the
 [shared naming contract and review](../deployments/shared/modules/orchestration/naming/README.md#portal-and-deployment-boundary)
 for ownership, naming constraints and the identifier-based API for new
 add-ons. The generic API covers all 36 convention-named abbreviation types and
-budgets readable identifiers around the configured stable suffix (13 characters,
-or six for 24-character Key Vault names). Resource groups use subscription-scoped
-seeds; VM resource names are distinct from Windows computer names.
+uses six-character hashes for globally named types and no hash for scope-local
+types. VM resource names are distinct from Windows computer names.
 
 The diagram below highlights how the resource groups are created based on the parameters.
 
@@ -576,7 +609,8 @@ The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) 
 
 ### Implementation location
 
-The naming implementation lives in [naming.bicep](../deployments/shared/modules/orchestration/naming/naming.bicep).
+The public naming interface lives in [naming.bicep](../deployments/shared/modules/orchestration/naming/naming.bicep);
+its implementation lives in [internal.bicep](../deployments/shared/modules/orchestration/naming/internal.bicep).
 Standard and automated host pools and the dedicated PoC import `hostPoolNames`;
 standalone FSLogix storage imports the focused `fslogixNames` bundle.
 AVD Shared Services, Image Management and other deployment families consume the
