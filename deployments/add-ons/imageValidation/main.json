@@ -6,87 +6,12 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4653786252589465211"
+      "templateHash": "5865579439569362478"
     },
-    "name": "Image validation infrastructure",
-    "description": "Deploys private Windows PowerShell timer Function infrastructure. Validation code and workload permissions are supplied by the operator."
+    "name": "Image Validation Add-On",
+    "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
   },
   "definitions": {
-    "_1.functionAppNameOverrides": {
-      "type": "object",
-      "properties": {
-        "functionAppName": {
-          "type": "string",
-          "nullable": true
-        },
-        "storageAccountName": {
-          "type": "string",
-          "nullable": true
-        },
-        "storageEncryptionIdentityName": {
-          "type": "string",
-          "nullable": true
-        }
-      },
-      "metadata": {
-        "description": "Optional explicit names applied before generating per-application defaults, allowing an override to bypass an overlength generated name. Empty values use the common naming rules.",
-        "__bicep_imported_from!": {
-          "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-        }
-      }
-    },
-    "_1.functionAppNamingResult": {
-      "type": "object",
-      "properties": {
-        "functionAppName": {
-          "type": "string"
-        },
-        "storageAccountName": {
-          "type": "string"
-        },
-        "applicationInsightsName": {
-          "type": "string"
-        },
-        "storageEncryptionIdentityName": {
-          "type": "string"
-        },
-        "privateEndpointNameConv": {
-          "type": "string"
-        },
-        "privateEndpointNICNameConv": {
-          "type": "string"
-        }
-      },
-      "metadata": {
-        "description": "Per-application Function App, storage, Insights, storage-CMK identity names and private-endpoint patterns. Shared hosting plans are named separately by their owner.",
-        "__bicep_imported_from!": {
-          "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-        }
-      }
-    },
-    "_1.namingContext": {
-      "type": "object",
-      "properties": {
-        "subscriptionId": {
-          "type": "string"
-        },
-        "resourceGroupName": {
-          "type": "string"
-        },
-        "location": {
-          "type": "string"
-        },
-        "cloud": {
-          "type": "string"
-        }
-      },
-      "metadata": {
-        "description": "Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group, location and cloud. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.",
-        "__bicep_imported_from!": {
-          "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-        }
-      }
-    },
     "artifactCustomizationType": {
       "type": "object",
       "properties": {
@@ -125,680 +50,41 @@
       }
     }
   },
-  "functions": [
-    {
-      "namespace": "_1",
-      "members": {
-        "buildCustomName": {
-          "parameters": [
-            {
-              "type": "array",
-              "name": "components"
-            },
-            {
-              "type": "string",
-              "name": "delimiter"
-            },
-            {
-              "type": "string",
-              "name": "rtCode"
-            },
-            {
-              "type": "string",
-              "name": "component"
-            },
-            {
-              "type": "string",
-              "name": "loc"
-            },
-            {
-              "type": "string",
-              "name": "ff1"
-            },
-            {
-              "type": "string",
-              "name": "env"
-            },
-            {
-              "type": "string",
-              "name": "ff2"
-            },
-            {
-              "type": "string",
-              "name": "workload"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[join(filter(map(parameters('components'), lambda('comp', _1.resolveComponent(lambdaVariables('comp'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload')))), lambda('s', not(empty(lambdaVariables('s'))))), parameters('delimiter'))]"
-          },
-          "metadata": {
-            "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "canonicalNamingCloud": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "cloud"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(equals(toLower(parameters('cloud')), 'azurecloud'), 'AzureCloud', if(equals(toLower(parameters('cloud')), 'azureusgovernment'), 'AzureUSGovernment', if(startsWith(toLower(parameters('cloud')), 'us'), parameters('cloud'), fail('Identifier-based naming supports AzureCloud, AzureUSGovernment and US-prefixed air-gapped cloud environments.'))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "cnv": {
-          "parameters": [
-            {
-              "type": "array",
-              "name": "components"
-            },
-            {
-              "type": "string",
-              "name": "delimiter"
-            },
-            {
-              "type": "string",
-              "name": "rtCode"
-            },
-            {
-              "type": "string",
-              "name": "component"
-            },
-            {
-              "type": "string",
-              "name": "loc"
-            },
-            {
-              "type": "string",
-              "name": "ff1"
-            },
-            {
-              "type": "string",
-              "name": "env"
-            },
-            {
-              "type": "string",
-              "name": "ff2"
-            },
-            {
-              "type": "string",
-              "name": "workload"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.buildCustomName(filter(parameters('components'), lambda('s', not(equals(lambdaVariables('s'), 'none')))), parameters('delimiter'), parameters('rtCode'), parameters('component'), parameters('loc'), parameters('ff1'), parameters('env'), parameters('ff2'), parameters('workload'))]"
-          },
-          "metadata": {
-            "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "composeTypeName": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "type": "object",
-              "name": "rule"
-            },
-            {
-              "type": "string",
-              "name": "code"
-            },
-            {
-              "type": "string",
-              "name": "region"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "type": "string",
-              "name": "unique"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.formatTypeName(_1.cnv(parameters('convention').components, parameters('convention').delimiter, parameters('code'), if(empty(parameters('unique')), parameters('identifier'), format('{0}{1}{2}', parameters('identifier'), parameters('convention').delimiter, parameters('unique'))), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "formatTypeName": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "value"
-            },
-            {
-              "type": "object",
-              "name": "rule"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[toLower(if(equals(parameters('rule').format, 'storage'), _1.stripSeps(parameters('value')), if(equals(parameters('rule').format, 'gallery'), replace(parameters('value'), '-', '_'), if(equals(parameters('rule').format, 'hyphen'), _1.kvSanitize(parameters('value')), fail('Unsupported resource-type naming format.')))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "isNamingToken": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "value"
-            }
-          ],
-          "output": {
-            "type": "bool",
-            "value": "[and(and(and(not(empty(parameters('value'))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(first(parameters('value'))))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(last(parameters('value'))))), empty(filter(map(range(0, length(parameters('value'))), lambda('i', toLower(substring(parameters('value'), lambdaVariables('i'), 1)))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789-_.', lambdaVariables('character')))))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "kvSanitize": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "s"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[replace(replace(parameters('s'), '_', '-'), '.', '-')]"
-          },
-          "metadata": {
-            "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "namePattern": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "pattern"
-            },
-            {
-              "type": "object",
-              "name": "context"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.render(variables('namingPolicy').patterns[parameters('pattern')], union(createObject('delimiter', variables('namingPolicy').defaults.delimiter), parameters('context')))]"
-          },
-          "metadata": {
-            "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "privateEndpointNicPattern": {
-          "parameters": [
-            {
-              "type": "bool",
-              "name": "first"
-            },
-            {
-              "type": "string",
-              "name": "privateEndpointCode"
-            },
-            {
-              "type": "string",
-              "name": "networkInterfaceCode"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.namePattern(if(parameters('first'), 'privateEndpointNicFirst', 'privateEndpointNicLast'), createObject('networkInterfaces', parameters('networkInterfaceCode'), 'endpoint', _1.privateEndpointPattern(parameters('first'), parameters('privateEndpointCode'))))]"
-          },
-          "metadata": {
-            "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "privateEndpointPattern": {
-          "parameters": [
-            {
-              "type": "bool",
-              "name": "first"
-            },
-            {
-              "type": "string",
-              "name": "privateEndpointCode"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.namePattern(if(parameters('first'), 'privateEndpointFirst', 'privateEndpointLast'), createObject('privateEndpoints', parameters('privateEndpointCode')))]"
-          },
-          "metadata": {
-            "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "regionAbbreviation": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "region"
-            },
-            {
-              "type": "string",
-              "name": "cloud"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[variables('_1.locationDefinitions')[if(startsWith(toLower(parameters('cloud')), 'us'), 'other', parameters('cloud'))][if(startsWith(toLower(parameters('cloud')), 'us'), substring(parameters('region'), 5, max(sub(length(parameters('region')), 5), 0)), parameters('region'))].abbreviation]"
-          },
-          "metadata": {
-            "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "render": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "pattern"
-            },
-            {
-              "type": "object",
-              "name": "context"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[reduce(items(parameters('context')), parameters('pattern'), lambda('result', 'item', replace(lambdaVariables('result'), format('{{{0}}}', lambdaVariables('item').key), string(lambdaVariables('item').value))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "requireNamingToken": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "value"
-            },
-            {
-              "type": "string",
-              "name": "label"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(_1.isNamingToken(parameters('value')), parameters('value'), fail(format('{0} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.', parameters('label'))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resolveComponent": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "comp"
-            },
-            {
-              "type": "string",
-              "name": "rtCode"
-            },
-            {
-              "type": "string",
-              "name": "component"
-            },
-            {
-              "type": "string",
-              "name": "loc"
-            },
-            {
-              "type": "string",
-              "name": "ff1"
-            },
-            {
-              "type": "string",
-              "name": "env"
-            },
-            {
-              "type": "string",
-              "name": "ff2"
-            },
-            {
-              "type": "string",
-              "name": "workload"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resolveConvention": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            }
-          ],
-          "output": {
-            "type": "object",
-            "value": "[union(variables('namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
-          },
-          "metadata": {
-            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resolvedTypeName": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "type": "object",
-              "name": "rule"
-            },
-            {
-              "type": "string",
-              "name": "code"
-            },
-            {
-              "type": "string",
-              "name": "region"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "type": "string",
-              "name": "unique"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.validateTypeName(_1.composeTypeName(parameters('convention'), parameters('rule'), parameters('code'), parameters('region'), parameters('identifier'), parameters('unique')), parameters('rule'))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resourceTypeFirst": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            }
-          ],
-          "output": {
-            "type": "bool",
-            "value": "[or(empty(filter(_1.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), not(equals(last(filter(_1.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), 'resourceType')))]"
-          },
-          "metadata": {
-            "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "scopedTypeName": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "type": "string",
-              "name": "resourceType"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "$ref": "#/definitions/_1.namingContext",
-              "name": "context"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(not(contains(variables('namingPolicy').resourceTypes, parameters('resourceType'))), fail('Unsupported identifier-based resource type. Use a resource type registered in namingPolicy.resourceTypes.'), _1.resolvedTypeName(parameters('convention'), variables('namingPolicy').resourceTypes[parameters('resourceType')], _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('resourceType')], 'Resource type abbreviation'), _1.typeLocationAbbreviation(parameters('convention'), parameters('context')), _1.requireNamingToken(parameters('identifier'), 'Add-on identifier'), if(coalesce(tryGet(variables('namingPolicy').resourceTypes[parameters('resourceType')], 'globallyUnique'), false()), take(uniqueString(toLower(parameters('context').subscriptionId), toLower(parameters('context').resourceGroupName), toLower(parameters('context').location), toLower(parameters('context').cloud), toLower(parameters('identifier'))), coalesce(tryGet(variables('namingPolicy').resourceTypes[parameters('resourceType')], 'uniqueLength'), variables('namingPolicy').limits.defaultUniqueLength)), '')))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "stripSeps": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "s"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[replace(replace(replace(parameters('s'), '-', ''), '_', ''), '.', '')]"
-          },
-          "metadata": {
-            "description": "Removes hyphens, underscores, and dots. Callers separately enforce case, length, uniqueness, and the remaining resource naming rules.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "typeLocationAbbreviation": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "$ref": "#/definitions/_1.namingContext",
-              "name": "context"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.requireNamingToken(if(not(empty(coalesce(tryGet(parameters('convention'), 'locationAbbreviation'), ''))), parameters('convention').locationAbbreviation, if(not(empty(coalesce(tryGet(parameters('convention'), 'vmsLocationAbbreviation'), ''))), parameters('convention').vmsLocationAbbreviation, _1.regionAbbreviation(toLower(parameters('context').location), parameters('context').cloud))), 'Location abbreviation')]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "validateNamingContext": {
-          "parameters": [
-            {
-              "$ref": "#/definitions/_1.namingContext",
-              "name": "context"
-            },
-            {
-              "type": "string",
-              "name": "resourceType"
-            }
-          ],
-          "output": {
-            "$ref": "#/definitions/_1.namingContext",
-            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "validateTypeConvention": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            }
-          ],
-          "output": {
-            "type": "object",
-            "value": "[if(not(equals(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1)), fail('Identifier-based naming requires exactly one purpose component so the identifier cannot be omitted.'), if(not(empty(filter(parameters('convention').components, lambda('component', not(contains(createArray('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'), lambdaVariables('component'))))))), fail('Identifier-based naming contains an unsupported naming-convention component.'), if(or(greater(length(parameters('convention').delimiter), 3), not(empty(filter(map(range(0, length(parameters('convention').delimiter)), lambda('i', substring(parameters('convention').delimiter, lambdaVariables('i'), 1))), lambda('character', not(contains('-_.', lambdaVariables('character')))))))), fail('Identifier-based naming delimiter must be empty or contain at most three hyphens, underscores or dots.'), if(not(empty(filter(createArray('workload', 'environment', 'freeform1', 'freeform2'), lambda('component', and(and(contains(parameters('convention').components, lambdaVariables('component')), not(empty(parameters('convention')[lambdaVariables('component')]))), not(_1.isNamingToken(parameters('convention')[lambdaVariables('component')]))))))), fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.'), parameters('convention')))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "validateTypeName": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "name"
-            },
-            {
-              "type": "object",
-              "name": "rule"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(greater(length(parameters('name')), parameters('rule').lengthLimit), fail(format('Generated name exceeds the {0}-character limit. Shorten the identifier or naming-convention values.', parameters('rule').lengthLimit)), if(and(coalesce(tryGet(parameters('rule'), 'startWithLetter'), false()), not(contains('abcdefghijklmnopqrstuvwxyz', first(parameters('name'))))), fail('This resource type requires a name starting with a letter. Change the first selected component.'), if(and(coalesce(tryGet(parameters('rule'), 'noConsecutiveHyphens'), false()), contains(parameters('name'), '--')), fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.'), parameters('name'))))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        }
+  "parameters": {
+    "applicationInsightsName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 260,
+      "metadata": {
+        "description": "Required. Complete name for the Application Insights resource."
       }
     },
-    {
-      "namespace": "__bicep",
-      "members": {
-        "functionAppNames": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "$ref": "#/definitions/_1.namingContext",
-              "name": "context"
-            },
-            {
-              "$ref": "#/definitions/_1.functionAppNameOverrides",
-              "name": "overrides"
-            }
-          ],
-          "output": {
-            "$ref": "#/definitions/_1.functionAppNamingResult",
-            "value": {
-              "functionAppName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'functionAppName'), ''))), coalesce(tryGet(parameters('overrides'), 'functionAppName'), ''), __bicep.resourceNameForType(parameters('convention'), 'functionApps', parameters('identifier'), parameters('context')))]",
-              "storageAccountName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'storageAccountName'), ''))), toLower(coalesce(tryGet(parameters('overrides'), 'storageAccountName'), '')), __bicep.resourceNameForType(parameters('convention'), 'storageAccounts', parameters('identifier'), parameters('context')))]",
-              "applicationInsightsName": "[__bicep.resourceNameForType(parameters('convention'), 'applicationInsights', parameters('identifier'), parameters('context'))]",
-              "storageEncryptionIdentityName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'storageEncryptionIdentityName'), ''))), coalesce(tryGet(parameters('overrides'), 'storageEncryptionIdentityName'), ''), __bicep.resourceNameForType(parameters('convention'), 'userAssignedIdentities', format('{0}-storage-cmk', parameters('identifier')), parameters('context')))]",
-              "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.requireNamingToken(_1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'))]",
-              "privateEndpointNICNameConv": "[_1.privateEndpointNicPattern(_1.resourceTypeFirst(parameters('convention')), _1.requireNamingToken(_1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'), _1.requireNamingToken(_1.resolveConvention(parameters('convention')).resourceTypeCodes.networkInterfaces, 'Network interface abbreviation'))]"
-            }
-          },
-          "metadata": {
-            "description": "Names per-application Function App infrastructure with common explicit overrides. App and storage share a hash; Insights and the storage-CMK identity retain the purpose and region without a hash. Hosting plans have separate ownership.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resourceNameForType": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "type": "string",
-              "name": "resourceType"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "$ref": "#/definitions/_1.namingContext",
-              "name": "context"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.scopedTypeName(_1.validateTypeConvention(_1.resolveConvention(parameters('convention'))), parameters('resourceType'), parameters('identifier'), _1.validateNamingContext(parameters('context'), parameters('resourceType')))]"
-          },
-          "metadata": {
-            "description": "Names a supported resource type from an identifier and target context. Globally named types share an application-scoped hash; other types have no hash. All retain the full formatted identifier and fail if overlength.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        }
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 40,
+      "metadata": {
+        "description": "Optional. The name for a new App Service plan. Ignored when using an existing plan ID."
       }
-    }
-  ],
-  "parameters": {
-    "appServicePlanNameOverride": {
+    },
+    "appServicePlanSku": {
+      "type": "string",
+      "defaultValue": "P0v3",
+      "allowedValues": [
+        "P0v3",
+        "P1v3",
+        "P2v3",
+        "P3v3"
+      ],
+      "metadata": {
+        "description": "Optional. The SKU for a new App Service plan. Ignored when using an existing plan ID."
+      }
+    },
+    "appServicePlanResourceId": {
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Optional. Complete name override for a new App Service plan. Ignored when using an existing plan ID."
+        "description": "Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan."
       }
     },
     "artifactsContainerUri": {
@@ -868,6 +154,14 @@
         "description": "Optional. Existing disk encryption set resource ID for the validation VM."
       }
     },
+    "diskName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "metadata": {
+        "description": "Required. Complete name for the validation VM disk."
+      }
+    },
     "enableAcceleratedNetworking": {
       "type": "bool",
       "defaultValue": true,
@@ -882,21 +176,6 @@
         "description": "Optional. Enable encryption at host for the validation VM."
       }
     },
-    "encryptionKeyVaultNameOverride": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 24,
-      "metadata": {
-        "description": "Optional. Complete name override for the new storage encryption Key Vault."
-      }
-    },
-    "existingAppServicePlanResourceId": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Existing same-region Windows Dedicated App Service plan ID. Empty creates a dedicated PremiumV3_P0v3 plan."
-      }
-    },
     "functionAppDelegatedSubnetResourceId": {
       "type": "string",
       "defaultValue": "",
@@ -904,27 +183,12 @@
         "description": "Required for private mode. Existing Microsoft.Web/serverFarms-delegated integration subnet in the app region, separate from the endpoint subnet."
       }
     },
-    "functionAppNameOverride": {
+    "functionAppName": {
       "type": "string",
-      "defaultValue": "",
+      "minLength": 2,
       "maxLength": 60,
       "metadata": {
-        "description": "Optional. Complete Function App name override."
-      }
-    },
-    "hibernationEnabled": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Optional. Enable hibernation for the validation VM."
-      }
-    },
-    "identifier": {
-      "type": "string",
-      "defaultValue": "iv",
-      "minLength": 1,
-      "metadata": {
-        "description": "Optional. Short add-on identifier used by the centralized naming policy. Use distinct identifiers for independent instances."
+        "description": "Required. Complete Function App name."
       }
     },
     "imageLicenseType": {
@@ -943,6 +207,21 @@
       "minLength": 1,
       "metadata": {
         "description": "Required. Existing image version resource ID under imageDefinitionResourceId for the validation VM."
+      }
+    },
+    "integrityMonitoring": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable hardware integrity monitoring for the validation VM."
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 24,
+      "metadata": {
+        "description": "Required. Complete name for the credentials Key Vault."
       }
     },
     "keyVaultResourceId": {
@@ -966,11 +245,12 @@
         "description": "Optional. Existing workspace ID. Nonempty enables Application Insights and FunctionAppLogs diagnostics."
       }
     },
-    "namingConvention": {
-      "type": "object",
-      "defaultValue": {},
+    "networkInterfaceName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
       "metadata": {
-        "description": "Optional. Shared naming convention overrides. Empty uses the centralized FederalAVD defaults."
+        "description": "Required. Complete name for the validation VM network interface."
       }
     },
     "privateEndpoint": {
@@ -1001,11 +281,12 @@
         "description": "Required. Available static IPv4 address in the validation VM subnet."
       }
     },
-    "resourceGroupNameOverride": {
+    "resourceGroupName": {
       "type": "string",
-      "defaultValue": "",
+      "minLength": 1,
+      "maxLength": 90,
       "metadata": {
-        "description": "Optional. Complete resource group name override. The deployment manages this group."
+        "description": "Required. Complete resource group name. The deployment manages this group."
       }
     },
     "schedule": {
@@ -1015,7 +296,7 @@
         "description": "Required. Timer schedule in six-field Functions NCRONTAB format or a supported app-setting reference."
       }
     },
-    "secureBootEnabled": {
+    "secureBoot": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
@@ -1027,18 +308,19 @@
       "defaultValue": "TrustedLaunch",
       "allowedValues": [
         "TrustedLaunch",
-        "ConfidentialVM"
+        "ConfidentialVM",
+        "Standard"
       ],
       "metadata": {
         "description": "Optional. Security type for the validation VM."
       }
     },
-    "storageAccountNameOverride": {
+    "storageAccountName": {
       "type": "string",
-      "defaultValue": "",
+      "minLength": 3,
       "maxLength": 24,
       "metadata": {
-        "description": "Optional. Complete runtime storage name override, also useful when generated storage names exceed 24 characters."
+        "description": "Required. Complete runtime storage name, also useful when generated storage names exceed 24 characters."
       }
     },
     "subnetResourceId": {
@@ -1055,11 +337,20 @@
         "description": "Optional. Tags applied to all resources that support tags."
       }
     },
-    "userAssignedIdentityNameOverride": {
+    "templateSpecName": {
       "type": "string",
-      "defaultValue": "",
+      "minLength": 1,
+      "maxLength": 90,
       "metadata": {
-        "description": "Optional. Complete name override for the Function App identity."
+        "description": "Required. Complete name for the template spec."
+      }
+    },
+    "userAssignedIdentityName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "metadata": {
+        "description": "Required. Complete name for the Function App identity."
       }
     },
     "userAssignedIdentityResourceIds": {
@@ -1079,14 +370,21 @@
         "description": "Optional. Customizations applied to the validation VM."
       }
     },
-    "virtualMachineSize": {
+    "virtualMachineName": {
       "type": "string",
       "minLength": 1,
+      "maxLength": 15,
       "metadata": {
-        "description": "Required. Windows VM size supported by the selected image and region, including accelerated networking."
+        "description": "Required. The name for the validation VM."
       }
     },
-    "vTpmEnabled": {
+    "virtualMachineSize": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. The size of the virtual machine supported by the selected image and region."
+      }
+    },
+    "vTpm": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
@@ -1096,844 +394,19 @@
   },
   "variables": {
     "$fxv#0": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, please uncomment the line below.\r\n    # 'Az' = '7.*'\r\n}",
-    "$fxv#1": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n# Get an access token for Azure resources\r\n$AzureManagementAccessToken = (Invoke-RestMethod `\r\n    -Headers @{Metadata=\"true\"} `\r\n    -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/galleries/' + $env:ComputeGalleryName + '/images/' + $env:ComputeGalleryImageName + '/versions?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\n# Get virtual machine\r\n$VirtualMachine = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')\r\n\r\n\r\nif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Deleted existing virtual machine'\r\n\r\n\t# Deploy the virtual machine to run the tool\r\n\t$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n\t$Body = @{\r\n\t\tproperties = @{\r\n\t\t\tmode = 'Incremental'\r\n\t\t\tparameters = @{\r\n\t\t\t\tartifactsContainerUri = @{ value = $env:artifactsContainerUri }\r\n\t\t\t\tartifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }\r\n\t\t\t\tbootDiagnosticsEnabled = @{ value = $env:bootDiagnosticsEnabled }\r\n\t\t\t\tdiskAccessResourceId = @{ value = $env:diskAccessResourceId }\r\n\t\t\t\tdiskControllerType = @{ value = $env:diskControllerType }\r\n\t\t\t\tdiskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }\r\n\t\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\t\tenableAcceleratedNetworking = @{ value = $env:enableAcceleratedNetworking }\r\n\t\t\t\tencryptionAtHost = @{ value = $env:encryptionAtHost }\r\n\t\t\t\thibernationEnabled = @{ value = $env:hibernationEnabled }\r\n\t\t\t\timageVersionResourceId = @{ value = $env:imageVersionResourceId }\r\n\t\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\t\tlocation = @{ value = $env:location }\r\n\t\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\t\tsecureBootEnabled = @{ value = $env:secureBootEnabled }\r\n\t\t\t\tsecurityType = @{ value = $env:securityType }\r\n\t\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\t\ttags = @{ value = ($env:tags | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tuserAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\t\tvmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -ErrorAction Stop) }\r\n\t\t\t\tvTpmEnabled = @{ value = $env:vTpmEnabled }\r\n\t\t\t}\r\n\t\t\ttemplateLink = @{\r\n\t\t\t\tid = $env:TemplateSpecResourceId\r\n\t\t\t}\r\n\t\t}\r\n\t} | ConvertTo-Json -Depth 5\r\n\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'PUT' `\r\n\t\t-Body $Body `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\t\r\n\tWrite-Output 'Deployed new image validation virtual machine'\r\n}",
+    "$fxv#1": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n# Get an access token for Azure resources\r\n$AzureManagementAccessToken = (Invoke-RestMethod `\r\n    -Headers @{Metadata=\"true\"} `\r\n    -Uri $('http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=' + $ResourceManagerUriFixed + '&client_id=' + $UserAssignedIdentityClientId)).access_token\r\n\r\n# Set header for Azure Management API\r\n$AzureManagementHeader = @{\r\n    'Content-Type'='application/json'\r\n    'Authorization'='Bearer ' + $AzureManagementAccessToken\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/galleries/' + $env:ComputeGalleryName + '/images/' + $env:ComputeGalleryImageName + '/versions?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\n# Get virtual machine\r\n$VirtualMachine = Invoke-RestMethod `\r\n    -Headers $AzureManagementHeader `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?api-version=2024-07-01')\r\n\r\n\r\nif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourceGroups/' + $env:ResourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:VmName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Deleted existing virtual machine'\r\n\r\n\t# Deploy the virtual machine to run the tool\r\n\t$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n\t$Body = @{\r\n\t\tproperties = @{\r\n\t\t\tmode = 'Incremental'\r\n\t\t\tparameters = @{\r\n\t\t\t\tartifactsContainerUri = @{ value = $env:artifactsContainerUri }\r\n\t\t\t\tartifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }\r\n\t\t\t\tbootDiagnosticsEnabled = @{ value = [bool]$env:bootDiagnosticsEnabled }\r\n\t\t\t\tdiskAccessResourceId = @{ value = $env:diskAccessResourceId }\r\n\t\t\t\tdiskControllerType = @{ value = $env:diskControllerType }\r\n\t\t\t\tdiskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }\r\n\t\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\t\tenableAcceleratedNetworking = @{ value = [bool]$env:enableAcceleratedNetworking }\r\n\t\t\t\tencryptionAtHost = @{ value = [bool]$env:encryptionAtHost }\r\n\t\t\t\thibernationEnabled = @{ value = $false }\r\n\t\t\t\timageVersionResourceId = @{ value = $env:imageVersionResourceId }\r\n\t\t\t\tintegrityMonitoring = @{ value = [bool]$env:integrityMonitoring }\r\n\t\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\t\tlocation = @{ value = $env:location }\r\n\t\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\t\tsecureBoot = @{ value = [bool]$env:secureBoot }\r\n\t\t\t\tsecurityType = @{ value = $env:securityType }\r\n\t\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\t\ttags = @{ value = ($env:tags | ConvertFrom-Json -Depth 5) }\r\n\t\t\t\tuserAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -Depth 5) }\r\n\t\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\t\tvmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -Depth 5) }\r\n\t\t\t\tvTpm = @{ value = [bool]$env:vTpm }\r\n\t\t\t}\r\n\t\t\ttemplateLink = @{\r\n\t\t\t\tid = $env:TemplateSpecResourceId\r\n\t\t\t}\r\n\t\t}\r\n\t} | ConvertTo-Json -Depth 5\r\n\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $AzureManagementHeader `\r\n\t\t-Method 'PUT' `\r\n\t\t-Body $Body `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:SubscriptionId + '/resourcegroups/' + $env:ResourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\t\r\n\tWrite-Output 'Deployed new image validation virtual machine'\r\n}",
     "$fxv#2": "# Authentication is provided in the script",
-    "groupContext": {
-      "subscriptionId": "[subscription().subscriptionId]",
-      "resourceGroupName": "",
-      "location": "[parameters('location')]",
-      "cloud": "[environment().name]"
-    },
-    "resourceGroupName": "[if(not(empty(parameters('resourceGroupNameOverride'))), parameters('resourceGroupNameOverride'), __bicep.resourceNameForType(parameters('namingConvention'), 'resourceGroups', parameters('identifier'), variables('groupContext')))]",
-    "namingContext": "[union(variables('groupContext'), createObject('resourceGroupName', variables('resourceGroupName')))]",
-    "validationVirtualMachineName": "[__bicep.resourceNameForType(parameters('namingConvention'), 'virtualMachines', parameters('identifier'), variables('namingContext'))]",
-    "names": "[union(__bicep.functionAppNames(parameters('namingConvention'), parameters('identifier'), variables('namingContext'), createObject('functionAppName', parameters('functionAppNameOverride'), 'storageAccountName', parameters('storageAccountNameOverride'))), createObject('resourceGroup', variables('resourceGroupName'), 'diskName', __bicep.resourceNameForType(parameters('namingConvention'), 'osdisks', parameters('identifier'), variables('namingContext')), 'networkInterfaceName', __bicep.resourceNameForType(parameters('namingConvention'), 'networkInterfaces', parameters('identifier'), variables('namingContext')), 'encryptionKeyVaultName', if(not(empty(parameters('encryptionKeyVaultNameOverride'))), parameters('encryptionKeyVaultNameOverride'), __bicep.resourceNameForType(parameters('namingConvention'), 'keyVaults', parameters('identifier'), variables('namingContext'))), 'templateSpecName', __bicep.resourceNameForType(parameters('namingConvention'), 'templateSpecs', parameters('identifier'), variables('namingContext')), 'virtualMachineName', if(greater(length(variables('validationVirtualMachineName')), variables('namingPolicy').limits.deploymentVm), fail('Generated validation VM name exceeds the shared Windows computer-name limit. Shorten the identifier or naming-convention values.'), variables('validationVirtualMachineName')), 'userAssignedIdentity', if(not(empty(parameters('userAssignedIdentityNameOverride'))), parameters('userAssignedIdentityNameOverride'), __bicep.resourceNameForType(parameters('namingConvention'), 'userAssignedIdentities', parameters('identifier'), variables('namingContext'))), 'appServicePlanName', if(not(empty(parameters('existingAppServicePlanResourceId'))), last(split(parameters('existingAppServicePlanResourceId'), '/')), if(not(empty(parameters('appServicePlanNameOverride'))), parameters('appServicePlanNameOverride'), __bicep.resourceNameForType(parameters('namingConvention'), 'appServicePlans', parameters('identifier'), variables('namingContext'))))))]",
     "integrationSubnetId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('functionAppDelegatedSubnetResourceId')))), fail('Private mode requires functionAppDelegatedSubnetResourceId.'), parameters('functionAppDelegatedSubnetResourceId'))]",
     "endpointSubnetId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('privateEndpointSubnetResourceId')))), fail('Private mode requires privateEndpointSubnetResourceId.'), parameters('privateEndpointSubnetResourceId'))]",
     "blobDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureBlobPrivateDnsZoneResourceId')))), fail('Private mode requires azureBlobPrivateDnsZoneResourceId.'), parameters('azureBlobPrivateDnsZoneResourceId'))]",
     "appDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureFunctionAppPrivateDnsZoneResourceId')))), fail('Private mode requires azureFunctionAppPrivateDnsZoneResourceId.'), parameters('azureFunctionAppPrivateDnsZoneResourceId'))]",
-    "vaultDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureKeyVaultPrivateDnsZoneResourceId')))), fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.'), parameters('azureKeyVaultPrivateDnsZoneResourceId'))]",
-    "_1._2": {
-      "applicationInsights": "appi",
-      "appServicePlans": "asp",
-      "automationAccounts": "aa",
-      "availabilitySets": "as",
-      "computeGalleries": "gal",
-      "dataCollectionEndpoints": "dce",
-      "dataCollectionRules": "dcr",
-      "desktopApplicationGroups": "vddag",
-      "diskAccesses": "da",
-      "remoteApplicationGroups": "vdrag",
-      "diskEncryptionSets": "des",
-      "functionApps": "fa",
-      "hostPools": "vdpool",
-      "keyVaults": "kv",
-      "logAnalyticsWorkspaces": "law",
-      "natGateways": "ng",
-      "netAppAccounts": "naa",
-      "netAppCapacityPools": "nacp",
-      "networkInterfaces": "nic",
-      "networkSecurityGroups": "nsg",
-      "osdisks": "disk",
-      "privateEndpoints": "pe",
-      "privateLinkScopes": "pls",
-      "publicIPAddresses": "pip",
-      "recoveryServicesVaults": "rsv",
-      "resourceGroups": "rg",
-      "routeTables": "rt",
-      "scalingPlans": "vdscaling",
-      "storageAccounts": "sa",
-      "templateSpecs": "ts",
-      "userAssignedIdentities": "uai",
-      "virtualMachines": "vm",
-      "virtualNetworks": "vnet",
-      "subnets": "snet",
-      "workbooks": "wb",
-      "workspaces": "vdws",
-      "imageDefinitions": "vmid"
-    },
-    "_1._3": {
-      "AzureCloud": {
-        "australiacentral": {
-          "abbreviation": "auc",
-          "recoveryServicesGeo": "acl"
-        },
-        "australiacentral2": {
-          "abbreviation": "auc2",
-          "recoveryServicesGeo": "acl2"
-        },
-        "australiaeast": {
-          "abbreviation": "aue",
-          "recoveryServicesGeo": "ae"
-        },
-        "australiasoutheast": {
-          "abbreviation": "ause",
-          "recoveryServicesGeo": "ase"
-        },
-        "brazilsouth": {
-          "abbreviation": "brs",
-          "recoveryServicesGeo": "brs"
-        },
-        "brazilsoutheast": {
-          "abbreviation": "brse",
-          "recoveryServicesGeo": "bse"
-        },
-        "canadacentral": {
-          "abbreviation": "cac",
-          "recoveryServicesGeo": "cnc"
-        },
-        "canadaeast": {
-          "abbreviation": "cae",
-          "recoveryServicesGeo": "cne"
-        },
-        "centralindia": {
-          "abbreviation": "inc",
-          "recoveryServicesGeo": "inc"
-        },
-        "centralus": {
-          "abbreviation": "usc",
-          "recoveryServicesGeo": "cus"
-        },
-        "eastasia": {
-          "abbreviation": "ase",
-          "recoveryServicesGeo": "ea"
-        },
-        "eastus": {
-          "abbreviation": "use",
-          "recoveryServicesGeo": "eus"
-        },
-        "eastus2": {
-          "abbreviation": "use2",
-          "recoveryServicesGeo": "eus2"
-        },
-        "francecentral": {
-          "abbreviation": "frc",
-          "recoveryServicesGeo": "frc"
-        },
-        "francesouth": {
-          "abbreviation": "frs",
-          "recoveryServicesGeo": "frs"
-        },
-        "germanynorth": {
-          "abbreviation": "den",
-          "recoveryServicesGeo": "gn"
-        },
-        "germanywestcentral": {
-          "abbreviation": "dewc",
-          "recoveryServicesGeo": "gwc"
-        },
-        "israelcentral": {
-          "abbreviation": "ilc",
-          "recoveryServicesGeo": "ilc"
-        },
-        "italynorth": {
-          "abbreviation": "itn",
-          "recoveryServicesGeo": "itn"
-        },
-        "japaneast": {
-          "abbreviation": "jpe",
-          "recoveryServicesGeo": "jpe"
-        },
-        "japanwest": {
-          "abbreviation": "jpw",
-          "recoveryServicesGeo": "jpw"
-        },
-        "jioindiacentral": {
-          "abbreviation": "injc",
-          "recoveryServicesGeo": "jic"
-        },
-        "jioindiawest": {
-          "abbreviation": "injw",
-          "recoveryServicesGeo": "jiw"
-        },
-        "koreacentral": {
-          "abbreviation": "krc",
-          "recoveryServicesGeo": "krc"
-        },
-        "koreasouth": {
-          "abbreviation": "krs",
-          "recoveryServicesGeo": "krs"
-        },
-        "northcentralus": {
-          "abbreviation": "usnc",
-          "recoveryServicesGeo": "ncus"
-        },
-        "northeurope": {
-          "abbreviation": "eun",
-          "recoveryServicesGeo": "ne"
-        },
-        "norwayeast": {
-          "abbreviation": "noe",
-          "recoveryServicesGeo": "nwe"
-        },
-        "norwaywest": {
-          "abbreviation": "now",
-          "recoveryServicesGeo": "nww"
-        },
-        "polandcentral": {
-          "abbreviation": "plc",
-          "recoveryServicesGeo": "plc"
-        },
-        "qatarcentral": {
-          "abbreviation": "qac",
-          "recoveryServicesGeo": "qac"
-        },
-        "southafricanorth": {
-          "abbreviation": "zan",
-          "recoveryServicesGeo": "san"
-        },
-        "southafricawest": {
-          "abbreviation": "zaw",
-          "recoveryServicesGeo": "saw"
-        },
-        "southcentralus": {
-          "abbreviation": "ussc",
-          "recoveryServicesGeo": "scus"
-        },
-        "southeastasia": {
-          "abbreviation": "asse",
-          "recoveryServicesGeo": "sea"
-        },
-        "southindia": {
-          "abbreviation": "ins",
-          "recoveryServicesGeo": "ins"
-        },
-        "swedencentral": {
-          "abbreviation": "sec",
-          "recoveryServicesGeo": "sdc"
-        },
-        "switzerlandnorth": {
-          "abbreviation": "chn",
-          "recoveryServicesGeo": "szn"
-        },
-        "switzerlandwest": {
-          "abbreviation": "chw",
-          "recoveryServicesGeo": "szw"
-        },
-        "uaecentral": {
-          "abbreviation": "aec",
-          "recoveryServicesGeo": "uac"
-        },
-        "uaenorth": {
-          "abbreviation": "aen",
-          "recoveryServicesGeo": "uan"
-        },
-        "uksouth": {
-          "abbreviation": "uks",
-          "recoveryServicesGeo": "uks"
-        },
-        "ukwest": {
-          "abbreviation": "ukw",
-          "recoveryServicesGeo": "ukw"
-        },
-        "westcentralus": {
-          "abbreviation": "uswc",
-          "recoveryServicesGeo": "wcus"
-        },
-        "westeurope": {
-          "abbreviation": "euw",
-          "recoveryServicesGeo": "we"
-        },
-        "westindia": {
-          "abbreviation": "inw",
-          "recoveryServicesGeo": "inw"
-        },
-        "westus": {
-          "abbreviation": "usw",
-          "recoveryServicesGeo": "wus"
-        },
-        "westus2": {
-          "abbreviation": "usw2",
-          "recoveryServicesGeo": "wus2"
-        },
-        "westus3": {
-          "abbreviation": "usw3",
-          "recoveryServicesGeo": "wus3"
-        }
-      },
-      "AzureUSGovernment": {
-        "usdodcentral": {
-          "abbreviation": "dodc",
-          "recoveryServicesGeo": "udc"
-        },
-        "usdodeast": {
-          "abbreviation": "dode",
-          "recoveryServicesGeo": "ude"
-        },
-        "usgovarizona": {
-          "abbreviation": "az",
-          "recoveryServicesGeo": "uga"
-        },
-        "usgovtexas": {
-          "abbreviation": "tx",
-          "recoveryServicesGeo": "ugt"
-        },
-        "usgovvirginia": {
-          "abbreviation": "va",
-          "recoveryServicesGeo": "ugv"
-        }
-      },
-      "other": {
-        "north": {
-          "abbreviation": "no"
-        },
-        "east": {
-          "abbreviation": "ea"
-        },
-        "south": {
-          "abbreviation": "so"
-        },
-        "west": {
-          "abbreviation": "we"
-        },
-        "central": {
-          "abbreviation": "ce"
-        },
-        "northcentral": {
-          "abbreviation": "noce"
-        },
-        "eastcentral": {
-          "abbreviation": "wece"
-        },
-        "southcentral": {
-          "abbreviation": "soce"
-        },
-        "westcentral": {
-          "abbreviation": "wece"
-        }
-      }
-    },
-    "_1.locationDefinitions": "[variables('_1._3')]",
-    "_1.osDiskNamePattern": "SHNAME-osdisk",
-    "_1.resourceAbbreviations": "[variables('_1._2')]",
-    "namingPolicy": {
-      "defaults": {
-        "components": [
-          "resourceType",
-          "workload",
-          "purpose",
-          "location"
-        ],
-        "delimiter": "-",
-        "workload": "avd"
-      },
-      "identifiers": {
-        "imageManagement": "image-management",
-        "sessionHostReplacer": "shr",
-        "sharedFslogix": "fslogix"
-      },
-      "limits": {
-        "deploymentVm": 15,
-        "fslogixStoragePrefix": 13,
-        "uniqueSuffix": 6,
-        "defaultUniqueLength": 6,
-        "imageManagementStoragePrefix": 5,
-        "imageManagementStorageLocation": 4
-      },
-      "resourceTypes": {
-        "functionApps": {
-          "lengthLimit": 60,
-          "format": "hyphen",
-          "globallyUnique": true
-        },
-        "storageAccounts": {
-          "lengthLimit": 24,
-          "format": "storage",
-          "globallyUnique": true
-        },
-        "applicationInsights": {
-          "lengthLimit": 260,
-          "format": "hyphen"
-        },
-        "appServicePlans": {
-          "lengthLimit": 60,
-          "format": "hyphen"
-        },
-        "userAssignedIdentities": {
-          "lengthLimit": 128,
-          "format": "hyphen"
-        },
-        "automationAccounts": {
-          "lengthLimit": 50,
-          "format": "hyphen",
-          "startWithLetter": true
-        },
-        "availabilitySets": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "computeGalleries": {
-          "lengthLimit": 80,
-          "format": "gallery"
-        },
-        "dataCollectionEndpoints": {
-          "lengthLimit": 44,
-          "format": "hyphen"
-        },
-        "dataCollectionRules": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "desktopApplicationGroups": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "remoteApplicationGroups": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "diskAccesses": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "diskEncryptionSets": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "hostPools": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "keyVaults": {
-          "lengthLimit": 24,
-          "format": "hyphen",
-          "globallyUnique": true,
-          "uniqueLength": 6,
-          "startWithLetter": true,
-          "noConsecutiveHyphens": true
-        },
-        "logAnalyticsWorkspaces": {
-          "lengthLimit": 63,
-          "format": "hyphen"
-        },
-        "natGateways": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "netAppAccounts": {
-          "lengthLimit": 128,
-          "format": "hyphen"
-        },
-        "netAppCapacityPools": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "networkInterfaces": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "networkSecurityGroups": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "osdisks": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "privateEndpoints": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "privateLinkScopes": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "publicIPAddresses": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "recoveryServicesVaults": {
-          "lengthLimit": 50,
-          "format": "hyphen",
-          "startWithLetter": true
-        },
-        "resourceGroups": {
-          "lengthLimit": 90,
-          "format": "hyphen"
-        },
-        "routeTables": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "scalingPlans": {
-          "lengthLimit": 63,
-          "format": "hyphen"
-        },
-        "templateSpecs": {
-          "lengthLimit": 90,
-          "format": "hyphen"
-        },
-        "virtualMachines": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "virtualNetworks": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "subnets": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        },
-        "workspaces": {
-          "lengthLimit": 64,
-          "format": "hyphen"
-        },
-        "imageDefinitions": {
-          "lengthLimit": 80,
-          "format": "hyphen"
-        }
-      },
-      "resources": {
-        "operationsResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "operations"
-          ]
-        },
-        "monitoringResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "monitoring"
-          ]
-        },
-        "controlPlaneResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "control",
-            "plane"
-          ]
-        },
-        "globalFeedResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "global",
-            "feed"
-          ]
-        },
-        "globalFeedWorkspace": {
-          "type": "workspaces",
-          "purpose": [
-            "global",
-            "feed"
-          ]
-        },
-        "workspace": {
-          "type": "workspaces",
-          "purpose": []
-        },
-        "hostWorkspace": {
-          "type": "workspaces",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "deploymentResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "{identifier}",
-            "deployment"
-          ]
-        },
-        "deploymentVm": {
-          "type": "",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "consolidatedResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "hostsResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "{identifier}",
-            "hosts"
-          ]
-        },
-        "storageResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "{identifier}",
-            "storage"
-          ]
-        },
-        "secretsKeyVault": {
-          "type": "keyVaults",
-          "purpose": [
-            "sec",
-            "{unique}"
-          ]
-        },
-        "encryptionKeyVault": {
-          "type": "keyVaults",
-          "purpose": [
-            "enc",
-            "{unique}"
-          ]
-        },
-        "dataCollectionEndpoint": {
-          "type": "dataCollectionEndpoints",
-          "purpose": []
-        },
-        "logAnalyticsWorkspace": {
-          "type": "logAnalyticsWorkspaces",
-          "purpose": []
-        },
-        "hostPool": {
-          "type": "hostPools",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "desktopApplicationGroup": {
-          "type": "desktopApplicationGroups",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "scalingPlan": {
-          "type": "scalingPlans",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "vmBackupVault": {
-          "type": "recoveryServicesVaults",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "filesBackupVault": {
-          "type": "recoveryServicesVaults",
-          "purpose": [
-            "files"
-          ]
-        },
-        "identityPattern": {
-          "type": "userAssignedIdentities",
-          "purpose": [
-            "{identifier}",
-            "TOKEN"
-          ]
-        },
-        "availabilitySet": {
-          "type": "availabilitySets",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "diskAccess": {
-          "type": "diskAccesses",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "diskEncryptionSetPattern": {
-          "type": "diskEncryptionSets",
-          "purpose": [
-            "{identifier}",
-            "TOKEN"
-          ]
-        },
-        "netAppAccount": {
-          "type": "netAppAccounts",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "netAppCapacityPool": {
-          "type": "netAppCapacityPools",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "imageManagementResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "imageGallery": {
-          "type": "computeGalleries",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "imageBlobIdentity": {
-          "type": "userAssignedIdentities",
-          "purpose": [
-            "{identifier}-blob-access"
-          ]
-        },
-        "imageStorageEncryptionIdentity": {
-          "type": "userAssignedIdentities",
-          "purpose": [
-            "{identifier}-storage-cmk"
-          ]
-        },
-        "imageBuildResourceGroup": {
-          "type": "resourceGroups",
-          "purpose": [
-            "image-builds"
-          ]
-        },
-        "imageGalleryCustomerKeys": {
-          "type": "diskEncryptionSets",
-          "purpose": [
-            "{identifier}-customer-keys"
-          ]
-        },
-        "imageGalleryDoubleEncryptionKeys": {
-          "type": "diskEncryptionSets",
-          "purpose": [
-            "{identifier}-platform-and-customer-keys"
-          ]
-        },
-        "imageGalleryConfidentialKeys": {
-          "type": "diskEncryptionSets",
-          "purpose": [
-            "{identifier}-confidential-vm"
-          ]
-        },
-        "networkNatGateway": {
-          "type": "natGateways",
-          "purpose": []
-        },
-        "networkPublicIP": {
-          "type": "publicIPAddresses",
-          "purpose": []
-        },
-        "networkRouteTable": {
-          "type": "routeTables",
-          "purpose": []
-        },
-        "networkSecurityGroup": {
-          "type": "networkSecurityGroups",
-          "purpose": []
-        },
-        "pocVirtualNetwork": {
-          "type": "virtualNetworks",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "pocHostsSubnet": {
-          "type": "subnets",
-          "purpose": [
-            "{identifier}",
-            "hosts"
-          ]
-        },
-        "pocNatGateway": {
-          "type": "natGateways",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "pocPublicIP": {
-          "type": "publicIPAddresses",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "pocSecurityGroup": {
-          "type": "networkSecurityGroups",
-          "purpose": [
-            "{identifier}"
-          ]
-        },
-        "alertsAutomation": {
-          "type": "automationAccounts",
-          "purpose": [
-            "alerts"
-          ]
-        },
-        "quotaAutomation": {
-          "type": "automationAccounts",
-          "purpose": [
-            "sqm",
-            "{identifier}"
-          ],
-          "omitWorkload": true,
-          "omitEmptyPurposeParts": true
-        },
-        "routesAutomation": {
-          "type": "automationAccounts",
-          "purpose": [
-            "urt",
-            "{unique}"
-          ],
-          "omitWorkload": true
-        }
-      },
-      "patterns": {
-        "virtualMachine": "SHNAME",
-        "osDisk": "[variables('_1.osDiskNamePattern')]",
-        "nic": "SHNAME-nic",
-        "standaloneAvailabilitySet": "avset-##",
-        "privateEndpointFirst": "{privateEndpoints}-RESOURCE-SUBRESOURCE-VNETID",
-        "privateEndpointLast": "RESOURCE-SUBRESOURCE-VNETID-{privateEndpoints}",
-        "privateEndpointNicFirst": "{networkInterfaces}-{endpoint}",
-        "privateEndpointNicLast": "{endpoint}-{networkInterfaces}",
-        "deploymentDisk": "{vm}-{osdisks}",
-        "deploymentNic": "{vm}-{networkInterfaces}",
-        "availabilitySet": "{name}{delimiter}##",
-        "policyIdentityPurpose": "policy{delimiter}remediation",
-        "deploymentIdentityPurpose": "deployment",
-        "monitorIdentityPurpose": "ama",
-        "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
-        "customerDiskPurpose": "customer{delimiter}keys",
-        "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslogix{unique}",
-        "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
-        "vmKey": "{identifier}-vm-cmk",
-        "confidentialVmKey": "{identifier}-cvm-cmk",
-        "recoveryServicesKey": "{identifier}-rsv-cmk",
-        "imageStorageKey": "{identifier}-storage-cmk",
-        "storageCmkKey": "{identifier}-storage-cmk",
-        "imageGalleryKey": "{identifier}-gallery-cmk",
-        "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
-        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
-        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
-        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
-        "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
-        "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
-        "imageBuildVm": "{prefix}img-{unique}",
-        "imageBuildOrchestrationVm": "{prefix}orc-{unique}",
-        "deploymentPrefix": "{prefix}-",
-        "imageDefinition": "{imageDefinitions}-{publisher}-{offer}-{sku}"
-      },
-      "imageStoragePurposes": {
-        "artifacts": "imgassets",
-        "logs": "imglogs"
-      },
-      "templateSpecs": {
-        "sharedServices": "shared-services",
-        "networking": "networking",
-        "imageBuild": "custom-image",
-        "hostPool": "hostpool",
-        "hostPoolPoc": "hostpool-poc",
-        "automatedHostPool": "automated-hostpool",
-        "runCommandsOnVms": "run-commands-on-vms",
-        "updateStorageAccountKeyOnSessionHosts": "update-storage-account-key-on-session-hosts",
-        "fslogixStorage": "fslogix-storage",
-        "storageQuotaManager": "storage-quota-manager",
-        "sessionHostReplacer": "session-host-replacer",
-        "sessionHostMaintenance": "session-host-maintenance",
-        "sessionHosts": "session-hosts",
-        "sessionHostPolicy": "session-host-policy"
-      }
-    }
+    "vaultDnsZoneId": "[if(and(parameters('privateEndpoint'), empty(trim(parameters('azureKeyVaultPrivateDnsZoneResourceId')))), fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.'), parameters('azureKeyVaultPrivateDnsZoneResourceId'))]"
   },
   "resources": {
     "rg": {
       "type": "Microsoft.Resources/resourceGroups",
       "apiVersion": "2021-04-01",
-      "name": "[variables('names').resourceGroup]",
+      "name": "[parameters('resourceGroupName')]",
       "location": "[parameters('location')]",
       "tags": "[parameters('tags')]"
     },
@@ -1941,7 +414,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('userAssignedIdentity-{0}', uniqueString('userAssignedIdentity', deployment().name))]",
-      "resourceGroup": "[variables('names').resourceGroup]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -1952,7 +425,7 @@
             "value": "[parameters('location')]"
           },
           "name": {
-            "value": "[variables('names').userAssignedIdentity]"
+            "value": "[parameters('userAssignedIdentityName')]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -2041,7 +514,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('templateSpec-{0}', uniqueString('templateSpec', deployment().name))]",
-      "resourceGroup": "[variables('names').resourceGroup]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -2058,7 +531,7 @@
             "value": "[parameters('tags')]"
           },
           "templateSpecName": {
-            "value": "[variables('names').templateSpecName]"
+            "value": "[parameters('templateSpecName')]"
           }
         },
         "template": {
@@ -2068,7 +541,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "12397959460734864024"
+              "templateHash": "18406205286157495490"
             }
           },
           "parameters": {
@@ -2094,7 +567,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "14153031719411595505"
+                  "templateHash": "6642663907239387580"
                 }
               },
               "definitions": {
@@ -2138,46 +611,61 @@
               },
               "parameters": {
                 "artifactsContainerUri": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": ""
                 },
                 "artifactsUserAssignedIdentityClientId": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": ""
                 },
                 "bootDiagnosticsEnabled": {
-                  "type": "bool"
+                  "type": "bool",
+                  "defaultValue": true
                 },
                 "diskAccessResourceId": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": ""
                 },
                 "diskControllerType": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": "SCSI"
                 },
                 "diskEncryptionSetResourceId": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": ""
                 },
                 "diskName": {
                   "type": "string"
                 },
                 "enableAcceleratedNetworking": {
-                  "type": "bool"
+                  "type": "bool",
+                  "defaultValue": true
                 },
                 "encryptionAtHost": {
-                  "type": "bool"
+                  "type": "bool",
+                  "defaultValue": true
                 },
                 "hibernationEnabled": {
-                  "type": "bool"
+                  "type": "bool",
+                  "defaultValue": false
                 },
                 "imageVersionResourceId": {
                   "type": "string"
+                },
+                "integrityMonitoring": {
+                  "type": "bool",
+                  "defaultValue": true
                 },
                 "keyVaultResourceId": {
                   "type": "string"
                 },
                 "licenseType": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": "Windows_Client"
                 },
                 "location": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": "[[resourceGroup().location]"
                 },
                 "networkInterfaceName": {
                   "type": "string"
@@ -2186,19 +674,23 @@
                   "type": "string"
                 },
                 "secureBootEnabled": {
-                  "type": "bool"
+                  "type": "bool",
+                  "defaultValue": true
                 },
                 "securityType": {
-                  "type": "string"
+                  "type": "string",
+                  "defaultValue": "TrustedLaunch"
                 },
                 "subnetResourceId": {
                   "type": "string"
                 },
                 "tags": {
-                  "type": "object"
+                  "type": "object",
+                  "defaultValue": {}
                 },
                 "userAssignedIdentityResourceIds": {
-                  "type": "array"
+                  "type": "array",
+                  "defaultValue": []
                 },
                 "virtualMachineName": {
                   "type": "string"
@@ -2210,10 +702,12 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/definitions/artifactCustomizationType"
-                  }
+                  },
+                  "defaultValue": []
                 },
                 "vTpmEnabled": {
-                  "type": "bool"
+                  "type": "bool",
+                  "defaultValue": true
                 }
               },
               "resources": {
@@ -2827,6 +1321,113 @@
                     }
                   }
                 },
+                "extension_GuestAttestation": {
+                  "condition": "[[parameters('integrityMonitoring')]",
+                  "type": "Microsoft.Resources/deployments",
+                  "apiVersion": "2025-04-01",
+                  "name": "[[format('extension_GuestAttestation-{0}', uniqueString('extension_GuestAttestation', deployment().name))]",
+                  "properties": {
+                    "expressionEvaluationOptions": {
+                      "scope": "inner"
+                    },
+                    "mode": "Incremental",
+                    "parameters": {
+                      "location": {
+                        "value": "[[parameters('location')]"
+                      },
+                      "tags": {
+                        "value": "[[parameters('tags')]"
+                      },
+                      "virtualMachineName": {
+                        "value": "[[reference('virtualMachine').outputs.name.value]"
+                      }
+                    },
+                    "template": {
+                      "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                      "contentVersion": "1.0.0.0",
+                      "metadata": {
+                        "_generator": {
+                          "name": "bicep",
+                          "version": "0.49.2.45890",
+                          "templateHash": "9250201168598392427"
+                        },
+                        "name": "Windows guest attestation extension",
+                        "description": "Installs the Windows guest attestation extension on an existing compatible VM using the built-in attestation settings."
+                      },
+                      "parameters": {
+                        "virtualMachineName": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                          }
+                        },
+                        "location": {
+                          "type": "string",
+                          "defaultValue": "[[resourceGroup().location]",
+                          "metadata": {
+                            "description": "Optional. Azure region for the windows guest attestation extension; defaults to the deployment resource group region."
+                          }
+                        },
+                        "tags": {
+                          "type": "object",
+                          "defaultValue": {},
+                          "metadata": {
+                            "description": "Optional. Tags applied to the windows guest attestation extension."
+                          }
+                        }
+                      },
+                      "resources": [
+                        {
+                          "type": "Microsoft.Compute/virtualMachines/extensions",
+                          "apiVersion": "2023-09-01",
+                          "name": "[[format('{0}/{1}', parameters('virtualMachineName'), 'GuestAttestation')]",
+                          "location": "[[parameters('location')]",
+                          "tags": "[[parameters('tags')]",
+                          "properties": {
+                            "publisher": "Microsoft.Azure.Security.WindowsAttestation",
+                            "type": "GuestAttestation",
+                            "typeHandlerVersion": "1.0",
+                            "autoUpgradeMinorVersion": true,
+                            "enableAutomaticUpgrade": true,
+                            "settings": {
+                              "AttestationConfig": {
+                                "MaaSettings": {
+                                  "maaEndpoint": "",
+                                  "maaTenantName": "GuestAttestation"
+                                },
+                                "AscSettings": {
+                                  "ascReportingEndpoint": "",
+                                  "ascReportingFrequency": ""
+                                },
+                                "useCustomToken": "false",
+                                "disableAlerts": "false"
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "outputs": {
+                        "resourceId": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Resource ID of the windows guest attestation extension."
+                          },
+                          "value": "[[resourceId('Microsoft.Compute/virtualMachines/extensions', parameters('virtualMachineName'), 'GuestAttestation')]"
+                        },
+                        "name": {
+                          "type": "string",
+                          "metadata": {
+                            "description": "Azure resource name of the windows guest attestation extension."
+                          },
+                          "value": "GuestAttestation"
+                        }
+                      }
+                    }
+                  },
+                  "dependsOn": [
+                    "virtualMachine"
+                  ]
+                },
                 "customizations": {
                   "type": "Microsoft.Resources/deployments",
                   "apiVersion": "2025-04-01",
@@ -3035,7 +1636,7 @@
         "mode": "Incremental",
         "parameters": {
           "resourceGroupName": {
-            "value": "[variables('names').resourceGroup]"
+            "value": "[parameters('resourceGroupName')]"
           },
           "deploySecretsKeyVault": {
             "value": false
@@ -3047,7 +1648,7 @@
             "value": true
           },
           "encryptionKeyVaultName": {
-            "value": "[variables('names').encryptionKeyVaultName]"
+            "value": "[format('{0}-enc', parameters('keyVaultName'))]"
           },
           "azureKeyVaultPrivateDnsZoneResourceId": {
             "value": "[variables('vaultDnsZoneId')]"
@@ -3062,10 +1663,10 @@
             "value": "[variables('endpointSubnetId')]"
           },
           "privateEndpointNameConv": {
-            "value": "[variables('names').privateEndpointNameConv]"
+            "value": "[format('pe-{0}', parameters('keyVaultName'))]"
           },
           "privateEndpointNICNameConv": {
-            "value": "[variables('names').privateEndpointNICNameConv]"
+            "value": "[format('nic-pe-{0}', parameters('keyVaultName'))]"
           },
           "paasPublicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "tags": {
@@ -4562,7 +3163,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('storageCmk-{0}', uniqueString('storageCmk', deployment().name))]",
-      "resourceGroup": "[variables('names').resourceGroup]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -4577,11 +3178,11 @@
           },
           "keyNames": {
             "value": [
-              "[variables('names').storageAccountName]"
+              "[parameters('storageAccountName')]"
             ]
           },
           "identityName": {
-            "value": "[variables('names').storageEncryptionIdentityName]"
+            "value": "[format('{0}-enc', parameters('userAssignedIdentityName'))]"
           },
           "location": {
             "value": "[parameters('location')]"
@@ -5931,11 +4532,11 @@
       ]
     },
     "serverFarm": {
-      "condition": "[empty(parameters('existingAppServicePlanResourceId'))]",
+      "condition": "[empty(parameters('appServicePlanResourceId'))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('serverFarm-{0}', uniqueString('serverFarm', deployment().name))]",
-      "resourceGroup": "[variables('names').resourceGroup]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -5952,10 +4553,10 @@
             "value": "[parameters('location')]"
           },
           "name": {
-            "value": "[variables('names').appServicePlanName]"
+            "value": "[parameters('appServicePlanName')]"
           },
           "planPricing": {
-            "value": "PremiumV3_P0v3"
+            "value": "[format('PremiumV3_{0}', parameters('appServicePlanSku'))]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -6062,7 +4663,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('functionApp-{0}', uniqueString('functionApp', deployment().name))]",
-      "resourceGroup": "[variables('names').resourceGroup]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -6070,7 +4671,7 @@
         "mode": "Incremental",
         "parameters": {
           "applicationInsightsName": {
-            "value": "[variables('names').applicationInsightsName]"
+            "value": "[parameters('applicationInsightsName')]"
           },
           "azureBlobPrivateDnsZoneResourceId": {
             "value": "[variables('blobDnsZoneId')]"
@@ -6088,19 +4689,19 @@
             "value": false
           },
           "encryptionKeyName": {
-            "value": "[variables('names').storageAccountName]"
+            "value": "[parameters('storageAccountName')]"
           },
           "encryptionKeyVaultResourceId": {
             "value": "[reference('encryptionKeyVault').outputs.encryptionKeyVaultResourceId.value]"
           },
           "functionAppAppSettings": {
-            "value": "[concat(createArray(createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityClientId', 'value', parameters('artifactsUserAssignedIdentityClientId')), createObject('name', 'bootDiagnosticsEnabled', 'value', string(parameters('bootDiagnosticsEnabled'))), createObject('name', 'diskAccessResourceId', 'value', parameters('diskAccessResourceId')), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', parameters('diskEncryptionSetResourceId')), createObject('name', 'diskName', 'value', variables('names').diskName), createObject('name', 'enableAcceleratedNetworking', 'value', string(parameters('enableAcceleratedNetworking'))), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'hibernationEnabled', 'value', string(parameters('hibernationEnabled'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', variables('names').networkInterfaceName), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'secureBootEnabled', 'value', string(parameters('secureBootEnabled'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'tags', 'value', string(parameters('tags'))), createObject('name', 'userAssignedIdentityResourceIds', 'value', string(union(parameters('userAssignedIdentityResourceIds'), createArray(reference('userAssignedIdentity').outputs.resourceId.value)))), createObject('name', 'virtualMachineName', 'value', variables('names').virtualMachineName), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpmEnabled', 'value', string(parameters('vTpmEnabled')))))]"
+            "value": "[concat(createArray(createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityClientId', 'value', parameters('artifactsUserAssignedIdentityClientId')), createObject('name', 'bootDiagnosticsEnabled', 'value', string(parameters('bootDiagnosticsEnabled'))), createObject('name', 'diskAccessResourceId', 'value', parameters('diskAccessResourceId')), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', parameters('diskEncryptionSetResourceId')), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'enableAcceleratedNetworking', 'value', string(parameters('enableAcceleratedNetworking'))), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(parameters('integrityMonitoring'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'userAssignedIdentityResourceIds', 'value', string(union(parameters('userAssignedIdentityResourceIds'), createArray(reference('userAssignedIdentity').outputs.resourceId.value)))), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm')))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[variables('integrationSubnetId')]"
           },
           "functionAppName": {
-            "value": "[variables('names').functionAppName]"
+            "value": "[parameters('functionAppName')]"
           },
           "functionAppUserAssignedIdentityResourceId": {
             "value": "[reference('userAssignedIdentity').outputs.resourceId.value]"
@@ -6122,10 +4723,10 @@
             "value": "[parameters('privateEndpoint')]"
           },
           "privateEndpointNameConv": {
-            "value": "[variables('names').privateEndpointNameConv]"
+            "value": "[format('pe-{0}', parameters('functionAppName'))]"
           },
           "privateEndpointNICNameConv": {
-            "value": "[variables('names').privateEndpointNICNameConv]"
+            "value": "[format('nic-pe-{0}', parameters('functionAppName'))]"
           },
           "privateEndpointSubnetResourceId": {
             "value": "[variables('endpointSubnetId')]"
@@ -6133,12 +4734,12 @@
           "privateLinkScopeResourceId": {
             "value": "[parameters('privateLinkScopeResourceId')]"
           },
-          "serverFarmId": "[if(not(empty(parameters('existingAppServicePlanResourceId'))), createObject('value', parameters('existingAppServicePlanResourceId')), createObject('value', reference('serverFarm').outputs.hostingPlanId.value))]",
+          "serverFarmId": "[if(empty(parameters('appServicePlanResourceId')), createObject('value', reference('serverFarm').outputs.hostingPlanId.value), createObject('value', parameters('appServicePlanResourceId')))]",
           "storageAccountName": {
-            "value": "[variables('names').storageAccountName]"
+            "value": "[parameters('storageAccountName')]"
           },
           "storageEncryptionIdentityName": {
-            "value": "[variables('names').storageEncryptionIdentityName]"
+            "value": "[format('{0}-enc', parameters('userAssignedIdentityName'))]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -7107,7 +5708,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('function-{0}', uniqueString('function', deployment().name))]",
-      "resourceGroup": "[variables('names').resourceGroup]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -7199,22 +5800,6 @@
         "functionApp",
         "rg"
       ]
-    }
-  },
-  "outputs": {
-    "generatedNames": {
-      "type": "object",
-      "metadata": {
-        "description": "Resolved infrastructure and validation VM names from the shared naming policy."
-      },
-      "value": "[variables('names')]"
-    },
-    "userAssignedIdentityPrincipalId": {
-      "type": "string",
-      "metadata": {
-        "description": "Managed identity principal ID for granting validation workload permissions."
-      },
-      "value": "[reference('userAssignedIdentity').outputs.principalId.value]"
     }
   }
 }
