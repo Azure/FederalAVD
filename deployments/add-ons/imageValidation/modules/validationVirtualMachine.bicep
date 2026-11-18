@@ -2,14 +2,14 @@ import { artifactCustomizationType } from '../../../shared/modules/resourceModul
 
 param artifactsContainerUri string = ''
 param artifactsUserAssignedIdentityClientId string = ''
-param bootDiagnosticsEnabled bool = true
+param bootDiagnostics bool = true
 param diskAccessResourceId string = ''
 param diskControllerType string = 'SCSI'
 param diskEncryptionSetResourceId string = ''
 param diskName string
 param enableAcceleratedNetworking bool = true
 param encryptionAtHost bool = true
-param hibernationEnabled bool = false
+param hibernation bool = false
 param imageVersionResourceId string
 param integrityMonitoring bool = true
 param keyVaultResourceId string
@@ -36,14 +36,14 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
   params: {
     adminPassword: keyVault.getSecret('LocalAdminPassword')
     adminUsername: keyVault.getSecret('LocalAdminUsername')
-    bootDiagnosticsEnabled: bootDiagnosticsEnabled
+    bootDiagnosticsEnabled: bootDiagnostics
     customImageResourceId: imageVersionResourceId
     diskAccessId: diskAccessResourceId
     diskControllerType: diskControllerType
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     enableAcceleratedNetworking: enableAcceleratedNetworking
     encryptionAtHost: encryptionAtHost
-    hibernationEnabled: hibernationEnabled
+    hibernationEnabled: hibernation
     licenseType: licenseType
     location: location
     name: virtualMachineName

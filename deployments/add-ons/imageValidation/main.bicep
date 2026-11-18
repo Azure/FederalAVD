@@ -42,7 +42,7 @@ param azureFunctionAppPrivateDnsZoneResourceId string = ''
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
 
 @description('Optional. Enable boot diagnostics for the validation VM.')
-param bootDiagnosticsEnabled bool = true
+param bootDiagnostics bool = true
 
 @description('Optional. Existing disk access resource ID for the validation VM.')
 param diskAccessResourceId string = ''
@@ -289,8 +289,8 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: artifactsUserAssignedIdentityClientId
       }
       {
-        name: 'bootDiagnosticsEnabled'
-        value: string(bootDiagnosticsEnabled)
+        name: 'bootDiagnostics'
+        value: string(bootDiagnostics)
       }
       {
         name: 'diskAccessResourceId'

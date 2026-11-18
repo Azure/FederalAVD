@@ -51,14 +51,14 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 			parameters = @{
 				artifactsContainerUri = @{ value = $env:artifactsContainerUri }
 				artifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }
-				bootDiagnosticsEnabled = @{ value = [bool]$env:bootDiagnosticsEnabled }
+				bootDiagnostics = @{ value = [bool]$env:bootDiagnostics }
 				diskAccessResourceId = @{ value = $env:diskAccessResourceId }
 				diskControllerType = @{ value = $env:diskControllerType }
 				diskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }
 				diskName = @{ value = $env:diskName }
 				enableAcceleratedNetworking = @{ value = [bool]$env:enableAcceleratedNetworking }
 				encryptionAtHost = @{ value = [bool]$env:encryptionAtHost }
-				hibernationEnabled = @{ value = $false }
+				hibernation = @{ value = $false }
 				imageVersionResourceId = @{ value = $env:imageVersionResourceId }
 				integrityMonitoring = @{ value = [bool]$env:integrityMonitoring }
 				keyVaultResourceId = @{ value = $env:keyVaultResourceId }

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4337944891571709745"
+      "templateHash": "4140392328353995120"
     }
   },
   "definitions": {
@@ -57,7 +57,7 @@
       "type": "string",
       "defaultValue": ""
     },
-    "bootDiagnosticsEnabled": {
+    "bootDiagnostics": {
       "type": "bool",
       "defaultValue": true
     },
@@ -84,7 +84,7 @@
       "type": "bool",
       "defaultValue": true
     },
-    "hibernationEnabled": {
+    "hibernation": {
       "type": "bool",
       "defaultValue": false
     },
@@ -185,7 +185,7 @@
             }
           },
           "bootDiagnosticsEnabled": {
-            "value": "[parameters('bootDiagnosticsEnabled')]"
+            "value": "[parameters('bootDiagnostics')]"
           },
           "customImageResourceId": {
             "value": "[parameters('imageVersionResourceId')]"
@@ -206,7 +206,7 @@
             "value": "[parameters('encryptionAtHost')]"
           },
           "hibernationEnabled": {
-            "value": "[parameters('hibernationEnabled')]"
+            "value": "[parameters('hibernation')]"
           },
           "licenseType": {
             "value": "[parameters('licenseType')]"
