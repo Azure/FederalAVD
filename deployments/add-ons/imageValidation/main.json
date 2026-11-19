@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "9514678933712755150"
+      "templateHash": "10946992661336524176"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -1583,107 +1583,6 @@
         }
       },
       "dependsOn": [
-        "rg"
-      ]
-    },
-    "userAssignedIdentity": {
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('userAssignedIdentity-{0}', uniqueString('userAssignedIdentity', deployment().name))]",
-      "resourceGroup": "[parameters('resourceGroupName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "name": {
-            "value": "[parameters('userAssignedIdentityName')]"
-          },
-          "tags": {
-            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject())]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.49.2.45890",
-              "templateHash": "4675357121791106424"
-            },
-            "name": "User-assigned managed identity",
-            "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
-          },
-          "parameters": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the user-assigned managed identity to deploy."
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Optional. Azure region for the user-assigned managed identity; defaults to the deployment resource group region."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags applied to the user-assigned managed identity."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-              "apiVersion": "2023-01-31",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]"
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the user-assigned managed identity."
-              },
-              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure resource name of the user-assigned managed identity."
-              },
-              "value": "[parameters('name')]"
-            },
-            "clientId": {
-              "type": "string",
-              "metadata": {
-                "description": "Application client ID of the user-assigned managed identity, for identity selection by clients."
-              },
-              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').clientId]"
-            },
-            "principalId": {
-              "type": "string",
-              "metadata": {
-                "description": "Microsoft Entra service principal object ID of the user-assigned managed identity, for granting permissions."
-              },
-              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('name')), '2023-01-31').principalId]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "networkInterface",
         "rg"
       ]
     },
@@ -4924,9 +4823,6 @@
           "functionAppName": {
             "value": "[parameters('functionAppName')]"
           },
-          "functionAppUserAssignedIdentityResourceId": {
-            "value": "[reference('userAssignedIdentity').outputs.resourceId.value]"
-          },
           "hostPoolResourceId": {
             "value": ""
           },
@@ -5923,8 +5819,7 @@
         "keyVault",
         "networkInterface",
         "rg",
-        "serverFarm",
-        "userAssignedIdentity"
+        "serverFarm"
       ]
     },
     "function": {

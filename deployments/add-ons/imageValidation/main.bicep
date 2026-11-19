@@ -214,18 +214,6 @@ module networkInterface '../../shared/modules/resourceModules/network/networkInt
   }
 }
 
-module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/deploy.bicep' = {
-  scope: rg
-  params: {
-    location: location
-    name: userAssignedIdentityName
-    tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
-  }
-  dependsOn: [
-    networkInterface
-  ]
-}
-
 module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = {
   scope: rg
   params: {
@@ -404,7 +392,6 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     ])
     functionAppDelegatedSubnetResourceId: integrationSubnetId
     functionAppName: functionAppName
-    functionAppUserAssignedIdentityResourceId: userAssignedIdentity.outputs.resourceId
     hostPoolResourceId: ''
     keyManagementStorageAccounts: 'CustomerManagedHSM'
     location: location
