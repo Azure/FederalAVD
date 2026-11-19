@@ -896,12 +896,28 @@
               "label": "Private DNS Zones",
               "elements": [
                 {
+                  "name": "subscription",
+                  "type": "Microsoft.Common.SubscriptionSelector",
+                  "resourceProviders": [
+                    "Microsoft.Network"
+                  ],
+                  "constraints": {
+                    "validations": [
+                      {
+                        "isValid": "[not(empty(steps('basics').subscription.subscriptionId))]",
+                        "message": "Select a subscription."
+                      }
+                    ]
+                  },
+                  "visible": true
+                },
+                {
                   "name": "privateDnsZonesApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
                   "condition": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
                   "request": {
                     "method": "GET",
-                    "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                    "path": "[concat('/subscriptions/', steps('functionApp').privateDnsZones.subscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
                   }
                 },
                 {
@@ -909,9 +925,10 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Azure blobs",
                   "toolTip": "Select the private DNS zone for Azure Blobs.",
+                  "multiLine": true,
                   "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => item.name))]",
                   "constraints": {
-                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
                     "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                   },
                   "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
@@ -921,9 +938,10 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Azure functions",
                   "toolTip": "Select the private DNS zone for Azure Functions.",
+                  "multiLine": true,
                   "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => item.name))]",
                   "constraints": {
-                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
                     "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                   },
                   "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
@@ -933,9 +951,10 @@
                   "type": "Microsoft.Common.DropDown",
                   "label": "Key vault",
                   "toolTip": "Select the private DNS zone for the key vault.",
+                  "multiLine": true,
                   "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => item.name))]",
                   "constraints": {
-                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
                     "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                   },
                   "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
@@ -1010,7 +1029,7 @@
                   "name": "appServicePlan",
                   "type": "Microsoft.Common.TextBox",
                   "label": "App service plan",
-                  "defaultValue": "",
+                  "defaultValue": "asp-<env>-<location>-imgv",
                   "visible": "[not(steps('functionApp').general.existingAppServicePlan)]",
                   "constraints": {
                     "required": true,
@@ -1026,7 +1045,7 @@
                   "name": "applicationInsights",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Application insights",
-                  "defaultValue": "asp-<env>-<location>-imgv",
+                  "defaultValue": "appi-<env>-<location>-imgv",
                   "toolTip": "",
                   "constraints": {
                     "required": true,
@@ -1050,7 +1069,7 @@
                   "name": "disk",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Disk",
-                  "defaultValue": "",
+                  "defaultValue": "disk-<env>-<location>-imgv",
                   "visible": true,
                   "constraints": {
                     "required": true,
@@ -1063,10 +1082,22 @@
                   }
                 },
                 {
+                  "name": "functionAppCheckNameAvailabilityApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "request": {
+                    "method": "POST",
+                    "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.Web/checkNameAvailability?api-version=2016-08-01')]",
+                    "body": {
+                      "name": "[steps('namingAndTags').naming.functionApp]",
+                      "type": "Microsoft.Web/sites"
+                    }
+                  }
+                },
+                {
                   "name": "functionApp",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Function app",
-                  "defaultValue": "",
+                  "defaultValue": "fa-<env>-<location>-imgv",
                   "constraints": {
                     "required": true,
                     "validations": [
@@ -1086,11 +1117,23 @@
                   }
                 },
                 {
+                  "name": "keyVaultCheckNameAvailabilityApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "request": {
+                    "method": "POST",
+                    "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.KeyVault/checkNameAvailability?api-version=2024-11-01')]",
+                    "body": {
+                      "name": "[steps('namingAndTags').naming.keyVault]",
+                      "type": "Microsoft.KeyVault/vaults"
+                    }
+                  }
+                },
+                {
                   "name": "keyVault",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Key vault",
-                  "defaultValue": "",
-                  "toolTip": "Leave empty to use the shared naming framework. This new Premium vault stores the runtime storage CMK, not VM credentials.",
+                  "defaultValue": "kv-<env>-<location>-imgv",
+                  "toolTip": "Input the name of the key vault to store keys.",
                   "constraints": {
                     "required": true,
                     "validations": [
@@ -1109,6 +1152,10 @@
                       {
                         "isValid": "[not(contains(steps('namingAndTags').naming.keyVault, '--'))]",
                         "message": "The value cannot contain consecutive hyphens."
+                      },
+                      {
+                        "isValid": "[steps('namingAndTags').naming.keyVaultCheckNameAvailabilityApi.nameAvailable]",
+                        "message": "The key vault name is not available."
                       }
                     ]
                   }
@@ -1117,7 +1164,7 @@
                   "name": "networkInterface",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Network interface",
-                  "defaultValue": "",
+                  "defaultValue": "nic-<env>-<location>-imgv",
                   "visible": true,
                   "constraints": {
                     "required": true,
@@ -1141,7 +1188,7 @@
                   "name": "resourceGroup",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Resource group",
-                  "defaultValue": "",
+                  "defaultValue": "rg-<env>-<location>-imgv",
                   "constraints": {
                     "required": true,
                     "validations": [
@@ -1172,7 +1219,7 @@
                   "name": "storage",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Storage account",
-                  "defaultValue": "",
+                  "defaultValue": "st<env><location>imgv",
                   "constraints": {
                     "required": true,
                     "validations": [
@@ -1191,7 +1238,7 @@
                   "name": "templateSpec",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Template spec",
-                  "defaultValue": "",
+                  "defaultValue": "ts-<env>-<location>-imgv",
                   "constraints": {
                     "required": true,
                     "validations": [
@@ -1206,7 +1253,7 @@
                   "name": "userAssignedIdentity",
                   "type": "Microsoft.Common.TextBox",
                   "label": "User-Assigned managed identity",
-                  "defaultValue": "",
+                  "defaultValue": "id-<env>-<location>-imgv",
                   "constraints": {
                     "required": true,
                     "validations": [
@@ -1225,7 +1272,7 @@
                   "name": "virtualMachine",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Virtual machine",
-                  "defaultValue": "",
+                  "defaultValue": "vm<env><location>imgv",
                   "visible": true,
                   "constraints": {
                     "required": true,
