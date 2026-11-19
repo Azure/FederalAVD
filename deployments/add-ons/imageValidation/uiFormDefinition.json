@@ -288,7 +288,7 @@
                 {
                   "name": "checkIPAddressAvailabilityApi",
                   "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('virtualMachine').network.virtualNetwork))]",
+                  "condition": "[and(not(empty(steps('virtualMachine').network.virtualNetwork)), not(empty(steps('virtualMachine').network.privateIPAddress)))]",
                   "request": {
                     "method": "GET",
                     "path": "[concat(steps('virtualMachine').network.virtualNetwork.id, '/checkIPAddressAvailability?api-version=2026-01-01&ipAddress=', steps('virtualMachine').network.privateIPAddress)]"
@@ -758,8 +758,8 @@
                   "label": "App service plan",
                   "resourceType": "Microsoft.Web/serverFarms",
                   "scope": {
-                    "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-                    "location": "[steps('basics').scope.location.name]"
+                    "location": "[steps('basics').scope.location.name]",
+                    "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
                   },
                   "visible": "[steps('functionApp').general.existingAppServicePlan]",
                   "constraints": {
@@ -848,8 +848,8 @@
                   "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
                   "resourceType": "Microsoft.Network/virtualNetworks",
                   "scope": {
-                    "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
-                    "location": "[steps('basics').scope.location.name]"
+                    "location": "[steps('basics').scope.location.name]",
+                    "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
                   },
                   "constraints": {
                     "required": true
@@ -887,39 +887,58 @@
                     "required": true,
                     "allowedValues": "[map(filter(steps('functionApp').networkSettings.subnetsApi.value, (item) => not(empty(filter(if(empty(item.properties.delegations), parse('[]'), item.properties.delegations), (delegation) => equals(toLower(delegation.properties.serviceName), 'microsoft.web/serverfarms'))))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
                   }
-                },
+                }
+              ]
+            },
+            {
+              "name": "privateDnsZones",
+              "type": "Microsoft.Common.Section",
+              "label": "Private DNS Zones",
+              "elements": [
                 {
-                  "name": "blobDnsZone",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Blob private DNS zone",
-                  "toolTip": "Select the blob private DNS zone for the target network.",
-                  "resourceType": "Microsoft.Network/privateDnsZones",
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
-                  "constraints": {
-                    "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                  "name": "privateDnsZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
                   }
                 },
                 {
-                  "name": "appDnsZone",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Function app private DNS zone",
-                  "toolTip": "Select the app service private DNS zone for the target network.",
-                  "resourceType": "Microsoft.Network/privateDnsZones",
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
+                  "name": "azureBlobs",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Azure blobs",
+                  "toolTip": "Select the private DNS zone for Azure Blobs.",
+                  "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => item.name))]",
                   "constraints": {
+                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
                     "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                  }
+                  },
+                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                 },
                 {
-                  "name": "vaultDnsZone",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Key vault private DNS zone",
-                  "toolTip": "Select the key vault private DNS zone for the target network.",
-                  "resourceType": "Microsoft.Network/privateDnsZones",
-                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
+                  "name": "azureFunctions",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Azure functions",
+                  "toolTip": "Select the private DNS zone for Azure Functions.",
+                  "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => item.name))]",
                   "constraints": {
+                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
                     "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
-                  }
+                  },
+                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                },
+                {
+                  "name": "keyVault",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Key vault",
+                  "toolTip": "Select the private DNS zone for the key vault.",
+                  "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => item.name))]",
+                  "constraints": {
+                    "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                    "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                  },
+                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                 }
               ]
             },
@@ -1262,26 +1281,26 @@
     },
     "outputs": {
       "kind": "Subscription",
-      "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]",
+      "subscriptionId": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId)]",
       "location": "[steps('basics').scope.location.name]",
       "parameters": {
         "applicationInsightsName": "[steps('namingAndTags').naming.applicationInsights]",
         "appServicePlanName": "[if(steps('functionApp').general.existingAppServicePlan, '', steps('namingAndTags').naming.appServicePlan)]",
         "appServicePlanResourceId": "[if(steps('functionApp').general.existingAppServicePlan, steps('functionApp').general.appServicePlan.id, '')]",
-        "appServicePlanSku": "[steps('functionApp').general.appServicePlanSku]",
+        "appServicePlanSku": "[if(steps('functionApp').general.existingAppServicePlan, '', steps('functionApp').general.appServicePlanSku)]",
         "artifactsContainerUri": "[if(steps('virtualMachine').customizations.addCustomScripts, if(and(not(empty(steps('virtualMachine').customizations.storageAccount)), not(empty(steps('virtualMachine').customizations.container))), concat(steps('virtualMachine').customizations.storageAccount.blobEndpoint, steps('virtualMachine').customizations.container), ''), '')]",
         "artifactsUserAssignedIdentityClientId": "[if(steps('virtualMachine').customizations.addCustomScripts, if(not(empty(steps('virtualMachine').customizations.managedIdentity)), steps('virtualMachine').customizations.managedIdentity.clientId, ''), '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.blobDnsZone.id, '')]",
-        "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.appDnsZone.id, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.vaultDnsZone.id, '')]",
+        "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureBlobs, '')]",
+        "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureFunctions, '')]",
+        "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.keyVault, '')]",
         "bootDiagnostics": "[steps('virtualMachine').general.bootDiagnostics]",
-        "diskAccessResourceId": "[steps('virtualMachine').disk.diskAccess.id]",
+        "diskAccessResourceId": "[if(equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate'), steps('virtualMachine').disk.diskAccess.id, '')]",
         "diskControllerType": "[steps('virtualMachine').disk.controllerType]",
-        "diskEncryptionSetResourceId": "[steps('virtualMachine').disk.diskEncryptionSet.id]",
+        "diskEncryptionSetResourceId": "[if(equals(steps('virtualMachine').disk.encryptionType, 'CMK'), steps('virtualMachine').disk.diskEncryptionSet.id, '')]",
         "diskName": "[steps('namingAndTags').naming.disk]",
         "acceleratedNetworking": "[steps('virtualMachine').network.acceleratedNetworking]",
         "encryptionAtHost": "[steps('virtualMachine').disk.encryptionAtHost]",
-        "functionAppDelegatedSubnetResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.delegatedSubnet, '')]",
+        "functionAppDelegatedSubnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]",
         "functionAppName": "[steps('namingAndTags').naming.functionApp]",
         "imageLicenseType": "[steps('virtualMachine').image.licenseType]",
         "imageVersionResourceId": "[first(map(steps('virtualMachine').image.versionsApi.transformed.list, (item) => item.value))]",
@@ -1302,7 +1321,7 @@
         "tags": "[steps('namingAndTags').tagsSection.tags]",
         "templateSpecName": "[steps('namingAndTags').naming.templateSpec]",
         "userAssignedIdentityName": "[steps('namingAndTags').naming.userAssignedIdentity]",
-        "userAssignedIdentityResourceIds": "",
+        "userAssignedIdentityResourceIds": "[parse('[]')]",
         "virtualMachineCustomizations": "[if(steps('virtualMachine').customizations.addCustomScripts, steps('virtualMachine').customizations.customScripts, parse('[]'))]",
         "virtualMachineName": "[steps('namingAndTags').naming.virtualMachine]",
         "virtualMachineSize": "[steps('virtualMachine').general.size]",
