@@ -101,6 +101,7 @@ product configuration, READMEs, and staged installers.
 | [Configure-LocalServiceAccount](Configure-LocalServiceAccount/) | Create or update a local service account using a Key Vault password | — |
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
 | [Configure-OneDrivePolicy](Configure-OneDrivePolicy/) | Configure OneDrive Known Folder Move and free-space thresholds | — |
+| [Configure-OneDrivePinnedFolders](Configure-OneDrivePinnedFolders/) | Stage a per-user OneDrive folder-pinning script with a delayed sign-in task and failure retries | — |
 | [Configure-RemoteDesktopPolicy](Configure-RemoteDesktopPolicy/) | Configure Remote Desktop session policies | — |
 | [Configure-SecureNetworkProtocols](Configure-SecureNetworkProtocols/) | Disable legacy TLS/SSL and weak cipher suites | — |
 | [Configure-WindowsUpdatePolicy](Configure-WindowsUpdatePolicy/) | Configure Windows Update / WSUS policy settings | — |
