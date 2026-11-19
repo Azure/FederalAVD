@@ -51,7 +51,7 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 			parameters = @{
 				acceleratedNetworking = @{ value = [bool]$env:acceleratedNetworking }
 				artifactsContainerUri = @{ value = $env:artifactsContainerUri }
-				artifactsUserAssignedIdentityClientId = @{ value = $env:artifactsUserAssignedIdentityClientId }
+				artifactsUserAssignedIdentityResourceId = @{ value = $env:artifactsUserAssignedIdentityResourceId }
 				bootDiagnostics = @{ value = [bool]$env:bootDiagnostics }
 				diskAccessResourceId = @{ value = $env:diskAccessResourceId }
 				diskControllerType = @{ value = $env:diskControllerType }
@@ -70,7 +70,6 @@ if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -
 				securityType = @{ value = $env:securityType }
 				subnetResourceId = @{ value = $env:subnetResourceId }
 				tags = @{ value = ($env:tags | ConvertFrom-Json -Depth 5) }
-				userAssignedIdentityResourceIds = @{ value = ($env:userAssignedIdentityResourceIds | ConvertFrom-Json -Depth 5) }
 				virtualMachineName = @{ value = $env:virtualMachineName }
 				virtualMachineSize = @{ value = $env:virtualMachineSize }
 				vmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -Depth 5) }

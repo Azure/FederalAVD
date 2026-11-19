@@ -29,8 +29,8 @@ param appServicePlanResourceId string = ''
 @description('Optional. URI of the storage container containing the customization artifacts.')
 param artifactsContainerUri string = ''
 
-@description('Optional. Client ID of the user-assigned identity used to access the customization artifacts.')
-param artifactsUserAssignedIdentityClientId string = ''
+@description('Optional. Resource ID of the user-assigned identity used to access the customization artifacts.')
+param artifactsUserAssignedIdentityResourceId string = ''
 
 @description('Required for private mode. Existing target-cloud blob private DNS zone ID, linked to the integration VNet.')
 param azureBlobPrivateDnsZoneResourceId string = ''
@@ -165,9 +165,6 @@ param templateSpecName string
 @maxLength(128)
 param userAssignedIdentityName string
 
-@description('Optional. Existing user-assigned identity resource IDs for the validation VM.')
-param userAssignedIdentityResourceIds array = []
-
 @description('Optional. Customizations applied to the validation VM.')
 param virtualMachineCustomizations artifactCustomizationType[] = []
 
@@ -301,8 +298,8 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: artifactsContainerUri
       }
       {
-        name: 'artifactsUserAssignedIdentityClientId'
-        value: artifactsUserAssignedIdentityClientId
+        name: 'artifactsUserAssignedIdentityResourceId'
+        value: artifactsUserAssignedIdentityResourceId
       }
       {
         name: 'bootDiagnostics'
@@ -375,10 +372,6 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       {
         name: 'tags'
         value: string(tags[?'Microsoft.Compute/virtualMachines'] ?? {})
-      }
-      {
-        name: 'userAssignedIdentityResourceIds'
-        value: string(union(userAssignedIdentityResourceIds, [userAssignedIdentity.outputs.resourceId]))
       }
       {
         name: 'virtualMachineName'

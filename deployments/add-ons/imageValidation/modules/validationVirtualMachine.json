@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "16554968559648220553"
+      "templateHash": "10006300007730171575"
     }
   },
   "definitions": {
@@ -57,7 +57,7 @@
       "type": "string",
       "defaultValue": ""
     },
-    "artifactsUserAssignedIdentityClientId": {
+    "artifactsUserAssignedIdentityResourceId": {
       "type": "string",
       "defaultValue": ""
     },
@@ -127,10 +127,6 @@
       "type": "object",
       "defaultValue": {}
     },
-    "userAssignedIdentityResourceIds": {
-      "type": "array",
-      "defaultValue": []
-    },
     "virtualMachineName": {
       "type": "string"
     },
@@ -157,6 +153,15 @@
       "subscriptionId": "[split(parameters('keyVaultResourceId'), '/')[2]]",
       "resourceGroup": "[split(parameters('keyVaultResourceId'), '/')[4]]",
       "name": "[last(split(parameters('keyVaultResourceId'), '/'))]"
+    },
+    "userAssignedIdentity": {
+      "condition": "[not(empty(parameters('artifactsUserAssignedIdentityResourceId')))]",
+      "existing": true,
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2018-11-30",
+      "subscriptionId": "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[4]]",
+      "name": "[last(split(parameters('artifactsUserAssignedIdentityResourceId'), '/'))]"
     },
     "virtualMachine": {
       "type": "Microsoft.Resources/deployments",
@@ -244,9 +249,7 @@
           "tags": {
             "value": "[parameters('tags')]"
           },
-          "userAssignedIdentityResourceIds": {
-            "value": "[parameters('userAssignedIdentityResourceIds')]"
-          },
+          "userAssignedIdentityResourceIds": "[if(empty(parameters('artifactsUserAssignedIdentityResourceId')), createObject('value', createArray()), createObject('value', createArray(parameters('artifactsUserAssignedIdentityResourceId'))))]",
           "vmSize": {
             "value": "[parameters('virtualMachineSize')]"
           },
@@ -868,6 +871,7 @@
       ]
     },
     "customizations": {
+      "condition": "[and(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), not(empty(parameters('vmCustomizations'))))]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('customizations-{0}', uniqueString('customizations', deployment().name))]",
@@ -884,7 +888,7 @@
             "value": "[parameters('vmCustomizations')]"
           },
           "userAssignedIdentityClientId": {
-            "value": "[parameters('artifactsUserAssignedIdentityClientId')]"
+            "value": "[reference('userAssignedIdentity').clientId]"
           },
           "virtualMachineName": {
             "value": "[parameters('virtualMachineName')]"
@@ -1019,6 +1023,7 @@
         }
       },
       "dependsOn": [
+        "userAssignedIdentity",
         "virtualMachine"
       ]
     }

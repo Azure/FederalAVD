@@ -2,7 +2,7 @@ import { artifactCustomizationType } from '../../../shared/modules/resourceModul
 
 param acceleratedNetworking bool = true
 param artifactsContainerUri string = ''
-param artifactsUserAssignedIdentityClientId string = ''
+param artifactsUserAssignedIdentityResourceId string = ''
 param bootDiagnostics bool = true
 param diskAccessResourceId string = ''
 param diskControllerType string = 'SCSI'
@@ -21,7 +21,6 @@ param secureBoot bool = true
 param securityType string = 'TrustedLaunch'
 param subnetResourceId string
 param tags object = {}
-param userAssignedIdentityResourceIds array = []
 param virtualMachineName string
 param virtualMachineSize string
 param vmCustomizations artifactCustomizationType[] = []
@@ -30,6 +29,11 @@ param vTpm bool = true
 resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
   scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
   name: last(split(keyVaultResourceId, '/'))
+}
+
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' existing = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+  scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
+  name: last(split(artifactsUserAssignedIdentityResourceId, '/'))
 }
 
 module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMachines/deploy.bicep' = {
@@ -56,7 +60,9 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
     securityType: securityType
     subnetResourceId: subnetResourceId
     tags: tags
-    userAssignedIdentityResourceIds: userAssignedIdentityResourceIds
+    userAssignedIdentityResourceIds: empty(artifactsUserAssignedIdentityResourceId) ? [] : [
+      artifactsUserAssignedIdentityResourceId
+    ]
     vmSize: virtualMachineSize
     vTpmEnabled: vTpm
   }
@@ -70,11 +76,11 @@ module extension_GuestAttestation '../../../shared/modules/resourceModules/exten
   }
 }
 
-module customizations '../../../shared/modules/orchestration/sessionHosts/invokeCustomizations.bicep' = {
+module customizations '../../../shared/modules/orchestration/sessionHosts/invokeCustomizations.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId) && !empty(vmCustomizations)) {
   params: {
     artifactsContainerUri: artifactsContainerUri
     customizations: vmCustomizations
-    userAssignedIdentityClientId: artifactsUserAssignedIdentityClientId
+    userAssignedIdentityClientId: userAssignedIdentity!.properties.clientId
     virtualMachineName: virtualMachineName
   }
   dependsOn: [
