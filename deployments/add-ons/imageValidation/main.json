@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "10272392863441061342"
+      "templateHash": "9514678933712755150"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -1724,7 +1724,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "16301844172595616959"
+              "templateHash": "16412949497694810986"
             },
             "name": "Template Spec and version",
             "description": "Creates or updates a Template Spec and one version in the deployment resource group, optionally attaching a Portal form. The caller supplies the compiled ARM template and any form definition."
@@ -1785,6 +1785,9 @@
               }
             }
           },
+          "variables": {
+            "properties": "[if(empty(parameters('uiFormDefinition')), createObject('mainTemplate', parameters('mainTemplate')), createObject('mainTemplate', parameters('mainTemplate'), 'uiFormDefinition', parameters('uiFormDefinition')))]"
+          },
           "resources": [
             {
               "type": "Microsoft.Resources/templateSpecs",
@@ -1803,10 +1806,7 @@
               "name": "[format('{0}/{1}', parameters('name'), parameters('version'))]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
-              "properties": {
-                "mainTemplate": "[parameters('mainTemplate')]",
-                "uiFormDefinition": "[if(not(empty(parameters('uiFormDefinition'))), parameters('uiFormDefinition'), null())]"
-              },
+              "properties": "[variables('properties')]",
               "dependsOn": [
                 "[resourceId('Microsoft.Resources/templateSpecs', parameters('name'))]"
               ]
@@ -1881,10 +1881,10 @@
             "value": "[variables('endpointSubnetId')]"
           },
           "privateEndpointNameConv": {
-            "value": "[format('pe-{0}', parameters('keyVaultName'))]"
+            "value": "pe-RESOURCE-SUBRESOURCE"
           },
           "privateEndpointNICNameConv": {
-            "value": "[format('nic-pe-{0}', parameters('keyVaultName'))]"
+            "value": "nic-pe-RESOURCE-SUBRESOURCE"
           },
           "paasPublicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "tags": {
@@ -4944,10 +4944,10 @@
             "value": "[parameters('privateEndpoint')]"
           },
           "privateEndpointNameConv": {
-            "value": "[format('pe-{0}', parameters('functionAppName'))]"
+            "value": "pe-RESOURCE-SUBRESOURCE"
           },
           "privateEndpointNICNameConv": {
-            "value": "[format('nic-pe-{0}', parameters('functionAppName'))]"
+            "value": "nic-pe-RESOURCE-SUBRESOURCE"
           },
           "privateEndpointSubnetResourceId": {
             "value": "[variables('endpointSubnetId')]"

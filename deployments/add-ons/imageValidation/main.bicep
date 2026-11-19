@@ -252,8 +252,8 @@ module keyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' =
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     privateEndpoint: privateEndpoint
     privateEndpointSubnetResourceId: endpointSubnetId
-    privateEndpointNameConv: 'pe-${keyVaultName}'
-    privateEndpointNICNameConv: 'nic-pe-${keyVaultName}'
+    privateEndpointNameConv: 'pe-RESOURCE-SUBRESOURCE'
+    privateEndpointNICNameConv: 'nic-pe-RESOURCE-SUBRESOURCE'
     paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     tags: tags
   }
@@ -411,8 +411,8 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
     privateEndpoint: privateEndpoint
-    privateEndpointNameConv: 'pe-${functionAppName}'
-    privateEndpointNICNameConv: 'nic-pe-${functionAppName}'
+    privateEndpointNameConv: 'pe-RESOURCE-SUBRESOURCE'
+    privateEndpointNICNameConv: 'nic-pe-RESOURCE-SUBRESOURCE'
     privateEndpointSubnetResourceId: endpointSubnetId
     privateLinkScopeResourceId: privateLinkScopeResourceId
     serverFarmId: empty(appServicePlanResourceId)
