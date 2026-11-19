@@ -221,6 +221,9 @@ module userAssignedIdentity '../../shared/modules/resourceModules/managedIdentit
     name: userAssignedIdentityName
     tags: tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
   }
+  dependsOn: [
+    networkInterface
+  ]
 }
 
 module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = {
@@ -233,6 +236,9 @@ module templateSpec '../../shared/modules/resourceModules/resources/templateSpec
     name: templateSpecName
     tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
   }
+  dependsOn: [
+    networkInterface
+  ]
 }
 
 module keyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
@@ -266,6 +272,9 @@ module keys '../../shared/modules/orchestration/customerManagedKeys/customerMana
     location: location
     tags: tags
   }
+  dependsOn: [
+    networkInterface
+  ]
 }
 
 module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
@@ -279,6 +288,9 @@ module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppH
     tags: tags
     zoneRedundant: false
   }
+  dependsOn: [
+    networkInterface
+  ]
 }
 
 module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
@@ -428,4 +440,7 @@ module function '../../shared/modules/resourceModules/functionApp/function.bicep
     functionName: 'ImageValidation'
     schedule: schedule
   }
+  dependsOn: [
+    networkInterface
+  ]
 }
