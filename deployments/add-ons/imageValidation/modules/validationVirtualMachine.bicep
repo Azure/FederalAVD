@@ -8,6 +8,7 @@ param diskAccessResourceId string = ''
 param diskControllerType string = 'SCSI'
 param diskEncryptionSetResourceId string = ''
 param diskName string
+param diskNetworkAccess string = 'DenyAll'
 param encryptionAtHost bool = true
 param hibernation bool = false
 param imageVersionResourceId string
@@ -44,6 +45,7 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
     customImageResourceId: imageVersionResourceId
     diskAccessId: diskAccessResourceId
     diskControllerType: diskControllerType
+    //diskNetworkAccess: diskNetworkAccess // Add this setting once all clouds support 2026-04-01 or later
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     enableAcceleratedNetworking: acceleratedNetworking
     encryptionAtHost: encryptionAtHost
