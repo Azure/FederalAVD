@@ -100,7 +100,7 @@ The Azure identity running this deployment needs:
 
 - **Type:** Object
 - **Default:** CAF-aligned (`resourceType-workload-purpose-location`)
-- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. Set the optional `imageManagementStoragePrefix` property to a shared prefix of up to 5 lowercase letters or numbers when storage account names must begin with an organization-specific token. The resulting names append `imgassets` or `imglogs`, the location abbreviation, and a deterministic 6-character uniqueness suffix. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, segment descriptions, and cross-solution examples.
+- **Description:** Controls how every resource in the deployment is named. Leave at its default for CAF-compliant names. Pass the same object to all solutions (sharedServices, imageManagement, hostpool) for a consistent enterprise naming convention. Set the optional `imageManagementStoragePrefix` property to a shared prefix of up to 5 lowercase letters or numbers when storage account names must begin with an organization-specific token. The resulting names append `imgassets` or `imglogs`, a deterministic 6-character uniqueness token, and the location abbreviation. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. Moving the hash before the location changes generated account names; existing accounts are not renamed or migrated. See the **[Naming Convention guide](../../docs/naming-convention.md)** for the full parameter schema, migration warning, segment descriptions, and cross-solution examples.
 
 ### Storage Configuration
 
@@ -352,13 +352,13 @@ az deployment sub create \
 
 - **Type:** String
 - **Description:** Resource ID of the artifacts storage account. Empty string when `deployArtifactsStorageAccount = false`.
-- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsuse2abc123`
+- **Example:** `/subscriptions/{sub}/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsabc123use2`
 
 ### `artifactsBlobContainerUrl`
 
 - **Type:** String
 - **Description:** Full URL of the artifacts blob container. Empty string when `deployArtifactsStorageAccount = false`.
-- **Example:** `https://saimgassetsuse2abc123.blob.core.usgovcloudapi.net/artifacts/`
+- **Example:** `https://saimgassetsabc123use2.blob.core.usgovcloudapi.net/artifacts/`
 - **Used by:** Image build deployments to download artifacts
 
 ### `managedIdentityResourceId`

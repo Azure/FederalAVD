@@ -64,6 +64,7 @@ var explicitShared = sharedServicesNames({
   globalFeedWorkspaceName: 'explicit-feed'
 })
 var customImage = imageManagementNames({ imageManagementStoragePrefix: 'cont1', locationAbbreviation: 'e1' }, context, 'PlatformManagedAndCustomerManaged')
+var lastImage = imageManagementNames({ components: ['workload', 'purpose', 'location', 'resourceType'], locationAbbreviation: 'e1' }, context, 'CustomerManaged')
 var sharedAtLimit = sharedServicesNames({ workload: 'avdxxx' }, context, {})
 var shared = sharedServicesNames({}, context, {})
 var vaultContext = union(context, { resourceGroupName: shared.operationsResourceGroupName })
@@ -88,6 +89,12 @@ output encodedResults string = base64(string(cases))
 output encodedFoundation string = base64(string({
   explicitShared: explicitShared
   customImage: customImage
+  lastImage: lastImage
+  lastImageSeed: take(uniqueString(toLower(context.subscriptionId), toLower(lastImage.resourceGroupName), toLower(context.location)), 6)
+  imageAtLimit: {
+    artifacts: imageStorageName({}, 'artifacts', 'use2', union(context, { resourceGroupName: customImage.resourceGroupName }), 'cont1')
+    logs: imageStorageName({}, 'logs', 'use2', union(context, { resourceGroupName: customImage.resourceGroupName }), 'cont1')
+  }
   sharedAtLimit: sharedAtLimit
   customImageSeed: take(uniqueString(toLower(context.subscriptionId), toLower(customImage.resourceGroupName), toLower(context.location)), 6)
   consolidatedSeed: take(uniqueString(toLower(context.subscriptionId), 'existing-operations', toLower(context.location)), 6)

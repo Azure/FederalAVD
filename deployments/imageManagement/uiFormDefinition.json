@@ -977,7 +977,7 @@
                   "placeholder": "e.g. cont, corp",
                   "defaultValue": "",
                   "visible": "[or(steps('storageAccounts').deployArtifactsStorageAccount, steps('storageAccounts').deployBuildLogsStorageAccount)]",
-                  "toolTip": "Optional shared prefix for the artifacts and build-logs storage accounts. Use up to 5 lowercase letters or numbers. The names append imgassets or imglogs, the location abbreviation, and a 6-character deterministic uniqueness suffix. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. Leave empty to derive storage account names from the naming convention.",
+                  "toolTip": "Optional shared prefix for the artifacts and build-logs storage accounts. Use up to 5 lowercase letters or numbers. The names append imgassets or imglogs, a 6-character deterministic uniqueness token, and the location abbreviation. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. Leave empty to derive storage account names from the naming convention.",
                   "constraints": {
                     "required": false,
                     "regex": "^[a-z0-9]{0,5}$",

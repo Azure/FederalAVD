@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "13084805137274458318"
+      "templateHash": "116333495448319488"
     }
   },
   "definitions": {
@@ -2356,9 +2356,9 @@
         "storageCmkKey": "{identifier}-storage-cmk",
         "imageGalleryKey": "{identifier}-gallery-cmk",
         "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
-        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
-        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
-        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+        "imageStorageFirst": "{storageAccounts}{purpose}{unique}{location}",
+        "imageStorageLast": "{purpose}{unique}{location}{storageAccounts}",
+        "imageStorageCustomPrefix": "{prefix}{purpose}{unique}{location}",
         "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
         "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
         "imageBuildVm": "{prefix}img-{unique}",

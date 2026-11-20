@@ -28,7 +28,7 @@ Describe 'Image Management storage account prefix' {
         'cont12' | Should -Not -Match $prefix.constraints.regex
         'contoso-avd' | Should -Not -Match $prefix.constraints.regex
         ([regex]::IsMatch('CONTOSO', $prefix.constraints.regex)) | Should -Be $false
-        ('cont1' + 'imgassets' + 'use2' + 'abcdef').Length | Should -Be 24
+        ('cont1' + 'imgassets' + 'abcdef' + 'use2').Length | Should -Be 24
         $locationError.visible | Should -Match 'imageManagementStoragePrefix'
         $locationError.visible | Should -Match 'locationAbbreviationOverride'
         $locationError.visible | Should -Match 'deployArtifactsStorageAccount'
@@ -52,7 +52,7 @@ Describe 'Image Management storage account prefix' {
         $form.view.outputs.parameters.namingConvention | Should -Match "steps\('tagsAndNaming'\)\.naming\.imageManagementStoragePrefix"
     }
 
-    It 'preserves default names and uses deterministic custom-prefix names' {
+    It 'uses purpose-adjacent uniqueness for default and custom-prefix names' {
         $functions = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep') -Raw
         $policy = Get-TestNamingPolicy
         $bicep | Should -Match 'var naming = imageManagementNames\(namingConvention,'
@@ -68,6 +68,9 @@ Describe 'Image Management storage account prefix' {
         $policy.limits.imageManagementStoragePrefix | Should -Be 5
         $policy.limits.imageManagementStorageLocation | Should -Be 4
         $policy.limits.uniqueSuffix | Should -Be 6
+        $policy.patterns.imageStorageFirst | Should -Be '{storageAccounts}{purpose}{unique}{location}'
+        $policy.patterns.imageStorageLast | Should -Be '{purpose}{unique}{location}{storageAccounts}'
+        $policy.patterns.imageStorageCustomPrefix | Should -Be '{prefix}{purpose}{unique}{location}'
         $arm | Should -Match 'imageManagementStoragePrefix'
         $arm | Should -Match 'imgassets'
         $arm | Should -Match 'imglogs'

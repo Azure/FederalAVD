@@ -154,11 +154,27 @@ Describe 'Direct centralized naming bundles' {
     }
 
     It 'shares the image scope hash across purposes and prefix choices while retaining double-encryption selection' {
-        $foundation.customImage.artifactsStorageAccountName | Should -Be "cont1imgassetse1$($foundation.customImageSeed)"
-        $foundation.customImage.logsStorageAccountName | Should -Be "cont1imglogse1$($foundation.customImageSeed)"
+        $foundation.customImage.artifactsStorageAccountName | Should -Be "cont1imgassets$($foundation.customImageSeed)e1"
+        $foundation.customImage.logsStorageAccountName | Should -Be "cont1imglogs$($foundation.customImageSeed)e1"
         $foundation.customImage.galleryDiskEncryptionSetName | Should -Be 'des-avd-image-management-platform-and-customer-keys-e1'
-        $foundation.defaultImage.artifactsStorageAccountName | Should -Be "saimgassetse1$($foundation.customImageSeed)"
-        $foundation.defaultImage.logsStorageAccountName | Should -Be "saimglogse1$($foundation.customImageSeed)"
+        $foundation.defaultImage.artifactsStorageAccountName | Should -Be "saimgassets$($foundation.customImageSeed)e1"
+        $foundation.defaultImage.logsStorageAccountName | Should -Be "saimglogs$($foundation.customImageSeed)e1"
+    }
+
+    It 'places image storage uniqueness after purpose and before trailing location and resource type' {
+        $foundation.lastImage.artifactsStorageAccountName | Should -Be "imgassets$($foundation.lastImageSeed)e1sa"
+        $foundation.lastImage.logsStorageAccountName | Should -Be "imglogs$($foundation.lastImageSeed)e1sa"
+        $foundation.imageAtLimit.artifacts | Should -Be "cont1imgassets$($foundation.customImageSeed)use2"
+        $foundation.imageAtLimit.logs | Should -Be "cont1imglogs$($foundation.customImageSeed)use2"
+        $foundation.imageAtLimit.artifacts.Length | Should -Be 24
+        foreach ($name in @(
+            $foundation.lastImage.artifactsStorageAccountName
+            $foundation.lastImage.logsStorageAccountName
+            $foundation.imageAtLimit.artifacts
+            $foundation.imageAtLimit.logs
+        )) {
+            $name | Should -Match '^[a-z0-9]{3,24}$'
+        }
     }
 
     It 'uses the same shared vault names for different host pools and the direct type API' {
