@@ -5,6 +5,9 @@ metadata description = 'The Image Validation add-on deploys an Azure Function Ap
 
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 
+@description('Optional. Enable accelerated networking for the validation VM network interface.')
+param acceleratedNetworking bool = true
+
 @description('Required. Complete name for the Application Insights resource.')
 @minLength(1)
 @maxLength(260)
@@ -44,8 +47,8 @@ param azureKeyVaultPrivateDnsZoneResourceId string = ''
 @description('Optional. Enable boot diagnostics for the validation VM.')
 param bootDiagnostics bool = true
 
-@description('Optional. Existing disk access resource ID for the validation VM.')
-param diskAccessResourceId string = ''
+@description('Optional. Name of the disk access resource to protect the validation VM\'s disk.')
+param diskAccessName string = ''
 
 @description('Optional. Disk controller type for the validation VM.')
 @allowed([
@@ -54,19 +57,40 @@ param diskAccessResourceId string = ''
 ])
 param diskControllerType string = 'SCSI'
 
-@description('Optional. Existing disk encryption set resource ID for the validation VM.')
-param diskEncryptionSetResourceId string = ''
+@description('Optional. Name of the disk encryption set resource to protect the validation VM\'s disk.')
+param diskEncryptionSetName string = ''
+
+@description('Optional. Encryption type for the disk encryption set.')
+@allowed([
+  'EncryptionAtRestWithCustomerKey'
+  'EncryptionAtRestWithPlatformAndCustomerKeys'
+  'ConfidentialVmEncryptedWithCustomerKey'
+])
+param diskEncryptionType string = 'EncryptionAtRestWithPlatformAndCustomerKeys'
 
 @description('Required. Complete name for the validation VM disk.')
 @minLength(1)
 @maxLength(80)
 param diskName string
 
-@description('Optional. Enable accelerated networking for the validation VM network interface.')
-param acceleratedNetworking bool = true
+@description('Optional. Network access configuration for the validation VM\'s disk.')
+@allowed([
+  'AllowAll'
+  'AllowPrivate'
+  'DenyAll'
+])
+param diskNetworkAccess string = 'DenyAll'
 
 @description('Optional. Enable encryption at host for the validation VM.')
 param encryptionAtHost bool = true
+
+@description('Optional. Endpoint type for the PaaS services.')
+@allowed([
+  'private'
+  'public'
+  'service'
+])
+param endpointType string = 'private'
 
 @description('Required for private mode. Existing Microsoft.Web/serverFarms-delegated integration subnet in the app region, separate from the endpoint subnet.')
 param functionAppDelegatedSubnetResourceId string = ''
@@ -110,17 +134,11 @@ param logAnalyticsWorkspaceResourceId string = ''
 @maxLength(80)
 param networkInterfaceName string
 
-@description('Optional. Create private endpoints and disable public app/storage access. Requires existing subnets and private DNS zones.')
-param privateEndpoint bool = true
-
-@description('Required for private mode. Existing subnet for app and blob private endpoints.')
-param privateEndpointSubnetResourceId string = ''
-
 @description('Optional. Existing Azure Monitor Private Link Scope ID. Without it, enabled Insights uses public ingestion and query endpoints.')
 param privateLinkScopeResourceId string = ''
 
 @description('Required. Available static IPv4 address in the validation VM subnet.')
-@minLength(1)
+@minLength(7)
 param privateIPAddress string
 
 @description('Required. Complete resource group name. The deployment manages this group.')
@@ -129,8 +147,8 @@ param privateIPAddress string
 param resourceGroupName string
 
 @description('Required. Timer schedule in six-field Functions NCRONTAB format or a supported app-setting reference.')
-@minLength(1)
-param schedule string
+@minLength(11)
+param schedule string = '0 0 21 * * *'
 
 @description('Optional. Enable secure boot for the validation VM.')
 param secureBoot bool = true
@@ -160,6 +178,16 @@ param tags object = {}
 @maxLength(90)
 param templateSpecName string
 
+@description('Optional. Time zone for the timer schedule in the Function App.')
+@allowed([
+  'Central Standard Time'
+  'Eastern Standard Time'
+  'Mountain Standard Time'
+  'Pacific Standard Time'
+  'UTC'
+])
+param timeZone string = 'UTC'
+
 @description('Required. Complete name for the Function App identity.')
 @minLength(3)
 @maxLength(128)
@@ -179,19 +207,16 @@ param virtualMachineSize string
 @description('Optional. Enable vTPM for the validation VM.')
 param vTpm bool = true
 
-var integrationSubnetId = privateEndpoint && empty(trim(functionAppDelegatedSubnetResourceId))
+var integrationSubnetId = endpointType == 'private' && empty(trim(functionAppDelegatedSubnetResourceId))
   ? fail('Private mode requires functionAppDelegatedSubnetResourceId.')
   : functionAppDelegatedSubnetResourceId
-var endpointSubnetId = privateEndpoint && empty(trim(privateEndpointSubnetResourceId))
-  ? fail('Private mode requires privateEndpointSubnetResourceId.')
-  : privateEndpointSubnetResourceId
-var blobDnsZoneId = privateEndpoint && empty(trim(azureBlobPrivateDnsZoneResourceId))
+var blobDnsZoneId = endpointType == 'private' && empty(trim(azureBlobPrivateDnsZoneResourceId))
   ? fail('Private mode requires azureBlobPrivateDnsZoneResourceId.')
   : azureBlobPrivateDnsZoneResourceId
-var appDnsZoneId = privateEndpoint && empty(trim(azureFunctionAppPrivateDnsZoneResourceId))
+var appDnsZoneId = endpointType == 'private' && empty(trim(azureFunctionAppPrivateDnsZoneResourceId))
   ? fail('Private mode requires azureFunctionAppPrivateDnsZoneResourceId.')
   : azureFunctionAppPrivateDnsZoneResourceId
-var vaultDnsZoneId = privateEndpoint && empty(trim(azureKeyVaultPrivateDnsZoneResourceId))
+var vaultDnsZoneId = endpointType == 'private' && empty(trim(azureKeyVaultPrivateDnsZoneResourceId))
   ? fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.')
   : azureKeyVaultPrivateDnsZoneResourceId
 
@@ -199,6 +224,42 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
   location: location
   tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
+}
+
+resource roleDefinition_keyVaultDeployAction 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  name: guid(subscription().id, 'KeyVaultDeployAction')
+  properties: {
+    roleName: 'KeyVaultDeployAction_${subscription().subscriptionId}'
+    description: 'Allows a principal to get but not view Key Vault secrets for an ARM template deployment.'
+    assignableScopes: [
+      subscription().id
+    ]
+    permissions: [
+      {
+        actions: [
+          'Microsoft.KeyVault/vaults/deploy/action'
+        ]
+      }
+    ]
+  }
+}
+
+resource roleDefinition_subnetJoinAction 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  name: guid(subscription().id, 'SubnetJoinAction')
+  properties: {
+    roleName: 'SubnetJoinAction_${subscription().subscriptionId}'
+    description: 'Allows a principal to join subnets for an ARM template deployment.'
+    assignableScopes: [
+      subscription().id
+    ]
+    permissions: [
+      {
+        actions: [
+          'Microsoft.Network/virtualNetworks/subnets/join/action'
+        ]
+      }
+    ]
+  }
 }
 
 module networkInterface '../../shared/modules/resourceModules/network/networkInterfaces/deploy.bicep' = {
@@ -212,6 +273,36 @@ module networkInterface '../../shared/modules/resourceModules/network/networkInt
     privateIPAllocationMethod: 'Static'
     tags: tags[?'Microsoft.Network/networkInterfaces'] ?? {}
   }
+}
+
+module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = if (endpointType == 'private') {
+  scope: rg
+  params: {
+    name: diskAccessName
+    location: location
+    tags: tags[?'Microsoft.Compute/diskAccesses'] ?? {}
+  }
+  dependsOn: [
+    networkInterface
+  ]
+}
+
+module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (endpointType == 'private') {
+  scope: rg
+  params: {
+    groupId: 'disks'
+    location: location
+    name: 'pe-${diskAccessName}'
+    privateDNSZoneIds: [
+      blobDnsZoneId
+    ]
+    privateLinkServiceId: diskAccess!.outputs.resourceId
+    subnetResourceId: subnetResourceId
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+  }
+  dependsOn: [
+    networkInterface
+  ]
 }
 
 module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = {
@@ -229,21 +320,45 @@ module templateSpec '../../shared/modules/resourceModules/resources/templateSpec
   ]
 }
 
-module keyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
+// This key vault is used for storing the encryption keys when using customer-managed keys for the storage account
+module keyVault '../../shared/modules/resourceModules/keyVault/vaults/deploy.bicep' = {
+  scope: rg
   params: {
-    resourceGroupName: rg.name
-    deploySecretsKeyVault: false
-    secretsKeyVaultName: ''
-    deployEncryptionKeyVault: true
-    encryptionKeyVaultName: '${keyVaultName}-enc'
-    azureKeyVaultPrivateDnsZoneResourceId: vaultDnsZoneId
-    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    privateEndpoint: privateEndpoint
-    privateEndpointSubnetResourceId: endpointSubnetId
-    privateEndpointNameConv: 'pe-RESOURCE-SUBRESOURCE'
-    privateEndpointNICNameConv: 'nic-pe-RESOURCE-SUBRESOURCE'
-    paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    tags: tags
+    location: location
+    name: keyVaultName
+    networkAcls: endpointType == 'service'
+      ? {
+          bypass: 'None'
+          defaultAction: 'Deny'
+          ipRules: []
+          virtualNetworkRules: [
+            {
+              id: subnetResourceId
+              ignoreMissingVnetServiceEndpoint: false
+            }
+          ]
+        }
+      : {}
+    publicNetworkAccess: endpointType == 'private' ? 'Disabled' : 'Enabled'
+    tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
+  }
+  dependsOn: [
+    networkInterface
+  ]
+}
+
+module keyVaultPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (endpointType == 'private') {
+  scope: rg
+  params: {
+    groupId: 'vault'
+    location: location
+    name: 'pe-${keyVaultName}'
+    privateDNSZoneIds: [
+      vaultDnsZoneId
+    ]
+    privateLinkServiceId: keyVault!.outputs.resourceId
+    subnetResourceId: subnetResourceId
+    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
   dependsOn: [
     networkInterface
@@ -253,16 +368,48 @@ module keyVault '../../shared/modules/orchestration/keyVaults/keyVaults.bicep' =
 module keys '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
   scope: rg
   params: {
-    keyVaultResourceId: keyVault.outputs.encryptionKeyVaultResourceId
+    keyVaultResourceId: keyVault.outputs.resourceId
     keyManagementType: 'CustomerManagedHSM'
-    keyNames: [storageAccountName]
-    identityName: '${userAssignedIdentityName}-enc'
+    keyNames: [
+      diskEncryptionSetName
+      storageAccountName
+    ]
+    identityName: userAssignedIdentityName
     location: location
     tags: tags
   }
   dependsOn: [
     networkInterface
   ]
+}
+
+module diskEncryptionSet '../../shared/modules/resourceModules/compute/diskEncryptionSets/deploy.bicep' = if (!empty(diskEncryptionSetName)) {
+  scope: rg
+  params: {
+    encryptionType: diskEncryptionType
+    keyName: diskEncryptionSetName
+    keyVaultResourceId: keyVault.outputs.resourceId
+    location: location
+    name: diskEncryptionSetName
+    tags: tags
+  }
+  dependsOn: [
+    networkInterface
+  ]
+}
+
+module keyVaultKeysRoleAssignment '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = if (!empty(diskEncryptionSetName)) {
+  scope: rg
+  params: {
+    assignments: [
+      {
+        principalId: diskEncryptionSet!.outputs.principalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'e147488a-f6f5-4113-8e2d-b22465e65bf6' // Key Vault Crypto Service Encryption User
+      }
+    ]
+    keyVaultName: last(split(keyVault.outputs.resourceId, '/'))
+  }
 }
 
 module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
@@ -291,8 +438,12 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     enableQueueStorage: false
     enableTableStorage: false
     encryptionKeyName: storageAccountName
-    encryptionKeyVaultResourceId: keyVault.outputs.encryptionKeyVaultResourceId
+    encryptionKeyVaultResourceId: keyVault.outputs.resourceId
     functionAppAppSettings: concat([
+      {
+        name: 'acceleratedNetworking'
+        value: string(acceleratedNetworking)
+      }
       {
         name: 'artifactsContainerUri'
         value: artifactsContainerUri
@@ -307,7 +458,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'diskAccessResourceId'
-        value: diskAccessResourceId
+        value: endpointType == 'private' ? diskAccess!.outputs.resourceId : ''
       }
       {
         name: 'diskControllerType'
@@ -315,15 +466,15 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'diskEncryptionSetResourceId'
-        value: diskEncryptionSetResourceId
+        value: empty(diskEncryptionSetName) ? '' : diskEncryptionSet!.outputs.resourceId
       }
       {
         name: 'diskName'
         value: diskName
       }
       {
-        name: 'acceleratedNetworking'
-        value: string(acceleratedNetworking)
+        name: 'diskNetworkAccess'
+        value: diskNetworkAccess
       }
       {
         name: 'encryptionAtHost'
@@ -358,6 +509,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: privateIPAddress
       }
       {
+        name: 'resourceGroupName'
+        value: resourceGroupName
+      }
+      {
         name: 'secureBoot'
         value: string(secureBoot)
       }
@@ -370,8 +525,16 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: subnetResourceId
       }
       {
+        name: 'subscriptionId'
+        value: subscription().subscriptionId
+      }
+      {
         name: 'tags'
         value: string(tags[?'Microsoft.Compute/virtualMachines'] ?? {})
+      }
+      {
+        name: 'templateSpecResourceId'
+        value: templateSpec.outputs.versionResourceId
       }
       {
         name: 'virtualMachineName'
@@ -389,6 +552,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         name: 'vTpm'
         value: string(vTpm)
       }
+      {
+        name: 'WEBSITE_TIME_ZONE'
+        value: timeZone
+      }
     ])
     functionAppDelegatedSubnetResourceId: integrationSubnetId
     functionAppName: functionAppName
@@ -396,23 +563,91 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     keyManagementStorageAccounts: 'CustomerManagedHSM'
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    paasPublicNetworkAccess: privateEndpoint ? 'Disabled' : 'Enabled'
-    privateEndpoint: privateEndpoint
+    paasPublicNetworkAccess: endpointType == 'private' ? 'Disabled' : 'Enabled'
+    privateEndpoint: endpointType == 'private' ? true : false
     privateEndpointNameConv: 'pe-RESOURCE-SUBRESOURCE'
     privateEndpointNICNameConv: 'nic-pe-RESOURCE-SUBRESOURCE'
-    privateEndpointSubnetResourceId: endpointSubnetId
+    privateEndpointSubnetResourceId: subnetResourceId
     privateLinkScopeResourceId: privateLinkScopeResourceId
-    serverFarmId: empty(appServicePlanResourceId)
-      ? serverFarm!.outputs.hostingPlanId
-      : appServicePlanResourceId
+    serverFarmId: empty(appServicePlanResourceId) ? serverFarm!.outputs.hostingPlanId : appServicePlanResourceId
     storageAccountName: storageAccountName
-    storageEncryptionIdentityName: '${userAssignedIdentityName}-enc'
+    storageEncryptionIdentityName: userAssignedIdentityName
     tags: tags
   }
   dependsOn: [
     keys
     networkInterface
   ]
+}
+
+// Role assignment gives the Virtual Machine Contributor role to the function app to manage the validation virtual machine resources
+module resourceGroupRoleAssignment '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
+  scope: resourceGroup(split(subnetResourceId, '/')[2], split(subnetResourceId, '/')[4])
+  params: {
+    principalId: functionApp.outputs.functionAppPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+  }
+}
+
+// Role assignment gives the subnet join action to the function app to add network interfaces to the virtual network (least privilege access)
+module virtualNetworkRoleAssignment '../../shared/modules/resourceModules/network/virtualNetworks/roleAssignment.bicep' = {
+  scope: resourceGroup(split(subnetResourceId, '/')[2], split(subnetResourceId, '/')[4])
+  params: {
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: roleDefinition_subnetJoinAction.id
+      }
+    ]
+    virtualNetworkName: split(subnetResourceId, '/')[8]
+  }
+}
+
+// Role assignment gives the key vault deploy action to the function app to access key vault secrets for deployment (least privilege access)
+module keyVaultRoleAssignment '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = {
+  scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
+  params: {
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: roleDefinition_keyVaultDeployAction.id
+      }
+    ]
+    keyVaultName: last(split(keyVaultResourceId, '/'))
+  }
+}
+
+// Role assignment gives the Reader role to the function app for the compute gallery (least privilege access)
+module galleryRoleAssignment '../../shared/modules/resourceModules/compute/galleries/roleAssignment.bicep' = {
+  scope: resourceGroup(split(imageVersionResourceId, '/')[2], split(imageVersionResourceId, '/')[4])
+  params: {
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+      }
+    ]
+    galleryName: split(imageVersionResourceId, '/')[8]
+  }
+}
+
+// Role assignment gives the Template Spec Reader role to the function app for the template spec (least privilege access)
+module templateSpecRoleAssignment '../../shared/modules/resourceModules/resources/templateSpecs/roleAssignment.bicep' = {
+  scope: rg
+  params: {
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: '392ae280-861d-42bd-9ea5-08ee6d83b80e' // Template Spec Reader
+      }
+    ]
+    templateSpecName: templateSpec.outputs.name
+  }
 }
 
 module function '../../shared/modules/resourceModules/functionApp/function.bicep' = {

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "10006300007730171575"
+      "templateHash": "10656364825065426793"
     }
   },
   "definitions": {
@@ -79,6 +79,10 @@
     },
     "diskName": {
       "type": "string"
+    },
+    "diskNetworkAccess": {
+      "type": "string",
+      "defaultValue": "DenyAll"
     },
     "encryptionAtHost": {
       "type": "bool",
