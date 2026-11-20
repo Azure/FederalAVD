@@ -10,6 +10,110 @@ BeforeAll {
     $readmePath = Join-Path $repoRoot 'deployments\sharedServices\README.md'
 }
 
+Describe 'Shared Services Portal network access' {
+    BeforeAll {
+        . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
+        $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+        $operations = $form.view.properties.steps | Where-Object name -eq 'operations'
+        $access = $operations.elements | Where-Object name -eq 'permittedIPsSection'
+        $network = $operations.elements | Where-Object name -eq 'networkSection'
+        $dns = $operations.elements | Where-Object name -eq 'privateDnsSection'
+        $outputs = $form.view.outputs.parameters
+    }
+
+    It 'groups endpoint and public-access selectors before private subnet and DNS settings' {
+        $selector = $access.elements | Where-Object name -eq 'networkAccess'
+        $selector.type | Should -Be 'Microsoft.Common.DropDown'
+        $selector.defaultValue | Should -Be 'Public Endpoint'
+        $selector.constraints.required | Should -Be $true
+        ($selector.constraints.allowedValues.label -join ',') | Should -Be 'Public Endpoint,Private Endpoint'
+        ($selector.constraints.allowedValues.value -join ',') | Should -Be 'PublicEndpoint,PrivateEndpoint'
+        @($access.elements | Where-Object name -eq 'paasPublicNetworkAccess').Count | Should -Be 1
+        @($operations.elements | Where-Object name -eq 'privateEndpoint').Count | Should -Be 0
+        $names = @($operations.elements.name)
+        [array]::IndexOf($names, 'permittedIPsSection') | Should -BeLessThan ([array]::IndexOf($names, 'networkSection'))
+        [array]::IndexOf($names, 'permittedIPsSection') | Should -BeLessThan ([array]::IndexOf($names, 'privateDnsSection'))
+    }
+
+    It 'preserves native outputs and independent public access for <Mode>' -TestCases @(
+        @{ Mode = 'PublicEndpoint'; Private = $false; DefaultPublic = 'Enabled' }
+        @{ Mode = 'PrivateEndpoint'; Private = $true; DefaultPublic = 'Disabled' }
+    ) {
+        param($Mode, $Private, $DefaultPublic)
+
+        foreach ($public in @('Disabled', 'EnabledWithRestrictions', 'Enabled')) {
+            foreach ($integrateDns in @($false, $true)) {
+                foreach ($resources in @(
+                    @{ deploySecretsKeyVault = $false; deployEncryptionKeyVault = $false; deployFSLogixBackupVault = $false }
+                    @{ deploySecretsKeyVault = $true; deployEncryptionKeyVault = $false; deployFSLogixBackupVault = $false }
+                    @{ deploySecretsKeyVault = $false; deployEncryptionKeyVault = $true; deployFSLogixBackupVault = $false }
+                    @{ deploySecretsKeyVault = $false; deployEncryptionKeyVault = $false; deployFSLogixBackupVault = $true }
+                    @{ deploySecretsKeyVault = $true; deployEncryptionKeyVault = $true; deployFSLogixBackupVault = $true }
+                )) {
+                    $steps = @{
+                        operations = @{
+                            permittedIPsSection = @{ networkAccess = $Mode; paasPublicNetworkAccess = $public }
+                            networkSection = @{ privateEndpointSubnet = 'subnet-id' }
+                            privateDnsSection = @{
+                                enablePrivateDNSIntegration = $integrateDns
+                                keyVaultPrivateDnsZone = 'keyvault-dns'
+                                azureBackupPrivateDnsZone = 'backup-dns'
+                                azureBlobPrivateDnsZone = 'blob-dns'
+                                azureQueuePrivateDnsZone = 'queue-dns'
+                            }
+                            resources = $resources
+                        }
+                    }
+                    $endpoint = Invoke-TestNamingFormExpression $outputs.privateEndpoint $steps
+                    $endpoint | Should -BeOfType ([bool])
+                    $endpoint | Should -Be $Private
+                    Invoke-TestNamingFormExpression $network.visible $steps | Should -Be $Private
+                    Invoke-TestNamingFormExpression $dns.visible $steps | Should -Be $Private
+                    Invoke-TestNamingFormExpression $outputs.privateEndpointSubnetResourceId $steps |
+                        Should -Be $(if ($Private) { 'subnet-id' } else { '' })
+                    Invoke-TestNamingFormExpression $outputs.paasPublicNetworkAccess $steps | Should -Be $public
+                    $publicControl = $access.elements | Where-Object name -eq 'paasPublicNetworkAccess'
+                    Invoke-TestNamingFormExpression $publicControl.defaultValue $steps | Should -Be $DefaultPublic
+                    Invoke-TestNamingFormExpression $outputs.azureKeyVaultPrivateDnsZoneResourceId $steps |
+                        Should -Be $(if ($Private -and $integrateDns -and ($resources.deploySecretsKeyVault -or $resources.deployEncryptionKeyVault)) { 'keyvault-dns' } else { '' })
+                    foreach ($zone in @(
+                        @{ Parameter = 'azureBackupPrivateDnsZoneResourceId'; Value = 'backup-dns' }
+                        @{ Parameter = 'azureBlobPrivateDnsZoneResourceId'; Value = 'blob-dns' }
+                        @{ Parameter = 'azureQueuePrivateDnsZoneResourceId'; Value = 'queue-dns' }
+                    )) {
+                        Invoke-TestNamingFormExpression $outputs.($zone.Parameter) $steps |
+                            Should -Be $(if ($Private -and $integrateDns -and $resources.deployFSLogixBackupVault) { $zone.Value } else { '' })
+                    }
+                }
+            }
+        }
+    }
+
+    It 'gates network and DNS discovery on private access and their selected dependencies' {
+        $vnetApi = $network.elements | Where-Object name -eq 'virtualNetworksApi'
+        $subnetApi = $network.elements | Where-Object name -eq 'subnetsApi'
+        $dnsApi = $dns.elements | Where-Object name -eq 'privateDNSZonesApi'
+        foreach ($mode in @('PublicEndpoint', 'PrivateEndpoint')) {
+            foreach ($selected in @($false, $true)) {
+                $steps = @{
+                    basics = @{ subscription = $(if ($selected) { @{ id = 'subscription-id' } } else { $null }) }
+                    operations = @{
+                        permittedIPsSection = @{ networkAccess = $mode }
+                        networkSection = @{ virtualNetwork = $(if ($selected) { @{ id = 'vnet-id' } } else { $null }) }
+                        privateDnsSection = @{
+                            enablePrivateDNSIntegration = $selected
+                            privateDNSZonesSubscription = $(if ($selected) { @{ id = 'dns-subscription-id' } } else { $null })
+                        }
+                    }
+                }
+                foreach ($condition in @($vnetApi.condition, $subnetApi.condition, $dnsApi.condition)) {
+                    Invoke-TestNamingFormExpression $condition $steps | Should -Be ($mode -eq 'PrivateEndpoint' -and $selected)
+                }
+            }
+        }
+    }
+}
+
 Describe 'Shared Services AVD workspace ownership' {
     BeforeAll {
         $bicep = Get-Content -LiteralPath $bicepPath -Raw

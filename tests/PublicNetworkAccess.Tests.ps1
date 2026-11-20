@@ -72,7 +72,7 @@ Describe 'PaaS public-access Portal contracts' {
         $control.constraints.required | Should -Be $true
         $control.defaultValue | Should -Match "'Disabled'"
         $control.defaultValue | Should -Match "'Enabled'"
-        $control.defaultValue | Should -Not -Match 'permittedIPs|PermittedIPs'
+        $control.defaultValue | Should -Not -Match '\.(?:permittedIPs|storagePermittedIPs)\b'
         $form.view.outputs.parameters.paasPublicNetworkAccess | Should -Match '\.paasPublicNetworkAccess'
         $template.parameters.paasPublicNetworkAccess.defaultValue | Should -Be 'Auto'
         $modeType = $template.definitions.publicNetworkAccessMode
