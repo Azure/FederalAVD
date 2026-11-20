@@ -20,16 +20,17 @@ resource runCommands 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' 
   location: location
   properties: {
     source: {
-      script: loadTextContent('../scripts/Execute-Script.ps1')
+      script: loadTextContent('../../../shared/scripts/Invoke-Customization.ps1')
     }
-    parameters: [
+    parameters: concat([
       { name: 'APIVersion', value: apiVersion }
       { name: 'BlobStorageSuffix', value: 'blob.${environment().suffixes.storage}' }
       { name: 'UserAssignedIdentityClientId', value: scriptsUserAssignedIdentityClientId }
       { name: 'Name', value: script.name }
       { name: 'Uri', value: script.uri }
+    ], empty(script.arguments) ? [] : [
       { name: 'Arguments', value: script.arguments }
-    ]
+    ])
     outputBlobUri: empty(logsContainerUri) ? null : '${logsContainerUri}/${virtualMachineName}-${script.name}-output-${timeStamp}.log'
     errorBlobUri: empty(logsContainerUri) ? null : '${logsContainerUri}/${virtualMachineName}-${script.name}-error-${timeStamp}.log'
     outputBlobManagedIdentity: empty(logsUserAssignedIdentityClientId) ? null : { clientId: logsUserAssignedIdentityClientId }

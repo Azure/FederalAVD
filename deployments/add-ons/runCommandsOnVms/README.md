@@ -56,6 +56,31 @@ Each script object must contain:
 - `blobNameOrUri` - Blob name (if in container) or full URI
 - `arguments` (optional) - Space-separated arguments to pass to the script
 
+The storage-account path uses the shared `Invoke-Customization.ps1` wrapper, just like
+image builds and standard session-host customizations. For `.ps1` files and scripts
+inside ZIP artifacts, it parses named arguments into a parameter hashtable and splats
+them into the script. Strings, booleans, switches, and string arrays use the same
+[artifact argument contract](../../../docs/artifacts-guide.md#key-implementation-details).
+EXE, MSI, and BAT files also use the shared wrapper's execution and exit-code handling;
+the default accepted success exit codes are `0` and `3010`. Inline content and direct
+URI deployments do not use this wrapper and are unchanged.
+
+For example, enter this directly into the Portal **Arguments** field:
+
+```powershell
+-Folders @('Documents\cspid', 'Shared Documents\Reports')
+```
+
+In a JSON parameter file, escape each backslash for JSON:
+
+```json
+"arguments": "-Folders @('Documents\\cspid', 'Shared Documents\\Reports')"
+```
+
+Do not paste the doubled JSON backslashes into the Portal field or a PowerShell
+string. The wrapper parses the documented argument syntax; it does not evaluate
+arbitrary PowerShell expressions.
+
 ```powershell
 # Define multiple scripts to run in sequence
 $scripts = @(
