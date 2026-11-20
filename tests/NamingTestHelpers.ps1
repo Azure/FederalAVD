@@ -33,6 +33,8 @@ function Invoke-TestNamingFormExpression {
         'if' = { param($condition, $yes, $no) if ($condition) { $yes } else { $no } }
         empty = { param($value) $null -eq $value -or $value.Length -eq 0 }
         equals = { param($left, $right) $left -ceq $right }
+        startsWith = { param($value, $prefix) $null -ne $value -and $value.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }
+        int = { param($value) [int]$value }
         concat = { [string]::Concat([string[]]$args) }
         parse = { param($value) $value | ConvertFrom-Json -ErrorAction Stop }
         'not' = { param($value) -not $value }
@@ -40,7 +42,7 @@ function Invoke-TestNamingFormExpression {
         'and' = { $false -notin $args }
     }
     $body = $Expression.Substring(1, $Expression.Length - 2)
-    $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|empty|equals|concat|parse|not|or|and)\(", {
+    $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|empty|equals|startsWith|int|concat|parse|not|or|and)\(", {
         param($match)
         if ($match.Value.StartsWith("'")) { $match.Value }
         else { '$functions.' + $match.Value.TrimEnd('(') + '.InvokeReturnAsIs(' }

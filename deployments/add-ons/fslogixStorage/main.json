@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "8793433630538619876"
+      "templateHash": "9272313150842192509"
     }
   },
   "definitions": {
@@ -213,6 +213,95 @@
         }
       }
     },
+    "_1.sharedServicesNameOverrides": {
+      "type": "object",
+      "properties": {
+        "consolidatedResourceGroupName": {
+          "type": "string",
+          "nullable": true
+        },
+        "secretsKeyVaultName": {
+          "type": "string",
+          "nullable": true
+        },
+        "encryptionKeyVaultName": {
+          "type": "string",
+          "nullable": true
+        },
+        "controlPlaneResourceGroupName": {
+          "type": "string",
+          "nullable": true
+        },
+        "workspaceName": {
+          "type": "string",
+          "nullable": true
+        },
+        "globalFeedResourceGroupName": {
+          "type": "string",
+          "nullable": true
+        },
+        "globalFeedWorkspaceName": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "metadata": {
+        "description": "Internal Shared Services override contract. Empty values retain generated defaults or convention-level vault overrides.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.sharedServicesNamingResult": {
+      "type": "object",
+      "properties": {
+        "operationsResourceGroupName": {
+          "type": "string"
+        },
+        "monitoringResourceGroupName": {
+          "type": "string"
+        },
+        "controlPlaneResourceGroupName": {
+          "type": "string"
+        },
+        "avdWorkspaceName": {
+          "type": "string"
+        },
+        "globalFeedResourceGroupName": {
+          "type": "string"
+        },
+        "globalFeedWorkspaceName": {
+          "type": "string"
+        },
+        "secretsKeyVaultName": {
+          "type": "string"
+        },
+        "encryptionKeyVaultName": {
+          "type": "string"
+        },
+        "fslogixBackupVaultName": {
+          "type": "string"
+        },
+        "logAnalyticsWorkspaceName": {
+          "type": "string"
+        },
+        "dataCollectionEndpointName": {
+          "type": "string"
+        },
+        "privateEndpointNameConv": {
+          "type": "string"
+        },
+        "privateEndpointNICNameConv": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Internal Shared Services bundle result.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
     "entraGroupType": {
       "type": "object",
       "properties": {
@@ -331,6 +420,23 @@
           },
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "canonicalNamingCloud": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(toLower(parameters('cloud')), 'azurecloud'), 'AzureCloud', if(equals(toLower(parameters('cloud')), 'azureusgovernment'), 'AzureUSGovernment', if(startsWith(toLower(parameters('cloud')), 'us'), parameters('cloud'), fail('Identifier-based naming supports AzureCloud, AzureUSGovernment and US-prefixed air-gapped cloud environments.'))))]"
+          },
+          "metadata": {
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
             }
@@ -1035,6 +1141,36 @@
             }
           }
         },
+        "resourceNameForType": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.scopedTypeName(_1.validateConvention(_1.resolveConvention(parameters('convention')), true()), parameters('resourceType'), parameters('identifier'), _1.validateNamingContext(parameters('context'), parameters('resourceType')))]"
+          },
+          "metadata": {
+            "description": "Names a resource type from its readable purpose and target context. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "resourcePurpose": {
           "parameters": [
             {
@@ -1082,6 +1218,35 @@
             }
           }
         },
+        "scopedTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(not(contains(variables('_1.namingPolicy').resourceTypes, parameters('resourceType'))), fail('Unsupported identifier-based resource type. Use a resource type registered in namingPolicy.resourceTypes.'), _1.resolvedTypeName(parameters('convention'), variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('resourceType')], 'Resource type abbreviation'), _1.typeLocationAbbreviation(parameters('convention'), parameters('context')), _1.requireNamingToken(parameters('identifier'), 'Add-on identifier'), if(coalesce(tryGet(variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], 'globallyUnique'), false()), take(_1.scopeUnique(parameters('context')), coalesce(tryGet(variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], 'uniqueLength'), variables('_1.namingPolicy').limits.defaultUniqueLength)), '')))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "scopeUnique": {
           "parameters": [
             {
@@ -1095,6 +1260,137 @@
           },
           "metadata": {
             "description": "One stable resource-scope hash: lowercase subscription, owning resource group and full location. Cloud, purpose, resource type and naming-convention choices never participate. Callers apply their suffix budget.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "sharedServicesNames": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "$ref": "#/definitions/_1.sharedServicesNameOverrides",
+              "name": "overrides"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.sharedServicesNamingResult",
+            "value": "[_1.sharedServicesNamesForAbbreviation(parameters('convention'), parameters('context'), parameters('overrides'), if(not(empty(coalesce(tryGet(parameters('convention'), 'locationAbbreviation'), ''))), parameters('convention').locationAbbreviation, _1.regionAbbreviation(parameters('context').location, parameters('context').cloud)))]"
+          },
+          "metadata": {
+            "description": "Internal Shared Services bundle implementation; public callers use naming.bicep.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "sharedServicesNamesForAbbreviation": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "$ref": "#/definitions/_1.sharedServicesNameOverrides",
+              "name": "overrides"
+            },
+            {
+              "type": "string",
+              "name": "abbreviation"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.sharedServicesNamingResult",
+            "value": "[_1.sharedServicesNamesForScope(parameters('convention'), parameters('context'), parameters('overrides'), parameters('abbreviation'), if(not(empty(coalesce(tryGet(parameters('overrides'), 'consolidatedResourceGroupName'), ''))), parameters('overrides').consolidatedResourceGroupName, _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('abbreviation'), '', '')))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "sharedServicesNamesForScope": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "$ref": "#/definitions/_1.sharedServicesNameOverrides",
+              "name": "overrides"
+            },
+            {
+              "type": "string",
+              "name": "abbreviation"
+            },
+            {
+              "type": "string",
+              "name": "operationsGroup"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.sharedServicesNamingResult",
+            "value": {
+              "operationsResourceGroupName": "[parameters('operationsGroup')]",
+              "monitoringResourceGroupName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'consolidatedResourceGroupName'), ''))), parameters('overrides').consolidatedResourceGroupName, _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), '', ''))]",
+              "controlPlaneResourceGroupName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'consolidatedResourceGroupName'), ''))), parameters('overrides').consolidatedResourceGroupName, if(not(empty(coalesce(tryGet(parameters('overrides'), 'controlPlaneResourceGroupName'), ''))), parameters('overrides').controlPlaneResourceGroupName, _1.resourceName(parameters('convention'), 'controlPlaneResourceGroup', parameters('abbreviation'), '', '')))]",
+              "avdWorkspaceName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'workspaceName'), ''))), parameters('overrides').workspaceName, _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), '', ''))]",
+              "globalFeedResourceGroupName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'globalFeedResourceGroupName'), ''))), parameters('overrides').globalFeedResourceGroupName, _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', '', ''))]",
+              "globalFeedWorkspaceName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'globalFeedWorkspaceName'), ''))), parameters('overrides').globalFeedWorkspaceName, _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', '', ''))]",
+              "secretsKeyVaultName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'secretsKeyVaultName'), ''))), parameters('overrides').secretsKeyVaultName, _1.sharedVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), union(parameters('context'), createObject('resourceGroupName', parameters('operationsGroup')))))]",
+              "encryptionKeyVaultName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'encryptionKeyVaultName'), ''))), parameters('overrides').encryptionKeyVaultName, _1.sharedVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), union(parameters('context'), createObject('resourceGroupName', parameters('operationsGroup')))))]",
+              "fslogixBackupVaultName": "[_1.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), '', '')]",
+              "logAnalyticsWorkspaceName": "[_1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), '', '')]",
+              "dataCollectionEndpointName": "[_1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), '', '')]",
+              "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints)]",
+              "privateEndpointNICNameConv": "[_1.privateEndpointNicPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, _1.resolveConvention(parameters('convention')).resourceTypeCodes.networkInterfaces)]"
+            }
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "sharedVaultName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "role"
+            },
+            {
+              "type": "string",
+              "name": "abbreviation"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(not(empty(if(equals(parameters('role'), 'secretsKeyVault'), coalesce(tryGet(parameters('convention'), 'secretsKeyVaultNameOverride'), ''), coalesce(tryGet(parameters('convention'), 'encryptionKeyVaultNameOverride'), '')))), if(equals(parameters('role'), 'secretsKeyVault'), parameters('convention').secretsKeyVaultNameOverride, parameters('convention').encryptionKeyVaultNameOverride), _1.resourceNameForType(union(parameters('convention'), createObject('locationAbbreviation', parameters('abbreviation'))), 'keyVaults', first(variables('_1.namingPolicy').resources[parameters('role')].purpose), parameters('context')))]"
+          },
+          "metadata": {
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
             }
@@ -1135,6 +1431,27 @@
             }
           }
         },
+        "typeLocationAbbreviation": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.requireNamingToken(if(not(empty(coalesce(tryGet(parameters('convention'), 'locationAbbreviation'), ''))), parameters('convention').locationAbbreviation, if(not(empty(coalesce(tryGet(parameters('convention'), 'vmsLocationAbbreviation'), ''))), parameters('convention').vmsLocationAbbreviation, _1.regionAbbreviation(toLower(parameters('context').location), parameters('context').cloud))), 'Location abbreviation')]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "validateConvention": {
           "parameters": [
             {
@@ -1149,6 +1466,27 @@
           "output": {
             "type": "object",
             "value": "[if(or(and(parameters('requirePurpose'), not(equals(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1))), greater(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1)), fail('Naming requires exactly one purpose component for resources with a purpose.'), if(empty(filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), fail('Naming requires at least one non-none component.'), if(not(empty(filter(parameters('convention').components, lambda('component', not(contains(createArray('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'), lambdaVariables('component'))))))), fail('Naming contains an unsupported naming-convention component.'), if(or(greater(length(parameters('convention').delimiter), 3), not(empty(filter(map(range(0, length(parameters('convention').delimiter)), lambda('i', substring(parameters('convention').delimiter, lambdaVariables('i'), 1))), lambda('character', not(contains('-_.', lambdaVariables('character')))))))), fail('Naming delimiter must be empty or contain at most three hyphens, underscores or dots.'), if(not(empty(filter(createArray('workload', 'environment', 'freeform1', 'freeform2'), lambda('component', and(and(contains(parameters('convention').components, lambdaVariables('component')), not(empty(parameters('convention')[lambdaVariables('component')]))), not(_1.isNamingToken(parameters('convention')[lambdaVariables('component')]))))))), fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.'), parameters('convention'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateNamingContext": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.namingContext",
+            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -1203,6 +1541,62 @@
           },
           "metadata": {
             "description": "Names standalone FSLogix resources without a host-pool dependency, using the common owning-scope hash.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
+            }
+          }
+        },
+        "resourceNameForType": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/namingConventionConfig",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.resourceNameForType(parameters('convention'), parameters('resourceType'), parameters('identifier'), parameters('context'))]"
+          },
+          "metadata": {
+            "description": "Names a supported resource type from its identifier and actual target scope. Retains the complete identifier and fails on overlength names.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
+            }
+          }
+        },
+        "sharedServicesNames": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/namingConventionConfig",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "$ref": "#/definitions/_1.sharedServicesNameOverrides",
+              "name": "overrides"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.sharedServicesNamingResult",
+            "value": "[_1.sharedServicesNames(parameters('convention'), parameters('context'), parameters('overrides'))]"
+          },
+          "metadata": {
+            "description": "Names Shared Services resources using the effective owning scope and explicit name overrides. Shared vaults never depend on a host-pool identifier.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
             }
@@ -1612,6 +2006,54 @@
         "description": "Optional. Name of the Azure Files backup policy in the Recovery Services vault."
       }
     },
+    "deployFSLogixBackupVault": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Optional. Create a snapshot backup vault and policy when no existing vault ID is supplied. Azure Files only."
+      }
+    },
+    "backupVaultScope": {
+      "type": "string",
+      "defaultValue": "Shared",
+      "allowedValues": [
+        "Shared",
+        "Dedicated"
+      ],
+      "metadata": {
+        "description": "Optional. Shared uses the regional operations resource group; Dedicated uses the storage resource group."
+      }
+    },
+    "backupVaultName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Name override for a newly deployed backup vault."
+      }
+    },
+    "backupResourceGroupName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional. Operations resource group name override for a new Shared backup vault. Dedicated always uses the storage resource group."
+      }
+    },
+    "fslogixBackupRetentionDays": {
+      "type": "int",
+      "defaultValue": 30,
+      "minValue": 1,
+      "maxValue": 200,
+      "metadata": {
+        "description": "Optional. Daily snapshot retention for a newly deployed backup policy."
+      }
+    },
+    "fslogixBackupTimeZone": {
+      "type": "string",
+      "defaultValue": "UTC",
+      "metadata": {
+        "description": "Optional. Windows time zone for the new backup policy daily schedule at 23:00."
+      }
+    },
     "existingSharedActiveDirectoryConnection": {
       "type": "bool",
       "defaultValue": false,
@@ -1706,6 +2148,11 @@
     },
     "storageSolution": "[split(parameters('fslogixStorageService'), ' ')[0]]",
     "storageSku": "[split(parameters('fslogixStorageService'), ' ')[1]]",
+    "createFSLogixBackupVault": "[and(and(equals(variables('storageSolution'), 'AzureFiles'), parameters('deployFSLogixBackupVault')), empty(parameters('recoveryServicesVaultResourceId')))]",
+    "effectiveBackupResourceGroupName": "[if(equals(parameters('backupVaultScope'), 'Dedicated'), variables('effectiveStorageResourceGroupName'), if(not(empty(parameters('backupResourceGroupName'))), parameters('backupResourceGroupName'), variables('backupNaming').operationsResourceGroupName))]",
+    "effectiveBackupVaultName": "[if(not(empty(parameters('backupVaultName'))), parameters('backupVaultName'), if(equals(parameters('backupVaultScope'), 'Shared'), variables('backupNaming').fslogixBackupVaultName, __bicep.resourceNameForType(parameters('namingConvention'), 'Microsoft.RecoveryServices/vaults', format('{0}-backup', parameters('identifier')), createObject('subscriptionId', subscription().subscriptionId, 'resourceGroupName', variables('effectiveStorageResourceGroupName'), 'cloud', environment().name, 'location', parameters('location')))))]",
+    "backupConfigurationIsValid": "[if(or(equals(variables('storageSolution'), 'AzureFiles'), and(not(parameters('deployFSLogixBackupVault')), empty(parameters('recoveryServicesVaultResourceId')))), true(), fail('Recovery Services snapshot backup is supported only for Azure Files.'))]",
+    "backupResourceGroupNamesAreDistinct": "[if(or(not(variables('deployDeploymentVirtualMachine')), and(or(not(variables('createFSLogixBackupVault')), not(equals(toLower(variables('effectiveBackupResourceGroupName')), toLower(variables('effectiveDeploymentResourceGroupName'))))), or(empty(parameters('recoveryServicesVaultResourceId')), not(equals(toLower(split(parameters('recoveryServicesVaultResourceId'), '/')[4]), toLower(variables('effectiveDeploymentResourceGroupName'))))))), true(), fail('The backup vault must not reside in the temporary deployment resource group, which cleanup deletes.'))]",
     "effectiveStorageResourceGroupName": "[if(not(empty(parameters('storageResourceGroupName'))), parameters('storageResourceGroupName'), variables('naming').resourceGroupStorage)]",
     "effectiveDeploymentResourceGroupName": "[if(not(empty(parameters('deploymentResourceGroupName'))), parameters('deploymentResourceGroupName'), variables('naming').resourceGroupDeployment)]",
     "effectiveDeploymentVirtualMachineName": "[if(not(empty(parameters('deploymentVirtualMachineName'))), parameters('deploymentVirtualMachineName'), variables('naming').depVirtualMachineName)]",
@@ -1735,6 +2182,7 @@
     "domainCredentialsRequired": "[or(or(contains(parameters('identitySolution'), 'DomainServices'), equals(variables('storageSolution'), 'AzureNetAppFiles')), and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('fslogixUserGroups')))))]",
     "externalDeploymentConfigurationIsValid": "[if(or(or(not(variables('deploymentVirtualMachineRequired')), parameters('manageDeploymentVirtualMachine')), and(not(empty(parameters('deploymentVirtualMachineName'))), not(empty(parameters('existingDeploymentUserAssignedIdentityClientId'))))), true(), fail('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.'))]",
     "naming": "[__bicep.fslogixNames(parameters('namingConvention'), parameters('identifier'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'location', parameters('location')))]",
+    "backupNaming": "[__bicep.sharedServicesNames(parameters('namingConvention'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'location', parameters('location')), createObject())]",
     "_1._2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
@@ -4469,6 +4917,929 @@
         "storageResourceGroup"
       ]
     },
+    "backupResourceGroup": {
+      "condition": "[and(variables('createFSLogixBackupVault'), equals(parameters('backupVaultScope'), 'Shared'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('backupResourceGroup-{0}', uniqueString('backupResourceGroup', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": "[if(variables('backupResourceGroupNamesAreDistinct'), createObject('value', variables('effectiveBackupResourceGroupName')), createObject('value', variables('effectiveBackupResourceGroupName')))]",
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
+            },
+            "name": "Resource group",
+            "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the resource group to deploy."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the resource group; must match the parent resource where required."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the resource group."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Resources/resourceGroups",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('name')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "resourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the resource group."
+              },
+              "value": "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('name'))]"
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure resource name of the resource group."
+              },
+              "value": "[parameters('name')]"
+            }
+          }
+        }
+      }
+    },
+    "fslogixBackupVault": {
+      "condition": "[variables('createFSLogixBackupVault')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('fslogixBackupVault-{0}', uniqueString('fslogixBackupVault', deployment().name))]",
+      "location": "[deployment().location]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "createVault": {
+            "value": true
+          },
+          "manageBackupPolicy": {
+            "value": true
+          },
+          "vaultName": {
+            "value": "[variables('effectiveBackupVaultName')]"
+          },
+          "resourceGroupOperations": {
+            "value": "[variables('effectiveBackupResourceGroupName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logAnalyticsWorkspaceResourceId": {
+            "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
+          },
+          "privateEndpoint": {
+            "value": false
+          },
+          "privateEndpointNameConv": {
+            "value": "[variables('effectivePrivateEndpointNameConvention')]"
+          },
+          "privateEndpointNICNameConv": {
+            "value": "[variables('effectivePrivateEndpointNicNameConvention')]"
+          },
+          "tags": {
+            "value": "[union(parameters('tags'), createObject('Microsoft.RecoveryServices/vaults', union(coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject()), if(and(equals(parameters('backupVaultScope'), 'Dedicated'), not(empty(parameters('parentResourceId')))), createObject('cm-resource-parent', parameters('parentResourceId')), createObject()))))]"
+          },
+          "timeZone": {
+            "value": "[parameters('fslogixBackupTimeZone')]"
+          },
+          "fileSharePolicyName": {
+            "value": "[parameters('fileSharePolicyName')]"
+          },
+          "backupRetentionDays": {
+            "value": "[parameters('fslogixBackupRetentionDays')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "7365231393870551114"
+            },
+            "name": "FSLogix Azure Files backup vault",
+            "description": "Creates or adopts a Recovery Services vault and optionally manages a daily Azure Files snapshot policy."
+          },
+          "parameters": {
+            "createVault": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to create a new Recovery Services Vault."
+              }
+            },
+            "manageBackupPolicy": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Whether to create or update the Azure Files snapshot backup policy."
+              }
+            },
+            "existingRecoveryServicesVaultResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Conditional. Resource ID of an existing Recovery Services Vault. Required when createVault is false."
+              }
+            },
+            "vaultName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name for the Recovery Services Vault when createVault is true."
+              }
+            },
+            "resourceGroupOperations": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the operations resource group where the vault is or will be deployed."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for the Recovery Services vault. The private endpoint uses its subnet virtual network region."
+              }
+            },
+            "logAnalyticsWorkspaceResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Log Analytics workspace for vault diagnostics."
+              }
+            },
+            "privateEndpoint": {
+              "type": "bool",
+              "metadata": {
+                "description": "Required. Whether to deploy a private endpoint for the vault."
+              }
+            },
+            "privateEndpointSubnetResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the subnet for the vault private endpoint."
+              }
+            },
+            "azureBackupPrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Backup private DNS zone."
+              }
+            },
+            "azureBlobPrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Blob private DNS zone required by the backup private endpoint."
+              }
+            },
+            "azureQueuePrivateDnsZoneResourceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Resource ID of the Azure Queue private DNS zone required by the backup private endpoint."
+              }
+            },
+            "privateEndpointNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention for private endpoints."
+              }
+            },
+            "privateEndpointNICNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name convention for private endpoint network interfaces."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Required. Resource tags object."
+              }
+            },
+            "timeZone": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Backup policy time zone, such as Eastern Standard Time."
+              }
+            },
+            "fileSharePolicyName": {
+              "type": "string",
+              "defaultValue": "filesharepolicy",
+              "metadata": {
+                "description": "Optional. Name for the Azure Files snapshot backup policy."
+              }
+            },
+            "backupRetentionDays": {
+              "type": "int",
+              "defaultValue": 30,
+              "minValue": 1,
+              "maxValue": 200,
+              "metadata": {
+                "description": "Optional. Number of daily snapshots to retain."
+              }
+            }
+          },
+          "variables": {
+            "backupPrivateDnsZoneResourceIds": "[filter(createArray(parameters('azureBackupPrivateDnsZoneResourceId'), parameters('azureBlobPrivateDnsZoneResourceId'), parameters('azureQueuePrivateDnsZoneResourceId')), lambda('zoneResourceId', not(empty(lambdaVariables('zoneResourceId')))))]",
+            "effectiveVaultSubscriptionId": "[if(parameters('createVault'), subscription().subscriptionId, split(parameters('existingRecoveryServicesVaultResourceId'), '/')[2])]",
+            "effectiveVaultResourceGroupName": "[if(parameters('createVault'), parameters('resourceGroupOperations'), split(parameters('existingRecoveryServicesVaultResourceId'), '/')[4])]",
+            "effectiveVaultName": "[if(parameters('createVault'), parameters('vaultName'), last(split(parameters('existingRecoveryServicesVaultResourceId'), '/')))]"
+          },
+          "resources": {
+            "privateEndpointVirtualNetwork": {
+              "condition": "[and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId'))))]",
+              "existing": true,
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2024-05-01",
+              "subscriptionId": "[split(parameters('privateEndpointSubnetResourceId'), '/')[2]]",
+              "resourceGroup": "[split(parameters('privateEndpointSubnetResourceId'), '/')[4]]",
+              "name": "[split(parameters('privateEndpointSubnetResourceId'), '/')[8]]"
+            },
+            "recoveryServicesVault": {
+              "condition": "[parameters('createVault')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('recoveryServicesVault-{0}', uniqueString('recoveryServicesVault', deployment().name))]",
+              "resourceGroup": "[parameters('resourceGroupOperations')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[parameters('vaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
+                  "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', null()))]",
+                  "publicNetworkAccess": "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+                  "storageType": {
+                    "value": "LocallyRedundant"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.RecoveryServices/vaults'), createObject())]"
+                  },
+                  "cmkKeyUri": {
+                    "value": ""
+                  },
+                  "cmkUserAssignedIdentityResourceId": {
+                    "value": ""
+                  },
+                  "cmkUseSystemAssignedIdentity": {
+                    "value": false
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.49.2.45890",
+                      "templateHash": "5342044481972282498"
+                    },
+                    "name": "Recovery Services vault",
+                    "description": "Deploys a Recovery Services vault with backup storage, security settings and optional diagnostics or CMK. Key access must be granted separately; system-identity CMK can require staged deployment."
+                  },
+                  "definitions": {
+                    "_1.logCategoryType": {
+                      "type": "object",
+                      "properties": {
+                        "categoryGroup": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Category group name, e.g. \"allLogs\". Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "category": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Individual log category name. Use either categoryGroup or category, not both."
+                          }
+                        },
+                        "enabled": {
+                          "type": "bool"
+                        },
+                        "retentionPolicy": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "int"
+                            },
+                            "enabled": {
+                              "type": "bool"
+                            }
+                          },
+                          "nullable": true
+                        }
+                      },
+                      "metadata": {
+                        "description": "Diagnostic log selection using an individual category or category group, with enabled state and optional retention settings.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    },
+                    "diagnosticSettingsType": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Optional. Explicit diagnostic setting resource name."
+                          }
+                        },
+                        "workspaceId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Log Analytics workspace to send logs to."
+                          }
+                        },
+                        "storageAccountId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the storage account to archive logs to."
+                          }
+                        },
+                        "eventHubAuthorizationRuleId": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Resource ID of the Event Hub authorization rule."
+                          }
+                        },
+                        "eventHubName": {
+                          "type": "string",
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Name of the Event Hub. If omitted, a hub is created for each log category."
+                          }
+                        },
+                        "logCategories": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/_1.logCategoryType"
+                          },
+                          "nullable": true,
+                          "metadata": {
+                            "description": "Log categories to stream. Defaults to allLogs when omitted."
+                          }
+                        }
+                      },
+                      "metadata": {
+                        "description": "Optional diagnostic setting name, existing destination resource IDs and log category selections interpreted by the consuming module.",
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "../../types/diagnosticSettings.bicep"
+                        }
+                      }
+                    }
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the recovery Services vault to deploy."
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the recovery Services vault; defaults to the deployment resource group region."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the recovery Services vault."
+                      }
+                    },
+                    "publicNetworkAccess": {
+                      "type": "string",
+                      "defaultValue": "Disabled",
+                      "metadata": {
+                        "description": "Optional. Public network access mode for this resource; private endpoints are configured separately."
+                      }
+                    },
+                    "storageType": {
+                      "type": "string",
+                      "defaultValue": "GeoRedundant",
+                      "metadata": {
+                        "description": "Storage replication type for the vault. GeoRedundant, LocallyRedundant, or ZoneRedundant."
+                      }
+                    },
+                    "crossRegionRestoreFlag": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Enable cross-region restore (requires GeoRedundant storage)."
+                      }
+                    },
+                    "softDeleteFeatureState": {
+                      "type": "string",
+                      "defaultValue": "Enabled",
+                      "metadata": {
+                        "description": "Soft-delete feature state for the vault."
+                      }
+                    },
+                    "enhancedSecurityState": {
+                      "type": "string",
+                      "defaultValue": "Enabled",
+                      "metadata": {
+                        "description": "Enhanced security state for the vault."
+                      }
+                    },
+                    "cmkKeyUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Customer-managed key URI for vault encryption. Leave empty to use Microsoft-managed encryption."
+                      }
+                    },
+                    "cmkUserAssignedIdentityResourceId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. User-assigned identity resource ID used by the vault to access the CMK. Mutually exclusive with cmkUseSystemAssignedIdentity."
+                      }
+                    },
+                    "cmkUseSystemAssignedIdentity": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Optional. Use the vault system identity for CMK; required for private-endpoint CMK and mutually exclusive with cmkUserAssignedIdentityResourceId."
+                      }
+                    },
+                    "diagnosticSettings": {
+                      "$ref": "#/definitions/diagnosticSettingsType",
+                      "nullable": true,
+                      "metadata": {
+                        "description": "Optional. Diagnostic destinations and log categories; null or no destination skips diagnostic settings."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "cmkEnabled": "[not(empty(parameters('cmkKeyUri')))]",
+                    "cmkConfigurationValidated": "[if(or(and(not(variables('cmkEnabled')), empty(parameters('cmkUserAssignedIdentityResourceId'))), and(and(variables('cmkEnabled'), contains(parameters('cmkKeyUri'), '/keys/')), equals(parameters('cmkUseSystemAssignedIdentity'), empty(parameters('cmkUserAssignedIdentityResourceId'))))), true(), fail('Invalid CMK configuration. Provide cmkKeyUri (including /keys/) with either cmkUserAssignedIdentityResourceId (no vault PE) or cmkUseSystemAssignedIdentity=true (vault PE), but not both identity options simultaneously.'))]",
+                    "diagTargetNames": "[filter(createArray(if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'workspaceId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), ''))), last(split(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '/')), ''), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), ''))), if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubName'), ''))), parameters('diagnosticSettings').eventHubName, split(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '/')[8]), '')), lambda('t', not(empty(lambdaVariables('t')))))]",
+                    "diagnosticSettingName": "[if(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'name'), ''))), parameters('diagnosticSettings').name, if(greater(length(variables('diagTargetNames')), 1), format('diag-{0}', uniqueString(join(variables('diagTargetNames'), '-'))), if(equals(length(variables('diagTargetNames')), 1), format('diag-{0}', variables('diagTargetNames')[0]), 'diagnostics')))]"
+                  },
+                  "resources": {
+                    "recoveryServicesVault": {
+                      "type": "Microsoft.RecoveryServices/vaults",
+                      "apiVersion": "2023-04-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "identity": "[if(parameters('cmkUseSystemAssignedIdentity'), createObject('type', 'SystemAssigned'), if(variables('cmkEnabled'), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('cmkUserAssignedIdentityResourceId')), createObject())), null()))]",
+                      "sku": {
+                        "name": "RS0",
+                        "tier": "Standard"
+                      },
+                      "properties": {
+                        "publicNetworkAccess": "[if(variables('cmkConfigurationValidated'), parameters('publicNetworkAccess'), parameters('publicNetworkAccess'))]",
+                        "encryption": "[if(variables('cmkEnabled'), createObject('keyVaultProperties', createObject('keyUri', parameters('cmkKeyUri')), 'kekIdentity', if(parameters('cmkUseSystemAssignedIdentity'), createObject('useSystemAssignedIdentity', true()), createObject('userAssignedIdentity', parameters('cmkUserAssignedIdentityResourceId'), 'useSystemAssignedIdentity', false())), 'infrastructureEncryption', 'Enabled'), null())]"
+                      }
+                    },
+                    "backupStorageConfig": {
+                      "type": "Microsoft.RecoveryServices/vaults/backupstorageconfig",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'vaultstorageconfig')]",
+                      "properties": {
+                        "storageType": "[parameters('storageType')]",
+                        "crossRegionRestoreFlag": "[parameters('crossRegionRestoreFlag')]"
+                      },
+                      "dependsOn": [
+                        "recoveryServicesVault"
+                      ]
+                    },
+                    "backupConfig": {
+                      "type": "Microsoft.RecoveryServices/vaults/backupconfig",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'vaultconfig')]",
+                      "properties": {
+                        "softDeleteFeatureState": "[parameters('softDeleteFeatureState')]",
+                        "enhancedSecurityState": "[parameters('enhancedSecurityState')]"
+                      },
+                      "dependsOn": [
+                        "recoveryServicesVault"
+                      ]
+                    },
+                    "diagnosticSetting": {
+                      "condition": "[and(not(equals(parameters('diagnosticSettings'), null())), or(or(not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'workspaceId'), ''))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'storageAccountId'), '')))), not(empty(coalesce(tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId'), '')))))]",
+                      "type": "Microsoft.Insights/diagnosticSettings",
+                      "apiVersion": "2021-05-01-preview",
+                      "scope": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]",
+                      "name": "[variables('diagnosticSettingName')]",
+                      "properties": {
+                        "workspaceId": "[tryGet(parameters('diagnosticSettings'), 'workspaceId')]",
+                        "storageAccountId": "[tryGet(parameters('diagnosticSettings'), 'storageAccountId')]",
+                        "eventHubAuthorizationRuleId": "[tryGet(parameters('diagnosticSettings'), 'eventHubAuthorizationRuleId')]",
+                        "eventHubName": "[tryGet(parameters('diagnosticSettings'), 'eventHubName')]",
+                        "logs": "[coalesce(tryGet(parameters('diagnosticSettings'), 'logCategories'), createArray(createObject('categoryGroup', 'allLogs', 'enabled', true())))]"
+                      },
+                      "dependsOn": [
+                        "recoveryServicesVault"
+                      ]
+                    }
+                  },
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the recovery Services vault."
+                      },
+                      "value": "[resourceId('Microsoft.RecoveryServices/vaults', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the recovery Services vault."
+                      },
+                      "value": "[parameters('name')]"
+                    },
+                    "principalId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Vault identity principal ID when a system identity or CMK user identity is configured; otherwise an empty string."
+                      },
+                      "value": "[if(or(parameters('cmkUseSystemAssignedIdentity'), and(variables('cmkEnabled'), not(empty(parameters('cmkUserAssignedIdentityResourceId'))))), reference('recoveryServicesVault', '2023-04-01', 'full').identity.principalId, '')]"
+                    }
+                  }
+                }
+              }
+            },
+            "fileShareBackupPolicy": {
+              "condition": "[parameters('manageBackupPolicy')]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('fileShareBackupPolicy-{0}', uniqueString('fileShareBackupPolicy', deployment().name))]",
+              "subscriptionId": "[variables('effectiveVaultSubscriptionId')]",
+              "resourceGroup": "[variables('effectiveVaultResourceGroupName')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "recoveryServicesVaultName": {
+                    "value": "[variables('effectiveVaultName')]"
+                  },
+                  "name": {
+                    "value": "[parameters('fileSharePolicyName')]"
+                  },
+                  "properties": {
+                    "value": {
+                      "backupManagementType": "AzureStorage",
+                      "workLoadType": "AzureFileShare",
+                      "schedulePolicy": {
+                        "schedulePolicyType": "SimpleSchedulePolicy",
+                        "scheduleRunFrequency": "Daily",
+                        "scheduleRunTimes": [
+                          "23:00"
+                        ]
+                      },
+                      "retentionPolicy": {
+                        "retentionPolicyType": "LongTermRetentionPolicy",
+                        "dailySchedule": {
+                          "retentionTimes": [
+                            "23:00"
+                          ],
+                          "retentionDuration": {
+                            "count": "[parameters('backupRetentionDays')]",
+                            "durationType": "Days"
+                          }
+                        }
+                      },
+                      "timeZone": "[parameters('timeZone')]"
+                    }
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.49.2.45890",
+                      "templateHash": "5233015135582439641"
+                    },
+                    "name": "Recovery Services backup policy",
+                    "description": "Creates or updates a backup policy under an existing Recovery Services vault in the deployment resource group using caller-supplied workload-specific properties."
+                  },
+                  "parameters": {
+                    "recoveryServicesVaultName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the existing Recovery Services vault in the deployment resource group."
+                      }
+                    },
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the recovery Services backup policy to deploy."
+                      }
+                    },
+                    "properties": {
+                      "type": "object",
+                      "metadata": {
+                        "description": "Backup policy properties. The schema varies by workload type (AzureIaasVM, AzureStorage, etc.)."
+                      }
+                    }
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.RecoveryServices/vaults/backupPolicies",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('recoveryServicesVaultName'), parameters('name'))]",
+                      "properties": "[parameters('properties')]"
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the recovery Services backup policy."
+                      },
+                      "value": "[resourceId('Microsoft.RecoveryServices/vaults/backupPolicies', parameters('recoveryServicesVaultName'), parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the recovery Services backup policy."
+                      },
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "recoveryServicesVault"
+              ]
+            },
+            "vaultPrivateEndpoint": {
+              "condition": "[and(and(and(parameters('createVault'), parameters('privateEndpoint')), not(empty(parameters('privateEndpointSubnetResourceId')))), not(empty(parameters('azureBackupPrivateDnsZoneResourceId'))))]",
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "[format('vaultPrivateEndpoint-{0}', uniqueString('vaultPrivateEndpoint', deployment().name))]",
+              "resourceGroup": "[parameters('resourceGroupOperations')]",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "name": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('vaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
+                  },
+                  "customNetworkInterfaceName": {
+                    "value": "[replace(replace(replace(parameters('privateEndpointNICNameConv'), 'SUBRESOURCE', 'AzureBackup'), 'RESOURCE', parameters('vaultName')), 'VNETID', split(parameters('privateEndpointSubnetResourceId'), '/')[8])]"
+                  },
+                  "location": {
+                    "value": "[reference('privateEndpointVirtualNetwork', '2024-05-01', 'full').location]"
+                  },
+                  "subnetResourceId": {
+                    "value": "[parameters('privateEndpointSubnetResourceId')]"
+                  },
+                  "privateLinkServiceId": {
+                    "value": "[reference('recoveryServicesVault').outputs.resourceId.value]"
+                  },
+                  "groupId": {
+                    "value": "AzureBackup"
+                  },
+                  "privateDNSZoneIds": {
+                    "value": "[variables('backupPrivateDnsZoneResourceIds')]"
+                  },
+                  "tags": {
+                    "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.49.2.45890",
+                      "templateHash": "9996145834195031428"
+                    },
+                    "name": "Private endpoint",
+                    "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
+                  },
+                  "parameters": {
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private endpoint to deploy."
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the private endpoint."
+                      }
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the subnet to deploy the private endpoint into."
+                      }
+                    },
+                    "privateLinkServiceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the resource to create the private endpoint for."
+                      }
+                    },
+                    "groupId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Group ID (sub-resource) of the private link service."
+                      }
+                    },
+                    "customNetworkInterfaceName": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Custom name for the network interface created for this endpoint."
+                      }
+                    },
+                    "privateDNSZoneIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
+                      }
+                    }
+                  },
+                  "variables": {
+                    "copy": [
+                      {
+                        "name": "privateDnsZoneConfigs",
+                        "count": "[length(parameters('privateDNSZoneIds'))]",
+                        "input": {
+                          "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
+                          "properties": {
+                            "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "resources": [
+                    {
+                      "type": "Microsoft.Network/privateEndpoints",
+                      "apiVersion": "2023-09-01",
+                      "name": "[parameters('name')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "subnet": {
+                          "id": "[parameters('subnetResourceId')]"
+                        },
+                        "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
+                        "privateLinkServiceConnections": [
+                          {
+                            "name": "[parameters('name')]",
+                            "properties": {
+                              "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                              "groupIds": [
+                                "[parameters('groupId')]"
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
+                      "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
+                      "apiVersion": "2023-04-01",
+                      "name": "[format('{0}/{1}', parameters('name'), 'default')]",
+                      "properties": {
+                        "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
+                      },
+                      "dependsOn": [
+                        "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                      ]
+                    }
+                  ],
+                  "outputs": {
+                    "resourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Resource ID of the private endpoint."
+                      },
+                      "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
+                    },
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Azure resource name of the private endpoint."
+                      },
+                      "value": "[parameters('name')]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "privateEndpointVirtualNetwork",
+                "recoveryServicesVault"
+              ]
+            }
+          },
+          "outputs": {
+            "recoveryServicesVaultResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the newly deployed vault or the caller-supplied existing vault."
+              },
+              "value": "[if(parameters('createVault'), reference('recoveryServicesVault').outputs.resourceId.value, parameters('existingRecoveryServicesVaultResourceId'))]"
+            },
+            "fileShareBackupPolicyName": {
+              "type": "string",
+              "metadata": {
+                "description": "Selected Azure Files backup policy name, returned whether or not this module manages the policy."
+              },
+              "value": "[parameters('fileSharePolicyName')]"
+            },
+            "fileShareBackupPolicyResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Constructed policy resource ID in the selected vault; when manageBackupPolicy is false, existence is the caller responsibility."
+              },
+              "value": "[format('/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.RecoveryServices/vaults/{2}/backupPolicies/{3}', variables('effectiveVaultSubscriptionId'), variables('effectiveVaultResourceGroupName'), variables('effectiveVaultName'), parameters('fileSharePolicyName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "backupResourceGroup",
+        "storageResourceGroup"
+      ]
+    },
     "fslogix": {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
@@ -4502,9 +5873,7 @@
           },
           "encryptionKeyVaultUri": "[if(variables('deployStorageCmk'), createObject('value', reference('encryptionKeyVault').vaultUri), createObject('value', ''))]",
           "encryptionUserAssignedIdentityResourceId": "[if(variables('deployStorageCmk'), createObject('value', reference('storageCmk').outputs.storageEncryptionIdentityResourceId.value), createObject('value', ''))]",
-          "fileSharePolicyName": {
-            "value": "[parameters('fileSharePolicyName')]"
-          },
+          "fileSharePolicyName": "[if(and(variables('backupConfigurationIsValid'), variables('backupResourceGroupNamesAreDistinct')), createObject('value', parameters('fileSharePolicyName')), createObject('value', parameters('fileSharePolicyName')))]",
           "fslogixAdminGroups": {
             "value": "[parameters('fslogixAdminGroups')]"
           },
@@ -4569,9 +5938,7 @@
           "privateEndpointSubnetResourceId": {
             "value": "[parameters('privateEndpointSubnetResourceId')]"
           },
-          "recoveryServicesVaultResourceId": {
-            "value": "[parameters('recoveryServicesVaultResourceId')]"
-          },
+          "recoveryServicesVaultResourceId": "[if(variables('createFSLogixBackupVault'), createObject('value', reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value), createObject('value', parameters('recoveryServicesVaultResourceId')))]",
           "resourceGroupDeployment": {
             "value": "[variables('effectiveDeploymentResourceGroupName')]"
           },
@@ -4611,7 +5978,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "11340627022736772075"
+              "templateHash": "254604854940849240"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -9007,10 +10374,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "10352049559264767359"
+                      "templateHash": "2132894057681700020"
                     },
                     "name": "FSLogix file share backup registration",
-                    "description": "Registers existing Azure Files storage accounts and every requested share with an existing Recovery Services vault and backup policy in the deployment resource group."
+                    "description": "Registers existing Azure Files storage accounts and requested non-Office shares with an existing Recovery Services vault and backup policy."
                   },
                   "parameters": {
                     "vaultName": {
@@ -9028,13 +10395,13 @@
                     "fileShares": {
                       "type": "array",
                       "metadata": {
-                        "description": "Required. Array of share name strings to create or register on every supplied storage account."
+                        "description": "Required. Shares to protect on every supplied account. office-containers is always excluded."
                       }
                     },
                     "storageAccountResourceIds": {
                       "type": "array",
                       "metadata": {
-                        "description": "Required. Array of existing storage account resource ID strings; every fileShares entry is protected on each account."
+                        "description": "Required. Existing storage account resource IDs; eligible shares are protected on each account."
                       }
                     },
                     "fileSharePolicyName": {
@@ -9061,7 +10428,8 @@
                   },
                   "variables": {
                     "parentResourceTags": "[if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject())]",
-                    "combos": "[flatten(map(range(0, length(parameters('storageAccountResourceIds'))), lambda('saIdx', map(parameters('fileShares'), lambda('shareName', createObject('saId', parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], 'rgName', split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')[4], 'saName', last(split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')), 'shareName', lambdaVariables('shareName')))))))]"
+                    "backupFileShares": "[filter(parameters('fileShares'), lambda('shareName', not(equals(toLower(lambdaVariables('shareName')), 'office-containers'))))]",
+                    "combos": "[flatten(map(range(0, length(parameters('storageAccountResourceIds'))), lambda('saIdx', map(variables('backupFileShares'), lambda('shareName', createObject('saId', parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], 'rgName', split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')[4], 'saName', last(split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')), 'shareName', lambdaVariables('shareName')))))))]"
                   },
                   "resources": [
                     {
@@ -9071,6 +10439,7 @@
                         "mode": "serial",
                         "batchSize": 1
                       },
+                      "condition": "[not(empty(variables('backupFileShares')))]",
                       "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
                       "apiVersion": "2024-04-01",
                       "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}', parameters('vaultName'), split(parameters('storageAccountResourceIds')[copyIndex()], '/')[4], last(split(parameters('storageAccountResourceIds')[copyIndex()], '/')))]",
@@ -9144,6 +10513,7 @@
       "dependsOn": [
         "deploymentHelper",
         "encryptionKeyVault",
+        "fslogixBackupVault",
         "storageCmk",
         "storageResourceGroup"
       ]
@@ -10098,6 +11468,27 @@
     "storageAccountResourceIds": {
       "type": "array",
       "value": "[reference('fslogix').outputs.storageAccountResourceIds.value]"
+    },
+    "fslogixBackupVaultResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Selected snapshot backup vault ID; empty when backup is disabled."
+      },
+      "value": "[if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('recoveryServicesVaultResourceId'))]"
+    },
+    "fslogixBackupPolicyName": {
+      "type": "string",
+      "metadata": {
+        "description": "Selected snapshot backup policy name; empty when backup is disabled."
+      },
+      "value": "[if(empty(if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('recoveryServicesVaultResourceId'))), '', parameters('fileSharePolicyName'))]"
+    },
+    "fslogixBackupPolicyResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Selected snapshot backup policy resource ID; empty when backup is disabled."
+      },
+      "value": "[if(empty(if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('recoveryServicesVaultResourceId'))), '', format('{0}/backupPolicies/{1}', if(variables('createFSLogixBackupVault'), reference('fslogixBackupVault').outputs.recoveryServicesVaultResourceId.value, parameters('recoveryServicesVaultResourceId')), parameters('fileSharePolicyName')))]"
     }
   }
 }

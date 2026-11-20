@@ -271,6 +271,9 @@ session host uses its own system-assigned managed identity.
 This deployment creates the vault and policy. Each consuming host-pool or FSLogix Storage deployment
 registers its own eligible Azure Files storage account and share with that vault and policy. Azure
 NetApp Files is not protected by this Azure Files backup policy.
+The shared FSLogix registration module never enrolls `office-containers`; only profile shares
+are protected for the standard layouts. Existing Office protected items must be stopped through
+the approved backup-management process; incremental deployments do not remove them.
 
 ### Naming and Tags
 

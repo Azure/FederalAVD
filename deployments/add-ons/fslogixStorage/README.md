@@ -1,7 +1,7 @@
 # FSLogix Storage Add-On
 
 This add-on provisions FSLogix storage independently of a FederalAVD host pool deployment. It uses
-the same `deployments/shared/modules/orchestration/fslogix.bicep` module as the host pool and is
+the same `deployments/shared/modules/orchestration/fslogix/fslogix.bicep` module as the host pool and is
 also composed by the automated host-pool deployment before policy and session-host provisioning.
 
 ## Boundary
@@ -12,9 +12,11 @@ user-assigned identity, and role assignments. After storage configuration comple
 its external role assignments and deletes the temporary resource group, including itself and its
 identity. Entra ID storage-account-key authentication skips these temporary resources and the
 deployment VM's NTFS configuration. The add-on does not create a host pool,
-session host, policy assignment, Key Vault, Log Analytics workspace, Recovery Services vault, or
-backup policy. Those shared resources are supplied by resource ID or name. AVD Shared Services can
-create the regional FSLogix vault and policy before this add-on is deployed.
+session host, policy assignment, Key Vault, or Log Analytics workspace. Those shared resources
+are supplied by resource ID. For Azure Files snapshot backup, the add-on can consume an existing
+vault and policy, create a shared regional vault in the operations resource group, or create a
+dedicated vault in the storage resource group. It reuses the same backup vault module as AVD
+Shared Services. Office container shares are never enrolled by the shared FSLogix backup module.
 
 ## Deployment
 
@@ -149,12 +151,61 @@ count only after storage, policy, and role assignments complete.
 | Private networking | Private endpoint | Delegated subnet |
 | Customer-managed keys | Existing Key Vault; keys and identity created automatically | Managed by the NetApp account path |
 | Diagnostics | Existing Log Analytics workspace | Not configured by the shared module |
-| Backup | Existing Recovery Services vault and policy from AVD Shared Services or another provider | Not configured by the shared module |
+| Backup | Existing or newly created shared/dedicated Recovery Services vault and policy; profile shares only | Not configured by the shared module |
 
-For Azure Files backup, deploy AVD Shared Services with `deployFSLogixBackupVault: true`, then pass
-its `fslogixBackupVaultResourceId` output to `recoveryServicesVaultResourceId` and its
-`fslogixBackupPolicyName` output to `fileSharePolicyName`. The add-on owns registration of its
-storage accounts and shares as protected items; it does not modify the shared vault or policy.
+### Azure Files Snapshot Backup
+
+On **Zero Trust Configuration > Monitoring and Recovery**, choose:
+
+| Portal choice | Behavior |
+| --- | --- |
+| No backup | No vault, policy, or backup enrollment. This remains the default. |
+| Use an existing vault and policy | Select the vault and supply its policy name. Neither resource is modified. |
+| Create a shared regional vault | Create or reuse the naming convention's operations resource group and deploy the shared regional vault and policy. |
+| Create a dedicated vault | Deploy an identifier-based vault and policy in this deployment's storage resource group. |
+
+New vaults use a daily snapshot policy at **23:00** in the selected Windows time zone, with
+**30 days** retention by default. Snapshot data remains in Azure Files, protected by the storage
+account's encryption and networking controls; the vault holds backup metadata. The add-on does
+not create a vault private endpoint because [Azure Files snapshot backup does not require one](https://learn.microsoft.com/en-us/azure/backup/private-endpoints-overview#recommended-and-supported-scenarios).
+The new vault uses the shared module's enabled public network access, LRS metadata storage,
+platform-managed encryption, and security defaults. Storage private endpoints remain independent.
+The vault and storage accounts must be in a supported backup configuration in the same subscription
+and region.
+
+| Parameter | Default | Purpose |
+| --- | --- | --- |
+| `recoveryServicesVaultResourceId` | Empty | Existing vault ID. Takes precedence over vault creation. |
+| `fileSharePolicyName` | `filesharepolicy` | Policy to create in a new vault or consume in an existing vault. |
+| `deployFSLogixBackupVault` | `false` | Create a vault and policy when no existing vault ID is supplied. Azure Files only. |
+| `backupVaultScope` | `Shared` | `Shared` uses the operations resource group; `Dedicated` uses the storage resource group. |
+| `backupVaultName` | Empty | Override the new vault name. Blank uses shared regional or dedicated identifier-based naming. |
+| `backupResourceGroupName` | Empty | Override the operations resource group for `Shared` creation. Ignored for `Dedicated`. |
+| `fslogixBackupRetentionDays` | `30` | Daily retention for a new policy, from 1 to 200 days. |
+| `fslogixBackupTimeZone` | `UTC` | Windows time-zone ID for a new policy, for example `Eastern Standard Time`. |
+
+To consume AVD Shared Services backup resources, pass its `fslogixBackupVaultResourceId` output
+to `recoveryServicesVaultResourceId` and `fslogixBackupPolicyName` to `fileSharePolicyName`.
+This add-on returns those same output names plus `fslogixBackupPolicyResourceId`.
+For later shard expansion, reuse the returned vault ID and policy name, and leave
+`deployFSLogixBackupVault` false. This avoids changing a shared policy while adding storage.
+
+The shared registration module protects `profile-containers` on every deployed storage account.
+It always excludes `office-containers`, including case variations, for standalone, standard,
+automated, and PoC FSLogix deployments. Office shares are still created and configured normally;
+this exclusion does not change Cloud Cache replication or share soft delete.
+
+**Existing Office backup protection requires operator action.** An incremental ARM deployment
+does not remove protected items omitted from the template. Stop protection for any already enrolled
+Office shares through the approved backup-management process, review retention/deletion choices
+separately, and ensure external backup policies or automation do not enroll them again. This
+deployment does not delete existing recovery points or stop existing protection automatically.
+
+After publication, smoke-test all four Portal choices, switch between them and Azure NetApp Files,
+and check downloaded parameters for stale hidden vault IDs and creation settings. After a live
+deployment, verify one profile protected item per storage account, no Office protected items,
+a successful scheduled snapshot, and a profile restore. Offline checks do not establish backup
+or restore success.
 
 ## Public Network Access
 
@@ -254,8 +305,10 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
    replica promotion remain external operational responsibilities.
 - **Diagnostics:** The selected Log Analytics workspace must already exist and accept diagnostic
    settings from the storage resources.
-- **Azure Files backup:** The selected Recovery Services vault and file-share backup policy must
-   already exist and be usable by the storage accounts being protected.
+- **Azure Files backup:** An existing vault and file-share policy must already exist and be usable
+   by the storage accounts, or select creation of a shared/dedicated vault and policy. The principal
+   needs deployment permissions in the chosen backup resource group. Never place a vault in the
+   temporary deployment resource group; cleanup deletes that group.
 
 When identity-based authentication requires it, the temporary deployment VM uses Run Command to
 register domain-backed storage, update Entra Kerberos applications, grant consent, and initialize

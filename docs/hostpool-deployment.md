@@ -605,7 +605,7 @@ Backup behavior depends on host pool type and the `recoveryServices` parameter:
 
 > **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.
 >
-> **FSLogix backup only applies to Azure Files.** NetApp Files has its own snapshot/replication capabilities and is not enrolled in Recovery Services.
+> **FSLogix backup only applies to Azure Files profile shares.** `office-containers` is always excluded from enrollment. Previously enrolled Office shares require approved operator action to stop protection; incremental redeployment does not remove them. NetApp Files has its own snapshot/replication capabilities and is not enrolled in Recovery Services.
 >
 > **Personal pools have no FSLogix storage.** The `deployFSLogixStorage` parameter is ignored for personal host pools.
 >

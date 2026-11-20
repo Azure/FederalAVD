@@ -505,10 +505,16 @@ When `identitySolution = 'EntraId'` (storage key authentication), FSLogix is con
 ### Backup Schedule Is Not Parameterized
 
 Personal host-pool deployments create their VM backup policy when `recoveryServices = true`.
-For shared FSLogix backup, AVD Shared Services owns the Azure Files policy, including
-`fslogixBackupRetentionDays` and `fslogixBackupTimeZone`. The daily schedule runs at 23:00 in the
+For shared FSLogix backup, AVD Shared Services or the FSLogix Storage add-on can create the Azure
+Files policy, including `fslogixBackupRetentionDays` and `fslogixBackupTimeZone`. The add-on also
+supports a dedicated vault in its storage resource group. The daily schedule runs at 23:00 in the
 selected time zone. If you require custom backup windows or intraday snapshots, configure an
 additional policy after deployment.
+
+All FederalAVD FSLogix backup enrollment excludes `office-containers`; profile shares are protected
+on every shard. Office shares remain available for normal use and Cloud Cache replication.
+If Office shares were protected before this exclusion, stop protection through the approved operator
+process. Incremental ARM deployments do not stop existing protection or delete recovery points.
 
 ### FSLogix Office Container Cross-Region
 

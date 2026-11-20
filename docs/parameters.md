@@ -30,6 +30,12 @@ The add-on cannot join externally managed helpers. Azure NetApp Files retains it
 domain join. See the [standard host-pool guidance](../deployments/hostpools/README.md#deployment-vm-domain-join)
 and [FSLogix Storage guidance](../deployments/add-ons/fslogixStorage/README.md#deployment).
 
+The [FSLogix Storage backup contract](../deployments/add-ons/fslogixStorage/README.md#azure-files-snapshot-backup)
+supports existing vaults or opt-in shared/dedicated vault creation with `deployFSLogixBackupVault`,
+`backupVaultScope`, name overrides, `fslogixBackupRetentionDays`, and `fslogixBackupTimeZone`.
+All shared FSLogix backup registration excludes `office-containers`; previously enrolled Office
+shares require explicit operator removal from protection.
+
 ---
 
 ## Naming Convention
@@ -223,6 +229,10 @@ preserved.
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **fslogixStorage** | `recoveryServicesVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **fslogixStorage** | `fileSharePolicyName` |
+| **fslogixStorage** | `fslogixBackupVaultResourceId` | **hostpool / automatedHostPool** | `existingFilesBackupVaultResourceId` |
+| **fslogixStorage** | `fslogixBackupPolicyName` | **hostpool / automatedHostPool** | `existingFilesBackupPolicyName` |
+| **fslogixStorage** | `fslogixBackupVaultResourceId` | **fslogixStorage** (later expansion) | `recoveryServicesVaultResourceId` |
+| **fslogixStorage** | `fslogixBackupPolicyName` | **fslogixStorage** (later expansion) | `fileSharePolicyName` |
 | **imageManagement** | `computeGalleryResourceId` | **imageBuild** | `computeGalleryResourceId` |
 | **imageManagement** | `artifactsBlobContainerUrl` | **imageBuild** | `artifactsContainerUri` |
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |
