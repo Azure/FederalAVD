@@ -256,8 +256,10 @@ provenance. Filtering is limited to recognized template/schema locations, not
 similarly named properties in literal application data, and runs before hashing
 and deduplication.
 
-The publisher deduplicates eligible nested templates into linked artifacts in the
-filtered publication copy and publishes the complete package with the Template Spec REST API.
+The publisher prefers a self-contained, annotation-filtered template with inline
+nested templates. It selects linked-artifact deduplication only when the filtered
+inline package exceeds the size budget or Azure rejects inline publication as too
+large. It publishes the complete package with the Template Spec REST API.
 It does not depend on input minification or change SDK serialization settings.
 Before any resource creation or publication, every selected package is measured
 using the installed Az.Resources SDK's normal version-request serializer, including
@@ -266,10 +268,11 @@ the main template, linked artifacts, Portal form, and location envelope. A
 it is not data appended to the template. Output separates the measured request,
 reserved margin, total checked, and remaining headroom against the 2,000,000-byte
 budget. A warning highlights each package with 200,000 bytes (10%) or less
-remaining after the safety reserve; exceeding the budget still stops publication
-before any Azure writes. Publication packaging is performed in memory.
+remaining after the safety reserve. If inline content exceeds the budget, the
+publisher selects the deduplicated candidate; if that also exceeds the budget,
+publication stops before any Azure writes. Publication packaging is performed in memory.
 
-Run `Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
+Run `Invoke-Pester -Path tests\TemplateSpecs.Tests.ps1,tests\DeduplicatedTemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
 after changes affecting publication. These offline checks require Az.Resources,
 cover all current template/form pairs, enforce the publication budget and a
 4,000,000-byte tracked ARM file budget, and verify annotation filtering preserves
@@ -312,7 +315,7 @@ The authoritative references are:
 
 #### Implementation and validation
 
-`tools/New-TemplateSpecs.ps1` uses deduplicated REST publication and supports
+`tools/New-TemplateSpecs.ps1` uses inline-first REST publication and supports
 `-TemplateSpecNameSuffix` for isolated test names and `-WhatIf` for preflight without
 Azure writes. Without a suffix it targets the existing standard names.
 Only `-Location` is mandatory. The resource-group name defaults to the naming convention
@@ -320,7 +323,28 @@ with purpose `operations`; `-ResourceGroupName` remains an optional override. Af
 preflight, the publisher reuses the resolved group or creates it if missing, subject to
 `ShouldProcess`. The redundant `-createResourceGroup` parameter has been removed; callers
 that supplied it must omit it.
-Offline checks do not establish live publication or deployment compatibility.
+Before any writes, it prepares both the filtered inline payload and the
+deduplicated candidate for each selected entry. A complete inline request plus
+the 16,384-byte reserve at or below 2,000,000 bytes is selected without linked
+artifacts. Otherwise, the deduplicated candidate must fit the same budget.
+Selection is per template and size-based, not a hard-coded list of solutions.
+
+An inline publication can still exceed Azure's service-side accounting. When the
+version PUT returns `TemplateSpecTooLarge` or HTTP 413, or throws an exception
+carrying that code/status, the publisher warns and retries the same version once
+with the preflighted deduplicated payload. This retry is available only when the
+candidate contains linked artifacts, is smaller, and fits the offline budget.
+Parent Template Spec failures, unrelated version errors, and a failed deduplicated
+retry stop publication; they do not trigger another attempt. The retry remains
+inside the original `ShouldProcess` approval, and `-WhatIf` sends no PUT requests.
+See Microsoft's [Template Spec size limitation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/template-specs-known-issues).
+
+Linked-artifact versions can fail when replayed through deployment history's
+Portal **Redeploy** action because the extracted template can lose its artifact
+context. Deploy again from the original Template Spec version in that case.
+Inline-first selection avoids introducing that dependency when unnecessary; it
+does not repair deployment records created from older linked versions.
+Offline checks do not establish live publication, Portal Redeploy, or deployment compatibility.
 Version incrementing remains enabled by default;
 disabling it overwrites version `1.0.0`.
 The publisher retrieves existing versions by omitting `-Version`
@@ -333,8 +357,8 @@ return a collection as a single pipeline object.
 names and version-read failures stop publication rather than silently selecting
 `1.0.0`.
 
-The publisher filters the same publication-only annotations, identifies
-byte-identical JSON bodies with SHA-256, and extracts only static deployment
+For the deduplicated candidate, the publisher filters the same publication-only
+annotations, identifies byte-identical JSON bodies with SHA-256, and extracts only static deployment
 templates with explicitly declared inner expression scope. It traverses both
 symbolic resource objects and resource arrays, including nested deployments, but
 does not rewrite templates carried as variable/default/output data for later
