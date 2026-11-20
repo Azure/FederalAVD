@@ -761,6 +761,77 @@ Describe 'Portal naming without resource-name previews' {
         [string]::IsNullOrWhiteSpace($form.view.outputs.parameters.$Output) | Should -Be $false
     }
 
+    Describe 'Portal naming hidden component outputs in <Directory>' -ForEach @(
+        @{ Directory = 'imageManagement' }
+        @{ Directory = 'sharedServices' }
+        @{ Directory = 'hostpools' }
+        @{ Directory = 'automatedHostPools' }
+    ) {
+        BeforeAll {
+            $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
+            $step = $form.view.properties.steps | Where-Object name -eq 'tagsAndNaming'
+            $naming = $step.elements | Where-Object name -eq 'naming'
+            $defaults = @{}
+            foreach ($control in $naming.elements) {
+                $defaults[$control.name] = if ($control.type -eq 'Microsoft.Common.DropDown') {
+                    ($control.constraints.allowedValues | Where-Object label -eq $control.defaultValue).value
+                } else {
+                    $control.defaultValue
+                }
+            }
+            $binding = $form.view.outputs.parameters.namingConvention
+            $templates = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "deployments\$Directory") -Filter '*.json' -File |
+                Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) })
+            $templates.Count | Should -Be 1
+            $template = Get-Content -LiteralPath $templates[0].FullName -Raw | ConvertFrom-Json
+            $schema = $template.parameters.namingConvention
+            while ($schema.'$ref') {
+                $schema = $template.definitions.($schema.'$ref'.Split('/')[-1])
+            }
+            $allowedComponents = $schema.properties.components.allowedValues
+            $allowedComponents | Should -Not -BeNullOrEmpty
+        }
+
+        It 'submits valid defaults when the hidden sixth component is unset' {
+            foreach ($unset in @($null, '')) {
+                $values = $defaults.Clone()
+                $values.component6 = $unset
+                $result = Invoke-TestNamingFormExpression $binding @{ tagsAndNaming = @{ naming = $values } }
+                ($result.components -join ',') | Should -Be 'resourceType,workload,purpose,location,none,none'
+                @($result.components | Where-Object { $_ -notin $allowedComponents }).Count | Should -Be 0
+            }
+        }
+
+        It 'normalizes every hidden component after an earlier stop selection' {
+            foreach ($stop in 2..6) {
+                foreach ($unset in @($null, '')) {
+                    $values = $defaults.Clone()
+                    $values["component$stop"] = 'none'
+                    for ($index = $stop + 1; $index -le 6; $index++) {
+                        $values["component$index"] = $unset
+                    }
+                    $result = Invoke-TestNamingFormExpression $binding @{ tagsAndNaming = @{ naming = $values } }
+                    $result.components.Count | Should -Be 6
+                    @($result.components | Where-Object { $_ -notin $allowedComponents }).Count | Should -Be 0
+                    for ($index = 1; $index -le 6; $index++) {
+                        $expected = if ($index -lt $stop) { $defaults["component$index"] } else { 'none' }
+                        $result.components[$index - 1] | Should -Be $expected
+                    }
+                }
+            }
+        }
+
+        It 'preserves all six explicitly selected components' {
+            $values = $defaults.Clone()
+            $expected = @('freeform1', 'environment', 'workload', 'purpose', 'location', 'resourceType')
+            for ($index = 1; $index -le 6; $index++) {
+                $values["component$index"] = $expected[$index - 1]
+            }
+            $result = Invoke-TestNamingFormExpression $binding @{ tagsAndNaming = @{ naming = $values } }
+            ($result.components -join ',') | Should -Be ($expected -join ',')
+        }
+    }
+
     It 'explains Key Vault length failures and retains complete-name override validation in <Directory>' -TestCases @(
         @{ Directory = 'hostpools' }
         @{ Directory = 'sharedServices' }

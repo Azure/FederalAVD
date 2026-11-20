@@ -24,6 +24,29 @@ function Get-TestFormElement {
     }
 }
 
+function Invoke-TestNamingFormExpression {
+    param([string]$Expression, [hashtable]$Steps)
+
+    # Evaluate only the scalar functions used by naming outputs, not the Portal runtime.
+    $functions = @{
+        steps = { param($name) $Steps[$name] }.GetNewClosure()
+        'if' = { param($condition, $yes, $no) if ($condition) { $yes } else { $no } }
+        empty = { param($value) $null -eq $value -or $value.Length -eq 0 }
+        concat = { [string]::Concat([string[]]$args) }
+        parse = { param($value) $value | ConvertFrom-Json -ErrorAction Stop }
+        'not' = { param($value) -not $value }
+        'or' = { $true -in $args }
+        'and' = { $false -notin $args }
+    }
+    $body = $Expression.Substring(1, $Expression.Length - 2)
+    $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|empty|concat|parse|not|or|and)\(", {
+        param($match)
+        if ($match.Value.StartsWith("'")) { $match.Value }
+        else { '$functions.' + $match.Value.TrimEnd('(') + '.InvokeReturnAsIs(' }
+    })
+    & ([scriptblock]::Create($body))
+}
+
 function Invoke-TestNamingVectors {
     param([Parameter(Mandatory)][string]$TemplateFile)
 

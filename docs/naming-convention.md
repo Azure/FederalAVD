@@ -542,6 +542,12 @@ Each element of `components` must be one of these values:
 | `customToken2` (alias `freeform2`) | Second static custom token | `01` |
 | `none` | Placeholder that is always removed — use to hold a slot in the Portal UI without including it in the output | — |
 
+In the Portal naming forms, selecting **None (stop here)** hides subsequent component
+controls. Hidden controls can return null or empty values rather than their displayed
+defaults, so the form output normalizes empty optional component slots to `none`.
+Leaving the default four-component layout unchanged must not submit an empty component
+name: `""` is not a valid component identifier.
+
 ### Minimum required components
 
 | Component | Requirement | What happens without it |
