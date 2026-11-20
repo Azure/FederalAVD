@@ -66,6 +66,7 @@
                   "toolTip": "Region for the resource group and function app infrastructure. Verify Windows Dedicated plan and PowerShell runtime availability in this cloud and region.",
                   "resourceTypes": [
                     "Microsoft.Authorization/roleAssignments",
+                    "Microsoft.Compute/diskAccesses",
                     "Microsoft.Compute/diskEncryptionSets",
                     "Microsoft.Compute/virtualMachines",
                     "Microsoft.Insights/components",
@@ -477,21 +478,6 @@
                   }
                 },
                 {
-                  "name": "diskAccess",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Disk access",
-                  "toolTip": "Select a disk access resource to disable public network access to the managed disk.",
-                  "resourceType": "Microsoft.Compute/diskAccesses",
-                  "scope": {
-                    "location": "[steps('basics').scope.location.name]",
-                    "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
-                  },
-                  "visible": "[equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate')]",
-                  "constraints": {
-                    "required": true
-                  }
-                },
-                {
                   "name": "encryptionAtHost",
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Encryption At Host",
@@ -537,35 +523,28 @@
                   "name": "encryptionType",
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Encryption type",
-                  "defaultValue": "Customer-managed keys",
+                  "defaultValue": "Double encryption with platform-managed and customer-managed keys",
                   "toolTip": "Enables a zero trust configuration on the session host disks.",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
                       {
-                        "label": "Customer-managed keys",
-                        "value": "CMK"
+                        "label": "Encryption at-rest with platform-managed key",
+                        "value": "EncryptionAtRestWithPlatformKey"
                       },
                       {
-                        "label": "Platform-managed keys",
-                        "value": "PMK"
+                        "label": "Encryption at-rest with customer-managed key",
+                        "value": "EncryptionAtRestWithCustomerKey"
+                      },
+                      {
+                        "label": "Double encryption with platform-managed and customer-managed keys",
+                        "value": "EncryptionAtRestWithPlatformAndCustomerKeys"
+                      },
+                      {
+                        "label": "Confidential disk encryption with a customer-managed key",
+                        "value": "ConfidentialVmEncryptedWithCustomerKey"
                       }
                     ]
-                  }
-                },
-                {
-                  "name": "diskEncryptionSet",
-                  "type": "Microsoft.Solutions.ResourceSelector",
-                  "label": "Disk encryption set",
-                  "toolTip": "Select the disk encryption set for the validation VM.",
-                  "resourceType": "Microsoft.Compute/diskEncryptionSets",
-                  "scope": {
-                    "location": "[steps('basics').scope.location.name]",
-                    "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
-                  },
-                  "visible": "[equals(steps('virtualMachine').disk.encryptionType, 'CMK')]",
-                  "constraints": {
-                    "required": true
                   }
                 }
               ]
@@ -799,14 +778,47 @@
                   "name": "schedule",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Cron schedule",
-                  "toolTip": "Enter six NCRONTAB fields: second minute hour day month day-of-week, or an app-setting reference such as %ImageValidationSchedule%. Timer time zone is UTC unless configured through supported Function App settings. Verify ranges and supported syntax before deployment.",
-                  "placeholder": "0 0 2 * * *",
+                  "toolTip": "Enter six NCRONTAB fields. The default value triggers daily at 9 PM.",
+                  "defaultValue": "0 0 21 * * *",
                   "constraints": {
                     "required": true,
                     "validations": [
                       {
                         "regex": "^(?:\\S+\\s+){5}\\S+$|^%[^%\\s]+%$",
                         "message": "Enter six whitespace-separated NCRONTAB fields or an app-setting reference enclosed in percent signs."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "timeZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Time zone",
+                  "toolTip": "The time zone for the timer schedule in the Function App.",
+                  "visible": true,
+                  "defaultValue": "Coordinated Universal Time (UTC)",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Coordinated Universal Time (UTC)",
+                        "value": "UTC"
+                      },
+                      {
+                        "label": "Eastern Standard Time (EST)",
+                        "value": "Eastern Standard Time"
+                      },
+                      {
+                        "label": "Central Standard Time (CST)",
+                        "value": "Central Standard Time"
+                      },
+                      {
+                        "label": "Mountain Standard Time (MST)",
+                        "value": "Mountain Standard Time"
+                      },
+                      {
+                        "label": "Pacific Standard Time (PST)",
+                        "value": "Pacific Standard Time"
                       }
                     ]
                   }
@@ -1036,7 +1048,7 @@
                     "validations": [
                       {
                         "regex": "^[a-zA-Z0-9-]{1,40}$",
-                        "message": "The name must be 1 - 40 characters and contain only letters, digits, or hyphens."
+                        "message": "The name must be 1 - 40 characters and contain only letters, numbers, or hyphens."
                       }
                     ]
                   }
@@ -1076,7 +1088,55 @@
                     "validations": [
                       {
                         "regex": "^[a-zA-Z0-9-_]{1,80}$",
-                        "message": "Use 1-80 letters, digits, hyphens, or underscores."
+                        "message": "Use 1-80 letters, numbers, hyphens, or underscores."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "diskAccess",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Disk access",
+                  "defaultValue": "da-<env>-<location>-imgv",
+                  "visible": "[equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate')]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9-_\\.]{1,80}$",
+                        "message": "Use 1-80 letters, numbers, hyphens, underscores, or periods."
+                      },
+                      {
+                        "regex": "^[a-zA-Z0-9].*$",
+                        "message": "The value must start with a letter or number."
+                      },
+                      {
+                        "regex": "^.*[a-zA-Z0-9_]$",
+                        "message": "The value must end with a letter, number, or underscore."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "diskEncryptionSet",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Disk encryption set",
+                  "defaultValue": "des-<env>-<location>-imgv",
+                  "visible": "[not(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      {
+                        "regex": "^[a-zA-Z0-9-_\\.]{1,80}$",
+                        "message": "Use 1-80 letters, numbers, hyphens, underscores, or periods."
+                      },
+                      {
+                        "regex": "^[a-zA-Z0-9].*$",
+                        "message": "The value must start with a letter or number."
+                      },
+                      {
+                        "regex": "^.*[a-zA-Z0-9_]$",
+                        "message": "The value must end with a letter, number, or underscore."
                       }
                     ]
                   }
@@ -1139,7 +1199,7 @@
                     "validations": [
                       {
                         "regex": "^[a-zA-Z0-9-]{3,24}$",
-                        "message": "The value must use 3-24 letters, digits, or hyphens."
+                        "message": "The value must use 3-24 letters, numbers, or hyphens."
                       },
                       {
                         "regex": "^[a-zA-Z].*$",
@@ -1304,6 +1364,7 @@
                   "type": "Microsoft.Common.TagsByResource",
                   "resources": [
                     "Microsoft.Authorization/roleAssignments",
+                    "Microsoft.Compute/diskAccesses",
                     "Microsoft.Compute/diskEncryptionSets",
                     "Microsoft.Compute/virtualMachines",
                     "Microsoft.Insights/components",
@@ -1331,6 +1392,7 @@
       "subscriptionId": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId)]",
       "location": "[steps('basics').scope.location.name]",
       "parameters": {
+        "acceleratedNetworking": "[steps('virtualMachine').network.acceleratedNetworking]",
         "applicationInsightsName": "[steps('namingAndTags').naming.applicationInsights]",
         "appServicePlanName": "[if(steps('functionApp').general.existingAppServicePlan, '', steps('namingAndTags').naming.appServicePlan)]",
         "appServicePlanResourceId": "[if(steps('functionApp').general.existingAppServicePlan, steps('functionApp').general.appServicePlan.id, '')]",
@@ -1341,12 +1403,14 @@
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureFunctions, '')]",
         "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.keyVault, '')]",
         "bootDiagnostics": "[steps('virtualMachine').general.bootDiagnostics]",
-        "diskAccessResourceId": "[if(equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate'), steps('virtualMachine').disk.diskAccess.id, '')]",
+        "diskAccessName": "[if(equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate'), steps('namingAndTags').naming.diskAccess, '')]",
         "diskControllerType": "[steps('virtualMachine').disk.controllerType]",
-        "diskEncryptionSetResourceId": "[if(equals(steps('virtualMachine').disk.encryptionType, 'CMK'), steps('virtualMachine').disk.diskEncryptionSet.id, '')]",
+        "diskEncryptionSetName": "[if(equals(steps('virtualMachine').disk.encryptionType, 'CMK'), steps('namingAndTags').naming.diskEncryptionSet, '')]",
+        "diskEncryptionType": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), 'EncryptionAtRestWithCustomerKey', steps('virtualMachine').disk.encryptionType)]",
         "diskName": "[steps('namingAndTags').naming.disk]",
-        "acceleratedNetworking": "[steps('virtualMachine').network.acceleratedNetworking]",
+        "diskNetworkAccess": "[steps('virtualMachine').disk.networkAccess]",
         "encryptionAtHost": "[steps('virtualMachine').disk.encryptionAtHost]",
+        "endpointType": "[steps('functionApp').networkSettings.networkAccess]",
         "functionAppDelegatedSubnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]",
         "functionAppName": "[steps('namingAndTags').naming.functionApp]",
         "imageLicenseType": "[steps('virtualMachine').image.licenseType]",
@@ -1355,8 +1419,6 @@
         "keyVaultResourceId": "[steps('virtualMachine').credentials.keyVault.id]",
         "logAnalyticsWorkspaceResourceId": "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]",
         "networkInterfaceName": "[steps('namingAndTags').naming.networkInterface]",
-        "privateEndpoint": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
-        "privateEndpointSubnetResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').networkSettings.subnet, '')]",
         "privateIPAddress": "[steps('virtualMachine').network.privateIPAddress]",
         "privateLinkScopeResourceId": "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]",
         "resourceGroupName": "[steps('namingAndTags').naming.resourceGroup]",
@@ -1367,6 +1429,7 @@
         "subnetResourceId": "[steps('virtualMachine').network.subnet]",
         "tags": "[steps('namingAndTags').tagsSection.tags]",
         "templateSpecName": "[steps('namingAndTags').naming.templateSpec]",
+        "timeZone": "[steps('functionApp').general.timeZone]",
         "userAssignedIdentityName": "[steps('namingAndTags').naming.userAssignedIdentity]",
         "virtualMachineCustomizations": "[if(steps('virtualMachine').customizations.addCustomScripts, steps('virtualMachine').customizations.customScripts, parse('[]'))]",
         "virtualMachineName": "[steps('namingAndTags').naming.virtualMachine]",
