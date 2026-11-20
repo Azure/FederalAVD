@@ -114,7 +114,28 @@ Secret/Top Secret packages; obtain the target-cloud versions within high instead
 | **DeleteExistingBlobs** | Switch | `$false` | Delete all existing blobs in the container before uploading. Use for a clean refresh rather than incremental update. |
 | **SkipDownloadingNewSources** | Switch | `$false` | Skip all source downloads. On high, use only after every required target-cloud file is staged through approved internal sources. |
 | **CustomerDownloadsMode** | String | `Merge` | `None` ignores the customer download overlay but retains base downloads and customer artifacts. Recommended on high. |
-| **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
+| **TempDir** | String | `[System.IO.Path]::GetTempPath()` | Platform temporary directory for packaging; does not require `$Env:TEMP`. Use a path on a high-performance drive for large artifact sets. |
+
+### Azure Cloud Shell / Linux
+
+Run the saved script from a complete repository checkout in **PowerShell** Cloud Shell.
+PowerShell sets `$PSScriptRoot` to the script's directory when invoking the file; Cloud Shell
+does not inherently remove it. Do not paste the script body or execute downloaded text with
+`Invoke-Expression`, because the repository-relative paths require the saved script location.
+
+The script uses .NET's platform temporary directory by default, so an unset `$Env:TEMP` is
+supported. `-TempDir` overrides artifact staging; Windows-only WinGet cache maintenance uses
+Windows `TEMP` separately, falling back to the platform temporary directory if unset.
+Empty temporary paths are rejected explicitly.
+Earlier versions also read `$Env:TEMP` again during download initialization, so supplying
+`-TempDir` alone did not prevent that second null-path failure.
+
+WinGet registration, Windows PATH refresh, and WinGet cache cleanup run only on Windows.
+Entries that require an unavailable WinGet executable are skipped with a warning unless they
+qualify for the existing Store fallback. MSI metadata extraction is also Windows-only.
+For packages requiring Windows tooling, prepare them on Windows, stage the completed packages,
+then use `-SkipDownloadingNewSources` in Cloud Shell to package and upload them. Cloud Shell
+does not execute the artifact installers; those run later on Windows image or session-host VMs.
 
 ## Usage Examples
 

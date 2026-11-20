@@ -79,7 +79,7 @@ delivery service if winget fails or is unavailable. The fallback stages verified
 x64-compatible packages and dependencies. It is disabled for air-gapped download manifests.
 
 .PARAMETER TempDir
-Temporary directory used during artifact packaging. Defaults to $Env:Temp.
+Temporary directory used during artifact packaging. Defaults to [System.IO.Path]::GetTempPath().
 Use a path on a high-performance drive when processing large artifact sets.
 
 .EXAMPLE
@@ -151,7 +151,8 @@ param(
     [string]$CustomerDownloadsMode = 'Merge',
 
     [Parameter(Mandatory = $false)]
-    [string]$TempDir = "$Env:Temp",
+    [ValidateNotNullOrEmpty()]
+    [string]$TempDir = [System.IO.Path]::GetTempPath(),
 
     [Parameter(Mandatory = $false)]
     [switch]$CopyDownloadsToCustomerArtifacts
@@ -159,6 +160,13 @@ param(
 
 #region Variables
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($TempDir)) {
+    throw 'TempDir must be a nonempty filesystem directory path.'
+}
+if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    throw 'Run Update-ImageArtifacts.ps1 from a saved file in a complete FederalAVD checkout, not pasted code or Invoke-Expression.'
+}
+$RunningOnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or ($IsWindows -eq $true)
 $ScriptStartTime = Get-Date
 $LocalPackageMode = $PSCmdlet.ParameterSetName -eq 'LocalPackage'
 
@@ -1295,7 +1303,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             break
         }
     }
-    If ($RequiresWinget -and -not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
+    If ($RequiresWinget -and $RunningOnWindows -and -not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
         Write-Output "Winget not found. Attempting to register the App Installer package..."
         try {
             # 'Register' re-associates an already-staged Appx package with the current user context.
@@ -1327,12 +1335,18 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     # Cache latest and recent releases, but resolve each entry's complete asset set together.
     $GitHubReleaseCache = @{}
 
-    # Clean winget's own working directory so stale files from previous runs do not
-    # accumulate. winget creates %TEMP%\WinGet independently of --download-directory.
-    $WingetTempDir = Join-Path -Path $Env:TEMP -ChildPath 'WinGet'
-    If (Test-Path -Path $WingetTempDir) {
-        Write-Output "Cleaning winget temp directory '$WingetTempDir'..."
-        Remove-Item -Path $WingetTempDir -Recurse -Force -ErrorAction SilentlyContinue
+    # WinGet's cache is separate from the caller-selected artifact staging directory.
+    If ($RunningOnWindows -and $RequiresWinget) {
+        $WingetTempRoot = if ([string]::IsNullOrWhiteSpace($env:TEMP)) {
+            [System.IO.Path]::GetTempPath()
+        } else {
+            $env:TEMP
+        }
+        $WingetTempDir = Join-Path -Path $WingetTempRoot -ChildPath 'WinGet'
+        If (Test-Path -Path $WingetTempDir) {
+            Write-Output "Cleaning winget temp directory '$WingetTempDir'..."
+            Remove-Item -Path $WingetTempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     foreach ($key in $Downloads.PSObject.Properties.Name) {
