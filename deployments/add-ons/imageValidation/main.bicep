@@ -263,7 +263,7 @@ resource roleDefinition_subnetJoinAction 'Microsoft.Authorization/roleDefinition
 }
 
 module networkInterface '../../shared/modules/resourceModules/network/networkInterfaces/deploy.bicep' = {
-  scope: rg
+  scope: resourceGroup(resourceGroupName)
   params: {
     enableAcceleratedNetworking: acceleratedNetworking
     location: location
@@ -273,9 +273,12 @@ module networkInterface '../../shared/modules/resourceModules/network/networkInt
     privateIPAllocationMethod: 'Static'
     tags: tags[?'Microsoft.Network/networkInterfaces'] ?? {}
   }
+  dependsOn: [
+    rg
+  ]
 }
 
-module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = if (endpointType == 'private') {
+module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
   scope: rg
   params: {
     name: diskAccessName
@@ -287,7 +290,7 @@ module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/dep
   ]
 }
 
-module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (endpointType == 'private') {
+module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
   scope: rg
   params: {
     groupId: 'disks'
@@ -394,6 +397,7 @@ module diskEncryptionSet '../../shared/modules/resourceModules/compute/diskEncry
     tags: tags
   }
   dependsOn: [
+    keys
     networkInterface
   ]
 }
@@ -458,7 +462,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'diskAccessResourceId'
-        value: endpointType == 'private' ? diskAccess!.outputs.resourceId : ''
+        value: diskNetworkAccess == 'AllowPrivate' ? diskAccess!.outputs.resourceId : ''
       }
       {
         name: 'diskControllerType'
@@ -582,7 +586,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
 
 // Role assignment gives the Virtual Machine Contributor role to the function app to manage the validation virtual machine resources
 module resourceGroupRoleAssignment '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = {
-  scope: resourceGroup(split(subnetResourceId, '/')[2], split(subnetResourceId, '/')[4])
+  scope: rg
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
     principalType: 'ServicePrincipal'
@@ -617,6 +621,21 @@ module keyVaultRoleAssignment '../../shared/modules/resourceModules/keyVault/vau
       }
     ]
     keyVaultName: last(split(keyVaultResourceId, '/'))
+  }
+}
+
+// Role assignment gives the Reader role to the function app to access the disk encryption set (least privilege access)
+module diskEncryptionSetRoleAssignment '../../shared/modules/resourceModules/compute/diskEncryptionSets/roleAssignment.bicep' = if (!empty(diskEncryptionSetName)) {
+  scope: rg
+  params: {
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'acdd72a7-3385-48ef-bd42-f606fba81ae7' // Reader
+      }
+    ]
+    diskEncryptionSetName: split(diskEncryptionSet!.outputs.resourceId, '/')[8]
   }
 }
 
