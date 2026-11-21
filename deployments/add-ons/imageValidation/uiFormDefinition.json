@@ -907,6 +907,7 @@
               "name": "privateDnsZones",
               "type": "Microsoft.Common.Section",
               "label": "Private DNS Zones",
+              "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
               "elements": [
                 {
                   "name": "subscription",
@@ -914,7 +915,7 @@
                   "resourceProviders": [
                     "Microsoft.Network"
                   ],
-                  "visible": true
+                  "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
                 },
                 {
                   "name": "privateDnsZonesApi",
