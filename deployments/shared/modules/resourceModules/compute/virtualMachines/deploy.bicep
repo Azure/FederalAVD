@@ -260,4 +260,4 @@ output resourceId string = virtualMachine.id
 output name string = virtualMachine.name
 
 @description('VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string.')
-output principalId string = (systemAssignedIdentity || empty(userAssignedIdentityResourceIds)) ? virtualMachine.identity.principalId : ''
+output principalId string = (systemAssignedIdentity || !empty(userAssignedIdentityResourceIds)) ? virtualMachine.identity.principalId : ''
