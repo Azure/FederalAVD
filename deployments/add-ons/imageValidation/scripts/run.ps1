@@ -19,6 +19,8 @@ try
         'Content-Type'='application/json'
         'Authorization'='Bearer ' + $AccessToken
     }
+
+	Write-Output 'Successfully authenticated to Azure'
 }
 catch
 {
@@ -34,6 +36,8 @@ $ComputeGalleryImageVersions = Invoke-RestMethod `
 
 $LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1
 
+Write-Output "Latest compute gallery image version: $($LatestComputeGalleryImageVersion.name)"
+
 $StatusCode = $null
 try {
 	# Get virtual machine
@@ -41,6 +45,8 @@ try {
 		-Headers $Header `
 		-Method 'Get' `
 		-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?api-version=2024-07-01')
+
+	Write-Output "Deployed compute gallery image version: $($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1])"
 }
 catch  {
 	if ($_.Exception.Response.StatusCode -eq 'NotFound') {
@@ -50,7 +56,6 @@ catch  {
         throw $_.Exception.Message
     }
 }
-
 
 if ($StatusCode -eq 'NotFound'){
 	Write-Output "Virtual machine does not exist. No deletion necessary."
@@ -62,7 +67,7 @@ elseif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-
 		-Method 'Delete' `
 		-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null
 
-    Write-Output 'Deleted existing virtual machine'
+    Write-Output 'Virtual machine was using an outdated image and has been deleted.'
 }
 
 $Timestamp = Get-Date -Format 'yyyyMMddHHmmss'
@@ -82,7 +87,7 @@ $Body = @{
 			diskNetworkAccess = @{ value = $env:diskNetworkAccess }
 			encryptionAtHost = @{ value = [bool]$env:encryptionAtHost }
 			hibernation = @{ value = $false }
-			imageVersionResourceId = @{ value = $env:imageVersionResourceId }
+			imageVersionResourceId = @{ value = $LatestComputeGalleryImageVersion.id }
 			integrityMonitoring = @{ value = [bool]$env:integrityMonitoring }
 			keyVaultResourceId = @{ value = $env:keyVaultResourceId }
 			licenseType = @{ value = $env:licenseType }
@@ -110,4 +115,4 @@ Invoke-RestMethod `
 	-Body $Body `
 	-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourcegroups/' + $env:resourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null
 
-Write-Output 'Deployed new image validation virtual machine'
+Write-Output "Deployment submitted for new image validation virtual machine. Check deployment status in the portal for more details. Deployment name is: ImageValidation-$Timestamp"
