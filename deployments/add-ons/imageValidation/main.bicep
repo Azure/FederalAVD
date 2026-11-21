@@ -319,7 +319,7 @@ module keyVault '../../shared/modules/resourceModules/keyVault/vaults/deploy.bic
     name: keyVaultName
     networkAcls: endpointType == 'service'
       ? {
-          bypass: 'None'
+          bypass: 'AzureServices'
           defaultAction: 'Deny'
           ipRules: []
           virtualNetworkRules: [

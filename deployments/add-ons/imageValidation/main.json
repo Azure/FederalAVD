@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "7588250254597384727"
+      "templateHash": "5815472788161711688"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -2099,7 +2099,7 @@
           "name": {
             "value": "[parameters('keyVaultName')]"
           },
-          "networkAcls": "[if(equals(parameters('endpointType'), 'service'), createObject('value', createObject('bypass', 'None', 'defaultAction', 'Deny', 'ipRules', createArray(), 'virtualNetworkRules', createArray(createObject('id', parameters('subnetResourceId'), 'ignoreMissingVnetServiceEndpoint', false())))), createObject('value', createObject()))]",
+          "networkAcls": "[if(equals(parameters('endpointType'), 'service'), createObject('value', createObject('bypass', 'AzureServices', 'defaultAction', 'Deny', 'ipRules', createArray(), 'virtualNetworkRules', createArray(createObject('id', parameters('subnetResourceId'), 'ignoreMissingVnetServiceEndpoint', false())))), createObject('value', createObject()))]",
           "publicNetworkAccess": "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
