@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4863731932190041415"
+      "templateHash": "12783425391188611953"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -431,7 +431,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.49.2.45890",
-          "templateHash": "10656364825065426793"
+          "templateHash": "877361240545273520"
         }
       },
       "definitions": {
@@ -694,7 +694,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "16154729554409593475"
+                  "templateHash": "18386894160170663158"
                 },
                 "name": "Windows virtual machine",
                 "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -1186,7 +1186,7 @@
                   "metadata": {
                     "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
                   },
-                  "value": "[[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
+                  "value": "[[if(or(parameters('systemAssignedIdentity'), not(empty(parameters('userAssignedIdentityResourceIds')))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
                 }
               }
             }
@@ -1665,7 +1665,7 @@
       ]
     },
     "diskAccess": {
-      "condition": "[equals(parameters('endpointType'), 'private')]",
+      "condition": "[equals(parameters('diskNetworkAccess'), 'AllowPrivate')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('diskAccess-{0}', uniqueString('diskAccess', deployment().name))]",
@@ -1753,7 +1753,7 @@
       ]
     },
     "diskAccessPrivateEndpoint": {
-      "condition": "[equals(parameters('endpointType'), 'private')]",
+      "condition": "[equals(parameters('diskNetworkAccess'), 'AllowPrivate')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('diskAccessPrivateEndpoint-{0}', uniqueString('diskAccessPrivateEndpoint', deployment().name))]",
@@ -4125,6 +4125,7 @@
         }
       },
       "dependsOn": [
+        "keys",
         "keyVault",
         "networkInterface",
         "rg"
@@ -4450,7 +4451,7 @@
             "value": "[reference('keyVault').outputs.resourceId.value]"
           },
           "functionAppAppSettings": {
-            "value": "[concat(createArray(createObject('name', 'acceleratedNetworking', 'value', string(parameters('acceleratedNetworking'))), createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityResourceId', 'value', parameters('artifactsUserAssignedIdentityResourceId')), createObject('name', 'bootDiagnostics', 'value', string(parameters('bootDiagnostics'))), createObject('name', 'diskAccessResourceId', 'value', if(equals(parameters('endpointType'), 'private'), reference('diskAccess').outputs.resourceId.value, '')), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', if(empty(parameters('diskEncryptionSetName')), '', reference('diskEncryptionSet').outputs.resourceId.value)), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'diskNetworkAccess', 'value', parameters('diskNetworkAccess')), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(parameters('integrityMonitoring'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'resourceGroupName', 'value', parameters('resourceGroupName')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'subscriptionId', 'value', subscription().subscriptionId), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'templateSpecResourceId', 'value', reference('templateSpec').outputs.versionResourceId.value), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm'))), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
+            "value": "[concat(createArray(createObject('name', 'acceleratedNetworking', 'value', string(parameters('acceleratedNetworking'))), createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityResourceId', 'value', parameters('artifactsUserAssignedIdentityResourceId')), createObject('name', 'bootDiagnostics', 'value', string(parameters('bootDiagnostics'))), createObject('name', 'diskAccessResourceId', 'value', if(equals(parameters('diskNetworkAccess'), 'AllowPrivate'), reference('diskAccess').outputs.resourceId.value, '')), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', if(empty(parameters('diskEncryptionSetName')), '', reference('diskEncryptionSet').outputs.resourceId.value)), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'diskNetworkAccess', 'value', parameters('diskNetworkAccess')), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(parameters('integrityMonitoring'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'resourceGroupName', 'value', parameters('resourceGroupName')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'subscriptionId', 'value', subscription().subscriptionId), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'templateSpecResourceId', 'value', reference('templateSpec').outputs.versionResourceId.value), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm'))), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[variables('integrationSubnetId')]"
@@ -5462,8 +5463,7 @@
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "[format('resourceGroupRoleAssignment-{0}', uniqueString('resourceGroupRoleAssignment', deployment().name))]",
-      "subscriptionId": "[split(parameters('subnetResourceId'), '/')[2]]",
-      "resourceGroup": "[split(parameters('subnetResourceId'), '/')[4]]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -5556,7 +5556,8 @@
         }
       },
       "dependsOn": [
-        "functionApp"
+        "functionApp",
+        "rg"
       ]
     },
     "virtualNetworkRoleAssignment": {
@@ -5865,6 +5866,161 @@
       "dependsOn": [
         "functionApp",
         "roleDefinition_keyVaultDeployAction"
+      ]
+    },
+    "diskEncryptionSetRoleAssignment": {
+      "condition": "[not(empty(parameters('diskEncryptionSetName')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('diskEncryptionSetRoleAssignment-{0}', uniqueString('diskEncryptionSetRoleAssignment', deployment().name))]",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "assignments": {
+            "value": [
+              {
+                "principalId": "[reference('functionApp').outputs.functionAppPrincipalId.value]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+              }
+            ]
+          },
+          "diskEncryptionSetName": {
+            "value": "[split(reference('diskEncryptionSet').outputs.resourceId.value, '/')[8]]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "12186462738620009574"
+            },
+            "name": "Disk encryption set role assignments",
+            "description": "Applies deterministic role assignments at an existing disk encryption set in the deployment resource group; does not grant access to its encryption key."
+          },
+          "definitions": {
+            "roleAssignmentType": {
+              "type": "object",
+              "properties": {
+                "roleDefinitionId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Role definition GUID or fully-qualified resource ID."
+                  }
+                },
+                "principalId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Object (principal) ID of the identity receiving the role."
+                  }
+                },
+                "principalType": {
+                  "type": "string",
+                  "allowedValues": [
+                    "",
+                    "Device",
+                    "ForeignGroup",
+                    "Group",
+                    "ServicePrincipal",
+                    "User"
+                  ],
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                  }
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Optional human-readable description for the assignment."
+                  }
+                }
+              },
+              "metadata": {
+                "description": "A single role assignment to apply to a specific resource.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                }
+              }
+            }
+          },
+          "parameters": {
+            "diskEncryptionSetName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the existing disk encryption set."
+              }
+            },
+            "assignments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/roleAssignmentType"
+              },
+              "metadata": {
+                "description": "Role assignments to apply to this disk encryption set."
+              }
+            }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "formattedAssignments",
+                "count": "[length(parameters('assignments'))]",
+                "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+              }
+            ]
+          },
+          "resources": {
+            "diskEncryptionSet": {
+              "existing": true,
+              "type": "Microsoft.Compute/diskEncryptionSets",
+              "apiVersion": "2023-04-02",
+              "name": "[parameters('diskEncryptionSetName')]"
+            },
+            "roleAssignment": {
+              "copy": {
+                "name": "roleAssignment",
+                "count": "[length(variables('formattedAssignments'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Compute/diskEncryptionSets', parameters('diskEncryptionSetName'))]",
+              "name": "[guid(resourceId('Microsoft.Compute/diskEncryptionSets', parameters('diskEncryptionSetName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+              "properties": {
+                "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+              }
+            }
+          },
+          "outputs": {
+            "resourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Array of role assignment resource IDs in the same order as the assignments input."
+              },
+              "copy": {
+                "count": "[length(variables('formattedAssignments'))]",
+                "input": "[extensionResourceId(resourceId('Microsoft.Compute/diskEncryptionSets', parameters('diskEncryptionSetName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Compute/diskEncryptionSets', parameters('diskEncryptionSetName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "diskEncryptionSet",
+        "functionApp",
+        "rg"
       ]
     },
     "galleryRoleAssignment": {
