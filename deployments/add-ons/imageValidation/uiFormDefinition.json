@@ -463,16 +463,16 @@
                     "required": true,
                     "allowedValues": [
                       {
-                        "label": "Enable public access from all networks",
-                        "value": "AllowAll"
+                        "label": "Disable public and private access",
+                        "value": "DenyAll"
                       },
                       {
                         "label": "Disable public access and enable private access",
                         "value": "AllowPrivate"
                       },
                       {
-                        "label": "Disable public and private access",
-                        "value": "DenyAll"
+                        "label": "Enable public access from all networks",
+                        "value": "AllowAll"
                       }
                     ]
                   }
@@ -529,20 +529,20 @@
                     "required": true,
                     "allowedValues": [
                       {
-                        "label": "Encryption at-rest with platform-managed key",
-                        "value": "EncryptionAtRestWithPlatformKey"
+                        "label": "Double encryption with platform-managed and customer-managed keys",
+                        "value": "EncryptionAtRestWithPlatformAndCustomerKeys"
                       },
                       {
                         "label": "Encryption at-rest with customer-managed key",
                         "value": "EncryptionAtRestWithCustomerKey"
                       },
                       {
-                        "label": "Double encryption with platform-managed and customer-managed keys",
-                        "value": "EncryptionAtRestWithPlatformAndCustomerKeys"
-                      },
-                      {
                         "label": "Confidential disk encryption with a customer-managed key",
                         "value": "ConfidentialVmEncryptedWithCustomerKey"
+                      },
+                      {
+                        "label": "Encryption at-rest with platform-managed key",
+                        "value": "EncryptionAtRestWithPlatformKey"
                       }
                     ]
                   }
@@ -838,17 +838,18 @@
                   "constraints": {
                     "required": true,
                     "allowedValues": [
+                      
                       {
-                        "label": "Enable public access from all networks",
-                        "value": "public"
+                        "label": "Disable public access and use private access",
+                        "value": "private"
                       },
                       {
                         "label": "Enable public access from selected virtual networks and IP addresses",
                         "value": "service"
                       },
                       {
-                        "label": "Disable public access and use private access",
-                        "value": "private"
+                        "label": "Enable public access from all networks",
+                        "value": "public"
                       }
                     ]
                   }
@@ -913,14 +914,6 @@
                   "resourceProviders": [
                     "Microsoft.Network"
                   ],
-                  "constraints": {
-                    "validations": [
-                      {
-                        "isValid": "[not(empty(steps('basics').subscription.subscriptionId))]",
-                        "message": "Select a subscription."
-                      }
-                    ]
-                  },
                   "visible": true
                 },
                 {
@@ -1405,7 +1398,7 @@
         "bootDiagnostics": "[steps('virtualMachine').general.bootDiagnostics]",
         "diskAccessName": "[if(equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate'), steps('namingAndTags').naming.diskAccess, '')]",
         "diskControllerType": "[steps('virtualMachine').disk.controllerType]",
-        "diskEncryptionSetName": "[if(equals(steps('virtualMachine').disk.encryptionType, 'CMK'), steps('namingAndTags').naming.diskEncryptionSet, '')]",
+        "diskEncryptionSetName": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), '', steps('namingAndTags').naming.diskEncryptionSet)]",
         "diskEncryptionType": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), 'EncryptionAtRestWithCustomerKey', steps('virtualMachine').disk.encryptionType)]",
         "diskName": "[steps('namingAndTags').naming.disk]",
         "diskNetworkAccess": "[steps('virtualMachine').disk.networkAccess]",
