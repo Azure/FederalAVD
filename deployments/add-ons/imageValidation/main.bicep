@@ -263,7 +263,7 @@ resource roleDefinition_subnetJoinAction 'Microsoft.Authorization/roleDefinition
 }
 
 module networkInterface '../../shared/modules/resourceModules/network/networkInterfaces/deploy.bicep' = {
-  scope: resourceGroup(resourceGroupName)
+  scope: rg
   params: {
     enableAcceleratedNetworking: acceleratedNetworking
     location: location
@@ -273,9 +273,6 @@ module networkInterface '../../shared/modules/resourceModules/network/networkInt
     privateIPAllocationMethod: 'Static'
     tags: tags[?'Microsoft.Network/networkInterfaces'] ?? {}
   }
-  dependsOn: [
-    rg
-  ]
 }
 
 module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
@@ -285,9 +282,6 @@ module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/dep
     location: location
     tags: tags[?'Microsoft.Compute/diskAccesses'] ?? {}
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
@@ -303,9 +297,6 @@ module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/p
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = {
@@ -318,9 +309,6 @@ module templateSpec '../../shared/modules/resourceModules/resources/templateSpec
     name: templateSpecName
     tags: tags[?'Microsoft.Resources/templateSpecs'] ?? {}
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 // This key vault is used for storing the encryption keys when using customer-managed keys for the storage account
@@ -345,9 +333,6 @@ module keyVault '../../shared/modules/resourceModules/keyVault/vaults/deploy.bic
     publicNetworkAccess: endpointType == 'private' ? 'Disabled' : 'Enabled'
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 module keyVaultPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (endpointType == 'private') {
@@ -363,9 +348,6 @@ module keyVaultPrivateEndpoint '../../shared/modules/resourceModules/network/pri
     subnetResourceId: subnetResourceId
     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 module keys '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep' = {
@@ -381,9 +363,6 @@ module keys '../../shared/modules/orchestration/customerManagedKeys/customerMana
     location: location
     tags: tags
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 module diskEncryptionSet '../../shared/modules/resourceModules/compute/diskEncryptionSets/deploy.bicep' = if (!empty(diskEncryptionSetName)) {
@@ -398,7 +377,6 @@ module diskEncryptionSet '../../shared/modules/resourceModules/compute/diskEncry
   }
   dependsOn: [
     keys
-    networkInterface
   ]
 }
 
@@ -427,9 +405,6 @@ module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppH
     tags: tags
     zoneRedundant: false
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
 
 module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
@@ -580,7 +555,6 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
   }
   dependsOn: [
     keys
-    networkInterface
   ]
 }
 
@@ -681,7 +655,4 @@ module function '../../shared/modules/resourceModules/functionApp/function.bicep
     functionName: 'ImageValidation'
     schedule: schedule
   }
-  dependsOn: [
-    networkInterface
-  ]
 }
