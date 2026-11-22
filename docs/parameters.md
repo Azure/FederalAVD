@@ -5,9 +5,10 @@
 Parameter documentation lives alongside each deployment template. Find the section for your solution below.
 
 The [Image Validation parameter reference](../deployments/add-ons/imageValidation/README.md#parameters)
-covers generated validation resource names, existing image-version and credentials
-inputs, VM network/size settings, and typed Run Commands. Its names are resolved by
-the shared naming framework, not by caller-supplied app-setting strings.
+covers explicit resource names, existing image-version and credentials inputs,
+VM network/security settings, artifact customizations, and resource-type tags.
+Image Validation builds its own runtime settings; it does not expose naming
+conventions or an additional app-settings parameter.
 
 ---
 
@@ -27,7 +28,7 @@ the shared naming framework, not by caller-supplied app-setting strings.
 
 ## Naming Convention
 
-FederalAVD-created resource names across solutions are controlled by the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, the same parameter object should be passed to every solution for a consistent enterprise naming strategy. Azure Virtual Desktop owns automated session-host VM, OS disk, and NIC names and exposes only a VM name prefix; see [Solution Limitations](limitations.md#automated-host-pool-limitations).
+Most FederalAVD deployments control resource names through the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, pass the same parameter object to solutions that support it for a consistent enterprise naming strategy. Image Validation instead takes complete resource names. Azure Virtual Desktop owns automated session-host VM, OS disk, and NIC names and exposes only a VM name prefix; see [Solution Limitations](limitations.md#automated-host-pool-limitations).
 
 See the **[Naming Convention guide](naming-convention.md)** for:
 
