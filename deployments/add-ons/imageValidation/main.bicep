@@ -355,10 +355,14 @@ module keys '../../shared/modules/orchestration/customerManagedKeys/customerMana
   params: {
     keyVaultResourceId: keyVault.outputs.resourceId
     keyManagementType: 'CustomerManagedHSM'
-    keyNames: [
-      diskEncryptionSetName
-      storageAccountName
-    ]
+    keyNames: union(
+      [storageAccountName],
+      empty(diskEncryptionSetName)
+        ? []
+        : [
+            diskEncryptionSetName
+          ]
+    )
     identityName: userAssignedIdentityName
     location: location
     tags: tags
@@ -542,7 +546,11 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
     keyManagementStorageAccounts: 'CustomerManagedHSM'
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
-    paasPublicNetworkAccess: endpointType == 'private' ? 'Disabled' : 'Enabled'
+    paasPublicNetworkAccess: endpointType == 'private'
+      ? 'Disabled'
+      : endpointType == 'service'
+        ? 'EnabledWithRestrictions'
+        : 'Enabled'
     privateEndpoint: endpointType == 'private' ? true : false
     privateEndpointNameConv: 'pe-RESOURCE-SUBRESOURCE'
     privateEndpointNICNameConv: 'nic-pe-RESOURCE-SUBRESOURCE'
@@ -568,7 +576,7 @@ module resourceGroupRoleAssignment '../../shared/modules/resourceModules/authori
   }
 }
 
-// Role assignment gives the subnet join action to the function app to add network interfaces to the virtual network (least privilege access)
+// Role assignment gives the subnet join action to the function app to allow the addition of network interfaces to the virtual network (least privilege access)
 module virtualNetworkRoleAssignment '../../shared/modules/resourceModules/network/virtualNetworks/roleAssignment.bicep' = {
   scope: resourceGroup(split(subnetResourceId, '/')[2], split(subnetResourceId, '/')[4])
   params: {
@@ -583,7 +591,7 @@ module virtualNetworkRoleAssignment '../../shared/modules/resourceModules/networ
   }
 }
 
-// Role assignment gives the key vault deploy action to the function app to access key vault secrets for deployment (least privilege access)
+// Role assignment gives the key vault deploy action to the function app to allow access to the key vault secrets for deployment (least privilege access)
 module keyVaultRoleAssignment '../../shared/modules/resourceModules/keyVault/vaults/roleAssignment.bicep' = {
   scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
   params: {
@@ -598,7 +606,7 @@ module keyVaultRoleAssignment '../../shared/modules/resourceModules/keyVault/vau
   }
 }
 
-// Role assignment gives the Reader role to the function app to access the disk encryption set (least privilege access)
+// Role assignment gives the Reader role to the function app to allow the assignment of the disk encryption set to the validation virtual machine (least privilege access)
 module diskEncryptionSetRoleAssignment '../../shared/modules/resourceModules/compute/diskEncryptionSets/roleAssignment.bicep' = if (!empty(diskEncryptionSetName)) {
   scope: rg
   params: {
@@ -613,7 +621,7 @@ module diskEncryptionSetRoleAssignment '../../shared/modules/resourceModules/com
   }
 }
 
-// Role assignment gives the Reader role to the function app for the compute gallery (least privilege access)
+// Role assignment gives the Reader role to the function app to allow the deployment of the compute gallery image (least privilege access)
 module galleryRoleAssignment '../../shared/modules/resourceModules/compute/galleries/roleAssignment.bicep' = {
   scope: resourceGroup(split(imageVersionResourceId, '/')[2], split(imageVersionResourceId, '/')[4])
   params: {
@@ -628,7 +636,7 @@ module galleryRoleAssignment '../../shared/modules/resourceModules/compute/galle
   }
 }
 
-// Role assignment gives the Template Spec Reader role to the function app for the template spec (least privilege access)
+// Role assignment gives the Template Spec Reader role to the function app to allow the deployment of the template spec (least privilege access)
 module templateSpecRoleAssignment '../../shared/modules/resourceModules/resources/templateSpecs/roleAssignment.bicep' = {
   scope: rg
   params: {
@@ -640,6 +648,21 @@ module templateSpecRoleAssignment '../../shared/modules/resourceModules/resource
       }
     ]
     templateSpecName: templateSpec.outputs.name
+  }
+}
+
+// Role assignment gives the Managed Identity Operator role to the function app to allow the assignment of the managed identity to the validation virtual machine (least privilege access)
+module identityRoleAssignment '../../shared/modules/resourceModules/managedIdentity/userAssignedIdentities/roleAssignment.bicep' = if (!empty(artifactsUserAssignedIdentityResourceId)) {
+  scope: resourceGroup(split(artifactsUserAssignedIdentityResourceId, '/')[2], split(artifactsUserAssignedIdentityResourceId, '/')[4])
+  params: {
+    assignments: [
+      {
+        principalId: functionApp.outputs.functionAppPrincipalId
+        principalType: 'ServicePrincipal'
+        roleDefinitionId: 'f1a07417-d97a-45cb-824c-7a7467783830' // Managed Identity Operator
+      }
+    ]
+    identityName: split(artifactsUserAssignedIdentityResourceId, '/')[8]
   }
 }
 
