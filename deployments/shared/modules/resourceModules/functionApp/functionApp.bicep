@@ -59,7 +59,6 @@ param hostPoolResourceId string
   'CustomerManagedHSM'
 ])
 @description('Required. Storage encryption key management mode for the Function App storage account.')
-
 param keyManagementStorageAccounts string
 
 @description('Required. Azure region for resources in this module.')
@@ -76,7 +75,6 @@ param privateEndpointNameConv string
 
 @description('Required. Naming convention template for private endpoint NIC resources (supports RESOURCE/SUBRESOURCE/VNETID placeholders).')
 param privateEndpointNICNameConv string
-
 
 @description('Required when privateEndpoint is true. Subnet resource ID used by private endpoints.')
 param privateEndpointSubnetResourceId string
@@ -119,18 +117,20 @@ var effectivePermittedIPs = filter(permittedIPs, ip => !empty(trim(ip)))
 var networkAccess = resolveNetworkAccess(paasPublicNetworkAccess, privateEndpoint, !empty(effectivePermittedIPs))
 var parentTag = empty(hostPoolResourceId) ? {} : { 'cm-resource-parent': hostPoolResourceId }
 var restrictPublicAccess = networkAccess.defaultAction == 'Deny'
-var storagePermittedIPs = [for ip in effectivePermittedIPs: endsWith(trim(ip), '/32')
-  ? replace(trim(ip), '/32', '')
-  : trim(ip)]
+var storagePermittedIPs = [
+  for ip in effectivePermittedIPs: endsWith(trim(ip), '/32') ? replace(trim(ip), '/32', '') : trim(ip)
+]
 var functionAppPermittedIPs = [for ip in effectivePermittedIPs: contains(trim(ip), '/') ? trim(ip) : '${trim(ip)}/32']
 var storageIpRules = [for ip in storagePermittedIPs: { value: ip, action: 'Allow' }]
 
-var permittedIPRestrictions = [for (ip, i) in functionAppPermittedIPs: {
-  ipAddress: ip
-  action: 'Allow'
-  priority: 100 + i
-  name: 'PermittedIP-${i}'
-}]
+var permittedIPRestrictions = [
+  for (ip, i) in functionAppPermittedIPs: {
+    ipAddress: ip
+    action: 'Allow'
+    priority: 100 + i
+    name: 'PermittedIP-${i}'
+  }
+]
 
 var azureCloudRestriction = [
   {
@@ -149,26 +149,50 @@ var azureCloudRestriction = [
   }
 ]
 
+var permittedSubnetIds = paasPublicNetworkAccess == 'EnabledWithRestrictions' && !privateEndpoint
+  ? filter(union([privateEndpointSubnetResourceId], [functionAppDelegatedSubnetResourceId]), id => !empty(id))
+  : []
+
+var permittedSubnetRestrictions = [
+  for (id, i) in permittedSubnetIds: {
+    vnetSubnetResourceId: id
+    action: 'Allow'
+    priority: 300 + i
+    name: 'PermittedSubnet-${i}'
+  }
+]
+
 // An explicit deny-all rule would override Allow in unrestricted mode. Retain allow entries,
 // but emit the catch-all deny only in restricted/disabled modes.
 var resolvedIpSecurityRestrictions = (restrictPublicAccess || !empty(effectivePermittedIPs))
-  ? union(permittedIPRestrictions, restrictPublicAccess ? azureCloudRestriction : [azureCloudRestriction[0]])
+  ? union(
+      permittedIPRestrictions,
+      permittedSubnetRestrictions,
+      restrictPublicAccess ? azureCloudRestriction : [azureCloudRestriction[0]]
+    )
   : null
 
 // Build arrays dynamically based on which storage types are enabled
 var storageSubResources = union(
-  ['blob'], // Always required
+  ['blob'],
+  // Always required
   enableQueueStorage ? ['queue'] : [],
   enableTableStorage ? ['table'] : []
 )
 
 // Keep imported calls outside resource-loop names: parent expansion can lose their ARM namespace.
 var storagePrivateEndpointNames = [
-  for subResource in storageSubResources: privateEndpointName(privateEndpointNameConv, storageAccountName, subResource, privateEndpointVnetName)
+  for subResource in storageSubResources: privateEndpointName(
+    privateEndpointNameConv,
+    storageAccountName,
+    subResource,
+    privateEndpointVnetName
+  )
 ]
 
 var azureStoragePrivateDnsZoneResourceIds = concat(
-  [azureBlobPrivateDnsZoneResourceId], // Always required
+  [azureBlobPrivateDnsZoneResourceId],
+  // Always required
   // Keep empty slots aligned with storageSubResources when DNS is managed externally.
   enableQueueStorage ? [azureQueuePrivateDnsZoneResourceId] : [],
   enableTableStorage ? [azureTablePrivateDnsZoneResourceId] : []
@@ -191,10 +215,7 @@ var useCmk = keyManagementStorageAccounts != 'PlatformManaged'
 // Resolve Key Vault URI for the storage account encryption property.
 resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = if (useCmk && !empty(encryptionKeyVaultResourceId)) {
   name: last(split(encryptionKeyVaultResourceId, '/'))
-  scope: resourceGroup(
-    split(encryptionKeyVaultResourceId, '/')[2],
-    split(encryptionKeyVaultResourceId, '/')[4]
-  )
+  scope: resourceGroup(split(encryptionKeyVaultResourceId, '/')[2], split(encryptionKeyVaultResourceId, '/')[4])
 }
 
 // Resolved CMK identity — always the dedicated storage encryption UAI when CMK is enabled.
@@ -274,7 +295,12 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
     minimumTlsVersion: 'TLS1_2'
     networkAcls: {
       bypass: 'AzureServices'
-      virtualNetworkRules: []
+      virtualNetworkRules: [
+        for id in permittedSubnetIds: {
+          id: id
+          action: 'Allow'
+        }
+      ]
       ipRules: storageIpRules
       defaultAction: networkAccess.defaultAction
     }
@@ -295,7 +321,12 @@ resource privateEndpoints_storage 'Microsoft.Network/privateEndpoints@2023-04-01
     name: storagePrivateEndpointNames[i]
     location: location
     properties: {
-      customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, storageAccountName, subResource, privateEndpointVnetName)
+      customNetworkInterfaceName: privateEndpointName(
+        privateEndpointNICNameConv,
+        storageAccountName,
+        subResource,
+        privateEndpointVnetName
+      )
       privateLinkServiceConnections: [
         {
           name: storagePrivateEndpointNames[i]
@@ -475,17 +506,23 @@ resource functionApp 'Microsoft.Web/sites@2024-11-01' = {
       netFrameworkVersion: 'v10.0'
       powerShellVersion: powerShellVersion
       ipSecurityRestrictions: resolvedIpSecurityRestrictions
-      ipSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? networkAccess.defaultAction : null
-      scmIpSecurityRestrictions: restrictPublicAccess ? [
-        {
-          ipAddress: 'Any'
-          action: 'Deny'
-          priority: 2147483647
-          name: 'Deny all'
-          description: 'Deny all access'
-        }
-      ] : null
-      scmIpSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? networkAccess.defaultAction : null
+      ipSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess)
+        ? networkAccess.defaultAction
+        : null
+      scmIpSecurityRestrictions: restrictPublicAccess
+        ? [
+            {
+              ipAddress: 'Any'
+              action: 'Deny'
+              priority: 2147483647
+              name: 'Deny all'
+              description: 'Deny all access'
+            }
+          ]
+        : null
+      scmIpSecurityRestrictionsDefaultAction: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess)
+        ? networkAccess.defaultAction
+        : null
       scmIpSecurityRestrictionsUseMain: (paasPublicNetworkAccess != 'Auto' || restrictPublicAccess) ? true : null
       publicNetworkAccess: networkAccess.publicNetworkAccess
       use32BitWorkerProcess: false
@@ -518,7 +555,12 @@ resource privateEndpoint_functionApp 'Microsoft.Network/privateEndpoints@2023-04
   name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', privateEndpointVnetName)
   location: location
   properties: {
-    customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, functionApp.name, 'sites', privateEndpointVnetName)
+    customNetworkInterfaceName: privateEndpointName(
+      privateEndpointNICNameConv,
+      functionApp.name,
+      'sites',
+      privateEndpointVnetName
+    )
     privateLinkServiceConnections: [
       {
         name: privateEndpointName(privateEndpointNameConv, functionApp.name, 'sites', privateEndpointVnetName)
