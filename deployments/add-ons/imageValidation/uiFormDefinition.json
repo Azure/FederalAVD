@@ -831,6 +831,13 @@
               "label": "Network Settings",
               "elements": [
                 {
+                  "name": "overview",
+                  "type": "Microsoft.Common.TextBlock",
+                  "options": {
+                    "text": "The network settings defined here are used to configure the remainder of the service or private endpoint configurations if selected. All endpoints will be deployed to the virtual machine subnet picked in the previous step."
+                  }
+                },
+                {
                   "name": "networkAccess",
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Network access",
@@ -838,7 +845,6 @@
                   "constraints": {
                     "required": true,
                     "allowedValues": [
-                      
                       {
                         "label": "Disable public access and use private access",
                         "value": "private"
@@ -875,18 +881,6 @@
                   "request": {
                     "method": "GET",
                     "path": "[concat(steps('functionApp').networkSettings.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-                  }
-                },
-                {
-                  "name": "subnet",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
-                  "label": "Subnet",
-                  "defaultValue": "",
-                  "toolTip": "[concat('Select an existing subnet for the ', if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), 'private endpoints', 'service endpoints'), ' on the function app and its supporting resources.')]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('functionApp').networkSettings.subnetsApi.value, (item) => and(empty(item.properties.delegations), not(contains(item.name, 'Bastion')), not(contains(item.name, 'Firewall')))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
                   }
                 },
                 {
@@ -1390,7 +1384,7 @@
         "applicationInsightsName": "[steps('namingAndTags').naming.applicationInsights]",
         "appServicePlanName": "[if(steps('functionApp').general.existingAppServicePlan, '', steps('namingAndTags').naming.appServicePlan)]",
         "appServicePlanResourceId": "[if(steps('functionApp').general.existingAppServicePlan, steps('functionApp').general.appServicePlan.id, '')]",
-        "appServicePlanSku": "[if(steps('functionApp').general.existingAppServicePlan, '', steps('functionApp').general.appServicePlanSku)]",
+        "appServicePlanSku": "[if(steps('functionApp').general.existingAppServicePlan, 'P0v3', steps('functionApp').general.appServicePlanSku)]",
         "artifactsContainerUri": "[if(steps('virtualMachine').customizations.addCustomScripts, if(and(not(empty(steps('virtualMachine').customizations.storageAccount)), not(empty(steps('virtualMachine').customizations.container))), concat(steps('virtualMachine').customizations.storageAccount.blobEndpoint, steps('virtualMachine').customizations.container), ''), '')]",
         "artifactsUserAssignedIdentityResourceId": "[if(steps('virtualMachine').customizations.addCustomScripts, if(not(empty(steps('virtualMachine').customizations.managedIdentity)), steps('virtualMachine').customizations.managedIdentity.id, ''), '')]",
         "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureBlobs, '')]",
@@ -1409,6 +1403,7 @@
         "functionAppName": "[steps('namingAndTags').naming.functionApp]",
         "imageLicenseType": "[steps('virtualMachine').image.licenseType]",
         "imageVersionResourceId": "[first(map(steps('virtualMachine').image.versionsApi.transformed.list, (item) => item.value))]",
+        "integrityMonitoring": "[steps('virtualMachine').security.integrityMonitoring]",
         "keyVaultName": "[steps('namingAndTags').naming.keyVault]",
         "keyVaultResourceId": "[steps('virtualMachine').credentials.keyVault.id]",
         "logAnalyticsWorkspaceResourceId": "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]",
