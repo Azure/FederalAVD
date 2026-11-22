@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "5815472788161711688"
+      "templateHash": "12295859096961653373"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -1459,7 +1459,7 @@
       }
     },
     "$fxv#1": "# This file enables modules to be automatically managed by the Functions service.\r\n# See https://aka.ms/functionsmanageddependency for additional information.\r\n#\r\n@{\r\n    # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'. \r\n    # To use the Az module in your function app, please uncomment the line below.\r\n    # 'Az' = '7.*'\r\n}",
-    "$fxv#2": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n\r\n# Azure Authentication\r\n$AccessToken = $null\r\ntry\r\n{\r\n    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUriFixed + '&api-version=2019-08-01'\r\n    $TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\"=\"$env:IDENTITY_HEADER\"} -Uri $TokenAuthURI\r\n    $AccessToken = $TokenResponse.access_token\r\n    $Header = @{\r\n        'Content-Type'='application/json'\r\n        'Authorization'='Bearer ' + $AccessToken\r\n    }\r\n\r\n\tWrite-Output 'Successfully authenticated to Azure'\r\n}\r\ncatch\r\n{\r\n    throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ImageDefinitionVersionsPath = ($env:imageVersionResourceId.Split('/') | Select-Object -SkipLast 1) -join '/'\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $Header `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + $ImageDefinitionVersionsPath + '?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\n\r\nWrite-Output \"Latest compute gallery image version: $($LatestComputeGalleryImageVersion.name)\"\r\n\r\n$StatusCode = $null\r\ntry {\r\n\t# Get virtual machine\r\n\t$VirtualMachine = Invoke-RestMethod `\r\n\t\t-Headers $Header `\r\n\t\t-Method 'Get' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?api-version=2024-07-01')\r\n\r\n\tWrite-Output \"Deployed compute gallery image version: $($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1])\"\r\n}\r\ncatch  {\r\n\tif ($_.Exception.Response.StatusCode -eq 'NotFound') {\r\n\t\t$StatusCode = 'NotFound'\r\n    }\r\n    else {\r\n        throw $_.Exception.Message\r\n    }\r\n}\r\n\r\nif ($StatusCode -eq 'NotFound'){\r\n\tWrite-Output \"Virtual machine does not exist. No deletion necessary.\"\r\n} \r\nelseif ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n\t# Delete the virtual machine\r\n\tInvoke-RestMethod `\r\n\t\t-Headers $Header `\r\n\t\t-Method 'Delete' `\r\n\t\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n    Write-Output 'Virtual machine was using an outdated image and has been deleted.'\r\n}\r\n\r\n$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n$Body = @{\r\n\tproperties = @{\r\n\t\tmode = 'Incremental'\r\n\t\tparameters = @{\r\n\t\t\tacceleratedNetworking = @{ value = [bool]$env:acceleratedNetworking }\r\n\t\t\tartifactsContainerUri = @{ value = $env:artifactsContainerUri }\r\n\t\t\tartifactsUserAssignedIdentityResourceId = @{ value = $env:artifactsUserAssignedIdentityResourceId }\r\n\t\t\tbootDiagnostics = @{ value = [bool]$env:bootDiagnostics }\r\n\t\t\tdiskAccessResourceId = @{ value = $env:diskAccessResourceId }\r\n\t\t\tdiskControllerType = @{ value = $env:diskControllerType }\r\n\t\t\tdiskEncryptionSetResourceId = @{ value = $env:diskEncryptionSetResourceId }\r\n\t\t\tdiskName = @{ value = $env:diskName }\r\n\t\t\tdiskNetworkAccess = @{ value = $env:diskNetworkAccess }\r\n\t\t\tencryptionAtHost = @{ value = [bool]$env:encryptionAtHost }\r\n\t\t\thibernation = @{ value = $false }\r\n\t\t\timageVersionResourceId = @{ value = $LatestComputeGalleryImageVersion.id }\r\n\t\t\tintegrityMonitoring = @{ value = [bool]$env:integrityMonitoring }\r\n\t\t\tkeyVaultResourceId = @{ value = $env:keyVaultResourceId }\r\n\t\t\tlicenseType = @{ value = $env:licenseType }\r\n\t\t\tlocation = @{ value = $env:location }\r\n\t\t\tnetworkInterfaceName = @{ value = $env:networkInterfaceName }\r\n\t\t\tprivateIPAddress = @{ value = $env:privateIPAddress }\r\n\t\t\tsecureBoot = @{ value = [bool]$env:secureBoot }\r\n\t\t\tsecurityType = @{ value = $env:securityType }\r\n\t\t\tsubnetResourceId = @{ value = $env:subnetResourceId }\r\n\t\t\ttags = @{ value = ($env:tags | ConvertFrom-Json -Depth 5) }\r\n\t\t\tvirtualMachineName = @{ value = $env:virtualMachineName }\r\n\t\t\tvirtualMachineSize = @{ value = $env:virtualMachineSize }\r\n\t\t\tvmCustomizations = @{ value = ($env:vmCustomizations | ConvertFrom-Json -Depth 5) }\r\n\t\t\tvTpm = @{ value = [bool]$env:vTpm }\r\n\t\t}\r\n\t\ttemplateLink = @{\r\n\t\t\tid = $env:templateSpecResourceId\r\n\t\t}\r\n\t}\r\n} | ConvertTo-Json -Depth 20\r\n\r\nInvoke-RestMethod `\r\n\t-Headers $Header `\r\n\t-Method 'PUT' `\r\n\t-Body $Body `\r\n\t-Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourcegroups/' + $env:resourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\r\nWrite-Output \"Deployment submitted for new image validation virtual machine. Check deployment status in the portal for more details. Deployment name is: ImageValidation-$Timestamp\"\r\n",
+    "$fxv#2": "param($Timer)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n\r\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\r\n\r\n# Fix the resource manager URI since only AzureCloud contains a trailing slash\r\n$ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')\r\n\r\n\r\n# Azure Authentication\r\n$AccessToken = $null\r\ntry {\r\n    $TokenAuthURI = $env:IDENTITY_ENDPOINT + '?resource=' + $ResourceManagerUriFixed + '&api-version=2019-08-01'\r\n    $TokenResponse = Invoke-RestMethod -Method Get -Headers @{\"X-IDENTITY-HEADER\" = \"$env:IDENTITY_HEADER\" } -Uri $TokenAuthURI\r\n    $AccessToken = $TokenResponse.access_token\r\n    $Header = @{\r\n        'Content-Type'  = 'application/json'\r\n        'Authorization' = 'Bearer ' + $AccessToken\r\n    }\r\n\r\n    Write-Output 'Successfully authenticated to Azure'\r\n}\r\ncatch {\r\n    throw [System.Exception]::new('Failed to authenticate Azure with application ID, tenant ID, subscription ID', $PSItem.Exception)\r\n}\r\n\r\n# Get latest compute gallery image version\r\n$ImageDefinitionVersionsPath = ($env:imageVersionResourceId.Split('/') | Select-Object -SkipLast 1) -join '/'\r\n$ComputeGalleryImageVersions = Invoke-RestMethod `\r\n    -Headers $Header `\r\n    -Method 'Get' `\r\n    -Uri $($ResourceManagerUriFixed + $ImageDefinitionVersionsPath + '?api-version=2024-03-03')\r\n\r\n$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1\r\nWrite-Output \"Latest compute gallery image version: $($LatestComputeGalleryImageVersion.name)\"\r\n\r\n# Check if the latest compute gallery image version is available and ready\r\n$AggregatedState = ''\r\n$ProvisioningState = ''\r\n$StateCounter = 0\r\n\r\nwhile ($AggregatedState -ne 'Completed' -or $ProvisioningState -ne 'Succeeded') {\r\n    $ComputeGalleryImageVersion = Invoke-RestMethod `\r\n        -Headers $Header `\r\n        -Method 'Get' `\r\n        -Uri $($ResourceManagerUriFixed + $LatestComputeGalleryImageVersion.id + '?api-version=2024-03-03&$expand=ReplicationStatus')\r\n\r\n    $AggregatedState = $ComputeGalleryImageVersion.properties.replicationStatus.aggregatedState\r\n    $ProvisioningState = $ComputeGalleryImageVersion.properties.provisioningState\r\n    Start-Sleep -Seconds 30\r\n    $StateCounter++\r\n    if ($StateCounter -ge 60) {\r\n        throw [System.Exception]::new('Timeout waiting for compute gallery image version to be ready')\r\n    }\r\n    elseif ($AggregatedState -eq 'Failed' -or $ProvisioningState -eq 'Failed') {\r\n        throw [System.Exception]::new('Compute gallery image version failed to be ready')\r\n    }\r\n}\r\n\r\n# Get virtual machine\r\n$StatusCode = $null\r\ntry {\r\n    $VirtualMachine = Invoke-RestMethod `\r\n        -Headers $Header `\r\n        -Method 'Get' `\r\n        -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?api-version=2024-07-01') `\r\n        -StatusCodeVariable StatusCode\r\n\r\n    Write-Output \"Deployed compute gallery image version: $($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1])\"\r\n}\r\ncatch {\r\n    if ([int]$PSItem.Exception.Response.StatusCode -eq 404) {\r\n        Write-Output \"Virtual machine does not exist. No deletion necessary.\"\r\n    }\r\n    else {\r\n        throw [System.Exception]::new('Failed to get virtual machine', $PSItem.Exception)\r\n    }\r\n}\r\n\r\nif ($StatusCode -eq 200) {\r\n    # Delete the virtual machine\r\n    if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {\r\n        Invoke-RestMethod `\r\n            -Headers $Header `\r\n            -Method 'Delete' `\r\n            -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?forceDeletion=true&api-version=2024-07-01') | Out-Null\r\n\r\n        $StatusCode = $null\r\n        $StatusCounter = 0\r\n        while ($StatusCode -ne 404) {\r\n            # Get virtual machine\r\n            try {\r\n                $VirtualMachine = Invoke-RestMethod `\r\n                    -Headers $Header `\r\n                    -Method 'Get' `\r\n                    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourceGroups/' + $env:resourceGroupName + '/providers/Microsoft.Compute/virtualMachines/' + $env:virtualMachineName + '?api-version=2024-07-01') `\r\n                    -StatusCodeVariable StatusCode\r\n            }\r\n            catch {\r\n                if ([int]$PSItem.Exception.Response.StatusCode -eq 404) {\r\n                    break\r\n                }\r\n                else {\r\n                    throw [System.Exception]::new('Failed to get virtual machine', $PSItem.Exception)\r\n                }\r\n            }\r\n\r\n            Start-Sleep -Seconds 30\r\n            $StatusCounter++\r\n            if ($StatusCounter -ge 60) {\r\n                throw [System.Exception]::new('Timeout waiting for virtual machine to be deleted')\r\n            }\r\n        }\r\n\r\n        Write-Output 'Virtual machine was using an outdated image and has been deleted.'\r\n    }\r\n    else {\r\n        Write-Output 'Virtual machine is using the latest image. No deletion necessary.'\r\n    }\r\n}\r\n\r\n$Timestamp = Get-Date -Format 'yyyyMMddHHmmss'\r\n\r\n$Body = @{\r\n    properties = @{\r\n        mode         = 'Incremental'\r\n        parameters   = @{\r\n            acceleratedNetworking                   = @{ value = [bool]::Parse($env:acceleratedNetworking) }\r\n            artifactsContainerUri                   = @{ value = $env:artifactsContainerUri }\r\n            artifactsUserAssignedIdentityResourceId = @{ value = $env:artifactsUserAssignedIdentityResourceId }\r\n            bootDiagnostics                         = @{ value = [bool]::Parse($env:bootDiagnostics) }\r\n            diskAccessResourceId                    = @{ value = $env:diskAccessResourceId }\r\n            diskControllerType                      = @{ value = $env:diskControllerType }\r\n            diskEncryptionSetResourceId             = @{ value = $env:diskEncryptionSetResourceId }\r\n            diskName                                = @{ value = $env:diskName }\r\n            diskNetworkAccess                       = @{ value = $env:diskNetworkAccess }\r\n            encryptionAtHost                        = @{ value = [bool]::Parse($env:encryptionAtHost) }\r\n            hibernation                             = @{ value = $false }\r\n            imageVersionResourceId                  = @{ value = $LatestComputeGalleryImageVersion.id }\r\n            integrityMonitoring                     = @{ value = [bool]::Parse($env:integrityMonitoring) }\r\n            keyVaultResourceId                      = @{ value = $env:keyVaultResourceId }\r\n            licenseType                             = @{ value = $env:licenseType }\r\n            location                                = @{ value = $env:location }\r\n            networkInterfaceName                    = @{ value = $env:networkInterfaceName }\r\n            privateIPAddress                        = @{ value = $env:privateIPAddress }\r\n            secureBoot                              = @{ value = [bool]::Parse($env:secureBoot) }\r\n            securityType                            = @{ value = $env:securityType }\r\n            subnetResourceId                        = @{ value = $env:subnetResourceId }\r\n            tags                                    = @{ value = ($env:tags | ConvertFrom-Json -Depth 5) }\r\n            virtualMachineName                      = @{ value = $env:virtualMachineName }\r\n            virtualMachineSize                      = @{ value = $env:virtualMachineSize }\r\n            vmCustomizations                        = @{ value = ($env:vmCustomizations | ConvertFrom-Json -Depth 5) }\r\n            vTpm                                    = @{ value = [bool]::Parse($env:vTpm) }\r\n        }\r\n        templateLink = @{\r\n            id = $env:templateSpecResourceId\r\n        }\r\n    }\r\n} | ConvertTo-Json -Depth 20\r\n\r\nInvoke-RestMethod `\r\n    -Headers $Header `\r\n    -Method 'PUT' `\r\n    -Body $Body `\r\n    -Uri $($ResourceManagerUriFixed + '/subscriptions/' + $env:subscriptionId + '/resourcegroups/' + $env:resourceGroupName + '/providers/Microsoft.Resources/deployments/ImageValidation-' + $Timestamp + '?api-version=2020-10-01') | Out-Null\r\n\r\nWrite-Output \"Deployment submitted for new image validation virtual machine. Check deployment status in the portal for more details. Deployment name is: ImageValidation-$Timestamp\"\r\n",
     "$fxv#3": "# Authentication is provided in the script",
     "integrationSubnetId": "[if(and(equals(parameters('endpointType'), 'private'), empty(trim(parameters('functionAppDelegatedSubnetResourceId')))), fail('Private mode requires functionAppDelegatedSubnetResourceId.'), parameters('functionAppDelegatedSubnetResourceId'))]",
     "blobDnsZoneId": "[if(and(equals(parameters('endpointType'), 'private'), empty(trim(parameters('azureBlobPrivateDnsZoneResourceId')))), fail('Private mode requires azureBlobPrivateDnsZoneResourceId.'), parameters('azureBlobPrivateDnsZoneResourceId'))]",
@@ -2603,10 +2603,7 @@
             "value": "CustomerManagedHSM"
           },
           "keyNames": {
-            "value": [
-              "[parameters('diskEncryptionSetName')]",
-              "[parameters('storageAccountName')]"
-            ]
+            "value": "[union(createArray(parameters('storageAccountName')), if(empty(parameters('diskEncryptionSetName')), createArray(), createArray(parameters('diskEncryptionSetName'))))]"
           },
           "identityName": {
             "value": "[parameters('userAssignedIdentityName')]"
@@ -4463,7 +4460,7 @@
           "logAnalyticsWorkspaceResourceId": {
             "value": "[parameters('logAnalyticsWorkspaceResourceId')]"
           },
-          "paasPublicNetworkAccess": "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]",
+          "paasPublicNetworkAccess": "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), if(equals(parameters('endpointType'), 'service'), createObject('value', 'EnabledWithRestrictions'), createObject('value', 'Enabled')))]",
           "privateEndpoint": "[if(equals(parameters('endpointType'), 'private'), createObject('value', true()), createObject('value', false()))]",
           "privateEndpointNameConv": {
             "value": "pe-RESOURCE-SUBRESOURCE"
@@ -4496,7 +4493,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "2869430009876096841"
+              "templateHash": "14494584998577120813"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -4853,6 +4850,16 @@
                 }
               },
               {
+                "name": "permittedSubnetRestrictions",
+                "count": "[length(variables('permittedSubnetIds'))]",
+                "input": {
+                  "vnetSubnetResourceId": "[variables('permittedSubnetIds')[copyIndex('permittedSubnetRestrictions')]]",
+                  "action": "Allow",
+                  "priority": "[add(300, copyIndex('permittedSubnetRestrictions'))]",
+                  "name": "[format('PermittedSubnet-{0}', copyIndex('permittedSubnetRestrictions'))]"
+                }
+              },
+              {
                 "name": "storagePrivateEndpointNames",
                 "count": "[length(variables('storageSubResources'))]",
                 "input": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), parameters('storageAccountName'), variables('storageSubResources')[copyIndex('storagePrivateEndpointNames')], variables('privateEndpointVnetName'))]"
@@ -4880,7 +4887,8 @@
                 "description": "Deny all access"
               }
             ],
-            "resolvedIpSecurityRestrictions": "[if(or(variables('restrictPublicAccess'), not(empty(variables('effectivePermittedIPs')))), union(variables('permittedIPRestrictions'), if(variables('restrictPublicAccess'), variables('azureCloudRestriction'), createArray(variables('azureCloudRestriction')[0]))), null())]",
+            "permittedSubnetIds": "[if(and(equals(parameters('paasPublicNetworkAccess'), 'EnabledWithRestrictions'), not(parameters('privateEndpoint'))), filter(union(createArray(parameters('privateEndpointSubnetResourceId')), createArray(parameters('functionAppDelegatedSubnetResourceId'))), lambda('id', not(empty(lambdaVariables('id'))))), createArray())]",
+            "resolvedIpSecurityRestrictions": "[if(or(variables('restrictPublicAccess'), not(empty(variables('effectivePermittedIPs')))), union(variables('permittedIPRestrictions'), variables('permittedSubnetRestrictions'), if(variables('restrictPublicAccess'), variables('azureCloudRestriction'), createArray(variables('azureCloudRestriction')[0]))), null())]",
             "storageSubResources": "[union(createArray('blob'), if(parameters('enableQueueStorage'), createArray('queue'), createArray()), if(parameters('enableTableStorage'), createArray('table'), createArray()))]",
             "azureStoragePrivateDnsZoneResourceIds": "[concat(createArray(parameters('azureBlobPrivateDnsZoneResourceId')), if(parameters('enableQueueStorage'), createArray(parameters('azureQueuePrivateDnsZoneResourceId')), createArray()), if(parameters('enableTableStorage'), createArray(parameters('azureTablePrivateDnsZoneResourceId')), createArray()))]",
             "useCmk": "[not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'))]",
@@ -4943,8 +4951,17 @@
                 },
                 "minimumTlsVersion": "TLS1_2",
                 "networkAcls": {
+                  "copy": [
+                    {
+                      "name": "virtualNetworkRules",
+                      "count": "[length(variables('permittedSubnetIds'))]",
+                      "input": {
+                        "id": "[variables('permittedSubnetIds')[copyIndex('virtualNetworkRules')]]",
+                        "action": "Allow"
+                      }
+                    }
+                  ],
                   "bypass": "AzureServices",
-                  "virtualNetworkRules": [],
                   "ipRules": "[variables('storageIpRules')]",
                   "defaultAction": "[variables('networkAccess').defaultAction]"
                 },
@@ -6319,6 +6336,160 @@
         "functionApp",
         "rg",
         "templateSpec"
+      ]
+    },
+    "identityRoleAssignment": {
+      "condition": "[not(empty(parameters('artifactsUserAssignedIdentityResourceId')))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('identityRoleAssignment-{0}', uniqueString('identityRoleAssignment', deployment().name))]",
+      "subscriptionId": "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[2]]",
+      "resourceGroup": "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[4]]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "assignments": {
+            "value": [
+              {
+                "principalId": "[reference('functionApp').outputs.functionAppPrincipalId.value]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "f1a07417-d97a-45cb-824c-7a7467783830"
+              }
+            ]
+          },
+          "identityName": {
+            "value": "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[8]]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "1808584453457603169"
+            },
+            "name": "Managed identity resource role assignments",
+            "description": "Applies role assignments scoped to an existing user-assigned identity resource; these authorize principals over the identity rather than granting the identity access to other resources."
+          },
+          "definitions": {
+            "roleAssignmentType": {
+              "type": "object",
+              "properties": {
+                "roleDefinitionId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Role definition GUID or fully-qualified resource ID."
+                  }
+                },
+                "principalId": {
+                  "type": "string",
+                  "metadata": {
+                    "description": "Object (principal) ID of the identity receiving the role."
+                  }
+                },
+                "principalType": {
+                  "type": "string",
+                  "allowedValues": [
+                    "",
+                    "Device",
+                    "ForeignGroup",
+                    "Group",
+                    "ServicePrincipal",
+                    "User"
+                  ],
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Type of the assigned principal. Defaults to ServicePrincipal."
+                  }
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Optional human-readable description for the assignment."
+                  }
+                }
+              },
+              "metadata": {
+                "description": "A single role assignment to apply to a specific resource.",
+                "__bicep_imported_from!": {
+                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                }
+              }
+            }
+          },
+          "parameters": {
+            "identityName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the existing user-assigned identity in the deployment resource group."
+              }
+            },
+            "assignments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/roleAssignmentType"
+              },
+              "metadata": {
+                "description": "Role assignments to apply to this user-assigned identity."
+              }
+            }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "formattedAssignments",
+                "count": "[length(parameters('assignments'))]",
+                "input": "[union(parameters('assignments')[copyIndex('formattedAssignments')], createObject('roleDefinitionId', if(contains(parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, '/providers/Microsoft.Authorization/roleDefinitions/'), parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId, format('/providers/Microsoft.Authorization/roleDefinitions/{0}', parameters('assignments')[copyIndex('formattedAssignments')].roleDefinitionId))))]"
+              }
+            ]
+          },
+          "resources": {
+            "identity": {
+              "existing": true,
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('identityName')]"
+            },
+            "roleAssignment": {
+              "copy": {
+                "name": "roleAssignment",
+                "count": "[length(variables('formattedAssignments'))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]",
+              "name": "[guid(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId)]",
+              "properties": {
+                "roleDefinitionId": "[variables('formattedAssignments')[copyIndex()].roleDefinitionId]",
+                "principalId": "[variables('formattedAssignments')[copyIndex()].principalId]",
+                "principalType": "[coalesce(tryGet(variables('formattedAssignments')[copyIndex()], 'principalType'), 'ServicePrincipal')]",
+                "description": "[tryGet(variables('formattedAssignments')[copyIndex()], 'description')]"
+              }
+            }
+          },
+          "outputs": {
+            "resourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Array of role assignment resource IDs in the same order as the assignments input."
+              },
+              "copy": {
+                "count": "[length(variables('formattedAssignments'))]",
+                "input": "[extensionResourceId(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), variables('formattedAssignments')[copyIndex()].principalId, variables('formattedAssignments')[copyIndex()].roleDefinitionId))]"
+              }
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "functionApp"
       ]
     },
     "function": {
