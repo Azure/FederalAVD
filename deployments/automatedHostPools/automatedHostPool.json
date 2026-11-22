@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "900015511276375277"
+      "templateHash": "11571775123434682682"
     }
   },
   "definitions": {
@@ -1168,7 +1168,7 @@
             "value": "[_1.hostPoolNamesForLocation(parameters('convention'), parameters('identifier'), parameters('context'), _1.fslogixNames(parameters('convention'), parameters('identifier'), createObject('subscriptionId', parameters('context').subscriptionId, 'cloud', parameters('context').cloud, 'location', parameters('context').virtualMachinesLocation)), if(not(empty(coalesce(tryGet(parameters('convention'), 'cpLocationAbbreviation'), ''))), parameters('convention').cpLocationAbbreviation, _1.regionAbbreviation(parameters('context').controlPlaneLocation, parameters('context').cloud)))]"
           },
           "metadata": {
-            "description": "Returns the complete legacy-compatible host-pool bundle by composing FSLogix names with compute and control-plane names. All locations and scope seeds are explicit; no VNet lookup or naming deployment is required.",
+            "description": "Composes host-pool names with storage, monitoring, Key Vault and backup names in the VM region and AVD control-plane names in the control-plane region.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
@@ -1199,7 +1199,7 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[_1.hostPoolNamesWithScopes(parameters('convention'), parameters('identifier'), parameters('context'), parameters('storage'), parameters('abbreviation'), _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), _1.resourceName(parameters('convention'), 'diskEncryptionSetPattern', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''))]"
+            "value": "[_1.hostPoolNamesWithScopes(parameters('convention'), parameters('identifier'), parameters('context'), parameters('storage'), parameters('abbreviation'), _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), _1.resourceName(parameters('convention'), 'diskEncryptionSetPattern', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -1235,16 +1235,12 @@
             },
             {
               "type": "string",
-              "name": "sharedOperationsGroup"
-            },
-            {
-              "type": "string",
               "name": "diskEncryptionPattern"
             }
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', _1.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('sharedOperationsGroup'), 'sharedResourceGroupMonitoring', _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.sharedVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('sharedOperationsGroup'), 'location', parameters('context').controlPlaneLocation, 'cloud', parameters('context').cloud)), 'sharedKeyVaultNameEncryption', _1.sharedVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('sharedOperationsGroup'), 'location', parameters('context').controlPlaneLocation, 'cloud', parameters('context').cloud)), 'sharedRecoveryServicesVaultNameFSLogix', _1.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), parameters('identifier'), ''), 'sharedDataCollectionEndpointName', _1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', _1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), _1.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', _1.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', _1.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', _1.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', _1.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', _1.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', _1.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('_1.namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('_1.namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('_1.namingPolicy').patterns.nic), 'diskAccessName', _1.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
+            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', _1.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('operationsGroup'), 'sharedResourceGroupMonitoring', _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.sharedVaultName(parameters('convention'), 'secretsKeyVault', parameters('storage').vmLocationAbbreviation, createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('operationsGroup'), 'location', parameters('context').virtualMachinesLocation, 'cloud', parameters('context').cloud)), 'sharedKeyVaultNameEncryption', _1.sharedVaultName(parameters('convention'), 'encryptionKeyVault', parameters('storage').vmLocationAbbreviation, createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('operationsGroup'), 'location', parameters('context').virtualMachinesLocation, 'cloud', parameters('context').cloud)), 'sharedRecoveryServicesVaultNameFSLogix', _1.resourceName(parameters('convention'), 'filesBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedDataCollectionEndpointName', _1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', _1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), _1.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', _1.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', _1.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', _1.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', _1.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', _1.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', _1.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('_1.namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('_1.namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('_1.namingPolicy').patterns.nic), 'diskAccessName', _1.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -3853,7 +3849,7 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('location')]"
           },
           "azureMonitorPrivateLinkScopeResourceId": {
             "value": ""
@@ -4667,6 +4663,9 @@
           "resourceGroupName": {
             "value": "[variables('naming').sharedResourceGroupOperations]"
           },
+          "location": {
+            "value": "[parameters('location')]"
+          },
           "deploySecretsKeyVault": {
             "value": "[variables('deploySharedSecretsKeyVault')]"
           },
@@ -4737,7 +4736,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8869330643200660930"
+              "templateHash": "1727531124347487297"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -4853,6 +4852,12 @@
               "type": "string",
               "metadata": {
                 "description": "Required. Name of the existing target resource group in the deployment subscription."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for both vaults, independent of resource group metadata location. Private endpoints use their subnet virtual network region."
               }
             },
             "azureKeyVaultPrivateDnsZoneResourceId": {
@@ -5059,6 +5064,9 @@
                 "parameters": {
                   "name": {
                     "value": "[parameters('secretsKeyVaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
@@ -5682,6 +5690,9 @@
                 "parameters": {
                   "name": {
                     "value": "[parameters('encryptionKeyVaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
@@ -7701,7 +7712,7 @@
             "value": "[variables('naming').sharedResourceGroupOperations]"
           },
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('location')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(variables('deploySharedMonitoring'), createObject('value', reference('sharedMonitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('logAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpoint": {
@@ -8627,7 +8638,7 @@
             "value": "[variables('naming').sharedResourceGroupOperations]"
           },
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('location')]"
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"
@@ -8710,7 +8721,7 @@
             "value": "[variables('naming').sharedResourceGroupMonitoring]"
           },
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('location')]"
           },
           "tags": {
             "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject())]"

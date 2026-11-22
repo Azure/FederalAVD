@@ -68,8 +68,8 @@ VNet and subnet names remain explicit.
 
 | Parameter | Default | Purpose |
 | --- | --- | --- |
-| `controlPlaneLocation` | Subscription deployment location | AVD control-plane and shared supporting resources |
-| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers and their naming context |
+| `controlPlaneLocation` | Subscription deployment location | AVD host pool, workspace, application groups and scaling plan |
+| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers, monitoring, Key Vaults, backup and their naming context |
 
 Both use Azure location names such as `eastus2` or `usgovvirginia`, not display
 labels or naming abbreviations. The Portal passes both selections explicitly.

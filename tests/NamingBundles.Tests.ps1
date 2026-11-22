@@ -115,6 +115,21 @@ Describe 'Direct centralized naming bundles' {
                 $case.sharedServices.secretsKeyVaultName | Should -Match $case.expectedVaultSeed
                 $case.sharedServices.encryptionKeyVaultName | Should -Match $case.expectedVaultSeed
             }
+            $sharedMapping = @{
+                operationsResourceGroupName = 'sharedResourceGroupOperations'
+                monitoringResourceGroupName = 'sharedResourceGroupMonitoring'
+                secretsKeyVaultName = 'sharedKeyVaultNameSecrets'
+                encryptionKeyVaultName = 'sharedKeyVaultNameEncryption'
+                fslogixBackupVaultName = 'sharedRecoveryServicesVaultNameFSLogix'
+                logAnalyticsWorkspaceName = 'sharedLogAnalyticsWorkspaceName'
+                dataCollectionEndpointName = 'sharedDataCollectionEndpointName'
+            }
+            if ($case.name -notin @('abbreviation-overrides', 'shared-subscription')) {
+                foreach ($name in $sharedMapping.Keys) {
+                    $case.sharedServices.$name | Should -Be $case.hostPool.($sharedMapping[$name])
+                }
+                $case.hostPool.resourceGroupOperations | Should -Be $case.sharedServices.operationsResourceGroupName
+            }
             if ($case.name -notin @('split-location', 'government', 'abbreviation-overrides', 'shared-subscription', 'no-location-west')) {
                 $mapping = @{
                     operationsResourceGroupName = 'sharedResourceGroupOperations'
@@ -137,6 +152,41 @@ Describe 'Direct centralized naming bundles' {
         $west = $actual | Where-Object name -eq 'no-location-west'
         $east.sharedServices.secretsKeyVaultName | Should -Not -Be $west.sharedServices.secretsKeyVaultName
         $east.imageManagement.artifactsStorageAccountName | Should -Not -Be $west.imageManagement.artifactsStorageAccountName
+    }
+
+    It 'keeps supporting resources shared by host region rather than control-plane region or persona' {
+        $split = $actual | Where-Object name -eq 'split-location'
+        $split.hostPool.sharedRecoveryServicesVaultNameFSLogix | Should -Be 'rsv-avd-files-use'
+        $split.hostPool.resourceGroupOperations | Should -Be 'rg-avd-operations-use'
+        $split.hostPool.sharedResourceGroupOperations | Should -Be 'rg-avd-operations-use'
+        $split.hostPool.sharedResourceGroupMonitoring | Should -Be 'rg-avd-monitoring-use'
+        $split.hostPool.sharedLogAnalyticsWorkspaceName | Should -Be 'law-avd-use'
+        $split.hostPool.sharedDataCollectionEndpointName | Should -Be 'dce-avd-use'
+        $split.hostPool.resourceGroupControlPlane | Should -Be 'rg-avd-control-plane-usw2'
+        $split.hostPool.sharedRecoveryServicesVaultNameFSLogix | Should -Be $split.sharedServices.fslogixBackupVaultName
+        $split.hostPool.resourceGroupOperations | Should -Be $split.sharedServices.operationsResourceGroupName
+        $government = $actual | Where-Object name -eq 'government'
+        $government.hostPool.sharedRecoveryServicesVaultNameFSLogix | Should -Be $government.sharedServices.fslogixBackupVaultName
+        $government.hostPool.resourceGroupOperations | Should -Be $government.sharedServices.operationsResourceGroupName
+        $default = $actual | Where-Object name -eq 'default'
+        $foundation.alternateHostPool.sharedRecoveryServicesVaultNameFSLogix |
+            Should -Be $default.hostPool.sharedRecoveryServicesVaultNameFSLogix
+        $foundation.alternateHostPool.resourceGroupOperations | Should -Be $default.hostPool.resourceGroupOperations
+        foreach ($name in @('sharedKeyVaultNameSecrets', 'sharedKeyVaultNameEncryption', 'sharedLogAnalyticsWorkspaceName', 'sharedDataCollectionEndpointName')) {
+            $split.hostPool.$name | Should -Be $default.hostPool.$name
+            $foundation.alternateHostPool.$name | Should -Be $default.hostPool.$name
+        }
+        $override = $actual | Where-Object name -eq 'abbreviation-overrides'
+        $override.hostPool.sharedRecoveryServicesVaultNameFSLogix | Should -Match '-vmx$'
+        $override.hostPool.sharedResourceGroupOperations | Should -Be $override.hostPool.resourceGroupOperations
+        $override.hostPool.sharedLogAnalyticsWorkspaceName | Should -Match '-vmx$'
+        $override.hostPool.sharedKeyVaultNameSecrets | Should -Match '-vmx$'
+        $override.hostPool.sharedKeyVaultNameEncryption | Should -Match '-vmx$'
+        $sharedSubscription = $actual | Where-Object name -eq 'shared-subscription'
+        $sharedSubscription.hostPool.sharedKeyVaultNameSecrets |
+            Should -Be "kv-avd-sec-$($foundation.scopeCases[1].hash)-use"
+        $sharedSubscription.hostPool.sharedKeyVaultNameEncryption |
+            Should -Be "kv-avd-enc-$($foundation.scopeCases[1].hash)-use"
     }
 
     It 'honors consolidated scope and explicit overrides before evaluating overlength defaults' {

@@ -768,7 +768,8 @@ The `identifier` (or equivalent) parameter creates the **per-deployment unique t
 When CP and VMs are in different regions, both locations appear in the name:
 
 - Control plane resources (Host Pool, DAG, Workspace, Scaling Plan, CP RG) use `cpLocationAbbreviation`.
-- VMs, disks, storage, operations RGs use `vmsLocationAbbreviation`.
+- VMs, disks, storage, shared Operations/Monitoring RGs, Key Vaults, Log Analytics,
+  DCR/DCE and backup vaults use `vmsLocationAbbreviation`.
 
 The hash always uses the full target region, not its display abbreviation.
 Changing `vmsLocationAbbreviation` or `cpLocationAbbreviation` does not replace

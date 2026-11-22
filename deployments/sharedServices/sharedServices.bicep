@@ -407,6 +407,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
   scope: subscription()
   params: {
     resourceGroupName: operationsResourceGroupName
+    location: location
     deploySecretsKeyVault: createSecretsKeyVault
     secretsKeyVaultName: secretsKeyVaultName
     secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete

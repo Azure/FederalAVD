@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "1237913038647150800"
+      "templateHash": "4138975019117130968"
     }
   },
   "definitions": {
@@ -4953,6 +4953,9 @@
           "resourceGroupName": {
             "value": "[variables('operationsResourceGroupName')]"
           },
+          "location": {
+            "value": "[parameters('location')]"
+          },
           "deploySecretsKeyVault": {
             "value": "[variables('createSecretsKeyVault')]"
           },
@@ -5023,7 +5026,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8869330643200660930"
+              "templateHash": "1727531124347487297"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -5139,6 +5142,12 @@
               "type": "string",
               "metadata": {
                 "description": "Required. Name of the existing target resource group in the deployment subscription."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for both vaults, independent of resource group metadata location. Private endpoints use their subnet virtual network region."
               }
             },
             "azureKeyVaultPrivateDnsZoneResourceId": {
@@ -5345,6 +5354,9 @@
                 "parameters": {
                   "name": {
                     "value": "[parameters('secretsKeyVaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
@@ -5968,6 +5980,9 @@
                 "parameters": {
                   "name": {
                     "value": "[parameters('encryptionKeyVaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"

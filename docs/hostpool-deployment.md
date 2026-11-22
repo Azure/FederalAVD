@@ -27,7 +27,9 @@ monitoring, Key Vaults, and shared FSLogix backup resources.
 
 `controlPlaneLocation` defaults to the subscription deployment location.
 `virtualMachinesLocation` defaults to `controlPlaneLocation` and controls session
-hosts, storage, deployment helpers and their centralized names. The Portal passes
+hosts, storage, deployment helpers, shared monitoring, credentials/encryption Key
+Vaults, backup and their centralized names. Only AVD control-plane resources use
+`controlPlaneLocation`. Existing resource IDs retain their existing placement. The Portal passes
 both selected locations; its VM-location selector defaults to the control-plane
 location and filters VNets to that selection. Split-location deployments can
 choose different control-plane and VM locations.

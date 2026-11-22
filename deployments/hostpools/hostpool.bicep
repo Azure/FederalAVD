@@ -174,7 +174,7 @@ param vmOUPath string = ''
 param controlPlaneLocation string = deployment().location
 
 @minLength(1)
-@description('Optional. Azure location for session hosts and supporting resources. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location.')
+@description('Optional. Azure location for session hosts, storage, monitoring, Key Vaults and backup. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location.')
 param virtualMachinesLocation string = controlPlaneLocation
 
 @description('Optional. The subscription Id where the AVD Control Plane resources are deployed. If not provided, the deployment subscription will be used.')
@@ -784,7 +784,7 @@ module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.b
   params: {
     azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
     dataCollectionEndpointName: naming.sharedDataCollectionEndpointName
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     logAnalyticsWorkspaceName: naming.sharedLogAnalyticsWorkspaceName
     resourceGroupMonitoring: sharedMonitoringResourceGroupName
     tags: tags
@@ -812,6 +812,7 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     resourceGroupName: sharedOperationsResourceGroupName
+    location: virtualMachinesLocation
     deploySecretsKeyVault: deploySecretsKeyVault
     secretsKeyVaultName: naming.sharedKeyVaultNameSecrets
     secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
@@ -890,7 +891,7 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
     manageBackupPolicy: true
     vaultName: naming.sharedRecoveryServicesVaultNameFSLogix
     resourceGroupOperations: sharedOperationsResourceGroupName
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     privateEndpoint: sharedPrivateEndpoint
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
@@ -1346,7 +1347,7 @@ var vmConfigurationTags = union(
 module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     name: sharedOperationsResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -1355,7 +1356,7 @@ module sharedOperationsResourceGroup '../shared/modules/resourceModules/resource
 module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     name: sharedMonitoringResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }

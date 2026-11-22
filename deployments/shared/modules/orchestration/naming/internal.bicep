@@ -727,18 +727,18 @@ func sharedVaultName(convention object, role string, abbreviation string, contex
     ? (role == 'secretsKeyVault' ? convention.secretsKeyVaultNameOverride : convention.encryptionKeyVaultNameOverride)
     : resourceNameForType(union(convention, { locationAbbreviation: abbreviation }), 'keyVaults', first(namingPolicy.resources[role].purpose), context)
 
-func hostPoolNamesWithScopes(convention object, identifier string, context hostPoolNamingContext, storage fslogixNamingResult, abbreviation string, operationsGroup string, sharedOperationsGroup string, diskEncryptionPattern string) hostPoolNamingResult =>
+func hostPoolNamesWithScopes(convention object, identifier string, context hostPoolNamingContext, storage fslogixNamingResult, abbreviation string, operationsGroup string, diskEncryptionPattern string) hostPoolNamingResult =>
   union(storage, {
     resourceGroupOperations: operationsGroup
     resourceGroupConsolidated: resourceName(convention, 'consolidatedResourceGroup', storage.vmLocationAbbreviation, identifier, '')
-    sharedResourceGroupOperations: sharedOperationsGroup
-    sharedResourceGroupMonitoring: resourceName(convention, 'monitoringResourceGroup', abbreviation, identifier, '')
+    sharedResourceGroupOperations: operationsGroup
+    sharedResourceGroupMonitoring: resourceName(convention, 'monitoringResourceGroup', storage.vmLocationAbbreviation, identifier, '')
     sharedResourceGroupControlPlane: hostPoolControlPlaneGroup(convention, identifier, context, abbreviation)
-    sharedKeyVaultNameSecrets: sharedVaultName(convention, 'secretsKeyVault', abbreviation, { subscriptionId: context.sharedServicesSubscriptionId, resourceGroupName: sharedOperationsGroup, location: context.controlPlaneLocation, cloud: context.cloud })
-    sharedKeyVaultNameEncryption: sharedVaultName(convention, 'encryptionKeyVault', abbreviation, { subscriptionId: context.sharedServicesSubscriptionId, resourceGroupName: sharedOperationsGroup, location: context.controlPlaneLocation, cloud: context.cloud })
-    sharedRecoveryServicesVaultNameFSLogix: resourceName(convention, 'filesBackupVault', abbreviation, identifier, '')
-    sharedDataCollectionEndpointName: resourceName(convention, 'dataCollectionEndpoint', abbreviation, identifier, '')
-    sharedLogAnalyticsWorkspaceName: resourceName(convention, 'logAnalyticsWorkspace', abbreviation, identifier, '')
+    sharedKeyVaultNameSecrets: sharedVaultName(convention, 'secretsKeyVault', storage.vmLocationAbbreviation, { subscriptionId: context.sharedServicesSubscriptionId, resourceGroupName: operationsGroup, location: context.virtualMachinesLocation, cloud: context.cloud })
+    sharedKeyVaultNameEncryption: sharedVaultName(convention, 'encryptionKeyVault', storage.vmLocationAbbreviation, { subscriptionId: context.sharedServicesSubscriptionId, resourceGroupName: operationsGroup, location: context.virtualMachinesLocation, cloud: context.cloud })
+    sharedRecoveryServicesVaultNameFSLogix: resourceName(convention, 'filesBackupVault', storage.vmLocationAbbreviation, identifier, '')
+    sharedDataCollectionEndpointName: resourceName(convention, 'dataCollectionEndpoint', storage.vmLocationAbbreviation, identifier, '')
+    sharedLogAnalyticsWorkspaceName: resourceName(convention, 'logAnalyticsWorkspace', storage.vmLocationAbbreviation, identifier, '')
     globalFeedResourceGroupName: !empty(context.globalFeedLocation) ? resourceName(convention, 'globalFeedResourceGroup', '', identifier, '') : ''
     globalFeedWorkspaceName: resourceName(convention, 'globalFeedWorkspace', '', identifier, '')
     resourceGroupControlPlane: hostPoolControlPlaneGroup(convention, identifier, context, abbreviation)
@@ -766,11 +766,10 @@ func hostPoolNamesWithScopes(convention object, identifier string, context hostP
 func hostPoolNamesForLocation(convention object, identifier string, context hostPoolNamingContext, storage fslogixNamingResult, abbreviation string) hostPoolNamingResult =>
   hostPoolNamesWithScopes(convention, identifier, context, storage, abbreviation,
     resourceName(convention, 'operationsResourceGroup', storage.vmLocationAbbreviation, identifier, ''),
-    resourceName(convention, 'operationsResourceGroup', abbreviation, identifier, ''),
     resourceName(convention, 'diskEncryptionSetPattern', storage.vmLocationAbbreviation, identifier, ''))
 
 @export()
-@description('Returns the complete legacy-compatible host-pool bundle by composing FSLogix names with compute and control-plane names. All locations and scope seeds are explicit; no VNet lookup or naming deployment is required.')
+@description('Composes host-pool names with storage, monitoring, Key Vault and backup names in the VM region and AVD control-plane names in the control-plane region.')
 func hostPoolNames(convention object, identifier string, context hostPoolNamingContext) hostPoolNamingResult =>
   hostPoolNamesForLocation(convention, identifier, context, fslogixNames(convention, identifier, {
     subscriptionId: context.subscriptionId

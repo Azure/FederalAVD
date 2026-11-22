@@ -594,6 +594,23 @@ host pools, set `controlPlaneSubscriptionId` when it differs from the deployment
 automated host pools use the deployment subscription. Keep the selected control-plane region
 consistent with the workspace region.
 
+Monitoring (Log Analytics, DCR and DCE), credentials and encryption Key Vaults, and FSLogix
+Azure Files snapshot backup follow the storage/session-host region, not the control-plane
+region. Standard and automated host pools create those shared resources in that region's
+Monitoring and Operations groups, using the same naming rules as Shared Services deployed
+in that region. The FSLogix Storage add-on uses the same shared `files` vault rule.
+Key Vault regions are passed explicitly rather than inferred from resource group metadata.
+The AVD host pool, workspace, application groups and scaling plan retain control-plane placement.
+
+Existing resource IDs and supported explicit names retain their selection; these changes
+do not relocate resources. With different host and control-plane regions, generated shared
+resource names and Key Vault scope hashes now follow the host region. Review existing
+deployments before redeployment rather than implicitly creating replacement shared services.
+For an existing backup configuration, keep supplying the existing vault and policy IDs/names.
+This correction does not move an existing vault or reassign protected storage automatically.
+If changing vaults is required, use an approved operator transition; an Azure Files storage
+account cannot be registered with two backup vaults simultaneously.
+
 > **Resource group changes:** Changing the target resource group does not relocate existing
 > resources. A different resource group produces different resource IDs and can create a second
 > pool instead of updating the existing one.

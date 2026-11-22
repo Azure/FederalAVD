@@ -577,7 +577,7 @@ var sharedPrivateEndpoint = deployPrivateEndpoints && (deploySharedKeyVaults || 
 
 module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.bicep' = if (deploySharedMonitoring) {
   params: {
-    location: controlPlaneLocation
+    location: location
     azureMonitorPrivateLinkScopeResourceId: ''
     dataCollectionEndpointName: naming.sharedDataCollectionEndpointName
     logAnalyticsWorkspaceName: naming.sharedLogAnalyticsWorkspaceName
@@ -600,6 +600,7 @@ var effectiveDataCollectionEndpointResourceId = enableMonitoring
 module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = if (deploySharedKeyVaults) {
   params: {
     resourceGroupName: naming.sharedResourceGroupOperations
+    location: location
     deploySecretsKeyVault: deploySharedSecretsKeyVault
     secretsKeyVaultName: naming.sharedKeyVaultNameSecrets
     secretsKeyVaultEnableSoftDelete: true
@@ -679,7 +680,7 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
     manageBackupPolicy: true
     vaultName: naming.sharedRecoveryServicesVaultNameFSLogix
     resourceGroupOperations: naming.sharedResourceGroupOperations
-    location: controlPlaneLocation
+    location: location
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
     privateEndpoint: sharedPrivateEndpoint
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
@@ -880,7 +881,7 @@ module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/re
 module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup) {
   params: {
     name: naming.sharedResourceGroupOperations
-    location: controlPlaneLocation
+    location: location
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
@@ -888,7 +889,7 @@ module sharedOperationsResourceGroup '../shared/modules/resourceModules/resource
 module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring) {
   params: {
     name: naming.sharedResourceGroupMonitoring
-    location: controlPlaneLocation
+    location: location
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
 }
