@@ -1,4 +1,5 @@
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$runPath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1'
 
 Describe 'Image validation infrastructure' {
     BeforeAll {
@@ -8,6 +9,7 @@ Describe 'Image validation infrastructure' {
         $template = Get-Content -LiteralPath $compiledPath -Raw | ConvertFrom-Json
         $app = $template.resources.functionApp.properties.parameters
         $timer = $template.resources.function.properties.parameters
+        $vmTemplate = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\imageValidation\modules\validationVirtualMachine.json') -Raw | ConvertFrom-Json
     }
 
     AfterAll {
@@ -16,203 +18,249 @@ Describe 'Image validation infrastructure' {
         }
     }
 
-    It 'uses the shared naming bundle and actual owning scope for all infrastructure' {
-        @($template.parameters.namingConvention.defaultValue.PSObject.Properties).Count | Should Be 0
-        $template.variables.resourceGroupName | Should Match "__bicep\.resourceNameForType\(parameters\('namingConvention'\), 'resourceGroups'"
-        $template.variables.groupContext.resourceGroupName | Should Be ''
-        $template.variables.namingContext | Should Match "variables\('resourceGroupName'\)"
-        $template.variables.names | Should Match '__bicep\.functionAppNames'
-        $template.variables.names | Should Match "'userAssignedIdentities'"
-        $template.variables.names | Should Match "'appServicePlans'"
-        foreach ($type in @('osdisks', 'networkInterfaces', 'templateSpecs', 'keyVaults')) {
-            $template.variables.names | Should Match "__bicep\.resourceNameForType\(parameters\('namingConvention'\), '$type', parameters\('identifier'\), variables\('namingContext'\)\)"
+    It 'passes explicit resource names through to their owning resources' {
+        $template.resources.rg.name | Should Be "[parameters('resourceGroupName')]"
+        foreach ($binding in @(
+            @{ Module = 'networkInterface'; Parameter = 'networkInterfaceName' }
+            @{ Module = 'keyVault'; Parameter = 'keyVaultName' }
+            @{ Module = 'templateSpec'; Parameter = 'templateSpecName' }
+        )) {
+            $template.resources.($binding.Module).properties.parameters.name.value |
+                Should Be "[parameters('$($binding.Parameter)')]"
         }
-        $template.variables.validationVirtualMachineName |
-            Should Match "__bicep\.resourceNameForType\(parameters\('namingConvention'\), 'virtualMachines', parameters\('identifier'\), variables\('namingContext'\)\)"
-        $template.variables.names | Should Match "greater\(length\(variables\('validationVirtualMachineName'\)\), variables\('namingPolicy'\)\.limits\.deploymentVm\)"
-        $template.variables.namingPolicy.limits.deploymentVm | Should Be 15
-        $template.resources.templateSpec.properties.parameters.templateSpecName.value | Should Be "[variables('names').templateSpecName]"
-        $template.resources.rg.name | Should Be "[variables('names').resourceGroup]"
-        $template.resources.userAssignedIdentity.properties.parameters.name.value | Should Be "[variables('names').userAssignedIdentity]"
-        foreach ($name in @('functionAppName', 'storageAccountName', 'applicationInsightsName', 'privateEndpointNameConv', 'privateEndpointNICNameConv')) {
-            $app.$name.value | Should Be "[variables('names').$name]"
+        foreach ($name in @('functionAppName', 'storageAccountName', 'applicationInsightsName')) {
+            $app.$name.value | Should Be "[parameters('$name')]"
         }
-        $template.outputs.generatedNames.value | Should Be "[variables('names')]"
-    }
-
-    It 'preserves explicit name overrides in the shared naming call' {
-        foreach ($name in @('resourceGroupNameOverride', 'userAssignedIdentityNameOverride', 'appServicePlanNameOverride', 'functionAppNameOverride', 'storageAccountNameOverride', 'encryptionKeyVaultNameOverride')) {
-            ($template.variables | ConvertTo-Json -Depth 10) | Should Match "parameters\('$name'\)"
+        foreach ($name in @('diskName', 'networkInterfaceName', 'virtualMachineName')) {
+            $app.functionAppAppSettings.value | Should Match "parameters\('$name'\)"
         }
     }
 
     It 'creates a Windows Dedicated plan only when an existing plan ID is absent' {
-        $template.resources.serverFarm.condition | Should Be "[empty(parameters('existingAppServicePlanResourceId'))]"
+        $template.resources.serverFarm.condition | Should Be "[empty(parameters('appServicePlanResourceId'))]"
         $plan = $template.resources.serverFarm.properties.parameters
         $plan.functionAppKind.value | Should Be 'functionapp'
         $plan.hostingPlanType.value | Should Be 'Dedicated'
-        $plan.planPricing.value | Should Be 'PremiumV3_P0v3'
-        $plan.zoneRedundant.value | Should Be $false
-        $app.serverFarmId | Should Be "[if(not(empty(parameters('existingAppServicePlanResourceId'))), createObject('value', parameters('existingAppServicePlanResourceId')), createObject('value', reference('serverFarm').outputs.hostingPlanId.value))]"
+        $plan.name.value | Should Be "[parameters('appServicePlanName')]"
+        $plan.planPricing.value | Should Be "[format('PremiumV3_{0}', parameters('appServicePlanSku'))]"
+        $app.serverFarmId | Should Match "if\(empty\(parameters\('appServicePlanResourceId'\)\)"
+        $app.serverFarmId | Should Match "reference\('serverFarm'\)\.outputs\.hostingPlanId"
+        $app.serverFarmId | Should Match "parameters\('appServicePlanResourceId'\)"
     }
 
-    It 'attaches the created identity and sequences the timer after app infrastructure and host-storage roles' {
-        $app.functionAppUserAssignedIdentityResourceId.value | Should Be "[reference('userAssignedIdentity').outputs.resourceId.value]"
-        ($template.resources.functionApp.dependsOn -contains 'userAssignedIdentity') | Should Be $true
-        ($template.resources.functionApp.dependsOn -contains 'serverFarm') | Should Be $true
-        ($template.resources.function.dependsOn -contains 'functionApp') | Should Be $true
-        $timer.functionAppName.value | Should Be "[reference('functionApp').outputs.functionAppName.value]"
-        ($timer.PSObject.Properties.Name -contains 'location') | Should Be $false
-        $template.outputs.userAssignedIdentityPrincipalId.value | Should Be "[reference('userAssignedIdentity').outputs.principalId.value]"
-    }
-
-    It 'requires private connectivity by default with an explicit public opt-out' {
-        $template.parameters.privateEndpoint.defaultValue | Should Be $true
-        $app.paasPublicNetworkAccess | Should Be "[if(parameters('privateEndpoint'), createObject('value', 'Disabled'), createObject('value', 'Enabled'))]"
-        foreach ($variable in @('integrationSubnetId', 'endpointSubnetId', 'blobDnsZoneId', 'appDnsZoneId', 'vaultDnsZoneId')) {
-            $template.variables.$variable | Should Match "parameters\('privateEndpoint'\)"
+    It 'shares the VM subnet with endpoints while keeping outbound integration separate' {
+        $app.privateEndpointSubnetResourceId.value | Should Be "[parameters('subnetResourceId')]"
+        $app.functionAppDelegatedSubnetResourceId.value | Should Be "[variables('integrationSubnetId')]"
+        $template.resources.keyVaultPrivateEndpoint.properties.parameters.subnetResourceId.value |
+            Should Be "[parameters('subnetResourceId')]"
+        foreach ($variable in @('integrationSubnetId', 'blobDnsZoneId', 'appDnsZoneId', 'vaultDnsZoneId')) {
+            $template.variables.$variable | Should Match "equals\(parameters\('endpointType'\), 'private'\)"
             $template.variables.$variable | Should Match "fail\('Private mode requires"
         }
-        $app.functionAppDelegatedSubnetResourceId.value | Should Be "[variables('integrationSubnetId')]"
-        $app.privateEndpointSubnetResourceId.value | Should Be "[variables('endpointSubnetId')]"
-        $app.azureBlobPrivateDnsZoneResourceId.value | Should Be "[variables('blobDnsZoneId')]"
-        $app.azureFunctionAppPrivateDnsZoneResourceId.value | Should Be "[variables('appDnsZoneId')]"
     }
 
-    It 'embeds the packaged timer code and requires an explicit schedule' {
-        ($template.parameters.schedule.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
+    It 'distinguishes private, restricted service, and unrestricted public access' {
+        $app.paasPublicNetworkAccess |
+            Should Be "[if(equals(parameters('endpointType'), 'private'), createObject('value', 'Disabled'), if(equals(parameters('endpointType'), 'service'), createObject('value', 'EnabledWithRestrictions'), createObject('value', 'Enabled')))]"
+        $network = $template.resources.functionApp.properties.template
+        $network.variables.permittedSubnetIds | Should Match "equals\(parameters\('paasPublicNetworkAccess'\), 'EnabledWithRestrictions'\)"
+        foreach ($parameter in @('privateEndpointSubnetResourceId', 'functionAppDelegatedSubnetResourceId')) {
+            $network.variables.permittedSubnetIds | Should Match "parameters\('$parameter'\)"
+        }
+        $subnetRules = $network.variables.copy | Where-Object name -eq 'permittedSubnetRestrictions'
+        $subnetRules.input.vnetSubnetResourceId | Should Match "variables\('permittedSubnetIds'\)"
+        $subnetRules.input.action | Should Be 'Allow'
+        $network.variables.resolvedIpSecurityRestrictions | Should Match "variables\('permittedSubnetRestrictions'\)"
+        $storageRules = $network.resources.storageAccount.properties.networkAcls.copy |
+            Where-Object name -eq 'virtualNetworkRules'
+        $storageRules.input.id | Should Match "variables\('permittedSubnetIds'\)"
+        $storageRules.input.action | Should Be 'Allow'
+        $network.resources.storageAccount.properties.networkAcls.defaultAction |
+            Should Be "[variables('networkAccess').defaultAction]"
+    }
+
+    It 'provisions the storage key and optional disk key before Function infrastructure' {
+        $keys = $template.resources.keys.properties.parameters
+        $keys.keyManagementType.value | Should Be 'CustomerManagedHSM'
+        $keys.keyNames.value |
+            Should Be "[union(createArray(parameters('storageAccountName')), if(empty(parameters('diskEncryptionSetName')), createArray(), createArray(parameters('diskEncryptionSetName'))))]"
+        $keys.keyVaultResourceId.value | Should Be "[reference('keyVault').outputs.resourceId.value]"
+        $app.encryptionKeyName.value | Should Be "[parameters('storageAccountName')]"
+        $app.storageEncryptionIdentityName.value | Should Be $keys.identityName.value
+        ($template.resources.functionApp.dependsOn -contains 'keys') | Should Be $true
+        $template.resources.diskEncryptionSet.condition | Should Be "[not(empty(parameters('diskEncryptionSetName')))]"
+        ($template.resources.diskEncryptionSet.dependsOn -contains 'keys') | Should Be $true
+        $app.keyManagementStorageAccounts.value | Should Be 'CustomerManagedHSM'
+    }
+
+    It 'grants the Function runtime workload permissions and scopes optional artifact identity access correctly' {
+        $principal = "[reference('functionApp').outputs.functionAppPrincipalId.value]"
+        $template.resources.resourceGroupRoleAssignment.properties.parameters.principalId.value | Should Be $principal
+        $template.resources.resourceGroupRoleAssignment.properties.parameters.roleDefinitionId.value |
+            Should Be '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
+        foreach ($module in @('virtualNetworkRoleAssignment', 'keyVaultRoleAssignment', 'galleryRoleAssignment', 'templateSpecRoleAssignment')) {
+            $template.resources.$module.properties.parameters.assignments.value[0].principalId | Should Be $principal
+        }
+        $identity = $template.resources.identityRoleAssignment
+        $identity.condition | Should Be "[not(empty(parameters('artifactsUserAssignedIdentityResourceId')))]"
+        $identity.subscriptionId | Should Be "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[2]]"
+        $identity.resourceGroup | Should Be "[split(parameters('artifactsUserAssignedIdentityResourceId'), '/')[4]]"
+        $identity.properties.parameters.assignments.value[0].principalId | Should Be $principal
+        $identity.properties.parameters.assignments.value[0].roleDefinitionId |
+            Should Be 'f1a07417-d97a-45cb-824c-7a7467783830'
+        $app.functionAppUserAssignedIdentityResourceId | Should BeNullOrEmpty
+    }
+
+    It 'embeds the timer source and sequences it after Function infrastructure' {
         $runContent = $timer.files.value.'run.ps1'
         if ($runContent -match "^\[variables\('([^']+)'\)\]$") {
             $runContent = $template.variables.($Matches[1])
         }
-        $runContent | Should Be (Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1') -Raw)
+        $runContent | Should Be (Get-Content -LiteralPath $runPath -Raw)
         ($timer.files.value.PSObject.Properties.Name -contains 'requirements.psd1') | Should Be $true
         ($timer.files.value.PSObject.Properties.Name -contains '../profile.ps1') | Should Be $true
         $timer.schedule.value | Should Be "[parameters('schedule')]"
         $timer.functionName.value | Should Be 'ImageValidation'
+        ($template.resources.function.dependsOn -contains 'functionApp') | Should Be $true
         $app.enableQueueStorage.value | Should Be $false
         $app.enableTableStorage.value | Should Be $false
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseInput($runContent, [ref]$tokens, [ref]$parseErrors) | Out-Null
+        $parseErrors.Count | Should Be 0
     }
 
-    It 'wires generated VM names and required workload inputs into app settings' {
-        foreach ($name in @('imageVersionResourceId', 'keyVaultResourceId', 'privateIPAddress', 'subnetResourceId', 'virtualMachineSize')) {
-            $template.parameters.$name.type | Should Be 'string'
-            ($template.parameters.$name.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
-            $app.functionAppAppSettings.value | Should Match "parameters\('$name'\)"
-        }
-        foreach ($name in @('diskName', 'networkInterfaceName', 'virtualMachineName')) {
-            $app.functionAppAppSettings.value | Should Match "variables\('names'\)\.$name"
-        }
-        $app.functionAppAppSettings.value | Should Match "string\(parameters\('runCommandSettings'\)\)"
-        $commandType = ($template.parameters.runCommandSettings.items.'$ref' -split '/')[-1]
-        $template.definitions.$commandType.properties.parameters.type | Should Be 'array'
-        $template.variables.additionalAppSettings | Should Match "fail\('Additional Function App settings cannot override"
-        $template.variables.additionalAppSettings | Should Match "toLower"
+    It 'forwards artifact customizations and enables them only with an artifact identity' {
+        $app.functionAppAppSettings.value | Should Match "string\(parameters\('virtualMachineCustomizations'\)\)"
+        $customizationType = ($template.parameters.virtualMachineCustomizations.items.'$ref' -split '/')[-1]
+        $properties = $template.definitions.$customizationType.properties
+        ($properties.PSObject.Properties.Name | Sort-Object) -join ',' | Should Be 'arguments,blobNameOrUri,name,successExitCodes'
+        $vmTemplate.resources.customizations.condition |
+            Should Be "[and(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), not(empty(parameters('vmCustomizations'))))]"
+        $vmTemplate.resources.customizations.properties.parameters.customizations.value |
+            Should Be "[parameters('vmCustomizations')]"
+        ($vmTemplate.resources.customizations.dependsOn -contains 'virtualMachine') | Should Be $true
+        $vmTemplate.resources.extension_GuestAttestation.condition | Should Be "[parameters('integrityMonitoring')]"
     }
 
-    It 'uses HSM customer-managed encryption and only enables monitoring with an existing workspace' {
-        $app.keyManagementStorageAccounts.value | Should Be 'CustomerManagedHSM'
+    It 'enables monitoring only when an existing workspace is supplied' {
         $app.enableApplicationInsights.value | Should Be "[not(empty(parameters('logAnalyticsWorkspaceResourceId')))]"
         $app.logAnalyticsWorkspaceResourceId.value | Should Be "[parameters('logAnalyticsWorkspaceResourceId')]"
         $app.privateLinkScopeResourceId.value | Should Be "[parameters('privateLinkScopeResourceId')]"
     }
+}
 
-    It 'creates the encryption vault and storage-named key before Function infrastructure' {
-        $vaults = $template.resources.encryptionKeyVault
-        $cmk = $template.resources.storageCmk
-        ($vaults.dependsOn -contains 'rg') | Should Be $true
-        $vaults.properties.parameters.deploySecretsKeyVault.value | Should Be $false
-        $vaults.properties.parameters.deployEncryptionKeyVault.value | Should Be $true
-        $vaults.properties.parameters.encryptionKeyVaultName.value | Should Be "[variables('names').encryptionKeyVaultName]"
-        ($cmk.dependsOn -contains 'encryptionKeyVault') | Should Be $true
-        $cmk.properties.parameters.keyVaultResourceId.value |
-            Should Be "[reference('encryptionKeyVault').outputs.encryptionKeyVaultResourceId.value]"
-        $cmk.properties.parameters.keyNames.value.Count | Should Be 1
-        $cmk.properties.parameters.keyNames.value[0] | Should Be $app.storageAccountName.value
-        $app.encryptionKeyName.value | Should Be $app.storageAccountName.value
-        $app.encryptionKeyVaultResourceId.value | Should Be $cmk.properties.parameters.keyVaultResourceId.value
-        $cmk.properties.parameters.identityName.value | Should Be "[variables('names').storageEncryptionIdentityName]"
-        $app.storageEncryptionIdentityName.value | Should Be $cmk.properties.parameters.identityName.value
-        ($app.storageEncryptionIdentityName.value -ne $app.functionAppUserAssignedIdentityResourceId.value) | Should Be $true
-        ($template.resources.functionApp.dependsOn -contains 'storageCmk') | Should Be $true
-        ($template.resources.functionApp.dependsOn -contains 'encryptionKeyVault') | Should Be $true
-        $app.functionAppAppSettings.value | Should Match "parameters\('keyVaultResourceId'\)"
-    }
-
-    It 'reuses protected Premium vault and key-scoped CMK provisioning with private networking and monitoring' {
-        $vaults = $template.resources.encryptionKeyVault
-        $vault = $vaults.properties.template.resources.encryptionKeyVault.properties.parameters
-        $vault.sku.value | Should Be 'premium'
-        $vault.enablePurgeProtection.value | Should Be $true
-        $vault.enableSoftDelete.value | Should Be $true
-        $vaults.properties.parameters.azureKeyVaultPrivateDnsZoneResourceId.value | Should Be "[variables('vaultDnsZoneId')]"
-        $vaults.properties.parameters.privateEndpointSubnetResourceId.value | Should Be "[variables('endpointSubnetId')]"
-        $vaults.properties.parameters.privateEndpoint.value | Should Be "[parameters('privateEndpoint')]"
-        $vaults.properties.parameters.paasPublicNetworkAccess | Should Be $app.paasPublicNetworkAccess
-        $vaults.properties.parameters.logAnalyticsWorkspaceResourceId.value | Should Be "[parameters('logAnalyticsWorkspaceResourceId')]"
-        $vaults.properties.template.variables.encryptionKvNetworkAcls.bypass | Should Be 'AzureServices'
-        $cmk = $template.resources.storageCmk.properties.template
-        $template.resources.storageCmk.properties.parameters.keyManagementType.value | Should Be 'CustomerManagedHSM'
-        $cmk.resources.paasKeys.properties.parameters.keySize.value | Should Be 4096
-        $cmk.resources.paasKeys.properties.parameters.attributesExportable.value | Should Be $false
-        $cmk.resources.paasKeys.properties.parameters.rotationPolicy.value | Should Be "[variables('rotationPolicy')]"
-        $cmk.variables.roleKeyVaultCryptoEncryptionUser | Should Be 'e147488a-f6f5-4113-8e2d-b22465e65bf6'
-        ($cmk.resources.paasKeyRoleAssignments.dependsOn -contains 'paasIdentity') | Should Be $true
-        ($cmk.resources.paasKeyRoleAssignments.dependsOn -contains "[format('paasKeys[{0}]', copyIndex())]") | Should Be $true
-    }
-
-    It 'applies one tag set from Portal or parameter files to all supported resources' {
-        $template.parameters.tags.type | Should Be 'object'
-        @($template.parameters.tags.defaultValue.PSObject.Properties).Count | Should Be 0
-        ($template.parameters.PSObject.Properties.Name -contains 'tagsByResource') | Should Be $false
-        ($template.variables.PSObject.Properties.Name -contains 'commonTags') | Should Be $false
-        ($template.variables.PSObject.Properties.Name -contains 'resourceTags') | Should Be $false
-        $tagExpression = "[parameters('tags')]"
-        $template.resources.rg.tags | Should Be $tagExpression
-        $template.resources.userAssignedIdentity.properties.parameters.tags.value | Should Be $tagExpression
-        $template.resources.templateSpec.properties.parameters.tags.value | Should Be $tagExpression
-        $specTemplate = $template.resources.templateSpec.properties.template
-        foreach ($resource in $specTemplate.resources) {
-            $resource.tags | Should Be "[parameters('tags')]"
-        }
-        $specVersion = $specTemplate.resources | Where-Object type -eq 'Microsoft.Resources/templateSpecs/versions'
-        $vmTemplate = $specVersion.properties.mainTemplate
-        if ($vmTemplate -is [string] -and $vmTemplate -match "^\[variables\('([^']+)'\)\]$") {
-            $vmTemplate = $specTemplate.variables.($Matches[1])
-        }
-        ($vmTemplate.parameters.tags.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
-        $vmTemplate.resources.virtualMachine.properties.parameters.tags.value | Should Be "[[parameters('tags')]"
-        foreach ($moduleName in @('encryptionKeyVault', 'storageCmk', 'serverFarm', 'functionApp')) {
-            $template.resources.$moduleName.properties.parameters.tags.value | Should Be $tagExpression
-        }
-        $app.functionAppAppSettings.value | Should Match "string\(parameters\('tags'\)\)"
-        $runContent = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1') -Raw
-        $runContent | Should Match 'tags = @\{ value = \(\$env:tags \| ConvertFrom-Json -ErrorAction Stop\) \}'
-    }
-
-    It 'fits conservative ARM and no-form Template Spec publishing budgets including the SDK envelope' {
-        Import-Module Az.Resources -ErrorAction Stop
+Describe 'Image validation timer HTTP handling' {
+    BeforeAll {
         $tokens = $null
         $parseErrors = $null
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
-            (Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'), [ref]$tokens, [ref]$parseErrors
-        )
-        if ($parseErrors.Count -gt 0) { throw 'Template Spec publisher has parse errors.' }
-        $definition = $ast.Find({
+        $runAst = [System.Management.Automation.Language.Parser]::ParseFile($runPath, [ref]$tokens, [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0) { throw 'Image validation timer has parse errors.' }
+        $deletionLoop = $runAst.Find({
             param($node)
-            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-                $node.Name -eq 'Get-DeduplicatedTemplateSpecPayload'
+            $node -is [System.Management.Automation.Language.WhileStatementAst] -and
+                $node.Condition.Extent.Text -eq '$StatusCode -ne 404'
         }, $true)
-        Invoke-Expression $definition.Extent.Text
-        $package = [pscustomobject]@{
-            RootTemplate = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $compiledPath -Raw))
-            UIFormDefinition = $null
-            Artifacts = [System.Collections.Generic.List[Microsoft.Azure.Management.Resources.Models.LinkedTemplateArtifact]]::new()
+    }
+
+    BeforeEach {
+        $environment = @{
+            ResourceManagerUri = 'https://management.azure.com/'
+            IDENTITY_ENDPOINT = 'http://identity.invalid/token'
+            IDENTITY_HEADER = 'test-header'
+            imageVersionResourceId = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/test/images/test/versions/1.0.0'
+            subscriptionId = 'test'
+            resourceGroupName = 'validation'
+            virtualMachineName = 'validation'
+            acceleratedNetworking = 'False'
+            bootDiagnostics = 'False'
+            encryptionAtHost = 'False'
+            integrityMonitoring = 'False'
+            secureBoot = 'False'
+            vTpm = 'False'
+            tags = '{}'
+            vmCustomizations = '[]'
+            templateSpecResourceId = '/subscriptions/test/resourceGroups/validation/providers/Microsoft.Resources/templateSpecs/test/versions/1.0'
         }
-        $armBytes = (Get-Item -LiteralPath $compiledPath).Length
-        $payloadBytes = [Text.Encoding]::UTF8.GetByteCount((Get-DeduplicatedTemplateSpecPayload -Package $package -Location 'eastus'))
-        ($armBytes -lt 4000000) | Should Be $true
-        ($payloadBytes + 16384 -lt 2000000) | Should Be $true
-        Write-Host "Image validation ARM: $armBytes bytes; ARM headroom: $(4000000 - $armBytes). No-form SDK payload: $payloadBytes bytes; Template Spec headroom with metadata allowance: $(2000000 - $payloadBytes - 16384)."
+        $originalEnvironment = @{}
+        foreach ($name in $environment.Keys) {
+            $originalEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
+            [Environment]::SetEnvironmentVariable($name, $environment[$name])
+        }
+        Mock Start-Sleep {}
+        Mock Invoke-RestMethod {
+            param($Uri, $Method, $Body)
+            $requestUri = [string]$Uri
+            if ($requestUri -like 'http://identity.invalid/*') {
+                return @{ access_token = 'test-token' }
+            }
+            if ($requestUri -match '/versions\?api-version=') {
+                return @{ value = @(
+                    @{ name = '1.9.0'; id = '/subscriptions/test/versions/1.9.0' }
+                    @{ name = '1.10.0'; id = '/subscriptions/test/versions/1.10.0' }
+                ) }
+            }
+            if ($requestUri -match '/versions/[^/?]+\?') {
+                return @{ properties = @{
+                    provisioningState = 'Succeeded'
+                    replicationStatus = @{ aggregatedState = 'Completed' }
+                } }
+            }
+            if ($Method -eq 'PUT' -and $requestUri -match '/deployments/ImageValidation-') {
+                return @{ properties = @{ provisioningState = 'Accepted' } }
+            }
+            throw "Unexpected mocked request: $Method $requestUri"
+        }
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Method -eq 'Get' -and [string]$Uri -match '/virtualMachines/'
+        } -MockWith {
+            $response = [System.Net.Http.HttpResponseMessage]::new([System.Net.HttpStatusCode]::NotFound)
+            throw [Microsoft.PowerShell.Commands.HttpResponseException]::new('Simulated VM lookup failure', $response)
+        }
+    }
+
+    AfterEach {
+        foreach ($name in $originalEnvironment.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $originalEnvironment[$name])
+        }
+    }
+
+    It 'handles a missing VM and submits the numerically latest image without deleting anything' {
+        & $runPath | Out-Null
+        Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'Delete' }
+        Assert-MockCalled Invoke-RestMethod -Times 1 -Exactly -Scope It -ParameterFilter {
+            $Method -eq 'PUT' -and
+                ($Body | ConvertFrom-Json).properties.parameters.imageVersionResourceId.value -eq '/subscriptions/test/versions/1.10.0'
+        }
+        Assert-MockCalled Invoke-RestMethod -Times 1 -Exactly -Scope It -ParameterFilter {
+            [string]$Uri -like '*&$expand=ReplicationStatus'
+        }
+    }
+
+    It 'does not treat HTTP <Status> as a missing VM' -TestCases @(
+        @{ Status = 403 }
+        @{ Status = 500 }
+    ) {
+        param($Status)
+        Mock Invoke-RestMethod -ParameterFilter {
+            $Method -eq 'Get' -and [string]$Uri -match '/virtualMachines/'
+        } -MockWith ({
+            $response = [System.Net.Http.HttpResponseMessage]::new([System.Net.HttpStatusCode]$Status)
+            throw [Microsoft.PowerShell.Commands.HttpResponseException]::new('Simulated VM lookup failure', $response)
+        }.GetNewClosure())
+        { & $runPath | Out-Null } | Should Throw 'Failed to get virtual machine'
+        Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' -or $Method -eq 'Delete' }
+    }
+
+    It 'ends deletion polling on an expected 404 without sleeping or retrying' {
+        $deletionLoop | Should Not BeNullOrEmpty
+        $ResourceManagerUriFixed = $env:ResourceManagerUri.TrimEnd('/')
+        $Header = @{}
+        $StatusCode = $null
+        $StatusCounter = 0
+        Invoke-Expression $deletionLoop.Extent.Text
+        Assert-MockCalled Invoke-RestMethod -Times 1 -Exactly -Scope It -ParameterFilter { $Method -eq 'Get' }
+        Assert-MockCalled Start-Sleep -Times 0 -Exactly -Scope It
+        $StatusCounter | Should Be 0
     }
 }
