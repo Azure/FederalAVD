@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "17841214131148773791"
+      "templateHash": "5074953103685795622"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -431,7 +431,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.49.2.45890",
-          "templateHash": "11971273214191795818"
+          "templateHash": "5043159510819467831"
         }
       },
       "definitions": {
@@ -697,7 +697,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "18386894160170663158"
+                  "templateHash": "7921988687599192063"
                 },
                 "name": "Windows virtual machine",
                 "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -1189,7 +1189,7 @@
                   "metadata": {
                     "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
                   },
-                  "value": "[[if(or(parameters('systemAssignedIdentity'), not(empty(parameters('userAssignedIdentityResourceIds')))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
+                  "value": "[[if(parameters('systemAssignedIdentity'), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
                 }
               }
             }
