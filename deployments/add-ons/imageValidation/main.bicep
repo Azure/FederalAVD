@@ -237,7 +237,7 @@ resource roleDefinition_keyVaultDeployAction 'Microsoft.Authorization/roleDefini
     assignableScopes: union([
       subscription().id
     ], [
-      split(keyVaultResourceId, '/')[2]
+      '/subscriptions/${split(keyVaultResourceId, '/')[2]}'
     ])
     permissions: [
       {
@@ -257,7 +257,7 @@ resource roleDefinition_subnetJoinAction 'Microsoft.Authorization/roleDefinition
     assignableScopes: union([
       subscription().id
     ], [
-      split(subnetResourceId, '/')[2]
+      '/subscriptions/${split(subnetResourceId, '/')[2]}'
     ])
     permissions: [
       {
