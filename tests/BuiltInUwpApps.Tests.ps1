@@ -79,7 +79,7 @@ Describe 'Built-in UWP image-provisioned upgrade selection' {
 
     It 'skips absent image apps by default without changing provisioning or removal records' {
         $global:uwpTestState.Deprovisioned = $true
-        $output = & $installer
+        $output = & $installer 6>&1
         $LASTEXITCODE | Should -Be 0
         $output -join "`n" | Should -Match 'not provisioned in this image'
         $output -join "`n" | Should -Match 'not provisioned'
@@ -91,7 +91,7 @@ Describe 'Built-in UWP image-provisioned upgrade selection' {
     }
     It 'upgrades an existing older provisioned app and preserves provisioning prerequisites' {
         $global:uwpTestState.Packages = @(New-TestProvisionedPackage 'Microsoft.WindowsCalculator' '1.0.0.0')
-        $output = & $installer
+        $output = & $installer 6>&1
         $LASTEXITCODE | Should -Be 0
         $global:uwpTestState.RemoveCalls.Count | Should -Be 1
         $global:uwpTestState.AddCalls.Count | Should -Be 1
@@ -125,7 +125,7 @@ Describe 'Built-in UWP image-provisioned upgrade selection' {
         $global:uwpTestState.RemoveCalls.Count | Should -Be 0
     }
     It 'installs absent apps only with the explicit opt-in' {
-        $output = & $installer -InstallMissing
+        $output = & $installer -InstallMissing 6>&1
         $LASTEXITCODE | Should -Be 0
         $global:uwpTestState.AddCalls.Count | Should -Be 1
         $global:uwpTestState.RemoveCalls.Count | Should -Be 0
@@ -134,7 +134,7 @@ Describe 'Built-in UWP image-provisioned upgrade selection' {
     It 'updates present apps while intentionally skipping absent apps in the same package' {
         New-TestUwpPayload 'Paint' 'Microsoft.Paint'
         $global:uwpTestState.Packages = @(New-TestProvisionedPackage 'Microsoft.WindowsCalculator' '1.0.0.0')
-        $output = & $installer
+        $output = & $installer 6>&1
         $LASTEXITCODE | Should -Be 0
         $global:uwpTestState.AddCalls.Count | Should -Be 1
         $global:uwpTestState.Packages.Count | Should -Be 1
@@ -155,7 +155,7 @@ Describe 'Built-in UWP image-provisioned upgrade selection' {
     It 'surfaces failed eligible upgrades with a nonzero exit code' {
         $global:uwpTestState.Packages = @(New-TestProvisionedPackage 'Microsoft.WindowsCalculator' '1.0.0.0')
         $global:uwpTestState.FailAdd = $true
-        $output = & $installer
+        $output = & $installer 6>&1
         $LASTEXITCODE | Should -Be 1
         $output -join "`n" | Should -Match 'Health\s+: FAIL'
     }
