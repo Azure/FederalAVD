@@ -547,11 +547,15 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
     }
 
-    It 'deploys two scheduled ten-host SideBySide batches while old hosts drain with target setting <TargetSetting>' -TestCases @(
-        @{ TargetSetting = 0 }
-        @{ TargetSetting = 20 }
+    It 'applies target <UpdatedTarget> from <TargetSetting> only at a scheduled SideBySide boundary' -TestCases @(
+        @{ TargetSetting = 0; UpdatedTarget = 0; ExpectedTarget = 20; SecondBatchSize = 10; SecondBatchLimit = 10; MoreAllowed = $false }
+        @{ TargetSetting = 20; UpdatedTarget = 20; ExpectedTarget = 20; SecondBatchSize = 10; SecondBatchLimit = 10; MoreAllowed = $false }
+        @{ TargetSetting = 20; UpdatedTarget = 30; ExpectedTarget = 30; SecondBatchSize = 10; SecondBatchLimit = 10; MoreAllowed = $true }
+        @{ TargetSetting = 20; UpdatedTarget = 19; ExpectedTarget = 19; SecondBatchSize = 7; SecondBatchLimit = 8; MoreAllowed = $true }
+        @{ TargetSetting = 20; UpdatedTarget = 15; ExpectedTarget = 15; SecondBatchSize = 0; SecondBatchLimit = 0; MoreAllowed = $true }
+        @{ TargetSetting = 20; UpdatedTarget = 0; ExpectedTarget = 20; SecondBatchSize = 10; SecondBatchLimit = 10; MoreAllowed = $false }
     ) {
-        param($TargetSetting)
+        param($TargetSetting, $UpdatedTarget, $ExpectedTarget, $SecondBatchSize, $SecondBatchLimit, $MoreAllowed)
         Mock Save-ShrContinuationCheckpoint {}
         $global:shrSettings.TargetSessionHostCount = $TargetSetting
         $global:shrSettings.MaxDeploymentBatchSize = 10
@@ -610,6 +614,8 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         $global:shrSimulation.DeploymentCalls[0].Count | Should -Be 10
         $context.BatchHostNames.Count | Should -Be 10
         $context.DeploymentBatchReady | Should -Be $false
+        $firstIntent = $context.DeploymentIntent | ConvertTo-Json -Depth 20 -Compress
+        $global:shrSettings.TargetSessionHostCount = $UpdatedTarget
 
         $firstReplacements = @($global:shrSimulation.AllocatedNames | ForEach-Object {
             $newHost = New-OrchestrationTestHost -Name $_ -ImageVersion '2.0.0'
@@ -632,34 +638,68 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
         $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $context.TargetCount | Should -Be 20
+        ($context.DeploymentIntent | ConvertTo-Json -Depth 20 -Compress) | Should -Be $firstIntent
 
         $context.NextBatchAuthorization = @{
             Id = 'scheduled-second-batch'; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
         }
-        $global:shrSimulation.AllocatedNames = @(11..20 | ForEach-Object { "new-$($_.ToString('00'))" })
+        $global:shrSimulation.AllocatedNames = @(
+            if ($SecondBatchSize -gt 0) {
+                11..(10 + $SecondBatchSize) | ForEach-Object { "new-$($_.ToString('00'))" }
+            }
+        )
         $global:shrSimulation.RunNumber = 3
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
-        $global:shrSimulation.DeploymentCalls[1].Count | Should -Be 10
-        $context.BatchHostNames.Count | Should -Be 20
-        $context.BatchNumber | Should -Be 2
+        $expectedDeployments = if ($SecondBatchSize -gt 0) { 2 } else { 1 }
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be $expectedDeployments
+        if ($SecondBatchSize -gt 0) {
+            $global:shrSimulation.DeploymentCalls[1].Count | Should -Be $SecondBatchSize
+        }
+        else {
+            ($context.DeploymentIntent | ConvertTo-Json -Depth 20 -Compress) | Should -Be $firstIntent
+        }
+        $context.BatchHostNames.Count | Should -Be (10 + $SecondBatchLimit)
+        $context.BatchNumber | Should -Be $(if ($SecondBatchLimit -gt 0) { 2 } else { 1 })
+        $context.TargetCount | Should -Be $ExpectedTarget
         $context.LastBatchAuthorizationId | Should -Be 'scheduled-second-batch'
-        $context.DeploymentBatchReady | Should -Be $false
+        $context.DeploymentBatchReady | Should -Be ($SecondBatchSize -eq 0)
         @($global:shrSimulation.Hosts | Where-Object { $_.ImageVersion -eq '1.0.0' }).Count | Should -Be 20
 
         $global:shrSimulation.Hosts += @($global:shrSimulation.AllocatedNames | ForEach-Object {
             New-OrchestrationTestHost -Name $_ -ImageVersion '2.0.0'
         })
-        $global:shrSimulation.Readiness.TotalNewHosts = 20
+        $global:shrSimulation.Readiness.TotalNewHosts = 10 + $SecondBatchSize
         $global:shrSimulation.RunNumber = 4
         $global:shrSimulation.DeploymentStatuses[4] = 'Succeeded'
         & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
             -ContinuationContext $context -CycleResult @{ Completed = $false }
-        $global:shrSimulation.Hosts.Count | Should -Be 40
-        $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+        $global:shrSimulation.Hosts.Count | Should -Be (30 + $SecondBatchSize)
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be $expectedDeployments
         $context.DeploymentBatchReady | Should -Be $true
-        $context.MoreDeploymentsAllowed | Should -Be $false
+        $context.MoreDeploymentsAllowed | Should -Be $MoreAllowed
+        if ($UpdatedTarget -eq 20) {
+            $settledIntent = $context.DeploymentIntent | ConvertTo-Json -Depth 20 -Compress
+            $global:shrSettings.TargetSessionHostCount = 30
+            & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+                -ContinuationContext $context -CycleResult @{ Completed = $false }
+            $context.MoreDeploymentsAllowed | Should -Be $true
+            $context.TargetCount | Should -Be 20
+            ($context.DeploymentIntent | ConvertTo-Json -Depth 20 -Compress) | Should -Be $settledIntent
+            $global:shrSimulation.DeploymentCalls.Count | Should -Be 2
+            $context.NextBatchAuthorization = @{
+                Id = 'scheduled-growth-batch'; ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+            }
+            $global:shrSimulation.AllocatedNames = @(21..30 | ForEach-Object { "new-$($_.ToString('00'))" })
+            $global:shrSimulation.RunNumber = 5
+            & $runPath -Timer ([PSCustomObject]@{ IsPastDue = $false }) `
+                -ContinuationContext $context -CycleResult @{ Completed = $false }
+            $global:shrSimulation.DeploymentCalls.Count | Should -Be 3
+            $global:shrSimulation.DeploymentCalls[2].Count | Should -Be 10
+            $context.TargetCount | Should -Be 30
+            $context.BatchNumber | Should -Be 3
+        }
     }
 
     It 'does not release unhealthy up-to-date hosts or mark their continuation complete' {

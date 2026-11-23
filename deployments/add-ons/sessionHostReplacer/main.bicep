@@ -948,10 +948,22 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         {
           name: 'InitiationEnabled'
           value: string(initiationEnabled)
-        }       
+        }
         {
           name: 'ContinuationTimeoutHours'
           value: string(continuationTimeoutHours)
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer-worker.Disabled'
+          value: 'false'
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer-initiator.Disabled'
+          value: 'false'
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer.Disabled'
+          value: 'true'
         }
         {
           name: 'AzureFunctionsJobHost__functionTimeout'

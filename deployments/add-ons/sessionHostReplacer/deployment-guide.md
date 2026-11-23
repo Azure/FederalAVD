@@ -109,6 +109,10 @@ assignment, and allow RBAC propagation before testing repair.
    not delete the old child function: verify it is disabled, then remove only that legacy
    function through the approved operator process while the app is stopped. Do not remove
    shared engine/modules or operation state.
+   These settings use Microsoft's [function enable/disable mechanism](https://learn.microsoft.com/azure/azure-functions/disable-function)
+   and are enforced on redeployment. Use `InitiationEnabled=false` to hold new batches,
+   not a function's `Disabled` setting; the reconciliation timer must remain enabled to finish
+   authorized work.
 5. Before starting the app, verify both bindings, the shared engine/modules and the new native-timer
    host configuration are installed. Check that the app remained stopped throughout the update.
    Start it only after the code deployment is complete.

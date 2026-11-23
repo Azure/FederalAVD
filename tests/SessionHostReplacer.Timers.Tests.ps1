@@ -143,17 +143,27 @@ Describe 'SHR mandatory two-timer deployment contract' {
         }
     }
 
-    It 'does not fingerprint a changed initiation schedule as an operation configuration change' {
+    It 'does not fingerprint a changed timer runtime setting <Setting>' -ForEach @(
+        @{ Setting = 'TimerSchedule'; Initial = '0 0,30 * * * *'; Updated = '0 0 1 * * 1' }
+        @{ Setting = 'AzureWebJobs.session-host-replacer-worker.Disabled'; Initial = 'true'; Updated = 'false' }
+        @{ Setting = 'AzureWebJobs.session-host-replacer-initiator.Disabled'; Initial = 'true'; Updated = 'false' }
+        @{ Setting = 'AzureWebJobs.session-host-replacer.Disabled'; Initial = 'false'; Updated = 'true' }
+    ) {
         Import-Module (Join-Path $shrRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1') -Force
         try {
-            InModuleScope SessionHostReplacer.Continuation {
-                $previous = $env:TimerSchedule
+            InModuleScope SessionHostReplacer.Continuation -Parameters @{
+                Setting = $Setting
+                Initial = $Initial
+                Updated = $Updated
+            } {
+                param($Setting, $Initial, $Updated)
+                $previous = [Environment]::GetEnvironmentVariable($Setting)
                 try {
-                    $env:TimerSchedule = '0 0,30 * * * *'
+                    [Environment]::SetEnvironmentVariable($Setting, $Initial)
                     $hash = Get-ShrConfigurationHash
-                    $env:TimerSchedule = '0 0 1 * * 1'
+                    [Environment]::SetEnvironmentVariable($Setting, $Updated)
                     Get-ShrConfigurationHash | Should -Be $hash
-                } finally { $env:TimerSchedule = $previous }
+                } finally { [Environment]::SetEnvironmentVariable($Setting, $previous) }
             }
         } finally { Remove-Module SessionHostReplacer -Force }
     }

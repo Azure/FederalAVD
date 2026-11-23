@@ -934,6 +934,11 @@ if ($ContinuationContext) {
             $ContinuationContext.NextBatchAuthorization = $null
             $ContinuationContext.NextBatchAuthorized = $false
         }
+        if ($null -ne $ContinuationContext.TargetCount -and
+            $ContinuationContext.TargetCount -ne $hostPoolReplacementPlan.TargetSessionHostCount) {
+            Write-LogEntry -Message "TARGET_UPDATE | PreviousTarget: {0} | NewTarget: {1} | Batch: {2}" `
+                -StringValues $ContinuationContext.TargetCount, $hostPoolReplacementPlan.TargetSessionHostCount, $ContinuationContext.BatchNumber
+        }
         $ContinuationContext.TargetCount = [int]$hostPoolReplacementPlan.TargetSessionHostCount
         $parameterBytes = [Text.Encoding]::Unicode.GetByteCount(
             ($sessionHostParameters | ConvertTo-Json -Depth 20 -Compress)
@@ -958,6 +963,17 @@ if ($ContinuationContext) {
     $hostPoolReplacementPlan.PossibleDeploymentsCount = [Math]::Min(
         $hostPoolReplacementPlan.PossibleDeploymentsCount, $ContinuationContext.BatchDeploymentLimit
     )
+    if ($ContinuationContext.DeploymentIntent) {
+        $intentNames = @($ContinuationContext.DeploymentIntent.HostNames)
+        if ($intentNames.Count -eq 0) { throw 'Checkpointed deployment has no target host names.' }
+        $registeredNames = @($sessionHostsFiltered | Where-Object {
+            -not $_.IsUnavailable -and $_.SessionHostName -in $intentNames
+        } | ForEach-Object { $_.SessionHostName })
+        $unresolvedCount = @($intentNames | Where-Object { $_ -notin $registeredNames }).Count
+        $hostPoolReplacementPlan.PossibleDeploymentsCount = [Math]::Min(
+            $hostPoolReplacementPlan.PossibleDeploymentsCount, $unresolvedCount
+        )
+    }
 }
 
 if ($replacementMode -eq 'MaintenanceWindow' -and -not $maintenanceCanStartNewBatch) {
@@ -1909,8 +1925,12 @@ if ($ContinuationContext -and $replacementMode -eq 'SideBySide') {
         $_.ImageVersion -eq $latestImageVersion.Version -and
         $_.ImageDefinition -eq $latestImageVersion.Definition
     }).Count
-    $ContinuationContext.MoreDeploymentsAllowed = $ContinuationContext.DeploymentBatchReady -and
-        $latestHostCount -lt $ContinuationContext.TargetCount
+    $requestedTargetCount = [int](Read-FunctionAppSetting TargetSessionHostCount)
+    if ($requestedTargetCount -eq 0) { $requestedTargetCount = $ContinuationContext.TargetCount }
+    $ContinuationContext.MoreDeploymentsAllowed = $ContinuationContext.DeploymentBatchReady -and (
+        $latestHostCount -lt $requestedTargetCount -or
+        $requestedTargetCount -ne $ContinuationContext.TargetCount
+    )
 }
 
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | NewHosts: {10}/{11} ({12}%) Available | LatestImage: {13}" `

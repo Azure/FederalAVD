@@ -1034,11 +1034,11 @@ Set to a specific number (e.g., 100) to maintain that exact count throughout rep
 
 #### Auto-Detect Mode (Recommended)
 
-Set to `0` to automatically maintain the current count when replacement cycles begin:
+Set to `0` to automatically capture the current count when a replacement operation begins:
 
-- Function captures initial count when first outdated host is detected
-- This count is maintained throughout the entire replacement cycle
-- After all hosts are replaced, the next cycle captures the new current count
+- Function captures registered and unresolved recovery hosts at operation start
+- This count is retained while the operation's authorized batches finish
+- The next operation captures the new current count rather than reusing the previous operation's target
 - **Perfect for dynamic scaling plans**: Function adapts to whatever count your scaling plan has set
 - **Manual scaling compatible**: Make temporary adjustments between image updates
 
@@ -1052,6 +1052,31 @@ Set to `0` to automatically maintain the current count when replacement cycles b
 6. Next image update will use "75" as the target
 
 Auto-detect mode is supported in both replacement modes. In DeleteFirst mode, the captured target is persisted with the recovery state so retries continue toward the same cycle target.
+
+**Positive target changes are accepted during an active operation.** Increases and decreases
+do not stop reconciliation merely because the count changed. An existing deployment, cleanup
+intent and active batch retain their authorization; a count update does not cancel or rewrite them.
+SideBySide adopts the requested target at the next scheduled, health- and handoff-checked batch
+boundary. DeleteFirst finishes its authorized batch and uses the new target in the next operation.
+Capacity floors, buffer space, image-replica ceilings and user-session protection still apply.
+Reducing the target may require more than one batch; it does not immediately delete excess hosts.
+
+Setting the target to `0` preserves the active operation's effective target, including an initiating
+explicit target before its first batch. Auto-detection resumes on the next operation, rather than
+counting temporary SideBySide duplicates. The configuration helper updates app settings but does
+not inspect operation state: an accepted update is a requested target, not proof of immediate resizing.
+`TARGET_UPDATE` logs record the previous and new effective targets when an authorized boundary adopts
+the change. Keep the matching deployment parameters in sync.
+
+New operations record their original configured target separately from the effective batch target
+so other protected settings remain fingerprinted. Existing operations can retain their fingerprint
+after a target change when it can be verified against the saved effective target or auto-detect
+configuration. If an older operation has no checkpointed target and its original explicit value
+cannot be verified, restore that value or finish it before upgrading; the worker does not guess.
+An operation already stopped by the old count-change guard still requires the
+[preview-first recovery procedure](#recover-a-stopped-operation); it is not resumed automatically.
+Normal recovery now permits target-only changes but preserves saved intents and the active target.
+Do not delete state or rewrite a fingerprint to bypass unrelated configuration checks.
 
 ### Tag Schema
 
@@ -2355,6 +2380,20 @@ The script reads the complete app-settings collection, displays only supported n
 configuration, validates mode-specific combinations, shows a before-and-after diff, and writes the
 complete collection back so unrelated Function App settings are preserved. App-setting changes
 restart the Function App.
+
+Supported by the helper does not mean mutable during an active operation:
+
+| Setting category | Active-operation behavior |
+| --- | --- |
+| Initiation hold, drain timings, capacity percentage, batch ceilings, progressive-scale-up controls and retention days | Read by later invocations; existing authorized work and live safety checks still govern what can happen |
+| Target host count | Positive changes apply at safe batch boundaries; `0` preserves the active target and enables auto-detection for the next operation |
+| Retention enablement, rollback permission and excluded-image inclusion | Protected by the operation fingerprint; a change stops reconciliation in `NeedsAttention` |
+| Continuation timeout | Establishes the deadline for a new operation; does not extend the active operation |
+| Image publication-age delay | Does not replace the image already pinned to an active operation |
+
+See [target-count changes](#target-session-host-count) and the
+[coordination and recovery boundaries](replacement-flow.md#coordination-and-recovery-boundaries)
+before changing settings while work is in progress.
 
 The script intentionally does not change replacement mode, timer schedule, identities, networking,
 device-cleanup permissions, template references, or other deployment resources. Change those
