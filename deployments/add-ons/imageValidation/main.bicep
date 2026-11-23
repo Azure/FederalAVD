@@ -219,6 +219,9 @@ var appDnsZoneId = endpointType == 'private' && empty(trim(azureFunctionAppPriva
 var vaultDnsZoneId = endpointType == 'private' && empty(trim(azureKeyVaultPrivateDnsZoneResourceId))
   ? fail('Private mode requires azureKeyVaultPrivateDnsZoneResourceId.')
   : azureKeyVaultPrivateDnsZoneResourceId
+var integrityMonitoringValidation = integrityMonitoring && (!secureBoot || !vTpm) && securityType != 'Standard'
+  ? fail('Integrity monitoring requires Secure Boot and vTPM to be enabled.')
+  : integrityMonitoring
 
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName
@@ -377,7 +380,7 @@ module diskEncryptionSet '../../shared/modules/resourceModules/compute/diskEncry
     keyVaultResourceId: keyVault.outputs.resourceId
     location: location
     name: diskEncryptionSetName
-    tags: tags
+    tags: tags[?'Microsoft.Compute/diskEncryptionSets'] ?? {}
   }
   dependsOn: [
     keys
@@ -436,6 +439,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
         value: artifactsUserAssignedIdentityResourceId
       }
       {
+        name: 'AzureFunctionsJobHost__functionTimeout'
+        value: '01:30:00'
+      }
+      {
         name: 'bootDiagnostics'
         value: string(bootDiagnostics)
       }
@@ -469,7 +476,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'integrityMonitoring'
-        value: string(integrityMonitoring)
+        value: string(integrityMonitoringValidation)
       }
       {
         name: 'keyVaultResourceId'
