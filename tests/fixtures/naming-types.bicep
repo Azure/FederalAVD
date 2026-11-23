@@ -128,7 +128,7 @@ output encodedResults string = base64(string({
   })))
   prefixes: map(['', 'customer-prefix', 'CUSTOMER-LONG-STORAGE-PREFIX'], prefix => {
     actual: fslogixNames({ fslogixStoragePrefix: prefix }, 'finance', { subscriptionId: context.subscriptionId, cloud: context.cloud, location: context.location }).fslogixStorageAccountNamePrefix
-    expected: empty(prefix) ? 'fslogix${take(uniqueString(toLower(context.subscriptionId), 'rg-avd-finance-storage-use', toLower(context.location)), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
+    expected: empty(prefix) ? 'fslpc${take(uniqueString(toLower(context.subscriptionId), 'rg-avd-finance-storage-use', toLower(context.location)), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
   })
   shortSeeds: [
     {

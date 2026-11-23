@@ -12,12 +12,16 @@ param fslogixContainerType string
 param fslogixFileShareNames array
 @description('Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization.')
 param fslogixLocalStorageAccountResourceIds array
+@description('Optional. Existing local Office Azure Files account IDs paired with local Profile accounts in shard order.')
+param fslogixLocalOfficeStorageAccountResourceIds array = []
 @description('Required. Array of local NetApp SMB server FQDN strings aligned with the ordered share names.')
 param fslogixLocalNetAppServerFqdns array
 @description('Required. Array of group name strings forwarded as the initialization script OSSGroups argument.')
 param fslogixOSSGroups array
 @description('Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization.')
 param fslogixRemoteStorageAccountResourceIds array
+@description('Optional. Existing remote Office Azure Files account IDs paired with remote Profile accounts in shard order.')
+param fslogixRemoteOfficeStorageAccountResourceIds array = []
 @description('Required. Array of remote NetApp SMB server FQDN strings aligned with the ordered share names.')
 param fslogixRemoteNetAppServerFqdns array
 @description('Required. Storage backend name forwarded to initialization, AzureFiles or AzureNetAppFiles.')
@@ -37,6 +41,9 @@ param virtualMachineName string
 
 var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixLocalOfficeStorageAccountNames = [for id in fslogixLocalOfficeStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixRemoteOfficeStorageAccountNames = [for id in fslogixRemoteOfficeStorageAccountResourceIds: last(split(id, '/'))]
+var useStorageKeys = configureFSLogix && identitySolution == 'EntraId' && fslogixStorageService == 'AzureFiles'
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' existing = {
   name: virtualMachineName
@@ -69,6 +76,10 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: string(fslogixLocalStorageAccountNames)
       }
       {
+        name: 'LocalOfficeStorageAccountNames'
+        value: string(fslogixLocalOfficeStorageAccountNames)
+      }
+      {
         name: 'OSSGroups'
         value: string(fslogixOSSGroups)
       }
@@ -79,6 +90,10 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
       {
         name: 'RemoteStorageAccountNames'
         value: string(fslogixRemoteStorageAccountNames)
+      }
+      {
+        name: 'RemoteOfficeStorageAccountNames'
+        value: string(fslogixRemoteOfficeStorageAccountNames)
       }
       {
         name: 'Shares'
@@ -99,6 +114,24 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
       {
         name: 'TimeZone'
         value: timeZone
+      }
+    ]
+    protectedParameters: [
+      {
+        name: 'LocalStorageAccountKeys'
+        value: useStorageKeys && length(fslogixLocalStorageAccountResourceIds) == 1 ? string([listKeys(fslogixLocalStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
+      }
+      {
+        name: 'RemoteStorageAccountKeys'
+        value: useStorageKeys && length(fslogixRemoteStorageAccountResourceIds) == 1 ? string([listKeys(fslogixRemoteStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
+      }
+      {
+        name: 'LocalOfficeStorageAccountKeys'
+        value: useStorageKeys && length(fslogixLocalOfficeStorageAccountResourceIds) == 1 ? string([listKeys(fslogixLocalOfficeStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
+      }
+      {
+        name: 'RemoteOfficeStorageAccountKeys'
+        value: useStorageKeys && length(fslogixRemoteOfficeStorageAccountResourceIds) == 1 ? string([listKeys(fslogixRemoteOfficeStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
       }
     ]
     source: {

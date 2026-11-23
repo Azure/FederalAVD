@@ -252,7 +252,10 @@ Describe 'Shared naming and module metadata contracts' {
         foreach ($name in @('DeploymentHelper', 'SessionHostVMs')) {
             $variables = $compiledModules[$name].variables | ConvertTo-Json -Depth 100 -Compress
             $variables | Should -Not -Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
-            @($compiledModules[$name].functions | Where-Object { $null -ne $_ }).Count | Should -Be 0
+            foreach ($function in @($compiledModules[$name].functions | Where-Object { $null -ne $_ })) {
+                $name | Should -Be 'SessionHostVMs'
+                @($function.members.PSObject.Properties.Name) | Should -Be @('validateOfficeStorageAccounts')
+            }
         }
     }
 

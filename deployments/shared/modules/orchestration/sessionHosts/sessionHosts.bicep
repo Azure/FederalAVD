@@ -73,12 +73,16 @@ param fslogixFileShareNames string[]
 param fslogixLocalNetAppVolumeResourceIds string[]
 @description('Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization.')
 param fslogixLocalStorageAccountResourceIds string[]
+@description('Optional. Local Office Azure Files account IDs paired with local Profile IDs.')
+param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 @description('Required. Array of group name strings forwarded as the initialization script OSSGroups argument.')
 param fslogixOSSGroups string[]
 @description('Required. Array of existing remote NetApp volume IDs, empty or one per share in profile-then-Office order.')
 param fslogixRemoteNetAppVolumeResourceIds string[]
 @description('Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization.')
 param fslogixRemoteStorageAccountResourceIds string[]
+@description('Optional. Remote Office Azure Files account IDs paired with remote Profile IDs.')
+param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 @description('Required. Profile container size in MB forwarded to session-host initialization.')
 param fslogixSizeInMBs int
 @description('Required. Storage backend name forwarded to initialization, AzureFiles or AzureNetAppFiles.')
@@ -252,8 +256,10 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     fslogixOSSGroups: fslogixOSSGroups
     fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns : []
     fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+    fslogixLocalOfficeStorageAccountResourceIds: fslogixLocalOfficeStorageAccountResourceIds
     fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns : []
     fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteOfficeStorageAccountResourceIds: fslogixRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled

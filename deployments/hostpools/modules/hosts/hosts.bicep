@@ -37,9 +37,11 @@ param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
 param fslogixLocalNetAppVolumeResourceIds string[]
 param fslogixLocalStorageAccountResourceIds string[]
+param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 param fslogixOSSGroups string[]
 param fslogixRemoteNetAppVolumeResourceIds string[]
 param fslogixRemoteStorageAccountResourceIds string[]
+param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 param fslogixSizeInMBs int
 param fslogixStorageService string
 param hibernationEnabled bool
@@ -187,10 +189,12 @@ module sessionHosts '../../../shared/modules/orchestration/sessionHosts/sessionH
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+    fslogixLocalOfficeStorageAccountResourceIds: fslogixLocalOfficeStorageAccountResourceIds
     fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
     fslogixOSSGroups: fslogixOSSGroups
     fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
     fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteOfficeStorageAccountResourceIds: fslogixRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled

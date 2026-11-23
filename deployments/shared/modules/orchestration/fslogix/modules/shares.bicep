@@ -9,6 +9,12 @@ param shareSizeInGB int
 param StorageAccountName string
 @description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
 param storageSku string
+@description('Optional. Explicit share tier; empty omits accessTier for provisioned-v2 shares.')
+param accessTier string = storageSku == 'Premium' ? 'Premium' : 'TransactionOptimized'
+@description('Optional. Provisioned-v2 IOPS; zero omits the property for legacy shares.')
+param provisionedIops int = 0
+@description('Optional. Provisioned-v2 throughput in MiB/s; zero omits the property for legacy shares.')
+param provisionedThroughputMiBps int = 0
 
 module shares '../../../resourceModules/storage/storageAccounts/fileServices/shares/deploy.bicep' = [
   for i in range(0, length(fileShares)): {
@@ -17,7 +23,9 @@ module shares '../../../resourceModules/storage/storageAccounts/fileServices/sha
       storageAccountName: StorageAccountName
       name: fileShares[i]
       shareQuota: shareSizeInGB
-      accessTier: storageSku == 'Premium' ? 'Premium' : 'TransactionOptimized'
+      accessTier: accessTier
+      provisionedIops: provisionedIops
+      provisionedThroughputMiBps: provisionedThroughputMiBps
     }
   }
 ]

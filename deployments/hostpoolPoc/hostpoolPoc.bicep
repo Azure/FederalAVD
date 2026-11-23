@@ -33,6 +33,14 @@ param virtualMachineSize string = 'Standard_D4ads_v5'
 @description('Optional. Deploys Azure Files storage and configures FSLogix profile containers. Two session hosts are deployed when enabled; otherwise one is deployed.')
 param deployFSLogixStorage bool = true
 
+@allowed(['Standard', 'Premium'])
+@description('Optional. Profile media tier; Standard preserves existing parameter-file behavior.')
+param fslogixProfileStorageTier string = 'Standard'
+
+@allowed(['Legacy', 'ProvisionedV2'])
+@description('Optional. Profile billing model; Legacy preserves existing parameter-file behavior.')
+param fslogixProfileStorageBillingModel string = 'Legacy'
+
 @description('Optional. Deploys Log Analytics, an AVD Insights data collection rule, and a data collection endpoint.')
 param enableMonitoring bool = false
 
@@ -327,6 +335,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     encryptionKeyVaultUri: ''
     fslogixAdminGroups: []
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
+    officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
     fslogixFileShares: fslogixFileShareNames
     fslogixShardOptions: 'None'
     fslogixUserGroups: []
@@ -349,9 +358,11 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     shareSizeInGB: 100
     smbServerLocation: naming.vmsLocAbbr
     storageAccountNamePrefix: naming.fslogixStorageAccountNamePrefix
+    officeStorageAccountNamePrefix: naming.fslogixOfficeStorageAccountNamePrefix
     storageCount: 1
     storageIndex: 1
-    storageSku: 'Standard'
+    storageSku: fslogixProfileStorageTier
+    profileStorageBillingModel: fslogixProfileStorageBillingModel
     fslogixStorageRedundancy: 'LocallyRedundant'
     storageSolution: 'AzureFiles'
     permittedIPs: []
@@ -403,9 +414,11 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
       ? fslogix!.outputs.storageAccountResourceIds
       : []
     fslogixLocalNetAppVolumeResourceIds: []
+    fslogixLocalOfficeStorageAccountResourceIds: []
     fslogixOSSGroups: []
     fslogixRemoteNetAppVolumeResourceIds: []
     fslogixRemoteStorageAccountResourceIds: []
+    fslogixRemoteOfficeStorageAccountResourceIds: []
     fslogixSizeInMBs: 30000
     fslogixStorageService: 'AzureFiles'
     hibernationEnabled: false
@@ -469,6 +482,7 @@ output dataCollectionEndpointResourceId string = dataCollectionEndpointResourceI
 output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
   ? fslogix!.outputs.storageAccountResourceIds
   : []
+output fslogixLocalOfficeStorageAccountResourceIds array = []
 output hostResourceGroupId string = subscriptionResourceId('Microsoft.Resources/resourceGroups', resourceGroupName)
 output virtualMachineNames array = sessionHosts.outputs.virtualMachineNames
 output virtualNetworkResourceId string = virtualNetworkResourceId

@@ -92,6 +92,75 @@ use that same host region, matching Shared Services deployed there. Only AVD con
 resources retain `controlPlaneLocation`. Existing selections do not relocate resources or
 re-register protected storage.
 
+### Paired Profile and Office Azure Files accounts
+
+`ProfileOfficeContainer` and `CloudCacheProfileOfficeContainer` create a distinct Office account
+for every Profile shard. New generated names use the `fslpc` (Profile) and `fsloc` (Office) role
+prefixes with the same index; explicit naming overrides remain available. Both roles use the same
+ordered user-group mapping, private endpoint and identity preparation, and independent CMK keys.
+`fslogixStorageAccountResourceIds` contains only Profile accounts;
+`fslogixOfficeStorageAccountResourceIds` contains only Office accounts.
+The policy stage records local and remote account names in host resource-group lifecycle tags
+`fslLocalStorageAccountNames`, `fslRemoteStorageAccountNames`,
+`fslLocalOfficeStorageAccountNames`, and `fslRemoteOfficeStorageAccountNames`. Each tag contains
+the role's ordered JSON array of names, preserving the configuration shard index for Portal defaults.
+
+| Office setting | Default | Meaning |
+| --- | --- | --- |
+| `fslogixOfficeStorageTier` | `Inherit` | Profile tier, or explicit `Standard`/`Premium` |
+| `fslogixOfficeStorageRedundancy` | `Inherit` | Profile redundancy, or explicit `LocallyRedundant`/`ZoneRedundant` |
+| `fslogixOfficeShareSizeInGB` | `0` | Profile quota, or a positive Office quota in GB |
+
+These settings affect newly deployed Azure Files Office storage only, not Azure NetApp Files or
+existing accounts. Backup enrollment is **Profile-only**; Office accounts and shares are never
+registered by this deployment.
+
+The Portal defaults new Azure Files storage to **Premium (SSD) + Provisioned v2**. Bicep omission
+retains `AzureFiles Premium`, `LocallyRedundant`, 100 GiB and `Legacy` billing defaults.
+`fslogixProfileStorageBillingModel` accepts `Legacy` or `ProvisionedV2` (default `Legacy`);
+`fslogixOfficeStorageBillingModel` accepts those plus `Inherit` (default), which uses Profile billing.
+Legacy Standard is HDD pay-as-you-go `StorageV2`; legacy Premium is SSD provisioned-v1 `FileStorage`.
+V2 uses `FileStorage` with `StandardV2_LRS/ZRS` (HDD) or `PremiumV2_LRS/ZRS` (SSD).
+Only LRS/ZRS are offered; verify target subscription/region SKU availability. There is no separate
+Commercial-only gate for storage billing (the automated host-pool service itself still requires Commercial).
+
+Preferred nullable Profile aliases override the old inputs when supplied:
+`fslogixProfileShareSizeInGB` over `fslogixShareSizeInGB`,
+`fslogixProfileStorageRedundancy` over `fslogixStorageRedundancy`,
+`fslogixProfileStorageTier` over the Azure Files tier in `fslogixStorageService`,
+`fslogixProfileStorageAccountNamePrefix` over generated naming (including legacy
+`namingConvention.fslogixStoragePrefix`), and
+`fslogixExistingLocalProfileStorageAccountResourceIds` /
+`fslogixExistingRemoteProfileStorageAccountResourceIds` over the corresponding legacy arrays without
+`Profile` in their names. Null retains legacy behavior; a supplied empty array clears the old array.
+The Portal exports preferred spellings only. Shared authentication, groups, count and index are unchanged.
+Profile tier overrides do not change Azure NetApp Files service levels, and nondefault Azure Files-only
+tuning is rejected during storage creation.
+
+`fslogixProfileProvisionedIops`, `fslogixProfileProvisionedThroughputMiBps`,
+`fslogixOfficeProvisionedIops`, and `fslogixOfficeProvisionedThroughputMiBps` default to `0`:
+each role calculates recommended performance from its own quota, rather than copying Profile
+performance into Office. Explicit nonzero performance requires v2. V2 quota is 32–262144 GiB;
+legacy maximum is 102400 GiB (Premium minimum 100 GiB). V2 SSD permits 3000–102400 IOPS /
+100–10340 MiB/s and HDD permits 500–50000 IOPS / 60–5120 MiB/s. No account SKU conversion or
+data migration is performed. Microsoft
+[recommends SSD for virtual desktop workloads, including Cloud Cache](https://learn.microsoft.com/azure/storage/files/virtual-desktop-workloads);
+existing Standard selections remain supported without silently changing customer billing or tier.
+
+When `deployFSLogixStorage` is false, provide `fslogixExistingLocalOfficeStorageAccountResourceIds`
+alongside the existing local Profile IDs. For remote Cloud Cache storage, provide
+`fslogixExistingRemoteOfficeStorageAccountResourceIds` alongside the remote Profile IDs. Each Office
+array must have the same count and shard order as its corresponding Profile array, and all role
+accounts must be distinct. Profile-only layouts require empty Office arrays. Invalid pairs fail
+deployment or initialization rather than falling back to Profile accounts.
+
+This is not a data migration: selecting a new account does not move, copy or automatically replace
+existing containers. Plan migration and rollback separately, retaining existing resource IDs/names
+where appropriate. The policy still checks successful provisioning of the named
+`ConfigureSessionHost` Run Command; updating these inputs does not force already-compliant hosts
+to rerun initialization. Validate new/replaced hosts and user sign-in, SID-to-shard mapping, local
+and remote Cloud Cache failover, and Profile-only backup registration before production rollout.
+
 When creating a workspace, production control-plane resources share one resource group per
 control-plane region and naming convention, not one per persona. For example, the default convention places the `admin` and
 `finance` host pools in `rg-avd-control-plane-eus` when their control-plane region is East US.

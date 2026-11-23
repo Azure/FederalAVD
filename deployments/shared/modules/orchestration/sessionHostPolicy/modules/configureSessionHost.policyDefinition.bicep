@@ -65,11 +65,12 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           'EntraDomainServices'
           'EntraKerberos-CloudOnly'
           'EntraKerberos-Hybrid'
+          'EntraId'
         ]
         defaultValue: 'EntraKerberos-CloudOnly'
         metadata: {
           displayName: 'Identity solution'
-          description: 'Identity-based SMB authentication mode.'
+          description: 'SMB authentication mode. EntraId uses protected storage account keys.'
         }
       }
       fslogixStorageService: {
@@ -117,6 +118,22 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
         defaultValue: []
         metadata: {
           displayName: 'Remote Azure Files storage account resource IDs'
+        }
+      }
+      fslogixLocalOfficeStorageAccountResourceIds: {
+        type: 'Array'
+        defaultValue: []
+        metadata: {
+          displayName: 'Local Office Azure Files storage account resource IDs'
+          description: 'Distinct Office accounts paired with local Profile accounts in shard order.'
+        }
+      }
+      fslogixRemoteOfficeStorageAccountResourceIds: {
+        type: 'Array'
+        defaultValue: []
+        metadata: {
+          displayName: 'Remote Office Azure Files storage account resource IDs'
+          description: 'Distinct Office accounts paired with remote Profile accounts in shard order.'
         }
       }
       fslogixLocalNetAppServerFqdns: {
@@ -187,6 +204,9 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                 fslogixLocalStorageAccountResourceIds: {
                   value: '[parameters(\'fslogixLocalStorageAccountResourceIds\')]'
                 }
+                fslogixLocalOfficeStorageAccountResourceIds: {
+                  value: '[parameters(\'fslogixLocalOfficeStorageAccountResourceIds\')]'
+                }
                 fslogixLocalNetAppServerFqdns: {
                   value: '[parameters(\'fslogixLocalNetAppServerFqdns\')]'
                 }
@@ -195,6 +215,9 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                 }
                 fslogixRemoteStorageAccountResourceIds: {
                   value: '[parameters(\'fslogixRemoteStorageAccountResourceIds\')]'
+                }
+                fslogixRemoteOfficeStorageAccountResourceIds: {
+                  value: '[parameters(\'fslogixRemoteOfficeStorageAccountResourceIds\')]'
                 }
                 fslogixRemoteNetAppServerFqdns: {
                   value: '[parameters(\'fslogixRemoteNetAppServerFqdns\')]'

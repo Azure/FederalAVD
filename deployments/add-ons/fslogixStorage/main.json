@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "13130084264496191925"
+      "templateHash": "11160836084301677138"
     }
   },
   "definitions": {
@@ -60,7 +60,13 @@
         "fslogixStorageAccountNamePrefix": {
           "type": "string"
         },
+        "fslogixOfficeStorageAccountNamePrefix": {
+          "type": "string"
+        },
         "encryptionKeyNameFSLogix": {
+          "type": "string"
+        },
+        "encryptionKeyNameFSLogixOffice": {
           "type": "string"
         },
         "privateEndpointNameConv": {
@@ -181,6 +187,10 @@
           "nullable": true
         },
         "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixOfficeStoragePrefix": {
           "type": "string",
           "nullable": true
         },
@@ -621,7 +631,7 @@
             "value": "[_1.fslogixNamesForAbbreviation(parameters('convention'), parameters('identifier'), parameters('context'), if(not(empty(coalesce(tryGet(parameters('convention'), 'vmsLocationAbbreviation'), ''))), parameters('convention').vmsLocationAbbreviation, _1.regionAbbreviation(parameters('context').location, parameters('context').cloud)))]"
           },
           "metadata": {
-            "description": "Returns the legacy-compatible FSLogix bundle without a naming deployment or a host-pool dependency. Explicit caller overrides remain outside this bundle.",
+            "description": "Returns paired Profile/Office storage names without a naming deployment or host-pool dependency. Explicit caller overrides remain outside this bundle.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
             }
@@ -717,6 +727,10 @@
             },
             {
               "type": "string",
+              "name": "officePrefix"
+            },
+            {
+              "type": "string",
               "name": "helperVmName"
             }
           ],
@@ -732,7 +746,9 @@
               "netAppAccountName": "[_1.resourceName(parameters('convention'), 'netAppAccount', parameters('abbreviation'), parameters('identifier'), '')]",
               "netAppCapacityPoolName": "[_1.resourceName(parameters('convention'), 'netAppCapacityPool', parameters('abbreviation'), parameters('identifier'), '')]",
               "fslogixStorageAccountNamePrefix": "[parameters('prefix')]",
+              "fslogixOfficeStorageAccountNamePrefix": "[parameters('officePrefix')]",
               "encryptionKeyNameFSLogix": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('prefix')))]",
+              "encryptionKeyNameFSLogixOffice": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('officePrefix')))]",
               "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints)]",
               "privateEndpointNICNameConv": "[_1.privateEndpointNicPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, _1.resolveConvention(parameters('convention')).resourceTypeCodes.networkInterfaces)]",
               "userAssignedIdentityNameConv": "[_1.resourceName(parameters('convention'), 'identityPattern', parameters('abbreviation'), parameters('identifier'), '')]",
@@ -775,7 +791,28 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.fslogixNamingResult",
-            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
+            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.fslogixOfficeStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixOfficeStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "fslogixOfficeStoragePrefix": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "prefix"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(not(empty(parameters('prefix'))), take(toLower(replace(parameters('prefix'), '-', '')), variables('_1.namingPolicy').limits.fslogixStoragePrefix), _1.namePattern('fslogixOfficeStoragePrefix', createObject('unique', parameters('unique'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -1830,6 +1867,116 @@
         "description": "Optional. Storage redundancy for Azure Files."
       }
     },
+    "fslogixProfileStorageRedundancy": {
+      "type": "string",
+      "nullable": true,
+      "allowedValues": [
+        "LocallyRedundant",
+        "ZoneRedundant"
+      ],
+      "metadata": {
+        "description": "Optional. Preferred Profile Azure Files redundancy. Overrides fslogixStorageRedundancy when supplied."
+      }
+    },
+    "fslogixProfileStorageTier": {
+      "type": "string",
+      "nullable": true,
+      "allowedValues": [
+        "Standard",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "Optional. Profile Azure Files tier. Null derives the tier from fslogixStorageService; does not change Azure NetApp Files."
+      }
+    },
+    "fslogixProfileStorageBillingModel": {
+      "type": "string",
+      "defaultValue": "Legacy",
+      "allowedValues": [
+        "Legacy",
+        "ProvisionedV2"
+      ],
+      "metadata": {
+        "description": "Optional. Profile Azure Files billing model. Existing accounts are not converted."
+      }
+    },
+    "fslogixOfficeStorageBillingModel": {
+      "type": "string",
+      "defaultValue": "Inherit",
+      "allowedValues": [
+        "Inherit",
+        "Legacy",
+        "ProvisionedV2"
+      ],
+      "metadata": {
+        "description": "Optional. Office Azure Files billing model. Inherit uses the Profile billing model."
+      }
+    },
+    "fslogixProfileProvisionedIops": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. Profile provisioned v2 IOPS. Zero calculates recommended sizing from the Profile quota."
+      }
+    },
+    "fslogixProfileProvisionedThroughputMiBps": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. Profile provisioned v2 throughput in MiB/s. Zero calculates recommended sizing from the Profile quota."
+      }
+    },
+    "fslogixOfficeProvisionedIops": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. Office provisioned v2 IOPS. Zero calculates recommended sizing from the Office quota."
+      }
+    },
+    "fslogixOfficeProvisionedThroughputMiBps": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "metadata": {
+        "description": "Optional. Office provisioned v2 throughput in MiB/s. Zero calculates recommended sizing from the Office quota."
+      }
+    },
+    "fslogixOfficeStorageTier": {
+      "type": "string",
+      "defaultValue": "Inherit",
+      "allowedValues": [
+        "Inherit",
+        "Standard",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "Optional. Office Azure Files tier; Inherit uses Profile tier. Ignored for Azure NetApp Files."
+      }
+    },
+    "fslogixOfficeStorageRedundancy": {
+      "type": "string",
+      "defaultValue": "Inherit",
+      "allowedValues": [
+        "Inherit",
+        "LocallyRedundant",
+        "ZoneRedundant"
+      ],
+      "metadata": {
+        "description": "Optional. Office Azure Files redundancy; Inherit uses Profile redundancy."
+      }
+    },
+    "fslogixOfficeShareSizeInGB": {
+      "type": "int",
+      "defaultValue": 0,
+      "minValue": 0,
+      "maxValue": 262144,
+      "metadata": {
+        "description": "Optional. Office Azure Files share quota in GB; 0 inherits shareSizeInGB. Ignored for Azure NetApp Files."
+      }
+    },
     "fslogixContainerType": {
       "type": "string",
       "defaultValue": "ProfileContainer",
@@ -1857,6 +2004,14 @@
       "minValue": 1,
       "metadata": {
         "description": "Optional. File share or Azure NetApp Files volume size, in GB."
+      }
+    },
+    "fslogixProfileShareSizeInGB": {
+      "type": "int",
+      "nullable": true,
+      "minValue": 1,
+      "metadata": {
+        "description": "Optional. Preferred Profile share or volume quota in GiB. Overrides shareSizeInGB when supplied."
       }
     },
     "fslogixShardOptions": {
@@ -1897,6 +2052,22 @@
       "maxLength": 13,
       "metadata": {
         "description": "Optional. Lowercase alphanumeric Azure Files storage account name prefix override. The module appends a two-digit index."
+      }
+    },
+    "fslogixProfileStorageAccountNamePrefix": {
+      "type": "string",
+      "nullable": true,
+      "maxLength": 13,
+      "metadata": {
+        "description": "Optional. Preferred Profile Azure Files account prefix. Overrides storageAccountNamePrefix, including an empty value to use generated naming."
+      }
+    },
+    "officeStorageAccountNamePrefix": {
+      "type": "string",
+      "defaultValue": "",
+      "maxLength": 13,
+      "metadata": {
+        "description": "Optional. Separate Office Azure Files prefix override, 3-13 lowercase alphanumeric characters. Blank uses the generated fsloc prefix with the paired two-digit index."
       }
     },
     "storageIndex": {
@@ -2136,6 +2307,16 @@
         "description": "Optional. Existing remote Azure Files storage account resource IDs included in the session-host configuration output."
       }
     },
+    "remoteOfficeStorageAccountResourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "defaultValue": [],
+      "metadata": {
+        "description": "Conditional. Remote Office Azure Files account IDs paired with remoteStorageAccountResourceIds in the same shard order. Required with remote Profile accounts and Office containers; cannot overlap Profile accounts."
+      }
+    },
     "remoteNetAppVolumeResourceIds": {
       "type": "array",
       "items": {
@@ -2172,7 +2353,15 @@
       ]
     },
     "storageSolution": "[split(parameters('fslogixStorageService'), ' ')[0]]",
-    "storageSku": "[split(parameters('fslogixStorageService'), ' ')[1]]",
+    "azureFilesTuningIsValid": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), and(and(and(and(and(and(and(and(and(and(and(equals(parameters('fslogixProfileStorageTier'), null()), or(equals(parameters('fslogixProfileStorageRedundancy'), null()), equals(parameters('fslogixProfileStorageRedundancy'), 'LocallyRedundant'))), empty(parameters('fslogixProfileStorageAccountNamePrefix'))), equals(parameters('fslogixProfileStorageBillingModel'), 'Legacy')), equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit')), equals(parameters('fslogixProfileProvisionedIops'), 0)), equals(parameters('fslogixProfileProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeProvisionedIops'), 0)), equals(parameters('fslogixOfficeProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeStorageTier'), 'Inherit')), equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit')), equals(parameters('fslogixOfficeShareSizeInGB'), 0))), true(), fail('Azure Files tier, billing, redundancy and performance tuning cannot be used with Azure NetApp Files.'))]",
+    "storageSku": "[if(and(variables('azureFilesTuningIsValid'), equals(variables('storageSolution'), 'AzureFiles')), coalesce(parameters('fslogixProfileStorageTier'), split(parameters('fslogixStorageService'), ' ')[1]), split(parameters('fslogixStorageService'), ' ')[1])]",
+    "effectiveProfileStorageRedundancy": "[coalesce(parameters('fslogixProfileStorageRedundancy'), parameters('fslogixStorageRedundancy'))]",
+    "effectiveProfileShareSizeInGB": "[coalesce(parameters('fslogixProfileShareSizeInGB'), parameters('shareSizeInGB'))]",
+    "effectiveOfficeStorageBillingModel": "[if(equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit'), parameters('fslogixProfileStorageBillingModel'), if(equals(parameters('fslogixOfficeStorageBillingModel'), 'ProvisionedV2'), 'ProvisionedV2', 'Legacy'))]",
+    "officeEnabled": "[contains(parameters('fslogixContainerType'), 'OfficeContainer')]",
+    "effectiveOfficeStorageSku": "[if(equals(parameters('fslogixOfficeStorageTier'), 'Inherit'), variables('storageSku'), parameters('fslogixOfficeStorageTier'))]",
+    "effectiveOfficeStorageRedundancy": "[if(equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit'), variables('effectiveProfileStorageRedundancy'), parameters('fslogixOfficeStorageRedundancy'))]",
+    "effectiveOfficeShareSizeInGB": "[if(equals(parameters('fslogixOfficeShareSizeInGB'), 0), variables('effectiveProfileShareSizeInGB'), parameters('fslogixOfficeShareSizeInGB'))]",
     "createFSLogixBackupVault": "[and(and(equals(variables('storageSolution'), 'AzureFiles'), parameters('deployFSLogixBackupVault')), empty(parameters('recoveryServicesVaultResourceId')))]",
     "effectiveBackupResourceGroupName": "[if(equals(parameters('backupVaultScope'), 'Dedicated'), variables('effectiveStorageResourceGroupName'), if(not(empty(parameters('backupResourceGroupName'))), parameters('backupResourceGroupName'), variables('backupNaming').operationsResourceGroupName))]",
     "effectiveBackupVaultName": "[if(not(empty(parameters('backupVaultName'))), parameters('backupVaultName'), if(equals(parameters('backupVaultScope'), 'Shared'), variables('backupNaming').fslogixBackupVaultName, __bicep.resourceNameForType(parameters('namingConvention'), 'Microsoft.RecoveryServices/vaults', format('{0}-backup', parameters('identifier')), createObject('subscriptionId', subscription().subscriptionId, 'resourceGroupName', variables('effectiveStorageResourceGroupName'), 'cloud', environment().name, 'location', parameters('location')))))]",
@@ -2184,7 +2373,11 @@
     "effectiveDeploymentVirtualMachineDiskName": "[if(not(empty(parameters('deploymentVirtualMachineDiskName'))), parameters('deploymentVirtualMachineDiskName'), variables('naming').depVirtualMachineDiskName)]",
     "effectiveDeploymentVirtualMachineNicName": "[if(not(empty(parameters('deploymentVirtualMachineNicName'))), parameters('deploymentVirtualMachineNicName'), variables('naming').depVirtualMachineNicName)]",
     "effectiveDeploymentUserAssignedIdentityName": "[if(not(empty(parameters('deploymentUserAssignedIdentityName'))), parameters('deploymentUserAssignedIdentityName'), replace(variables('naming').userAssignedIdentityNameConv, 'TOKEN', 'deployment'))]",
-    "effectiveStorageAccountNamePrefix": "[if(not(empty(parameters('storageAccountNamePrefix'))), parameters('storageAccountNamePrefix'), variables('naming').fslogixStorageAccountNamePrefix)]",
+    "selectedProfileStorageAccountNamePrefix": "[coalesce(parameters('fslogixProfileStorageAccountNamePrefix'), parameters('storageAccountNamePrefix'))]",
+    "effectiveStorageAccountNamePrefix": "[if(not(empty(variables('selectedProfileStorageAccountNamePrefix'))), variables('selectedProfileStorageAccountNamePrefix'), variables('naming').fslogixStorageAccountNamePrefix)]",
+    "effectiveOfficeStorageAccountNamePrefix": "[if(not(empty(parameters('officeStorageAccountNamePrefix'))), parameters('officeStorageAccountNamePrefix'), variables('naming').fslogixOfficeStorageAccountNamePrefix)]",
+    "officeStorageAccountPrefixIsValid": "[if(or(or(not(equals(variables('storageSolution'), 'AzureFiles')), not(variables('officeEnabled'))), and(and(greaterOrEquals(length(variables('effectiveOfficeStorageAccountNamePrefix')), 3), lessOrEquals(length(variables('effectiveOfficeStorageAccountNamePrefix')), 13)), empty(filter(range(0, length(variables('effectiveOfficeStorageAccountNamePrefix'))), lambda('i', not(contains('abcdefghijklmnopqrstuvwxyz0123456789', substring(variables('effectiveOfficeStorageAccountNamePrefix'), lambdaVariables('i'), 1)))))))), true(), fail('Office storage account prefixes must contain 3-13 lowercase alphanumeric characters.'))]",
+    "officeStorageAccountPrefixesAreDistinct": "[if(or(or(not(equals(variables('storageSolution'), 'AzureFiles')), not(variables('officeEnabled'))), not(equals(toLower(variables('effectiveStorageAccountNamePrefix')), toLower(variables('effectiveOfficeStorageAccountNamePrefix'))))), true(), fail('Profile and Office Azure Files storage account prefixes must differ. Existing data is not moved, renamed, or deleted.'))]",
     "effectivePrivateEndpointNameConvention": "[if(not(empty(parameters('privateEndpointNameConvention'))), parameters('privateEndpointNameConvention'), variables('naming').privateEndpointNameConv)]",
     "effectivePrivateEndpointNicNameConvention": "[if(not(empty(parameters('privateEndpointNicNameConvention'))), parameters('privateEndpointNicNameConvention'), variables('naming').privateEndpointNICNameConv)]",
     "effectiveEncryptionUserAssignedIdentityName": "[if(not(empty(parameters('encryptionUserAssignedIdentityName'))), parameters('encryptionUserAssignedIdentityName'), replace(variables('naming').userAssignedIdentityNameConv, 'TOKEN', format('storage{0}cmk', variables('naming').delimiter)))]",
@@ -2194,6 +2387,9 @@
     "fileShareNames": "[variables('fslogixShareNamesLookup')[parameters('fslogixContainerType')]]",
     "storageCount": "[if(or(equals(parameters('identitySolution'), 'EntraId'), equals(parameters('fslogixShardOptions'), 'None')), 1, length(parameters('fslogixUserGroups')))]",
     "remoteStorageAccountConfigurationIsValid": "[if(or(empty(parameters('remoteStorageAccountResourceIds')), equals(length(parameters('remoteStorageAccountResourceIds')), variables('storageCount'))), true(), fail('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.'))]",
+    "remoteProfileAccountIds": "[map(concat(map(range(0, variables('storageCount')), lambda('i', resourceId(subscription().subscriptionId, variables('effectiveStorageResourceGroupName'), 'Microsoft.Storage/storageAccounts', format('{0}{1}', variables('effectiveStorageAccountNamePrefix'), padLeft(add(lambdaVariables('i'), parameters('storageIndex')), 2, '0'))))), parameters('remoteStorageAccountResourceIds')), lambda('id', toLower(lambdaVariables('id'))))]",
+    "remoteOfficeAccountIds": "[map(concat(if(variables('officeEnabled'), map(range(0, variables('storageCount')), lambda('i', resourceId(subscription().subscriptionId, variables('effectiveStorageResourceGroupName'), 'Microsoft.Storage/storageAccounts', format('{0}{1}', variables('effectiveOfficeStorageAccountNamePrefix'), padLeft(add(lambdaVariables('i'), parameters('storageIndex')), 2, '0'))))), createArray()), parameters('remoteOfficeStorageAccountResourceIds')), lambda('id', toLower(lambdaVariables('id'))))]",
+    "remoteOfficeStorageAccountConfigurationIsValid": "[if(or(or(not(equals(variables('storageSolution'), 'AzureFiles')), not(variables('officeEnabled'))), and(and(and(equals(length(parameters('remoteOfficeStorageAccountResourceIds')), length(parameters('remoteStorageAccountResourceIds'))), empty(intersection(variables('remoteProfileAccountIds'), variables('remoteOfficeAccountIds')))), equals(length(variables('remoteProfileAccountIds')), length(union(variables('remoteProfileAccountIds'), variables('remoteProfileAccountIds'))))), equals(length(variables('remoteOfficeAccountIds')), length(union(variables('remoteOfficeAccountIds'), variables('remoteOfficeAccountIds')))))), true(), fail('Remote Office accounts must be separate from Profile accounts and paired one-for-one in the same shard order. No Profile-account fallback is permitted.'))]",
     "remoteNetAppConfigurationIsValid": "[if(or(empty(parameters('remoteNetAppVolumeResourceIds')), equals(length(parameters('remoteNetAppVolumeResourceIds')), length(variables('fileShareNames')))), true(), fail('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.'))]",
     "shardingConfigurationIsValid": "[if(or(equals(parameters('fslogixShardOptions'), 'None'), not(empty(parameters('fslogixUserGroups')))), true(), fail('fslogixUserGroups must contain at least one group when sharding is enabled.'))]",
     "storageIdentityConfigurationIsValid": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), contains(parameters('identitySolution'), 'DomainServices')), true(), fail('Azure NetApp Files requires ActiveDirectoryDomainServices or EntraDomainServices.'))]",
@@ -3021,7 +3217,8 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",
         "confidentialVmKey": "{identifier}-cvm-cmk",
@@ -3347,7 +3544,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "3642337555392518616"
+              "templateHash": "18095540339447607684"
             },
             "name": "Deployment helper orchestration",
             "description": "Deploys a temporary Windows helper VM and managed identity in an existing deployment resource group, with feature-dependent permissions and optional domain join for deployment-time operations."
@@ -3875,7 +4072,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "16602256035273770271"
+                      "templateHash": "7921988687599192063"
                     },
                     "name": "Windows virtual machine",
                     "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -3961,61 +4158,30 @@
                     }
                   },
                   "parameters": {
-                    "name": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Name of the windows virtual machine to deploy."
-                      }
-                    },
-                    "location": {
-                      "type": "string",
-                      "defaultValue": "[resourceGroup().location]",
-                      "metadata": {
-                        "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
-                      }
-                    },
-                    "tags": {
-                      "type": "object",
-                      "defaultValue": {},
-                      "metadata": {
-                        "description": "Optional. Tags applied to the windows virtual machine."
-                      }
-                    },
-                    "vmSize": {
-                      "type": "string",
-                      "defaultValue": "Standard_D4ads_v6",
-                      "metadata": {
-                        "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
-                      }
-                    },
-                    "adminUsername": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Local administrator account name for the Windows VM."
-                      }
-                    },
                     "adminPassword": {
                       "type": "securestring",
                       "metadata": {
                         "description": "Required. Local administrator password for the Windows VM, passed as a secure value."
                       }
                     },
-                    "subnetResourceId": {
-                      "type": "string",
+                    "adminUsername": {
+                      "type": "securestring",
                       "metadata": {
-                        "description": "Required. Resource ID of the existing subnet used by the VM NIC."
+                        "description": "Required. Local administrator account name for the Windows VM."
                       }
                     },
-                    "nicName": {
+                    "availabilitySetResourceId": {
                       "type": "string",
+                      "defaultValue": "",
                       "metadata": {
-                        "description": "Required. Name of the private network interface created for the VM."
+                        "description": "Availability set resource ID. Empty = no availability set."
                       }
                     },
-                    "osDiskName": {
-                      "type": "string",
+                    "bootDiagnosticsEnabled": {
+                      "type": "bool",
+                      "defaultValue": true,
                       "metadata": {
-                        "description": "Required. Name of the managed OS disk created from the selected image."
+                        "description": "Optional. Enable boot diagnostics with managed storage account."
                       }
                     },
                     "customImageResourceId": {
@@ -4025,45 +4191,11 @@
                         "description": "Optional. Custom image resource ID. Overrides imagePublisher/imageOffer/imageSku when provided."
                       }
                     },
-                    "imagePublisher": {
+                    "diskAccessId": {
                       "type": "string",
-                      "defaultValue": "MicrosoftWindowsDesktop",
+                      "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
-                      }
-                    },
-                    "imageOffer": {
-                      "type": "string",
-                      "defaultValue": "windows-11",
-                      "metadata": {
-                        "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
-                      }
-                    },
-                    "imageSku": {
-                      "type": "string",
-                      "defaultValue": "win11-25h2-avd",
-                      "metadata": {
-                        "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
-                      }
-                    },
-                    "osDiskSku": {
-                      "type": "string",
-                      "defaultValue": "Premium_LRS",
-                      "allowedValues": [
-                        "Premium_LRS",
-                        "StandardSSD_LRS",
-                        "Standard_LRS",
-                        "UltraSSD_LRS"
-                      ],
-                      "metadata": {
-                        "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
-                      }
-                    },
-                    "osDiskSizeGB": {
-                      "type": "int",
-                      "defaultValue": 0,
-                      "metadata": {
-                        "description": "OS disk size in GB. 0 uses the image default."
+                        "description": "Disk access resource ID for restricting disk network access."
                       }
                     },
                     "diskControllerType": {
@@ -4076,13 +4208,6 @@
                       ],
                       "metadata": {
                         "description": "Optional. The disk controller type. When empty, Azure selects automatically based on the VM SKU."
-                      }
-                    },
-                    "diskAccessId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Disk access resource ID for restricting disk network access."
                       }
                     },
                     "diskEncryptionSetResourceId": {
@@ -4106,53 +4231,6 @@
                         "description": "Optional. Enable host-level VM encryption; the selected VM size must support it."
                       }
                     },
-                    "hibernationEnabled": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
-                      }
-                    },
-                    "securityType": {
-                      "type": "string",
-                      "defaultValue": "TrustedLaunch",
-                      "allowedValues": [
-                        "Standard",
-                        "TrustedLaunch",
-                        "ConfidentialVM"
-                      ],
-                      "metadata": {
-                        "description": "Optional. VM security model; the image and VM size must support the selected model."
-                      }
-                    },
-                    "secureBootEnabled": {
-                      "type": "bool",
-                      "defaultValue": true,
-                      "metadata": {
-                        "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
-                      }
-                    },
-                    "vTpmEnabled": {
-                      "type": "bool",
-                      "defaultValue": true,
-                      "metadata": {
-                        "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
-                      }
-                    },
-                    "availabilitySetResourceId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Availability set resource ID. Empty = no availability set."
-                      }
-                    },
-                    "userAssignedIdentityResourceIds": {
-                      "type": "array",
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "User-assigned managed identity resource IDs."
-                      }
-                    },
                     "extensions": {
                       "type": "array",
                       "items": {
@@ -4161,6 +4239,34 @@
                       "defaultValue": [],
                       "metadata": {
                         "description": "VM extensions to install."
+                      }
+                    },
+                    "hibernationEnabled": {
+                      "type": "bool",
+                      "defaultValue": false,
+                      "metadata": {
+                        "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
+                      }
+                    },
+                    "imageOffer": {
+                      "type": "string",
+                      "defaultValue": "windows-11",
+                      "metadata": {
+                        "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
+                      }
+                    },
+                    "imagePublisher": {
+                      "type": "string",
+                      "defaultValue": "MicrosoftWindowsDesktop",
+                      "metadata": {
+                        "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
+                      }
+                    },
+                    "imageSku": {
+                      "type": "string",
+                      "defaultValue": "win11-25h2-avd",
+                      "metadata": {
+                        "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
                       }
                     },
                     "licenseType": {
@@ -4175,11 +4281,114 @@
                         "description": "Optional. Windows Server license type for Azure Hybrid Benefit."
                       }
                     },
-                    "bootDiagnosticsEnabled": {
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
+                      }
+                    },
+                    "name": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the windows virtual machine to deploy."
+                      }
+                    },
+                    "nicDeleteOption": {
+                      "type": "string",
+                      "defaultValue": "Delete",
+                      "allowedValues": [
+                        "Delete",
+                        "Detach"
+                      ],
+                      "metadata": {
+                        "description": "Optional. NIC delete option when the VM is deleted."
+                      }
+                    },
+                    "nicName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the private network interface created for the VM."
+                      }
+                    },
+                    "nicPrivateIPAddress": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Optional. Private IP address for the VM NIC; used only when nicPrivateIPAllocationMethod is Static."
+                      }
+                    },
+                    "nicPrivateIPAllocationMethod": {
+                      "type": "string",
+                      "defaultValue": "Dynamic",
+                      "allowedValues": [
+                        "Dynamic",
+                        "Static"
+                      ],
+                      "metadata": {
+                        "description": "Optional. Private IP allocation method for the VM NIC."
+                      }
+                    },
+                    "osDiskDeleteOption": {
+                      "type": "string",
+                      "defaultValue": "Delete",
+                      "allowedValues": [
+                        "Delete",
+                        "Detach"
+                      ],
+                      "metadata": {
+                        "description": "Optional. OS disk delete option when the VM is deleted."
+                      }
+                    },
+                    "osDiskName": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Name of the managed OS disk created from the selected image."
+                      }
+                    },
+                    "osDiskSizeGB": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "OS disk size in GB. 0 uses the image default."
+                      }
+                    },
+                    "osDiskSku": {
+                      "type": "string",
+                      "defaultValue": "Premium_LRS",
+                      "allowedValues": [
+                        "Premium_LRS",
+                        "StandardSSD_LRS",
+                        "Standard_LRS",
+                        "UltraSSD_LRS"
+                      ],
+                      "metadata": {
+                        "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
+                      }
+                    },
+                    "secureBootEnabled": {
                       "type": "bool",
                       "defaultValue": true,
                       "metadata": {
-                        "description": "Optional. Enable boot diagnostics with managed storage account."
+                        "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
+                      }
+                    },
+                    "securityType": {
+                      "type": "string",
+                      "defaultValue": "TrustedLaunch",
+                      "allowedValues": [
+                        "Standard",
+                        "TrustedLaunch",
+                        "ConfidentialVM"
+                      ],
+                      "metadata": {
+                        "description": "Optional. VM security model; the image and VM size must support the selected model."
+                      }
+                    },
+                    "subnetResourceId": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Resource ID of the existing subnet used by the VM NIC."
                       }
                     },
                     "systemAssignedIdentity": {
@@ -4187,6 +4396,34 @@
                       "defaultValue": false,
                       "metadata": {
                         "description": "Optional. Enable system-assigned managed identity in addition to any user-assigned identities."
+                      }
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {},
+                      "metadata": {
+                        "description": "Optional. Tags applied to the windows virtual machine."
+                      }
+                    },
+                    "userAssignedIdentityResourceIds": {
+                      "type": "array",
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "User-assigned managed identity resource IDs."
+                      }
+                    },
+                    "vmSize": {
+                      "type": "string",
+                      "defaultValue": "Standard_D4ads_v6",
+                      "metadata": {
+                        "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
+                      }
+                    },
+                    "vTpmEnabled": {
+                      "type": "bool",
+                      "defaultValue": true,
+                      "metadata": {
+                        "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
                       }
                     }
                   },
@@ -4209,7 +4446,8 @@
                           {
                             "name": "ipconfig1",
                             "properties": {
-                              "privateIPAllocationMethod": "Dynamic",
+                              "privateIPAllocationMethod": "[parameters('nicPrivateIPAllocationMethod')]",
+                              "privateIPAddress": "[if(equals(parameters('nicPrivateIPAllocationMethod'), 'Static'), parameters('nicPrivateIPAddress'), null())]",
                               "subnet": {
                                 "id": "[parameters('subnetResourceId')]"
                               }
@@ -4239,7 +4477,7 @@
                           "osDisk": {
                             "name": "[parameters('osDiskName')]",
                             "createOption": "FromImage",
-                            "deleteOption": "Delete",
+                            "deleteOption": "[parameters('osDiskDeleteOption')]",
                             "managedDisk": {
                               "storageAccountType": "[parameters('osDiskSku')]",
                               "diskEncryptionSet": "[if(not(empty(parameters('diskEncryptionSetResourceId'))), createObject('id', parameters('diskEncryptionSetResourceId')), null())]",
@@ -4255,7 +4493,7 @@
                             {
                               "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]",
                               "properties": {
-                                "deleteOption": "Delete"
+                                "deleteOption": "[parameters('nicDeleteOption')]"
                               }
                             }
                           ]
@@ -4326,7 +4564,7 @@
                       "metadata": {
                         "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
                       },
-                      "value": "[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
+                      "value": "[if(parameters('systemAssignedIdentity'), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
                     }
                   }
                 }
@@ -4408,13 +4646,7 @@
             "value": "[parameters('parentResourceId')]"
           },
           "storageKeyNames": {
-            "copy": [
-              {
-                "name": "value",
-                "count": "[length(range(0, variables('storageCount')))]",
-                "input": "[replace(variables('naming').encryptionKeyNameFSLogix, '##', padLeft(add(range(0, variables('storageCount'))[copyIndex('value')], parameters('storageIndex')), 2, '0'))]"
-              }
-            ]
+            "value": "[concat(map(range(0, variables('storageCount')), lambda('i', replace(variables('naming').encryptionKeyNameFSLogix, '##', padLeft(add(lambdaVariables('i'), parameters('storageIndex')), 2, '0')))), if(variables('officeEnabled'), map(range(0, variables('storageCount')), lambda('i', replace(variables('naming').encryptionKeyNameFSLogixOffice, '##', padLeft(add(lambdaVariables('i'), parameters('storageIndex')), 2, '0')))), createArray()))]"
           },
           "identityName": {
             "value": "[variables('effectiveEncryptionUserAssignedIdentityName')]"
@@ -5945,6 +6177,9 @@
           "fslogixEncryptionKeyNameConv": {
             "value": "[variables('naming').encryptionKeyNameFSLogix]"
           },
+          "officeEncryptionKeyNameConv": {
+            "value": "[variables('naming').encryptionKeyNameFSLogixOffice]"
+          },
           "fslogixFileShares": {
             "value": "[variables('fileShareNames')]"
           },
@@ -5953,7 +6188,7 @@
             "value": "[parameters('softDeleteRetentionDays')]"
           },
           "fslogixStorageRedundancy": {
-            "value": "[parameters('fslogixStorageRedundancy')]"
+            "value": "[variables('effectiveProfileStorageRedundancy')]"
           },
           "fslogixUserGroups": {
             "value": "[parameters('fslogixUserGroups')]"
@@ -6011,7 +6246,25 @@
             "value": "[variables('effectiveStorageResourceGroupName')]"
           },
           "shareSizeInGB": {
-            "value": "[parameters('shareSizeInGB')]"
+            "value": "[variables('effectiveProfileShareSizeInGB')]"
+          },
+          "profileStorageBillingModel": {
+            "value": "[parameters('fslogixProfileStorageBillingModel')]"
+          },
+          "officeStorageBillingModel": {
+            "value": "[variables('effectiveOfficeStorageBillingModel')]"
+          },
+          "profileProvisionedIops": {
+            "value": "[parameters('fslogixProfileProvisionedIops')]"
+          },
+          "profileProvisionedThroughputMiBps": {
+            "value": "[parameters('fslogixProfileProvisionedThroughputMiBps')]"
+          },
+          "officeProvisionedIops": {
+            "value": "[parameters('fslogixOfficeProvisionedIops')]"
+          },
+          "officeProvisionedThroughputMiBps": {
+            "value": "[parameters('fslogixOfficeProvisionedThroughputMiBps')]"
           },
           "smbServerLocation": {
             "value": "[variables('effectiveSmbServerLocation')]"
@@ -6019,9 +6272,17 @@
           "storageAccountNamePrefix": {
             "value": "[variables('effectiveStorageAccountNamePrefix')]"
           },
-          "storageCount": {
-            "value": "[variables('storageCount')]"
+          "officeStorageAccountNamePrefix": "[if(and(variables('officeStorageAccountPrefixIsValid'), variables('officeStorageAccountPrefixesAreDistinct')), createObject('value', variables('effectiveOfficeStorageAccountNamePrefix')), createObject('value', variables('effectiveOfficeStorageAccountNamePrefix')))]",
+          "officeStorageSku": {
+            "value": "[variables('effectiveOfficeStorageSku')]"
           },
+          "officeStorageRedundancy": {
+            "value": "[variables('effectiveOfficeStorageRedundancy')]"
+          },
+          "officeShareSizeInGB": {
+            "value": "[variables('effectiveOfficeShareSizeInGB')]"
+          },
+          "storageCount": "[if(and(variables('remoteStorageAccountConfigurationIsValid'), variables('remoteOfficeStorageAccountConfigurationIsValid')), createObject('value', variables('storageCount')), createObject('value', variables('storageCount')))]",
           "storageIndex": {
             "value": "[parameters('storageIndex')]"
           },
@@ -6043,7 +6304,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "254604854940849240"
+              "templateHash": "16534709207975942027"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -6088,6 +6349,77 @@
               }
             }
           },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "validateOfficeStorageAccounts": {
+                  "parameters": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "localProfile"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "remoteProfile"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "localOffice"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "remoteOffice"
+                    },
+                    {
+                      "type": "bool",
+                      "name": "officeEnabled"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "name": "groups"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "properties": {
+                      "local": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "remote": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "value": "[if(parameters('officeEnabled'), if(and(and(and(and(and(and(not(empty(parameters('localProfile'))), equals(length(parameters('localOffice')), length(parameters('localProfile')))), equals(length(parameters('remoteOffice')), length(parameters('remoteProfile')))), or(empty(parameters('remoteProfile')), equals(length(parameters('remoteProfile')), length(parameters('localProfile'))))), or(empty(parameters('groups')), equals(length(parameters('groups')), length(parameters('localProfile'))))), equals(length(union(map(concat(parameters('localOffice'), parameters('remoteOffice')), lambda('id', toLower(last(split(lambdaVariables('id'), '/'))))), map(concat(parameters('localOffice'), parameters('remoteOffice')), lambda('id', toLower(last(split(lambdaVariables('id'), '/'))))))), length(concat(parameters('localOffice'), parameters('remoteOffice'))))), empty(intersection(map(concat(parameters('localProfile'), parameters('remoteProfile')), lambda('id', toLower(last(split(lambdaVariables('id'), '/'))))), map(concat(parameters('localOffice'), parameters('remoteOffice')), lambda('id', toLower(last(split(lambdaVariables('id'), '/')))))))), createObject('local', parameters('localOffice'), 'remote', parameters('remoteOffice')), fail('Office containers require distinct Azure Files accounts paired one-to-one with Profile accounts in shard order.')), if(and(empty(parameters('localOffice')), empty(parameters('remoteOffice'))), createObject('local', createArray(), 'remote', createArray()), fail('Office storage accounts were supplied but Office containers are disabled.')))]"
+                  },
+                  "metadata": {
+                    "__bicep_export!": true
+                  }
+                }
+              }
+            }
+          ],
           "parameters": {
             "activeDirectoryConnection": {
               "type": "bool",
@@ -6181,7 +6513,7 @@
             "fslogixFileShares": {
               "type": "array",
               "metadata": {
-                "description": "Required. Array of share name strings in profile-then-Office order, created on each storage account or as individual NetApp volumes."
+                "description": "Required. Share names in Profile-then-Office order; Azure Files uses separate accounts per role, NetApp uses separate volumes."
               }
             },
             "fslogixShardOptions": {
@@ -6309,6 +6641,18 @@
                 "description": "Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex."
               }
             },
+            "officeStorageAccountNamePrefix": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Office account prefix, paired with Profile account indices; unused when Office containers are disabled or storage is NetApp."
+              }
+            },
+            "officeEncryptionKeyNameConv": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Office encryption-key pattern containing ##; unused without Office accounts or customer-managed encryption."
+              }
+            },
             "storageCount": {
               "type": "int",
               "metadata": {
@@ -6327,10 +6671,81 @@
                 "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
               }
             },
+            "officeStorageSku": {
+              "type": "string",
+              "defaultValue": "[parameters('storageSku')]",
+              "metadata": {
+                "description": "Optional. Office Azure Files tier; defaults to the Profile tier."
+              }
+            },
+            "officeShareSizeInGB": {
+              "type": "int",
+              "defaultValue": "[parameters('shareSizeInGB')]",
+              "metadata": {
+                "description": "Optional. Office share quota in GiB; defaults to the Profile quota."
+              }
+            },
             "fslogixStorageRedundancy": {
               "type": "string",
               "metadata": {
                 "description": "Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS."
+              }
+            },
+            "officeStorageRedundancy": {
+              "type": "string",
+              "defaultValue": "[parameters('fslogixStorageRedundancy')]",
+              "metadata": {
+                "description": "Optional. Office Azure Files redundancy; defaults to the Profile redundancy."
+              }
+            },
+            "profileStorageBillingModel": {
+              "type": "string",
+              "defaultValue": "Legacy",
+              "allowedValues": [
+                "Legacy",
+                "ProvisionedV2"
+              ],
+              "metadata": {
+                "description": "Optional. Profile Azure Files billing model; Legacy preserves existing parameters."
+              }
+            },
+            "officeStorageBillingModel": {
+              "type": "string",
+              "defaultValue": "[parameters('profileStorageBillingModel')]",
+              "allowedValues": [
+                "Legacy",
+                "ProvisionedV2"
+              ],
+              "metadata": {
+                "description": "Optional. Office Azure Files billing model; defaults to Profile."
+              }
+            },
+            "profileProvisionedIops": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "Optional. Profile provisioned-v2 IOPS; zero selects the capacity-based recommendation."
+              }
+            },
+            "profileProvisionedThroughputMiBps": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "Optional. Profile provisioned-v2 throughput in MiB/s; zero selects the capacity-based recommendation."
+              }
+            },
+            "officeProvisionedIops": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "Optional. Office provisioned-v2 IOPS; zero selects the Office capacity-based recommendation."
+              }
+            },
+            "officeProvisionedThroughputMiBps": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "Optional. Office provisioned-v2 throughput in MiB/s; zero selects the Office capacity-based recommendation."
               }
             },
             "storageSolution": {
@@ -6479,7 +6894,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "2951853416885464102"
+                      "templateHash": "12065671855162656757"
                     },
                     "name": "FSLogix NetApp storage orchestration",
                     "description": "Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials."
@@ -7094,7 +7509,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "11947828355218345379"
+                              "templateHash": "8317728250201469341"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -7119,10 +7534,32 @@
                             }
                           },
                           "parameters": {
-                            "virtualMachineName": {
-                              "type": "string",
+                            "asyncExecution": {
+                              "type": "bool",
+                              "defaultValue": false,
                               "metadata": {
-                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                                "description": "Run the command asynchronously (fire and forget)."
+                              }
+                            },
+                            "errorBlobManagedIdentityClientId": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                              }
+                            },
+                            "errorBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                              }
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                               }
                             },
                             "name": {
@@ -7131,11 +7568,38 @@
                                 "description": "Required. Name of the virtual machine Run Command to deploy."
                               }
                             },
-                            "location": {
+                            "outputBlobManagedIdentityClientId": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]",
+                              "defaultValue": "",
                               "metadata": {
-                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                              }
+                            },
+                            "outputBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                              }
+                            },
+                            "parameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named parameters to pass to the script."
+                              }
+                            },
+                            "protectedParameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named protected (secure) parameters to pass to the script."
                               }
                             },
                             "script": {
@@ -7159,38 +7623,11 @@
                                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
                               }
                             },
-                            "parameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named parameters to pass to the script."
-                              }
-                            },
-                            "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
-                              }
-                            },
                             "timeoutInSeconds": {
                               "type": "int",
                               "defaultValue": 0,
                               "metadata": {
                                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                              }
-                            },
-                            "asyncExecution": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Run the command asynchronously (fire and forget)."
                               }
                             },
                             "treatFailureAsDeploymentFailure": {
@@ -7200,32 +7637,10 @@
                                 "description": "Treat a non-zero exit code as a deployment failure."
                               }
                             },
-                            "outputBlobUri": {
+                            "virtualMachineName": {
                               "type": "string",
-                              "defaultValue": "",
                               "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                              }
-                            },
-                            "errorBlobUri": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                              }
-                            },
-                            "outputBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                              }
-                            },
-                            "errorBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
                               }
                             }
                           },
@@ -7343,6 +7758,39 @@
                   "fileShares": {
                     "value": "[parameters('fslogixFileShares')]"
                   },
+                  "officeStorageAccountNamePrefix": {
+                    "value": "[parameters('officeStorageAccountNamePrefix')]"
+                  },
+                  "officeEncryptionKeyNameConv": {
+                    "value": "[parameters('officeEncryptionKeyNameConv')]"
+                  },
+                  "officeStorageSku": {
+                    "value": "[parameters('officeStorageSku')]"
+                  },
+                  "officeStorageRedundancy": {
+                    "value": "[parameters('officeStorageRedundancy')]"
+                  },
+                  "officeShareSizeInGB": {
+                    "value": "[parameters('officeShareSizeInGB')]"
+                  },
+                  "profileStorageBillingModel": {
+                    "value": "[parameters('profileStorageBillingModel')]"
+                  },
+                  "officeStorageBillingModel": {
+                    "value": "[parameters('officeStorageBillingModel')]"
+                  },
+                  "profileProvisionedIops": {
+                    "value": "[parameters('profileProvisionedIops')]"
+                  },
+                  "profileProvisionedThroughputMiBps": {
+                    "value": "[parameters('profileProvisionedThroughputMiBps')]"
+                  },
+                  "officeProvisionedIops": {
+                    "value": "[parameters('officeProvisionedIops')]"
+                  },
+                  "officeProvisionedThroughputMiBps": {
+                    "value": "[parameters('officeProvisionedThroughputMiBps')]"
+                  },
                   "fslogixEncryptionKeyNameConv": {
                     "value": "[parameters('fslogixEncryptionKeyNameConv')]"
                   },
@@ -7434,12 +7882,40 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "1384374400907396021"
+                      "templateHash": "5789600168198240971"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
                   },
                   "definitions": {
+                    "_2.filesConfiguration": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "skuName": {
+                          "type": "string"
+                        },
+                        "accessTier": {
+                          "type": "string"
+                        },
+                        "largeFileSharesState": {
+                          "type": "string"
+                        },
+                        "provisionedIops": {
+                          "type": "int"
+                        },
+                        "provisionedThroughputMiBps": {
+                          "type": "int"
+                        }
+                      },
+                      "metadata": {
+                        "__bicep_imported_from!": {
+                          "sourceTemplate": "configuration.bicep"
+                        }
+                      }
+                    },
                     "publicNetworkAccessMode": {
                       "type": "string",
                       "allowedValues": [
@@ -7487,6 +7963,43 @@
                             "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                             "__bicep_imported_from!": {
                               "sourceTemplate": "../../naming/internal.bicep"
+                            }
+                          }
+                        },
+                        "resolveFilesConfiguration": {
+                          "parameters": [
+                            {
+                              "type": "string",
+                              "name": "tier"
+                            },
+                            {
+                              "type": "string",
+                              "name": "redundancy"
+                            },
+                            {
+                              "type": "string",
+                              "name": "billingModel"
+                            },
+                            {
+                              "type": "int",
+                              "name": "capacityGiB"
+                            },
+                            {
+                              "type": "int",
+                              "name": "iops"
+                            },
+                            {
+                              "type": "int",
+                              "name": "throughputMiBps"
+                            }
+                          ],
+                          "output": {
+                            "$ref": "#/definitions/_2.filesConfiguration",
+                            "value": "[if(and(and(contains(createArray('Standard', 'Premium'), parameters('tier')), contains(createArray('LocallyRedundant', 'ZoneRedundant'), parameters('redundancy'))), contains(createArray('Legacy', 'ProvisionedV2'), parameters('billingModel'))), if(equals(parameters('billingModel'), 'ProvisionedV2'), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), 32), lessOrEquals(parameters('capacityGiB'), 262144)), or(equals(parameters('iops'), 0), and(greaterOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 3000, 500)), lessOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 102400, 50000))))), or(equals(parameters('throughputMiBps'), 0), and(greaterOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 100, 60)), lessOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 10340, 5120))))), createObject('kind', 'FileStorage', 'skuName', format('{0}V2{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', '', 'largeFileSharesState', '', 'provisionedIops', if(not(equals(parameters('iops'), 0)), parameters('iops'), min(if(equals(parameters('tier'), 'Premium'), add(3000, parameters('capacityGiB')), add(1000, div(add(parameters('capacityGiB'), 4), 5))), if(equals(parameters('tier'), 'Premium'), 102400, 50000))), 'provisionedThroughputMiBps', if(not(equals(parameters('throughputMiBps'), 0)), parameters('throughputMiBps'), min(if(equals(parameters('tier'), 'Premium'), add(100, div(add(parameters('capacityGiB'), 9), 10)), add(60, div(add(parameters('capacityGiB'), 49), 50))), if(equals(parameters('tier'), 'Premium'), 10340, 5120)))), fail('Invalid provisioned-v2 Azure Files sizing. Capacity must be 32-262144 GiB; SSD IOPS 3000-102400 and MiB/s 100-10340; HDD IOPS 500-50000 and MiB/s 60-5120. Zero performance values select recommendations.')), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), if(equals(parameters('tier'), 'Premium'), 100, 1)), lessOrEquals(parameters('capacityGiB'), 102400)), equals(parameters('iops'), 0)), equals(parameters('throughputMiBps'), 0)), createObject('kind', if(equals(parameters('tier'), 'Standard'), 'StorageV2', 'FileStorage'), 'skuName', format('{0}{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', if(equals(parameters('tier'), 'Premium'), 'Premium', 'TransactionOptimized'), 'largeFileSharesState', if(equals(parameters('tier'), 'Standard'), 'Enabled', ''), 'provisionedIops', 0, 'provisionedThroughputMiBps', 0), fail('Legacy Azure Files capacity must be 1-102400 GiB (SSD minimum 100 GiB). Explicit IOPS and throughput require ProvisionedV2 billing.'))), fail('Unsupported Azure Files tier, redundancy, or billing model.'))]"
+                          },
+                          "metadata": {
+                            "__bicep_imported_from!": {
+                              "sourceTemplate": "configuration.bicep"
                             }
                           }
                         },
@@ -7721,6 +8234,20 @@
                         "description": "Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex."
                       }
                     },
+                    "officeStorageAccountNamePrefix": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 13,
+                      "metadata": {
+                        "description": "Required. Distinct Office account prefix; Office accounts use the same shard indices as Profile accounts."
+                      }
+                    },
+                    "officeEncryptionKeyNameConv": {
+                      "type": "string",
+                      "metadata": {
+                        "description": "Required. Office encryption-key name pattern containing ##; unused with platform-managed encryption."
+                      }
+                    },
                     "storageCount": {
                       "type": "int",
                       "metadata": {
@@ -7739,10 +8266,81 @@
                         "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
                       }
                     },
+                    "officeStorageSku": {
+                      "type": "string",
+                      "defaultValue": "[parameters('storageSku')]",
+                      "metadata": {
+                        "description": "Optional. Office Azure Files tier; defaults to the Profile tier."
+                      }
+                    },
+                    "officeShareSizeInGB": {
+                      "type": "int",
+                      "defaultValue": "[parameters('shareSizeInGB')]",
+                      "metadata": {
+                        "description": "Optional. Office share quota in GiB; defaults to the Profile quota."
+                      }
+                    },
                     "storageRedundancy": {
                       "type": "string",
                       "metadata": {
                         "description": "Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS."
+                      }
+                    },
+                    "officeStorageRedundancy": {
+                      "type": "string",
+                      "defaultValue": "[parameters('storageRedundancy')]",
+                      "metadata": {
+                        "description": "Optional. Office Azure Files redundancy; defaults to the Profile redundancy."
+                      }
+                    },
+                    "profileStorageBillingModel": {
+                      "type": "string",
+                      "defaultValue": "Legacy",
+                      "allowedValues": [
+                        "Legacy",
+                        "ProvisionedV2"
+                      ],
+                      "metadata": {
+                        "description": "Optional. Profile billing model; Legacy preserves existing deployments."
+                      }
+                    },
+                    "officeStorageBillingModel": {
+                      "type": "string",
+                      "defaultValue": "[parameters('profileStorageBillingModel')]",
+                      "allowedValues": [
+                        "Legacy",
+                        "ProvisionedV2"
+                      ],
+                      "metadata": {
+                        "description": "Optional. Office billing model; defaults to the Profile model."
+                      }
+                    },
+                    "profileProvisionedIops": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "Optional. Profile v2 IOPS; zero selects the capacity-based recommendation."
+                      }
+                    },
+                    "profileProvisionedThroughputMiBps": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "Optional. Profile v2 throughput in MiB/s; zero selects the capacity-based recommendation."
+                      }
+                    },
+                    "officeProvisionedIops": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "Optional. Office v2 IOPS; zero selects the recommendation for Office capacity."
+                      }
+                    },
+                    "officeProvisionedThroughputMiBps": {
+                      "type": "int",
+                      "defaultValue": 0,
+                      "metadata": {
+                        "description": "Optional. Office v2 throughput in MiB/s; zero selects the recommendation for Office capacity."
                       }
                     },
                     "tags": {
@@ -7798,10 +8396,10 @@
                       "versions": "SMB3.0;SMB3.1.1;",
                       "authenticationMethods": "NTLMv2;Kerberos;",
                       "kerberosTicketEncryption": "[if(equals(parameters('kerberosEncryptionType'), 'RC4'), 'RC4-HMAC;', 'AES-256;')]",
-                      "channelEncryption": "AES-128-CCM;AES-128-GCM;AES-256-GCM;",
-                      "multichannel": "[if(not(equals(parameters('storageSku'), 'Standard')), createObject('enabled', true()), null())]"
+                      "channelEncryption": "AES-128-CCM;AES-128-GCM;AES-256-GCM;"
                     },
-                    "storageRedundancySuffix": "[if(equals(parameters('storageRedundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')]",
+                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('storageAccountNamePrefix'), 'keyPattern', parameters('fslogixEncryptionKeyNameConv'), 'sku', parameters('storageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('storageSku'), parameters('storageRedundancy'), parameters('profileStorageBillingModel'), parameters('shareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(parameters('fileShares'), 1), 'shareSizeInGB', parameters('shareSizeInGB'), 'commandPrefix', '')), if(greater(length(parameters('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('storageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageSku'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(parameters('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
+                    "accountConfigurations": "[flatten(map(variables('storageRoles'), lambda('role', map(range(0, parameters('storageCount')), lambda('index', union(lambdaVariables('role'), createObject('name', format('{0}{1}', lambdaVariables('role').prefix, padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')), 'keyName', replace(lambdaVariables('role').keyPattern, '##', padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')))))))))]",
                     "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
                     "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
                     "storageNetworkAcls": {
@@ -7835,7 +8433,7 @@
                     "storageAccounts": {
                       "copy": {
                         "name": "storageAccounts",
-                        "count": "[length(range(0, parameters('storageCount')))]"
+                        "count": "[length(variables('accountConfigurations'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
@@ -7847,21 +8445,25 @@
                         "mode": "Incremental",
                         "parameters": {
                           "name": {
-                            "value": "[format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].name]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
                           },
-                          "kind": "[if(equals(parameters('storageSku'), 'Standard'), createObject('value', 'StorageV2'), createObject('value', 'FileStorage'))]",
+                          "kind": {
+                            "value": "[variables('accountConfigurations')[copyIndex()].configuration.kind]"
+                          },
                           "skuName": {
-                            "value": "[format('{0}{1}', parameters('storageSku'), variables('storageRedundancySuffix'))]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].configuration.skuName]"
                           },
                           "tags": {
                             "value": "[union(variables('parentResourceTags'), coalesce(tryGet(parameters('tags'), 'Microsoft.Storage/storageAccounts'), createObject()))]"
                           },
                           "allowedCopyScope": "[if(parameters('privateEndpoint'), createObject('value', 'PrivateLink'), createObject('value', 'AAD'))]",
                           "allowSharedKeyAccess": "[if(equals(parameters('identitySolution'), 'EntraId'), createObject('value', true()), createObject('value', false()))]",
-                          "largeFileSharesState": "[if(equals(parameters('storageSku'), 'Standard'), createObject('value', 'Enabled'), createObject('value', ''))]",
+                          "largeFileSharesState": {
+                            "value": "[variables('accountConfigurations')[copyIndex()].configuration.largeFileSharesState]"
+                          },
                           "sasExpirationPeriod": {
                             "value": "180.00:00:00"
                           },
@@ -7872,7 +8474,7 @@
                             "value": "[variables('networkAccess').publicNetworkAccess]"
                           },
                           "azureFilesIdentityBasedAuthentication": "[if(not(equals(parameters('identitySolution'), 'EntraId')), createObject('value', createObject('defaultSharePermission', variables('defaultSharePermission'), 'directoryServiceOptions', if(contains(parameters('identitySolution'), 'EntraKerberos'), 'AADKERB', if(equals(parameters('identitySolution'), 'EntraDomainServices'), 'AADDS', 'None')))), createObject('value', createObject()))]",
-                          "cmkKeyUri": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', format('{0}keys/{1}', parameters('encryptionKeyVaultUri'), replace(parameters('fslogixEncryptionKeyNameConv'), '##', padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))), createObject('value', ''))]",
+                          "cmkKeyUri": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', format('{0}keys/{1}', parameters('encryptionKeyVaultUri'), variables('accountConfigurations')[copyIndex()].keyName)), createObject('value', ''))]",
                           "cmkUserAssignedIdentityResourceId": "[if(not(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged')), createObject('value', parameters('encryptionUserAssignedIdentityResourceId')), createObject('value', ''))]",
                           "diagnosticSettings": "[if(not(empty(parameters('logAnalyticsWorkspaceId'))), createObject('value', createObject('workspaceId', parameters('logAnalyticsWorkspaceId'))), createObject('value', null()))]"
                         },
@@ -7884,7 +8486,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "3600459726864579106"
+                              "templateHash": "9712295133303282277"
                             },
                             "name": "Storage account",
                             "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
@@ -8193,7 +8795,7 @@
                           "resources": {
                             "storageAccount": {
                               "type": "Microsoft.Storage/storageAccounts",
-                              "apiVersion": "2023-05-01",
+                              "apiVersion": "2024-01-01",
                               "name": "[parameters('name')]",
                               "location": "[parameters('location')]",
                               "tags": "[parameters('tags')]",
@@ -8280,7 +8882,7 @@
                     "fileServices": {
                       "copy": {
                         "name": "fileServices",
-                        "count": "[length(range(0, parameters('storageCount')))]"
+                        "count": "[length(variables('accountConfigurations'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
@@ -8292,10 +8894,10 @@
                         "mode": "Incremental",
                         "parameters": {
                           "storageAccountName": {
-                            "value": "[format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].name]"
                           },
                           "smbSettings": {
-                            "value": "[variables('smbSettingsValues')]"
+                            "value": "[union(variables('smbSettingsValues'), createObject('multichannel', if(not(equals(variables('accountConfigurations')[copyIndex()].sku, 'Standard')), createObject('enabled', true()), null())))]"
                           },
                           "shareDeleteRetentionPolicyEnabled": {
                             "value": true
@@ -8578,7 +9180,7 @@
                     "shares": {
                       "copy": {
                         "name": "shares",
-                        "count": "[length(range(0, parameters('storageCount')))]"
+                        "count": "[length(variables('accountConfigurations'))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
@@ -8590,16 +9192,25 @@
                         "mode": "Incremental",
                         "parameters": {
                           "fileShares": {
-                            "value": "[parameters('fileShares')]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].shares]"
                           },
                           "shareSizeInGB": {
-                            "value": "[parameters('shareSizeInGB')]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].shareSizeInGB]"
                           },
                           "StorageAccountName": {
-                            "value": "[format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0')))]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].name]"
                           },
                           "storageSku": {
-                            "value": "[parameters('storageSku')]"
+                            "value": "[variables('accountConfigurations')[copyIndex()].sku]"
+                          },
+                          "accessTier": {
+                            "value": "[variables('accountConfigurations')[copyIndex()].configuration.accessTier]"
+                          },
+                          "provisionedIops": {
+                            "value": "[variables('accountConfigurations')[copyIndex()].configuration.provisionedIops]"
+                          },
+                          "provisionedThroughputMiBps": {
+                            "value": "[variables('accountConfigurations')[copyIndex()].configuration.provisionedThroughputMiBps]"
                           }
                         },
                         "template": {
@@ -8609,7 +9220,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "17471207199695942862"
+                              "templateHash": "13502657627929861742"
                             },
                             "name": "FSLogix file share orchestration",
                             "description": "Creates each named SMB share in an existing storage account using a shared quota and a SKU-dependent access tier."
@@ -8638,6 +9249,27 @@
                               "metadata": {
                                 "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
                               }
+                            },
+                            "accessTier": {
+                              "type": "string",
+                              "defaultValue": "[if(equals(parameters('storageSku'), 'Premium'), 'Premium', 'TransactionOptimized')]",
+                              "metadata": {
+                                "description": "Optional. Explicit share tier; empty omits accessTier for provisioned-v2 shares."
+                              }
+                            },
+                            "provisionedIops": {
+                              "type": "int",
+                              "defaultValue": 0,
+                              "metadata": {
+                                "description": "Optional. Provisioned-v2 IOPS; zero omits the property for legacy shares."
+                              }
+                            },
+                            "provisionedThroughputMiBps": {
+                              "type": "int",
+                              "defaultValue": 0,
+                              "metadata": {
+                                "description": "Optional. Provisioned-v2 throughput in MiB/s; zero omits the property for legacy shares."
+                              }
                             }
                           },
                           "resources": [
@@ -8664,7 +9296,15 @@
                                   "shareQuota": {
                                     "value": "[parameters('shareSizeInGB')]"
                                   },
-                                  "accessTier": "[if(equals(parameters('storageSku'), 'Premium'), createObject('value', 'Premium'), createObject('value', 'TransactionOptimized'))]"
+                                  "accessTier": {
+                                    "value": "[parameters('accessTier')]"
+                                  },
+                                  "provisionedIops": {
+                                    "value": "[parameters('provisionedIops')]"
+                                  },
+                                  "provisionedThroughputMiBps": {
+                                    "value": "[parameters('provisionedThroughputMiBps')]"
+                                  }
                                 },
                                 "template": {
                                   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -8673,7 +9313,7 @@
                                     "_generator": {
                                       "name": "bicep",
                                       "version": "0.49.2.45890",
-                                      "templateHash": "1655762631050578612"
+                                      "templateHash": "10967093958881257494"
                                     },
                                     "name": "Azure file share",
                                     "description": "Deploys a share in the default File service of an existing storage account with caller-selected quota, tier and protocol; the account must support those settings."
@@ -8705,7 +9345,8 @@
                                         "TransactionOptimized",
                                         "Hot",
                                         "Cool",
-                                        "Premium"
+                                        "Premium",
+                                        ""
                                       ],
                                       "metadata": {
                                         "description": "Optional. Azure file share access tier; must be compatible with the parent storage account SKU."
@@ -8722,17 +9363,35 @@
                                       "metadata": {
                                         "description": "Optional. Enabled protocols for the share."
                                       }
+                                    },
+                                    "provisionedIops": {
+                                      "type": "int",
+                                      "defaultValue": 0,
+                                      "minValue": 0,
+                                      "metadata": {
+                                        "description": "Optional. Provisioned-v2 IOPS; zero omits this property."
+                                      }
+                                    },
+                                    "provisionedThroughputMiBps": {
+                                      "type": "int",
+                                      "defaultValue": 0,
+                                      "minValue": 0,
+                                      "metadata": {
+                                        "description": "Optional. Provisioned-v2 throughput in MiB/s; zero omits this property."
+                                      }
                                     }
                                   },
                                   "resources": [
                                     {
                                       "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-                                      "apiVersion": "2023-05-01",
+                                      "apiVersion": "2024-01-01",
                                       "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('name'))]",
                                       "properties": {
                                         "shareQuota": "[parameters('shareQuota')]",
-                                        "accessTier": "[parameters('accessTier')]",
-                                        "enabledProtocols": "[if(not(empty(parameters('enabledProtocol'))), parameters('enabledProtocol'), null())]"
+                                        "accessTier": "[if(not(empty(parameters('accessTier'))), parameters('accessTier'), null())]",
+                                        "enabledProtocols": "[if(not(empty(parameters('enabledProtocol'))), parameters('enabledProtocol'), null())]",
+                                        "provisionedIops": "[if(greater(parameters('provisionedIops'), 0), parameters('provisionedIops'), null())]",
+                                        "provisionedBandwidthMibps": "[if(greater(parameters('provisionedThroughputMiBps'), 0), parameters('provisionedThroughputMiBps'), null())]"
                                       }
                                     }
                                   ],
@@ -8766,7 +9425,7 @@
                     "privateEndpoints": {
                       "copy": {
                         "name": "privateEndpoints",
-                        "count": "[length(range(0, parameters('storageCount')))]"
+                        "count": "[length(variables('accountConfigurations'))]"
                       },
                       "condition": "[parameters('privateEndpoint')]",
                       "type": "Microsoft.Resources/deployments",
@@ -8779,10 +9438,10 @@
                         "mode": "Incremental",
                         "parameters": {
                           "name": {
-                            "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0'))), 'file', variables('privateEndpointVnetName'))]"
+                            "value": "[__bicep.privateEndpointName(parameters('privateEndpointNameConv'), variables('accountConfigurations')[copyIndex()].name, 'file', variables('privateEndpointVnetName'))]"
                           },
                           "customNetworkInterfaceName": {
-                            "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), format('{0}{1}', parameters('storageAccountNamePrefix'), string(padLeft(add(range(0, parameters('storageCount'))[copyIndex()], parameters('storageIndex')), 2, '0'))), 'file', variables('privateEndpointVnetName'))]"
+                            "value": "[__bicep.privateEndpointName(parameters('privateEndpointNICNameConv'), variables('accountConfigurations')[copyIndex()].name, 'file', variables('privateEndpointVnetName'))]"
                           },
                           "tags": {
                             "value": "[union(variables('parentResourceTags'), coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject()))]"
@@ -8794,7 +9453,7 @@
                             "value": "[parameters('privateEndpointSubnetResourceId')]"
                           },
                           "privateLinkServiceId": {
-                            "value": "[reference(format('storageAccounts[{0}]', range(0, parameters('storageCount'))[copyIndex()])).outputs.resourceId.value]"
+                            "value": "[reference(format('storageAccounts[{0}]', copyIndex())).outputs.resourceId.value]"
                           },
                           "groupId": {
                             "value": "file"
@@ -8941,7 +9600,7 @@
                         "fileServices",
                         "privateEndpointVirtualNetwork",
                         "shares",
-                        "[format('storageAccounts[{0}]', range(0, parameters('storageCount'))[copyIndex()])]"
+                        "[format('storageAccounts[{0}]', copyIndex())]"
                       ]
                     },
                     "roleAssignmentsAdmins": {
@@ -9045,10 +9704,14 @@
                       }
                     },
                     "configureADDSAuth": {
+                      "copy": {
+                        "name": "configureADDSAuth",
+                        "count": "[length(variables('storageRoles'))]"
+                      },
                       "condition": "[equals(parameters('identitySolution'), 'ActiveDirectoryDomainServices')]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('configureADDSAuth-{0}', uniqueString('configureADDSAuth', deployment().name))]",
+                      "name": "[format('configureADDSAuth-{0}-{1}', copyIndex(), uniqueString('configureADDSAuth', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -9060,7 +9723,7 @@
                             "value": "[parameters('deploymentVirtualMachineName')]"
                           },
                           "name": {
-                            "value": "Domain-Join"
+                            "value": "[format('{0}Domain-Join', variables('storageRoles')[copyIndex()].commandPrefix)]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -9076,7 +9739,7 @@
                               },
                               {
                                 "name": "HostPoolName",
-                                "value": "[if(not(empty(parameters('hostPoolResourceId'))), last(split(parameters('hostPoolResourceId'), '/')), parameters('storageAccountNamePrefix'))]"
+                                "value": "[if(not(empty(parameters('hostPoolResourceId'))), last(split(parameters('hostPoolResourceId'), '/')), variables('storageRoles')[copyIndex()].prefix)]"
                               },
                               {
                                 "name": "KerberosEncryptionType",
@@ -9092,7 +9755,7 @@
                               },
                               {
                                 "name": "StorageAccountPrefix",
-                                "value": "[parameters('storageAccountNamePrefix')]"
+                                "value": "[variables('storageRoles')[copyIndex()].prefix]"
                               },
                               {
                                 "name": "StorageAccountResourceGroupName",
@@ -9144,7 +9807,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "11947828355218345379"
+                              "templateHash": "8317728250201469341"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -9169,10 +9832,32 @@
                             }
                           },
                           "parameters": {
-                            "virtualMachineName": {
-                              "type": "string",
+                            "asyncExecution": {
+                              "type": "bool",
+                              "defaultValue": false,
                               "metadata": {
-                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                                "description": "Run the command asynchronously (fire and forget)."
+                              }
+                            },
+                            "errorBlobManagedIdentityClientId": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                              }
+                            },
+                            "errorBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                              }
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                               }
                             },
                             "name": {
@@ -9181,11 +9866,38 @@
                                 "description": "Required. Name of the virtual machine Run Command to deploy."
                               }
                             },
-                            "location": {
+                            "outputBlobManagedIdentityClientId": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]",
+                              "defaultValue": "",
                               "metadata": {
-                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                              }
+                            },
+                            "outputBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                              }
+                            },
+                            "parameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named parameters to pass to the script."
+                              }
+                            },
+                            "protectedParameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named protected (secure) parameters to pass to the script."
                               }
                             },
                             "script": {
@@ -9209,38 +9921,11 @@
                                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
                               }
                             },
-                            "parameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named parameters to pass to the script."
-                              }
-                            },
-                            "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
-                              }
-                            },
                             "timeoutInSeconds": {
                               "type": "int",
                               "defaultValue": 0,
                               "metadata": {
                                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                              }
-                            },
-                            "asyncExecution": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Run the command asynchronously (fire and forget)."
                               }
                             },
                             "treatFailureAsDeploymentFailure": {
@@ -9250,32 +9935,10 @@
                                 "description": "Treat a non-zero exit code as a deployment failure."
                               }
                             },
-                            "outputBlobUri": {
+                            "virtualMachineName": {
                               "type": "string",
-                              "defaultValue": "",
                               "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                              }
-                            },
-                            "errorBlobUri": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                              }
-                            },
-                            "outputBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                              }
-                            },
-                            "errorBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
                               }
                             }
                           },
@@ -9333,10 +9996,14 @@
                       ]
                     },
                     "configureEntraKerberosWithDomainInfo": {
+                      "copy": {
+                        "name": "configureEntraKerberosWithDomainInfo",
+                        "count": "[length(variables('storageRoles'))]"
+                      },
                       "condition": "[and(and(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('configureEntraKerberosWithDomainInfo-{0}', uniqueString('configureEntraKerberosWithDomainInfo', deployment().name))]",
+                      "name": "[format('configureEntraKerberosWithDomainInfo-{0}-{1}', copyIndex(), uniqueString('configureEntraKerberosWithDomainInfo', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -9348,7 +10015,7 @@
                             "value": "[parameters('deploymentVirtualMachineName')]"
                           },
                           "name": {
-                            "value": "Configure-StorageAccountsforEntraHybrid"
+                            "value": "[format('{0}Configure-StorageAccountsforEntraHybrid', variables('storageRoles')[copyIndex()].commandPrefix)]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -9372,7 +10039,7 @@
                               },
                               {
                                 "name": "StorageAccountPrefix",
-                                "value": "[parameters('storageAccountNamePrefix')]"
+                                "value": "[variables('storageRoles')[copyIndex()].prefix]"
                               },
                               {
                                 "name": "StorageAccountResourceGroupName",
@@ -9424,7 +10091,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "11947828355218345379"
+                              "templateHash": "8317728250201469341"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -9449,10 +10116,32 @@
                             }
                           },
                           "parameters": {
-                            "virtualMachineName": {
-                              "type": "string",
+                            "asyncExecution": {
+                              "type": "bool",
+                              "defaultValue": false,
                               "metadata": {
-                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                                "description": "Run the command asynchronously (fire and forget)."
+                              }
+                            },
+                            "errorBlobManagedIdentityClientId": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                              }
+                            },
+                            "errorBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                              }
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                               }
                             },
                             "name": {
@@ -9461,11 +10150,38 @@
                                 "description": "Required. Name of the virtual machine Run Command to deploy."
                               }
                             },
-                            "location": {
+                            "outputBlobManagedIdentityClientId": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]",
+                              "defaultValue": "",
                               "metadata": {
-                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                              }
+                            },
+                            "outputBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                              }
+                            },
+                            "parameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named parameters to pass to the script."
+                              }
+                            },
+                            "protectedParameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named protected (secure) parameters to pass to the script."
                               }
                             },
                             "script": {
@@ -9489,38 +10205,11 @@
                                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
                               }
                             },
-                            "parameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named parameters to pass to the script."
-                              }
-                            },
-                            "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
-                              }
-                            },
                             "timeoutInSeconds": {
                               "type": "int",
                               "defaultValue": 0,
                               "metadata": {
                                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                              }
-                            },
-                            "asyncExecution": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Run the command asynchronously (fire and forget)."
                               }
                             },
                             "treatFailureAsDeploymentFailure": {
@@ -9530,32 +10219,10 @@
                                 "description": "Treat a non-zero exit code as a deployment failure."
                               }
                             },
-                            "outputBlobUri": {
+                            "virtualMachineName": {
                               "type": "string",
-                              "defaultValue": "",
                               "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                              }
-                            },
-                            "errorBlobUri": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                              }
-                            },
-                            "outputBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                              }
-                            },
-                            "errorBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
                               }
                             }
                           },
@@ -9613,10 +10280,14 @@
                       ]
                     },
                     "updateStorageApplicationsManifest": {
+                      "copy": {
+                        "name": "updateStorageApplicationsManifest",
+                        "count": "[length(variables('storageRoles'))]"
+                      },
                       "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('updateStorageApplicationsManifest-{0}', uniqueString('updateStorageApplicationsManifest', deployment().name))]",
+                      "name": "[format('updateStorageApplicationsManifest-{0}-{1}', copyIndex(), uniqueString('updateStorageApplicationsManifest', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -9628,7 +10299,7 @@
                             "value": "[parameters('deploymentVirtualMachineName')]"
                           },
                           "name": {
-                            "value": "Update-Storage-Account-Application-Manifest"
+                            "value": "[format('{0}Update-Storage-Account-Application-Manifest', variables('storageRoles')[copyIndex()].commandPrefix)]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -9640,7 +10311,7 @@
                             "value": [
                               {
                                 "name": "AppDisplayNamePrefix",
-                                "value": "[format('[Storage Account] {0}', parameters('storageAccountNamePrefix'))]"
+                                "value": "[format('[Storage Account] {0}', variables('storageRoles')[copyIndex()].prefix)]"
                               },
                               {
                                 "name": "ClientId",
@@ -9672,7 +10343,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "11947828355218345379"
+                              "templateHash": "8317728250201469341"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -9697,10 +10368,32 @@
                             }
                           },
                           "parameters": {
-                            "virtualMachineName": {
-                              "type": "string",
+                            "asyncExecution": {
+                              "type": "bool",
+                              "defaultValue": false,
                               "metadata": {
-                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                                "description": "Run the command asynchronously (fire and forget)."
+                              }
+                            },
+                            "errorBlobManagedIdentityClientId": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                              }
+                            },
+                            "errorBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                              }
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                               }
                             },
                             "name": {
@@ -9709,11 +10402,38 @@
                                 "description": "Required. Name of the virtual machine Run Command to deploy."
                               }
                             },
-                            "location": {
+                            "outputBlobManagedIdentityClientId": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]",
+                              "defaultValue": "",
                               "metadata": {
-                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                              }
+                            },
+                            "outputBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                              }
+                            },
+                            "parameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named parameters to pass to the script."
+                              }
+                            },
+                            "protectedParameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named protected (secure) parameters to pass to the script."
                               }
                             },
                             "script": {
@@ -9737,38 +10457,11 @@
                                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
                               }
                             },
-                            "parameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named parameters to pass to the script."
-                              }
-                            },
-                            "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
-                              }
-                            },
                             "timeoutInSeconds": {
                               "type": "int",
                               "defaultValue": 0,
                               "metadata": {
                                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                              }
-                            },
-                            "asyncExecution": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Run the command asynchronously (fire and forget)."
                               }
                             },
                             "treatFailureAsDeploymentFailure": {
@@ -9778,32 +10471,10 @@
                                 "description": "Treat a non-zero exit code as a deployment failure."
                               }
                             },
-                            "outputBlobUri": {
+                            "virtualMachineName": {
                               "type": "string",
-                              "defaultValue": "",
                               "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                              }
-                            },
-                            "errorBlobUri": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                              }
-                            },
-                            "outputBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                              }
-                            },
-                            "errorBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
                               }
                             }
                           },
@@ -9863,10 +10534,14 @@
                       ]
                     },
                     "SetNTFSPermissions": {
+                      "copy": {
+                        "name": "SetNTFSPermissions",
+                        "count": "[length(variables('storageRoles'))]"
+                      },
                       "condition": "[not(equals(parameters('identitySolution'), 'EntraId'))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('SetNTFSPermissions-{0}', uniqueString('SetNTFSPermissions', deployment().name))]",
+                      "name": "[format('SetNTFSPermissions-{0}-{1}', copyIndex(), uniqueString('SetNTFSPermissions', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -9878,7 +10553,7 @@
                             "value": "[parameters('deploymentVirtualMachineName')]"
                           },
                           "name": {
-                            "value": "Set-NTFS-Permissions"
+                            "value": "[format('{0}Set-NTFS-Permissions', variables('storageRoles')[copyIndex()].commandPrefix)]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -9894,7 +10569,7 @@
                               },
                               {
                                 "name": "Shares",
-                                "value": "[string(parameters('fileShares'))]"
+                                "value": "[string(variables('storageRoles')[copyIndex()].shares)]"
                               },
                               {
                                 "name": "ShardAzureFilesStorage",
@@ -9902,7 +10577,7 @@
                               },
                               {
                                 "name": "StorageAccountPrefix",
-                                "value": "[parameters('storageAccountNamePrefix')]"
+                                "value": "[variables('storageRoles')[copyIndex()].prefix]"
                               },
                               {
                                 "name": "StorageCount",
@@ -9950,7 +10625,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "11947828355218345379"
+                              "templateHash": "8317728250201469341"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -9975,10 +10650,32 @@
                             }
                           },
                           "parameters": {
-                            "virtualMachineName": {
-                              "type": "string",
+                            "asyncExecution": {
+                              "type": "bool",
+                              "defaultValue": false,
                               "metadata": {
-                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                                "description": "Run the command asynchronously (fire and forget)."
+                              }
+                            },
+                            "errorBlobManagedIdentityClientId": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                              }
+                            },
+                            "errorBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                              }
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                               }
                             },
                             "name": {
@@ -9987,11 +10684,38 @@
                                 "description": "Required. Name of the virtual machine Run Command to deploy."
                               }
                             },
-                            "location": {
+                            "outputBlobManagedIdentityClientId": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]",
+                              "defaultValue": "",
                               "metadata": {
-                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                              }
+                            },
+                            "outputBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                              }
+                            },
+                            "parameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named parameters to pass to the script."
+                              }
+                            },
+                            "protectedParameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named protected (secure) parameters to pass to the script."
                               }
                             },
                             "script": {
@@ -10015,38 +10739,11 @@
                                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
                               }
                             },
-                            "parameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named parameters to pass to the script."
-                              }
-                            },
-                            "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
-                              }
-                            },
                             "timeoutInSeconds": {
                               "type": "int",
                               "defaultValue": 0,
                               "metadata": {
                                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                              }
-                            },
-                            "asyncExecution": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Run the command asynchronously (fire and forget)."
                               }
                             },
                             "treatFailureAsDeploymentFailure": {
@@ -10056,32 +10753,10 @@
                                 "description": "Treat a non-zero exit code as a deployment failure."
                               }
                             },
-                            "outputBlobUri": {
+                            "virtualMachineName": {
                               "type": "string",
-                              "defaultValue": "",
                               "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                              }
-                            },
-                            "errorBlobUri": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                              }
-                            },
-                            "outputBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                              }
-                            },
-                            "errorBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
                               }
                             }
                           },
@@ -10142,10 +10817,14 @@
                       ]
                     },
                     "grantStorageApplicationsConsent": {
+                      "copy": {
+                        "name": "grantStorageApplicationsConsent",
+                        "count": "[length(variables('storageRoles'))]"
+                      },
                       "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
-                      "name": "[format('grantStorageApplicationsConsent-{0}', uniqueString('grantStorageApplicationsConsent', deployment().name))]",
+                      "name": "[format('grantStorageApplicationsConsent-{0}-{1}', copyIndex(), uniqueString('grantStorageApplicationsConsent', deployment().name))]",
                       "resourceGroup": "[parameters('deploymentResourceGroupName')]",
                       "properties": {
                         "expressionEvaluationOptions": {
@@ -10157,7 +10836,7 @@
                             "value": "[parameters('deploymentVirtualMachineName')]"
                           },
                           "name": {
-                            "value": "Grant-Storage-Account-Application-Consent"
+                            "value": "[format('{0}Grant-Storage-Account-Application-Consent', variables('storageRoles')[copyIndex()].commandPrefix)]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -10169,7 +10848,7 @@
                             "value": [
                               {
                                 "name": "AppDisplayNamePrefix",
-                                "value": "[format('[Storage Account] {0}', parameters('storageAccountNamePrefix'))]"
+                                "value": "[format('[Storage Account] {0}', variables('storageRoles')[copyIndex()].prefix)]"
                               },
                               {
                                 "name": "ClientId",
@@ -10193,7 +10872,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "11947828355218345379"
+                              "templateHash": "8317728250201469341"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10218,10 +10897,32 @@
                             }
                           },
                           "parameters": {
-                            "virtualMachineName": {
-                              "type": "string",
+                            "asyncExecution": {
+                              "type": "bool",
+                              "defaultValue": false,
                               "metadata": {
-                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                                "description": "Run the command asynchronously (fire and forget)."
+                              }
+                            },
+                            "errorBlobManagedIdentityClientId": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                              }
+                            },
+                            "errorBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                              }
+                            },
+                            "location": {
+                              "type": "string",
+                              "defaultValue": "[resourceGroup().location]",
+                              "metadata": {
+                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                               }
                             },
                             "name": {
@@ -10230,11 +10931,38 @@
                                 "description": "Required. Name of the virtual machine Run Command to deploy."
                               }
                             },
-                            "location": {
+                            "outputBlobManagedIdentityClientId": {
                               "type": "string",
-                              "defaultValue": "[resourceGroup().location]",
+                              "defaultValue": "",
                               "metadata": {
-                                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                              }
+                            },
+                            "outputBlobUri": {
+                              "type": "string",
+                              "defaultValue": "",
+                              "metadata": {
+                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                              }
+                            },
+                            "parameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named parameters to pass to the script."
+                              }
+                            },
+                            "protectedParameters": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/runCommandParameterType"
+                              },
+                              "defaultValue": [],
+                              "metadata": {
+                                "description": "Named protected (secure) parameters to pass to the script."
                               }
                             },
                             "script": {
@@ -10258,38 +10986,11 @@
                                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
                               }
                             },
-                            "parameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named parameters to pass to the script."
-                              }
-                            },
-                            "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
-                              },
-                              "defaultValue": [],
-                              "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
-                              }
-                            },
                             "timeoutInSeconds": {
                               "type": "int",
                               "defaultValue": 0,
                               "metadata": {
                                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                              }
-                            },
-                            "asyncExecution": {
-                              "type": "bool",
-                              "defaultValue": false,
-                              "metadata": {
-                                "description": "Run the command asynchronously (fire and forget)."
                               }
                             },
                             "treatFailureAsDeploymentFailure": {
@@ -10299,32 +11000,10 @@
                                 "description": "Treat a non-zero exit code as a deployment failure."
                               }
                             },
-                            "outputBlobUri": {
+                            "virtualMachineName": {
                               "type": "string",
-                              "defaultValue": "",
                               "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                              }
-                            },
-                            "errorBlobUri": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                              }
-                            },
-                            "outputBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                              }
-                            },
-                            "errorBlobManagedIdentityClientId": {
-                              "type": "string",
-                              "defaultValue": "",
-                              "metadata": {
-                                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                                "description": "Required. Name of the existing virtual machine in the deployment resource group."
                               }
                             }
                           },
@@ -10392,6 +11071,16 @@
                         "count": "[length(range(0, parameters('storageCount')))]",
                         "input": "[reference(format('storageAccounts[{0}]', range(0, parameters('storageCount'))[copyIndex()])).outputs.resourceId.value]"
                       }
+                    },
+                    "officeStorageAccountResourceIds": {
+                      "type": "array",
+                      "metadata": {
+                        "description": "Created Office account IDs paired by shard index with Profile accounts; empty when Office containers are disabled."
+                      },
+                      "copy": {
+                        "count": "[length(range(0, if(greater(length(parameters('fileShares')), 1), parameters('storageCount'), 0)))]",
+                        "input": "[reference(format('storageAccounts[{0}]', add(range(0, if(greater(length(parameters('fileShares')), 1), parameters('storageCount'), 0))[copyIndex()], parameters('storageCount')))).outputs.resourceId.value]"
+                      }
                     }
                   }
                 }
@@ -10417,7 +11106,7 @@
                     "value": "[parameters('location')]"
                   },
                   "fileShares": {
-                    "value": "[parameters('fslogixFileShares')]"
+                    "value": "[take(parameters('fslogixFileShares'), 1)]"
                   },
                   "storageAccountResourceIds": {
                     "value": "[reference('azureFiles').outputs.storageAccountResourceIds.value]"
@@ -10568,9 +11257,16 @@
             "storageAccountResourceIds": {
               "type": "array",
               "metadata": {
-                "description": "Created Azure Files storage account resource IDs in ascending storage index order; empty for NetApp storage."
+                "description": "Created Profile Azure Files account IDs in ascending shard index order; empty for NetApp storage."
               },
               "value": "[if(equals(parameters('storageSolution'), 'AzureFiles'), reference('azureFiles').outputs.storageAccountResourceIds.value, createArray())]"
+            },
+            "officeStorageAccountResourceIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Created Office Azure Files account IDs, paired by index with Profile accounts; empty when disabled or using NetApp."
+              },
+              "value": "[if(equals(parameters('storageSolution'), 'AzureFiles'), reference('azureFiles').outputs.officeStorageAccountResourceIds.value, createArray())]"
             }
           }
         }
@@ -10709,7 +11405,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "5838579585111959549"
+              "templateHash": "13403699738434883617"
             },
             "name": "Deployment helper cleanup orchestration",
             "description": "Runs cleanup on an existing helper VM for session-host Run Commands, supplied role assignments, and the deployment resource group."
@@ -10834,7 +11530,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "11947828355218345379"
+                      "templateHash": "8317728250201469341"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10859,10 +11555,32 @@
                     }
                   },
                   "parameters": {
-                    "virtualMachineName": {
-                      "type": "string",
+                    "asyncExecution": {
+                      "type": "bool",
+                      "defaultValue": false,
                       "metadata": {
-                        "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                        "description": "Run the command asynchronously (fire and forget)."
+                      }
+                    },
+                    "errorBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                      }
+                    },
+                    "errorBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                       }
                     },
                     "name": {
@@ -10871,11 +11589,38 @@
                         "description": "Required. Name of the virtual machine Run Command to deploy."
                       }
                     },
-                    "location": {
+                    "outputBlobManagedIdentityClientId": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]",
+                      "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                      }
+                    },
+                    "outputBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                      }
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named parameters to pass to the script."
+                      }
+                    },
+                    "protectedParameters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named protected (secure) parameters to pass to the script."
                       }
                     },
                     "script": {
@@ -10899,38 +11644,11 @@
                         "description": "Client ID of the user-assigned managed identity used to access the script URI."
                       }
                     },
-                    "parameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
-                      },
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named parameters to pass to the script."
-                      }
-                    },
-                    "protectedParameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
-                      },
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
-                      }
-                    },
                     "timeoutInSeconds": {
                       "type": "int",
                       "defaultValue": 0,
                       "metadata": {
                         "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                      }
-                    },
-                    "asyncExecution": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Run the command asynchronously (fire and forget)."
                       }
                     },
                     "treatFailureAsDeploymentFailure": {
@@ -10940,32 +11658,10 @@
                         "description": "Treat a non-zero exit code as a deployment failure."
                       }
                     },
-                    "outputBlobUri": {
+                    "virtualMachineName": {
                       "type": "string",
-                      "defaultValue": "",
                       "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                      }
-                    },
-                    "errorBlobUri": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                      }
-                    },
-                    "outputBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                      }
-                    },
-                    "errorBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                        "description": "Required. Name of the existing virtual machine in the deployment resource group."
                       }
                     }
                   },
@@ -11072,7 +11768,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "11947828355218345379"
+                      "templateHash": "8317728250201469341"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11097,10 +11793,32 @@
                     }
                   },
                   "parameters": {
-                    "virtualMachineName": {
-                      "type": "string",
+                    "asyncExecution": {
+                      "type": "bool",
+                      "defaultValue": false,
                       "metadata": {
-                        "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                        "description": "Run the command asynchronously (fire and forget)."
+                      }
+                    },
+                    "errorBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                      }
+                    },
+                    "errorBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                       }
                     },
                     "name": {
@@ -11109,11 +11827,38 @@
                         "description": "Required. Name of the virtual machine Run Command to deploy."
                       }
                     },
-                    "location": {
+                    "outputBlobManagedIdentityClientId": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]",
+                      "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                      }
+                    },
+                    "outputBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                      }
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named parameters to pass to the script."
+                      }
+                    },
+                    "protectedParameters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named protected (secure) parameters to pass to the script."
                       }
                     },
                     "script": {
@@ -11137,38 +11882,11 @@
                         "description": "Client ID of the user-assigned managed identity used to access the script URI."
                       }
                     },
-                    "parameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
-                      },
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named parameters to pass to the script."
-                      }
-                    },
-                    "protectedParameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
-                      },
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
-                      }
-                    },
                     "timeoutInSeconds": {
                       "type": "int",
                       "defaultValue": 0,
                       "metadata": {
                         "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                      }
-                    },
-                    "asyncExecution": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Run the command asynchronously (fire and forget)."
                       }
                     },
                     "treatFailureAsDeploymentFailure": {
@@ -11178,32 +11896,10 @@
                         "description": "Treat a non-zero exit code as a deployment failure."
                       }
                     },
-                    "outputBlobUri": {
+                    "virtualMachineName": {
                       "type": "string",
-                      "defaultValue": "",
                       "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                      }
-                    },
-                    "errorBlobUri": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                      }
-                    },
-                    "outputBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                      }
-                    },
-                    "errorBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                        "description": "Required. Name of the existing virtual machine in the deployment resource group."
                       }
                     }
                   },
@@ -11310,7 +12006,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "11947828355218345379"
+                      "templateHash": "8317728250201469341"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11335,10 +12031,32 @@
                     }
                   },
                   "parameters": {
-                    "virtualMachineName": {
-                      "type": "string",
+                    "asyncExecution": {
+                      "type": "bool",
+                      "defaultValue": false,
                       "metadata": {
-                        "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                        "description": "Run the command asynchronously (fire and forget)."
+                      }
+                    },
+                    "errorBlobManagedIdentityClientId": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                      }
+                    },
+                    "errorBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+                      }
+                    },
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]",
+                      "metadata": {
+                        "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
                       }
                     },
                     "name": {
@@ -11347,11 +12065,38 @@
                         "description": "Required. Name of the virtual machine Run Command to deploy."
                       }
                     },
-                    "location": {
+                    "outputBlobManagedIdentityClientId": {
                       "type": "string",
-                      "defaultValue": "[resourceGroup().location]",
+                      "defaultValue": "",
                       "metadata": {
-                        "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
+                      }
+                    },
+                    "outputBlobUri": {
+                      "type": "string",
+                      "defaultValue": "",
+                      "metadata": {
+                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+                      }
+                    },
+                    "parameters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named parameters to pass to the script."
+                      }
+                    },
+                    "protectedParameters": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/runCommandParameterType"
+                      },
+                      "defaultValue": [],
+                      "metadata": {
+                        "description": "Named protected (secure) parameters to pass to the script."
                       }
                     },
                     "script": {
@@ -11375,38 +12120,11 @@
                         "description": "Client ID of the user-assigned managed identity used to access the script URI."
                       }
                     },
-                    "parameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
-                      },
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named parameters to pass to the script."
-                      }
-                    },
-                    "protectedParameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
-                      },
-                      "defaultValue": [],
-                      "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
-                      }
-                    },
                     "timeoutInSeconds": {
                       "type": "int",
                       "defaultValue": 0,
                       "metadata": {
                         "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-                      }
-                    },
-                    "asyncExecution": {
-                      "type": "bool",
-                      "defaultValue": false,
-                      "metadata": {
-                        "description": "Run the command asynchronously (fire and forget)."
                       }
                     },
                     "treatFailureAsDeploymentFailure": {
@@ -11416,32 +12134,10 @@
                         "description": "Treat a non-zero exit code as a deployment failure."
                       }
                     },
-                    "outputBlobUri": {
+                    "virtualMachineName": {
                       "type": "string",
-                      "defaultValue": "",
                       "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-                      }
-                    },
-                    "errorBlobUri": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-                      }
-                    },
-                    "outputBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the output blob."
-                      }
-                    },
-                    "errorBlobManagedIdentityClientId": {
-                      "type": "string",
-                      "defaultValue": "",
-                      "metadata": {
-                        "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                        "description": "Required. Name of the existing virtual machine in the deployment resource group."
                       }
                     }
                   },
@@ -11516,6 +12212,8 @@
         "fileShareNames": "[variables('fileShareNames')]",
         "localStorageAccountResourceIds": "[reference('fslogix').outputs.storageAccountResourceIds.value]",
         "remoteStorageAccountResourceIds": "[if(variables('remoteStorageAccountConfigurationIsValid'), parameters('remoteStorageAccountResourceIds'), createArray())]",
+        "localOfficeStorageAccountResourceIds": "[reference('fslogix').outputs.officeStorageAccountResourceIds.value]",
+        "remoteOfficeStorageAccountResourceIds": "[if(variables('remoteOfficeStorageAccountConfigurationIsValid'), parameters('remoteOfficeStorageAccountResourceIds'), createArray())]",
         "localNetAppServerFqdns": "[reference('fslogix').outputs.netAppServerFqdns.value]",
         "remoteNetAppServerFqdns": "[if(empty(parameters('remoteNetAppVolumeResourceIds')), createArray(), reference('remoteNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value)]",
         "objectSpecificSettingsGroups": "[if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray())]",
@@ -11533,6 +12231,10 @@
     "storageAccountResourceIds": {
       "type": "array",
       "value": "[reference('fslogix').outputs.storageAccountResourceIds.value]"
+    },
+    "officeStorageAccountResourceIds": {
+      "type": "array",
+      "value": "[reference('fslogix').outputs.officeStorageAccountResourceIds.value]"
     },
     "fslogixBackupVaultResourceId": {
       "type": "string",

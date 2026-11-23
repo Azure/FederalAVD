@@ -213,11 +213,27 @@ New-AzResourceGroupDeployment `
 | `fslogixContainerType` | string | `ProfileContainer` | FSLogix container type: `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` | string | `AzureFiles` | Storage backend: `AzureFiles`, `AzureNetAppFiles` |
 | `fslogixLocalStorageAccountResourceIds` | array | `[]` | Local Azure Files storage account resource IDs |
+| `fslogixLocalProfileStorageAccountResourceIds` | array/null | `null` | Preferred local Profile IDs; supplied values override the legacy local array, including an explicit empty array |
+| `fslogixLocalOfficeStorageAccountResourceIds` | array | `[]` | Separate local Office accounts, paired with Profile accounts in the same shard order; required for Office containers on Azure Files |
 | `fslogixLocalNetAppVolumeResourceIds` | array | `[]` | Local Azure NetApp Files volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
 | `fslogixRemoteStorageAccountResourceIds` | array | `[]` | Remote Azure Files storage account resource IDs (cloud cache failover) |
+| `fslogixRemoteProfileStorageAccountResourceIds` | array/null | `null` | Preferred remote Profile IDs; supplied values override the legacy remote array |
+| `fslogixRemoteOfficeStorageAccountResourceIds` | array | `[]` | Separate remote Office accounts, paired with remote Profile accounts in the same shard order |
 | `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs for cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
 | `fslogixOSSGroups` | array | `[]` | Entra ID group object IDs for Office container separation |
 | `fslogixSizeInMBs` | int | `30720` | Maximum FSLogix VHD/VHDX size in megabytes |
+
+For Azure Files with Office containers, select separate local Office accounts and, when
+remote Profile accounts are used, separate remote Office accounts. Pair arrays in the same
+order as Profile accounts and shard groups. Check the exported parameter file before
+deploying multiple shards; the Portal picker is not a data migration or automatic pairing
+tool. Old host-group tags without Office mappings require explicit selections.
+See the [upgrade and data-transition precautions](../../../docs/design.md#separate-profile-and-office-azure-files-accounts).
+
+Portal exports use the explicit Profile input names; old parameter files remain accepted.
+These inputs consume existing SMB storage regardless of legacy/v2 billing and never convert
+or resize the selected accounts. Storage provisioning and performance tuning belong in the
+host-pool producer or the standalone FSLogix Storage add-on.
 
 ### Monitoring
 

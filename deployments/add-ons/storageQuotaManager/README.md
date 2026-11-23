@@ -2,25 +2,35 @@
 
 ## Overview
 
-The FSLogix Storage Quota Manager is an Azure Automation Account runbook that monitors all Azure Files Premium file shares in a specified storage resource group and automatically increases quotas when capacity thresholds are reached. This add-on is designed to prevent FSLogix profile containers from running out of space without requiring manual intervention.
+The FSLogix Storage Quota Manager is an Azure Automation Account runbook that monitors supported Azure Files SMB shares in a specified storage resource group and automatically increases or decreases capacity quotas. It supports provisioned v1 SSD, provisioned v2 HDD/SSD, and legacy StorageV2 pay-as-you-go accounts. Existing deployment resources and defaults are unchanged.
 
 ## Features
 
-- **Automated Quota Management**: Monitors all file shares in a storage resource group and automatically increases quotas to prevent storage exhaustion
+Account discovery is resource-group-wide, not restricted to a legacy FSLogix prefix.
+Separate Profile (`fslpc`) and Office (`fsloc`) accounts in the selected resource group are both
+discovered, and each share is evaluated against its own usage and current quota. The runbook
+uses one configured scaling policy for the whole resource group, not independent per-role
+thresholds. Initial Office tier and quota overrides do not create a separate scaling policy.
+Quota management does not enroll shares in backup; Office backup exclusion remains unchanged.
+
+- **Automated Quota Management**: Discovers supported accounts across the storage resource group and adjusts SMB share capacity; unsupported kinds, SKUs, and protocols are explicitly logged and skipped
 - **Smart Tiered Scaling**:
-  - **Small shares (< 500 GB)**: Increases by 100 GB when fewer than 50 GB remain
-  - **Large shares (>= 500 GB)**: Increases by 500 GB when fewer than 500 GB remain
+  - **Small shares (< 500 GiB)**: Increases by 100 GiB when fewer than 50 GiB remain
+  - **Large shares (>= 500 GiB)**: Increases by 500 GiB when fewer than 500 GiB remain
+  - **Decrease**: Reclaims 100 GiB on small shares with more than 200 GiB free, or 500 GiB on large shares with more than 1,000 GiB free, subject to cooldowns and limits
   - **Zero usage**: No action taken on unused shares
+- **Capacity Only**: Preserves independently provisioned v2 IOPS and bandwidth; no performance auto-scaling
 - **Lightweight Infrastructure**: Azure Automation Account (Basic SKU) - no App Service Plan,
   no function app storage account, no private endpoints required
 - **RBAC-Based Security**: System-assigned managed identity with Storage Account Contributor
   scoped to the storage resource group — no stored credentials, no secrets
-- **All-cloud Support**: Works in Azure Commercial, Government, and air-gapped clouds
+- **Cloud-Aware Endpoint**: Uses the configured ARM endpoint; API, SKU, and regional availability must be verified in each cloud, including Government and air-gapped clouds
 
 ## Prerequisites
 
 - Azure resource group where the Automation Account will be deployed
-- Resource group containing FSLogix Azure Files Premium storage accounts
+- Resource group containing supported FSLogix Azure Files storage accounts (see [Supported accounts and limits](#supported-accounts-and-limits))
+- Target cloud support for Microsoft.Storage API `2024-01-01`; provisioned v2 also requires the service usage endpoint and the selected SKU in the target region
 - Permissions to deploy resources and assign RBAC roles at resource group scope
 
 ## Deployment Methods
@@ -83,7 +93,7 @@ New-AzResourceGroupDeployment `
 
 | Parameter | Description |
 | --- | --- |
-| `storageResourceGroupId` | Full resource ID of the resource group containing FSLogix storage accounts. The runbook monitors **all** storage accounts and file shares in this group. |
+| `storageResourceGroupId` | Full resource ID of the resource group containing FSLogix storage accounts. The runbook discovers all accounts and monitors supported SMB shares in this group. |
 
 ### Optional
 
@@ -180,15 +190,80 @@ URI during template deployment.
 ## Runbook Logic
 
 The runbook (`Set-StorageQuota`) runs on its configured schedule and applies the following
-quota scaling logic to every file share in the storage resource group:
+quota scaling logic to supported SMB shares in the storage resource group. All capacity
+values below are GiB (the older descriptions used "GB" for the same binary units).
+Thresholds and increments are unchanged:
 
 | Current Quota | Remaining Capacity | Action | New Quota |
 | --- | --- | --- | --- |
-| Any | 0 GB used | None | Unchanged |
-| < 500 GB | > 50 GB remaining | None | Unchanged |
-| < 500 GB | < 50 GB remaining | +100 GB | Quota + 100 GB |
-| >= 500 GB | > 500 GB remaining | None | Unchanged |
-| >= 500 GB | < 500 GB remaining | +500 GB | Quota + 500 GB |
+| Any | 0 GiB used | None | Unchanged |
+| < 500 GiB | < 50 GiB remaining | Increase | Quota + 100 GiB |
+| < 500 GiB | > 200 GiB remaining | Decrease, if allowed | Quota - 100 GiB |
+| >= 500 GiB | < 500 GiB remaining | Increase | Quota + 500 GiB |
+| >= 500 GiB | > 1,000 GiB remaining | Decrease, if allowed | Quota - 500 GiB |
+| Any | Between thresholds, including equality | None | Unchanged |
+
+### Supported accounts and limits
+
+| Account kind | SKUs | Billing/media | Share capacity bounds |
+| --- | --- | --- | --- |
+| `FileStorage` | `StandardV2_LRS`, `StandardV2_ZRS` | Provisioned v2 HDD | 32–262,144 GiB |
+| `FileStorage` | `PremiumV2_LRS`, `PremiumV2_ZRS` | Provisioned v2 SSD | 32–262,144 GiB |
+| `FileStorage` | `Premium_LRS`, `Premium_ZRS` | Provisioned v1 SSD | 100–102,400 GiB |
+| `StorageV2` | `Standard_LRS`, `Standard_ZRS`, `Standard_GRS`, `Standard_RAGRS`, `Standard_GZRS`, `Standard_RAGZRS` | Pay-as-you-go HDD | 1–102,400 GiB with `largeFileSharesState: Enabled`; conservatively 1–5,120 GiB otherwise |
+
+For v2, the runbook requires `fileServices/default/usages/default`, intersects published
+share bounds with the returned `fileShareLimits`, and checks the account's live provisioned
+capacity and `storageAccountLimits` before growth. Published account ceilings are 262,144 GiB
+for SSD v2 and 4,194,304 GiB for HDD v2; a smaller service-reported limit takes precedence.
+Provisioned v1 accounts share a 102,400 GiB ceiling, checked against listed share quotas
+(including NFS shares, although only SMB shares are resized). Growth is clamped to available
+share/account capacity, with explicit limit warnings; at a limit, no PATCH is issued.
+For pay-as-you-go, account-wide used storage spans other services and isn't inferred from
+share quotas. Service account-capacity errors remain authoritative.
+
+The API is pinned to **`2024-01-01`**, the earliest stable official schema containing the
+v2 SKUs, `provisionedIops`, `provisionedBandwidthMibps`, service usage constraints, and
+`nextAllowedQuotaDowngradeTime` (absent from `2023-05-01`). This is not a claim that every
+cloud implements that API or these SKUs. Unsupported API/service calls fail the job with
+the service error; there is **no automatic API downgrade or success fallback**.
+Other SKUs, including future v2 redundancy variants, and NFS shares are explicitly skipped.
+Omitted `enabledProtocols` uses the documented SMB default.
+
+### Decreases, performance preservation, and failure handling
+
+- The service's `nextAllowedQuotaDowngradeTime`, when returned, is authoritative for
+  decreases, including cooldowns triggered by **increases**. Provisioned v2 documentation
+  requires 24 hours after the last increase. The existing local policy of at most one
+  decrease per 24 hours is retained using `sqmLastDecreased`, even after a service cooldown
+  expires. Either active deadline blocks shrinkage, not growth.
+- Decreases cannot go below the account/billing minimum or `ceil(used GiB) + 1`.
+  Existing share metadata is merged when recording the decrease, rather than replaced.
+  Malformed cooldown timestamps now fail closed instead of allowing an unsafe decrease.
+- PATCH sends only `shareQuota` and, on decrease, merged metadata. It omits independently
+  provisioned IOPS/bandwidth, access tier, bursting settings, and all other properties.
+  It does not apply the portal's recommended-performance formulas. The returned quota
+  and v2 IOPS/bandwidth are checked before logging a confirmed update.
+- Missing/invalid quota, usage, v2 performance, service limits, or update responses fail
+  the job, not silently convert to zero or report a successful update. REST failures stop
+  processing and preserve the original service error. Earlier confirmed updates aren't
+  rolled back if a later share fails.
+- Usage statistics are approximate. Concurrent changes, account capacity, performance
+  constraints, and cloud-specific restrictions may still cause Azure to reject a PATCH.
+  Such errors fail the job explicitly; the runbook does not lower performance to make
+  a capacity change fit. Provisioned v1 performance remains coupled to capacity by Azure.
+
+Authoritative references (reviewed for this implementation):
+[stable 2024-01-01 file schema](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/storage/resource-manager/Microsoft.Storage/Storage/stable/2024-01-01/file.json),
+[SKU schema](https://github.com/Azure/azure-rest-api-specs/blob/main/specification/storage/resource-manager/Microsoft.Storage/Storage/stable/2024-01-01/common.json),
+[scale targets](https://learn.microsoft.com/azure/storage/files/storage-files-scale-targets),
+[billing](https://learn.microsoft.com/azure/storage/files/understanding-billing), and
+[modifying shares](https://learn.microsoft.com/azure/storage/files/modify-file-share).
+
+Offline regression coverage: `Invoke-Pester -Path tests\StorageQuotaManager.Tests.ps1`.
+Before production use, validate target-cloud API/SKU/region support and live grow/shrink,
+post-increase cooldown, account-limit errors, metadata retention, and unchanged v2 performance
+in an isolated account. Mocked tests do not establish service acceptance or air-gap support.
 
 ### Authentication
 
@@ -236,6 +311,9 @@ to receive notifications on runbook failures.
 
 2. **Threshold** — confirm shares have enough usage to trigger the logic (< 50 GB or < 500 GB remaining).
 3. **Automation Variables** — check that `ResourceGroupName`, `SubscriptionId`, and `ResourceManagerUri` are set correctly under the Automation Account > Shared Resources > Variables.
+4. **Limits / compatibility** — inspect explicit share/account-limit messages or failed API calls.
+   Verify cloud API/SKU availability and v2 service usage responses. Do not retry with an older
+   API that omits v2 fields or silently change performance provisioning.
 
 ### Authentication errors in job output
 
@@ -249,9 +327,9 @@ to receive notifications on runbook failures.
 
 ## Limitations
 
-- Monitors all storage accounts and file shares in the specified resource group — no per-share exclusions
+- Monitors supported SMB shares in the specified resource group — no per-share exclusions
 - Single resource group per deployment (deploy multiple instances for multiple groups)
-- Quota only increases — manual decreases are possible via Portal or PowerShell but are limited to once per 24 hours and cannot go below current used size
+- Capacity only; v2 IOPS/throughput auto-scaling and top-level `Microsoft.FileShares` resources are not supported
 - Minimum schedule interval is 15 minutes (Azure Automation constraint)
 - No data-plane access — cannot read file content, only management plane quota metadata
 

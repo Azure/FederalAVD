@@ -4,12 +4,14 @@ import { artifactCustomizationType } from '../../shared/modules/resourceModules/
 import { vmApplicationAssignmentType } from '../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 
 type fslogixConfigurationType = {
-  identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid'
+  identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid' | 'EntraId'
   storageService: 'AzureFiles' | 'AzureNetAppFiles'
   containerType: 'CloudCacheProfileContainer' | 'CloudCacheProfileOfficeContainer' | 'ProfileContainer' | 'ProfileOfficeContainer'
   fileShareNames: string[]
   localStorageAccountResourceIds: string[]
   remoteStorageAccountResourceIds: string[]
+  localOfficeStorageAccountResourceIds: string[]
+  remoteOfficeStorageAccountResourceIds: string[]
   localNetAppServerFqdns: string[]
   remoteNetAppServerFqdns: string[]
   objectSpecificSettingsGroups: string[]
@@ -77,10 +79,10 @@ param virtualMachinesTimeZone string = 'Eastern Standard Time'
 @description('Optional. Disable public network access and deny all network export access on session host managed disks.')
 param disableManagedDiskPublicNetworkAccess bool = false
 
-@description('Optional. Configure identity-based FSLogix settings on automated session hosts.')
+@description('Optional. Configure FSLogix settings on automated session hosts.')
 param configureFSLogix bool = false
 
-@description('Optional. Identity-based FSLogix configuration applied when configureFSLogix is true.')
+@description('Optional. FSLogix configuration applied when configureFSLogix is true; Office Azure Files accounts must be paired with distinct Profile accounts.')
 param fslogixConfiguration fslogixConfigurationType = {
   identitySolution: 'EntraKerberos-CloudOnly'
   storageService: 'AzureFiles'
@@ -88,6 +90,8 @@ param fslogixConfiguration fslogixConfigurationType = {
   fileShareNames: ['profile-containers']
   localStorageAccountResourceIds: []
   remoteStorageAccountResourceIds: []
+  localOfficeStorageAccountResourceIds: []
+  remoteOfficeStorageAccountResourceIds: []
   localNetAppServerFqdns: []
   remoteNetAppServerFqdns: []
   objectSpecificSettingsGroups: []
@@ -114,6 +118,25 @@ param tags object = {}
 var virtualMachineContributorRoleDefinitionId = '9980e02c-c2be-4d73-94e8-173b1dc7cf3c'
 var tagContributorRoleDefinitionId = '4a9ae827-6dc8-4573-8ac7-8239d42aa03f'
 var managedIdentityOperatorRoleDefinitionId = 'f1a07417-d97a-45cb-824c-7a7467783830'
+var storageAccountKeyOperatorRoleDefinitionId = '81a9662b-bebf-436f-a333-f67b29880f12'
+var fslogixOfficeEnabled = contains(fslogixConfiguration.containerType, 'Office')
+var profileStorageAccountIds = map(concat(fslogixConfiguration.localStorageAccountResourceIds, fslogixConfiguration.remoteStorageAccountResourceIds), id => toLower(id))
+var officeStorageAccountIds = map(concat(fslogixConfiguration.localOfficeStorageAccountResourceIds, fslogixConfiguration.remoteOfficeStorageAccountResourceIds), id => toLower(id))
+var localOfficeAccountsArePaired = length(fslogixConfiguration.localOfficeStorageAccountResourceIds) == length(fslogixConfiguration.localStorageAccountResourceIds)
+var remoteOfficeAccountsArePaired = length(fslogixConfiguration.remoteOfficeStorageAccountResourceIds) == length(fslogixConfiguration.remoteStorageAccountResourceIds)
+var officeAccountsAreValid = fslogixOfficeEnabled ? localOfficeAccountsArePaired && remoteOfficeAccountsArePaired && empty(intersection(profileStorageAccountIds, officeStorageAccountIds)) : empty(officeStorageAccountIds)
+var accountIdsAreUnique = length(union(profileStorageAccountIds, [])) == length(profileStorageAccountIds) && length(union(officeStorageAccountIds, [])) == length(officeStorageAccountIds)
+var remoteAccountCountIsValid = empty(fslogixConfiguration.remoteStorageAccountResourceIds) || length(fslogixConfiguration.remoteStorageAccountResourceIds) == length(fslogixConfiguration.localStorageAccountResourceIds)
+var objectSpecificGroupCountIsValid = empty(fslogixConfiguration.objectSpecificSettingsGroups) || length(fslogixConfiguration.objectSpecificSettingsGroups) == length(fslogixConfiguration.localStorageAccountResourceIds)
+var pairedStorageAccountsAreValid = !configureFSLogix || fslogixConfiguration.storageService != 'AzureFiles' || (!empty(fslogixConfiguration.localStorageAccountResourceIds) && officeAccountsAreValid && accountIdsAreUnique && remoteAccountCountIsValid && objectSpecificGroupCountIsValid)
+  ? true
+  : fail('FSLogix Azure Files requires ordered, distinct Profile/Office account pairs for each local and remote shard; object-specific groups must match shard counts.')
+var storageKeyConfigurationIsValid = !configureFSLogix || fslogixConfiguration.identitySolution != 'EntraId' || (fslogixConfiguration.storageService == 'AzureFiles' && length(fslogixConfiguration.localStorageAccountResourceIds) == 1 && length(fslogixConfiguration.remoteStorageAccountResourceIds) <= 1 && empty(fslogixConfiguration.objectSpecificSettingsGroups))
+  ? true
+  : fail('Storage-key EntraId FSLogix requires one Azure Files account per enabled role and location, without object-specific sharding.')
+var storageKeyAccountResourceIds = configureFSLogix && fslogixConfiguration.identitySolution == 'EntraId' && pairedStorageAccountsAreValid && storageKeyConfigurationIsValid
+  ? concat(fslogixConfiguration.localStorageAccountResourceIds, fslogixConfiguration.remoteStorageAccountResourceIds, fslogixConfiguration.localOfficeStorageAccountResourceIds, fslogixConfiguration.remoteOfficeStorageAccountResourceIds)
+  : []
 var policyOwnerId = empty(hostPoolResourceId) ? 'FederalAVD-AutomatedHostPool' : hostPoolResourceId
 var inheritResourceGroupTagPolicyResourceId = tenantResourceId(
   'Microsoft.Authorization/policyDefinitions',
@@ -141,9 +164,15 @@ var finalSessionHostCustomizationName = !empty(sessionHostCustomizations)
   : 'PrivateCustomization-Final'
 var configureSessionHostCompute = encryptionAtHost || diskSizeGB > 0
 var parentResourceTags = empty(hostPoolResourceId) ? {} : { 'cm-resource-parent': hostPoolResourceId }
+var fslogixStorageAccountTags = fslogixConfiguration.storageService == 'AzureFiles' ? {
+  fslLocalStorageAccountNames: string(map(fslogixConfiguration.localStorageAccountResourceIds, id => last(split(id, '/'))))
+  fslRemoteStorageAccountNames: string(map(fslogixConfiguration.remoteStorageAccountResourceIds, id => last(split(id, '/'))))
+  fslLocalOfficeStorageAccountNames: string(map(fslogixConfiguration.localOfficeStorageAccountResourceIds, id => last(split(id, '/'))))
+  fslRemoteOfficeStorageAccountNames: string(map(fslogixConfiguration.remoteOfficeStorageAccountResourceIds, id => last(split(id, '/'))))
+} : {}
 var resourceGroupTags = union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, parentResourceTags, empty(hostPoolResourceId) ? {} : {
   'FederalAVD-SessionHostPolicy-Owner': hostPoolResourceId
-})
+}, fslogixStorageAccountTags)
 var managedIdentityTags = union(tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}, parentResourceTags)
 
 resource existingSessionHostResourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' existing = {
@@ -204,6 +233,21 @@ module policyIdentityVirtualMachineContributor '../../shared/modules/resourceMod
     assignmentDescription: 'Allows Azure Policy to configure automated AVD session host virtual machines.'
   }
 }
+
+module policyIdentityStorageKeyOperator '../../shared/modules/resourceModules/storage/storageAccounts/roleAssignment.bicep' = [for id in storageKeyAccountResourceIds: {
+  scope: resourceGroup(split(id, '/')[2], split(id, '/')[4])
+  params: {
+    storageAccountName: last(split(id, '/'))!
+    assignments: [
+      {
+        roleDefinitionId: storageAccountKeyOperatorRoleDefinitionId
+        principalId: policyIdentity.outputs.principalId
+        principalType: 'ServicePrincipal'
+        description: 'Allows session-host remediation to retrieve this FSLogix role account key.'
+      }
+    ]
+  }
+}]
 
 module policyIdentityNetworkContributor '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = if (enableAcceleratedNetworking) {
   scope: resourceGroup(sessionHostResourceGroupName)
@@ -443,7 +487,7 @@ module sessionHostConfigurationPolicyAssignment '../../shared/modules/orchestrat
         value: 'DeployIfNotExists'
       }
       configureFSLogix: {
-        value: configureFSLogix
+        value: pairedStorageAccountsAreValid && storageKeyConfigurationIsValid ? configureFSLogix : configureFSLogix
       }
       timeZone: {
         value: virtualMachinesTimeZone
@@ -469,6 +513,12 @@ module sessionHostConfigurationPolicyAssignment '../../shared/modules/orchestrat
       fslogixRemoteStorageAccountResourceIds: {
         value: fslogixConfiguration.remoteStorageAccountResourceIds
       }
+      fslogixLocalOfficeStorageAccountResourceIds: {
+        value: fslogixConfiguration.localOfficeStorageAccountResourceIds
+      }
+      fslogixRemoteOfficeStorageAccountResourceIds: {
+        value: fslogixConfiguration.remoteOfficeStorageAccountResourceIds
+      }
       fslogixLocalNetAppServerFqdns: {
         value: fslogixConfiguration.localNetAppServerFqdns
       }
@@ -487,6 +537,7 @@ module sessionHostConfigurationPolicyAssignment '../../shared/modules/orchestrat
   }
   dependsOn: [
     policyIdentityVirtualMachineContributor
+    policyIdentityStorageKeyOperator
   ]
 }
 

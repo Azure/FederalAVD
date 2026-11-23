@@ -33,6 +33,13 @@ The optional cloud-only FSLogix path uses storage-account-key authentication. It
 identity-based NTFS ACL configuration and does not create a temporary deployment-helper VM or
 deployment-helper resource group.
 
+The portal defaults new Profile storage to SSD (`Premium`) with provisioned-v2 billing.
+Capacity stays fixed at 100 GiB, with capacity-based IOPS and throughput recommendations.
+HDD and legacy billing remain selectable. Existing parameter files that omit
+`fslogixProfileStorageTier` and `fslogixProfileStorageBillingModel` retain Standard HDD
+pay-as-you-go. The PoC remains Profile-only; advanced sizing and existing-resource adoption
+belong in the full host-pool deployment or FSLogix Storage add-on.
+
 ## Fixed network configuration
 
 | Setting | Value |

@@ -97,7 +97,11 @@
                 "path": "[concat(steps('scope').resourceScope.subscription.id, '/providers/Microsoft.Storage/skus?api-version=2021-09-01')]",
                 "transforms": {
                   "standardZrs": "value[?resourceType == 'storageAccounts' && name == 'Standard_ZRS' && kind == 'StorageV2'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']",
-                  "premiumZrs": "value[?resourceType == 'storageAccounts' && name == 'Premium_ZRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']"
+                  "premiumZrs": "value[?resourceType == 'storageAccounts' && name == 'Premium_ZRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']",
+                  "standardV2Zrs": "value[?resourceType == 'storageAccounts' && name == 'StandardV2_ZRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']",
+                  "premiumV2Zrs": "value[?resourceType == 'storageAccounts' && name == 'PremiumV2_ZRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']",
+                  "standardV2Lrs": "value[?resourceType == 'storageAccounts' && name == 'StandardV2_LRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']",
+                  "premiumV2Lrs": "value[?resourceType == 'storageAccounts' && name == 'PremiumV2_LRS' && kind == 'FileStorage'] | [?restrictions[?type == 'Location'].type | [0] != 'Location']"
                 }
               }
             },
@@ -407,28 +411,59 @@
               "name": "storageService",
               "type": "Microsoft.Common.DropDown",
               "label": "Storage Service and SKU",
-              "defaultValue": "Azure Files Standard",
+              "defaultValue": "Azure Files Premium",
               "constraints": {
                 "required": true,
                 "allowedValues": "[if(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), parse('[{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"},{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"},{\"label\":\"Azure NetApp Files Premium\",\"value\":\"AzureNetAppFiles Premium\"},{\"label\":\"Azure NetApp Files Standard\",\"value\":\"AzureNetAppFiles Standard\"}]'), parse('[{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"},{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"}]'))]"
               }
             },
             {
+              "name": "profileStorageBillingModel",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Profile Azure Files Billing Model",
+              "defaultValue": "Provisioned v2",
+              "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
+              "toolTip": "New deployments default to SSD and provisioned v2. Legacy retains existing billing. This does not migrate data or convert an existing account SKU. Verify SKU availability in the target cloud and region.",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Legacy", "value": "Legacy" },
+                  { "label": "Provisioned v2", "value": "ProvisionedV2" }
+                ]
+              }
+            },
+            {
+              "name": "profileProvisionedIops",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Profile Provisioned IOPS (0 = recommended)",
+              "defaultValue": "0",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))]",
+              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+            },
+            {
+              "name": "profileProvisionedThroughputMiBps",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Profile Provisioned Throughput MiB/s (0 = recommended)",
+              "defaultValue": "0",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))]",
+              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+            },
+            {
               "name": "storageRedundancy",
               "type": "Microsoft.Common.DropDown",
               "label": "Azure Files Redundancy",
-              "defaultValue": "[if(not(empty(filter(if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), 'Zone Redundant', 'Locally Redundant')]",
+              "defaultValue": "[if(not(empty(filter(if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), 'Zone Redundant', 'Locally Redundant')]",
               "toolTip": "Defaults to Zone Redundant when the selected Azure Files tier supports ZRS in the deployment region. Only supported redundancy choices are shown.",
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
               "constraints": {
                 "required": true,
-                "allowedValues": "[if(not(empty(filter(if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"}]'))]"
+                "allowedValues": "[if(not(empty(filter(if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'), parse('[{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"}]'))]"
               }
             },
             {
               "name": "storageRedundancyWarning",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').storageRedundancy, 'LocallyRedundant'), not(empty(filter(if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))))]",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').storageRedundancy, 'LocallyRedundant'), not(empty(filter(if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))))]",
               "options": {
                 "style": "Warning",
                 "text": "Zone-redundant storage is available for the selected Azure Files tier and region, but locally redundant storage is selected. A zone-level storage outage could make FSLogix profiles unavailable."
@@ -479,8 +514,123 @@
               "defaultValue": "100",
               "constraints": {
                 "required": true,
-                "regex": "^[1-9][0-9]*$",
-                "validationMessage": "Enter a positive whole number."
+                "validations": [
+                  { "regex": "^[1-9][0-9]*$", "message": "Enter a positive whole number." },
+                  {
+                    "isValid": "[or(not(startsWith(steps('storage').storageService, 'AzureFiles')), and(greaterOrEquals(int(steps('storage').shareSizeInGB), if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), 32, if(equals(steps('storage').storageService, 'AzureFiles Premium'), 100, 1))), lessOrEquals(int(steps('storage').shareSizeInGB), if(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), 262144, 102400))))]",
+                    "message": "Azure Files v2 requires 32-262144 GiB. Legacy permits up to 102400 GiB (Premium minimum 100 GiB)."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "officeStorageGuidance",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+              "options": {
+                "text": "Office containers use separate Azure Files accounts, with paired Profile/Office shards in the same group order and indices. Generated accounts use fslpc and fsloc prefixes. Existing data is not moved, renamed, or deleted; Office shares are never backed up. Existing remote Office accounts must match the remote Profile array order."
+              }
+            },
+            {
+              "name": "officeStorageBillingModel",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Office Azure Files Billing Model",
+              "defaultValue": "Inherit Profile",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Inherit Profile", "value": "Inherit" },
+                  { "label": "Legacy", "value": "Legacy" },
+                  { "label": "Provisioned v2", "value": "ProvisionedV2" }
+                ]
+              }
+            },
+            {
+              "name": "officeProvisionedIops",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Office Provisioned IOPS (0 = recommended)",
+              "defaultValue": "0",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))))]",
+              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
+            },
+            {
+              "name": "officeProvisionedThroughputMiBps",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Office Provisioned Throughput MiB/s (0 = recommended)",
+              "defaultValue": "0",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))))]",
+              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
+            },
+            {
+              "name": "officeStorageTier",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Office Azure Files Tier",
+              "defaultValue": "Inherit Profile",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Inherit Profile", "value": "Inherit" },
+                  { "label": "Standard", "value": "Standard" },
+                  { "label": "Premium", "value": "Premium" }
+                ]
+              }
+            },
+            {
+              "name": "officeStorageRedundancy",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Office Azure Files Redundancy",
+              "defaultValue": "Inherit Profile",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+              "constraints": {
+                "required": true,
+                "allowedValues": "[if(not(empty(filter(if(or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))), if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))), parse('[{\"label\":\"Inherit Profile\",\"value\":\"Inherit\"},{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"},{\"label\":\"Zone Redundant\",\"value\":\"ZoneRedundant\"}]'), parse('[{\"label\":\"Inherit Profile\",\"value\":\"Inherit\"},{\"label\":\"Locally Redundant\",\"value\":\"LocallyRedundant\"}]'))]"
+              }
+            },
+            {
+              "name": "officeShareSizeInGB",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Office Share Quota (GB; 0 inherits Profile)",
+              "defaultValue": "0",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "regex": "^(0|[1-9][0-9]*)$",
+                    "message": "Enter 0 to inherit Profile quota, or a positive whole number."
+                  },
+                  {
+                    "isValid": "[and(greaterOrEquals(if(equals(int(steps('storage').officeShareSizeInGB), 0), int(steps('storage').shareSizeInGB), int(steps('storage').officeShareSizeInGB)), if(or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))), 32, if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), 100, 1))), lessOrEquals(if(equals(int(steps('storage').officeShareSizeInGB), 0), int(steps('storage').shareSizeInGB), int(steps('storage').officeShareSizeInGB)), if(or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))), 262144, 102400)))]",
+                    "message": "Use 0 to inherit quota; otherwise v2 requires 32-262144 GiB, legacy up to 102400 GiB (Premium minimum 100 GiB)."
+                  },
+                  {
+                    "isValid": "[or(not(or(equals(steps('storage').officeStorageRedundancy, 'ZoneRedundant'), and(equals(steps('storage').officeStorageRedundancy, 'Inherit'), equals(steps('storage').storageRedundancy, 'ZoneRedundant')))), not(empty(filter(if(or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))), if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), steps('scope').storageSkusApi.transformed.premiumZrs, steps('scope').storageSkusApi.transformed.standardZrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))))]",
+                    "message": "Office ZRS is unavailable for this tier and region. Select Office Locally Redundant or a supported tier."
+                  }
+                ]
+              }
+            },
+            {
+              "name": "provisionedV2SkuValidation",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Provisioned v2 Regional Availability",
+              "defaultValue": "Selected SKU must be available",
+              "readOnly": true,
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'), and(contains(steps('storage').containerType, 'OfficeContainer'), equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'))))]",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "isValid": "[or(not(equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2')), not(empty(filter(if(equals(steps('storage').storageRedundancy, 'ZoneRedundant'), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(equals(steps('storage').storageService, 'AzureFiles Premium'), steps('scope').storageSkusApi.transformed.premiumV2Lrs, steps('scope').storageSkusApi.transformed.standardV2Lrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))))]",
+                    "message": "The selected Profile v2 SKU is not available in this subscription and region. Choose an available tier/redundancy or explicitly select Legacy; there is no automatic legacy fallback."
+                  },
+                  {
+                    "isValid": "[or(not(contains(steps('storage').containerType, 'OfficeContainer')), not(or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2')))), not(empty(filter(if(or(equals(steps('storage').officeStorageRedundancy, 'ZoneRedundant'), and(equals(steps('storage').officeStorageRedundancy, 'Inherit'), equals(steps('storage').storageRedundancy, 'ZoneRedundant'))), if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), steps('scope').storageSkusApi.transformed.premiumV2Zrs, steps('scope').storageSkusApi.transformed.standardV2Zrs), if(or(equals(steps('storage').officeStorageTier, 'Premium'), and(equals(steps('storage').officeStorageTier, 'Inherit'), equals(steps('storage').storageService, 'AzureFiles Premium'))), steps('scope').storageSkusApi.transformed.premiumV2Lrs, steps('scope').storageSkusApi.transformed.standardV2Lrs)), (sku) => contains(sku.locations, steps('scope').resourceScope.location.name)))))]",
+                    "message": "The selected Office v2 SKU is not available in this subscription and region. Choose an available tier/redundancy or explicitly select Legacy."
+                  }
+                ]
               }
             },
             {
@@ -728,7 +878,7 @@
               "visible": "[startsWith(steps('storage').storageService, 'AzureFiles')]",
               "options": {
                 "style": "Info",
-                "text": "[if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 'One storage account will be deployed.', concat(string(length(steps('storage').userGroupPickerBlade.transformed.groups)), ' storage account(s) will be deployed, one for each selected user group.'))]"
+                "text": "No sharding creates one Profile account; sharding creates one Profile account per selected user group. Enabling Office containers creates a separate Office account for every Profile account, using the same group order and index."
               }
             },
             {
@@ -882,7 +1032,7 @@
             {
               "name": "remoteStorageAccounts",
               "type": "Microsoft.Common.DropDown",
-              "label": "Existing Remote Storage Accounts",
+              "label": "Existing Remote Profile Storage Accounts",
               "multiLine": true,
               "multiselect": true,
               "defaultValue": "[parse('[]')]",
@@ -891,6 +1041,37 @@
                 "required": false
               },
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'))]"
+            },
+            {
+              "name": "remoteOfficeStorageAccounts",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Existing Remote Office Storage Accounts",
+              "multiLine": true,
+              "multiselect": true,
+              "defaultValue": "[parse('[]')]",
+              "toolTip": "Select separate Office accounts in the same order as the paired remote Profile accounts.",
+              "constraints": {
+                "required": "[not(empty(steps('storage').remoteStorageAccounts))]",
+                "allowedValues": "[map(filter(steps('storage').storageAccountsApi.transformed.list, (account) => and(equals(account.location, steps('storage').remoteLocation), not(contains(steps('storage').remoteStorageAccounts, account.id)))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"value\":\"', account.id, '\"}')))]"
+              },
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), contains(steps('storage').containerType, 'OfficeContainer'))]"
+            },
+            {
+              "name": "remoteOfficePairingValidation",
+              "type": "Microsoft.Common.TextBox",
+              "label": "Remote Profile/Office Pairing",
+              "defaultValue": "Paired arrays required",
+              "readOnly": true,
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+              "constraints": {
+                "required": true,
+                "validations": [
+                  {
+                    "isValid": "[and(or(empty(steps('storage').remoteStorageAccounts), equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))), equals(length(steps('storage').remoteOfficeStorageAccounts), length(steps('storage').remoteStorageAccounts)), empty(filter(steps('storage').remoteOfficeStorageAccounts, (id) => contains(map(steps('storage').remoteStorageAccounts, (profileId) => toLower(profileId)), toLower(id)))))]",
+                    "message": "Supply paired, non-overlapping remote Profile and Office accounts for every shard, or omit both arrays."
+                  }
+                ]
+              }
             },
             {
               "name": "wrongRemoteStorageAccountCount",
@@ -1646,14 +1827,35 @@
                 {
                   "name": "storageAccountNamePrefixOverride",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Azure Files Storage Account Name Prefix",
-                  "placeholder": "fslogix{unique}",
-                  "toolTip": "Optional. Lowercase alphanumeric prefix for Azure Files storage accounts. The naming engine appends a generated six-character value by default, and the deployment appends a two-digit storage index to this prefix.",
+                  "label": "Profile Azure Files Storage Account Name Prefix",
+                  "placeholder": "fslpc{unique}",
+                  "toolTip": "Optional. Preserve an existing Profile prefix explicitly to avoid changing account names. Blank uses the generated fslpc prefix; the deployment appends a two-digit storage index.",
                   "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'))]",
                   "constraints": {
                     "required": false,
                     "regex": "^$|^[a-z0-9]{1,13}$",
                     "validationMessage": "Use 1-13 lowercase letters or numbers so the two-digit index remains AD-compatible, or leave blank to use the generated prefix."
+                  }
+                },
+                {
+                  "name": "officeStorageAccountNamePrefixOverride",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Office Azure Files Storage Account Name Prefix",
+                  "placeholder": "fsloc{unique}",
+                  "toolTip": "Optional. Must differ from the Profile prefix. Blank uses the generated fsloc prefix with the paired two-digit index. Existing data is not migrated.",
+                  "visible": "[and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'))]",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^$|^[a-z0-9]{3,13}$",
+                        "message": "Use 3-13 lowercase letters or numbers, or leave blank for the generated Office prefix."
+                      },
+                      {
+                        "isValid": "[or(empty(steps('tagsAndNaming').naming.officeStorageAccountNamePrefixOverride), not(equals(steps('tagsAndNaming').naming.officeStorageAccountNamePrefixOverride, steps('tagsAndNaming').naming.storageAccountNamePrefixOverride)))]",
+                        "message": "Explicit Profile and Office prefixes must differ."
+                      }
+                    ]
                   }
                 },
                 {
@@ -1780,14 +1982,25 @@
         "deploymentVirtualMachineOrganizationalUnitPath": "[if(and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), startsWith(steps('storage').storageService, 'AzureNetAppFiles')), steps('deployment').deploymentVirtualMachineOrganizationalUnitPath, '')]",
         "appUpdateUserAssignedIdentityResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'), steps('identity').automateEntraKerberosTasks), steps('identity').appUpdateIdentity, '')]",
         "fslogixStorageService": "[steps('storage').storageService]",
-        "fslogixStorageRedundancy": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').storageRedundancy, 'LocallyRedundant')]",
+        "fslogixProfileStorageRedundancy": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').storageRedundancy, 'LocallyRedundant')]",
+        "fslogixProfileStorageTier": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), last(split(steps('storage').storageService, ' ')), parse('null'))]",
+        "fslogixProfileStorageBillingModel": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), steps('storage').profileStorageBillingModel, 'Legacy')]",
+        "fslogixOfficeStorageBillingModel": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), steps('storage').officeStorageBillingModel, 'Inherit')]",
+        "fslogixProfileProvisionedIops": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2')), int(steps('storage').profileProvisionedIops), 0)]",
+        "fslogixProfileProvisionedThroughputMiBps": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2')), int(steps('storage').profileProvisionedThroughputMiBps), 0)]",
+        "fslogixOfficeProvisionedIops": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2')))), int(steps('storage').officeProvisionedIops), 0)]",
+        "fslogixOfficeProvisionedThroughputMiBps": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2')))), int(steps('storage').officeProvisionedThroughputMiBps), 0)]",
+        "fslogixOfficeStorageTier": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), steps('storage').officeStorageTier, 'Inherit')]",
+        "fslogixOfficeStorageRedundancy": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), steps('storage').officeStorageRedundancy, 'Inherit')]",
+        "fslogixOfficeShareSizeInGB": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), int(steps('storage').officeShareSizeInGB), 0)]",
         "fslogixContainerType": "[steps('storage').containerType]",
         "profileSizeInMBs": "[int(steps('storage').profileSizeInMBs)]",
-        "shareSizeInGB": "[int(steps('storage').shareSizeInGB)]",
+        "fslogixProfileShareSizeInGB": "[int(steps('storage').shareSizeInGB)]",
         "fslogixShardOptions": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))), steps('storage').shardOptions, 'None')]",
         "fslogixAdminGroups": "[if(steps('storage').configureAdminAccess, steps('storage').adminGroupPickerBlade.transformed.groups, parse('[]'))]",
         "fslogixUserGroups": "[if(and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None')))), steps('storage').userGroupPickerBlade.transformed.groups, parse('[]'))]",
-        "storageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles')), coalesce(steps('tagsAndNaming').naming.storageAccountNamePrefixOverride, ''), '')]",
+        "fslogixProfileStorageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles')), coalesce(steps('tagsAndNaming').naming.storageAccountNamePrefixOverride, ''), '')]",
+        "officeStorageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), coalesce(steps('tagsAndNaming').naming.officeStorageAccountNamePrefixOverride, ''), '')]",
         "storageIndex": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), int(steps('storage').storageIndex), 1)]",
         "parentResourceId": "[if(equals(steps('scope').storagePurpose.storageAssociation, 'ExistingHostPool'), steps('scope').storagePurpose.hostPool.id, '')]",
         "privateEndpoint": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), steps('zeroTrust').privateNetworking.privateEndpoint)]",
@@ -1817,6 +2030,7 @@
         "netAppVolumesSubnetResourceId": "[if(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), steps('storage').netAppVolumesSubnet.id, '')]",
         "smbServerLocation": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureNetAppFiles'), equals(steps('storage').netAppDeploymentMode, 'CreateAll')), coalesce(steps('tagsAndNaming').naming.smbServerLocationOverride, ''), '')]",
         "remoteStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache')), steps('storage').remoteStorageAccounts, parse('[]'))]",
+        "remoteOfficeStorageAccountResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), contains(steps('storage').containerType, 'OfficeContainer')), steps('storage').remoteOfficeStorageAccounts, parse('[]'))]",
         "remoteNetAppVolumeResourceIds": "[if(and(startsWith(steps('storage').storageService, 'AzureNetAppFiles'), contains(steps('storage').containerType, 'CloudCache')), steps('storage').remoteNetAppVolumes, parse('[]'))]",
         "tags": "[steps('tagsAndNaming').tagsSection.tags]"
       },

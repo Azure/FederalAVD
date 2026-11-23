@@ -407,6 +407,88 @@ Subscription
   if the operator overrides it to `LocallyRedundant`. Direct Bicep and parameter-file deployments
   retain the `LocallyRedundant` parameter default.
 
+#### Profile and Office account separation
+
+`ProfileOfficeContainer` and `CloudCacheProfileOfficeContainer` create separate Azure Files
+accounts for Profile and Office shares. Each role has the same shard count, group ordering, and
+`fslogixStorageIndex`; generated Profile names use `fslpc` prefixes and Office names use `fsloc`.
+Existing explicit Profile naming overrides are retained. CMK creates distinct indexed keys for
+both roles. Office shares are never enrolled in Azure Backup.
+
+| Office parameter | Default | Allowed values |
+| --- | --- | --- |
+| `fslogixOfficeStorageTier` | `Inherit` (Profile tier) | `Inherit`, `Standard`, `Premium` |
+| `fslogixOfficeStorageRedundancy` | `Inherit` (Profile redundancy) | `Inherit`, `LocallyRedundant`, `ZoneRedundant` |
+| `fslogixOfficeShareSizeInGB` | `0` (Profile quota) | `0` or a quota valid for the Office billing model |
+
+These settings apply only to Azure Files. Azure NetApp Files keeps separate Profile and Office
+volumes with the existing volume quota/service-level behavior.
+
+#### Azure Files billing and preferred Profile inputs
+
+The Portal defaults new Azure Files deployments to **Premium (SSD) + Provisioned v2**.
+Bicep omission retains the previous `AzureFiles Standard`, `LocallyRedundant`, 100 GiB and
+`Legacy` billing defaults. `fslogixStorageService` remains the backend/service compatibility input.
+The nullable aliases below take precedence when supplied; null retains the legacy input.
+Forms export the preferred names, not both spellings.
+
+| Preferred Profile input | Legacy fallback |
+| --- | --- |
+| `fslogixProfileShareSizeInGB` | `fslogixShareSizeInGB` |
+| `fslogixProfileStorageRedundancy` | `fslogixStorageRedundancy` |
+| `fslogixProfileStorageTier` | Tier from `fslogixStorageService` (Azure Files only) |
+| `fslogixProfileStorageAccountNamePrefix` | Generated naming, including `namingConvention.fslogixStoragePrefix` |
+| `fslogixExistingLocalProfileStorageAccountResourceIds` | `fslogixExistingLocalStorageAccountResourceIds` |
+| `fslogixExistingRemoteProfileStorageAccountResourceIds` | `fslogixExistingRemoteStorageAccountResourceIds` |
+
+A supplied empty account-ID array clears the legacy array. Authentication, shard count/order,
+groups and indices remain shared between Profile and Office; they are not renamed.
+
+| Setting | Bicep default | Meaning |
+| --- | --- | --- |
+| `fslogixProfileStorageBillingModel` | `Legacy` | `Legacy` or `ProvisionedV2` |
+| `fslogixOfficeStorageBillingModel` | `Inherit` | Profile billing, or explicit `Legacy` / `ProvisionedV2` |
+| `fslogixProfileProvisionedIops`, `fslogixProfileProvisionedThroughputMiBps` | `0` | Recommended sizing from the Profile quota |
+| `fslogixOfficeProvisionedIops`, `fslogixOfficeProvisionedThroughputMiBps` | `0` | Recommended sizing from the Office quota, not copied Profile performance |
+
+With `Legacy`, Standard is HDD pay-as-you-go (`StorageV2`, `Standard_LRS/ZRS`) and Premium is SSD
+provisioned v1 (`FileStorage`, `Premium_LRS/ZRS`). With `ProvisionedV2`, both use `FileStorage`:
+Standard uses `StandardV2_LRS/ZRS`, Premium uses `PremiumV2_LRS/ZRS`. `StorageV2` is an account kind,
+not the v2 billing model. Only LRS/ZRS are offered. V2 quotas are 32–262144 GiB; legacy quotas remain
+limited to 102400 GiB (Premium minimum 100 GiB). Explicit v2 SSD performance is 3000–102400 IOPS
+and 100–10340 MiB/s; HDD is 500–50000 IOPS and 60–5120 MiB/s. Zero selects the shared module's
+per-role recommendation. Nonzero performance requires v2. Azure NetApp Files keeps its service
+level and volume behavior; nondefault Azure Files-only tuning is rejected during storage creation.
+Verify SKU availability in the target cloud, subscription and region; no Commercial-only storage
+gate is imposed. No SKU conversion or data migration is performed. See the
+[account/billing model reference](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-scale-targets#storage-account-data-plane-limits).
+
+Cloud Cache remains available with the existing tier choices. Microsoft
+[recommends SSD Azure file shares for FSLogix Cloud Cache](https://learn.microsoft.com/en-us/azure/storage/files/virtual-desktop-workloads#fslogix-profile-containers)
+for lower latency and higher IOPS. This recommendation does not block Standard/HDD, change
+customer defaults, or automatically upgrade storage. Validate performance for both role accounts
+under representative concurrency and sign-in load before production use.
+
+When configuring existing Azure Files storage, prefer
+`fslogixExistingLocalProfileStorageAccountResourceIds` and `fslogixExistingRemoteProfileStorageAccountResourceIds`;
+the legacy arrays remain supported.
+Supply the corresponding `fslogixExistingLocalOfficeStorageAccountResourceIds` and
+`fslogixExistingRemoteOfficeStorageAccountResourceIds` whenever Office containers are enabled.
+Each Office array must have the same length and shard order as its Profile array, and no Office
+ID may overlap a Profile ID. Omit both remote arrays when remote storage is not required.
+Storage-account-key authentication still selects the first pair per location.
+
+For expansion, retain the `fslogixLocalStorageAccountResourceIds`,
+`fslogixLocalOfficeStorageAccountResourceIds`, `fslogixRemoteStorageAccountResourceIds`, and
+`fslogixRemoteOfficeStorageAccountResourceIds` outputs and pass them to the corresponding consumer
+inputs. Do not substitute Profile IDs for Office IDs.
+
+**No automatic migration:** changing generated names or enabling separation does not move data,
+rename accounts, delete old resources, or stop existing backup protection. Before updating an
+existing deployment, preserve its Profile prefix explicitly and plan any data migration and removal
+of previously enrolled Office backup items through an approved operator process. A previously
+co-located Office share cannot be reused by passing its Profile account ID.
+
 #### `keyManagementStorage`
 
 - **Type:** String

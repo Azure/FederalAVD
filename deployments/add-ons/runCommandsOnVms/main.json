@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "6248770884380567792"
+      "templateHash": "7370187525523534422"
     }
   },
   "parameters": {
@@ -465,7 +465,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "11947828355218345379"
+              "templateHash": "8317728250201469341"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -490,10 +490,32 @@
             }
           },
           "parameters": {
-            "virtualMachineName": {
-              "type": "string",
+            "asyncExecution": {
+              "type": "bool",
+              "defaultValue": false,
               "metadata": {
-                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                "description": "Run the command asynchronously (fire and forget)."
+              }
+            },
+            "errorBlobManagedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+              }
+            },
+            "errorBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
               }
             },
             "name": {
@@ -502,11 +524,38 @@
                 "description": "Required. Name of the virtual machine Run Command to deploy."
               }
             },
-            "location": {
+            "outputBlobManagedIdentityClientId": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]",
+              "defaultValue": "",
               "metadata": {
-                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+              }
+            },
+            "outputBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+              }
+            },
+            "parameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named parameters to pass to the script."
+              }
+            },
+            "protectedParameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named protected (secure) parameters to pass to the script."
               }
             },
             "script": {
@@ -530,38 +579,11 @@
                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
               }
             },
-            "parameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
-              },
-              "defaultValue": [],
-              "metadata": {
-                "description": "Named parameters to pass to the script."
-              }
-            },
-            "protectedParameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
-              },
-              "defaultValue": [],
-              "metadata": {
-                "description": "Named protected (secure) parameters to pass to the script."
-              }
-            },
             "timeoutInSeconds": {
               "type": "int",
               "defaultValue": 0,
               "metadata": {
                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-              }
-            },
-            "asyncExecution": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Run the command asynchronously (fire and forget)."
               }
             },
             "treatFailureAsDeploymentFailure": {
@@ -571,32 +593,10 @@
                 "description": "Treat a non-zero exit code as a deployment failure."
               }
             },
-            "outputBlobUri": {
+            "virtualMachineName": {
               "type": "string",
-              "defaultValue": "",
               "metadata": {
-                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-              }
-            },
-            "errorBlobUri": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-              }
-            },
-            "outputBlobManagedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-              }
-            },
-            "errorBlobManagedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                "description": "Required. Name of the existing virtual machine in the deployment resource group."
               }
             }
           },

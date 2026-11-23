@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "6985997534358623793"
+      "templateHash": "15842043413602141755"
     }
   },
   "definitions": {
@@ -178,6 +178,10 @@
           "nullable": true
         },
         "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixOfficeStoragePrefix": {
           "type": "string",
           "nullable": true
         },
@@ -2245,7 +2249,8 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",
         "confidentialVmKey": "{identifier}-cvm-cmk",
@@ -2745,7 +2750,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "10139659775394482390"
+              "templateHash": "1123756340662281466"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -2839,7 +2844,7 @@
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "parentResourceId": {
@@ -2949,7 +2954,7 @@
                     "value": "[variables('rotationPolicy')]"
                   },
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject()))]"
                   }
                 },
                 "template": {
@@ -3393,7 +3398,7 @@
                   "rotationPolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject()), createObject('value', variables('rotationPolicy')))]",
                   "keyReleasePolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject('data', variables('cvmKeyReleasePolicy'), 'contentType', 'application/json; charset=utf-8')), createObject('value', createObject()))]",
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults/keys'), createObject()))]"
                   }
                 },
                 "template": {
@@ -4119,7 +4124,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "10139659775394482390"
+              "templateHash": "1123756340662281466"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -4213,7 +4218,7 @@
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "parentResourceId": {
@@ -4323,7 +4328,7 @@
                     "value": "[variables('rotationPolicy')]"
                   },
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject()))]"
                   }
                 },
                 "template": {
@@ -4767,7 +4772,7 @@
                   "rotationPolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject()), createObject('value', variables('rotationPolicy')))]",
                   "keyReleasePolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject('data', variables('cvmKeyReleasePolicy'), 'contentType', 'application/json; charset=utf-8')), createObject('value', createObject()))]",
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults/keys'), createObject()))]"
                   }
                 },
                 "template": {
@@ -5493,7 +5498,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "10139659775394482390"
+              "templateHash": "1123756340662281466"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -5587,7 +5592,7 @@
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "parentResourceId": {
@@ -5697,7 +5702,7 @@
                     "value": "[variables('rotationPolicy')]"
                   },
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject()))]"
                   }
                 },
                 "template": {
@@ -6141,7 +6146,7 @@
                   "rotationPolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject()), createObject('value', variables('rotationPolicy')))]",
                   "keyReleasePolicy": "[if(coalesce(tryGet(parameters('diskEncryptionConfigs')[copyIndex()], 'confidentialVMOSDiskEncryption'), false()), createObject('value', createObject('data', variables('cvmKeyReleasePolicy'), 'contentType', 'application/json; charset=utf-8')), createObject('value', createObject()))]",
                   "tags": {
-                    "value": "[variables('parentTag')]"
+                    "value": "[union(variables('parentTag'), coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults/keys'), createObject()))]"
                   }
                 },
                 "template": {
@@ -6881,7 +6886,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "3600459726864579106"
+              "templateHash": "9712295133303282277"
             },
             "name": "Storage account",
             "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
@@ -7190,7 +7195,7 @@
           "resources": {
             "storageAccount": {
               "type": "Microsoft.Storage/storageAccounts",
-              "apiVersion": "2023-05-01",
+              "apiVersion": "2024-01-01",
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
@@ -8035,7 +8040,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "3600459726864579106"
+              "templateHash": "9712295133303282277"
             },
             "name": "Storage account",
             "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
@@ -8344,7 +8349,7 @@
           "resources": {
             "storageAccount": {
               "type": "Microsoft.Storage/storageAccounts",
-              "apiVersion": "2023-05-01",
+              "apiVersion": "2024-01-01",
               "name": "[parameters('name')]",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",

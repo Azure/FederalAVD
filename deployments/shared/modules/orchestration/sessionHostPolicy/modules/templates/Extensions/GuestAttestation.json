@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "18052079899844170519"
+      "version": "0.49.2.45890",
+      "templateHash": "16657132971031846804"
     },
     "name": "Guest Attestation remediation template",
     "description": "Deploys the Guest Attestation extension on an existing VM in the deployment resource group for Azure Policy remediation."

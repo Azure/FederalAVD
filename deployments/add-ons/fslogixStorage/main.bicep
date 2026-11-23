@@ -102,6 +102,51 @@ param fslogixStorageService string = 'AzureFiles Standard'
 ])
 param fslogixStorageRedundancy string = 'LocallyRedundant'
 
+@allowed(['LocallyRedundant', 'ZoneRedundant'])
+@description('Optional. Preferred Profile Azure Files redundancy. Overrides fslogixStorageRedundancy when supplied.')
+param fslogixProfileStorageRedundancy string?
+
+@allowed(['Standard', 'Premium'])
+@description('Optional. Profile Azure Files tier. Null derives the tier from fslogixStorageService; does not change Azure NetApp Files.')
+param fslogixProfileStorageTier string?
+
+@allowed(['Legacy', 'ProvisionedV2'])
+@description('Optional. Profile Azure Files billing model. Existing accounts are not converted.')
+param fslogixProfileStorageBillingModel string = 'Legacy'
+
+@allowed(['Inherit', 'Legacy', 'ProvisionedV2'])
+@description('Optional. Office Azure Files billing model. Inherit uses the Profile billing model.')
+param fslogixOfficeStorageBillingModel string = 'Inherit'
+
+@minValue(0)
+@description('Optional. Profile provisioned v2 IOPS. Zero calculates recommended sizing from the Profile quota.')
+param fslogixProfileProvisionedIops int = 0
+
+@minValue(0)
+@description('Optional. Profile provisioned v2 throughput in MiB/s. Zero calculates recommended sizing from the Profile quota.')
+param fslogixProfileProvisionedThroughputMiBps int = 0
+
+@minValue(0)
+@description('Optional. Office provisioned v2 IOPS. Zero calculates recommended sizing from the Office quota.')
+param fslogixOfficeProvisionedIops int = 0
+
+@minValue(0)
+@description('Optional. Office provisioned v2 throughput in MiB/s. Zero calculates recommended sizing from the Office quota.')
+param fslogixOfficeProvisionedThroughputMiBps int = 0
+
+@allowed(['Inherit', 'Standard', 'Premium'])
+@description('Optional. Office Azure Files tier; Inherit uses Profile tier. Ignored for Azure NetApp Files.')
+param fslogixOfficeStorageTier string = 'Inherit'
+
+@allowed(['Inherit', 'LocallyRedundant', 'ZoneRedundant'])
+@description('Optional. Office Azure Files redundancy; Inherit uses Profile redundancy.')
+param fslogixOfficeStorageRedundancy string = 'Inherit'
+
+@minValue(0)
+@maxValue(262144)
+@description('Optional. Office Azure Files share quota in GB; 0 inherits shareSizeInGB. Ignored for Azure NetApp Files.')
+param fslogixOfficeShareSizeInGB int = 0
+
 @description('Optional. FSLogix container layout.')
 @allowed([
   'CloudCacheProfileContainer'
@@ -118,6 +163,10 @@ param profileSizeInMBs int = 30000
 @description('Optional. File share or Azure NetApp Files volume size, in GB.')
 @minValue(1)
 param shareSizeInGB int = 100
+
+@minValue(1)
+@description('Optional. Preferred Profile share or volume quota in GiB. Overrides shareSizeInGB when supplied.')
+param fslogixProfileShareSizeInGB int?
 
 @description('Optional. Azure Files storage sharding and permission model.')
 @allowed([
@@ -136,6 +185,14 @@ param fslogixUserGroups entraGroupType[] = []
 @description('Optional. Lowercase alphanumeric Azure Files storage account name prefix override. The module appends a two-digit index.')
 @maxLength(13)
 param storageAccountNamePrefix string = ''
+
+@maxLength(13)
+@description('Optional. Preferred Profile Azure Files account prefix. Overrides storageAccountNamePrefix, including an empty value to use generated naming.')
+param fslogixProfileStorageAccountNamePrefix string?
+
+@description('Optional. Separate Office Azure Files prefix override, 3-13 lowercase alphanumeric characters. Blank uses the generated fsloc prefix with the paired two-digit index.')
+@maxLength(13)
+param officeStorageAccountNamePrefix string = ''
 
 @description('Optional. Starting index appended to Azure Files storage account names.')
 @minValue(0)
@@ -248,6 +305,9 @@ param smbServerLocation string = ''
 @description('Optional. Existing remote Azure Files storage account resource IDs included in the session-host configuration output.')
 param remoteStorageAccountResourceIds string[] = []
 
+@description('Conditional. Remote Office Azure Files account IDs paired with remoteStorageAccountResourceIds in the same shard order. Required with remote Profile accounts and Office containers; cannot overlap Profile accounts.')
+param remoteOfficeStorageAccountResourceIds string[] = []
+
 @description('Optional. Existing remote Azure NetApp Files volume resource IDs included in the session-host configuration output.')
 param remoteNetAppVolumeResourceIds string[] = []
 
@@ -272,7 +332,19 @@ var fslogixShareNamesLookup = {
 }
 
 var storageSolution = split(fslogixStorageService, ' ')[0]
-var storageSku = split(fslogixStorageService, ' ')[1]
+var azureFilesTuningIsValid = storageSolution != 'AzureNetAppFiles' || (fslogixProfileStorageTier == null && (fslogixProfileStorageRedundancy == null || fslogixProfileStorageRedundancy == 'LocallyRedundant') && empty(fslogixProfileStorageAccountNamePrefix) && fslogixProfileStorageBillingModel == 'Legacy' && fslogixOfficeStorageBillingModel == 'Inherit' && fslogixProfileProvisionedIops == 0 && fslogixProfileProvisionedThroughputMiBps == 0 && fslogixOfficeProvisionedIops == 0 && fslogixOfficeProvisionedThroughputMiBps == 0 && fslogixOfficeStorageTier == 'Inherit' && fslogixOfficeStorageRedundancy == 'Inherit' && fslogixOfficeShareSizeInGB == 0)
+  ? true
+  : fail('Azure Files tier, billing, redundancy and performance tuning cannot be used with Azure NetApp Files.')
+var storageSku = azureFilesTuningIsValid && storageSolution == 'AzureFiles'
+  ? fslogixProfileStorageTier ?? split(fslogixStorageService, ' ')[1]
+  : split(fslogixStorageService, ' ')[1]
+var effectiveProfileStorageRedundancy = fslogixProfileStorageRedundancy ?? fslogixStorageRedundancy
+var effectiveProfileShareSizeInGB = fslogixProfileShareSizeInGB ?? shareSizeInGB
+var effectiveOfficeStorageBillingModel = fslogixOfficeStorageBillingModel == 'Inherit' ? fslogixProfileStorageBillingModel : fslogixOfficeStorageBillingModel == 'ProvisionedV2' ? 'ProvisionedV2' : 'Legacy'
+var officeEnabled = contains(fslogixContainerType, 'OfficeContainer')
+var effectiveOfficeStorageSku = fslogixOfficeStorageTier == 'Inherit' ? storageSku : fslogixOfficeStorageTier
+var effectiveOfficeStorageRedundancy = fslogixOfficeStorageRedundancy == 'Inherit' ? effectiveProfileStorageRedundancy : fslogixOfficeStorageRedundancy
+var effectiveOfficeShareSizeInGB = fslogixOfficeShareSizeInGB == 0 ? effectiveProfileShareSizeInGB : fslogixOfficeShareSizeInGB
 var createFSLogixBackupVault = storageSolution == 'AzureFiles' && deployFSLogixBackupVault && empty(recoveryServicesVaultResourceId)
 var effectiveBackupResourceGroupName = backupVaultScope == 'Dedicated'
   ? effectiveStorageResourceGroupName
@@ -304,7 +376,15 @@ var effectiveDeploymentVirtualMachineNicName = !empty(deploymentVirtualMachineNi
 var effectiveDeploymentUserAssignedIdentityName = !empty(deploymentUserAssignedIdentityName)
   ? deploymentUserAssignedIdentityName
   : replace(naming.userAssignedIdentityNameConv, 'TOKEN', 'deployment')
-var effectiveStorageAccountNamePrefix = !empty(storageAccountNamePrefix) ? storageAccountNamePrefix : naming.fslogixStorageAccountNamePrefix
+var selectedProfileStorageAccountNamePrefix = fslogixProfileStorageAccountNamePrefix ?? storageAccountNamePrefix
+var effectiveStorageAccountNamePrefix = !empty(selectedProfileStorageAccountNamePrefix) ? selectedProfileStorageAccountNamePrefix : naming.fslogixStorageAccountNamePrefix
+var effectiveOfficeStorageAccountNamePrefix = !empty(officeStorageAccountNamePrefix) ? officeStorageAccountNamePrefix : naming.fslogixOfficeStorageAccountNamePrefix
+var officeStorageAccountPrefixIsValid = storageSolution != 'AzureFiles' || !officeEnabled || (length(effectiveOfficeStorageAccountNamePrefix) >= 3 && length(effectiveOfficeStorageAccountNamePrefix) <= 13 && empty(filter(range(0, length(effectiveOfficeStorageAccountNamePrefix)), i => !contains('abcdefghijklmnopqrstuvwxyz0123456789', substring(effectiveOfficeStorageAccountNamePrefix, i, 1)))))
+  ? true
+  : fail('Office storage account prefixes must contain 3-13 lowercase alphanumeric characters.')
+var officeStorageAccountPrefixesAreDistinct = storageSolution != 'AzureFiles' || !officeEnabled || toLower(effectiveStorageAccountNamePrefix) != toLower(effectiveOfficeStorageAccountNamePrefix)
+  ? true
+  : fail('Profile and Office Azure Files storage account prefixes must differ. Existing data is not moved, renamed, or deleted.')
 var effectivePrivateEndpointNameConvention = !empty(privateEndpointNameConvention) ? privateEndpointNameConvention : naming.privateEndpointNameConv
 var effectivePrivateEndpointNicNameConvention = !empty(privateEndpointNicNameConvention) ? privateEndpointNicNameConvention : naming.privateEndpointNICNameConv
 var effectiveEncryptionUserAssignedIdentityName = !empty(encryptionUserAssignedIdentityName)
@@ -318,6 +398,17 @@ var storageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None
 var remoteStorageAccountConfigurationIsValid = empty(remoteStorageAccountResourceIds) || length(remoteStorageAccountResourceIds) == storageCount
   ? true
   : fail('remoteStorageAccountResourceIds must contain one storage account per local FSLogix storage account.')
+var remoteProfileAccountIds = map(concat(
+  map(range(0, storageCount), i => resourceId(subscription().subscriptionId, effectiveStorageResourceGroupName, 'Microsoft.Storage/storageAccounts', '${effectiveStorageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}')),
+  remoteStorageAccountResourceIds
+), id => toLower(id))
+var remoteOfficeAccountIds = map(concat(
+  officeEnabled ? map(range(0, storageCount), i => resourceId(subscription().subscriptionId, effectiveStorageResourceGroupName, 'Microsoft.Storage/storageAccounts', '${effectiveOfficeStorageAccountNamePrefix}${padLeft(i + storageIndex, 2, '0')}')) : [],
+  remoteOfficeStorageAccountResourceIds
+), id => toLower(id))
+var remoteOfficeStorageAccountConfigurationIsValid = storageSolution != 'AzureFiles' || !officeEnabled || (length(remoteOfficeStorageAccountResourceIds) == length(remoteStorageAccountResourceIds) && empty(intersection(remoteProfileAccountIds, remoteOfficeAccountIds)) && length(remoteProfileAccountIds) == length(union(remoteProfileAccountIds, remoteProfileAccountIds)) && length(remoteOfficeAccountIds) == length(union(remoteOfficeAccountIds, remoteOfficeAccountIds)))
+  ? true
+  : fail('Remote Office accounts must be separate from Profile accounts and paired one-for-one in the same shard order. No Profile-account fallback is permitted.')
 var remoteNetAppConfigurationIsValid = empty(remoteNetAppVolumeResourceIds) || length(remoteNetAppVolumeResourceIds) == length(fileShareNames)
   ? true
   : fail('remoteNetAppVolumeResourceIds must contain one volume per FSLogix share, in profile-then-Office order.')
@@ -449,9 +540,10 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/storag
     location: location
     tags: tags
     parentResourceId: parentResourceId
-    storageKeyNames: [
-      for i in range(0, storageCount): replace(naming.encryptionKeyNameFSLogix, '##', padLeft(i + storageIndex, 2, '0'))
-    ]
+    storageKeyNames: concat(
+      map(range(0, storageCount), i => replace(naming.encryptionKeyNameFSLogix, '##', padLeft(i + storageIndex, 2, '0'))),
+      officeEnabled ? map(range(0, storageCount), i => replace(naming.encryptionKeyNameFSLogixOffice, '##', padLeft(i + storageIndex, 2, '0'))) : []
+    )
     identityName: effectiveEncryptionUserAssignedIdentityName
   }
   dependsOn: [storageResourceGroup]
@@ -531,10 +623,11 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     fileSharePolicyName: backupConfigurationIsValid && backupResourceGroupNamesAreDistinct ? fileSharePolicyName : fileSharePolicyName
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
+    officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
     fslogixFileShares: fileShareNames
     fslogixShardOptions: shardingConfigurationIsValid ? fslogixShardOptions : fslogixShardOptions
     fslogixSoftDeleteRetentionDays: softDeleteRetentionDays
-    fslogixStorageRedundancy: fslogixStorageRedundancy
+    fslogixStorageRedundancy: effectiveProfileStorageRedundancy
     fslogixUserGroups: fslogixUserGroups
     hostPoolResourceId: parentResourceId
     identitySolution: identitySolution
@@ -554,10 +647,20 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
     resourceGroupDeployment: effectiveDeploymentResourceGroupName
     resourceGroupStorage: effectiveStorageResourceGroupName
-    shareSizeInGB: shareSizeInGB
+    shareSizeInGB: effectiveProfileShareSizeInGB
+    profileStorageBillingModel: fslogixProfileStorageBillingModel
+    officeStorageBillingModel: effectiveOfficeStorageBillingModel
+    profileProvisionedIops: fslogixProfileProvisionedIops
+    profileProvisionedThroughputMiBps: fslogixProfileProvisionedThroughputMiBps
+    officeProvisionedIops: fslogixOfficeProvisionedIops
+    officeProvisionedThroughputMiBps: fslogixOfficeProvisionedThroughputMiBps
     smbServerLocation: effectiveSmbServerLocation
     storageAccountNamePrefix: effectiveStorageAccountNamePrefix
-    storageCount: storageCount
+    officeStorageAccountNamePrefix: officeStorageAccountPrefixIsValid && officeStorageAccountPrefixesAreDistinct ? effectiveOfficeStorageAccountNamePrefix : effectiveOfficeStorageAccountNamePrefix
+    officeStorageSku: effectiveOfficeStorageSku
+    officeStorageRedundancy: effectiveOfficeStorageRedundancy
+    officeShareSizeInGB: effectiveOfficeShareSizeInGB
+    storageCount: remoteStorageAccountConfigurationIsValid && remoteOfficeStorageAccountConfigurationIsValid ? storageCount : storageCount
     storageIndex: storageIndex
     storageSku: storageSku
     storageSolution: storageSolution
@@ -595,6 +698,8 @@ output fslogixConfiguration object = {
   fileShareNames: fileShareNames
   localStorageAccountResourceIds: fslogix.outputs.storageAccountResourceIds
   remoteStorageAccountResourceIds: remoteStorageAccountConfigurationIsValid ? remoteStorageAccountResourceIds : []
+  localOfficeStorageAccountResourceIds: fslogix.outputs.officeStorageAccountResourceIds
+  remoteOfficeStorageAccountResourceIds: remoteOfficeStorageAccountConfigurationIsValid ? remoteOfficeStorageAccountResourceIds : []
   localNetAppServerFqdns: fslogix.outputs.netAppServerFqdns
   remoteNetAppServerFqdns: empty(remoteNetAppVolumeResourceIds) ? [] : remoteNetAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns
   objectSpecificSettingsGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
@@ -603,6 +708,7 @@ output fslogixConfiguration object = {
 output netAppServerFqdns array = fslogix.outputs.netAppServerFqdns
 output netAppVolumeResourceIds array = fslogix.outputs.netAppVolumeResourceIds
 output storageAccountResourceIds array = fslogix.outputs.storageAccountResourceIds
+output officeStorageAccountResourceIds array = fslogix.outputs.officeStorageAccountResourceIds
 
 @description('Selected snapshot backup vault ID; empty when backup is disabled.')
 output fslogixBackupVaultResourceId string = effectiveRecoveryServicesVaultResourceId

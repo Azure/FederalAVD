@@ -737,7 +737,7 @@ Describe 'FSLogix Storage add-on redundancy behavior' {
         $storageRedundancyWarning.visible | Should -Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
         $storageRedundancyWarning.visible | Should -Match 'sku\.locations'
         $storageRedundancyWarning.visible | Should -Not -Match 'tryGet|coalesce'
-        $form.view.outputs.parameters.fslogixStorageRedundancy | Should -Match 'storageRedundancy'
+        $form.view.outputs.parameters.fslogixProfileStorageRedundancy | Should -Match 'storageRedundancy'
     }
 }
 
@@ -1069,7 +1069,7 @@ Describe 'Standard host-pool PoC form' {
         $standardBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep') -Raw
         $fslogixStorageAddonBicep = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.bicep') -Raw
 
-        $azureFilesBicep | Should -Match "module SetNTFSPermissions .* = if \(identitySolution != 'EntraId'\)"
+        $azureFilesBicep | Should -Match "(?s)module SetNTFSPermissions [^\r\n]* = \[\s*for role in storageRoles: if \(identitySolution != 'EntraId'\)"
         $standardBicep | Should -Match "var createDeploymentVm = \(deployFSLogixStorage && identitySolution != 'EntraId'\)"
         $fslogixStorageAddonBicep | Should -Match "var deploymentVirtualMachineRequired = identitySolution != 'EntraId'"
         $fslogixStorageAddonBicep | Should -Match 'module deploymentHelper .* = if \(deployDeploymentVirtualMachine\)'

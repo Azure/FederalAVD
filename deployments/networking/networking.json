@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "18161587697384046235"
+      "templateHash": "13516870372390334208"
     }
   },
   "definitions": {
@@ -78,6 +78,10 @@
           "nullable": true
         },
         "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixOfficeStoragePrefix": {
           "type": "string",
           "nullable": true
         },
@@ -2386,7 +2390,8 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",
         "confidentialVmKey": "{identifier}-cvm-cmk",

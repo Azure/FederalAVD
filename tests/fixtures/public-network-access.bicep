@@ -42,6 +42,7 @@ module files '../../deployments/shared/modules/orchestration/fslogix/modules/azu
     domainJoinUserPrincipalName: ''
     domainName: ''
     fslogixEncryptionKeyNameConv: ''
+    officeEncryptionKeyNameConv: ''
     encryptionKeyVaultUri: ''
     encryptionUserAssignedIdentityResourceId: ''
     fileShares: []
@@ -63,6 +64,7 @@ module files '../../deployments/shared/modules/orchestration/fslogix/modules/azu
     shareSizeInGB: 100
     shareUserGroups: []
     storageAccountNamePrefix: 'files${i}'
+    officeStorageAccountNamePrefix: 'office'
     storageCount: 1
     storageIndex: 1
     storageSku: 'Standard'

@@ -9,7 +9,7 @@ param name string
 @description('Quota in GiB.')
 param shareQuota int = 100
 
-@allowed(['TransactionOptimized', 'Hot', 'Cool', 'Premium'])
+@allowed(['TransactionOptimized', 'Hot', 'Cool', 'Premium', ''])
 @description('Optional. Azure file share access tier; must be compatible with the parent storage account SKU.')
 param accessTier string = 'TransactionOptimized'
 
@@ -17,22 +17,32 @@ param accessTier string = 'TransactionOptimized'
 @allowed(['SMB', 'NFS', ''])
 param enabledProtocol string = 'SMB'
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+@minValue(0)
+@description('Optional. Provisioned-v2 IOPS; zero omits this property.')
+param provisionedIops int = 0
+
+@minValue(0)
+@description('Optional. Provisioned-v2 throughput in MiB/s; zero omits this property.')
+param provisionedThroughputMiBps int = 0
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
   name: storageAccountName
 }
 
-resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' existing = {
+resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' existing = {
   parent: storageAccount
   name: 'default'
 }
 
-resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-05-01' = {
+resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
   parent: fileService
   name: name
   properties: {
     shareQuota: shareQuota
-    accessTier: accessTier
+    accessTier: !empty(accessTier) ? accessTier : null
     enabledProtocols: !empty(enabledProtocol) ? enabledProtocol : null
+    provisionedIops: provisionedIops > 0 ? provisionedIops : null
+    provisionedBandwidthMibps: provisionedThroughputMiBps > 0 ? provisionedThroughputMiBps : null
   }
 }
 

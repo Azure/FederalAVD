@@ -271,6 +271,34 @@
               }
             },
             {
+              "name": "profileStorageTier",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Profile Storage Media",
+              "defaultValue": "SSD (Premium)",
+              "visible": "[steps('options').deployFSLogixStorage]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "SSD (Premium)", "value": "Premium" },
+                  { "label": "HDD (Standard)", "value": "Standard" }
+                ]
+              }
+            },
+            {
+              "name": "profileStorageBillingModel",
+              "type": "Microsoft.Common.DropDown",
+              "label": "Profile Storage Billing",
+              "defaultValue": "Provisioned v2 (recommended)",
+              "visible": "[steps('options').deployFSLogixStorage]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "Provisioned v2 (recommended)", "value": "ProvisionedV2" },
+                  { "label": "Legacy (HDD pay-as-you-go / SSD provisioned v1)", "value": "Legacy" }
+                ]
+              }
+            },
+            {
               "name": "monitoringInfo",
               "type": "Microsoft.Common.InfoBox",
               "options": {
@@ -332,6 +360,8 @@
         "imageSku": "[steps('sessionHosts').office365SkusApi.transformed.latest]",
         "virtualMachineSize": "[steps('sessionHosts').virtualMachineSize]",
         "deployFSLogixStorage": "[steps('options').deployFSLogixStorage]",
+        "fslogixProfileStorageTier": "[if(steps('options').deployFSLogixStorage, steps('options').profileStorageTier, 'Standard')]",
+        "fslogixProfileStorageBillingModel": "[if(steps('options').deployFSLogixStorage, steps('options').profileStorageBillingModel, 'Legacy')]",
         "enableMonitoring": "[steps('options').enableMonitoring]"
       }
     }

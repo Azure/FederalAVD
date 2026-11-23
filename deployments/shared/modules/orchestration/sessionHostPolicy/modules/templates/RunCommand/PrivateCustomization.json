@@ -5,8 +5,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "4762152804128293954"
+      "version": "0.49.2.45890",
+      "templateHash": "16216923918113045800"
     },
     "name": "Private customization remediation orchestration",
     "description": "Attaches an artifact identity to an existing VM and serializes the supplied customization Run Commands in input order for policy remediation."
@@ -88,8 +88,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "5264021254888971356"
+              "version": "0.49.2.45890",
+              "templateHash": "13115549351110128465"
             },
             "name": "Artifact identity attachment orchestration",
             "description": "Reads an existing VM identity map, unions in the artifact identity, and updates the VM with system-assigned and user-assigned identity types before customization remediation."
@@ -138,8 +138,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12606458513283727279"
+                      "version": "0.49.2.45890",
+                      "templateHash": "757915052787063819"
                     },
                     "name": "VM identity lookup",
                     "description": "Reads identity type and the user-assigned identity map from an existing VM in the deployment resource group for identity-preserving remediation."
@@ -201,8 +201,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "17245590649180069392"
+                      "version": "0.49.2.45890",
+                      "templateHash": "1619869187031939151"
                     },
                     "name": "VM identity remediation update",
                     "description": "Updates the identity type and user-assigned identity map of a named VM in the deployment resource group using the supplied location and complete identity map."
@@ -299,8 +299,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "10970190162788173748"
+              "version": "0.49.2.45890",
+              "templateHash": "1868047584971822259"
             },
             "name": "Private customization remediation command",
             "description": "Deploys one named customization Run Command on an existing VM, resolving the attached artifact identity client ID for private artifact access."

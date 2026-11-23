@@ -1,201 +1,230 @@
-# FSLogix Storage Quota Manager - Azure Automation Runbook
-# Automatically increases or decreases file share quotas on Azure Premium Files
-# storage accounts to keep provisioned capacity close to actual usage.
-#
-# Reads configuration from Automation Account variables:
-#   ResourceGroupName   - Resource group containing the FSLogix storage accounts
-#   SubscriptionId      - Subscription ID containing the storage resource group
-#   ResourceManagerUri  - Azure Resource Manager URI for this cloud
-#
-# Quota scaling rules (symmetric, Option B):
-#   Small shares (quota < 500 GB):
-#     Increase +100 GB when remaining < 50 GB
-#     Decrease -100 GB when remaining > 200 GB and 24h cooldown elapsed
-#   Large shares (quota >= 500 GB):
-#     Increase +500 GB when remaining < 500 GB
-#     Decrease -500 GB when remaining > 1000 GB and 24h cooldown elapsed
-#
-# Decrease constraints:
-#   - Cannot decrease below (used size + 1 GB)
-#   - Cannot decrease more than once per 24 hours per share
-#   - Last decrease timestamp stored in share metadata key sqmLastDecreased (ISO 8601 UTC)
+# FSLogix Storage Quota Manager - Azure Automation PowerShell 7 runbook.
+# Capacity only: provisioned v2 IOPS and bandwidth are never recalculated.
+# Small shares (<500 GiB): +100 when free <50, -100 when free >200.
+# Large shares: +500 when free <500, -500 when free >1000.
+# Empty shares are unchanged. Decreases retain a 24h local cooldown in
+# sqmLastDecreased metadata, in addition to the service's downgrade deadline.
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
-#region Helpers
-
 function Write-Log {
-    param(
-        [Parameter(Mandatory = $true)][string]$Message,
-        [switch]$Warn,
-        [switch]$Err
-    )
-    $ts   = Get-Date -AsUTC -Format 'yyyy-MM-dd HH:mm:ss'
-    $line = "[$ts] $Message"
-    if ($Err)      { Write-Error   $line }
-    elseif ($Warn) { Write-Warning $line }
-    else           { Write-Output  $line }
+    param([string]$Message, [switch]$Warn)
+    $line = "[$(Get-Date -AsUTC -Format 'yyyy-MM-dd HH:mm:ss')] $Message"
+    if ($Warn) { Write-Warning $line } else { Write-Output $line }
 }
 
-#endregion Helpers
+function Invoke-StorageRequest {
+    param([string]$Uri, [string]$Method = 'GET', [string]$Body)
+    try {
+        $arguments = @{ Uri = $Uri; Method = $Method; Headers = $Header; ErrorAction = 'Stop' }
+        if ($Body) { $arguments.Body = $Body }
+        Invoke-RestMethod @arguments
+    }
+    catch {
+        throw "Storage API $Method failed for $Uri. No fallback or API downgrade attempted. Service error: $_"
+    }
+}
 
-#region Configuration
+function Get-StorageList {
+    param([string]$Uri)
+    do {
+        $page = Invoke-StorageRequest -Uri $Uri
+        if ($null -eq $page.value -or $page.value -is [string] -or
+            $page.value -isnot [Collections.IEnumerable]) {
+            throw "Invalid list response from ${Uri}: missing/invalid value array."
+        }
+        $page.value
+        $Uri = $page.nextLink
+        if ($Uri -and -not $Uri.StartsWith($ResourceManagerUri, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Invalid list response: nextLink is outside the configured ARM endpoint.'
+        }
+    } while ($Uri)
+}
 
-$ResourceGroupName  = Get-AutomationVariable -Name 'ResourceGroupName'
-$SubscriptionId     = Get-AutomationVariable -Name 'SubscriptionId'
+function Get-WholeNumber {
+    param([AllowNull()][object]$Value, [string]$Field, [decimal]$Minimum = 0)
+    $number = [decimal]0
+    if ($null -eq $Value -or $Value -is [bool] -or
+        -not [decimal]::TryParse([string]$Value, [Globalization.NumberStyles]::Float,
+            [Globalization.CultureInfo]::InvariantCulture, [ref]$number) -or
+        $number -lt $Minimum -or $number -ne [math]::Truncate($number)) {
+        throw "Invalid response: $Field must be a whole number >= $Minimum."
+    }
+    return $number
+}
+
+function Get-UtcDeadline {
+    param([string]$Value, [string]$Field)
+    $deadline = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse($Value, [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$deadline)) {
+        throw "Invalid response: $Field timestamp '$Value'. No unsafe decrease attempted."
+    }
+    return $deadline.UtcDateTime
+}
+
+$ResourceGroupName = Get-AutomationVariable -Name 'ResourceGroupName'
+$SubscriptionId = Get-AutomationVariable -Name 'SubscriptionId'
 $ResourceManagerUri = Get-AutomationVariable -Name 'ResourceManagerUri'
-
-if ([string]::IsNullOrEmpty($ResourceGroupName)) { throw 'ResourceGroupName automation variable is not set.' }
-if ([string]::IsNullOrEmpty($SubscriptionId))    { throw 'SubscriptionId automation variable is not set.' }
-
-if (-not $ResourceManagerUri.EndsWith('/')) { $ResourceManagerUri = "$ResourceManagerUri/" }
+foreach ($variableName in @('ResourceGroupName', 'SubscriptionId', 'ResourceManagerUri')) {
+    if ([string]::IsNullOrWhiteSpace((Get-Variable -Name $variableName -ValueOnly))) {
+        throw "$variableName automation variable is not set."
+    }
+}
+if (-not $ResourceManagerUri.EndsWith('/')) { $ResourceManagerUri += '/' }
 
 Write-Log "Starting | Resource Group: $ResourceGroupName | Subscription: $SubscriptionId"
-
-#endregion Configuration
-
-#region Authentication
-
 try {
     Connect-AzAccount -Identity | Out-Null
     $tokenObj = Get-AzAccessToken -ResourceUrl ($ResourceManagerUri.TrimEnd('/'))
     $ArmToken = if ($tokenObj.Token -is [System.Security.SecureString]) {
-        [System.Net.NetworkCredential]::new('', $tokenObj.Token).Password
-    } else {
-        $tokenObj.Token
-    }
+        [Net.NetworkCredential]::new('', $tokenObj.Token).Password
+    } else { $tokenObj.Token }
     if ([string]::IsNullOrEmpty($ArmToken)) { throw 'Token was null or empty.' }
 }
-catch {
-    throw "Failed to acquire ARM access token via managed identity: $_"
-}
+catch { throw "Failed to acquire ARM access token via managed identity: $_" }
+$Header = @{ Authorization = "Bearer $ArmToken"; 'Content-Type' = 'application/json' }
 
-$Header = @{
-    Authorization  = "Bearer $ArmToken"
-    'Content-Type' = 'application/json'
-}
+# Earliest stable Microsoft.Storage schema with v2 SKUs, independent performance,
+# service usage limits, and nextAllowedQuotaDowngradeTime. No cloud API fallback.
+$ApiVersion = '2024-01-01'
+$accountsUri = "${ResourceManagerUri}subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Storage/storageAccounts?api-version=${ApiVersion}"
+$accounts = @(Get-StorageList -Uri $accountsUri)
+if ($accounts.Count -eq 0) { Write-Log 'No storage accounts found.' }
 
-Write-Log 'ARM token acquired.'
-
-#endregion Authentication
-
-#region Storage Quota Management
-
-# Quota scaling rules (Option B - symmetric with increase logic):
-#   Small shares (quota < 500 GB):
-#     Increase +100 GB when remaining < 50 GB
-#     Decrease -100 GB when remaining > 200 GB (2x threshold) and 24h cooldown elapsed
-#   Large shares (quota >= 500 GB):
-#     Increase +500 GB when remaining < 500 GB
-#     Decrease -500 GB when remaining > 1000 GB (2x threshold) and 24h cooldown elapsed
-#
-# Decrease constraints:
-#   - Cannot decrease below (used size + 1 GB)
-#   - Cannot decrease more than once per 24 hours per share
-#   - Last decrease time tracked in the share's metadata (sqmLastDecreased, ISO 8601 UTC)
-
-$Now        = [DateTime]::UtcNow
-$ApiVersion = '2023-05-01'
-
-$StorageAccountsUri  = "${ResourceManagerUri}subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Storage/storageAccounts?api-version=${ApiVersion}"
-$StorageAccountNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $StorageAccountsUri).value.name
-
-if ($null -eq $StorageAccountNames -or @($StorageAccountNames).Count -eq 0) {
-    Write-Log "No storage accounts found in resource group $ResourceGroupName. Exiting."
-}
-
-foreach ($StorageAccountName in $StorageAccountNames) {
-    $SharesUri  = "${ResourceManagerUri}subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Storage/storageAccounts/${StorageAccountName}/fileServices/default/shares?api-version=${ApiVersion}"
-    $ShareNames = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $SharesUri).value.name
-
-    foreach ($ShareName in $ShareNames) {
-        $ShareBaseUri   = "${ResourceManagerUri}subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Storage/storageAccounts/${StorageAccountName}/fileServices/default/shares/${ShareName}"
-        $ShareGetUri    = "${ShareBaseUri}?api-version=${ApiVersion}&`$expand=stats"
-        $ShareUpdateUri = "${ShareBaseUri}?api-version=${ApiVersion}"
-
-        $PFS                 = (Invoke-RestMethod -Headers $Header -Method 'GET' -Uri $ShareGetUri).properties
-        $ProvisionedCapacity = $PFS.shareQuota
-        $UsedCapacity        = $PFS.ShareUsageBytes
-        $UsedGB              = [math]::Round($UsedCapacity / 1GB, 0)
-        $RemainingGB         = $ProvisionedCapacity - ($UsedCapacity / [Math]::Pow(2, 30))
-
-        Write-Log "${StorageAccountName}/${ShareName} - Provisioned: ${ProvisionedCapacity}GB | Used: ${UsedGB}GB | Remaining: $([math]::Round($RemainingGB, 1))GB"
-
-        # --- Decrease cooldown check -------------------------------------------
-        $CanDecrease      = $true
-        $LastDecreasedStr = if ($PFS.metadata) { $PFS.metadata.sqmLastDecreased } else { $null }
-        if (-not [string]::IsNullOrEmpty($LastDecreasedStr)) {
-            try {
-                $LastDecreasedUtc = [DateTime]::Parse($LastDecreasedStr, $null, [System.Globalization.DateTimeStyles]::RoundtripKind)
-                $HoursSinceLast   = ($Now - $LastDecreasedUtc).TotalHours
-                if ($HoursSinceLast -lt 24) {
-                    $CanDecrease = $false
-                    Write-Log "${StorageAccountName}/${ShareName} - Decrease on cooldown: last decreased $([math]::Round($HoursSinceLast, 1))h ago (24h required)."
-                }
-            }
-            catch {
-                Write-Log "${StorageAccountName}/${ShareName} - Could not parse sqmLastDecreased metadata value '$LastDecreasedStr'." -Warn
-            }
-        }
-
-        # --- Scaling logic -------------------------------------------------------
-        if ($UsedCapacity -eq 0) {
-            Write-Log "${StorageAccountName}/${ShareName} - Share usage is 0GB. No changes."
-        }
-        elseif ($ProvisionedCapacity -lt 500) {
-            # Small share tier (quota < 500 GB)
-            if ($RemainingGB -lt 50) {
-                $Quota = $ProvisionedCapacity + 100
-                Write-Log "${StorageAccountName}/${ShareName} - Less than 50GB remaining. Increasing quota by 100GB to ${Quota}GB."
-                Invoke-RestMethod -Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) -Headers $Header -Method 'PATCH' -Uri $ShareUpdateUri | Out-Null
-            }
-            elseif ($CanDecrease -and $RemainingGB -gt 200) {
-                # More than 2x the increase threshold remains - reclaim 100 GB
-                $MinimumQuota = [Math]::Ceiling($UsedCapacity / [Math]::Pow(2, 30)) + 1
-                $ProposedQuota = $ProvisionedCapacity - 100
-                $Quota = [Math]::Max($MinimumQuota, $ProposedQuota)
-                if ($Quota -lt $ProvisionedCapacity) {
-                    Write-Log "${StorageAccountName}/${ShareName} - More than 200GB remaining. Decreasing quota by $($ProvisionedCapacity - $Quota)GB to ${Quota}GB."
-                    $Body = @{properties = @{shareQuota = $Quota; metadata = @{sqmLastDecreased = $Now.ToString('o')}}} | ConvertTo-Json -Depth 4
-                    Invoke-RestMethod -Body $Body -Headers $Header -Method 'PATCH' -Uri $ShareUpdateUri | Out-Null
-                }
-                else {
-                    Write-Log "${StorageAccountName}/${ShareName} - Cannot decrease: used size too close to provisioned quota."
-                }
-            }
-            else {
-                Write-Log "${StorageAccountName}/${ShareName} - Within normal range. No changes."
-            }
-        }
-        else {
-            # Large share tier (quota >= 500 GB)
-            if ($RemainingGB -lt 500) {
-                $Quota = $ProvisionedCapacity + 500
-                Write-Log "${StorageAccountName}/${ShareName} - Less than 500GB remaining. Increasing quota by 500GB to ${Quota}GB."
-                Invoke-RestMethod -Body (@{properties = @{shareQuota = $Quota}} | ConvertTo-Json) -Headers $Header -Method 'PATCH' -Uri $ShareUpdateUri | Out-Null
-            }
-            elseif ($CanDecrease -and $RemainingGB -gt 1000) {
-                # More than 2x the increase threshold remains - reclaim 500 GB
-                $MinimumQuota = [Math]::Ceiling($UsedCapacity / [Math]::Pow(2, 30)) + 1
-                $ProposedQuota = $ProvisionedCapacity - 500
-                $Quota = [Math]::Max($MinimumQuota, $ProposedQuota)
-                if ($Quota -lt $ProvisionedCapacity) {
-                    Write-Log "${StorageAccountName}/${ShareName} - More than 1000GB remaining. Decreasing quota by $($ProvisionedCapacity - $Quota)GB to ${Quota}GB."
-                    $Body = @{properties = @{shareQuota = $Quota; metadata = @{sqmLastDecreased = $Now.ToString('o')}}} | ConvertTo-Json -Depth 4
-                    Invoke-RestMethod -Body $Body -Headers $Header -Method 'PATCH' -Uri $ShareUpdateUri | Out-Null
-                }
-                else {
-                    Write-Log "${StorageAccountName}/${ShareName} - Cannot decrease: used size too close to provisioned quota."
-                }
-            }
-            else {
-                Write-Log "${StorageAccountName}/${ShareName} - Within normal range. No changes."
-            }
+foreach ($account in $accounts) {
+    $accountName = $account.name
+    $sku = $account.sku.name
+    if ([string]::IsNullOrWhiteSpace($accountName) -or
+        [string]::IsNullOrWhiteSpace($account.kind) -or [string]::IsNullOrWhiteSpace($sku)) {
+        throw 'Invalid account response: name, kind, and SKU are required.'
+    }
+    $isV2 = $account.kind -eq 'FileStorage' -and $sku -in @(
+        'StandardV2_LRS', 'StandardV2_ZRS', 'PremiumV2_LRS', 'PremiumV2_ZRS')
+    $isV1 = $account.kind -eq 'FileStorage' -and $sku -in @('Premium_LRS', 'Premium_ZRS')
+    $isPayGo = $account.kind -eq 'StorageV2' -and $sku -in @(
+        'Standard_LRS', 'Standard_ZRS', 'Standard_GRS', 'Standard_RAGRS', 'Standard_GZRS', 'Standard_RAGZRS')
+    if (-not ($isV2 -or $isV1 -or $isPayGo)) {
+        Write-Log "$accountName - Unsupported account kind/SKU '$($account.kind)/$sku'; skipped." -Warn
+        continue
+    }
+    $accountUri = "${ResourceManagerUri}subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Storage/storageAccounts/${accountName}"
+    $serviceUri = "$accountUri/fileServices/default"
+    $shares = @(Get-StorageList -Uri "${serviceUri}/shares?api-version=${ApiVersion}")
+    $accountProvisioned = [decimal]0
+    if ($isV1) {
+        foreach ($listedShare in $shares) {
+            $accountProvisioned += Get-WholeNumber $listedShare.properties.shareQuota "$accountName listed shareQuota" 1
         }
     }
+
+    foreach ($share in $shares) {
+        $shareName = $share.name
+        if ([string]::IsNullOrWhiteSpace($shareName)) { throw "Invalid share response for ${accountName}: missing name." }
+        $label = "$accountName/$shareName"
+        $shareUri = "$serviceUri/shares/$shareName"
+        $properties = (Invoke-StorageRequest -Uri "${shareUri}?api-version=${ApiVersion}&`$expand=stats").properties
+        if ($null -eq $properties) { throw "Invalid response for ${label}: missing share properties." }
+        # SMB is the service default when enabledProtocols is omitted.
+        if ($properties.enabledProtocols -and $properties.enabledProtocols -ne 'SMB') {
+            Write-Log "$label - Unsupported protocol '$($properties.enabledProtocols)'; skipped." -Warn
+            continue
+        }
+        $capacity = Get-WholeNumber $properties.shareQuota "$label shareQuota" 1
+        $usedBytes = Get-WholeNumber $properties.shareUsageBytes "$label shareUsageBytes"
+        $minimum = if ($isV2) { 32 } elseif ($isV1) { 100 } else { 1 }
+        $maximum = if ($isV2) { 262144 } elseif ($isV1 -or $account.properties.largeFileSharesState -eq 'Enabled') { 102400 } else { 5120 }
+        $accountMaximum = if ($isV1) { 102400 } else { $null }
+        if ($isV2) {
+            $iops = Get-WholeNumber $properties.provisionedIops "$label provisionedIops" 1
+            $bandwidth = Get-WholeNumber $properties.provisionedBandwidthMibps "$label provisionedBandwidthMibps" 1
+            $usage = (Invoke-StorageRequest -Uri "${serviceUri}/usages/default?api-version=${ApiVersion}").properties
+            $serviceMinimum = Get-WholeNumber $usage.fileShareLimits.minProvisionedStorageGiB "$label service minimum" 1
+            $serviceMaximum = Get-WholeNumber $usage.fileShareLimits.maxProvisionedStorageGiB "$label service maximum" 1
+            if ($serviceMinimum -gt $serviceMaximum) { throw "Invalid response for ${label}: inverted service limits." }
+            $minimum = [math]::Max($minimum, $serviceMinimum)
+            $maximum = [math]::Min($maximum, $serviceMaximum)
+            $accountMaximum = Get-WholeNumber $usage.storageAccountLimits.maxProvisionedStorageGiB "$label account maximum" 1
+            $mediaAccountMaximum = if ($sku -like 'PremiumV2_*') { 262144 } else { 4194304 }
+            $accountMaximum = [math]::Min($accountMaximum, $mediaAccountMaximum)
+            $accountProvisioned = Get-WholeNumber $usage.storageAccountUsage.liveShares.provisionedStorageGiB "$label live account capacity"
+            if ($accountProvisioned -lt $capacity) { throw "Invalid response for ${label}: account capacity is below share quota." }
+        }
+        if ($minimum -gt $maximum -or $capacity -lt $minimum -or $capacity -gt $maximum) {
+            throw "Invalid response/limits for ${label}: quota ${capacity}GiB outside ${minimum}-${maximum}GiB."
+        }
+        $usedGiB = $usedBytes / 1GB
+        $remaining = $capacity - $usedGiB
+        Write-Log "$label ($sku) - Provisioned: ${capacity}GiB | Used: $([math]::Round($usedGiB, 1))GiB | Remaining: $([math]::Round($remaining, 1))GiB | Limits: ${minimum}-${maximum}GiB"
+        if ($usedBytes -eq 0) { Write-Log "$label - Zero usage; no changes."; continue }
+
+        $step = if ($capacity -lt 500) { 100 } else { 500 }
+        $growBelow = if ($capacity -lt 500) { 50 } else { 500 }
+        $shrinkAbove = if ($capacity -lt 500) { 200 } else { 1000 }
+        $now = [DateTime]::UtcNow
+        $decreasing = $false
+        if ($remaining -lt $growBelow) {
+            $target = [math]::Min($capacity + $step, $maximum)
+            if ($null -ne $accountMaximum) {
+                $available = [math]::Max(0, $accountMaximum - $accountProvisioned)
+                $target = [math]::Min($target, $capacity + $available)
+                Write-Log "$label - Account capacity: ${accountProvisioned}/${accountMaximum}GiB; headroom: ${available}GiB."
+            }
+            if ($target -lt ($capacity + $step)) {
+                Write-Log "$label - Growth limited by share/account capacity limits to ${target}GiB." -Warn
+            }
+        }
+        elseif ($remaining -gt $shrinkAbove) {
+            $canDecrease = $true
+            if (-not [string]::IsNullOrEmpty($properties.nextAllowedQuotaDowngradeTime)) {
+                $deadline = Get-UtcDeadline $properties.nextAllowedQuotaDowngradeTime "$label nextAllowedQuotaDowngradeTime"
+                if ($now -lt $deadline) {
+                    Write-Log "$label - Service quota decrease cooldown until $($deadline.ToString('o')) (including after increases)."
+                    $canDecrease = $false
+                }
+            }
+            if (-not [string]::IsNullOrEmpty($properties.metadata.sqmLastDecreased)) {
+                $lastDecrease = Get-UtcDeadline $properties.metadata.sqmLastDecreased "$label sqmLastDecreased"
+                if ($now -lt $lastDecrease.AddHours(24)) {
+                    Write-Log "$label - Local decrease cooldown until $($lastDecrease.AddHours(24).ToString('o'))."
+                    $canDecrease = $false
+                }
+            }
+            if (-not $canDecrease) { continue }
+            $floor = [math]::Max($minimum, [math]::Ceiling($usedGiB) + 1)
+            $target = [math]::Max($capacity - $step, $floor)
+            $decreasing = $true
+            if ($target -gt ($capacity - $step)) {
+                Write-Log "$label - Decrease limited by minimum capacity/used-size floor to ${target}GiB."
+            }
+        }
+        else { Write-Log "$label - Within normal range; no changes."; continue }
+        if ($target -eq $capacity) { Write-Log "$label - At capacity limit; no quota change possible." -Warn; continue }
+
+        $update = @{ shareQuota = [int]$target }
+        if ($decreasing) {
+            $metadata = @{}
+            if ($properties.metadata) {
+                foreach ($entry in $properties.metadata.PSObject.Properties) { $metadata[$entry.Name] = $entry.Value }
+            }
+            $metadata.sqmLastDecreased = $now.ToString('o')
+            $update.metadata = $metadata
+        }
+        # Omitted PATCH properties are unchanged: never send recommended/default
+        # IOPS or bandwidth, nor echo unrelated read-only share properties.
+        Write-Log "$label - Updating quota ${capacity} -> ${target}GiB; independently provisioned performance unchanged."
+        $result = Invoke-StorageRequest -Uri "${shareUri}?api-version=${ApiVersion}" -Method 'PATCH' -Body (
+            @{ properties = $update } | ConvertTo-Json -Depth 6)
+        $actualQuota = Get-WholeNumber $result.properties.shareQuota "$label PATCH shareQuota" 1
+        if ($actualQuota -ne $target) { throw "Invalid PATCH response for ${label}: expected quota $target, got $actualQuota." }
+        if ($isV2 -and (
+            (Get-WholeNumber $result.properties.provisionedIops "$label PATCH provisionedIops" 1) -ne $iops -or
+            (Get-WholeNumber $result.properties.provisionedBandwidthMibps "$label PATCH provisionedBandwidthMibps" 1) -ne $bandwidth)) {
+            throw "Unexpected performance change for ${label}: capacity-only PATCH did not preserve IOPS/bandwidth."
+        }
+        if ($isV1) { $accountProvisioned += $target - $capacity }
+        Write-Log "$label - Quota update confirmed: ${target}GiB."
+    }
 }
-
 Write-Log 'Storage quota check complete.'
-
-#endregion Storage Quota Management

@@ -86,6 +86,52 @@
         "deployFSLogixStorage": {
             "value": true
         },
+        "fslogixProfileStorageTier": {
+            "value": "Premium"
+        },
+        "fslogixProfileStorageBillingModel": {
+            "value": "ProvisionedV2"
+        },
+        "fslogixProfileStorageRedundancy": {
+            "value": "LocallyRedundant"
+        },
+        "fslogixProfileShareSizeInGB": {
+            "value": 100
+        },
+        "fslogixProfileProvisionedIops": {
+            "value": 0
+        },
+        "fslogixProfileProvisionedThroughputMiBps": {
+            "value": 0
+        },
+        "fslogixOfficeStorageBillingModel": {
+            "value": "Inherit"
+        },
+        "fslogixOfficeProvisionedIops": {
+            "value": 0
+        },
+        "fslogixOfficeProvisionedThroughputMiBps": {
+            "value": 0
+        },
+        // Profile-only by default. Office layouts create separate paired accounts, never sharing Profile accounts.
+        // Office tier/billing/redundancy inherit Profile; zero quota inherits Profile quota.
+        // Zero performance calculates recommendations independently from each role's quota.
+        "fslogixOfficeStorageTier": {
+            "value": "Inherit"
+        },
+        "fslogixOfficeStorageRedundancy": {
+            "value": "Inherit"
+        },
+        "fslogixOfficeShareSizeInGB": {
+            "value": 0
+        },
+        // For existing Office storage, supply one distinct Office ID per Profile ID in matching shard order.
+        "fslogixExistingLocalOfficeStorageAccountResourceIds": {
+            "value": []
+        },
+        "fslogixExistingRemoteOfficeStorageAccountResourceIds": {
+            "value": []
+        },
         "fslogixPrivateEndpoint": {
             "value": true
         },

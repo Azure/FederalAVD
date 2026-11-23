@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "eastus2" },
+    "identifier": { "value": "fslogix" },
+    "createStorageResourceGroup": { "value": true },
+    "identitySolution": { "value": "EntraId" },
+    "fslogixStorageService": { "value": "AzureFiles Premium" },
+    "fslogixProfileStorageTier": { "value": "Premium" },
+    "fslogixProfileStorageRedundancy": { "value": "LocallyRedundant" },
+    "fslogixProfileStorageBillingModel": { "value": "ProvisionedV2" },
+    "fslogixOfficeStorageBillingModel": { "value": "Inherit" },
+    "fslogixContainerType": { "value": "ProfileOfficeContainer" },
+    "fslogixProfileShareSizeInGB": { "value": 100 },
+    "fslogixProfileProvisionedIops": { "value": 0 },
+    "fslogixProfileProvisionedThroughputMiBps": { "value": 0 },
+    "fslogixOfficeProvisionedIops": { "value": 0 },
+    "fslogixOfficeProvisionedThroughputMiBps": { "value": 0 },
+    "fslogixOfficeStorageTier": { "value": "Standard" },
+    "fslogixOfficeStorageRedundancy": { "value": "Inherit" },
+    "fslogixOfficeShareSizeInGB": { "value": 100 },
+    "privateEndpoint": { "value": true },
+    "privateEndpointSubnetResourceId": {
+      "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-avd/subnets/private-endpoints"
+    },
+    "azureFilePrivateDnsZoneResourceId": {
+      "value": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+    },
+    "paasPublicNetworkAccess": { "value": "Disabled" }
+  }
+}

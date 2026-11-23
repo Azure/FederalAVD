@@ -48,17 +48,31 @@ Describe 'Direct centralized naming bundles' {
         foreach ($scenario in $profiles) {
             $result = @($actual | Where-Object name -eq $scenario.name)
             $result.Count | Should -Be 1
-            @($result[0].hostPool.PSObject.Properties).Count | Should -Be 47
+            @($result[0].hostPool.PSObject.Properties).Count | Should -Be 49
         }
     }
 
-    It 'returns only fifteen shared FSLogix properties and composes them unchanged into host-pool names' {
+    It 'returns seventeen shared FSLogix properties and composes them unchanged into host-pool names' {
         foreach ($case in $actual) {
-            @($case.fslogix.PSObject.Properties).Count | Should -Be 15
+            @($case.fslogix.PSObject.Properties).Count | Should -Be 17
             foreach ($property in $case.fslogix.PSObject.Properties) {
                 $case.hostPool.($property.Name) | Should -Be $property.Value
             }
+
             ($case.fslogix.PSObject.Properties.Name -join ',') | Should -Not -Match 'hostPoolName|workspaceName|sharedResourceGroupControlPlane'
+        }
+    }
+
+    It 'uses paired fslpc and fsloc defaults with distinct encryption keys across clouds' {
+        foreach ($case in $actual) {
+            $case.fslogix.fslogixOfficeStorageAccountNamePrefix | Should -Match '^fsloc[a-z0-9]+$'
+            $scenario = $profiles | Where-Object name -eq $case.name
+            if (-not $scenario.convention.fslogixStoragePrefix) {
+                $case.fslogix.fslogixStorageAccountNamePrefix | Should -Match '^fslpc[a-z0-9]+$'
+                $case.fslogix.fslogixStorageAccountNamePrefix.Substring(5) |
+                    Should -Be $case.fslogix.fslogixOfficeStorageAccountNamePrefix.Substring(5)
+            }
+            $case.fslogix.encryptionKeyNameFSLogixOffice | Should -Not -Be $case.fslogix.encryptionKeyNameFSLogix
         }
     }
 

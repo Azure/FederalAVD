@@ -123,7 +123,8 @@ var namingPolicy object = {
     confidentialDiskPurpose: 'confvm{delimiter}customer{delimiter}keys'
     customerDiskPurpose: 'customer{delimiter}keys'
     doubleEncryptionDiskPurpose: 'platform{delimiter}and{delimiter}customer{delimiter}keys'
-    fslogixStoragePrefix: 'fslogix{unique}'
+    fslogixStoragePrefix: 'fslpc{unique}'
+    fslogixOfficeStoragePrefix: 'fsloc{unique}'
     fslogixKey: '{identifier}-{storagePrefix}##-cmk'
     vmKey: '{identifier}-vm-cmk'
     confidentialVmKey: '{identifier}-cvm-cmk'
@@ -182,6 +183,7 @@ type namingConventionConfig = {
   cpLocationAbbreviation: string?
   vmsLocationAbbreviation: string?
   fslogixStoragePrefix: string?
+  fslogixOfficeStoragePrefix: string?
   imageManagementStoragePrefix: string?
   secretsKeyVaultNameOverride: string?
   encryptionKeyVaultNameOverride: string?
@@ -495,6 +497,10 @@ func fslogixStoragePrefix(prefix string, unique string) string =>
   !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixStoragePrefix)
     : namePattern('fslogixStoragePrefix', { unique: unique })
 
+func fslogixOfficeStoragePrefix(prefix string, unique string) string =>
+  !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixStoragePrefix)
+    : namePattern('fslogixOfficeStoragePrefix', { unique: unique })
+
 // FSLogix bundle, shared with host pools.
 @export()
 @description('Explicit subscription, cloud and deployment location for legacy FSLogix naming. Existing resource-group overrides are applied after naming and do not change its uniqueness seed.')
@@ -516,7 +522,9 @@ type fslogixNamingResult = {
   netAppAccountName: string
   netAppCapacityPoolName: string
   fslogixStorageAccountNamePrefix: string
+  fslogixOfficeStorageAccountNamePrefix: string
   encryptionKeyNameFSLogix: string
+  encryptionKeyNameFSLogixOffice: string
   privateEndpointNameConv: string
   privateEndpointNICNameConv: string
   userAssignedIdentityNameConv: string
@@ -524,7 +532,7 @@ type fslogixNamingResult = {
   vmLocationAbbreviation: string
 }
 
-func fslogixNamesWithPrefix(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, prefix string, helperVmName string) fslogixNamingResult => {
+func fslogixNamesWithPrefix(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, prefix string, officePrefix string, helperVmName string) fslogixNamingResult => {
   delimiter: resolveConvention(convention).delimiter
   resourceGroupDeployment: resourceName(convention, 'deploymentResourceGroup', abbreviation, identifier, '')
   depVirtualMachineName: helperVmName
@@ -534,7 +542,9 @@ func fslogixNamesWithPrefix(convention object, identifier string, context fslogi
   netAppAccountName: resourceName(convention, 'netAppAccount', abbreviation, identifier, '')
   netAppCapacityPoolName: resourceName(convention, 'netAppCapacityPool', abbreviation, identifier, '')
   fslogixStorageAccountNamePrefix: prefix
+  fslogixOfficeStorageAccountNamePrefix: officePrefix
   encryptionKeyNameFSLogix: namePattern('fslogixKey', { identifier: identifier, storagePrefix: prefix })
+  encryptionKeyNameFSLogixOffice: namePattern('fslogixKey', { identifier: identifier, storagePrefix: officePrefix })
   privateEndpointNameConv: privateEndpointPattern(resourceTypeFirst(convention), resolveConvention(convention).resourceTypeCodes.privateEndpoints)
   privateEndpointNICNameConv: privateEndpointNicPattern(resourceTypeFirst(convention), resolveConvention(convention).resourceTypeCodes.privateEndpoints, resolveConvention(convention).resourceTypeCodes.networkInterfaces)
   userAssignedIdentityNameConv: resourceName(convention, 'identityPattern', abbreviation, identifier, '')
@@ -543,7 +553,7 @@ func fslogixNamesWithPrefix(convention object, identifier string, context fslogi
 }
 
 func fslogixNamesWithSeed(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, unique string) fslogixNamingResult =>
-  fslogixNamesWithPrefix(convention, identifier, context, abbreviation, storageGroupName, fslogixStoragePrefix(convention.?fslogixStoragePrefix ?? '', unique), deploymentVmName(convention, abbreviation, identifier))
+  fslogixNamesWithPrefix(convention, identifier, context, abbreviation, storageGroupName, fslogixStoragePrefix(convention.?fslogixStoragePrefix ?? '', unique), fslogixOfficeStoragePrefix(convention.?fslogixOfficeStoragePrefix ?? '', unique), deploymentVmName(convention, abbreviation, identifier))
 
 func fslogixNamesForLocation(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string) fslogixNamingResult =>
   fslogixNamesWithSeed(convention, identifier, context, abbreviation, storageGroupName, take(scopeUnique(union(context, { resourceGroupName: storageGroupName })), namingPolicy.limits.uniqueSuffix))
@@ -552,7 +562,7 @@ func fslogixNamesForAbbreviation(convention object, identifier string, context f
   fslogixNamesForLocation(convention, identifier, context, abbreviation, resourceName(convention, 'storageResourceGroup', abbreviation, identifier, ''))
 
 @export()
-@description('Returns the legacy-compatible FSLogix bundle without a naming deployment or a host-pool dependency. Explicit caller overrides remain outside this bundle.')
+@description('Returns paired Profile/Office storage names without a naming deployment or host-pool dependency. Explicit caller overrides remain outside this bundle.')
 func fslogixNames(convention object, identifier string, context fslogixNamingContext) fslogixNamingResult =>
   fslogixNamesForAbbreviation(convention, identifier, context, !empty(convention.?vmsLocationAbbreviation ?? '') ? convention.vmsLocationAbbreviation : regionAbbreviation(context.location, context.cloud))
 
@@ -680,7 +690,9 @@ type hostPoolNamingResult = {
   netAppAccountName: string
   netAppCapacityPoolName: string
   fslogixStorageAccountNamePrefix: string
+  fslogixOfficeStorageAccountNamePrefix: string
   encryptionKeyNameFSLogix: string
+  encryptionKeyNameFSLogixOffice: string
   privateEndpointNameConv: string
   privateEndpointNICNameConv: string
   userAssignedIdentityNameConv: string

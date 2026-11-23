@@ -1749,12 +1749,35 @@
                   "multiLine": true,
                   "multiselect": true,
                   "toolTip": "",
-                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
                   "constraints": {
                     "allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
                     "required": true
                   },
                   "visible": "[steps('userProfiles').configureSessionHosts]"
+                },
+                {
+                  "name": "existingLocalOfficeStorageAccounts",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing Local Office Container Storage Accounts",
+                  "multiLine": true,
+                  "multiselect": true,
+                  "toolTip": "Select one separate Office account per Profile account, in the same shard order. Profile and Office accounts cannot overlap.",
+                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalOfficeStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslLocalOfficeStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
+                  "constraints": {
+                    "allowedValues": "[if(empty(steps('userProfiles').azureFiles.storageAccountsApi), parse('[]'), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), not(contains(coalesce(steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]')), sa.id)))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"value\":\"', sa.id, '\"}'))))]",
+                    "required": true
+                  },
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'Office'), not(empty(steps('userProfiles').azureFiles.existingLocalStorageAccounts)))]"
+                },
+                {
+                  "name": "wrongNumberOfLocalOfficeStorageAccounts",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'Office'), not(equals(length(coalesce(steps('userProfiles').azureFiles.existingLocalOfficeStorageAccounts, parse('[]'))), length(coalesce(steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Office containers require one separate Office storage account for each local Profile storage account, in the same shard order. No data is moved automatically."
+                  }
                 },
                 {
                   "name": "wrongNumberOfLocalStorageAccounts",
@@ -1808,12 +1831,35 @@
                   "multiLine": true,
                   "multiselect": true,
                   "toolTip": "",
-                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => contains(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), sa.name)), (sa) => sa.name), parse('[]'))]",
+                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
                   "constraints": {
                     "allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\", \"value\":\"', sa.id, '\"}')))]",
                     "required": false
                   },
                   "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'CloudCache'))]"
+                },
+                {
+                  "name": "existingRemoteOfficeStorageAccounts",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing Remote Office Container Storage Accounts",
+                  "multiLine": true,
+                  "multiselect": true,
+                  "toolTip": "When remote Profile accounts are selected, select the same number of separate remote Office accounts in matching shard order.",
+                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteOfficeStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslRemoteOfficeStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
+                  "constraints": {
+                    "allowedValues": "[if(empty(steps('userProfiles').azureFiles.storageAccountsApi), parse('[]'), map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('userProfiles').azureFiles.remoteLocation), not(contains(coalesce(steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]')), sa.id)))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"value\":\"', sa.id, '\"}'))))]",
+                    "required": true
+                  },
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'Office'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(empty(steps('userProfiles').azureFiles.existingRemoteStorageAccounts)))]"
+                },
+                {
+                  "name": "wrongNumberOfRemoteOfficeStorageAccounts",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('userProfiles').fslogixContainerType, 'Office'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache'), not(equals(length(coalesce(steps('userProfiles').azureFiles.existingRemoteOfficeStorageAccounts, parse('[]'))), length(coalesce(steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Remote Office and Profile storage accounts must be separate, paired one-to-one, and listed in the same shard order."
+                  }
                 },
                 {
                   "name": "wrongNumberOfRemoteStorageAccounts",
@@ -2092,8 +2138,10 @@
         "fslogixContainerType": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
         "fslogixSizeInMBs": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').sizeInMBs, 30720)]",
         "fslogixStorageService": "[if(steps('userProfiles').configureSessionHosts, steps('userProfiles').storageService, 'AzureFiles')]",
-        "fslogixLocalStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
-        "fslogixRemoteStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
+        "fslogixLocalProfileStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles')), steps('userProfiles').azureFiles.existingLocalStorageAccounts, parse('[]'))]",
+        "fslogixLocalOfficeStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'Office')), steps('userProfiles').azureFiles.existingLocalOfficeStorageAccounts, parse('[]'))]",
+        "fslogixRemoteProfileStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteStorageAccounts, parse('[]'))]",
+        "fslogixRemoteOfficeStorageAccountResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'Office'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), steps('userProfiles').azureFiles.existingRemoteOfficeStorageAccounts, parse('[]'))]",
         "fslogixLocalNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), steps('userProfiles').azureNetAppFiles.localVolumes, parse(concat('[\"', steps('userProfiles').azureNetAppFiles.localVolumes, '\"]'))), parse('[]'))]",
         "fslogixRemoteNetAppVolumeResourceIds": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), contains(steps('userProfiles').fslogixContainerType, 'CloudCache')), if(contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, parse('[]')), if(not(empty(coalesce(steps('userProfiles').azureNetAppFiles.remoteVolumes, ''))), parse(concat('[\"', steps('userProfiles').azureNetAppFiles.remoteVolumes, '\"]')), parse('[]'))), parse('[]'))]",
         "fslogixOSSGroups": "[if(and(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('hosts').identity.machineIdentity, 'DomainServices'), equals(steps('userProfiles').azureFiles.shardingOption, 'ShardOSS')), map(steps('userProfiles').azureFiles.userGroupPickerBlade.selectedObjects, (group) => group.displayName), parse('[]'))]",

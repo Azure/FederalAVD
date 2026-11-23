@@ -42,6 +42,51 @@ supports existing vaults or opt-in shared/dedicated vault creation with `deployF
 All shared FSLogix backup registration excludes `office-containers`; previously enrolled Office
 shares require explicit operator removal from protection.
 
+Standard host pools and the FSLogix Storage add-on use separate Azure Files accounts whenever
+Office containers are enabled. `fslogixOfficeStorageTier` and `fslogixOfficeStorageRedundancy`
+default to `Inherit`; `fslogixOfficeShareSizeInGB = 0` inherits the Profile quota. Existing Office
+account arrays must be explicitly paired with Profile arrays in shard order and cannot overlap.
+Generated accounts use central `fslpc` / `fsloc` prefixes; preserve explicit Profile prefixes when
+updating an existing deployment. No data migration, account rename/deletion, or removal of
+existing Office backup protection occurs automatically. Azure NetApp Files retains separate volumes.
+See [standard host-pool storage](../deployments/hostpools/README.md#profile-and-office-account-separation)
+and the [add-on role-array contract](../deployments/add-ons/fslogixStorage/README.md#profile-and-office-storage-accounts).
+The disposable Standard PoC remains Profile-only.
+
+Azure Files media is `Standard` (HDD) or `Premium` (SSD). Billing is independently selected
+with `fslogixProfileStorageBillingModel` (`Legacy`, the Bicep default, or `ProvisionedV2`)
+and `fslogixOfficeStorageBillingModel` (`Inherit`, `Legacy`, or `ProvisionedV2`).
+New Portal deployments default to SSD provisioned v2; omitted parameters in old files preserve
+legacy behavior. V2 uses `FileStorage` with `StandardV2_LRS/ZRS` or `PremiumV2_LRS/ZRS`.
+`StorageV2` does not mean provisioned-v2 billing. Cloud Cache retains existing support;
+Microsoft recommends SSD. See the
+[tier/billing and Cloud Cache guidance](../deployments/add-ons/fslogixStorage/README.md#profile-and-office-storage-accounts).
+
+| Preferred Profile input | Compatibility input retained |
+| --- | --- |
+| `fslogixProfileStorageTier` | Media portion of `fslogixStorageService` |
+| `fslogixProfileStorageRedundancy` | `fslogixStorageRedundancy` |
+| `fslogixProfileShareSizeInGB` | `fslogixShareSizeInGB` (host pools), `shareSizeInGB` (storage add-on) |
+| `fslogixExistingLocalProfileStorageAccountResourceIds` | `fslogixExistingLocalStorageAccountResourceIds` |
+| `fslogixExistingRemoteProfileStorageAccountResourceIds` | `fslogixExistingRemoteStorageAccountResourceIds` |
+| `fslogixProfileStorageAccountNamePrefix` | `storageAccountNamePrefix` (storage add-on); existing `namingConvention.fslogixStoragePrefix` or generated naming (host pools) |
+| `fslogixLocalProfileStorageAccountResourceIds` (additional hosts/SHR) | `fslogixLocalStorageAccountResourceIds` |
+| `fslogixRemoteProfileStorageAccountResourceIds` (additional hosts/SHR) | `fslogixRemoteStorageAccountResourceIds` |
+
+Preferred values take precedence when supplied, including empty arrays; omission falls back
+to the compatibility input. Existing names and defaults are not removed. Shared authentication,
+shard count/index and group inputs remain neutral. Backend selection remains in
+`fslogixStorageService`; the Profile tier override applies only to Azure Files.
+
+For each role, `fslogixProfileProvisionedIops` / `fslogixOfficeProvisionedIops` and
+`fslogixProfileProvisionedThroughputMiBps` / `fslogixOfficeProvisionedThroughputMiBps` default
+to zero, selecting the recommendation calculated from that role's capacity. Nonzero performance
+inputs require v2. V2 global limits are 32-262144 GiB, SSD 3000-102400 IOPS / 100-10340 MiB/s,
+and HDD 500-50000 IOPS / 60-5120 MiB/s. Regional/account limits can be lower; validate the target
+environment. Capacity and performance are billed as provisioned, not as consumed.
+Existing-resource arrays do not resize, convert or migrate accounts. See the
+[design compatibility contract](design.md#provisioned-v2-sizing-and-compatible-interfaces).
+
 ---
 
 ## Naming Convention

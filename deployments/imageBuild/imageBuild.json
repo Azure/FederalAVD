@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "14579709616343769452"
+      "templateHash": "2595753753782175527"
     }
   },
   "definitions": {
@@ -1728,7 +1728,8 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",
         "confidentialVmKey": "{identifier}-cvm-cmk",
@@ -2393,7 +2394,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "16602256035273770271"
+              "templateHash": "7921988687599192063"
             },
             "name": "Windows virtual machine",
             "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -2479,61 +2480,30 @@
             }
           },
           "parameters": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the windows virtual machine to deploy."
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags applied to the windows virtual machine."
-              }
-            },
-            "vmSize": {
-              "type": "string",
-              "defaultValue": "Standard_D4ads_v6",
-              "metadata": {
-                "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
-              }
-            },
-            "adminUsername": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Local administrator account name for the Windows VM."
-              }
-            },
             "adminPassword": {
               "type": "securestring",
               "metadata": {
                 "description": "Required. Local administrator password for the Windows VM, passed as a secure value."
               }
             },
-            "subnetResourceId": {
-              "type": "string",
+            "adminUsername": {
+              "type": "securestring",
               "metadata": {
-                "description": "Required. Resource ID of the existing subnet used by the VM NIC."
+                "description": "Required. Local administrator account name for the Windows VM."
               }
             },
-            "nicName": {
+            "availabilitySetResourceId": {
               "type": "string",
+              "defaultValue": "",
               "metadata": {
-                "description": "Required. Name of the private network interface created for the VM."
+                "description": "Availability set resource ID. Empty = no availability set."
               }
             },
-            "osDiskName": {
-              "type": "string",
+            "bootDiagnosticsEnabled": {
+              "type": "bool",
+              "defaultValue": true,
               "metadata": {
-                "description": "Required. Name of the managed OS disk created from the selected image."
+                "description": "Optional. Enable boot diagnostics with managed storage account."
               }
             },
             "customImageResourceId": {
@@ -2543,45 +2513,11 @@
                 "description": "Optional. Custom image resource ID. Overrides imagePublisher/imageOffer/imageSku when provided."
               }
             },
-            "imagePublisher": {
+            "diskAccessId": {
               "type": "string",
-              "defaultValue": "MicrosoftWindowsDesktop",
+              "defaultValue": "",
               "metadata": {
-                "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
-              }
-            },
-            "imageOffer": {
-              "type": "string",
-              "defaultValue": "windows-11",
-              "metadata": {
-                "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
-              }
-            },
-            "imageSku": {
-              "type": "string",
-              "defaultValue": "win11-25h2-avd",
-              "metadata": {
-                "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
-              }
-            },
-            "osDiskSku": {
-              "type": "string",
-              "defaultValue": "Premium_LRS",
-              "allowedValues": [
-                "Premium_LRS",
-                "StandardSSD_LRS",
-                "Standard_LRS",
-                "UltraSSD_LRS"
-              ],
-              "metadata": {
-                "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
-              }
-            },
-            "osDiskSizeGB": {
-              "type": "int",
-              "defaultValue": 0,
-              "metadata": {
-                "description": "OS disk size in GB. 0 uses the image default."
+                "description": "Disk access resource ID for restricting disk network access."
               }
             },
             "diskControllerType": {
@@ -2594,13 +2530,6 @@
               ],
               "metadata": {
                 "description": "Optional. The disk controller type. When empty, Azure selects automatically based on the VM SKU."
-              }
-            },
-            "diskAccessId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Disk access resource ID for restricting disk network access."
               }
             },
             "diskEncryptionSetResourceId": {
@@ -2624,53 +2553,6 @@
                 "description": "Optional. Enable host-level VM encryption; the selected VM size must support it."
               }
             },
-            "hibernationEnabled": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
-              }
-            },
-            "securityType": {
-              "type": "string",
-              "defaultValue": "TrustedLaunch",
-              "allowedValues": [
-                "Standard",
-                "TrustedLaunch",
-                "ConfidentialVM"
-              ],
-              "metadata": {
-                "description": "Optional. VM security model; the image and VM size must support the selected model."
-              }
-            },
-            "secureBootEnabled": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
-              }
-            },
-            "vTpmEnabled": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
-              }
-            },
-            "availabilitySetResourceId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Availability set resource ID. Empty = no availability set."
-              }
-            },
-            "userAssignedIdentityResourceIds": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "User-assigned managed identity resource IDs."
-              }
-            },
             "extensions": {
               "type": "array",
               "items": {
@@ -2679,6 +2561,34 @@
               "defaultValue": [],
               "metadata": {
                 "description": "VM extensions to install."
+              }
+            },
+            "hibernationEnabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
+              }
+            },
+            "imageOffer": {
+              "type": "string",
+              "defaultValue": "windows-11",
+              "metadata": {
+                "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
+              }
+            },
+            "imagePublisher": {
+              "type": "string",
+              "defaultValue": "MicrosoftWindowsDesktop",
+              "metadata": {
+                "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
+              }
+            },
+            "imageSku": {
+              "type": "string",
+              "defaultValue": "win11-25h2-avd",
+              "metadata": {
+                "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
               }
             },
             "licenseType": {
@@ -2693,11 +2603,114 @@
                 "description": "Optional. Windows Server license type for Azure Hybrid Benefit."
               }
             },
-            "bootDiagnosticsEnabled": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
+              }
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the windows virtual machine to deploy."
+              }
+            },
+            "nicDeleteOption": {
+              "type": "string",
+              "defaultValue": "Delete",
+              "allowedValues": [
+                "Delete",
+                "Detach"
+              ],
+              "metadata": {
+                "description": "Optional. NIC delete option when the VM is deleted."
+              }
+            },
+            "nicName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the private network interface created for the VM."
+              }
+            },
+            "nicPrivateIPAddress": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Private IP address for the VM NIC; used only when nicPrivateIPAllocationMethod is Static."
+              }
+            },
+            "nicPrivateIPAllocationMethod": {
+              "type": "string",
+              "defaultValue": "Dynamic",
+              "allowedValues": [
+                "Dynamic",
+                "Static"
+              ],
+              "metadata": {
+                "description": "Optional. Private IP allocation method for the VM NIC."
+              }
+            },
+            "osDiskDeleteOption": {
+              "type": "string",
+              "defaultValue": "Delete",
+              "allowedValues": [
+                "Delete",
+                "Detach"
+              ],
+              "metadata": {
+                "description": "Optional. OS disk delete option when the VM is deleted."
+              }
+            },
+            "osDiskName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the managed OS disk created from the selected image."
+              }
+            },
+            "osDiskSizeGB": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "OS disk size in GB. 0 uses the image default."
+              }
+            },
+            "osDiskSku": {
+              "type": "string",
+              "defaultValue": "Premium_LRS",
+              "allowedValues": [
+                "Premium_LRS",
+                "StandardSSD_LRS",
+                "Standard_LRS",
+                "UltraSSD_LRS"
+              ],
+              "metadata": {
+                "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
+              }
+            },
+            "secureBootEnabled": {
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Enable boot diagnostics with managed storage account."
+                "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
+              }
+            },
+            "securityType": {
+              "type": "string",
+              "defaultValue": "TrustedLaunch",
+              "allowedValues": [
+                "Standard",
+                "TrustedLaunch",
+                "ConfidentialVM"
+              ],
+              "metadata": {
+                "description": "Optional. VM security model; the image and VM size must support the selected model."
+              }
+            },
+            "subnetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing subnet used by the VM NIC."
               }
             },
             "systemAssignedIdentity": {
@@ -2705,6 +2718,34 @@
               "defaultValue": false,
               "metadata": {
                 "description": "Optional. Enable system-assigned managed identity in addition to any user-assigned identities."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the windows virtual machine."
+              }
+            },
+            "userAssignedIdentityResourceIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "User-assigned managed identity resource IDs."
+              }
+            },
+            "vmSize": {
+              "type": "string",
+              "defaultValue": "Standard_D4ads_v6",
+              "metadata": {
+                "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
+              }
+            },
+            "vTpmEnabled": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
               }
             }
           },
@@ -2727,7 +2768,8 @@
                   {
                     "name": "ipconfig1",
                     "properties": {
-                      "privateIPAllocationMethod": "Dynamic",
+                      "privateIPAllocationMethod": "[parameters('nicPrivateIPAllocationMethod')]",
+                      "privateIPAddress": "[if(equals(parameters('nicPrivateIPAllocationMethod'), 'Static'), parameters('nicPrivateIPAddress'), null())]",
                       "subnet": {
                         "id": "[parameters('subnetResourceId')]"
                       }
@@ -2757,7 +2799,7 @@
                   "osDisk": {
                     "name": "[parameters('osDiskName')]",
                     "createOption": "FromImage",
-                    "deleteOption": "Delete",
+                    "deleteOption": "[parameters('osDiskDeleteOption')]",
                     "managedDisk": {
                       "storageAccountType": "[parameters('osDiskSku')]",
                       "diskEncryptionSet": "[if(not(empty(parameters('diskEncryptionSetResourceId'))), createObject('id', parameters('diskEncryptionSetResourceId')), null())]",
@@ -2773,7 +2815,7 @@
                     {
                       "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]",
                       "properties": {
-                        "deleteOption": "Delete"
+                        "deleteOption": "[parameters('nicDeleteOption')]"
                       }
                     }
                   ]
@@ -2844,7 +2886,7 @@
               "metadata": {
                 "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
               },
-              "value": "[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
+              "value": "[if(parameters('systemAssignedIdentity'), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
             }
           }
         }
@@ -2931,7 +2973,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "16602256035273770271"
+              "templateHash": "7921988687599192063"
             },
             "name": "Windows virtual machine",
             "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -3017,61 +3059,30 @@
             }
           },
           "parameters": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the windows virtual machine to deploy."
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags applied to the windows virtual machine."
-              }
-            },
-            "vmSize": {
-              "type": "string",
-              "defaultValue": "Standard_D4ads_v6",
-              "metadata": {
-                "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
-              }
-            },
-            "adminUsername": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Local administrator account name for the Windows VM."
-              }
-            },
             "adminPassword": {
               "type": "securestring",
               "metadata": {
                 "description": "Required. Local administrator password for the Windows VM, passed as a secure value."
               }
             },
-            "subnetResourceId": {
-              "type": "string",
+            "adminUsername": {
+              "type": "securestring",
               "metadata": {
-                "description": "Required. Resource ID of the existing subnet used by the VM NIC."
+                "description": "Required. Local administrator account name for the Windows VM."
               }
             },
-            "nicName": {
+            "availabilitySetResourceId": {
               "type": "string",
+              "defaultValue": "",
               "metadata": {
-                "description": "Required. Name of the private network interface created for the VM."
+                "description": "Availability set resource ID. Empty = no availability set."
               }
             },
-            "osDiskName": {
-              "type": "string",
+            "bootDiagnosticsEnabled": {
+              "type": "bool",
+              "defaultValue": true,
               "metadata": {
-                "description": "Required. Name of the managed OS disk created from the selected image."
+                "description": "Optional. Enable boot diagnostics with managed storage account."
               }
             },
             "customImageResourceId": {
@@ -3081,45 +3092,11 @@
                 "description": "Optional. Custom image resource ID. Overrides imagePublisher/imageOffer/imageSku when provided."
               }
             },
-            "imagePublisher": {
+            "diskAccessId": {
               "type": "string",
-              "defaultValue": "MicrosoftWindowsDesktop",
+              "defaultValue": "",
               "metadata": {
-                "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
-              }
-            },
-            "imageOffer": {
-              "type": "string",
-              "defaultValue": "windows-11",
-              "metadata": {
-                "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
-              }
-            },
-            "imageSku": {
-              "type": "string",
-              "defaultValue": "win11-25h2-avd",
-              "metadata": {
-                "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
-              }
-            },
-            "osDiskSku": {
-              "type": "string",
-              "defaultValue": "Premium_LRS",
-              "allowedValues": [
-                "Premium_LRS",
-                "StandardSSD_LRS",
-                "Standard_LRS",
-                "UltraSSD_LRS"
-              ],
-              "metadata": {
-                "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
-              }
-            },
-            "osDiskSizeGB": {
-              "type": "int",
-              "defaultValue": 0,
-              "metadata": {
-                "description": "OS disk size in GB. 0 uses the image default."
+                "description": "Disk access resource ID for restricting disk network access."
               }
             },
             "diskControllerType": {
@@ -3132,13 +3109,6 @@
               ],
               "metadata": {
                 "description": "Optional. The disk controller type. When empty, Azure selects automatically based on the VM SKU."
-              }
-            },
-            "diskAccessId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Disk access resource ID for restricting disk network access."
               }
             },
             "diskEncryptionSetResourceId": {
@@ -3162,53 +3132,6 @@
                 "description": "Optional. Enable host-level VM encryption; the selected VM size must support it."
               }
             },
-            "hibernationEnabled": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
-              }
-            },
-            "securityType": {
-              "type": "string",
-              "defaultValue": "TrustedLaunch",
-              "allowedValues": [
-                "Standard",
-                "TrustedLaunch",
-                "ConfidentialVM"
-              ],
-              "metadata": {
-                "description": "Optional. VM security model; the image and VM size must support the selected model."
-              }
-            },
-            "secureBootEnabled": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
-              }
-            },
-            "vTpmEnabled": {
-              "type": "bool",
-              "defaultValue": true,
-              "metadata": {
-                "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
-              }
-            },
-            "availabilitySetResourceId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Availability set resource ID. Empty = no availability set."
-              }
-            },
-            "userAssignedIdentityResourceIds": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "User-assigned managed identity resource IDs."
-              }
-            },
             "extensions": {
               "type": "array",
               "items": {
@@ -3217,6 +3140,34 @@
               "defaultValue": [],
               "metadata": {
                 "description": "VM extensions to install."
+              }
+            },
+            "hibernationEnabled": {
+              "type": "bool",
+              "defaultValue": false,
+              "metadata": {
+                "description": "Optional. Enable VM hibernation capability; the selected VM size and image must support it."
+              }
+            },
+            "imageOffer": {
+              "type": "string",
+              "defaultValue": "windows-11",
+              "metadata": {
+                "description": "Optional. Marketplace image offer, used only when no custom image resource ID is supplied."
+              }
+            },
+            "imagePublisher": {
+              "type": "string",
+              "defaultValue": "MicrosoftWindowsDesktop",
+              "metadata": {
+                "description": "Optional. Marketplace image publisher, used only when no custom image resource ID is supplied."
+              }
+            },
+            "imageSku": {
+              "type": "string",
+              "defaultValue": "win11-25h2-avd",
+              "metadata": {
+                "description": "Optional. Marketplace image SKU; the latest version is used when no custom image resource ID is supplied."
               }
             },
             "licenseType": {
@@ -3231,11 +3182,114 @@
                 "description": "Optional. Windows Server license type for Azure Hybrid Benefit."
               }
             },
-            "bootDiagnosticsEnabled": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the windows virtual machine; defaults to the deployment resource group region."
+              }
+            },
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the windows virtual machine to deploy."
+              }
+            },
+            "nicDeleteOption": {
+              "type": "string",
+              "defaultValue": "Delete",
+              "allowedValues": [
+                "Delete",
+                "Detach"
+              ],
+              "metadata": {
+                "description": "Optional. NIC delete option when the VM is deleted."
+              }
+            },
+            "nicName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the private network interface created for the VM."
+              }
+            },
+            "nicPrivateIPAddress": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional. Private IP address for the VM NIC; used only when nicPrivateIPAllocationMethod is Static."
+              }
+            },
+            "nicPrivateIPAllocationMethod": {
+              "type": "string",
+              "defaultValue": "Dynamic",
+              "allowedValues": [
+                "Dynamic",
+                "Static"
+              ],
+              "metadata": {
+                "description": "Optional. Private IP allocation method for the VM NIC."
+              }
+            },
+            "osDiskDeleteOption": {
+              "type": "string",
+              "defaultValue": "Delete",
+              "allowedValues": [
+                "Delete",
+                "Detach"
+              ],
+              "metadata": {
+                "description": "Optional. OS disk delete option when the VM is deleted."
+              }
+            },
+            "osDiskName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Name of the managed OS disk created from the selected image."
+              }
+            },
+            "osDiskSizeGB": {
+              "type": "int",
+              "defaultValue": 0,
+              "metadata": {
+                "description": "OS disk size in GB. 0 uses the image default."
+              }
+            },
+            "osDiskSku": {
+              "type": "string",
+              "defaultValue": "Premium_LRS",
+              "allowedValues": [
+                "Premium_LRS",
+                "StandardSSD_LRS",
+                "Standard_LRS",
+                "UltraSSD_LRS"
+              ],
+              "metadata": {
+                "description": "Optional. Storage account type for the managed OS disk; must be supported by the selected VM and image."
+              }
+            },
+            "secureBootEnabled": {
               "type": "bool",
               "defaultValue": true,
               "metadata": {
-                "description": "Optional. Enable boot diagnostics with managed storage account."
+                "description": "Optional. Enable Secure Boot when the VM security type is not Standard."
+              }
+            },
+            "securityType": {
+              "type": "string",
+              "defaultValue": "TrustedLaunch",
+              "allowedValues": [
+                "Standard",
+                "TrustedLaunch",
+                "ConfidentialVM"
+              ],
+              "metadata": {
+                "description": "Optional. VM security model; the image and VM size must support the selected model."
+              }
+            },
+            "subnetResourceId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Resource ID of the existing subnet used by the VM NIC."
               }
             },
             "systemAssignedIdentity": {
@@ -3243,6 +3297,34 @@
               "defaultValue": false,
               "metadata": {
                 "description": "Optional. Enable system-assigned managed identity in addition to any user-assigned identities."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Optional. Tags applied to the windows virtual machine."
+              }
+            },
+            "userAssignedIdentityResourceIds": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "User-assigned managed identity resource IDs."
+              }
+            },
+            "vmSize": {
+              "type": "string",
+              "defaultValue": "Standard_D4ads_v6",
+              "metadata": {
+                "description": "Optional. Azure VM size; must support the selected image, security settings and networking capabilities."
+              }
+            },
+            "vTpmEnabled": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Optional. Enable the virtual TPM when the VM security type is not Standard."
               }
             }
           },
@@ -3265,7 +3347,8 @@
                   {
                     "name": "ipconfig1",
                     "properties": {
-                      "privateIPAllocationMethod": "Dynamic",
+                      "privateIPAllocationMethod": "[parameters('nicPrivateIPAllocationMethod')]",
+                      "privateIPAddress": "[if(equals(parameters('nicPrivateIPAllocationMethod'), 'Static'), parameters('nicPrivateIPAddress'), null())]",
                       "subnet": {
                         "id": "[parameters('subnetResourceId')]"
                       }
@@ -3295,7 +3378,7 @@
                   "osDisk": {
                     "name": "[parameters('osDiskName')]",
                     "createOption": "FromImage",
-                    "deleteOption": "Delete",
+                    "deleteOption": "[parameters('osDiskDeleteOption')]",
                     "managedDisk": {
                       "storageAccountType": "[parameters('osDiskSku')]",
                       "diskEncryptionSet": "[if(not(empty(parameters('diskEncryptionSetResourceId'))), createObject('id', parameters('diskEncryptionSetResourceId')), null())]",
@@ -3311,7 +3394,7 @@
                     {
                       "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nicName'))]",
                       "properties": {
-                        "deleteOption": "Delete"
+                        "deleteOption": "[parameters('nicDeleteOption')]"
                       }
                     }
                   ]
@@ -3382,7 +3465,7 @@
               "metadata": {
                 "description": "VM identity principal ID when systemAssignedIdentity is true or no user-assigned identities are supplied; otherwise an empty string."
               },
-              "value": "[if(or(parameters('systemAssignedIdentity'), empty(parameters('userAssignedIdentityResourceIds'))), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
+              "value": "[if(parameters('systemAssignedIdentity'), reference('virtualMachine', '2023-09-01', 'full').identity.principalId, '')]"
             }
           }
         }
@@ -3429,7 +3512,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "11947828355218345379"
+              "templateHash": "8317728250201469341"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -3454,10 +3537,32 @@
             }
           },
           "parameters": {
-            "virtualMachineName": {
-              "type": "string",
+            "asyncExecution": {
+              "type": "bool",
+              "defaultValue": false,
               "metadata": {
-                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                "description": "Run the command asynchronously (fire and forget)."
+              }
+            },
+            "errorBlobManagedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+              }
+            },
+            "errorBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
               }
             },
             "name": {
@@ -3466,11 +3571,38 @@
                 "description": "Required. Name of the virtual machine Run Command to deploy."
               }
             },
-            "location": {
+            "outputBlobManagedIdentityClientId": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]",
+              "defaultValue": "",
               "metadata": {
-                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+              }
+            },
+            "outputBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+              }
+            },
+            "parameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named parameters to pass to the script."
+              }
+            },
+            "protectedParameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named protected (secure) parameters to pass to the script."
               }
             },
             "script": {
@@ -3494,38 +3626,11 @@
                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
               }
             },
-            "parameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
-              },
-              "defaultValue": [],
-              "metadata": {
-                "description": "Named parameters to pass to the script."
-              }
-            },
-            "protectedParameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
-              },
-              "defaultValue": [],
-              "metadata": {
-                "description": "Named protected (secure) parameters to pass to the script."
-              }
-            },
             "timeoutInSeconds": {
               "type": "int",
               "defaultValue": 0,
               "metadata": {
                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-              }
-            },
-            "asyncExecution": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Run the command asynchronously (fire and forget)."
               }
             },
             "treatFailureAsDeploymentFailure": {
@@ -3535,32 +3640,10 @@
                 "description": "Treat a non-zero exit code as a deployment failure."
               }
             },
-            "outputBlobUri": {
+            "virtualMachineName": {
               "type": "string",
-              "defaultValue": "",
               "metadata": {
-                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-              }
-            },
-            "errorBlobUri": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-              }
-            },
-            "outputBlobManagedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-              }
-            },
-            "errorBlobManagedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                "description": "Required. Name of the existing virtual machine in the deployment resource group."
               }
             }
           },
@@ -6542,7 +6625,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "11947828355218345379"
+              "templateHash": "8317728250201469341"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -6567,10 +6650,32 @@
             }
           },
           "parameters": {
-            "virtualMachineName": {
-              "type": "string",
+            "asyncExecution": {
+              "type": "bool",
+              "defaultValue": false,
               "metadata": {
-                "description": "Required. Name of the existing virtual machine in the deployment resource group."
+                "description": "Run the command asynchronously (fire and forget)."
+              }
+            },
+            "errorBlobManagedIdentityClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+              }
+            },
+            "errorBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
+              }
+            },
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]",
+              "metadata": {
+                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
               }
             },
             "name": {
@@ -6579,11 +6684,38 @@
                 "description": "Required. Name of the virtual machine Run Command to deploy."
               }
             },
-            "location": {
+            "outputBlobManagedIdentityClientId": {
               "type": "string",
-              "defaultValue": "[resourceGroup().location]",
+              "defaultValue": "",
               "metadata": {
-                "description": "Optional. Azure region for the virtual machine Run Command; defaults to the deployment resource group region."
+                "description": "Client ID of the user-assigned managed identity used to access the output blob."
+              }
+            },
+            "outputBlobUri": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
+              }
+            },
+            "parameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named parameters to pass to the script."
+              }
+            },
+            "protectedParameters": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/runCommandParameterType"
+              },
+              "defaultValue": [],
+              "metadata": {
+                "description": "Named protected (secure) parameters to pass to the script."
               }
             },
             "script": {
@@ -6607,38 +6739,11 @@
                 "description": "Client ID of the user-assigned managed identity used to access the script URI."
               }
             },
-            "parameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
-              },
-              "defaultValue": [],
-              "metadata": {
-                "description": "Named parameters to pass to the script."
-              }
-            },
-            "protectedParameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
-              },
-              "defaultValue": [],
-              "metadata": {
-                "description": "Named protected (secure) parameters to pass to the script."
-              }
-            },
             "timeoutInSeconds": {
               "type": "int",
               "defaultValue": 0,
               "metadata": {
                 "description": "Maximum execution time in seconds. 0 = platform default (~1.5 hours)."
-              }
-            },
-            "asyncExecution": {
-              "type": "bool",
-              "defaultValue": false,
-              "metadata": {
-                "description": "Run the command asynchronously (fire and forget)."
               }
             },
             "treatFailureAsDeploymentFailure": {
@@ -6648,32 +6753,10 @@
                 "description": "Treat a non-zero exit code as a deployment failure."
               }
             },
-            "outputBlobUri": {
+            "virtualMachineName": {
               "type": "string",
-              "defaultValue": "",
               "metadata": {
-                "description": "SAS URI or managed identity accessible blob URI to stream stdout to."
-              }
-            },
-            "errorBlobUri": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "SAS URI or managed identity accessible blob URI to stream stderr to."
-              }
-            },
-            "outputBlobManagedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used to access the output blob."
-              }
-            },
-            "errorBlobManagedIdentityClientId": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Client ID of the user-assigned managed identity used to access the error blob."
+                "description": "Required. Name of the existing virtual machine in the deployment resource group."
               }
             }
           },

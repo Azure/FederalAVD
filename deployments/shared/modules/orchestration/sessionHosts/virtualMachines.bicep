@@ -3,6 +3,7 @@ metadata description = 'Deploys session-host VM batches with NICs, initializatio
 
 import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
 import { osDiskNamePattern } from '../naming/internal.bicep'
+import { validateOfficeStorageAccounts } from '../fslogix/fslogix.bicep'
 
 @description('Required. AVD Agent Boot Loader installer URL forwarded to initialization; the caller resolves cloud-specific defaults.')
 param agentBootLoaderDownloadUrl string
@@ -64,12 +65,16 @@ param fslogixFileShareNames string[]
 param fslogixLocalNetAppServerFqdns string[]
 @description('Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization.')
 param fslogixLocalStorageAccountResourceIds string[]
+@description('Optional. Local Office account IDs paired with local Profile IDs; required for Azure Files Office containers.')
+param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 @description('Required. Array of group name strings forwarded as the initialization script OSSGroups argument.')
 param fslogixOSSGroups string[]
 @description('Required. Array of remote NetApp SMB server FQDN strings aligned with the ordered share names.')
 param fslogixRemoteNetAppServerFqdns string[]
 @description('Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization.')
 param fslogixRemoteStorageAccountResourceIds string[]
+@description('Optional. Remote Office account IDs paired with remote Profile IDs.')
+param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 @description('Required. Profile container size in MB forwarded to session-host initialization.')
 param fslogixSizeInMBs int
 @description('Required. Storage backend name forwarded to initialization, AzureFiles or AzureNetAppFiles.')
@@ -144,6 +149,17 @@ var storageSuffix = environment().suffixes.storage
 
 var sessionHostCount = length(sessionHostNames)
 
+var validatedOfficeStorageAccounts = fslogixConfigureSessionHosts && fslogixStorageService == 'AzureFiles'
+  ? validateOfficeStorageAccounts(
+      fslogixLocalStorageAccountResourceIds,
+      fslogixRemoteStorageAccountResourceIds,
+      fslogixLocalOfficeStorageAccountResourceIds,
+      fslogixRemoteOfficeStorageAccountResourceIds,
+      contains(fslogixContainerType, 'Office'),
+      fslogixOSSGroups
+    )
+  : { local: [], remote: [] }
+
 var effectiveFslogixLocalStorageAccountResourceIds = identitySolution == 'EntraId'
   ? take(fslogixLocalStorageAccountResourceIds, 1)
   : fslogixLocalStorageAccountResourceIds
@@ -157,6 +173,24 @@ var fslogixLocalStorageAccountKeys = identitySolution == 'EntraId' && !empty(eff
   : []
 var fslogixRemoteStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixRemoteStorageAccountResourceIds)
   ? [remoteStorageAccounts[0].listkeys().keys[0].value]
+  : []
+var effectiveFslogixLocalOfficeStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(validatedOfficeStorageAccounts.local, 1)
+  : validatedOfficeStorageAccounts.local
+var effectiveFslogixRemoteOfficeStorageAccountResourceIds = identitySolution == 'EntraId'
+  ? take(validatedOfficeStorageAccounts.remote, 1)
+  : validatedOfficeStorageAccounts.remote
+var fslogixLocalOfficeStorageAccountNames = [
+  for id in effectiveFslogixLocalOfficeStorageAccountResourceIds: last(split(id, '/'))
+]
+var fslogixRemoteOfficeStorageAccountNames = [
+  for id in effectiveFslogixRemoteOfficeStorageAccountResourceIds: last(split(id, '/'))
+]
+var fslogixLocalOfficeStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixLocalOfficeStorageAccountResourceIds)
+  ? [localOfficeStorageAccounts[0].listkeys().keys[0].value]
+  : []
+var fslogixRemoteOfficeStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixRemoteOfficeStorageAccountResourceIds)
+  ? [remoteOfficeStorageAccounts[0].listkeys().keys[0].value]
   : []
 
 var identityType = (!contains(identitySolution, 'DomainServices') || enableMonitoring ? true : false)
@@ -187,6 +221,20 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existin
 
 resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
   for resId in effectiveFslogixLocalStorageAccountResourceIds: if (identitySolution == 'EntraId') {
+    name: last(split(resId, '/'))
+    scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
+  }
+]
+
+resource localOfficeStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
+  for resId in effectiveFslogixLocalOfficeStorageAccountResourceIds: if (identitySolution == 'EntraId') {
+    name: last(split(resId, '/'))
+    scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
+  }
+]
+
+resource remoteOfficeStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
+  for resId in effectiveFslogixRemoteOfficeStorageAccountResourceIds: if (identitySolution == 'EntraId') {
     name: last(split(resId, '/'))
     scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
   }
@@ -553,9 +601,11 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         { name: 'IdentitySolution', value: identitySolution }
         { name: 'LocalNetAppServers', value: string(fslogixLocalNetAppServerFqdns) }
         { name: 'LocalStorageAccountNames', value: string(fslogixLocalStorageAccountNames) }
+        { name: 'LocalOfficeStorageAccountNames', value: string(fslogixLocalOfficeStorageAccountNames) }
         { name: 'OSSGroups', value: string(fslogixOSSGroups) }
         { name: 'RemoteNetAppServers', value: string(fslogixRemoteNetAppServerFqdns) }
         { name: 'RemoteStorageAccountNames', value: string(fslogixRemoteStorageAccountNames) }
+        { name: 'RemoteOfficeStorageAccountNames', value: string(fslogixRemoteOfficeStorageAccountNames) }
         { name: 'Shares', value: string(fslogixFileShareNames) }
         { name: 'SizeInMBs', value: string(fslogixSizeInMBs) }
         { name: 'StorageService', value: fslogixStorageService }
@@ -565,6 +615,8 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
             { name: 'RegistrationToken', value: last(hostPool.listRegistrationTokens().value).token }
             { name: 'LocalStorageAccountKeys', value: string(fslogixLocalStorageAccountKeys) }
             { name: 'RemoteStorageAccountKeys', value: string(fslogixRemoteStorageAccountKeys) }
+            { name: 'LocalOfficeStorageAccountKeys', value: string(fslogixLocalOfficeStorageAccountKeys) }
+            { name: 'RemoteOfficeStorageAccountKeys', value: string(fslogixRemoteOfficeStorageAccountKeys) }
           ]
         : [
             { name: 'RegistrationToken', value: last(hostPool.listRegistrationTokens().value).token }

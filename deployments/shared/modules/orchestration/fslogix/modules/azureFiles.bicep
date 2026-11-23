@@ -2,6 +2,7 @@ metadata name = 'FSLogix Azure Files orchestration'
 metadata description = 'Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM.'
 
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../../networking/functions.bicep'
+import { resolveFilesConfiguration } from 'configuration.bicep'
 
 @description('Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands.')
 param appUpdateUserAssignedIdentityResourceId string
@@ -64,14 +65,40 @@ param shareSizeInGB int
 param shareUserGroups array
 @description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
 param storageAccountNamePrefix string
+@description('Required. Distinct Office account prefix; Office accounts use the same shard indices as Profile accounts.')
+@minLength(3)
+@maxLength(13)
+param officeStorageAccountNamePrefix string
+@description('Required. Office encryption-key name pattern containing ##; unused with platform-managed encryption.')
+param officeEncryptionKeyNameConv string
 @description('Required. Number of indexed Azure Files storage accounts to create.')
 param storageCount int
 @description('Required. Starting numeric index for storage account and encryption-key names.')
 param storageIndex int
 @description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
 param storageSku string
+@description('Optional. Office Azure Files tier; defaults to the Profile tier.')
+param officeStorageSku string = storageSku
+@description('Optional. Office share quota in GiB; defaults to the Profile quota.')
+param officeShareSizeInGB int = shareSizeInGB
 @description('Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS.')
 param storageRedundancy string
+@description('Optional. Office Azure Files redundancy; defaults to the Profile redundancy.')
+param officeStorageRedundancy string = storageRedundancy
+@allowed(['Legacy', 'ProvisionedV2'])
+@description('Optional. Profile billing model; Legacy preserves existing deployments.')
+param profileStorageBillingModel string = 'Legacy'
+@allowed(['Legacy', 'ProvisionedV2'])
+@description('Optional. Office billing model; defaults to the Profile model.')
+param officeStorageBillingModel string = profileStorageBillingModel
+@description('Optional. Profile v2 IOPS; zero selects the capacity-based recommendation.')
+param profileProvisionedIops int = 0
+@description('Optional. Profile v2 throughput in MiB/s; zero selects the capacity-based recommendation.')
+param profileProvisionedThroughputMiBps int = 0
+@description('Optional. Office v2 IOPS; zero selects the recommendation for Office capacity.')
+param officeProvisionedIops int = 0
+@description('Optional. Office v2 throughput in MiB/s; zero selects the recommendation for Office capacity.')
+param officeProvisionedThroughputMiBps int = 0
 @description('Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
 param tags object
 @description('Optional. Array of permitted IP addresses or CIDR blocks for the FSLogix storage account firewall.')
@@ -97,10 +124,7 @@ import { privateEndpointName } from '../../naming/internal.bicep'
 
 resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-05-01' existing = if (privateEndpoint && !empty(privateEndpointSubnetResourceId)) {
   name: privateEndpointVnetName
-  scope: resourceGroup(
-    split(privateEndpointSubnetResourceId, '/')[2],
-    split(privateEndpointSubnetResourceId, '/')[4]
-  )
+  scope: resourceGroup(split(privateEndpointSubnetResourceId, '/')[2], split(privateEndpointSubnetResourceId, '/')[4])
 }
 
 var smbSettingsValues = {
@@ -108,9 +132,52 @@ var smbSettingsValues = {
   authenticationMethods: 'NTLMv2;Kerberos;'
   kerberosTicketEncryption: kerberosEncryptionType == 'RC4' ? 'RC4-HMAC;' : 'AES-256;'
   channelEncryption: 'AES-128-CCM;AES-128-GCM;AES-256-GCM;'
-  multichannel: storageSku != 'Standard' ? { enabled: true } : null
 }
-var storageRedundancySuffix = storageRedundancy == 'ZoneRedundant' ? '_ZRS' : '_LRS'
+
+// One template contains both roles so scripts are not duplicated in generated ARM.
+var storageRoles = concat(
+  [
+    {
+      prefix: storageAccountNamePrefix
+      keyPattern: fslogixEncryptionKeyNameConv
+      sku: storageSku
+      configuration: resolveFilesConfiguration(storageSku, storageRedundancy, profileStorageBillingModel, shareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
+      shares: take(fileShares, 1)
+      shareSizeInGB: shareSizeInGB
+      commandPrefix: ''
+    }
+  ],
+  length(fileShares) > 1
+    ? [
+        {
+          prefix: toLower(officeStorageAccountNamePrefix) != toLower(storageAccountNamePrefix)
+            ? officeStorageAccountNamePrefix
+            : fail('Profile and Office Azure Files storage account prefixes must differ.')
+          keyPattern: keyManagementStorageAccounts == 'PlatformManaged' || toLower(officeEncryptionKeyNameConv) != toLower(fslogixEncryptionKeyNameConv)
+            ? officeEncryptionKeyNameConv
+            : fail('Profile and Office customer-managed encryption keys must use different name patterns.')
+          sku: officeStorageSku
+          configuration: resolveFilesConfiguration(officeStorageSku, officeStorageRedundancy, officeStorageBillingModel, officeShareSizeInGB, officeProvisionedIops, officeProvisionedThroughputMiBps)
+          shares: take(skip(fileShares, 1), 1)
+          shareSizeInGB: officeShareSizeInGB
+          commandPrefix: 'Office-'
+        }
+      ]
+    : []
+)
+
+var accountConfigurations = flatten(map(
+  storageRoles,
+  role =>
+    map(
+      range(0, storageCount),
+      index =>
+        union(role, {
+          name: '${role.prefix}${padLeft(index + storageIndex, 2, '0')}'
+          keyName: replace(role.keyPattern, '##', padLeft(index + storageIndex, 2, '0'))
+        })
+    )
+))
 
 // Network ACLs for FSLogix storage accounts.
 // AzureServices bypass is required for Azure Files backup and monitoring.
@@ -142,16 +209,16 @@ resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
 
 // ─── Storage Accounts ──────────────────────────────────────────────────────────
 module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.bicep' = [
-  for i in range(0, storageCount): {
+  for (account, i) in accountConfigurations: {
     params: {
-      name: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
+      name: account.name
       location: location
-      kind: storageSku == 'Standard' ? 'StorageV2' : 'FileStorage'
-      skuName: '${storageSku}${storageRedundancySuffix}'
+      kind: account.configuration.kind
+      skuName: account.configuration.skuName
       tags: union(parentResourceTags, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
-      largeFileSharesState: storageSku == 'Standard' ? 'Enabled' : ''
+      largeFileSharesState: account.configuration.largeFileSharesState
       sasExpirationPeriod: '180.00:00:00'
       networkAcls: storageNetworkAcls
       publicNetworkAccess: networkAccess.publicNetworkAccess
@@ -164,7 +231,7 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
           }
         : {}
       cmkKeyUri: keyManagementStorageAccounts != 'PlatformManaged'
-        ? '${encryptionKeyVaultUri}keys/${replace(fslogixEncryptionKeyNameConv, '##', padLeft(i + storageIndex, 2, '0'))}'
+        ? '${encryptionKeyVaultUri}keys/${account.keyName}'
         : ''
       cmkUserAssignedIdentityResourceId: keyManagementStorageAccounts != 'PlatformManaged'
         ? encryptionUserAssignedIdentityResourceId
@@ -176,10 +243,10 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
 
 // ─── File Services ─────────────────────────────────────────────────────────────
 module fileServices '../../../resourceModules/storage/storageAccounts/fileServices/deploy.bicep' = [
-  for i in range(0, storageCount): {
+  for (account, i) in accountConfigurations: {
     params: {
-      storageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-      smbSettings: smbSettingsValues
+      storageAccountName: account.name
+      smbSettings: union(smbSettingsValues, { multichannel: account.sku != 'Standard' ? { enabled: true } : null })
       shareDeleteRetentionPolicyEnabled: true
       shareDeleteRetentionPolicyDays: softDeleteRetentionDays
       diagnosticSettings: !empty(logAnalyticsWorkspaceId)
@@ -195,12 +262,15 @@ module fileServices '../../../resourceModules/storage/storageAccounts/fileServic
 
 // ─── File Shares ───────────────────────────────────────────────────────────────
 module shares 'shares.bicep' = [
-  for i in range(0, storageCount): {
+  for (account, i) in accountConfigurations: {
     params: {
-      fileShares: fileShares
-      shareSizeInGB: shareSizeInGB
-      StorageAccountName: '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}'
-      storageSku: storageSku
+      fileShares: account.shares
+      shareSizeInGB: account.shareSizeInGB
+      StorageAccountName: account.name
+      storageSku: account.sku
+      accessTier: account.configuration.accessTier
+      provisionedIops: account.configuration.provisionedIops
+      provisionedThroughputMiBps: account.configuration.provisionedThroughputMiBps
     }
     dependsOn: [storageAccounts, fileServices]
   }
@@ -208,10 +278,15 @@ module shares 'shares.bicep' = [
 
 // ─── Private Endpoints ─────────────────────────────────────────────────────────
 module privateEndpoints '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
-  for i in range(0, storageCount): if (privateEndpoint) {
+  for (account, i) in accountConfigurations: if (privateEndpoint) {
     params: {
-      name: privateEndpointName(privateEndpointNameConv, '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}', 'file', privateEndpointVnetName)
-      customNetworkInterfaceName: privateEndpointName(privateEndpointNICNameConv, '${storageAccountNamePrefix}${string(padLeft(i + storageIndex, 2, '0'))}', 'file', privateEndpointVnetName)
+      name: privateEndpointName(privateEndpointNameConv, account.name, 'file', privateEndpointVnetName)
+      customNetworkInterfaceName: privateEndpointName(
+        privateEndpointNICNameConv,
+        account.name,
+        'file',
+        privateEndpointVnetName
+      )
       tags: union(parentResourceTags, tags[?'Microsoft.Network/privateEndpoints'] ?? {})
       location: privateEndpointVirtualNetwork!.location
       subnetResourceId: privateEndpointSubnetResourceId
@@ -238,153 +313,170 @@ module roleAssignmentsAdmins '../../../resourceModules/authorization/roleAssignm
 ]
 
 // ─── ADDS Domain Join ──────────────────────────────────────────────────────────
-module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'ActiveDirectoryDomainServices') {
-  scope: resourceGroup(deploymentResourceGroupName)
-  params: {
-    virtualMachineName: deploymentVirtualMachineName
-    name: 'Domain-Join'
-    location: location
-    script: loadTextContent('../../../../scripts/Configure-StorageAccountforADDS.ps1')
-    parameters: [
-      { name: 'DomainName', value: domainName }
-      { name: 'HostPoolName', value: !empty(hostPoolResourceId) ? last(split(hostPoolResourceId, '/'))! : storageAccountNamePrefix }
-      { name: 'KerberosEncryptionType', value: kerberosEncryptionType }
-      { name: 'OuPath', value: ouPath }
-      { name: 'ResourceManagerUri', value: environment().resourceManager }
-      { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
-      { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
-      { name: 'StorageCount', value: string(storageCount) }
-      { name: 'StorageIndex', value: string(storageIndex) }
-      { name: 'StorageSuffix', value: environment().suffixes.storage }
-      { name: 'SubscriptionId', value: subscription().subscriptionId }
-      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
-    ]
-    protectedParameters: [
-      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-    ]
-    treatFailureAsDeploymentFailure: true
+module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
+  for role in storageRoles: if (identitySolution == 'ActiveDirectoryDomainServices') {
+    scope: resourceGroup(deploymentResourceGroupName)
+    params: {
+      virtualMachineName: deploymentVirtualMachineName
+      name: '${role.commandPrefix}Domain-Join'
+      location: location
+      script: loadTextContent('../../../../scripts/Configure-StorageAccountforADDS.ps1')
+      parameters: [
+        { name: 'DomainName', value: domainName }
+        {
+          name: 'HostPoolName'
+          value: !empty(hostPoolResourceId) ? last(split(hostPoolResourceId, '/'))! : role.prefix
+        }
+        { name: 'KerberosEncryptionType', value: kerberosEncryptionType }
+        { name: 'OuPath', value: ouPath }
+        { name: 'ResourceManagerUri', value: environment().resourceManager }
+        { name: 'StorageAccountPrefix', value: role.prefix }
+        { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
+        { name: 'StorageCount', value: string(storageCount) }
+        { name: 'StorageIndex', value: string(storageIndex) }
+        { name: 'StorageSuffix', value: environment().suffixes.storage }
+        { name: 'SubscriptionId', value: subscription().subscriptionId }
+        { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+      ]
+      protectedParameters: [
+        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+      ]
+      treatFailureAsDeploymentFailure: true
+    }
+    dependsOn: [privateEndpoints, shares]
   }
-  dependsOn: [privateEndpoints, shares]
-}
+]
 
 // ─── EntraKerberos Hybrid (with domain info) ───────────────────────────────────
 // Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided.
 // The workgroup deployment helper VM uses these credentials for explicit ADWS operations; it is not domain joined.
-module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
-  scope: resourceGroup(deploymentResourceGroupName)
-  params: {
-    virtualMachineName: deploymentVirtualMachineName
-    name: 'Configure-StorageAccountsforEntraHybrid'
-    location: location
-    script: loadTextContent('../../../../scripts/Configure-StorageAccountforEntraHybrid.ps1')
-    parameters: [
-      { name: 'DefaultSharePermission', value: defaultSharePermission }
-      { name: 'DomainName', value: domainName }
-      { name: 'ResourceManagerUri', value: environment().resourceManager }
-      { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
-      { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
-      { name: 'StorageCount', value: string(storageCount) }
-      { name: 'StorageIndex', value: string(storageIndex) }
-      { name: 'StorageSuffix', value: environment().suffixes.storage }
-      { name: 'SubscriptionId', value: subscription().subscriptionId }
-      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
-    ]
-    protectedParameters: [
-      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-    ]
-    treatFailureAsDeploymentFailure: true
+module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
+  for role in storageRoles: if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+    scope: resourceGroup(deploymentResourceGroupName)
+    params: {
+      virtualMachineName: deploymentVirtualMachineName
+      name: '${role.commandPrefix}Configure-StorageAccountsforEntraHybrid'
+      location: location
+      script: loadTextContent('../../../../scripts/Configure-StorageAccountforEntraHybrid.ps1')
+      parameters: [
+        { name: 'DefaultSharePermission', value: defaultSharePermission }
+        { name: 'DomainName', value: domainName }
+        { name: 'ResourceManagerUri', value: environment().resourceManager }
+        { name: 'StorageAccountPrefix', value: role.prefix }
+        { name: 'StorageAccountResourceGroupName', value: resourceGroupStorage }
+        { name: 'StorageCount', value: string(storageCount) }
+        { name: 'StorageIndex', value: string(storageIndex) }
+        { name: 'StorageSuffix', value: environment().suffixes.storage }
+        { name: 'SubscriptionId', value: subscription().subscriptionId }
+        { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+      ]
+      protectedParameters: [
+        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+      ]
+      treatFailureAsDeploymentFailure: true
+    }
+    dependsOn: [privateEndpoints, shares]
   }
-  dependsOn: [privateEndpoints, shares]
-}
+]
 
 // PHASE 1: Update application manifest with privatelink FQDNs and tags
 // This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
-module updateStorageApplicationsManifest '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
-  scope: resourceGroup(deploymentResourceGroupName)
-  params: {
-    virtualMachineName: deploymentVirtualMachineName
-    name: 'Update-Storage-Account-Application-Manifest'
-    location: location
-    script: loadTextContent('../../../../scripts/Update-StorageAccountApplicationManifest.ps1')
-    parameters: [
-      { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${storageAccountNamePrefix}' }
-      { name: 'ClientId', value: appUpdateUai!.properties.clientId }
-      { name: 'GraphEndpoint', value: graphEndpoint }
-      { name: 'PrivateEndpoint', value: string(privateEndpoint) }
-      { name: 'EnableCloudGroupSids', value: string(identitySolution == 'EntraKerberos-CloudOnly') }
+module updateStorageApplicationsManifest '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
+  for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+    scope: resourceGroup(deploymentResourceGroupName)
+    params: {
+      virtualMachineName: deploymentVirtualMachineName
+      name: '${role.commandPrefix}Update-Storage-Account-Application-Manifest'
+      location: location
+      script: loadTextContent('../../../../scripts/Update-StorageAccountApplicationManifest.ps1')
+      parameters: [
+        { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${role.prefix}' }
+        { name: 'ClientId', value: appUpdateUai!.properties.clientId }
+        { name: 'GraphEndpoint', value: graphEndpoint }
+        { name: 'PrivateEndpoint', value: string(privateEndpoint) }
+        { name: 'EnableCloudGroupSids', value: string(identitySolution == 'EntraKerberos-CloudOnly') }
+      ]
+      treatFailureAsDeploymentFailure: true
+    }
+    dependsOn: [
+      privateEndpoints
+      shares
+      configureEntraKerberosWithDomainInfo
     ]
-    treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    privateEndpoints
-    shares
-    configureEntraKerberosWithDomainInfo
-  ]
-}
+]
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
-module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (identitySolution != 'EntraId') {
-  scope: resourceGroup(deploymentResourceGroupName)
-  params: {
-    virtualMachineName: deploymentVirtualMachineName
-    name: 'Set-NTFS-Permissions'
-    location: location
-    script: loadTextContent('../../../../scripts/Set-NtfsPermissionsAzureFiles.ps1')
-    parameters: [
-      { name: 'DomainName', value: domainName }
-      { name: 'Shares', value: string(fileShares) }
-      { name: 'ShardAzureFilesStorage', value: shardingOptions == 'None' ? 'false' : 'true' }
-      { name: 'StorageAccountPrefix', value: storageAccountNamePrefix }
-      { name: 'StorageCount', value: string(storageCount) }
-      { name: 'StorageIndex', value: string(storageIndex) }
-      { name: 'StorageSuffix', value: environment().suffixes.storage }
-      { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
-      {
-        name: 'UserGroups'
-        value: string(identitySolution == 'EntraKerberos-CloudOnly'
-          ? map(shareUserGroups, group => group.id)
-          : !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)
-              ? map(shareUserGroups, group => group.name)
-              : [])
-      }
+module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
+  for role in storageRoles: if (identitySolution != 'EntraId') {
+    scope: resourceGroup(deploymentResourceGroupName)
+    params: {
+      virtualMachineName: deploymentVirtualMachineName
+      name: '${role.commandPrefix}Set-NTFS-Permissions'
+      location: location
+      script: loadTextContent('../../../../scripts/Set-NtfsPermissionsAzureFiles.ps1')
+      parameters: [
+        { name: 'DomainName', value: domainName }
+        { name: 'Shares', value: string(role.shares) }
+        { name: 'ShardAzureFilesStorage', value: shardingOptions == 'None' ? 'false' : 'true' }
+        { name: 'StorageAccountPrefix', value: role.prefix }
+        { name: 'StorageCount', value: string(storageCount) }
+        { name: 'StorageIndex', value: string(storageIndex) }
+        { name: 'StorageSuffix', value: environment().suffixes.storage }
+        { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+        {
+          name: 'UserGroups'
+          value: string(identitySolution == 'EntraKerberos-CloudOnly'
+            ? map(shareUserGroups, group => group.id)
+            : !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)
+                ? map(shareUserGroups, group => group.name)
+                : [])
+        }
+      ]
+      protectedParameters: [
+        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+      ]
+      treatFailureAsDeploymentFailure: true
+    }
+    dependsOn: [
+      privateEndpoints
+      shares
+      configureEntraKerberosWithDomainInfo
+      configureADDSAuth
+      updateStorageApplicationsManifest
     ]
-    protectedParameters: [
-      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-    ]
-    treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    privateEndpoints
-    shares
-    configureEntraKerberosWithDomainInfo
-    configureADDSAuth
-    updateStorageApplicationsManifest
-  ]
-}
+]
 
 // PHASE 2: Grant admin consent to storage account applications
 // This must happen AFTER NTFS permissions are set
-module grantStorageApplicationsConsent '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
-  scope: resourceGroup(deploymentResourceGroupName)
-  params: {
-    virtualMachineName: deploymentVirtualMachineName
-    name: 'Grant-Storage-Account-Application-Consent'
-    location: location
-    script: loadTextContent('../../../../scripts/Grant-StorageAccountApplicationConsent.ps1')
-    parameters: [
-      { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${storageAccountNamePrefix}' }
-      { name: 'ClientId', value: appUpdateUai!.properties.clientId }
-      { name: 'GraphEndpoint', value: graphEndpoint }
+module grantStorageApplicationsConsent '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
+  for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+    scope: resourceGroup(deploymentResourceGroupName)
+    params: {
+      virtualMachineName: deploymentVirtualMachineName
+      name: '${role.commandPrefix}Grant-Storage-Account-Application-Consent'
+      location: location
+      script: loadTextContent('../../../../scripts/Grant-StorageAccountApplicationConsent.ps1')
+      parameters: [
+        { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${role.prefix}' }
+        { name: 'ClientId', value: appUpdateUai!.properties.clientId }
+        { name: 'GraphEndpoint', value: graphEndpoint }
+      ]
+      treatFailureAsDeploymentFailure: true
+    }
+    dependsOn: [
+      SetNTFSPermissions
     ]
-    treatFailureAsDeploymentFailure: true
   }
-  dependsOn: [
-    SetNTFSPermissions
-  ]
-}
+]
 
 @description('Created storage account resource IDs in ascending index order starting at storageIndex.')
 output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]
+@description('Created Office account IDs paired by shard index with Profile accounts; empty when Office containers are disabled.')
+output officeStorageAccountResourceIds array = [
+  for i in range(0, length(fileShares) > 1 ? storageCount : 0): storageAccounts[i + storageCount].outputs.resourceId
+]

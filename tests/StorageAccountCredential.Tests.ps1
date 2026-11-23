@@ -3,8 +3,10 @@ Describe 'FSLogix native storage credentials' {
         $repoRoot = Split-Path -Parent $PSScriptRoot
         $initializer = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\scripts\Initialize-SessionHost.ps1') -Raw
         $rotation = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\scripts\Update-StorageAccountCredential.ps1') -Raw
+        $automated = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\automatedHostPools\scripts\Initialize-SessionHost.ps1') -Raw
         $initializerAst = [System.Management.Automation.Language.Parser]::ParseInput($initializer, [ref]$null, [ref]$null)
         $rotationAst = [System.Management.Automation.Language.Parser]::ParseInput($rotation, [ref]$null, [ref]$null)
+        $automatedAst = [System.Management.Automation.Language.Parser]::ParseInput($automated, [ref]$null, [ref]$null)
         $findHelper = {
             param($node)
             $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
@@ -13,6 +15,12 @@ Describe 'FSLogix native storage credentials' {
         $helperAst = $initializerAst.Find($findHelper, $true)
         $helper = $helperAst.Extent.Text
         $rotationHelper = $rotationAst.Find($findHelper, $true).Extent.Text
+        $automatedHelper = $automatedAst.Find($findHelper, $true).Extent.Text
+        $automatedAdapter = $automatedAst.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Set-FSLogixStorageCredential'
+        }, $true).Extent.Text
         $nativeSource = $helperAst.Find({
             param($node)
             $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
@@ -62,6 +70,7 @@ Describe 'FSLogix native storage credentials' {
             Add-Type -TypeDefinition $testSource -ErrorAction Stop
         }
         . ([scriptblock]::Create($helper.Replace('FederalAVD.StorageCredential', 'FederalAVD.CredentialTests.StorageCredential')))
+        . ([scriptblock]::Create($automatedAdapter))
         $testRotation = $rotation.Replace('FederalAVD.StorageCredential', 'FederalAVD.CredentialTests.StorageCredential')
 
         function Get-CredentialRunCommandScript {
@@ -87,11 +96,11 @@ Describe 'FSLogix native storage credentials' {
         }
     }
 
-    It 'keeps identical credential functions inside both standalone scripts' {
-        if ([string]::IsNullOrWhiteSpace($helper) -or $helper -cne $rotationHelper -or
+    It 'keeps identical native credential functions in both initializers and rotation' {
+        if ([string]::IsNullOrWhiteSpace($helper) -or $helper -cne $rotationHelper -or $helper -cne $automatedHelper -or
             $initializer.Contains('Set-StorageAccountCredential.ps1') -or
-            $rotation.Contains('Set-StorageAccountCredential.ps1')) {
-            throw 'Both scripts must contain the same credential function without an external helper dependency.'
+            $rotation.Contains('Set-StorageAccountCredential.ps1') -or $automated -match 'cmdkey') {
+            throw 'Both initializers and rotation must use the same self-contained native credential function without cmdkey.'
         }
     }
 
@@ -116,6 +125,21 @@ Describe 'FSLogix native storage credentials' {
             [FederalAVD.CredentialTests.StorageCredential]::LastPersist -ne 2) {
             throw 'The native credential arguments did not preserve the password, identity, type or persistence.'
         }
+    }
+
+    It 'passes <Role> account keys through the automated adapter without argument parsing' -TestCases @(
+        @{ Role = 'Profile'; Account = 'profiletest'; Key = '/abc123+xyz==' }
+        @{ Role = 'Office'; Account = 'officetest'; Key = '/"abc+123==' }
+        @{ Role = 'remote Office'; Account = 'remoteofficetest'; Key = 'abc/123+xyz==' }
+    ) {
+        param($Role, $Account, $Key)
+        [FederalAVD.CredentialTests.StorageCredential]::Calls = 0
+        [FederalAVD.CredentialTests.StorageCredential]::Fail = $false
+        Set-FSLogixStorageCredential -AccountName $Account -AccountKey $Key -Suffix 'core.usgovcloudapi.net'
+        [FederalAVD.CredentialTests.StorageCredential]::Calls | Should -Be 1
+        [FederalAVD.CredentialTests.StorageCredential]::LastPassword | Should -BeExactly $Key
+        [FederalAVD.CredentialTests.StorageCredential]::LastTarget | Should -Be "$Account.file.core.usgovcloudapi.net"
+        [FederalAVD.CredentialTests.StorageCredential]::LastUser | Should -Be "localhost\$Account"
     }
 
     It 'uses the Windows CREDENTIALW ABI and a checked Unicode CredWriteW result' {
@@ -153,6 +177,22 @@ Describe 'FSLogix native storage credentials' {
             $failure.Message.Contains($password)) {
             throw 'The native failure was not surfaced as a sanitized Win32 error.'
         }
+    }
+
+    It 'propagates an automated native write failure without exposing the key' {
+        $key = '/automated-sensitive-value=='
+        [FederalAVD.CredentialTests.StorageCredential]::Fail = $true
+        $failure = $null
+        try {
+            Set-FSLogixStorageCredential -AccountName 'officetest' -AccountKey $key -Suffix 'core.windows.net'
+        }
+        catch [System.Management.Automation.MethodInvocationException] {
+            $failure = $_.Exception.GetBaseException()
+        }
+        finally { [FederalAVD.CredentialTests.StorageCredential]::Fail = $false }
+        $failure | Should -BeOfType ([ComponentModel.Win32Exception])
+        $failure.NativeErrorCode | Should -Be 87
+        $failure.Message.Contains($key) | Should -Be $false
     }
 
     It 'rejects oversized credentials before reaching Windows' {
@@ -226,12 +266,16 @@ Describe 'FSLogix native storage credentials' {
         @{ Template = 'deployments\add-ons\sessionHosts\main.json' }
         @{ Template = 'deployments\add-ons\sessionHostReplacer\main.json' }
         @{ Template = 'deployments\add-ons\updateStorageAccountKeyOnSessionHosts\main.json' }
+        @{ Template = 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\ConfigureSessionHost.json' }
+        @{ Template = 'deployments\automatedHostPools\automatedHostPool.json' }
     ) {
         param($Template)
         $templateObject = Get-Content -LiteralPath (Join-Path $repoRoot $Template) -Raw | ConvertFrom-Json
         $scripts = @(Get-CredentialRunCommandScript $templateObject)
         if ($scripts.Count -eq 0) { throw "No embedded credential writer found in $Template" }
-        $source = if ($Template -like '*updateStorageAccountKey*') { $rotation } else { $initializer }
+        $source = if ($Template -like '*updateStorageAccountKey*') { $rotation }
+            elseif ($Template -like '*ConfigureSessionHost.json' -or $Template -like '*automatedHostPool.json') { $automated }
+            else { $initializer }
         foreach ($script in $scripts) {
             if ($script -cne $source -or $script.Contains('Set-StorageAccountCredential.ps1') -or $script -match 'cmdkey') {
                 throw "Embedded script does not match the standalone source in $Template"

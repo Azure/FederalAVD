@@ -414,6 +414,7 @@ Key abbreviations:
   "vmsLocationAbbreviation": "",
   "cpLocationAbbreviation":  "",
   "fslogixStoragePrefix":    "",
+  "fslogixOfficeStoragePrefix": "",
   "resourceTypeCodes":       {}
 }
 ```
@@ -433,7 +434,8 @@ Key abbreviations:
 | `imageManagementStoragePrefix` | `string` | No | Shared prefix for Image Management artifacts and build-logs storage accounts. Use 1-5 lowercase letters or numbers. The generated names append `imgassets` or `imglogs`, a deterministic 6-character uniqueness token, and the location abbreviation. When this prefix is used, a custom location abbreviation cannot exceed 4 characters. Leave blank to derive names from the standard Image Management storage naming pattern. |
 | `vmsLocationAbbreviation` | `string` | No | Override for the session hosts (VMs) region abbreviation. Leave blank to auto-derive from the deployment location. |
 | `cpLocationAbbreviation` | `string` | No | Override for the control plane region abbreviation. Leave blank to auto-derive. |
-| `fslogixStoragePrefix` | `string` | No | Custom prefix for FSLogix storage accounts (≤ 13 lowercase alphanumeric characters, no hyphens). Leave blank to use the auto-derived prefix `fslogix{unique}`. |
+| `fslogixStoragePrefix` | `string` | No | Custom prefix for Profile storage accounts (≤ 13 lowercase alphanumeric characters, no hyphens). Leave blank to use `fslpc{unique}`. Preserve the original prefix when redeploying existing accounts. |
+| `fslogixOfficeStoragePrefix` | `string` | No | Custom prefix for separate Office storage accounts (≤ 13 lowercase alphanumeric characters, no hyphens). Leave blank to use `fsloc{unique}` with the same scope seed as Profile accounts. It must differ from the Profile prefix. |
 | `resourceTypeCodes` | `object` | No | Per-resource-type abbreviation overrides. Keys must match the abbreviation file (e.g., `keyVaults`, `virtualMachines`). Values replace the default abbreviation for that type only. |
 
 Deployment parameters and the public API use the shared `namingConventionConfig`

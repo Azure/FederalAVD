@@ -55,6 +55,12 @@ param (
     [string]$LocalStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
+    [string]$LocalOfficeStorageAccountNames = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$LocalOfficeStorageAccountKeys = '[]',
+
+    [Parameter(Mandatory = $false)]
     [string]$OSSGroups = '[]',
 
     [Parameter(Mandatory = $false)]
@@ -65,6 +71,12 @@ param (
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteStorageAccountKeys = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$RemoteOfficeStorageAccountNames = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$RemoteOfficeStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$Shares = '[]',
@@ -757,6 +769,49 @@ try {
                 [array]$LocalStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues
                 [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'
                 [array]$RemoteStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues
+                [array]$LocalOfficeStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountNames -Name 'LocalOfficeStorageAccountNames'
+                [array]$LocalOfficeStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountKeys -Name 'LocalOfficeStorageAccountKeys' -SensitiveValues
+                [array]$RemoteOfficeStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountNames -Name 'RemoteOfficeStorageAccountNames'
+                [array]$RemoteOfficeStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountKeys -Name 'RemoteOfficeStorageAccountKeys' -SensitiveValues
+
+                if ($OfficeShareName) {
+                    if ($LocalOfficeStorageAccountNamesArray.Count -ne $LocalStorageAccountNamesArray.Count -or
+                        $LocalOfficeStorageAccountNamesArray.Count -eq 0 -or
+                        $RemoteOfficeStorageAccountNamesArray.Count -ne $RemoteStorageAccountNamesArray.Count) {
+                        throw 'Office containers require separate local and remote Azure Files accounts paired with the Profile accounts in shard order.'
+                    }
+                    $profileNames = @($LocalStorageAccountNamesArray) + @($RemoteStorageAccountNamesArray)
+                    $officeNames = @($LocalOfficeStorageAccountNamesArray) + @($RemoteOfficeStorageAccountNamesArray)
+                    if (($RemoteStorageAccountNamesArray.Count -gt 0 -and
+                            $RemoteStorageAccountNamesArray.Count -ne $LocalStorageAccountNamesArray.Count) -or
+                        ($OSSGroupsArray.Count -gt 0 -and $OSSGroupsArray.Count -ne $LocalStorageAccountNamesArray.Count)) {
+                        throw 'Office shards require matching local, remote and Object Specific Settings group counts.'
+                    }
+                    if (@($officeNames | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique).Count -ne $officeNames.Count) {
+                        throw 'Each Office shard requires a distinct storage account.'
+                    }
+                    if (@($officeNames | Where-Object { $_ -in $profileNames }).Count -gt 0) {
+                        throw 'Profile and Office containers must use different Azure Files storage accounts.'
+                    }
+                }
+                elseif ($LocalOfficeStorageAccountNamesArray.Count -gt 0 -or $RemoteOfficeStorageAccountNamesArray.Count -gt 0) {
+                    throw 'Office storage accounts were supplied but Office containers are disabled.'
+                }
+                foreach ($accountSet in @(
+                    @{ Names = $LocalStorageAccountNamesArray; Keys = $LocalStorageAccountKeysArray }
+                    @{ Names = $RemoteStorageAccountNamesArray; Keys = $RemoteStorageAccountKeysArray }
+                    @{ Names = $LocalOfficeStorageAccountNamesArray; Keys = $LocalOfficeStorageAccountKeysArray }
+                    @{ Names = $RemoteOfficeStorageAccountNamesArray; Keys = $RemoteOfficeStorageAccountKeysArray }
+                )) {
+                    if ($accountSet.Keys.Count -gt 0 -and $accountSet.Keys.Count -ne $accountSet.Names.Count) {
+                        throw 'Each supplied Azure Files account-key collection must match its account-name collection.'
+                    }
+                }
+                if ($OfficeShareName -and (
+                    ($LocalStorageAccountKeysArray.Count -gt 0) -ne ($LocalOfficeStorageAccountKeysArray.Count -gt 0) -or
+                    ($RemoteStorageAccountKeysArray.Count -gt 0) -ne ($RemoteOfficeStorageAccountKeysArray.Count -gt 0))) {
+                    throw 'Storage-key authentication requires a key for each paired Profile and Office account.'
+                }
                 
                 # Process Local Storage Accounts
                 Write-Log -message "Processing Local Storage Accounts"
@@ -764,10 +819,6 @@ try {
                     $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "Local storage [$i]: $SAFQDN"
 
-                    If ($OfficeShareName) {
-                        $LocalOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
-                        $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                    }
                     $LocalProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
                     $LocalCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
                 }
@@ -779,13 +830,21 @@ try {
                         $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
 
-                        If ($OfficeShareName) {
-                            $RemoteOfficeContainerPaths.Add("\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                            $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                        }
                         $RemoteProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
                         $RemoteCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
                     }
+                }
+                # Machine VHD Locations / CCD Locations retain their supported MULTI_SZ encoding.
+                # https://learn.microsoft.com/fslogix/reference-configuration-settings
+                foreach ($name in $LocalOfficeStorageAccountNamesArray) {
+                    $SAFQDN = "$name.file.$StorageSuffix"
+                    $LocalOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
+                    $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$SAFQDN\$OfficeShareName") | Out-Null
+                }
+                foreach ($name in $RemoteOfficeStorageAccountNamesArray) {
+                    $SAFQDN = "$name.file.$StorageSuffix"
+                    $RemoteOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
+                    $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$SAFQDN\$OfficeShareName") | Out-Null
                 }
             }
             'AzureNetAppFiles' {
@@ -848,7 +907,7 @@ try {
             $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = $SizeInMBsInt })
             $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'String'; Value = 'VHDX' })
 
-            If ($LocalStorageAccountKeysArray.Count -gt 0) {
+            If ($LocalOfficeStorageAccountKeysArray.Count -gt 0) {
                 $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
             }
             
@@ -869,7 +928,7 @@ try {
                 [string]$LocalProfileContainerPath = $LocalProfileContainerPaths[$i]
                 [string]$LocalCloudCacheProfileContainerPath = $LocalCloudCacheProfileContainerPaths[$i]
 
-                If ($RemoteStorageAccountNamesArray) {
+                If ($RemoteProfileContainerPaths.Count -gt 0) {
                     [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]
                     [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]
                     [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath, $RemoteProfileContainerPath)
@@ -893,7 +952,7 @@ try {
                     [string]$LocalOfficeContainerPath = $LocalOfficeContainerPaths[$i]
                     [string]$LocalCloudCacheOfficeContainerPath = $LocalCloudCacheOfficeContainerPaths[$i]
                     
-                    If ($RemoteStorageAccountNamesArray) {
+                    If ($RemoteOfficeContainerPaths.Count -gt 0) {
                         [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]
                         [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]
                         [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)
@@ -917,7 +976,7 @@ try {
         }
         Else {
             # No OSS Groups, use standard VHDLocations/CCDLocations
-            If ($RemoteStorageAccountNamesArray.Count -gt 0) {
+            If ($RemoteProfileContainerPaths.Count -gt 0) {
                 $ProfileContainerPaths = $LocalProfileContainerPaths + $RemoteProfileContainerPaths
                 $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths + $RemoteCloudCacheProfileContainerPaths
             }
@@ -936,7 +995,7 @@ try {
             }
             
             If ($LocalOfficeContainerPaths.Count -gt 0) {
-                If ($RemoteStorageAccountNamesArray.Count -gt 0) {
+                If ($RemoteOfficeContainerPaths.Count -gt 0) {
                     $OfficeContainerPaths = $LocalOfficeContainerPaths + $RemoteOfficeContainerPaths
                     $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths + $RemoteCloudCacheOfficeContainerPaths
                 }
@@ -1012,6 +1071,12 @@ try {
             Remove-Item -Path $seceditInf, $seceditDb, $seceditLog -Force -ErrorAction SilentlyContinue
         }
 
+        if ($StorageService -eq 'AzureFiles') {
+            $LocalStorageAccountNamesArray = @($LocalStorageAccountNamesArray) + @($LocalOfficeStorageAccountNamesArray)
+            $LocalStorageAccountKeysArray = @($LocalStorageAccountKeysArray) + @($LocalOfficeStorageAccountKeysArray)
+            $RemoteStorageAccountNamesArray = @($RemoteStorageAccountNamesArray) + @($RemoteOfficeStorageAccountNamesArray)
+            $RemoteStorageAccountKeysArray = @($RemoteStorageAccountKeysArray) + @($RemoteOfficeStorageAccountKeysArray)
+        }
         If ($StorageService -eq 'AzureFiles' -and
             ($LocalStorageAccountKeysArray.Count -gt 0 -or $RemoteStorageAccountKeysArray.Count -gt 0)) {
             For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {

@@ -774,6 +774,22 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **Advanced**: Resource-name overrides, session-host naming and resource tags (optional)
 5. Review and click **Create**
 
+For Azure Files with Office containers, supply
+`fslogixLocalOfficeStorageAccountResourceIds` and, when remote Profile accounts are used,
+`fslogixRemoteOfficeStorageAccountResourceIds`. Each Office array must contain separate
+accounts paired with its Profile array in identical shard-group order. Verify the exported
+parameters before enabling replacements. Existing shared-account Office data is not moved;
+finish the storage/data transition before updating SHR, and follow existing stopped-operation
+and active-cycle configuration precautions. Replacements receive both role mappings.
+See [upgrade precautions](../../../docs/design.md#separate-profile-and-office-azure-files-accounts).
+
+New Portal exports use `fslogixLocalProfileStorageAccountResourceIds` and
+`fslogixRemoteProfileStorageAccountResourceIds`. They take precedence over the retained legacy
+`fslogixLocalStorageAccountResourceIds` and `fslogixRemoteStorageAccountResourceIds` inputs when
+supplied, including empty arrays. SHR still serializes the legacy keys for compatibility with
+previously published session-host Template Specs. Resource-group tag names and shard order
+are unchanged. Both legacy and v2 SMB storage can be consumed without resizing or SKU conversion.
+
 Here is a screen shot of the form:
 
 ![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)

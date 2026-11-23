@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "12688311346943431116"
+      "version": "0.49.2.45890",
+      "templateHash": "3046242792864201154"
     },
     "name": "Azure Monitor Agent remediation template",
     "description": "Deploys the Azure Monitor Windows Agent extension on an existing VM in the deployment resource group for Azure Policy remediation."

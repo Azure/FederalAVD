@@ -2230,16 +2230,137 @@
                 },
                 {
                   "name": "shareSizeInGB",
-                  "type": "Microsoft.Common.Slider",
+                  "type": "Microsoft.Common.TextBox",
                   "label": "Storage Share Size (GB)",
-                  "defaultValue": 100,
-                  "min": 100,
-                  "max": 100000,
-                  "showStepMarkers": false,
+                  "defaultValue": "100",
                   "visible": "[steps('profiles').deployStorage]",
                   "constraints": {
-                    "required": true
+                    "required": true,
+                    "validations": [
+                      { "regex": "^[1-9][0-9]*$", "message": "Enter a positive whole number." },
+                      {
+                        "isValid": "[if(contains(steps('profiles').storage.service, 'AzureFiles'), and(greaterOrEquals(int(steps('profiles').storage.shareSizeInGB), if(equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'), 32, if(equals(steps('profiles').storage.service, 'AzureFiles Premium'), 100, 1))), lessOrEquals(int(steps('profiles').storage.shareSizeInGB), if(equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'), 262144, 102400))), and(greaterOrEquals(int(steps('profiles').storage.shareSizeInGB), 100), lessOrEquals(int(steps('profiles').storage.shareSizeInGB), 100000)))]",
+                        "message": "Azure Files v2 requires 32-262144 GiB; legacy up to 102400 GiB (Premium minimum 100 GiB). ANF retains the 100-100000 GiB form range."
+                      }
+                    ]
                   }
+                },
+                {
+                  "name": "officeStorageInfo",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'))]",
+                  "options": {
+                    "text": "Office containers use a separate Azure Files account for each Profile shard, in the same group/index order. Office tier, redundancy and quota can differ from Profile. Backup enrolls only Profile accounts/shares. Existing containers are not moved or replaced."
+                  }
+                },
+                {
+                  "name": "officeStorageTier",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Office Azure Files Tier",
+                  "defaultValue": "Inherit Profile tier",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Inherit Profile tier", "value": "Inherit" },
+                      { "label": "Standard", "value": "Standard" },
+                      { "label": "Premium", "value": "Premium" }
+                    ]
+                  }
+                },
+                {
+                  "name": "officeStorageRedundancy",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Office Azure Files Redundancy",
+                  "defaultValue": "Inherit Profile redundancy",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Inherit Profile redundancy", "value": "Inherit" },
+                      { "label": "Locally Redundant", "value": "LocallyRedundant" },
+                      { "label": "Zone Redundant", "value": "ZoneRedundant" }
+                    ]
+                  }
+                },
+                {
+                  "name": "officeShareSizeInGB",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Office Share Size (GB; 0 inherits Profile)",
+                  "defaultValue": "0",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'))]",
+                  "constraints": {
+                    "required": true,
+                    "validations": [
+                      { "regex": "^(0|[1-9][0-9]*)$", "message": "Use 0 to inherit Profile quota, or a positive whole number." },
+                      {
+                        "isValid": "[and(greaterOrEquals(if(equals(int(steps('profiles').storage.officeShareSizeInGB), 0), int(steps('profiles').storage.shareSizeInGB), int(steps('profiles').storage.officeShareSizeInGB)), if(or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))), 32, if(or(equals(steps('profiles').storage.officeStorageTier, 'Premium'), and(equals(steps('profiles').storage.officeStorageTier, 'Inherit'), equals(steps('profiles').storage.service, 'AzureFiles Premium'))), 100, 1))), lessOrEquals(if(equals(int(steps('profiles').storage.officeShareSizeInGB), 0), int(steps('profiles').storage.shareSizeInGB), int(steps('profiles').storage.officeShareSizeInGB)), if(or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))), 262144, 102400)))]",
+                        "message": "The effective Office quota (including inherited quota) must be valid for Office billing: v2 32-262144 GiB; legacy up to 102400 GiB (Premium minimum 100 GiB)."
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "profileStorageBillingModel",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Profile Azure Files Billing Model",
+                  "defaultValue": "Provisioned v2",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'))]",
+                  "toolTip": "New deployments default to SSD and provisioned v2. Legacy retains existing billing. This does not migrate data or convert an existing account SKU. Verify SKU availability in the target cloud and region.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Legacy", "value": "Legacy" },
+                      { "label": "Provisioned v2", "value": "ProvisionedV2" }
+                    ]
+                  }
+                },
+                {
+                  "name": "profileProvisionedIops",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Profile Provisioned IOPS (0 = recommended)",
+                  "defaultValue": "0",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))]",
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+                },
+                {
+                  "name": "profileProvisionedThroughputMiBps",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Profile Provisioned Throughput MiB/s (0 = recommended)",
+                  "defaultValue": "0",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))]",
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+                },
+                {
+                  "name": "officeStorageBillingModel",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Office Azure Files Billing Model",
+                  "defaultValue": "Inherit Profile",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Inherit Profile", "value": "Inherit" },
+                      { "label": "Legacy", "value": "Legacy" },
+                      { "label": "Provisioned v2", "value": "ProvisionedV2" }
+                    ]
+                  }
+                },
+                {
+                  "name": "officeProvisionedIops",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Office Provisioned IOPS (0 = recommended)",
+                  "defaultValue": "0",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))))]",
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
+                },
+                {
+                  "name": "officeProvisionedThroughputMiBps",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Office Provisioned Throughput MiB/s (0 = recommended)",
+                  "defaultValue": "0",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))))]",
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
                 },
                 {
                   "name": "profileSizeInMBs",
@@ -2321,9 +2442,9 @@
                 {
                   "name": "registerBackup",
                   "type": "Microsoft.Common.CheckBox",
-                  "label": "Enable FSLogix Azure Files Backup",
+                  "label": "Enable FSLogix Profile Azure Files Backup",
                   "defaultValue": false,
-                  "toolTip": "Registers every newly deployed Azure Files storage account and FSLogix share with an Azure Files snapshot backup policy.",
+                  "toolTip": "Registers only newly deployed Profile Azure Files accounts and Profile shares with snapshot backup. Office accounts and shares are never enrolled.",
                   "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'))]"
                 },
                 {
@@ -2520,7 +2641,7 @@
                 {
                   "name": "localStorageAccounts",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Existing Local Storage Accounts",
+                  "label": "Existing Local Profile Storage Accounts",
                   "multiLine": true,
                   "multiselect": true,
                   "defaultValue": [],
@@ -2535,7 +2656,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'))]",
                   "options": {
-                    "text": "[if(or(equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 'Select exactly one storage account from the same region as the session hosts.', concat('Select exactly ', string(length(steps('profiles').access.userGroupPickerBlade.transformed.groups)), ' storage account(s), one for each selected FSLogix user group.'))]"
+                    "text": "Select one local Profile account per shard. When Office is enabled, select the same number of distinct Office accounts. Keep both selections in the same user-group/shard order. Unsharded configurations require exactly one account per role."
                   }
                 },
                 {
@@ -2550,7 +2671,7 @@
                 {
                   "name": "remoteStorageAccounts",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Existing Remote Storage Accounts",
+                  "label": "Existing Remote Profile Storage Accounts",
                   "multiLine": true,
                   "multiselect": true,
                   "defaultValue": [],
@@ -2567,6 +2688,41 @@
                   "options": {
                     "style": "Error",
                     "text": "Select either no remote storage accounts or the same number required for local storage."
+                  }
+                },
+                {
+                  "name": "localOfficeStorageAccounts",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing Local Office Storage Accounts (paired shard order)",
+                  "multiLine": true,
+                  "multiselect": true,
+                  "defaultValue": "[parse('[]')]",
+                  "visible": "[and(not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('profiles').existingStorage.storageAccountsApi.transformed.list, (account) => and(equals(account.location, steps('hosts').location.name), not(contains(steps('profiles').existingStorage.localStorageAccounts, account.id)), not(contains(steps('profiles').existingStorage.remoteStorageAccounts, account.id)))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\",\"value\":\"', account.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "remoteOfficeStorageAccounts",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Existing Remote Office Storage Accounts (paired shard order)",
+                  "multiLine": true,
+                  "multiselect": true,
+                  "defaultValue": "[parse('[]')]",
+                  "visible": "[and(contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), contains(steps('profiles').storage.containerType, 'CloudCache'))]",
+                  "constraints": {
+                    "required": false,
+                    "allowedValues": "[map(filter(steps('profiles').existingStorage.storageAccountsApi.transformed.list, (account) => and(not(equals(account.location, steps('hosts').location.name)), not(contains(steps('profiles').existingStorage.localStorageAccounts, account.id)), not(contains(steps('profiles').existingStorage.remoteStorageAccounts, account.id)), not(contains(steps('profiles').existingStorage.localOfficeStorageAccounts, account.id)))), (account) => parse(concat('{\"label\":\"', account.name, '\",\"description\":\"Resource Group: ', first(skip(split(account.id, '/'), 4)), '\",\"value\":\"', account.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "officeAccountPairingError",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(and(not(steps('profiles').deployStorage), not(equals(length(steps('profiles').existingStorage.localOfficeStorageAccounts), length(steps('profiles').existingStorage.localStorageAccounts)))), and(contains(steps('profiles').storage.containerType, 'CloudCache'), not(equals(length(steps('profiles').existingStorage.remoteOfficeStorageAccounts), length(steps('profiles').existingStorage.remoteStorageAccounts))))))]",
+                  "options": {
+                    "style": "Error",
+                    "text": "Each local or remote Profile account requires one distinct Office account in matching shard order. Leave both remote roles empty if no remote storage is used. Invalid pairs fail deployment."
                   }
                 },
                 {
@@ -4414,9 +4570,20 @@
         "deployFSLogixStorage": "[and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage)]",
         "fslogixConfigureSessionHosts": "[and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').configureSessionHosts)]",
         "fslogixStorageService": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.service, 'AzureFiles Premium')]",
-        "fslogixStorageRedundancy": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageRedundancy, 'LocallyRedundant')]",
+        "fslogixProfileStorageRedundancy": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageRedundancy, 'LocallyRedundant')]",
+        "fslogixProfileStorageAccountNamePrefix": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, parse('null'))]",
+        "fslogixProfileStorageTier": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), last(split(steps('profiles').storage.service, ' ')), parse('null'))]",
+        "fslogixProfileStorageBillingModel": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.profileStorageBillingModel, 'Legacy')]",
+        "fslogixOfficeStorageBillingModel": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').storage.officeStorageBillingModel, 'Inherit')]",
+        "fslogixProfileProvisionedIops": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2')), int(steps('profiles').storage.profileProvisionedIops), 0)]",
+        "fslogixProfileProvisionedThroughputMiBps": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2')), int(steps('profiles').storage.profileProvisionedThroughputMiBps), 0)]",
+        "fslogixOfficeProvisionedIops": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2')))), int(steps('profiles').storage.officeProvisionedIops), 0)]",
+        "fslogixOfficeProvisionedThroughputMiBps": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2')))), int(steps('profiles').storage.officeProvisionedThroughputMiBps), 0)]",
+        "fslogixOfficeStorageTier": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').storage.officeStorageTier, 'Inherit')]",
+        "fslogixOfficeStorageRedundancy": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').storage.officeStorageRedundancy, 'Inherit')]",
+        "fslogixOfficeShareSizeInGB": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), int(steps('profiles').storage.officeShareSizeInGB), 0)]",
         "fslogixContainerType": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.containerType, 'ProfileContainer')]",
-        "fslogixShareSizeInGB": "[if(steps('profiles').deployStorage, steps('profiles').storage.shareSizeInGB, 100)]",
+        "fslogixProfileShareSizeInGB": "[if(steps('profiles').deployStorage, int(steps('profiles').storage.shareSizeInGB), 100)]",
         "fslogixProfileSizeInMBs": "[if(steps('profiles').configureSessionHosts, steps('profiles').storage.profileSizeInMBs, 30720)]",
         "fslogixOUPath": "[if(and(steps('profiles').deployStorage, equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices')), steps('profiles').storage.ouPath, '')]",
         "fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('profiles').userIdentity, 'EntraKerberos'), steps('profiles').deployStorage, steps('profiles').automateEntraKerberosTasks), steps('profiles').managedIdentity.id, '')]",
@@ -4428,8 +4595,10 @@
         "fslogixShardOptions": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.shardOptions, 'None')]",
         "fslogixAdminGroups": "[if(and(steps('profiles').deployStorage, steps('profiles').access.configureAdminAccess, not(empty(steps('profiles').access.adminGroupPickerBlade.transformed.groups))), steps('profiles').access.adminGroupPickerBlade.transformed.groups, parse('[]'))]",
         "fslogixUserGroups": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None'))), not(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups))), steps('profiles').access.userGroupPickerBlade.transformed.groups, parse('[]'))]",
-        "fslogixExistingLocalStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.localStorageAccounts, parse('[]'))]",
-        "fslogixExistingRemoteStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.containerType, 'CloudCache'), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.remoteStorageAccounts, parse('[]'))]",
+        "fslogixExistingLocalProfileStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.localStorageAccounts, parse('[]'))]",
+        "fslogixExistingRemoteProfileStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.containerType, 'CloudCache'), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.remoteStorageAccounts, parse('[]'))]",
+        "fslogixExistingLocalOfficeStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').existingStorage.localOfficeStorageAccounts, parse('[]'))]",
+        "fslogixExistingRemoteOfficeStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.containerType, 'CloudCache'), contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').existingStorage.remoteOfficeStorageAccounts, parse('[]'))]",
         "fslogixExistingLocalNetAppVolumeResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureNetAppFiles')), steps('profiles').existingStorage.localNetAppVolumes, parse('[]'))]",
         "fslogixExistingRemoteNetAppVolumeResourceIds": "[if(and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.containerType, 'CloudCache'), contains(steps('profiles').storage.service, 'AzureNetAppFiles')), steps('profiles').existingStorage.remoteNetAppVolumes, parse('[]'))]",
         "netAppVolumesSubnetResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureNetAppFiles')), steps('profiles').netApp.volumesSubnet.id, '')]",
@@ -4469,7 +4638,7 @@
         "updateLogOffMessage": "[steps('operationsAndMonitoring').updates.logOffMessage]",
         "deleteOriginalVm": "[if(equals(steps('hosts').availability.option, 'AvailabilitySets'), true, steps('operationsAndMonitoring').updates.deleteOriginalVm)]",
         "failedSessionHostCleanupPolicy": "[steps('operationsAndMonitoring').updates.failedSessionHostCleanupPolicy]",
-        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2), 'none', steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3), 'none', steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4), 'none', steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5), 'none', steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6), 'none', steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value), '', steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue), '', steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value), '', steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue), '', steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '', steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '', steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"fslogixStoragePrefix\":\"', if(and(steps('profiles').deployStorage, not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, ''), '\",\"resourceTypeCodes\":', if(steps('tagsAndNaming').naming.customizeAbbreviations, concat('{\"resourceGroups\":\"', steps('tagsAndNaming').naming.rtCodeRg, '\",\"hostPools\":\"', steps('tagsAndNaming').naming.rtCodeHp, '\",\"desktopApplicationGroups\":\"', steps('tagsAndNaming').naming.rtCodeDag, '\",\"workspaces\":\"', steps('tagsAndNaming').naming.rtCodeWs, '\",\"scalingPlans\":\"', steps('tagsAndNaming').naming.rtCodeSp, '\",\"diskEncryptionSets\":\"', steps('tagsAndNaming').naming.rtCodeDes, '\",\"storageAccounts\":\"', steps('tagsAndNaming').naming.rtCodeSa, '\",\"netAppAccounts\":\"', steps('tagsAndNaming').naming.rtCodeNaa, '\",\"netAppCapacityPools\":\"', steps('tagsAndNaming').naming.rtCodeNacp, '\",\"userAssignedIdentities\":\"', steps('tagsAndNaming').naming.rtCodeUai, '\",\"privateEndpoints\":\"', steps('tagsAndNaming').naming.rtCodePe, '\",\"networkInterfaces\":\"', steps('tagsAndNaming').naming.rtCodeNic, '\"}'), '{}'), '}'))]",
+        "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2), 'none', steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3), 'none', steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4), 'none', steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5), 'none', steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6), 'none', steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value), '', steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue), '', steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value), '', steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue), '', steps('tagsAndNaming').naming.workloadValue), '\",\"vmsLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '', steps('tagsAndNaming').naming.vmsLocationAbbreviationOverride), '\",\"cpLocationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '', steps('tagsAndNaming').naming.cpLocationAbbreviationOverride), '\",\"resourceTypeCodes\":', if(steps('tagsAndNaming').naming.customizeAbbreviations, concat('{\"resourceGroups\":\"', steps('tagsAndNaming').naming.rtCodeRg, '\",\"hostPools\":\"', steps('tagsAndNaming').naming.rtCodeHp, '\",\"desktopApplicationGroups\":\"', steps('tagsAndNaming').naming.rtCodeDag, '\",\"workspaces\":\"', steps('tagsAndNaming').naming.rtCodeWs, '\",\"scalingPlans\":\"', steps('tagsAndNaming').naming.rtCodeSp, '\",\"diskEncryptionSets\":\"', steps('tagsAndNaming').naming.rtCodeDes, '\",\"storageAccounts\":\"', steps('tagsAndNaming').naming.rtCodeSa, '\",\"netAppAccounts\":\"', steps('tagsAndNaming').naming.rtCodeNaa, '\",\"netAppCapacityPools\":\"', steps('tagsAndNaming').naming.rtCodeNacp, '\",\"userAssignedIdentities\":\"', steps('tagsAndNaming').naming.rtCodeUai, '\",\"privateEndpoints\":\"', steps('tagsAndNaming').naming.rtCodePe, '\",\"networkInterfaces\":\"', steps('tagsAndNaming').naming.rtCodeNic, '\"}'), '{}'), '}'))]",
         "tags": "[steps('tagsAndNaming').tags.tags]"
       },
       "kind": "Subscription",

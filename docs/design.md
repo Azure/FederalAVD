@@ -10,10 +10,85 @@ through that topology.
 
 ## FSLogix storage-key credentials
 
-Standard Entra ID host pools using Azure Files store their FSLogix storage credentials through
-a native `Set-StorageAccountCredential` function defined directly in `Initialize-SessionHost.ps1`.
+### Separate Profile and Office Azure Files accounts
+
+When Office containers are enabled, each Profile shard has a separate Office account
+at the same index. New defaults use `fslpc{unique}` and `fsloc{unique}` prefixes. The shared
+Azure Files module deploys both roles without duplicating its embedded scripts, with
+independent Office tier, redundancy and quota (inherited from Profile settings unless
+overridden). Authentication, private endpoints, CMK keys, share permissions and session-host
+locations are configured for both roles. Backup registration receives only Profile accounts
+and shares; `office-containers` remains excluded centrally.
+
+Existing-account arrays must be distinct and explicitly ordered to match the shard-group
+array. Local and remote Office arrays pair with the corresponding Profile arrays. Neither
+account names nor user data are migrated automatically. Before upgrading a deployment using
+the former generated Profile prefix, retain that exact prefix or adopt its existing account IDs.
+Before enabling the new Office mapping, prepare the separate accounts and plan the supported
+ODFC data transition, drain/sign-out and representative mount validation. Re-running deployment
+is not a data migration. Automated policies retain their successful Run Command compliance
+contract and do not forcibly reconfigure already-compliant hosts.
+
+Azure Files media (`Standard` HDD or `Premium` SSD) and billing are independent choices.
+Legacy billing maps HDD to pay-as-you-go `StorageV2` / `Standard_*`, and SSD to
+provisioned-v1 `FileStorage` / `Premium_*`. Provisioned-v2 billing uses `FileStorage` for
+both tiers, with `StandardV2_*` or `PremiumV2_*` SKUs. The supported redundancy selections
+remain LRS and ZRS; no geo-redundancy or account-less NFS resources are introduced.
+`StorageV2` is an account kind, not provisioned-v2 billing. Microsoft recommends SSD for
+[FSLogix Cloud Cache](https://learn.microsoft.com/azure/storage/files/virtual-desktop-workloads).
+Azure NetApp Files keeps its separate-volume model.
+
+### Provisioned-v2 sizing and compatible interfaces
+
+New Portal deployments default to SSD provisioned v2. Bicep/ARM parameter omission retains
+the previous media and legacy billing defaults, so upgrading an existing parameter file does
+not silently request a different SKU. Existing-account inputs only configure consumers;
+they never modify the supplied account's SKU or shares. An explicit billing change on an
+already-deployed account is not a migration mechanism. Create new accounts and plan a supported
+data transition; never assume a legacy account can be converted by redeployment.
+
+Profile and Office have independent capacity, billing, IOPS and throughput settings. Office
+inherits Profile media, billing, redundancy and capacity unless overridden. Zero IOPS or
+throughput means calculate the Microsoft recommendation for that role's resolved capacity,
+not copy the other role's performance. The shared resolver validates global v2 sizing bounds
+and emits one role-aware resource graph, without duplicating authentication scripts. V2
+shares omit legacy access-tier and large-file-share switches. SMB paths, AD DS/Entra
+authentication, shard order, Cloud Cache and native session-host credential writing are unchanged.
+Only Profile shares are enrolled for backup.
+
+The classic SMB storage account/share resources use stable API `2024-01-01`, the earliest
+stable schema supporting the v2 fields and SKUs. Validate API,
+SKU, redundancy, backup and capacity availability in the actual target cloud/region before
+deployment, including disconnected clouds; public-cloud availability is not evidence of
+identical sovereign-cloud limits. Unsupported service combinations must fail explicitly,
+not downgrade to a different SKU. Offline compilation cannot establish live availability.
+Microsoft documents v2 availability in Commercial and US Government; Top Secret availability
+has been reported by an operator, while Secret and per-region combinations still need target
+environment validation. See [Azure Files billing and sizing](https://learn.microsoft.com/azure/storage/files/understanding-billing).
+
+Preferred public parameters explicitly identify `Profile`. The legacy names remain accepted
+with their original defaults. Nullable aliases resolve once at the entry boundary; an explicitly
+supplied preferred value wins (including an empty existing-account array), while omission uses
+the legacy value. Portal exports and new examples use the preferred names. Shared authentication,
+shard index/count and group settings remain role-neutral. Lifecycle resource tags and SHR's
+serialized legacy parameter keys remain stable so older deployed session-host Template Specs
+continue to accept their inputs.
+
+Measure generated ARM and full serialized Template Spec packages after changes. Keep basic
+storage provisioning and existing-resource consumption in host pools. If payload growth becomes
+material, move advanced storage provisioning/tuning to the standalone add-on rather than
+duplicating orchestration or merely hiding form controls; no such feature removal is made here.
+The host-pool deduplicated-package regression ceiling is 1,650,000 bytes including the
+16 KiB reserve, leaving at least 350,000 bytes against the conservative publication budget.
+This intentionally accommodates v2 and compatibility aliases without weakening the separate
+2,000,000-byte publication limit or the publisher's 200,000-byte remaining-headroom warning.
+
+### Credential storage and rotation
+
+Standard and automated storage-key configurations using Azure Files store their FSLogix credentials
+through a native `Set-StorageAccountCredential` function defined directly in each initializer.
 The storage-key update script contains its own identical function, with regression tests keeping
-the implementations aligned. Both scripts are self-contained and embedded unchanged into Run
+all three implementations aligned. The scripts are self-contained and embedded unchanged into Run
 Command with `loadTextContent()`: no sibling helper file, ARM string replacement, download,
 external module, or password-bearing child-process command line is required.
 

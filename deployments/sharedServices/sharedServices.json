@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "12745314995087139709"
+      "templateHash": "2317173174475713292"
     }
   },
   "definitions": {
@@ -125,6 +125,10 @@
           "nullable": true
         },
         "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixOfficeStoragePrefix": {
           "type": "string",
           "nullable": true
         },
@@ -2509,7 +2513,8 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslogix{unique}",
+        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",
         "confidentialVmKey": "{identifier}-cvm-cmk",
@@ -5091,7 +5096,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1727531124347487297"
+              "templateHash": "15204831344553603813"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -5309,7 +5314,7 @@
               "type": "object",
               "defaultValue": {},
               "metadata": {
-                "description": "Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type."
+                "description": "Optional. Key-value pairs to apply as tags to the Azure resources."
               }
             },
             "virtualMachineAdminPassword": {

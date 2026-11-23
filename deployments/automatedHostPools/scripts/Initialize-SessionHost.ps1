@@ -27,6 +27,15 @@ param (
     [string]$LocalStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
+    [string]$LocalStorageAccountKeys = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$LocalOfficeStorageAccountNames = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$LocalOfficeStorageAccountKeys = '[]',
+
+    [Parameter(Mandatory = $false)]
     [string]$OSSGroups = '[]',
 
     [Parameter(Mandatory = $false)]
@@ -34,6 +43,15 @@ param (
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteStorageAccountNames = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$RemoteStorageAccountKeys = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$RemoteOfficeStorageAccountNames = '[]',
+
+    [Parameter(Mandatory = $false)]
+    [string]$RemoteOfficeStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$Shares = '[]',
@@ -82,12 +100,157 @@ Function ConvertFrom-JsonString {
             Return $Array
         }
         Else {
-            Return $null
+            Return
         }            
     }
     Else {
-        Return $null
+        Return
     }    
+}
+
+function Assert-FSLogixAzureFilesAccounts {
+    param (
+        [array]$LocalProfileNames,
+        [array]$RemoteProfileNames,
+        [array]$LocalOfficeNames,
+        [array]$RemoteOfficeNames,
+        [array]$Groups,
+        [bool]$OfficeEnabled,
+        [bool]$UseStorageKeys,
+        [array]$LocalProfileKeys,
+        [array]$RemoteProfileKeys,
+        [array]$LocalOfficeKeys,
+        [array]$RemoteOfficeKeys
+    )
+
+    if ($LocalProfileNames.Count -eq 0) {
+        throw 'FSLogix Azure Files requires at least one local Profile account.'
+    }
+    if ($RemoteProfileNames.Count -gt 0 -and $RemoteProfileNames.Count -ne $LocalProfileNames.Count) {
+        throw 'Remote Profile accounts must match the local shard count.'
+    }
+    if ($Groups.Count -gt 0 -and $Groups.Count -ne $LocalProfileNames.Count) {
+        throw 'Object-specific groups must match the local Profile shard count.'
+    }
+    if ($OfficeEnabled) {
+        if ($LocalOfficeNames.Count -ne $LocalProfileNames.Count -or $RemoteOfficeNames.Count -ne $RemoteProfileNames.Count) {
+            throw 'Office requires one distinct account per Profile account in the same local and remote shard order.'
+        }
+    }
+    elseif ($LocalOfficeNames.Count -gt 0 -or $RemoteOfficeNames.Count -gt 0) {
+        throw 'Office account arrays must be empty for Profile-only containers.'
+    }
+    $AllNames = @($LocalProfileNames) + @($RemoteProfileNames) + @($LocalOfficeNames) + @($RemoteOfficeNames)
+    if (@($AllNames | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0 -or
+        @($AllNames | Sort-Object -Unique).Count -ne $AllNames.Count) {
+        throw 'Profile and Office accounts must be nonempty, unique and disjoint across local and remote roles.'
+    }
+    if ($UseStorageKeys) {
+        if ($LocalProfileNames.Count -ne 1 -or $RemoteProfileNames.Count -gt 1 -or $Groups.Count -gt 0) {
+            throw 'Storage-key EntraId requires one account per role and location, without object-specific sharding.'
+        }
+        if ($LocalProfileKeys.Count -ne $LocalProfileNames.Count -or $RemoteProfileKeys.Count -ne $RemoteProfileNames.Count -or
+            $LocalOfficeKeys.Count -ne $LocalOfficeNames.Count -or $RemoteOfficeKeys.Count -ne $RemoteOfficeNames.Count) {
+            throw 'Storage-key EntraId requires a separate key for every Profile and Office account.'
+        }
+        $AllKeys = @($LocalProfileKeys) + @($RemoteProfileKeys) + @($LocalOfficeKeys) + @($RemoteOfficeKeys)
+        if (@($AllKeys | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count -gt 0) {
+            throw 'Storage-key EntraId account keys cannot be empty.'
+        }
+    }
+}
+
+function Set-StorageAccountCredential {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$TargetName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$UserName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Password
+    )
+
+    if (-not ('FederalAVD.StorageCredential' -as [type])) {
+        Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+
+namespace FederalAVD
+{
+    public static class StorageCredential
+    {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct Credential
+        {
+            public uint Flags;
+            public uint Type;
+            public string TargetName;
+            public string Comment;
+            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+            public uint CredentialBlobSize;
+            public IntPtr CredentialBlob;
+            public uint Persist;
+            public uint AttributeCount;
+            public IntPtr Attributes;
+            public string TargetAlias;
+            public string UserName;
+        }
+
+        [DllImport("advapi32.dll", EntryPoint = "CredWriteW", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CredWrite(ref Credential credential, uint flags);
+
+        public static void Write(string targetName, string userName, string password)
+        {
+            if (String.IsNullOrEmpty(targetName) || String.IsNullOrEmpty(userName) || String.IsNullOrEmpty(password))
+                throw new ArgumentException("Credential target, user name and password must not be empty.");
+            if (password.Length > 1280)
+                throw new ArgumentException("Credential password exceeds the Windows credential size limit.");
+
+            IntPtr passwordBuffer = Marshal.StringToCoTaskMemUni(password);
+            try
+            {
+                Credential credential = new Credential();
+                credential.Type = 2; // CRED_TYPE_DOMAIN_PASSWORD: used by SMB authentication.
+                credential.TargetName = targetName;
+                credential.UserName = userName;
+                credential.CredentialBlobSize = (uint)(password.Length * 2);
+                credential.CredentialBlob = passwordBuffer;
+                credential.Persist = 2; // CRED_PERSIST_LOCAL_MACHINE: same identity, across logon sessions.
+
+                if (!CredWrite(ref credential, 0))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    throw new Win32Exception(error, "Writing the storage credential failed (Win32 error " + error + ").");
+                }
+            }
+            finally
+            {
+                Marshal.ZeroFreeCoTaskMemUnicode(passwordBuffer);
+            }
+        }
+    }
+}
+'@
+    }
+
+    [FederalAVD.StorageCredential]::Write($TargetName, $UserName, $Password)
+}
+
+function Set-FSLogixStorageCredential {
+    param (
+        [string]$AccountName,
+        [string]$AccountKey,
+        [string]$Suffix
+    )
+    Set-StorageAccountCredential -TargetName "$AccountName.file.$Suffix" -UserName "localhost\$AccountName" -Password $AccountKey
 }
 
 Function Convert-GroupToSID {
@@ -387,9 +550,42 @@ try {
         switch ($StorageService) {
             'AzureFiles' {
                 Write-Log -message "Gathering Azure Files Storage Account Parameters"
-                [array]$OSSGroupsArray = ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups'
-                [array]$LocalStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames'
-                [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'
+                [array]$OSSGroupsArray = @(ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups')
+                [array]$LocalStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames')
+                [array]$RemoteStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames')
+                [array]$LocalOfficeStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountNames -Name 'LocalOfficeStorageAccountNames')
+                [array]$RemoteOfficeStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountNames -Name 'RemoteOfficeStorageAccountNames')
+                [array]$LocalStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues)
+                [array]$RemoteStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues)
+                [array]$LocalOfficeStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountKeys -Name 'LocalOfficeStorageAccountKeys' -SensitiveValues)
+                [array]$RemoteOfficeStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountKeys -Name 'RemoteOfficeStorageAccountKeys' -SensitiveValues)
+                $AccountValidation = @{
+                    LocalProfileNames = $LocalStorageAccountNamesArray
+                    RemoteProfileNames = $RemoteStorageAccountNamesArray
+                    LocalOfficeNames = $LocalOfficeStorageAccountNamesArray
+                    RemoteOfficeNames = $RemoteOfficeStorageAccountNamesArray
+                    Groups = $OSSGroupsArray
+                    OfficeEnabled = [bool]$OfficeShareName
+                    UseStorageKeys = $IdentitySolution -eq 'EntraId'
+                    LocalProfileKeys = $LocalStorageAccountKeysArray
+                    RemoteProfileKeys = $RemoteStorageAccountKeysArray
+                    LocalOfficeKeys = $LocalOfficeStorageAccountKeysArray
+                    RemoteOfficeKeys = $RemoteOfficeStorageAccountKeysArray
+                }
+                Assert-FSLogixAzureFilesAccounts @AccountValidation
+                if ($IdentitySolution -eq 'EntraId') {
+                    # Managed Run Command executes as SYSTEM, the account used for storage-key SMB credentials.
+                    Set-FSLogixStorageCredential -AccountName $LocalStorageAccountNamesArray[0] -AccountKey $LocalStorageAccountKeysArray[0] -Suffix $StorageSuffix
+                    if ($OfficeShareName) {
+                        Set-FSLogixStorageCredential -AccountName $LocalOfficeStorageAccountNamesArray[0] -AccountKey $LocalOfficeStorageAccountKeysArray[0] -Suffix $StorageSuffix
+                    }
+                    if ($RemoteStorageAccountNamesArray.Count -gt 0) {
+                        Set-FSLogixStorageCredential -AccountName $RemoteStorageAccountNamesArray[0] -AccountKey $RemoteStorageAccountKeysArray[0] -Suffix $StorageSuffix
+                        if ($OfficeShareName) {
+                            Set-FSLogixStorageCredential -AccountName $RemoteOfficeStorageAccountNamesArray[0] -AccountKey $RemoteOfficeStorageAccountKeysArray[0] -Suffix $StorageSuffix
+                        }
+                    }
+                }
                 
                 # Process Local Storage Accounts
                 Write-Log -message "Processing Local Storage Accounts"
@@ -398,8 +594,9 @@ try {
                     Write-Log -message "Local storage [$i]: $SAFQDN"
                     
                     If ($OfficeShareName) {
-                        $LocalOfficeContainerPaths.Add("\\$SAFQDN\$OfficeShareName") | Out-Null
-                        $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
+                        $OfficeSAFQDN = "$($LocalOfficeStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                        $LocalOfficeContainerPaths.Add("\\$OfficeSAFQDN\$OfficeShareName") | Out-Null
+                        $LocalCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($OfficeSAFQDN)\$($OfficeShareName)") | Out-Null
                     }
                     $LocalProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
                     $LocalCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
@@ -413,8 +610,9 @@ try {
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
                         
                         If ($OfficeShareName) {
-                            $RemoteOfficeContainerPaths.Add("\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
-                            $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($OfficeShareName)") | Out-Null
+                            $OfficeSAFQDN = "$($RemoteOfficeStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                            $RemoteOfficeContainerPaths.Add("\\$($OfficeSAFQDN)\$($OfficeShareName)") | Out-Null
+                            $RemoteCloudCacheOfficeContainerPaths.Add("type=smb,connectionString=\\$($OfficeSAFQDN)\$($OfficeShareName)") | Out-Null
                         }
                         $RemoteProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
                         $RemoteCloudCacheProfileContainerPaths.Add("type=smb,connectionString=\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
@@ -449,6 +647,15 @@ try {
         }
         
         # Add Common FSLogix Registry Settings
+        # ADMX Machine policy "Access Network as Computer Object" (v2105): DWORD 1 attaches as computer.
+        # Storage-key access exposes all containers to the host; identity-based configurations remain unchanged.
+        # https://learn.microsoft.com/fslogix/reference-configuration-settings#accessnetworkascomputerobject
+        if ($IdentitySolution -eq 'EntraId' -and $LocalStorageAccountKeysArray.Count -gt 0) {
+            $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
+        }
+        if ($IdentitySolution -eq 'EntraId' -and $LocalOfficeStorageAccountKeysArray.Count -gt 0) {
+            $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\Policies\FSLogix\ODFC'; PropertyType = 'DWord'; Value = 1 })
+        }
         $RegSettings.Add([PSCustomObject]@{ Name = 'CleanupInvalidSessions'; Path = 'HKLM:\SOFTWARE\FSLogix\Apps'; PropertyType = 'DWord'; Value = 1 })
         $RegSettings.Add([PSCustomObject]@{ Name = 'Enabled'; Path = 'HKLM:\SOFTWARE\Fslogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         $RegSettings.Add([PSCustomObject]@{ Name = 'DeleteLocalProfileWhenVHDShouldApply'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
@@ -494,7 +701,7 @@ try {
                 [string]$LocalProfileContainerPath = $LocalProfileContainerPaths[$i]
                 [string]$LocalCloudCacheProfileContainerPath = $LocalCloudCacheProfileContainerPaths[$i]
 
-                If ($RemoteStorageAccountNamesArray) {
+                If ($RemoteProfileContainerPaths.Count -gt 0) {
                     [string]$RemoteProfileContainerPath = $RemoteProfileContainerPaths[$i]
                     [string]$RemoteCloudCacheProfileContainerPath = $RemoteCloudCacheProfileContainerPaths[$i]
                     [array]$ProfileContainerPathsForGroup = @($LocalProfileContainerPath, $RemoteProfileContainerPath)
@@ -518,7 +725,7 @@ try {
                     [string]$LocalOfficeContainerPath = $LocalOfficeContainerPaths[$i]
                     [string]$LocalCloudCacheOfficeContainerPath = $LocalCloudCacheOfficeContainerPaths[$i]
                     
-                    If ($RemoteStorageAccountNamesArray) {
+                    If ($RemoteOfficeContainerPaths.Count -gt 0) {
                         [string]$RemoteOfficeContainerPath = $RemoteOfficeContainerPaths[$i]
                         [string]$RemoteCloudCacheOfficeContainerPath = $RemoteCloudCacheOfficeContainerPaths[$i]
                         [array]$OfficeContainerPathsForGroup = @($LocalOfficeContainerPath, $RemoteOfficeContainerPath)
@@ -542,7 +749,7 @@ try {
         }
         Else {
             # No OSS Groups, use standard VHDLocations/CCDLocations
-            If ($RemoteStorageAccountNamesArray.Count -gt 0) {
+            If ($RemoteProfileContainerPaths.Count -gt 0) {
                 $ProfileContainerPaths = $LocalProfileContainerPaths + $RemoteProfileContainerPaths
                 $CloudCacheProfileContainerPaths = $LocalCloudCacheProfileContainerPaths + $RemoteCloudCacheProfileContainerPaths
             }
@@ -561,7 +768,7 @@ try {
             }
             
             If ($LocalOfficeContainerPaths.Count -gt 0) {
-                If ($RemoteStorageAccountNamesArray.Count -gt 0) {
+                If ($RemoteOfficeContainerPaths.Count -gt 0) {
                     $OfficeContainerPaths = $LocalOfficeContainerPaths + $RemoteOfficeContainerPaths
                     $CloudCacheOfficeContainerPaths = $LocalCloudCacheOfficeContainerPaths + $RemoteCloudCacheOfficeContainerPaths
                 }

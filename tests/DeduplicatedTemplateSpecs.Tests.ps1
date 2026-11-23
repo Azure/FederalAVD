@@ -121,7 +121,7 @@ Describe 'Deduplicated publication packages' {
         (Get-FileHash -LiteralPath $FormFile).Hash | Should -Be $formHash
         if ($Name -eq 'deployments\hostpools\hostpool.json') {
             ($package.OriginalPayloadBytes - $package.PayloadBytes) | Should -BeGreaterThan 240000
-            ($package.PayloadBytes + 16384) | Should -BeLessThan 1600000
+            ($package.PayloadBytes + 16384) | Should -BeLessThan 1650000
             $package.Artifacts.Count | Should -Be 28
         }
     }

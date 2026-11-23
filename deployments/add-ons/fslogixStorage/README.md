@@ -37,12 +37,15 @@ recovery are grouped on the Zero Trust Configuration page. Resource tags and opt
 overrides are grouped on the final Tags and Naming page.
 
 For Azure Files, the portal form checks the Storage resource provider SKU inventory for the selected
-subscription and region. It checks `Standard_ZRS` with the `StorageV2` account kind for Standard
-storage and `Premium_ZRS` with the `FileStorage` account kind for Premium storage. When the matching
+subscription and region. For Legacy billing it checks `Standard_ZRS` with the `StorageV2` account
+kind or `Premium_ZRS` with `FileStorage`; for Provisioned v2 it checks `StandardV2_ZRS` or
+`PremiumV2_ZRS`, both with `FileStorage`. When the matching
 ZRS SKU is available and has no location restriction, the form offers both LRS and ZRS, defaults to
 ZRS, and warns only if LRS is selected. Otherwise, only LRS is offered. Direct Bicep, PowerShell, and
 CI/CD deployments retain the `LocallyRedundant` parameter default and must select
 `ZoneRedundant` explicitly.
+V2 LRS and ZRS availability checks use the selected role's effective tier and billing model;
+unavailable v2 SKUs do not silently fall back to legacy inventory or billing.
 
 For Cloud Cache, the form follows the host-pool workflow instead of accepting raw identifiers.
 Azure Files users select a remote region and existing storage accounts discovered from Azure.
@@ -74,8 +77,8 @@ to newly created storage resource groups, temporary deployment resources, storag
 endpoints, NetApp resources, backup registrations, encryption keys, and the storage encryption
 identity. Shared and future-host-pool modes do not apply a parent tag because no single existing
 host pool owns those resources at deployment time.
-Azure Files storage account prefixes use the same deterministic `fslogix${uniqueString(...)}`
-calculation as the host-pool deployment and are limited to 13 characters so appending the two-digit
+Azure Files storage account prefixes use the central deterministic naming bundle: `fslpc` for Profile
+accounts and `fsloc` for Office accounts. Prefixes are limited to 13 characters so appending the two-digit
 storage index remains compatible with Active Directory computer account names. Advanced overrides
 are optional and may be supplied individually; every blank override continues to use the generated
 name.
@@ -365,6 +368,85 @@ Entra Domain Services also support FSLogix Object Specific Settings.
 
 ## Required Outputs
 
+### Profile and Office storage accounts
+
+With `ProfileOfficeContainer` or `CloudCacheProfileOfficeContainer`, Azure Files always creates
+separate Profile and Office accounts. There is one account per role without sharding, or one
+paired account per role for each shard group. Both arrays use the same group ordering and
+`storageIndex`. `fslogixProfileStorageAccountNamePrefix` is the preferred nullable Profile override,
+falling back to the legacy `storageAccountNamePrefix` when null;
+`officeStorageAccountNamePrefix` independently overrides Office names and must differ from Profile.
+CMK creates distinct indexed keys for both roles using the same encryption identity.
+Office shares are never enrolled in backup.
+
+| Parameter | Default | Allowed values |
+| --- | --- | --- |
+| `fslogixOfficeStorageTier` | `Inherit` (`fslogixStorageService` tier) | `Inherit`, `Standard`, `Premium` |
+| `fslogixOfficeStorageRedundancy` | `Inherit` (`fslogixStorageRedundancy`) | `Inherit`, `LocallyRedundant`, `ZoneRedundant` |
+| `fslogixOfficeShareSizeInGB` | `0` (effective Profile quota) | `0` or a quota valid for the Office billing model |
+
+The Portal defaults new Azure Files deployments to **Premium (SSD) + Provisioned v2**.
+Bicep omission preserves `AzureFiles Standard`, `LocallyRedundant`, 100 GiB and `Legacy` billing.
+`fslogixProfileStorageBillingModel` accepts `Legacy` or `ProvisionedV2` (default `Legacy`).
+`fslogixOfficeStorageBillingModel` accepts those plus `Inherit` (default), which uses Profile billing.
+`Inherit` tier uses the effective Profile tier. These account/billing combinations are supported:
+
+| Tier | Media / billing | Account kind | Account SKUs |
+| --- | --- | --- | --- |
+| `Standard` | HDD / pay-as-you-go | `StorageV2` | `Standard_LRS`, `Standard_ZRS` |
+| `Premium` | SSD / provisioned v1 | `FileStorage` | `Premium_LRS`, `Premium_ZRS` |
+| `Standard` | HDD / provisioned v2 | `FileStorage` | `StandardV2_LRS`, `StandardV2_ZRS` |
+| `Premium` | SSD / provisioned v2 | `FileStorage` | `PremiumV2_LRS`, `PremiumV2_ZRS` |
+
+`StorageV2` is an account kind, **not** the provisioned v2 billing model. Only LRS/ZRS are offered.
+The nullable aliases `fslogixProfileShareSizeInGB`, `fslogixProfileStorageRedundancy` and
+`fslogixProfileStorageAccountNamePrefix` override `shareSizeInGB`, `fslogixStorageRedundancy` and
+`storageAccountNamePrefix` when supplied. An empty preferred prefix requests generated naming,
+even when the old prefix is supplied. `fslogixProfileStorageTier` overrides the Azure Files tier
+from `fslogixStorageService`; null derives it from that unchanged backend compatibility parameter.
+Forms export preferred names only. Shared authentication, sharding, count, groups and index are unchanged.
+
+`fslogixProfileProvisionedIops`, `fslogixProfileProvisionedThroughputMiBps`,
+`fslogixOfficeProvisionedIops` and `fslogixOfficeProvisionedThroughputMiBps` default to `0`.
+Zero calculates recommended sizing from each role's own quota, not by copying Profile performance
+to Office. Nonzero performance requires v2. V2 quotas are 32–262144 GiB; legacy maximum remains
+102400 GiB (Premium minimum 100 GiB). V2 SSD permits 3000–102400 IOPS and 100–10340 MiB/s;
+HDD permits 500–50000 IOPS and 60–5120 MiB/s. Azure NetApp Files retains its service-level and
+volume behavior; nondefault Azure Files-only tuning is rejected. Verify cloud/subscription/region
+SKU availability; no Commercial-only billing gate is imposed. There is **no automatic data
+migration or account SKU conversion**. See Microsoft's
+[Azure Files account and billing model definitions](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-scale-targets#storage-account-data-plane-limits).
+
+Cloud Cache retains its existing support and tier choices. Microsoft's
+[virtual-desktop workloads guidance](https://learn.microsoft.com/en-us/azure/storage/files/virtual-desktop-workloads#fslogix-profile-containers)
+recommends SSD file shares for FSLogix Cloud Cache because of their lower latency and higher IOPS.
+This is operational guidance, not a new deployment restriction: Standard/HDD is not silently
+blocked, upgraded, or migrated, and existing defaults remain unchanged. Size and load-test both
+Profile and Office storage against representative user concurrency and sign-in workloads.
+
+Office settings are Azure Files-only; Azure NetApp Files retains its separate-volume behavior.
+The Portal checks Office ZRS against the effective Office tier, including when Profile redundancy
+is inherited. Scripted deployments must verify regional tier/redundancy availability.
+See the [Office separation example](../../../customer-examples/parameters/add-ons/fslogixStorage-office.parameters.json);
+copy it into `customer/parameters/` and customize it before use.
+
+For Cloud Cache with Office containers, pair `remoteOfficeStorageAccountResourceIds` with
+`remoteStorageAccountResourceIds`, one-for-one in shard order. The role arrays must not overlap;
+omit both when remote storage is not selected. Local outputs `storageAccountResourceIds` and
+`officeStorageAccountResourceIds` contain Profile-only and Office-only IDs respectively.
+The configuration object uses `localOfficeStorageAccountResourceIds` and
+`remoteOfficeStorageAccountResourceIds` alongside the existing Profile fields.
+
+Pass both role arrays to consumers and host-pool expansion. Standard host pools use
+`fslogixExistingLocalStorageAccountResourceIds` / `fslogixExistingLocalOfficeStorageAccountResourceIds`
+and `fslogixExistingRemoteStorageAccountResourceIds` / `fslogixExistingRemoteOfficeStorageAccountResourceIds`.
+There is no fallback to Profile IDs.
+
+Changing defaults or enabling separation does not migrate data, rename accounts, delete old
+resources, or remove existing Office backup protection. Preserve an existing Profile prefix
+explicitly before updating an existing deployment; arrange data migration and removal of previously
+enrolled Office backup items through the approved operator process.
+
 The add-on outputs a `fslogixConfiguration` object accepted directly by
 `deployments/automatedHostPools/policy/main.bicep`:
 
@@ -376,6 +458,8 @@ output fslogixConfiguration object = {
   fileShareNames: fileShareNames
   localStorageAccountResourceIds: storageAccountResourceIds
   remoteStorageAccountResourceIds: remoteStorageAccountResourceIds
+  localOfficeStorageAccountResourceIds: officeStorageAccountResourceIds
+  remoteOfficeStorageAccountResourceIds: remoteOfficeStorageAccountResourceIds
   localNetAppServerFqdns: netAppServerFqdns
   remoteNetAppServerFqdns: remoteNetAppServerFqdns
   objectSpecificSettingsGroups: objectSpecificSettingsGroups

@@ -6,6 +6,21 @@ targetScope = 'subscription'
 import { entraGroupType } from '../../resourceModules/types/identityTypes.bicep'
 import { publicNetworkAccessMode } from '../networking/functions.bicep'
 
+@export()
+func validateOfficeStorageAccounts(localProfile string[], remoteProfile string[], localOffice string[], remoteOffice string[], officeEnabled bool, groups string[]) { local: string[], remote: string[] } => officeEnabled
+  ? (!empty(localProfile) && length(localOffice) == length(localProfile) && length(remoteOffice) == length(remoteProfile) && (empty(remoteProfile) || length(remoteProfile) == length(localProfile)) && (empty(groups) || length(groups) == length(localProfile)) && length(union(
+        map(concat(localOffice, remoteOffice), id => toLower(last(split(id, '/')))),
+        map(concat(localOffice, remoteOffice), id => toLower(last(split(id, '/'))))
+      )) == length(concat(localOffice, remoteOffice)) && empty(intersection(
+        map(concat(localProfile, remoteProfile), id => toLower(last(split(id, '/')))),
+        map(concat(localOffice, remoteOffice), id => toLower(last(split(id, '/'))))
+      )))
+      ? { local: localOffice, remote: remoteOffice }
+      : fail('Office containers require distinct Azure Files accounts paired one-to-one with Profile accounts in shard order.')
+  : empty(localOffice) && empty(remoteOffice)
+    ? { local: [], remote: [] }
+    : fail('Office storage accounts were supplied but Office containers are disabled.')
+
 @description('Required. Whether to configure an Active Directory connection when creating the NetApp account.')
 param activeDirectoryConnection bool
 @description('Optional. Whether to create the NetApp account; when false, the named account must already exist.')
@@ -36,7 +51,7 @@ param fslogixAdminGroups entraGroupType[]
 param appUpdateUserAssignedIdentityResourceId string
 @description('Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption.')
 param fslogixEncryptionKeyNameConv string
-@description('Required. Array of share name strings in profile-then-Office order, created on each storage account or as individual NetApp volumes.')
+@description('Required. Share names in Profile-then-Office order; Azure Files uses separate accounts per role, NetApp uses separate volumes.')
 param fslogixFileShares array
 @description('Required. Sharding selection forwarded to Azure Files permission configuration; None disables sharding.')
 param fslogixShardOptions string
@@ -78,14 +93,38 @@ param shareSizeInGB int
 param smbServerLocation string
 @description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
 param storageAccountNamePrefix string
+@description('Required. Office account prefix, paired with Profile account indices; unused when Office containers are disabled or storage is NetApp.')
+param officeStorageAccountNamePrefix string
+@description('Required. Office encryption-key pattern containing ##; unused without Office accounts or customer-managed encryption.')
+param officeEncryptionKeyNameConv string
 @description('Required. Number of indexed Azure Files storage accounts to create.')
 param storageCount int
 @description('Required. Starting numeric index for storage account and encryption-key names.')
 param storageIndex int
 @description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
 param storageSku string
+@description('Optional. Office Azure Files tier; defaults to the Profile tier.')
+param officeStorageSku string = storageSku
+@description('Optional. Office share quota in GiB; defaults to the Profile quota.')
+param officeShareSizeInGB int = shareSizeInGB
 @description('Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS.')
 param fslogixStorageRedundancy string
+@description('Optional. Office Azure Files redundancy; defaults to the Profile redundancy.')
+param officeStorageRedundancy string = fslogixStorageRedundancy
+@allowed(['Legacy', 'ProvisionedV2'])
+@description('Optional. Profile Azure Files billing model; Legacy preserves existing parameters.')
+param profileStorageBillingModel string = 'Legacy'
+@allowed(['Legacy', 'ProvisionedV2'])
+@description('Optional. Office Azure Files billing model; defaults to Profile.')
+param officeStorageBillingModel string = profileStorageBillingModel
+@description('Optional. Profile provisioned-v2 IOPS; zero selects the capacity-based recommendation.')
+param profileProvisionedIops int = 0
+@description('Optional. Profile provisioned-v2 throughput in MiB/s; zero selects the capacity-based recommendation.')
+param profileProvisionedThroughputMiBps int = 0
+@description('Optional. Office provisioned-v2 IOPS; zero selects the Office capacity-based recommendation.')
+param officeProvisionedIops int = 0
+@description('Optional. Office provisioned-v2 throughput in MiB/s; zero selects the Office capacity-based recommendation.')
+param officeProvisionedThroughputMiBps int = 0
 @description('Required. Storage backend selection: AzureFiles or AzureNetAppFiles; the NetApp path requires a domain-services identity solution.')
 param storageSolution string
 @description('Required. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
@@ -158,6 +197,17 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
     fileShares: fslogixFileShares
+    officeStorageAccountNamePrefix: officeStorageAccountNamePrefix
+    officeEncryptionKeyNameConv: officeEncryptionKeyNameConv
+    officeStorageSku: officeStorageSku
+    officeStorageRedundancy: officeStorageRedundancy
+    officeShareSizeInGB: officeShareSizeInGB
+    profileStorageBillingModel: profileStorageBillingModel
+    officeStorageBillingModel: officeStorageBillingModel
+    profileProvisionedIops: profileProvisionedIops
+    profileProvisionedThroughputMiBps: profileProvisionedThroughputMiBps
+    officeProvisionedIops: officeProvisionedIops
+    officeProvisionedThroughputMiBps: officeProvisionedThroughputMiBps
     fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'PlatformManaged'
@@ -198,7 +248,7 @@ module backupRegistration 'modules/fslogixBackupItems.bicep' = if (storageSoluti
   params: {
     vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
     location: location
-    fileShares: fslogixFileShares
+    fileShares: take(fslogixFileShares, 1)
     storageAccountResourceIds: azureFiles!.outputs.storageAccountResourceIds
     fileSharePolicyName: fileSharePolicyName
     tags: tags
@@ -216,7 +266,11 @@ output netAppVolumeResourceIds array = storageSolution == 'AzureNetAppFiles'
 output netAppServerFqdns array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.smbServerFqdns
   : []
-@description('Created Azure Files storage account resource IDs in ascending storage index order; empty for NetApp storage.')
+@description('Created Profile Azure Files account IDs in ascending shard index order; empty for NetApp storage.')
 output storageAccountResourceIds array = storageSolution == 'AzureFiles'
   ? azureFiles!.outputs.storageAccountResourceIds
+  : []
+@description('Created Office Azure Files account IDs, paired by index with Profile accounts; empty when disabled or using NetApp.')
+output officeStorageAccountResourceIds array = storageSolution == 'AzureFiles'
+  ? azureFiles!.outputs.officeStorageAccountResourceIds
   : []

@@ -282,7 +282,7 @@ Describe 'Automated host-pool Shared Services create-or-adopt controls' {
         $backupRetention = $storage.elements | Where-Object { $_.name -eq 'backupRetentionDays' }
         $vaultSelector = $storage.elements | Where-Object { $_.name -eq 'recoveryServicesVault' }
 
-        $registerBackup.label | Should -Be 'Enable FSLogix Azure Files Backup'
+        $registerBackup.label | Should -Be 'Enable FSLogix Profile Azure Files Backup'
         $useExistingVault.defaultValue | Should -Be $false
         $backupRetention.visible | Should -Match 'not\(steps'
         $vaultSelector.visible | Should -Match 'useExistingRecoveryServicesVault'

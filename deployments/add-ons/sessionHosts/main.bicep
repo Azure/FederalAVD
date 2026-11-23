@@ -119,6 +119,10 @@ param fslogixLocalNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Resource IDs of local storage accounts for FSLogix.')
 param fslogixLocalStorageAccountResourceIds string[] = []
+@description('Optional. Preferred local Profile account IDs; when supplied, overrides the legacy fslogixLocalStorageAccountResourceIds.')
+param fslogixLocalProfileStorageAccountResourceIds string[]?
+@description('Optional. Separate Office account IDs paired by shard index with local Profile accounts; required when Office containers use Azure Files.')
+param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 
 @description('Optional. Entra ID group object IDs for FSLogix Office container separation.')
 param fslogixOSSGroups string[] = []
@@ -128,6 +132,10 @@ param fslogixRemoteNetAppVolumeResourceIds string[] = []
 
 @description('Optional. Resource IDs of remote storage accounts for FSLogix cloud cache failover.')
 param fslogixRemoteStorageAccountResourceIds string[] = []
+@description('Optional. Preferred remote Profile account IDs; when supplied, overrides the legacy fslogixRemoteStorageAccountResourceIds.')
+param fslogixRemoteProfileStorageAccountResourceIds string[]?
+@description('Optional. Separate Office account IDs paired by shard index with remote Profile accounts.')
+param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 
 @description('Optional. Maximum size of FSLogix VHD/VHDX in megabytes.')
 param fslogixSizeInMBs int = 30720
@@ -310,10 +318,12 @@ module sessionHosts '../../shared/modules/orchestration/sessionHosts/sessionHost
     fslogixContainerType: fslogixContainerType
     fslogixFileShareNames: fslogixFileShareNames
     fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
-    fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+    fslogixLocalStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds ?? fslogixLocalStorageAccountResourceIds
+    fslogixLocalOfficeStorageAccountResourceIds: fslogixLocalOfficeStorageAccountResourceIds
     fslogixOSSGroups: fslogixOSSGroups
     fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
-    fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteStorageAccountResourceIds: fslogixRemoteProfileStorageAccountResourceIds ?? fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteOfficeStorageAccountResourceIds: fslogixRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled

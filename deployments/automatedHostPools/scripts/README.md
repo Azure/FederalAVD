@@ -25,6 +25,35 @@ installs the AVD agent using a host pool registration token. Automated host pool
 registered by the policy-governed provisioning workflow, so this solution-owned implementation only
 applies post-provisioning host configuration.
 
+Azure Files Office containers use `LocalOfficeStorageAccountNames` and
+`RemoteOfficeStorageAccountNames`, never the Profile name arrays. Initialization validates one
+distinct Office account per Profile shard in matching local/remote order and preserves the same
+SID-index mapping. Azure NetApp Files retains its ordered Profile/Office server arrays.
+
+The canonical remediation template also accepts storage-key `EntraId` configurations, although the
+automated public entry currently exposes identity-based authentication only. Keys for each role
+are supplied in Run Command `protectedParameters`: `LocalStorageAccountKeys`,
+`RemoteStorageAccountKeys`, `LocalOfficeStorageAccountKeys`, and `RemoteOfficeStorageAccountKeys`.
+The policy adapter grants its remediation identity Storage Account Key Operator at each selected
+account, only for storage-key configurations. Initialization requires one account/key per role and
+location, installs each credential separately as SYSTEM, and fails missing/overlapping pairs.
+The initializer uses the same self-contained native `CredWriteW` helper as standard initialization
+and key rotation, not `cmdkey` or a key-bearing child-process command line. Leading-slash and
+quoted-looking keys retain their exact bytes. Native failures stop initialization; PowerShell
+FullLanguage and permitted `Add-Type` execution are prerequisites. This does not override
+domain/MDM credential-storage policy or make PowerShell telemetry secret-safe.
+
+Storage-key mode sets the ADMX Machine **Access Network as Computer Object** policy (supported-on
+`v2105`) to DWORD `1` separately at `HKLM\SOFTWARE\FSLogix\Profiles` and
+`HKLM\SOFTWARE\Policies\FSLogix\ODFC`, conditioned on that role's keys. DWORD `0` means attach as
+user. Microsoft cautions that computer-level access can expose every container to the host.
+Identity-based behavior and existing location registry scopes/types remain unchanged; the
+[official configuration reference](https://learn.microsoft.com/fslogix/reference-configuration-settings)
+permits both REG_SZ and REG_MULTI_SZ for VHDLocations/CCDLocations. The mappings were checked against
+the current [official FSLogix policy templates](https://aka.ms/fslogix_download) and documentation.
+Validate effective settings and sign-in on supported FSLogix/Windows builds after configuration;
+offline checks do not demonstrate SMB access, profile attachment, or Cloud Cache failover.
+
 ## Deployment Sequencing
 
 ### [Wait-PolicyPropagation.ps1](Wait-PolicyPropagation.ps1)

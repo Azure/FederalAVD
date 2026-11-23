@@ -12,6 +12,11 @@ This solution will update the FSLogix Storage Account Key on Session Hosts to su
 ## Credential Storage and Rotation Safety
 
 This add-on distributes the selected existing key; it does not regenerate a storage account key.
+
+With separate Profile and Office accounts, run the add-on once for each account whose key
+must be distributed, including any remote account used for failover. The selected account's
+FQDN identifies the credential; a Profile update does not update the paired Office credential.
+Use the same target session-host scope and verify both container types after rotation.
 Its self-contained script defines a native `CredWriteW` function, not `cmdkey /pass`.
 Session-host initialization contains an identical function, kept aligned by regression tests.
 Keys beginning with `/`, and other valid Base64 characters, are passed as credential data rather
