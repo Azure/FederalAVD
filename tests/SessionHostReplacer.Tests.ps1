@@ -1329,6 +1329,48 @@ Describe 'Session Host Replacer ten-host replacement scenarios' {
         $plan.TargetSessionHostCount | Should -Be 10
     }
 
+    It 'uses target <Expected> for requested <Requested> at an authorized boundary <Authorized> in <Mode>' -ForEach @(
+        @{ Requested = 20; Authorized = $false; Mode = 'SideBySide'; Expected = 10 }
+        @{ Requested = 5; Authorized = $false; Mode = 'SideBySide'; Expected = 10 }
+        @{ Requested = 20; Authorized = $true; Mode = 'SideBySide'; Expected = 20 }
+        @{ Requested = 5; Authorized = $true; Mode = 'SideBySide'; Expected = 5 }
+        @{ Requested = 0; Authorized = $true; Mode = 'SideBySide'; Expected = 10 }
+        @{ Requested = 20; Authorized = $true; Mode = 'DeleteFirst'; Expected = 10 }
+        @{ Requested = 5; Authorized = $true; Mode = 'DeleteFirst'; Expected = 10 }
+    ) {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = @('avd-01'); TargetCount = 10; NextBatchAuthorized = $Authorized }
+        }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode $Mode -TargetSessionHostCount $Requested
+        $plan.TargetSessionHostCount | Should -Be $Expected
+        if (-not $Authorized -or $Mode -eq 'DeleteFirst') {
+            $plan.TotalSessionHostsToReplace | Should -Be 1
+        }
+    }
+
+    It 'preserves the initiating explicit target when switched to auto before the first batch' {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = $null; ConfigurationTargetCount = '10' }
+        }
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -TargetSessionHostCount 0
+        $plan.TargetSessionHostCount | Should -Be 10
+    }
+
+    It 'captures fresh inventory on the next auto-detect operation rather than the previous cycle target' {
+        Mock Get-ShrWorkerState -ModuleName SessionHostReplacer.Planning {
+            @{ BatchHostNames = $null; ConfigurationTargetCount = '0' }
+        }
+        Mock Get-DeploymentState -ModuleName SessionHostReplacer.Planning {
+            [PSCustomObject]@{ TargetSessionHostCount = 42; PendingHostMappings = '{}' }
+        }
+        Mock Save-DeploymentState -ModuleName SessionHostReplacer.Planning {}
+        $plan = Invoke-TenHostReplacementPlan -ReplacementMode SideBySide -TargetSessionHostCount 0
+        $plan.TargetSessionHostCount | Should -Be 10
+        Assert-MockCalled Save-DeploymentState -ModuleName SessionHostReplacer.Planning -Times 1 -Exactly -Scope It -ParameterFilter {
+            $DeploymentState.TargetSessionHostCount -eq 10 -and $RequireSuccess
+        }
+    }
+
     It 'SideBySide grows an up-to-date pool to an explicit target without an image update' {
         $currentHosts = 1..3 | ForEach-Object {
             [PSCustomObject]@{

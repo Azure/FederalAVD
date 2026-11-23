@@ -43,6 +43,7 @@ Describe 'SHR timer reconciliation of rejected batches' {
         $vmScope = '/subscriptions/subscription/resourceGroups/rg-hosts/providers/Microsoft.Compute/virtualMachines'
         $state = @{
             Id = $id; Status = 'NeedsAttention'; ConfigurationHash = $oldHash
+            TargetCount = 10
             CreatedUtc = [DateTimeOffset]::UtcNow.AddHours(-1).ToString('o')
             DeadlineUtc = [DateTimeOffset]::UtcNow.AddHours(24).ToString('o')
             InitiationExpiresUtc = [DateTimeOffset]::UtcNow.AddHours(-1).ToString('o')
@@ -294,8 +295,8 @@ Describe 'SHR timer reconciliation of rejected batches' {
             $global:shrReplanTest.Operation.State.ConfigurationHash = & $script:replanCoordinator { Get-ShrConfigurationHash }
         } }
         @{ Name = 'other protected setting changes'; Change = {
-            $global:shrReplanTest.Settings.TargetSessionHostCount = '11'
-            [Environment]::SetEnvironmentVariable('TargetSessionHostCount', '11')
+            $global:shrReplanTest.Settings.SessionHostParameters = '{"virtualMachineNameConv":"changed"}'
+            [Environment]::SetEnvironmentVariable('SessionHostParameters', '{"virtualMachineNameConv":"changed"}')
         } }
         @{ Name = 'a different deployment URI'; Change = { $global:shrReplanTest.Operation.State.DeploymentIntent.Uri = 'https://untrusted.example/deployment' } }
         @{ Name = 'a deployment record even when failed'; Change = { $global:shrReplanTest.DeploymentResponse = 'Exists' } }

@@ -172,8 +172,18 @@ count, including retries. No new app setting or additional role assignment is re
   Pending host mappings preserve planner priority through checkpoint serialization and reload;
   placement remains keyed by exact hostname. Invalid ARM deployment collection envelopes fail
   closed rather than being interpreted as an empty deployment list.
+- Target count is operational, not a reason to stop an otherwise matching configuration.
+  New operations retain the original configured value for fingerprint verification, separately
+  from the effective batch target. A SideBySide initiation can adopt an increased or decreased
+  target only after the previous deployment settles, exact-image readiness and scaling handoff
+  pass, and no cleanup is pending. A count-only boundary need not submit a deployment. Existing
+  intents and name reservations remain unchanged; a completed intent cannot be reused to grow
+  capacity without a new authorization. DeleteFirst adopts the request on its next operation.
+  A request for `0` retains the active target and enables fresh auto-detection for the next operation.
+  Legacy fingerprints are accepted only when the original target can be verified; other protected
+  settings, leases, deadlines and mutation guards are not bypassed.
 - The deadline is established once (`continuationTimeoutHours`, default 72, range 1-720); new
-  reconciliation ticks and additional SideBySide batches do not reset it. Unexpected failures, changed initiating configuration and expired
+  reconciliation ticks and additional SideBySide batches do not reset it. Unexpected failures, changed protected configuration and expired
   deadlines stop in `NeedsAttention`, retaining the batch, pins and recovery information.
   At an enabled initiation tick, a rejected first SideBySide submission can be automatically
   superseded after a template-only correction. The timer proves the protected settings otherwise

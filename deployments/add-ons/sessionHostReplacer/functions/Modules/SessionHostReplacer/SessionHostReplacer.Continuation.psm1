@@ -58,7 +58,11 @@ function Get-ShrOperationKey {
 }
 
 function Get-ShrConfigurationHash {
-    param([System.Collections.IDictionary] $Settings)
+    param(
+        [System.Collections.IDictionary] $Settings,
+        [hashtable] $OperationState,
+        [switch] $CaptureTarget
+    )
 
     $values = [ordered]@{}
     foreach ($key in @(
@@ -74,9 +78,42 @@ function Get-ShrConfigurationHash {
         $values[$key] = if ($PSBoundParameters.ContainsKey('Settings')) { $Settings[$key] }
         else { [Environment]::GetEnvironmentVariable($key) }
     }
-    return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
-        [Text.Encoding]::UTF8.GetBytes(($values | ConvertTo-Json -Compress))
-    )).ToLowerInvariant()
+    if ($OperationState -and -not [string]::IsNullOrEmpty($values.TargetSessionHostCount)) {
+        $targetCount = 0
+        if (-not [int]::TryParse([string]$values.TargetSessionHostCount, [ref]$targetCount) -or
+            $targetCount -lt 0 -or $targetCount -gt 1000) {
+            throw 'TargetSessionHostCount must be an integer between 0 and 1000.'
+        }
+    }
+    $calculateHash = {
+        [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+            [Text.Encoding]::UTF8.GetBytes(($values | ConvertTo-Json -Compress))
+        )).ToLowerInvariant()
+    }
+    if ($OperationState -and $OperationState.ContainsKey('ConfigurationTargetCount')) {
+        $values.TargetSessionHostCount = $OperationState.ConfigurationTargetCount
+        return & $calculateHash
+    }
+    $currentHash = & $calculateHash
+    if (-not $OperationState) { return $currentHash }
+    if ($currentHash -eq $OperationState.ConfigurationHash) {
+        if ($CaptureTarget) { $OperationState.ConfigurationTargetCount = $values.TargetSessionHostCount }
+        return $currentHash
+    }
+    # Legacy operations recorded the effective target, not the configured auto-detect value.
+    $priorTargets = @('0', $null)
+    if ($OperationState.TargetCount -gt 0) {
+        $priorTargets += [string]$OperationState.TargetCount
+    }
+    foreach ($target in $priorTargets) {
+        $values.TargetSessionHostCount = $target
+        $hash = & $calculateHash
+        if ($hash -eq $OperationState.ConfigurationHash) {
+            if ($CaptureTarget) { $OperationState.ConfigurationTargetCount = $target }
+            return $hash
+        }
+    }
+    return $currentHash
 }
 
 function Get-ShrOperation {
@@ -250,13 +287,14 @@ function Test-ShrPoolIdle {
 }
 
 function Test-ShrTemplateReferenceCorrection {
-    param([System.Collections.IDictionary] $Settings, [string] $TemplateVersionId, [string] $ConfigurationHash)
+    param([System.Collections.IDictionary] $Settings, [string] $TemplateVersionId,
+        [string] $ConfigurationHash, [hashtable] $OperationState)
 
     $previousSettings = @{}
     foreach ($key in $Settings.Keys) { $previousSettings[$key] = $Settings[$key] }
     foreach ($candidate in @(($TemplateVersionId -replace '/versions/[^/]+$', ''), $TemplateVersionId)) {
         $previousSettings['SessionHostTemplate'] = $candidate
-        if ((Get-ShrConfigurationHash -Settings $previousSettings) -eq $ConfigurationHash) { return $true }
+        if ((Get-ShrConfigurationHash -Settings $previousSettings -OperationState $OperationState) -eq $ConfigurationHash) { return $true }
     }
     return $false
 }
@@ -280,7 +318,7 @@ function Get-ShrRejectedBatchDecision {
         [DateTimeOffset]$state.LockExpiresUtc -gt [DateTimeOffset]::UtcNow) {
         return @{ Allowed = $false; Reason = 'A validation failure and an expired worker lease are required.' }
     }
-    $currentHash = Get-ShrConfigurationHash
+    $currentHash = Get-ShrConfigurationHash -OperationState $state
     if ($state.ConfigurationHash -eq $currentHash) {
         return @{ Allowed = $false; Reason = 'The rejected configuration has not been corrected.' }
     }
@@ -291,7 +329,7 @@ function Get-ShrRejectedBatchDecision {
         return @{ Allowed = $false; Reason = 'The saved request has no pinned Template Spec version.' }
     }
     if (-not (Test-ShrTemplateReferenceCorrection -Settings ([Environment]::GetEnvironmentVariables()) `
-        -TemplateVersionId $oldTemplate -ConfigurationHash $state.ConfigurationHash)) {
+        -TemplateVersionId $oldTemplate -ConfigurationHash $state.ConfigurationHash -OperationState $state)) {
         return @{ Allowed = $false; Reason = 'Protected settings other than the template reference changed.' }
     }
     $armRoot = Get-ResourceManagerUri
@@ -539,6 +577,7 @@ function Start-ShrContinuation {
         CleanupIntent = $null
         LastError = ''
         ConfigurationHash = (Get-ShrConfigurationHash)
+        ConfigurationTargetCount = [Environment]::GetEnvironmentVariable('TargetSessionHostCount')
     }
     if ($operation -and $operation.State.Status -eq 'Superseded') {
         $state.SupersedesOperationId = $operation.State.Id
@@ -727,7 +766,7 @@ function Invoke-ShrContinuation {
         if ([DateTimeOffset]$operation.State.DeadlineUtc -le $now) {
             throw 'SHR operation deadline expired. Inspect deployment, host health, sessions and capacity before recovery.'
         }
-        if ($operation.State.ConfigurationHash -ne (Get-ShrConfigurationHash)) {
+        if ($operation.State.ConfigurationHash -ne (Get-ShrConfigurationHash -OperationState $operation.State -CaptureTarget)) {
             throw 'SHR operation configuration changed. Restore the initiating configuration or perform operator recovery.'
         }
         $operation.State.NextBatchAuthorization = $null

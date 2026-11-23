@@ -56,6 +56,7 @@ Describe 'SHR checked operator recovery' {
             Id = ('a' * 32)
             Status = 'NeedsAttention'
             ConfigurationHash = $hash
+            TargetCount = 10
             DeadlineUtc = [DateTimeOffset]::UtcNow.AddHours(24).ToString('o')
             LockOwner = ''
             LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(-1).ToString('o')
@@ -255,8 +256,13 @@ Describe 'SHR checked operator recovery' {
         }
     }
 
-    It 'repairs only the rejected template link and configuration fingerprint' {
+    It 'repairs only the rejected template link and configuration fingerprint with requested target <Target>' -ForEach @(
+        @{ Target = '10' }
+        @{ Target = '11' }
+        @{ Target = '0' }
+    ) {
         Set-TestWrongTemplate
+        $global:shrRecoveryTest.Settings.TargetSessionHostCount = $Target
         $before = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
         & $recoveryPath @recoveryArguments -RepairTemplateReference -Apply -Confirm:$false
         $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
@@ -265,20 +271,29 @@ Describe 'SHR checked operator recovery' {
         $newBody.properties.templateLink.id | Should -Be "$($global:shrRecoveryTest.Settings.SessionHostTemplate)/versions/2.0.0"
         ($newBody.properties.parameters | ConvertTo-Json -Depth 20 -Compress) | Should -Be ($oldBody.properties.parameters | ConvertTo-Json -Depth 20 -Compress)
         $after.ConfigurationHash | Should -Not -Be $before.ConfigurationHash
+        $after.ConfigurationTargetCount | Should -Be $Target
+        $after.TargetCount | Should -Be 10
         $after.Id | Should -Be $before.Id
         $after.DeploymentIntent.Name | Should -Be $before.DeploymentIntent.Name
         $after.Generation | Should -Be $before.Generation
         @($global:shrRecoveryTest.Calls | Where-Object { $_.Surface -eq 'ARM' -and $_.Method -in @('PUT','PATCH','DELETE') }).Count | Should -Be 0
     }
 
-    It 'blocks a configuration change unless explicitly repaired' {
+    It 'allows a target change without rewriting the accepted deployment or operation target' {
         $global:shrRecoveryTest.Settings.TargetSessionHostCount = '11'
-        { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*Configuration changed*'
+        $before = $global:shrRecoveryTest.Entity.State
+        & $recoveryPath @recoveryArguments -Apply -Confirm:$false
+        $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        $original = $before | ConvertFrom-Json -AsHashtable
+        $after.Status | Should -Be 'Running'
+        $after.TargetCount | Should -Be 10
+        $after.ConfigurationHash | Should -Be $original.ConfigurationHash
+        $after.DeploymentIntent.Body | Should -Be $original.DeploymentIntent.Body
     }
 
     It 'blocks unrelated configuration changes during template repair' {
         Set-TestWrongTemplate
-        $global:shrRecoveryTest.Settings.TargetSessionHostCount = '11'
+        $global:shrRecoveryTest.Settings.SessionHostParameters = '{"virtualMachineSize":"changed"}'
         { & $recoveryPath @recoveryArguments -RepairTemplateReference } | Should -Throw -ExpectedMessage '*other than SessionHostTemplate*'
     }
 
@@ -462,6 +477,69 @@ Describe 'Shared SHR recovery fingerprints' {
         $script:hashCoordinator = Get-Module SessionHostReplacer.Continuation -All | Select-Object -First 1
     }
     AfterAll { Remove-Module SessionHostReplacer -Force }
+
+    It 'accepts target <Requested> with original setting <Original> and legacy state <Legacy>' -ForEach @(
+        @{ Original = '10'; Requested = '20'; Legacy = $false }
+        @{ Original = '10'; Requested = '5'; Legacy = $false }
+        @{ Original = '10'; Requested = '0'; Legacy = $false }
+        @{ Original = '0'; Requested = '20'; Legacy = $false }
+        @{ Original = '0'; Requested = '5'; Legacy = $false }
+        @{ Original = '10'; Requested = '20'; Legacy = $true }
+        @{ Original = '10'; Requested = '5'; Legacy = $true }
+        @{ Original = '10'; Requested = '0'; Legacy = $true }
+        @{ Original = '0'; Requested = '20'; Legacy = $true }
+        @{ Original = '0'; Requested = '5'; Legacy = $true }
+        @{ Original = $null; Requested = '20'; Legacy = $true }
+    ) {
+        $values = @{ HostPoolName = 'pool'; TargetSessionHostCount = $Original }
+        $hash = & $script:hashCoordinator { param($Values) Get-ShrConfigurationHash -Settings $Values } $values
+        $state = @{ ConfigurationHash = $hash; TargetCount = 10 }
+        if (-not $Legacy) { $state.ConfigurationTargetCount = $Original }
+        $values.TargetSessionHostCount = $Requested
+        $matched = & $script:hashCoordinator {
+            param($Values, $State)
+            Get-ShrConfigurationHash -Settings $Values -OperationState $State -CaptureTarget
+        } $values $state
+        $matched | Should -Be $hash
+        $state.ConfigurationTargetCount | Should -Be $Original
+        $state.TargetCount = 20
+        (& $script:hashCoordinator {
+            param($Values, $State)
+            Get-ShrConfigurationHash -Settings $Values -OperationState $State
+        } $values $state) | Should -Be $hash
+        $values.HostPoolName = 'another-pool'
+        (& $script:hashCoordinator {
+            param($Values, $State)
+            Get-ShrConfigurationHash -Settings $Values -OperationState $State
+        } $values $state) | Should -Not -Be $hash
+    }
+
+    It 'does not invent the original target of an uncheckpointed legacy operation' {
+        $values = @{ HostPoolName = 'pool'; TargetSessionHostCount = '7' }
+        $hash = & $script:hashCoordinator { param($Values) Get-ShrConfigurationHash -Settings $Values } $values
+        $state = @{ ConfigurationHash = $hash }
+        $values.TargetSessionHostCount = '20'
+        (& $script:hashCoordinator {
+            param($Values, $State)
+            Get-ShrConfigurationHash -Settings $Values -OperationState $State -CaptureTarget
+        } $values $state) | Should -Not -Be $hash
+        $state.ContainsKey('ConfigurationTargetCount') | Should -Be $false
+    }
+
+    It 'rejects invalid live target <Target>' -ForEach @(
+        @{ Target = '-1' }
+        @{ Target = '1001' }
+        @{ Target = 'not-a-count' }
+    ) {
+        $values = @{ HostPoolName = 'pool'; TargetSessionHostCount = '10' }
+        $hash = & $script:hashCoordinator { param($Values) Get-ShrConfigurationHash -Settings $Values } $values
+        $state = @{ ConfigurationHash = $hash; ConfigurationTargetCount = '10'; TargetCount = 10 }
+        $values.TargetSessionHostCount = $Target
+        { & $script:hashCoordinator {
+            param($Values, $State)
+            Get-ShrConfigurationHash -Settings $Values -OperationState $State
+        } $values $state } | Should -Throw -ExpectedMessage '*between 0 and 1000*'
+    }
 
     It 'produces exactly the runtime fingerprint from supplied app settings' {
         $values = @{ HostPoolName = 'pool'; SessionHostTemplate = '/template'; TargetSessionHostCount = '10' }

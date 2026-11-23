@@ -599,13 +599,28 @@ function Get-SessionHostReplacementPlan {
     $isDeleteBeforeDeployMode = $ReplacementMode -in @('DeleteFirst', 'MaintenanceWindow')
     Write-LogEntry -Message "We have $($SessionHosts.Count) session hosts (included in Automation)" -Level Trace
     
+    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
+    if ($continuation -and $TargetSessionHostCount -eq 0) {
+        if ($continuation.TargetCount -gt 0) {
+            $TargetSessionHostCount = [int]$continuation.TargetCount
+        }
+        elseif ($continuation.ConfigurationTargetCount -gt 0) {
+            $TargetSessionHostCount = [int]$continuation.ConfigurationTargetCount
+        }
+    }
+    $captureOperationTarget = $continuation -and
+        $continuation.ContainsKey('ConfigurationTargetCount') -and
+        [int]$continuation.ConfigurationTargetCount -eq 0 -and
+        $null -eq $continuation.BatchHostNames -and
+        -not ($continuation.TargetCount -gt 0)
+
     # Auto-detect target count if not specified (TargetSessionHostCount = 0)
     if ($TargetSessionHostCount -eq 0) {
         # Get deployment state to check for stored target
         try {
             $deploymentState = Get-DeploymentState -HostPoolName $HostPoolName -ReadOnly:$ReadOnly
             
-            if ($deploymentState.TargetSessionHostCount -gt 0) {
+            if ($deploymentState.TargetSessionHostCount -gt 0 -and -not $captureOperationTarget) {
                 # Use previously stored target from ongoing replacement cycle
                 $TargetSessionHostCount = $deploymentState.TargetSessionHostCount
                 Write-LogEntry -Message "Auto-detect mode: Using stored target count of $TargetSessionHostCount from current replacement cycle" -Level Trace
@@ -627,6 +642,7 @@ function Get-SessionHostReplacementPlan {
                 $deploymentState.TargetSessionHostCount = $TargetSessionHostCount
                 if (-not $ReadOnly) {
                     Save-DeploymentState -DeploymentState $deploymentState -HostPoolName $HostPoolName -RequireSuccess
+                    if ($captureOperationTarget) { $continuation.TargetCount = $TargetSessionHostCount }
                 }
                 Write-LogEntry -Message "Auto-detect mode: Detected target of $TargetSessionHostCount session hosts, including $unresolvedPendingCount unresolved recovery host(s); read-only assessment: $ReadOnly"
             }
@@ -714,14 +730,13 @@ function Get-SessionHostReplacementPlan {
     
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
     $totalFleetHostsToReplace = $sessionHostsToReplace.Count
-    $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
     if ($continuation -and $null -ne $continuation.BatchHostNames) {
         if (-not ($ReplacementMode -eq 'SideBySide' -and $continuation.NextBatchAuthorized)) {
             $sessionHostsToReplace = @($sessionHostsToReplace | Where-Object {
                 $_.SessionHostName -in $continuation.BatchHostNames
             })
+            $TargetSessionHostCount = $continuation.TargetCount
         }
-        $TargetSessionHostCount = $continuation.TargetCount
     }
 
     # Up-to-date hosts = not needing replacement AND not shutdown (shutdown VMs are deallocated and unavailable) AND not unavailable (VM deleted)

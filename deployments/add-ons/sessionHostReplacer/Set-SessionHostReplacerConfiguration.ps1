@@ -27,7 +27,8 @@
     Grace period for a draining host that still has active sessions.
 
 .PARAMETER TargetSessionHostCount
-    Explicit target host count, or 0 to detect the count at the start of each replacement cycle.
+    Explicit target host count, applied at safe batch boundaries. Zero preserves the active
+    operation target and enables auto-detection on the next operation.
 
 .PARAMETER MinimumCapacityPercentage
     DeleteFirst static safety floor used when no scaling-plan schedule is evaluable.
@@ -240,7 +241,7 @@ function Get-InterpretedConfiguration {
         HostPool = Get-SettingValue -Settings $Settings -Name 'HostPoolName'
         ReplacementMode = $mode
         ActiveHoursBehavior = $activeHoursBehavior
-        TargetSessionHosts = if ($target -eq '0') { 'Auto-detect each replacement cycle' } else { $target }
+        TargetSessionHosts = if ($target -eq '0') { 'Auto-detect each operation; active target retained' } else { $target }
         MinimumDrainMinutes = Get-SettingValue -Settings $Settings -Name 'MinimumDrainMinutes'
         DrainGracePeriodHours = Get-SettingValue -Settings $Settings -Name 'DrainGracePeriodHours'
         MinimumCapacityPercentage = if ($mode -eq 'DeleteFirst') {
@@ -387,6 +388,9 @@ Write-Host 'Proposed changes'
 Write-Host '----------------'
 $changeRows | Format-Table -AutoSize | Out-Host
 Write-Warning 'A future Template Spec redeployment can overwrite these values unless its parameters are updated to match.'
+if (@($changeRows.Setting) -contains 'TargetSessionHostCount') {
+    Write-Warning 'The requested target applies at a safe batch boundary, not immediately. Existing deployment and cleanup intents remain unchanged. Zero preserves the active target and enables auto-detection on the next operation.'
+}
 
 if ($PSCmdlet.ShouldProcess($functionAppResourceId, "Update $(@($changeRows).Count) Session Host Replacer app setting(s)")) {
     foreach ($change in $changeRows) {
