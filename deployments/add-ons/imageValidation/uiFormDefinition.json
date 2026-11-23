@@ -345,16 +345,12 @@
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Security type",
                   "defaultValue": "Trusted Launch",
-                  "toolTip": "Security type refers to the different security features available for a virtual machine. Security features like Trusted launch and Confidential virtual machines help to improve the security of Azure generation 2 virtual machines. However, not all VM configurations are supported when using these additional security features.",
+                  "toolTip": "Security type refers to the different security features available for a virtual machine. Trusted launch helps to improve the security of Azure generation 2 virtual machines. However, not all VM configurations are supported when using this additional security feature.",
                   "constraints": {
                     "allowedValues": [
                       {
                         "label": "Trusted Launch",
                         "value": "TrustedLaunch"
-                      },
-                      {
-                        "label": "Confidential VM",
-                        "value": "ConfidentialVM"
                       },
                       {
                         "label": "Standard",
@@ -412,7 +408,7 @@
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Integrity monitoring",
                   "toolTip": "Integrity monitoring enables cryptographic attestation and verification of VM boot integrity along with monitoring alerts if the VM didn't boot because attestation failed with the defined baseline.",
-                  "visible": "[not(equals(steps('virtualMachine').security.securityType, 'Standard'))]",
+                  "visible": "[and(not(equals(steps('virtualMachine').security.securityType, 'Standard')), steps('virtualMachine').security.secureBoot, steps('virtualMachine').security.vTpm)]",
                   "defaultValue": "Enabled",
                   "constraints": {
                     "required": true,
@@ -426,6 +422,24 @@
                         "value": false
                       }
                     ]
+                  }
+                },
+                {
+                  "name": "integrityMonitoringHeader",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(not(equals(steps('virtualMachine').security.securityType, 'Standard')), or(not(steps('virtualMachine').security.secureBoot), not(steps('virtualMachine').security.vTpm)))]",
+                  "options": {
+                    "text": "Integrity monitoring"
+                  }
+                },
+                {
+                  "name": "integrityMonitoringWarning",
+                  "type": "Microsoft.Common.InfoBox",
+                  "visible": "[and(not(equals(steps('virtualMachine').security.securityType, 'Standard')), or(not(steps('virtualMachine').security.secureBoot), not(steps('virtualMachine').security.vTpm)))]",
+                  "options": {
+                    "style": "Warning",
+                    "text": "Integrity monitoring requires Secure Boot and vTPM to be enabled.",
+                    "uri": "https://learn.microsoft.com/azure/virtual-machines/boot-integrity-monitoring-overview?tabs=portal"
                   }
                 }
               ]
@@ -496,28 +510,7 @@
                       }
                     ]
                   },
-                  "visible": "[not(equals(steps('virtualMachine').security.securityType, 'ConfidentialVM'))]"
-                },
-                {
-                  "name": "confidentialVMOSDiskEncryption",
-                  "type": "Microsoft.Common.OptionsGroup",
-                  "label": "Confidential OS Disk Encryption",
-                  "toolTip": "Check to enable Confidential VM disk encryption",
-                  "defaultValue": "Enabled",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": [
-                      {
-                        "label": "Enabled",
-                        "value": true
-                      },
-                      {
-                        "label": "Disabled",
-                        "value": false
-                      }
-                    ]
-                  },
-                  "visible": "[equals(steps('virtualMachine').security.securityType, 'ConfidentialVM')]"
+                  "visible": true
                 },
                 {
                   "name": "encryptionType",
@@ -535,10 +528,6 @@
                       {
                         "label": "Encryption at-rest with customer-managed key",
                         "value": "EncryptionAtRestWithCustomerKey"
-                      },
-                      {
-                        "label": "Confidential disk encryption with a customer-managed key",
-                        "value": "ConfidentialVmEncryptedWithCustomerKey"
                       },
                       {
                         "label": "Encryption at-rest with platform-managed key",
@@ -1403,7 +1392,7 @@
         "functionAppName": "[steps('namingAndTags').naming.functionApp]",
         "imageLicenseType": "[steps('virtualMachine').image.licenseType]",
         "imageVersionResourceId": "[first(map(steps('virtualMachine').image.versionsApi.transformed.list, (item) => item.value))]",
-        "integrityMonitoring": "[steps('virtualMachine').security.integrityMonitoring]",
+        "integrityMonitoring": "[if(and(equals(steps('virtualMachine').security.securityType, 'TrustedLaunch'), steps('virtualMachine').security.secureBoot, steps('virtualMachine').security.vTpm), steps('virtualMachine').security.integrityMonitoring, false)]",
         "keyVaultName": "[steps('namingAndTags').naming.keyVault]",
         "keyVaultResourceId": "[steps('virtualMachine').credentials.keyVault.id]",
         "logAnalyticsWorkspaceResourceId": "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]",
