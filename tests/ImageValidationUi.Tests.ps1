@@ -1,11 +1,13 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$formPath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\uiFormDefinition.json'
-$templatePath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\main.json'
-$form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
-$template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
-$steps = @{}
-foreach ($step in $form.view.properties.steps) {
-    $steps[$step.name] = $step
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $formPath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\uiFormDefinition.json'
+    $templatePath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\main.json'
+    $form = Get-Content -LiteralPath $formPath -Raw | ConvertFrom-Json
+    $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json
+    $steps = @{}
+    foreach ($step in $form.view.properties.steps) {
+        $steps[$step.name] = $step
+    }
 }
 
 Describe 'Image validation Portal form' {
