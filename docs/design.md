@@ -430,6 +430,13 @@ Bicep behind the single
 [naming.bicep entry point](../deployments/shared/modules/orchestration/naming/naming.bicep).
 The public interface has six functions: `resourceNameForType`, `functionAppNames`,
 `hostPoolNames`, `fslogixNames`, `sharedServicesNames` and `imageManagementNames`.
+`resourceNameForType` accepts official Azure resource types without API versions,
+not internal catalog keys. Ambiguous types require `context.namingVariant`:
+`functionapp` for `Microsoft.Web/sites`, or `Desktop`/`RemoteApp` for
+`Microsoft.DesktopVirtualization/applicationGroups`. The reverse lookup is derived
+from the central type rules. Unsupported or missing selectors fail; bundles supply
+their known variants internally. Names, hashes and abbreviation override keys are
+unchanged. See the [resource naming interface](naming-convention.md#resource-naming-interface).
 The shared sealed `namingConventionConfig` type defines optional settings and
 supported component names. `customToken1`/`customToken2` are position-neutral
 names for the existing freeform slots; old property and component spellings remain

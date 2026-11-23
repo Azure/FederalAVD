@@ -102,6 +102,22 @@ Describe 'Identifier-based shared resource naming' {
         ($policy.resourceTypes.PSObject.Properties.Name | Sort-Object) -join ',' | Should -Be ($expected -join ',')
     }
 
+    It 'maps every naming rule to one official resource type and explicit variant' {
+        $selectors = @(
+            foreach ($type in $policy.resourceTypes.PSObject.Properties) {
+                $type.Value.azureResourceType | Should -Match '^Microsoft\.[A-Za-z]+/[A-Za-z]+(?:/[A-Za-z]+)*$'
+                "$($type.Value.azureResourceType)|$($type.Value.namingVariant)".ToLowerInvariant()
+            }
+        )
+        @($selectors | Select-Object -Unique).Count | Should -Be @($policy.resourceTypes.PSObject.Properties).Count
+        $policy.resourceTypes.functionApps.namingVariant | Should -Be 'functionapp'
+        $policy.resourceTypes.desktopApplicationGroups.namingVariant | Should -Be 'Desktop'
+        $policy.resourceTypes.remoteApplicationGroups.namingVariant | Should -Be 'RemoteApp'
+        $defaults = @($values.cases | Where-Object profile -eq 'default')
+        ($defaults | Where-Object type -eq 'desktopApplicationGroups').actual | Should -Be 'vddag-avd-fin-use'
+        ($defaults | Where-Object type -eq 'remoteApplicationGroups').actual | Should -Be 'vdrag-avd-fin-use'
+    }
+
     It 'uses the complete readable default name for all 33 scope-local types' {
         $abbreviations = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\data\resourceAbbreviations.json') -Raw | ConvertFrom-Json
         $localCases = @($values.cases | Where-Object { $_.profile -eq 'default' -and $_.type -notin @('functionApps', 'storageAccounts', 'keyVaults') })
@@ -283,7 +299,8 @@ Describe 'Identifier-based shared resource naming' {
         $original = [IO.File]::ReadAllText($policyPath)
         try {
             $changedPolicy = $original.Replace(
-                "storageAccounts: { lengthLimit: 24,", "storageAccounts: { lengthLimit: 23,"
+                "storageAccounts: { azureResourceType: 'Microsoft.Storage/storageAccounts', lengthLimit: 24,",
+                "storageAccounts: { azureResourceType: 'Microsoft.Storage/storageAccounts', lengthLimit: 23,"
             ).Replace('defaultUniqueLength: 6', 'defaultUniqueLength: 5')
             $changedPolicy | Should -Not -Be $original
             [IO.File]::WriteAllText($policyPath, $changedPolicy)
@@ -315,7 +332,7 @@ Describe 'Identifier-based shared resource naming' {
     It 'rejects invalid input explicitly: <Name>' -TestCases (@(
         @{ Name = 'empty identifier'; Identifier = "''" }
         @{ Name = 'invalid identifier characters'; Identifier = "'inventory/app'" }
-        @{ Name = 'overlength SHR storage without override'; Identifier = "'finance-long-shr'"; Type = 'storageAccounts'; ExpectedError = 'Generated name exceeds the 24-character limit' }
+        @{ Name = 'overlength SHR storage without override'; Identifier = "'finance-long-shr'"; Type = 'Microsoft.Storage/storageAccounts'; ExpectedError = 'Generated name exceeds the 24-character limit' }
         @{ Name = 'leading separator'; Identifier = "'_inventory'" }
         @{ Name = 'missing purpose'; Convention = "{ components: ['resourceType', 'workload', 'location'] }" }
         @{ Name = 'empty components'; Convention = '{ components: [] }' }
@@ -327,10 +344,16 @@ Describe 'Identifier-based shared resource naming' {
         @{ Name = 'invalid workload'; Convention = "{ workload: 'my workload' }" }
         @{ Name = 'conflicting token aliases'; Convention = "{ customToken1: 'new', freeform1: 'old' }"; ExpectedError = 'aliases and must agree' }
         @{ Name = 'conflicting second token aliases'; Convention = "{ customToken2: 'new', freeform2: 'old' }"; ExpectedError = 'aliases and must agree' }
-        @{ Name = 'unbudgetable static components'; Convention = "{ workload: 'abcdefghijklmnopqrstuvwxyz' }"; Type = 'storageAccounts' }
+        @{ Name = 'unbudgetable static components'; Convention = "{ workload: 'abcdefghijklmnopqrstuvwxyz' }"; Type = 'Microsoft.Storage/storageAccounts' }
         @{ Name = 'invalid type code'; Convention = "{ resourceTypeCodes: { functionApps: '' } }" }
         @{ Name = 'invalid region abbreviation'; Convention = "{ locationAbbreviation: 'east/us' }" }
         @{ Name = 'unsupported resource type'; Type = 'notARegisteredType' }
+        @{ Name = 'resource type with API version'; Type = 'Microsoft.RecoveryServices/vaults@2025-01-01'; ExpectedError = 'Unsupported Azure resource type or namingVariant' }
+        @{ Name = 'Function App without variant'; Type = 'Microsoft.Web/sites'; MissingVariant = $true; ExpectedError = 'requires namingVariant functionapp' }
+        @{ Name = 'unsupported web app variant'; Type = 'Microsoft.Web/sites'; Variant = 'app'; ExpectedError = 'Unsupported Azure resource type or namingVariant' }
+        @{ Name = 'application group without variant'; Type = 'Microsoft.DesktopVirtualization/applicationGroups'; Context = 'context'; ExpectedError = 'requires Desktop or RemoteApp' }
+        @{ Name = 'incorrect application group variant'; Type = 'Microsoft.DesktopVirtualization/applicationGroups'; Variant = 'functionapp'; ExpectedError = 'Unsupported Azure resource type or namingVariant' }
+        @{ Name = 'variant on an unambiguous type'; Type = 'Microsoft.KeyVault/vaults'; Variant = 'functionapp'; ExpectedError = 'Unsupported Azure resource type or namingVariant' }
         @{ Name = 'empty subscription'; Context = "union(context, { subscriptionId: '' })" }
         @{ Name = 'empty resource group'; Context = "union(context, { resourceGroupName: '' })" }
         @{ Name = 'empty location'; Context = "union(context, { location: '' })" }
@@ -338,10 +361,10 @@ Describe 'Identifier-based shared resource naming' {
         @{ Name = 'surrounding scope whitespace'; Context = "union(context, { resourceGroupName: ' rg-addons ' })" }
         @{ Name = 'unsupported cloud'; Context = "union(context, { cloud: 'UnknownCloud' })" }
         @{ Name = 'unsupported cloud with explicit region abbreviation'; Context = "union(context, { cloud: 'UnknownCloud' })"; Convention = "{ locationAbbreviation: 'e1' }" }
-        @{ Name = 'vault consecutive hyphens'; Type = 'keyVaults'; Convention = "{ delimiter: '--' }" }
-        @{ Name = 'vault numeric first component'; Type = 'keyVaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
-        @{ Name = 'automation numeric first component'; Type = 'automationAccounts'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
-        @{ Name = 'backup vault numeric first component'; Type = 'recoveryServicesVaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
+        @{ Name = 'vault consecutive hyphens'; Type = 'Microsoft.KeyVault/vaults'; Convention = "{ delimiter: '--' }" }
+        @{ Name = 'vault numeric first component'; Type = 'Microsoft.KeyVault/vaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
+        @{ Name = 'automation numeric first component'; Type = 'Microsoft.Automation/automationAccounts'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
+        @{ Name = 'backup vault numeric first component'; Type = 'Microsoft.RecoveryServices/vaults'; Identifier = "'123inventory'"; Convention = "{ components: ['purpose'] }" }
     ) + @(
         foreach ($type in $discoveryPolicy.resourceTypes.PSObject.Properties) {
             $code = $discoveryAbbreviations.($type.Name)
@@ -350,18 +373,25 @@ Describe 'Identifier-based shared resource naming' {
             $identifier = 'a' * ($type.Value.lengthLimit - $overhead + 1)
             @{
                 Name = "one character over the $($type.Name) limit"
-                Type = $type.Name
+                Type = $type.Value.azureResourceType
+                Variant = $type.Value.namingVariant
                 Identifier = "'$identifier'"
                 ExpectedError = "Generated name exceeds the $($type.Value.lengthLimit)-character limit"
             }
         }
+    ) + @(
+        foreach ($type in $discoveryPolicy.resourceTypes.PSObject.Properties) {
+            @{ Name = "legacy type key $($type.Name)"; Type = $type.Name; ExpectedError = 'Legacy naming keys are not accepted' }
+        }
     )) {
-        param($Name, $Identifier, $Convention, $Type, $Context, $ExpectedError)
+        param($Name, $Identifier, $Convention, $Type, $Context, $Variant, $MissingVariant, $ExpectedError)
 
         if (-not $Identifier) { $Identifier = "'inventory'" }
         if (-not $Convention) { $Convention = '{}' }
-        if (-not $Type) { $Type = 'functionApps' }
+        if (-not $Type) { $Type = 'Microsoft.Web/sites' }
         if (-not $Context) { $Context = 'context' }
+        if (-not $Variant -and $Type -eq 'Microsoft.Web/sites' -and -not $MissingVariant) { $Variant = 'functionapp' }
+        $Context = "union($Context, { namingVariant: '$Variant' })"
         $fixture = Join-Path $testDirectory 'tests\fixtures\rejected.bicep'
         [IO.File]::WriteAllLines($fixture, @(
             "targetScope = 'local'"

@@ -164,6 +164,11 @@ On **Zero Trust Configuration > Monitoring and Recovery**, choose:
 | Create a shared regional vault | Create or reuse the naming convention's operations resource group and deploy the shared regional vault and policy. |
 | Create a dedicated vault | Deploy an identifier-based vault and policy in this deployment's storage resource group. |
 
+With the default naming convention, shared vaults are named
+`rsv-avd-files-<locationAbbreviation>` and dedicated vaults are named
+`rsv-avd-<identifier>-backup-<locationAbbreviation>`. Both use the centralized
+Recovery Services vault naming policy; an explicit `backupVaultName` overrides the generated name.
+
 New vaults use a daily snapshot policy at **23:00** in the selected Windows time zone, with
 **30 days** retention by default. Snapshot data remains in Azure Files, protected by the storage
 account's encryption and networking controls; the vault holds backup metadata. The add-on does

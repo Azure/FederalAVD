@@ -102,26 +102,26 @@ output encodedFoundation string = base64(string({
   shared: shared
   alternateHostPool: hostPoolNames({}, 'hr', profiles[0].context)
   directVaults: {
-    secrets: resourceNameForType({}, 'keyVaults', 'sec', vaultContext)
-    encryption: resourceNameForType({}, 'keyVaults', 'enc', vaultContext)
+    secrets: resourceNameForType({}, 'Microsoft.KeyVault/vaults', 'sec', vaultContext)
+    encryption: resourceNameForType({}, 'Microsoft.KeyVault/vaults', 'enc', vaultContext)
   }
   scopeCases: map(scopeCases, target => {
     hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location)), 6)
-    secrets: resourceNameForType({ locationAbbreviation: 'e1' }, 'keyVaults', 'sec', target)
-    encryption: resourceNameForType({ locationAbbreviation: 'e1' }, 'keyVaults', 'enc', target)
+    secrets: resourceNameForType({ locationAbbreviation: 'e1' }, 'Microsoft.KeyVault/vaults', 'sec', target)
+    encryption: resourceNameForType({ locationAbbreviation: 'e1' }, 'Microsoft.KeyVault/vaults', 'enc', target)
   })
-  caseOnlyVault: resourceNameForType({}, 'keyVaults', 'SEC', {
+  caseOnlyVault: resourceNameForType({}, 'Microsoft.KeyVault/vaults', 'SEC', {
     subscriptionId: toUpper(vaultContext.subscriptionId)
     resourceGroupName: toUpper(vaultContext.resourceGroupName)
     location: toUpper(vaultContext.location)
     cloud: toLower(vaultContext.cloud)
   })
-  noLocationVault: resourceNameForType({ components: ['resourceType', 'workload', 'purpose'] }, 'keyVaults', 'sec', vaultContext)
+  noLocationVault: resourceNameForType({ components: ['resourceType', 'workload', 'purpose'] }, 'Microsoft.KeyVault/vaults', 'sec', vaultContext)
   defaultImage: imageManagementNames({ locationAbbreviation: 'e1' }, context, 'CustomerManaged')
   aliasBundles: map(aliasConventions, convention => {
     hostPool: hostPoolNames(convention, 'finance', profiles[0].context)
     sharedServices: sharedServicesNames(convention, context, {})
     imageManagement: imageManagementNames(convention, context, 'CustomerManaged')
-    directName: resourceNameForType(convention, 'applicationInsights', 'fin', vaultContext)
+    directName: resourceNameForType(convention, 'Microsoft.Insights/components', 'fin', vaultContext)
   })
 }))

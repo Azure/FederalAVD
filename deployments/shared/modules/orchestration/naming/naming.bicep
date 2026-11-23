@@ -41,7 +41,7 @@ func functionAppNames(convention namingConventionConfig, identifier string, cont
   internalFunctionAppNames(convention, identifier, context, overrides)
 
 @export()
-@description('Names a supported resource type from its identifier and actual target scope. Retains the complete identifier and fails on overlength names.')
+@description('Names an official Azure resource type without an API version. Ambiguous types require context.namingVariant. Retains the complete identifier and fails on overlength names.')
 func resourceNameForType(convention namingConventionConfig, resourceType string, identifier string, context namingContext) string =>
   internalResourceNameForType(convention, resourceType, identifier, context)
 

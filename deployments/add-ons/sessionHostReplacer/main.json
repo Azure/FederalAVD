@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "10374049310099919468"
+      "templateHash": "8185576812047763376"
     }
   },
   "definitions": {
@@ -76,6 +76,10 @@
         },
         "cloud": {
           "type": "string"
+        },
+        "namingVariant": {
+          "type": "string",
+          "nullable": true
         }
       },
       "metadata": {
@@ -269,6 +273,27 @@
           "output": {
             "type": "string",
             "value": "[if(equals(parameters('rule').format, 'storage'), _1.stripSeps(parameters('value')), if(equals(parameters('rule').format, 'gallery'), replace(parameters('value'), '-', '_'), if(equals(parameters('rule').format, 'hyphen'), _1.kvSanitize(parameters('value')), if(equals(parameters('rule').format, 'literal'), parameters('value'), fail('Unsupported resource-type naming format.')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "azureResourceTypeKey": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "variant"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[coalesce(tryGet(variables('_1.azureResourceTypeKeys'), format('{0}|{1}', toLower(parameters('resourceType')), toLower(parameters('variant')))), fail(format('Unsupported Azure resource type or namingVariant: {0} ({1}). Use a registered official resource type without an API version. Microsoft.Web/sites requires namingVariant functionapp; Microsoft.DesktopVirtualization/applicationGroups requires Desktop or RemoteApp. Legacy naming keys are not accepted.', parameters('resourceType'), parameters('variant'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -473,10 +498,10 @@
           "output": {
             "$ref": "#/definitions/_1.functionAppNamingResult",
             "value": {
-              "functionAppName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'functionAppName'), ''))), coalesce(tryGet(parameters('overrides'), 'functionAppName'), ''), _1.resourceNameForType(parameters('convention'), 'functionApps', parameters('identifier'), parameters('context')))]",
-              "storageAccountName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'storageAccountName'), ''))), toLower(coalesce(tryGet(parameters('overrides'), 'storageAccountName'), '')), _1.resourceNameForType(parameters('convention'), 'storageAccounts', parameters('identifier'), parameters('context')))]",
-              "applicationInsightsName": "[_1.resourceNameForType(parameters('convention'), 'applicationInsights', parameters('identifier'), parameters('context'))]",
-              "storageEncryptionIdentityName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'storageEncryptionIdentityName'), ''))), coalesce(tryGet(parameters('overrides'), 'storageEncryptionIdentityName'), ''), _1.resourceNameForType(parameters('convention'), 'userAssignedIdentities', format('{0}-storage-cmk', parameters('identifier')), parameters('context')))]",
+              "functionAppName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'functionAppName'), ''))), coalesce(tryGet(parameters('overrides'), 'functionAppName'), ''), _1.resourceNameForType(parameters('convention'), 'Microsoft.Web/sites', parameters('identifier'), union(parameters('context'), createObject('namingVariant', 'functionapp'))))]",
+              "storageAccountName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'storageAccountName'), ''))), toLower(coalesce(tryGet(parameters('overrides'), 'storageAccountName'), '')), _1.resourceNameForType(parameters('convention'), 'Microsoft.Storage/storageAccounts', parameters('identifier'), parameters('context')))]",
+              "applicationInsightsName": "[_1.resourceNameForType(parameters('convention'), 'Microsoft.Insights/components', parameters('identifier'), parameters('context'))]",
+              "storageEncryptionIdentityName": "[if(not(empty(coalesce(tryGet(parameters('overrides'), 'storageEncryptionIdentityName'), ''))), coalesce(tryGet(parameters('overrides'), 'storageEncryptionIdentityName'), ''), _1.resourceNameForType(parameters('convention'), 'Microsoft.ManagedIdentity/userAssignedIdentities', format('{0}-storage-cmk', parameters('identifier')), parameters('context')))]",
               "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.requireNamingToken(_1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'))]",
               "privateEndpointNICNameConv": "[_1.privateEndpointNicPattern(_1.resourceTypeFirst(parameters('convention')), _1.requireNamingToken(_1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'), _1.requireNamingToken(_1.resolveConvention(parameters('convention')).resourceTypeCodes.networkInterfaces, 'Network interface abbreviation'))]"
             }
@@ -781,10 +806,10 @@
           ],
           "output": {
             "type": "string",
-            "value": "[_1.scopedTypeName(_1.validateConvention(_1.resolveConvention(parameters('convention')), true()), parameters('resourceType'), parameters('identifier'), _1.validateNamingContext(parameters('context'), parameters('resourceType')))]"
+            "value": "[_1.scopedTypeName(_1.validateConvention(_1.resolveConvention(parameters('convention')), true()), _1.azureResourceTypeKey(parameters('resourceType'), coalesce(tryGet(parameters('context'), 'namingVariant'), '')), parameters('identifier'), _1.validateNamingContext(parameters('context'), parameters('resourceType')))]"
           },
           "metadata": {
-            "description": "Names a resource type from its readable purpose and target context. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.",
+            "description": "Names an official Azure resource type without an API version. Ambiguous types require context.namingVariant. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/internal.bicep"
             }
@@ -928,7 +953,7 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.namingContext",
-            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
+            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'microsoft.resources/resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -1038,7 +1063,7 @@
             "value": "[_1.resourceNameForType(parameters('convention'), parameters('resourceType'), parameters('identifier'), parameters('context'))]"
           },
           "metadata": {
-            "description": "Names a supported resource type from its identifier and actual target scope. Retains the complete identifier and fails on overlength names.",
+            "description": "Names an official Azure resource type without an API version. Ambiguous types require context.namingVariant. Retains the complete identifier and fails on overlength names.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../../shared/modules/orchestration/naming/naming.bicep"
             }
@@ -7347,7 +7372,7 @@
     "effectiveRemoveEntraDevice": "[or(parameters('removeEntraDevice'), variables('isEntraJoined'))]",
     "effectiveRemoveIntuneDevice": "[or(parameters('removeIntuneDevice'), and(variables('isEntraJoined'), parameters('intuneEnrollment')))]",
     "naming": "[__bicep.functionAppNames(variables('effectiveNamingConvention'), variables('applicationIdentifier'), variables('namingContext'), createObject('functionAppName', parameters('functionAppNameOverride'), 'storageAccountName', parameters('storageAccountNameOverride'), 'storageEncryptionIdentityName', parameters('storageEncryptionIdentityNameOverride')))]",
-    "appServicePlanName": "[if(not(empty(parameters('existingAppServicePlanResourceId'))), last(split(parameters('existingAppServicePlanResourceId'), '/')), if(not(empty(parameters('appServicePlanNameOverride'))), parameters('appServicePlanNameOverride'), __bicep.resourceNameForType(variables('effectiveNamingConvention'), 'appServicePlans', variables('namingPolicy').identifiers.sessionHostReplacer, union(variables('namingContext'), createObject('resourceGroupName', variables('aspResourceGroupName'))))))]",
+    "appServicePlanName": "[if(not(empty(parameters('existingAppServicePlanResourceId'))), last(split(parameters('existingAppServicePlanResourceId'), '/')), if(not(empty(parameters('appServicePlanNameOverride'))), parameters('appServicePlanNameOverride'), __bicep.resourceNameForType(variables('effectiveNamingConvention'), 'Microsoft.Web/serverfarms', variables('namingPolicy').identifiers.sessionHostReplacer, union(variables('namingContext'), createObject('resourceGroupName', variables('aspResourceGroupName'))))))]",
     "privateEndpointNameConv": "[variables('naming').privateEndpointNameConv]",
     "privateEndpointNICNameConv": "[variables('naming').privateEndpointNICNameConv]",
     "workbookSubscriptionId": "[if(not(empty(parameters('logAnalyticsWorkspaceResourceId'))), split(parameters('logAnalyticsWorkspaceResourceId'), '/')[2], subscription().subscriptionId)]",
@@ -7357,7 +7382,7 @@
     "appInsightsName": "[variables('naming').applicationInsightsName]",
     "storageAccountName": "[variables('naming').storageAccountName]",
     "storageEncryptionIdentityName": "[variables('naming').storageEncryptionIdentityName]",
-    "templateSpecNameFinal": "[if(not(empty(parameters('sessionHostTemplateSpecResourceId'))), last(split(parameters('sessionHostTemplateSpecResourceId'), '/')), if(not(empty(parameters('templateSpecName'))), parameters('templateSpecName'), __bicep.resourceNameForType(variables('effectiveNamingConvention'), 'templateSpecs', variables('namingPolicy').templateSpecs.sessionHosts, variables('namingContext'))))]",
+    "templateSpecNameFinal": "[if(not(empty(parameters('sessionHostTemplateSpecResourceId'))), last(split(parameters('sessionHostTemplateSpecResourceId'), '/')), if(not(empty(parameters('templateSpecName'))), parameters('templateSpecName'), __bicep.resourceNameForType(variables('effectiveNamingConvention'), 'Microsoft.Resources/templateSpecs', variables('namingPolicy').templateSpecs.sessionHosts, variables('namingContext'))))]",
     "encryptionKeyName": "[__bicep.namePattern('storageCmkKey', createObject('identifier', variables('applicationIdentifier')))]",
     "computeGalleryResourceId": "[if(contains(parameters('imageReference'), 'id'), join(take(split(parameters('imageReference').id, '/'), 9), '/'), '')]",
     "paramAgentDownloadUrl": "[if(not(empty(parameters('agentDownloadUrl'))), createObject('agentDownloadUrl', parameters('agentDownloadUrl')), createObject())]",
@@ -7681,6 +7706,7 @@
         }
       }
     },
+    "_1.azureResourceTypeKeys": "[toObject(items(variables('namingPolicy').resourceTypes), lambda('rule', format('{0}|{1}', toLower(lambdaVariables('rule').value.azureResourceType), toLower(coalesce(tryGet(lambdaVariables('rule').value, 'namingVariant'), '')))), lambda('rule', lambdaVariables('rule').key))]",
     "_1.locationDefinitions": "[variables('_1._3')]",
     "_1.osDiskNamePattern": "SHNAME-osdisk",
     "_1.resourceAbbreviations": "[variables('_1._2')]",
@@ -7710,69 +7736,88 @@
       },
       "resourceTypes": {
         "functionApps": {
+          "azureResourceType": "Microsoft.Web/sites",
+          "namingVariant": "functionapp",
           "lengthLimit": 60,
           "format": "hyphen",
           "globallyUnique": true
         },
         "storageAccounts": {
+          "azureResourceType": "Microsoft.Storage/storageAccounts",
           "lengthLimit": 24,
           "format": "storage",
           "globallyUnique": true
         },
         "applicationInsights": {
+          "azureResourceType": "Microsoft.Insights/components",
           "lengthLimit": 260,
           "format": "hyphen"
         },
         "appServicePlans": {
+          "azureResourceType": "Microsoft.Web/serverfarms",
           "lengthLimit": 60,
           "format": "hyphen"
         },
         "userAssignedIdentities": {
+          "azureResourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
           "lengthLimit": 128,
           "format": "hyphen"
         },
         "automationAccounts": {
+          "azureResourceType": "Microsoft.Automation/automationAccounts",
           "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "availabilitySets": {
+          "azureResourceType": "Microsoft.Compute/availabilitySets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "computeGalleries": {
+          "azureResourceType": "Microsoft.Compute/galleries",
           "lengthLimit": 80,
           "format": "gallery"
         },
         "dataCollectionEndpoints": {
+          "azureResourceType": "Microsoft.Insights/dataCollectionEndpoints",
           "lengthLimit": 44,
           "format": "hyphen"
         },
         "dataCollectionRules": {
+          "azureResourceType": "Microsoft.Insights/dataCollectionRules",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "desktopApplicationGroups": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/applicationGroups",
+          "namingVariant": "Desktop",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "remoteApplicationGroups": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/applicationGroups",
+          "namingVariant": "RemoteApp",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskAccesses": {
+          "azureResourceType": "Microsoft.Compute/diskAccesses",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskEncryptionSets": {
+          "azureResourceType": "Microsoft.Compute/diskEncryptionSets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "hostPools": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/hostPools",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "keyVaults": {
+          "azureResourceType": "Microsoft.KeyVault/vaults",
           "lengthLimit": 24,
           "format": "hyphen",
           "globallyUnique": true,
@@ -7781,83 +7826,103 @@
           "noConsecutiveHyphens": true
         },
         "logAnalyticsWorkspaces": {
+          "azureResourceType": "Microsoft.OperationalInsights/workspaces",
           "lengthLimit": 63,
           "format": "hyphen"
         },
         "natGateways": {
+          "azureResourceType": "Microsoft.Network/natGateways",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "netAppAccounts": {
+          "azureResourceType": "Microsoft.NetApp/netAppAccounts",
           "lengthLimit": 128,
           "format": "hyphen"
         },
         "netAppCapacityPools": {
+          "azureResourceType": "Microsoft.NetApp/netAppAccounts/capacityPools",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "networkInterfaces": {
+          "azureResourceType": "Microsoft.Network/networkInterfaces",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "networkSecurityGroups": {
+          "azureResourceType": "Microsoft.Network/networkSecurityGroups",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "osdisks": {
+          "azureResourceType": "Microsoft.Compute/disks",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "privateEndpoints": {
+          "azureResourceType": "Microsoft.Network/privateEndpoints",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "privateLinkScopes": {
+          "azureResourceType": "Microsoft.Insights/privateLinkScopes",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "publicIPAddresses": {
+          "azureResourceType": "Microsoft.Network/publicIPAddresses",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "recoveryServicesVaults": {
+          "azureResourceType": "Microsoft.RecoveryServices/vaults",
           "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "resourceGroups": {
+          "azureResourceType": "Microsoft.Resources/resourceGroups",
           "lengthLimit": 90,
           "format": "hyphen"
         },
         "routeTables": {
+          "azureResourceType": "Microsoft.Network/routeTables",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "scalingPlans": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/scalingPlans",
           "lengthLimit": 63,
           "format": "hyphen"
         },
         "templateSpecs": {
+          "azureResourceType": "Microsoft.Resources/templateSpecs",
           "lengthLimit": 90,
           "format": "hyphen"
         },
         "virtualMachines": {
+          "azureResourceType": "Microsoft.Compute/virtualMachines",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "virtualNetworks": {
+          "azureResourceType": "Microsoft.Network/virtualNetworks",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "subnets": {
+          "azureResourceType": "Microsoft.Network/virtualNetworks/subnets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "workspaces": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/workspaces",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "imageDefinitions": {
+          "azureResourceType": "Microsoft.Compute/galleries/images",
           "lengthLimit": 80,
           "format": "hyphen"
         }

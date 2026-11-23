@@ -215,9 +215,9 @@ Describe 'Shared naming and module metadata contracts' {
         $moduleParameters = $template.resources.$Module.properties.parameters
         if ($Example -eq 'Automation Account') {
             $template.variables.names.automationAccountName | Should -Match "parameters\('automationAccountNameOverride'\)"
-            $template.variables.names.automationAccountName | Should -Match "'automationAccounts'"
+            $template.variables.names.automationAccountName | Should -Match "'Microsoft\.Automation/automationAccounts'"
             $template.variables.names.logAnalyticsWorkspaceName | Should -Match "parameters\('logAnalyticsWorkspaceNameOverride'\)"
-            $template.variables.names.logAnalyticsWorkspaceName | Should -Match "'logAnalyticsWorkspaces'"
+            $template.variables.names.logAnalyticsWorkspaceName | Should -Match "'Microsoft\.OperationalInsights/workspaces'"
             $moduleParameters.automationAccountName.value | Should -Be "[variables('names').automationAccountName]"
             $template.resources.workspace.properties.parameters.name.value | Should -Be "[variables('names').logAnalyticsWorkspaceName]"
             $moduleParameters.logAnalyticsWorkspaceResourceId.value | Should -Match "reference\('workspace'\)\.outputs\.resourceId"

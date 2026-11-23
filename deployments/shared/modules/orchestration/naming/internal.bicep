@@ -19,42 +19,42 @@ var namingPolicy object = {
     imageManagementStorageLocation: 4
   }
   resourceTypes: {
-    functionApps: { lengthLimit: 60, format: 'hyphen', globallyUnique: true }
-    storageAccounts: { lengthLimit: 24, format: 'storage', globallyUnique: true }
-    applicationInsights: { lengthLimit: 260, format: 'hyphen' }
-    appServicePlans: { lengthLimit: 60, format: 'hyphen' }
-    userAssignedIdentities: { lengthLimit: 128, format: 'hyphen' }
-    automationAccounts: { lengthLimit: 50, format: 'hyphen', startWithLetter: true }
-    availabilitySets: { lengthLimit: 80, format: 'hyphen' }
-    computeGalleries: { lengthLimit: 80, format: 'gallery' }
-    dataCollectionEndpoints: { lengthLimit: 44, format: 'hyphen' }
-    dataCollectionRules: { lengthLimit: 64, format: 'hyphen' }
-    desktopApplicationGroups: { lengthLimit: 64, format: 'hyphen' }
-    remoteApplicationGroups: { lengthLimit: 64, format: 'hyphen' }
-    diskAccesses: { lengthLimit: 64, format: 'hyphen' }
-    diskEncryptionSets: { lengthLimit: 80, format: 'hyphen' }
-    hostPools: { lengthLimit: 64, format: 'hyphen' }
-    keyVaults: { lengthLimit: 24, format: 'hyphen', globallyUnique: true, uniqueLength: 6, startWithLetter: true, noConsecutiveHyphens: true }
-    logAnalyticsWorkspaces: { lengthLimit: 63, format: 'hyphen' }
-    natGateways: { lengthLimit: 80, format: 'hyphen' }
-    netAppAccounts: { lengthLimit: 128, format: 'hyphen' }
-    netAppCapacityPools: { lengthLimit: 64, format: 'hyphen' }
-    networkInterfaces: { lengthLimit: 80, format: 'hyphen' }
-    networkSecurityGroups: { lengthLimit: 80, format: 'hyphen' }
-    osdisks: { lengthLimit: 80, format: 'hyphen' }
-    privateEndpoints: { lengthLimit: 64, format: 'hyphen' }
-    privateLinkScopes: { lengthLimit: 64, format: 'hyphen' }
-    publicIPAddresses: { lengthLimit: 80, format: 'hyphen' }
-    recoveryServicesVaults: { lengthLimit: 50, format: 'hyphen', startWithLetter: true }
-    resourceGroups: { lengthLimit: 90, format: 'hyphen' }
-    routeTables: { lengthLimit: 80, format: 'hyphen' }
-    scalingPlans: { lengthLimit: 63, format: 'hyphen' }
-    templateSpecs: { lengthLimit: 90, format: 'hyphen' }
-    virtualMachines: { lengthLimit: 64, format: 'hyphen' }
-    virtualNetworks: { lengthLimit: 64, format: 'hyphen' }
-    subnets: { lengthLimit: 80, format: 'hyphen' }
-    workspaces: { lengthLimit: 64, format: 'hyphen' }
-    imageDefinitions: { lengthLimit: 80, format: 'hyphen' }
+    functionApps: { azureResourceType: 'Microsoft.Web/sites', namingVariant: 'functionapp', lengthLimit: 60, format: 'hyphen', globallyUnique: true }
+    storageAccounts: { azureResourceType: 'Microsoft.Storage/storageAccounts', lengthLimit: 24, format: 'storage', globallyUnique: true }
+    applicationInsights: { azureResourceType: 'Microsoft.Insights/components', lengthLimit: 260, format: 'hyphen' }
+    appServicePlans: { azureResourceType: 'Microsoft.Web/serverfarms', lengthLimit: 60, format: 'hyphen' }
+    userAssignedIdentities: { azureResourceType: 'Microsoft.ManagedIdentity/userAssignedIdentities', lengthLimit: 128, format: 'hyphen' }
+    automationAccounts: { azureResourceType: 'Microsoft.Automation/automationAccounts', lengthLimit: 50, format: 'hyphen', startWithLetter: true }
+    availabilitySets: { azureResourceType: 'Microsoft.Compute/availabilitySets', lengthLimit: 80, format: 'hyphen' }
+    computeGalleries: { azureResourceType: 'Microsoft.Compute/galleries', lengthLimit: 80, format: 'gallery' }
+    dataCollectionEndpoints: { azureResourceType: 'Microsoft.Insights/dataCollectionEndpoints', lengthLimit: 44, format: 'hyphen' }
+    dataCollectionRules: { azureResourceType: 'Microsoft.Insights/dataCollectionRules', lengthLimit: 64, format: 'hyphen' }
+    desktopApplicationGroups: { azureResourceType: 'Microsoft.DesktopVirtualization/applicationGroups', namingVariant: 'Desktop', lengthLimit: 64, format: 'hyphen' }
+    remoteApplicationGroups: { azureResourceType: 'Microsoft.DesktopVirtualization/applicationGroups', namingVariant: 'RemoteApp', lengthLimit: 64, format: 'hyphen' }
+    diskAccesses: { azureResourceType: 'Microsoft.Compute/diskAccesses', lengthLimit: 64, format: 'hyphen' }
+    diskEncryptionSets: { azureResourceType: 'Microsoft.Compute/diskEncryptionSets', lengthLimit: 80, format: 'hyphen' }
+    hostPools: { azureResourceType: 'Microsoft.DesktopVirtualization/hostPools', lengthLimit: 64, format: 'hyphen' }
+    keyVaults: { azureResourceType: 'Microsoft.KeyVault/vaults', lengthLimit: 24, format: 'hyphen', globallyUnique: true, uniqueLength: 6, startWithLetter: true, noConsecutiveHyphens: true }
+    logAnalyticsWorkspaces: { azureResourceType: 'Microsoft.OperationalInsights/workspaces', lengthLimit: 63, format: 'hyphen' }
+    natGateways: { azureResourceType: 'Microsoft.Network/natGateways', lengthLimit: 80, format: 'hyphen' }
+    netAppAccounts: { azureResourceType: 'Microsoft.NetApp/netAppAccounts', lengthLimit: 128, format: 'hyphen' }
+    netAppCapacityPools: { azureResourceType: 'Microsoft.NetApp/netAppAccounts/capacityPools', lengthLimit: 64, format: 'hyphen' }
+    networkInterfaces: { azureResourceType: 'Microsoft.Network/networkInterfaces', lengthLimit: 80, format: 'hyphen' }
+    networkSecurityGroups: { azureResourceType: 'Microsoft.Network/networkSecurityGroups', lengthLimit: 80, format: 'hyphen' }
+    osdisks: { azureResourceType: 'Microsoft.Compute/disks', lengthLimit: 80, format: 'hyphen' }
+    privateEndpoints: { azureResourceType: 'Microsoft.Network/privateEndpoints', lengthLimit: 64, format: 'hyphen' }
+    privateLinkScopes: { azureResourceType: 'Microsoft.Insights/privateLinkScopes', lengthLimit: 64, format: 'hyphen' }
+    publicIPAddresses: { azureResourceType: 'Microsoft.Network/publicIPAddresses', lengthLimit: 80, format: 'hyphen' }
+    recoveryServicesVaults: { azureResourceType: 'Microsoft.RecoveryServices/vaults', lengthLimit: 50, format: 'hyphen', startWithLetter: true }
+    resourceGroups: { azureResourceType: 'Microsoft.Resources/resourceGroups', lengthLimit: 90, format: 'hyphen' }
+    routeTables: { azureResourceType: 'Microsoft.Network/routeTables', lengthLimit: 80, format: 'hyphen' }
+    scalingPlans: { azureResourceType: 'Microsoft.DesktopVirtualization/scalingPlans', lengthLimit: 63, format: 'hyphen' }
+    templateSpecs: { azureResourceType: 'Microsoft.Resources/templateSpecs', lengthLimit: 90, format: 'hyphen' }
+    virtualMachines: { azureResourceType: 'Microsoft.Compute/virtualMachines', lengthLimit: 64, format: 'hyphen' }
+    virtualNetworks: { azureResourceType: 'Microsoft.Network/virtualNetworks', lengthLimit: 64, format: 'hyphen' }
+    subnets: { azureResourceType: 'Microsoft.Network/virtualNetworks/subnets', lengthLimit: 80, format: 'hyphen' }
+    workspaces: { azureResourceType: 'Microsoft.DesktopVirtualization/workspaces', lengthLimit: 64, format: 'hyphen' }
+    imageDefinitions: { azureResourceType: 'Microsoft.Compute/galleries/images', lengthLimit: 80, format: 'hyphen' }
   }
   resources: {
     operationsResourceGroup: { type: 'resourceGroups', purpose: ['operations'] }
@@ -163,6 +163,7 @@ var namingPolicy object = {
 
 var resourceAbbreviations object = loadJsonContent('../../../data/resourceAbbreviations.json')
 var locationDefinitions object = loadJsonContent('../../../data/locations.json')
+var azureResourceTypeKeys object = toObject(items(namingPolicy.resourceTypes), rule => '${toLower(rule.value.azureResourceType)}|${toLower(rule.value.?namingVariant ?? '')}', rule => rule.key)
 
 @export()
 @sealed()
@@ -290,6 +291,7 @@ type namingContext = {
   resourceGroupName: string
   location: string
   cloud: string
+  namingVariant: string?
 }
 
 @export()
@@ -318,7 +320,7 @@ func requireNamingToken(value string, label string) string =>
   isNamingToken(value) ? value : fail('${label} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.')
 
 func validateNamingContext(context namingContext, resourceType string) namingContext =>
-  !empty(filter([context.subscriptionId, context.location, context.cloud], value => empty(trim(value)) || value != trim(value))) || context.resourceGroupName != trim(context.resourceGroupName) || (empty(context.resourceGroupName) && toLower(resourceType) != 'resourcegroups')
+  !empty(filter([context.subscriptionId, context.location, context.cloud], value => empty(trim(value)) || value != trim(value))) || context.resourceGroupName != trim(context.resourceGroupName) || (empty(context.resourceGroupName) && toLower(resourceType) != 'microsoft.resources/resourcegroups')
     ? fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.')
     : union(context, { cloud: canonicalNamingCloud(context.cloud) })
 
@@ -401,18 +403,21 @@ func scopedTypeName(convention object, resourceType string, identifier string, c
         : ''
     )
 
+func azureResourceTypeKey(resourceType string, variant string) string =>
+  azureResourceTypeKeys[?'${toLower(resourceType)}|${toLower(variant)}'] ?? fail('Unsupported Azure resource type or namingVariant: ${resourceType} (${variant}). Use a registered official resource type without an API version. Microsoft.Web/sites requires namingVariant functionapp; Microsoft.DesktopVirtualization/applicationGroups requires Desktop or RemoteApp. Legacy naming keys are not accepted.')
+
 @export()
-@description('Names a resource type from its readable purpose and target context. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.')
+@description('Names an official Azure resource type without an API version. Ambiguous types require context.namingVariant. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.')
 func resourceNameForType(convention object, resourceType string, identifier string, context namingContext) string =>
-  scopedTypeName(validateConvention(resolveConvention(convention), true), resourceType, identifier, validateNamingContext(context, resourceType))
+  scopedTypeName(validateConvention(resolveConvention(convention), true), azureResourceTypeKey(resourceType, context.?namingVariant ?? ''), identifier, validateNamingContext(context, resourceType))
 
 @export()
 @description('Names per-application Function App infrastructure with common explicit overrides. App and storage share a hash; Insights and the storage-CMK identity retain the purpose and region without a hash. Hosting plans have separate ownership.')
 func functionAppNames(convention object, identifier string, context namingContext, overrides functionAppNameOverrides) functionAppNamingResult => {
-  functionAppName: !empty(overrides.?functionAppName ?? '') ? overrides.?functionAppName ?? '' : resourceNameForType(convention, 'functionApps', identifier, context)
-  storageAccountName: !empty(overrides.?storageAccountName ?? '') ? toLower(overrides.?storageAccountName ?? '') : resourceNameForType(convention, 'storageAccounts', identifier, context)
-  applicationInsightsName: resourceNameForType(convention, 'applicationInsights', identifier, context)
-  storageEncryptionIdentityName: !empty(overrides.?storageEncryptionIdentityName ?? '') ? overrides.?storageEncryptionIdentityName ?? '' : resourceNameForType(convention, 'userAssignedIdentities', '${identifier}-storage-cmk', context)
+  functionAppName: !empty(overrides.?functionAppName ?? '') ? overrides.?functionAppName ?? '' : resourceNameForType(convention, 'Microsoft.Web/sites', identifier, union(context, { namingVariant: 'functionapp' }))
+  storageAccountName: !empty(overrides.?storageAccountName ?? '') ? toLower(overrides.?storageAccountName ?? '') : resourceNameForType(convention, 'Microsoft.Storage/storageAccounts', identifier, context)
+  applicationInsightsName: resourceNameForType(convention, 'Microsoft.Insights/components', identifier, context)
+  storageEncryptionIdentityName: !empty(overrides.?storageEncryptionIdentityName ?? '') ? overrides.?storageEncryptionIdentityName ?? '' : resourceNameForType(convention, 'Microsoft.ManagedIdentity/userAssignedIdentities', '${identifier}-storage-cmk', context)
   privateEndpointNameConv: privateEndpointPattern(resourceTypeFirst(convention), requireNamingToken(resolveConvention(convention).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'))
   privateEndpointNICNameConv: privateEndpointNicPattern(resourceTypeFirst(convention), requireNamingToken(resolveConvention(convention).resourceTypeCodes.privateEndpoints, 'Private endpoint abbreviation'), requireNamingToken(resolveConvention(convention).resourceTypeCodes.networkInterfaces, 'Network interface abbreviation'))
 }
@@ -725,7 +730,7 @@ func hostPoolControlPlaneGroup(convention object, identifier string, context hos
 func sharedVaultName(convention object, role string, abbreviation string, context namingContext) string =>
   !empty(role == 'secretsKeyVault' ? convention.?secretsKeyVaultNameOverride ?? '' : convention.?encryptionKeyVaultNameOverride ?? '')
     ? (role == 'secretsKeyVault' ? convention.secretsKeyVaultNameOverride : convention.encryptionKeyVaultNameOverride)
-    : resourceNameForType(union(convention, { locationAbbreviation: abbreviation }), 'keyVaults', first(namingPolicy.resources[role].purpose), context)
+    : resourceNameForType(union(convention, { locationAbbreviation: abbreviation }), 'Microsoft.KeyVault/vaults', first(namingPolicy.resources[role].purpose), context)
 
 func hostPoolNamesWithScopes(convention object, identifier string, context hostPoolNamingContext, storage fslogixNamingResult, abbreviation string, operationsGroup string, diskEncryptionPattern string) hostPoolNamingResult =>
   union(storage, {

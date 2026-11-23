@@ -12,6 +12,8 @@ Use one of these complete entry-template examples in `deployments/add-ons/<name>
 - **A predefined bundle, when useful:** call `functionAppNames` for Function App infrastructure, then pass the bundle's properties to the shared Function App module.
 
 `resourceNameForType` returns one name per call, not one resource type per add-on.
+Pass the official Azure resource type without an API version, such as
+`Microsoft.RecoveryServices/vaults`, rather than an internal abbreviation key.
 For example, the same add-on can name an Automation Account, a Log Analytics
 workspace, storage accounts, identities and a Key Vault with separate calls using the same convention. You can
 group those results in a local `names` object or mix direct calls with a predefined
@@ -95,10 +97,10 @@ var context = {
 var names = {
   automationAccountName: !empty(automationAccountNameOverride)
     ? automationAccountNameOverride
-    : resourceNameForType(namingConvention, 'automationAccounts', '<purpose>', context)
+    : resourceNameForType(namingConvention, 'Microsoft.Automation/automationAccounts', '<purpose>', context)
   logAnalyticsWorkspaceName: !empty(logAnalyticsWorkspaceNameOverride)
     ? logAnalyticsWorkspaceNameOverride
-    : resourceNameForType(namingConvention, 'logAnalyticsWorkspaces', '<purpose>', context)
+    : resourceNameForType(namingConvention, 'Microsoft.OperationalInsights/workspaces', '<purpose>', context)
 }
 
 module workspace '../../shared/modules/resourceModules/operationalInsights/workspaces/deploy.bicep' = {
@@ -992,9 +994,31 @@ Use the same interface regardless of deployment family:
 ```bicep
 import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
 
-var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
-var vaultName = resourceNameForType(namingConvention, 'keyVaults', 'sec', context)
+var storageName = resourceNameForType(namingConvention, 'Microsoft.Storage/storageAccounts', '${identifier}-data', context)
+var vaultName = resourceNameForType(namingConvention, 'Microsoft.KeyVault/vaults', 'sec', context)
 ```
+
+The resource type is case-insensitive and must omit `@apiVersion`. Internal keys
+such as `storageAccounts` and `keyVaults` are not accepted by this function.
+For ambiguous resource types, supply an explicit `context.namingVariant`:
+
+| Official resource type | Required naming variant |
+| --- | --- |
+| `Microsoft.Web/sites` | `functionapp` (web-app naming is not supported) |
+| `Microsoft.DesktopVirtualization/applicationGroups` | `Desktop` or `RemoteApp` |
+
+For example:
+
+```bicep
+var functionName = resourceNameForType(namingConvention, 'Microsoft.Web/sites', identifier, union(context, { namingVariant: 'functionapp' }))
+var desktopGroupName = resourceNameForType(namingConvention, 'Microsoft.DesktopVirtualization/applicationGroups', identifier, union(context, { namingVariant: 'Desktop' }))
+var remoteGroupName = resourceNameForType(namingConvention, 'Microsoft.DesktopVirtualization/applicationGroups', identifier, union(context, { namingVariant: 'RemoteApp' }))
+```
+
+Variants are case-insensitive. Missing or unsupported variants, variants on
+unambiguous types, unsupported resource types, and legacy type keys fail explicitly.
+Bundles supply their known variants internally. The API change does not change
+generated names, uniqueness seeds, or the existing `resourceTypeCodes` override keys.
 
 The example import is relative to an add-on entry template. `context` supplies
 the actual target subscription, owning resource group, location and cloud. To

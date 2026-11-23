@@ -2178,7 +2178,7 @@ Describe 'Session Host Replacer rollback operator experience' {
 Describe 'Session Host Replacer Application Insights isolation' {
     It 'uses the common purpose-based Insights name independently of Function App overrides' {
         Get-Content -LiteralPath $namingPath -Raw |
-            Should -Match "applicationInsightsName: resourceNameForType\(convention, 'applicationInsights', identifier, context\)"
+            Should -Match "applicationInsightsName: resourceNameForType\(convention, 'Microsoft\.Insights/components', identifier, context\)"
         Get-Content -LiteralPath $bicepPath -Raw |
             Should -Match 'var appInsightsName = naming.applicationInsightsName'
         $policy = Get-TestNamingPolicy

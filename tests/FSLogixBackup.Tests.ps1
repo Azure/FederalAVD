@@ -62,6 +62,63 @@ Describe 'FSLogix Storage backup vault ownership' {
     }
 }
 
+Describe 'FSLogix Storage evaluated backup vault naming' {
+    BeforeAll {
+        $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('FederalAVD-BackupNaming-' + [guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $testDirectory -ErrorAction Stop | Out-Null
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.bicep') -Raw
+        $namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
+        $relativeNaming = [IO.Path]::GetRelativePath($testDirectory, $namingPath).Replace('\', '/')
+        $lines = @(
+            "targetScope = 'local'"
+            "import { fslogixNames, sharedServicesNames, resourceNameForType } from '$relativeNaming'"
+            'var namingConvention = {}'
+            "var identifier = 'finance'"
+            "var location = 'usgovvirginia'"
+            "var storageResourceGroupName = 'rg-storage'"
+        )
+        $expressions = @{}
+        foreach ($name in @('naming', 'backupNaming', 'effectiveStorageResourceGroupName', 'effectiveBackupVaultName')) {
+            $match = [regex]::Match($source, "(?ms)^var $name = (.*?)(?=^var |^resource )")
+            if (-not $match.Success) { throw "Missing production naming expression: $name" }
+            $expression = $match.Groups[1].Value.Trim().
+                Replace('subscription().subscriptionId', "'00000000-1111-2222-3333-444444444444'").
+                Replace('environment().name', "'AzureUSGovernment'")
+            $expressions[$name] = $expression
+            if ($name -ne 'effectiveBackupVaultName') { $lines += "var $name = $expression" }
+        }
+        $cases = @(
+            @{ Name = 'shared'; Scope = 'Shared'; Override = ''; Expected = 'rsv-avd-files-va' }
+            @{ Name = 'dedicated'; Scope = 'Dedicated'; Override = ''; Expected = 'rsv-avd-finance-backup-va' }
+            @{ Name = 'sharedOverride'; Scope = 'Shared'; Override = 'existing-shared-name'; Expected = 'existing-shared-name' }
+            @{ Name = 'dedicatedOverride'; Scope = 'Dedicated'; Override = 'existing-dedicated-name'; Expected = 'existing-dedicated-name' }
+            @{ Name = 'customDedicated'; Scope = 'Dedicated'; Override = ''; Expected = 'finance-backup-rsv-va'; Convention = "{ components: ['purpose', 'resourceType', 'location'], delimiter: '-', workload: 'avd' }" }
+        )
+        foreach ($case in $cases) {
+            $expression = $expressions.effectiveBackupVaultName -replace '\bbackupVaultScope\b', "'$($case.Scope)'" -replace '\bbackupVaultName\b', "'$($case.Override)'"
+            if ($case.Convention) { $expression = $expression -replace '\bnamingConvention\b', $case.Convention }
+            $lines += "var $($case.Name) = $expression"
+        }
+        $properties = ($cases | ForEach-Object { "$($_.Name): $($_.Name)" }) -join ', '
+        $lines += "output encodedResults string = base64(string({ $properties }))"
+        $fixture = Join-Path $testDirectory 'backup-naming.bicep'
+        [IO.File]::WriteAllLines($fixture, $lines)
+        $names = Invoke-TestNamingVectors -TemplateFile $fixture
+    }
+
+    AfterAll {
+        if ($testDirectory -and (Test-Path -LiteralPath $testDirectory)) {
+            Remove-Item -LiteralPath $testDirectory -Recurse -Force -ErrorAction Stop
+        }
+    }
+
+    It 'evaluates the production shared and dedicated expressions, overrides, and custom convention' {
+        foreach ($case in $cases) {
+            $names.($case.Name).value | Should -Be $case.Expected
+        }
+    }
+}
+
 Describe 'FSLogix Storage backup Portal choices' {
     It 'offers disabled, existing, shared, and dedicated choices with a label-valued default' {
         $mode = $operations | Where-Object name -eq 'backupMode'

@@ -96,8 +96,8 @@ var context = {
   location: location
   cloud: environment().name
 }
-var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
-var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier}-secrets', context)
+var storageName = resourceNameForType(namingConvention, 'Microsoft.Storage/storageAccounts', '${identifier}-data', context)
+var vaultName = resourceNameForType(namingConvention, 'Microsoft.KeyVault/vaults', '${identifier}-secrets', context)
 ```
 
 The import path assumes an entry template in `deployments/add-ons/<name>/`.
@@ -105,14 +105,16 @@ An empty convention object uses the shared defaults. Use a distinct identifier
 for multiple resources of the same type in the same scope. Callers still create
 resources, apply explicit overrides and supply existing-resource IDs.
 
-To name a resource group, use `resourceGroups` with `resourceGroupName: ''`;
+To name a resource group, use `Microsoft.Resources/resourceGroups` with `resourceGroupName: ''`;
 its name has no hash and does not depend on that field. Do not make a group's
 generated name depend on itself. For all other types, pass the owning group.
 
 ## Adding or changing a rule
 
-Each `resourceTypes` entry owns its numeric `lengthLimit`, format and optional
-constraints. The separate `limits` section holds special budgets: temporary
+Each `resourceTypes` entry owns its official `azureResourceType`, optional
+`namingVariant`, numeric `lengthLimit`, format and optional constraints. The reverse
+lookup is derived from these entries; every type/variant pair must be unique.
+The separate `limits` section holds special budgets: temporary
 Windows computer names, FSLogix prefixes, Image Management prefixes/locations,
 the short `uniqueSuffix` (six characters), and the generic
 `defaultUniqueLength` (six characters). Types marked `globallyUnique: true`
@@ -256,7 +258,7 @@ var names = functionAppNames(namingConvention, '${identifier}-job', context, {
   functionAppName: functionAppNameOverride
   storageAccountName: storageAccountNameOverride
 })
-var sharedPlanName = resourceNameForType(namingConvention, 'appServicePlans', 'functions', context)
+var sharedPlanName = resourceNameForType(namingConvention, 'Microsoft.Web/serverfarms', 'functions', context)
 ```
 
 The snippet assumes the caller already defines the convention, identifier, target
@@ -309,10 +311,19 @@ Use your add-on's purpose instead of `shr` for an unrelated application.
 `resourceNameForType(convention, resourceType, identifier, context)` names an
 individual resource. `context` has the typed `namingContext` shape, containing
 `subscriptionId`, `resourceGroupName`, full Azure `location`, and `cloud`.
+Pass an official Azure resource type without an API version, not a catalog key.
+Types and variants are case-insensitive. `Microsoft.Web/sites` requires
+`context.namingVariant: 'functionapp'`; web-app naming is unsupported.
+`Microsoft.DesktopVirtualization/applicationGroups` requires `'Desktop'` or
+`'RemoteApp'`. Other types require an omitted or empty variant. Missing or invalid
+selectors and legacy type keys fail explicitly; no compatibility translation is
+provided. Bundles supply their known variants internally. This interface change
+preserves generated names and hashes; `resourceTypeCodes` retains its catalog keys.
+See the [direct-call examples](../../../../../docs/naming-convention.md#resource-naming-interface).
 The shared `resourceTypes` catalog covers all 36 convention-named types in the
 repository's abbreviation dataset:
 
-| Family | Resource-type keys |
+| Family | Internal catalog keys (not public API arguments) |
 | --- | --- |
 | AVD | `hostPools`, `workspaces`, `desktopApplicationGroups`, `remoteApplicationGroups`, `scalingPlans` |
 | Compute | `availabilitySets`, `computeGalleries`, `diskAccesses`, `diskEncryptionSets`, `osdisks`, `virtualMachines`, `imageDefinitions` |
@@ -463,7 +474,7 @@ Import only the functions needed by the caller:
 ```bicep
 import { resourceNameForType } from './naming.bicep'
 
-var operationsName = resourceNameForType({}, 'resourceGroups', 'operations', {
+var operationsName = resourceNameForType({}, 'Microsoft.Resources/resourceGroups', 'operations', {
   subscriptionId: subscription().subscriptionId
   resourceGroupName: ''
   location: 'usgovvirginia'

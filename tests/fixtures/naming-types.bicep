@@ -28,7 +28,7 @@ var cases = flatten(map(profiles, profile => map(types, type => {
   profile: profile.label
   type: type
   identifier: profile.identifier
-  actual: resourceNameForType(profile.convention, type, profile.identifier, context)
+  actual: resourceNameForType(profile.convention, policy.resourceTypes[type].azureResourceType, profile.identifier, union(context, { namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
   hash: (policy.resourceTypes[type].?globallyUnique ?? false)
     ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
     : ''
@@ -36,12 +36,12 @@ var cases = flatten(map(profiles, profile => map(types, type => {
 var abbreviations = loadJsonContent('../../deployments/shared/data/resourceAbbreviations.json')
 var boundaries = map(types, type => {
   type: type
-  actual: resourceNameForType({}, type, join(map(range(0, policy.resourceTypes[type].lengthLimit - (type == 'storageAccounts'
+  actual: resourceNameForType({}, policy.resourceTypes[type].azureResourceType, join(map(range(0, policy.resourceTypes[type].lengthLimit - (type == 'storageAccounts'
     ? length('${abbreviations[type]}avduse') + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
-    : length('${abbreviations[type]}-avd--use') + ((policy.resourceTypes[type].?globallyUnique ?? false) ? 1 + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength) : 0))), index => 'a'), ''), context)
+    : length('${abbreviations[type]}-avd--use') + ((policy.resourceTypes[type].?globallyUnique ?? false) ? 1 + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength) : 0))), index => 'a'), ''), union(context, { namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
 })
 var bundle = functionAppNames({}, 'inventory', context, {})
-var identityExpected = resourceNameForType({}, 'userAssignedIdentities', 'inventory-storage-cmk', context)
+var identityExpected = resourceNameForType({}, 'Microsoft.ManagedIdentity/userAssignedIdentities', 'inventory-storage-cmk', context)
 var seeds = map([
   context
   union(context, { subscriptionId: '00000000-1111-2222-3333-555555555555' })
@@ -49,8 +49,8 @@ var seeds = map([
   union(context, { location: 'westus2' })
   union(context, { location: 'usgovvirginia', cloud: 'AzureUSGovernment' })
 ], target => {
-  name: resourceNameForType({}, 'functionApps', 'inventory', target)
-  storage: resourceNameForType({}, 'storageAccounts', 'inventory', target)
+  name: resourceNameForType({}, 'Microsoft.Web/sites', 'inventory', union(target, { namingVariant: 'functionapp' }))
+  storage: resourceNameForType({}, 'Microsoft.Storage/storageAccounts', 'inventory', target)
   hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location)), policy.limits.defaultUniqueLength)
 })
 var caseOnly = functionAppNames({}, 'INVENTORY', {
@@ -92,13 +92,13 @@ output encodedResults string = base64(string({
   seeds: seeds
   cloudOnlyTypes: map(['keyVaults', 'storageAccounts', 'functionApps'], type => {
     type: type
-    baseline: resourceNameForType({ locationAbbreviation: 'e1' }, type, 'fin', context)
-    alternateCloud: resourceNameForType({ locationAbbreviation: 'e1' }, type, 'fin', union(context, { cloud: 'AzureUSGovernment' }))
+    baseline: resourceNameForType({ locationAbbreviation: 'e1' }, policy.resourceTypes[type].azureResourceType, 'fin', union(context, { namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
+    alternateCloud: resourceNameForType({ locationAbbreviation: 'e1' }, policy.resourceTypes[type].azureResourceType, 'fin', union(context, { cloud: 'AzureUSGovernment', namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
   })
   caseOnly: caseOnly
   caseOnlyTypes: map(types, type => {
     type: type
-    actual: resourceNameForType({}, toUpper(type), 'FIN', context)
+    actual: resourceNameForType({}, toUpper(policy.resourceTypes[type].azureResourceType), 'FIN', union(context, { namingVariant: toUpper(policy.resourceTypes[type].?namingVariant ?? '') }))
   })
   redeployment: redeployment
   alternateIdentifier: alternateIdentifier
@@ -107,7 +107,7 @@ output encodedResults string = base64(string({
   overrides: overrides
   applications: map(['finance-shr', 'hr-shr', 'finance-job'], identifier => {
     names: functionAppNames({}, identifier, context, {})
-    sharedPlan: resourceNameForType({}, 'appServicePlans', 'shr', context)
+    sharedPlan: resourceNameForType({}, 'Microsoft.Web/serverfarms', 'shr', context)
     hash: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), policy.limits.defaultUniqueLength)
   })
   locationTag: functionAppNames({ vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
@@ -115,8 +115,8 @@ output encodedResults string = base64(string({
   noLocation: noLocation
   clouds: clouds
   resourceGroups: [
-    resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: '' }))
-    resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))
+    resourceNameForType({}, 'Microsoft.Resources/resourceGroups', 'inventory', union(context, { resourceGroupName: '' }))
+    resourceNameForType({}, 'Microsoft.Resources/resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))
   ]
   endpointTokens: map(vnetNames, vnet => {
     actual: privateEndpointName('VNETID', '', '', vnet)
