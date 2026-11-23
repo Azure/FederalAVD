@@ -27,12 +27,24 @@ catch {
 
 # Get latest compute gallery image version
 $ImageDefinitionVersionsPath = ($env:imageVersionResourceId.Split('/') | Select-Object -SkipLast 1) -join '/'
-$ComputeGalleryImageVersions = Invoke-RestMethod `
+$ComputeGalleryImageVersions = @()
+$ComputeGalleryImageVersionsApi = Invoke-RestMethod `
     -Headers $Header `
     -Method 'Get' `
     -Uri $($ResourceManagerUriFixed + $ImageDefinitionVersionsPath + '?api-version=2024-03-03')
 
-$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions.value | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1
+$ComputeGalleryImageVersions += $ComputeGalleryImageVersionsApi.value
+
+while ($ComputeGalleryImageVersionsApi.nextLink) {
+    $ComputeGalleryImageVersionsApi = Invoke-RestMethod `
+        -Headers $Header `
+        -Method 'GET' `
+        -Uri $($ComputeGalleryImageVersionsApi.nextLink)
+    
+    $ComputeGalleryImageVersions += $ComputeGalleryImageVersionsApi.value
+}
+
+$LatestComputeGalleryImageVersion = $ComputeGalleryImageVersions | Sort-Object { [version]$_.name } -Descending | Select-Object -First 1
 Write-Output "Latest compute gallery image version: $($LatestComputeGalleryImageVersion.name)"
 
 # Check if the latest compute gallery image version is available and ready
@@ -50,7 +62,7 @@ while ($AggregatedState -ne 'Completed' -or $ProvisioningState -ne 'Succeeded') 
     $ProvisioningState = $ComputeGalleryImageVersion.properties.provisioningState
     Start-Sleep -Seconds 30
     $StateCounter++
-    if ($StateCounter -ge 60) {
+    if ($StateCounter -ge 60 -and ($AggregatedState -ne 'Completed' -or $ProvisioningState -ne 'Succeeded')) {
         throw [System.Exception]::new('Timeout waiting for compute gallery image version to be ready')
     }
     elseif ($AggregatedState -eq 'Failed' -or $ProvisioningState -eq 'Failed') {
@@ -78,9 +90,9 @@ catch {
     }
 }
 
+# Delete the virtual machine
 if ($StatusCode -eq 200) {
-    # Delete the virtual machine
-    if ($VirtualMachine.properties.storageProfile.imageReference.id.Split('/')[-1] -ne $LatestComputeGalleryImageVersion.name) {
+    if ($VirtualMachine.properties.storageProfile.imageReference.id -ne $LatestComputeGalleryImageVersion.id) {
         Invoke-RestMethod `
             -Headers $Header `
             -Method 'Delete' `
