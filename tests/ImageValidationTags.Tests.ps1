@@ -1,4 +1,6 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+}
 
 Describe 'Image validation resource-type tags and deployment payload' {
     BeforeAll {
