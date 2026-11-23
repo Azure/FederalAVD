@@ -27,6 +27,10 @@ param virtualMachineSize string
 param vmCustomizations artifactCustomizationType[] = []
 param vTpm bool = true
 
+var integrityMonitoringValidation = integrityMonitoring && (!secureBoot || !vTpm) && securityType != 'Standard'
+  ? fail('Integrity monitoring requires Secure Boot and vTPM to be enabled.')
+  : integrityMonitoring
+
 resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
   scope: resourceGroup(split(keyVaultResourceId, '/')[2], split(keyVaultResourceId, '/')[4])
   name: last(split(keyVaultResourceId, '/'))
@@ -70,7 +74,7 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
   }
 }
 
-module extension_GuestAttestation '../../../shared/modules/resourceModules/extensions/guestAttestation.bicep' = if (integrityMonitoring) {
+module extension_GuestAttestation '../../../shared/modules/resourceModules/extensions/guestAttestation.bicep' = if (securityType != 'Standard' && integrityMonitoringValidation) {
   params: {
     location: location
     tags: tags
