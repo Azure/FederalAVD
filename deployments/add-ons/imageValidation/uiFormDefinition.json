@@ -469,29 +469,6 @@
                   }
                 },
                 {
-                  "name": "networkAccess",
-                  "type": "Microsoft.Common.OptionsGroup",
-                  "label": "Network access",
-                  "defaultValue": "Disable public and private access",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": [
-                      {
-                        "label": "Disable public and private access",
-                        "value": "DenyAll"
-                      },
-                      {
-                        "label": "Disable public access and enable private access",
-                        "value": "AllowPrivate"
-                      },
-                      {
-                        "label": "Enable public access from all networks",
-                        "value": "AllowAll"
-                      }
-                    ]
-                  }
-                },
-                {
                   "name": "encryptionAtHost",
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Encryption At Host",
@@ -1071,30 +1048,6 @@
                   }
                 },
                 {
-                  "name": "diskAccess",
-                  "type": "Microsoft.Common.TextBox",
-                  "label": "Disk access",
-                  "defaultValue": "da-<env>-<location>-imgv",
-                  "visible": "[equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate')]",
-                  "constraints": {
-                    "required": true,
-                    "validations": [
-                      {
-                        "regex": "^[a-zA-Z0-9-_\\.]{1,80}$",
-                        "message": "Use 1-80 letters, numbers, hyphens, underscores, or periods."
-                      },
-                      {
-                        "regex": "^[a-zA-Z0-9].*$",
-                        "message": "The value must start with a letter or number."
-                      },
-                      {
-                        "regex": "^.*[a-zA-Z0-9_]$",
-                        "message": "The value must end with a letter, number, or underscore."
-                      }
-                    ]
-                  }
-                },
-                {
                   "name": "diskEncryptionSet",
                   "type": "Microsoft.Common.TextBox",
                   "label": "Disk encryption set",
@@ -1380,12 +1333,10 @@
         "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureFunctions, '')]",
         "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.keyVault, '')]",
         "bootDiagnostics": "[steps('virtualMachine').general.bootDiagnostics]",
-        "diskAccessName": "[if(equals(steps('virtualMachine').disk.networkAccess, 'AllowPrivate'), steps('namingAndTags').naming.diskAccess, '')]",
         "diskControllerType": "[steps('virtualMachine').disk.controllerType]",
         "diskEncryptionSetName": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), '', steps('namingAndTags').naming.diskEncryptionSet)]",
         "diskEncryptionType": "[if(equals(steps('virtualMachine').disk.encryptionType, 'EncryptionAtRestWithPlatformKey'), 'EncryptionAtRestWithCustomerKey', steps('virtualMachine').disk.encryptionType)]",
         "diskName": "[steps('namingAndTags').naming.disk]",
-        "diskNetworkAccess": "[steps('virtualMachine').disk.networkAccess]",
         "encryptionAtHost": "[steps('virtualMachine').disk.encryptionAtHost]",
         "endpointType": "[steps('functionApp').networkSettings.networkAccess]",
         "functionAppDelegatedSubnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]",
