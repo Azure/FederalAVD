@@ -207,8 +207,8 @@ param virtualMachineSize string
 @description('Optional. Enable vTPM for the validation VM.')
 param vTpm bool = true
 
-var integrationSubnetId = endpointType == 'private' && empty(trim(functionAppDelegatedSubnetResourceId))
-  ? fail('Private mode requires functionAppDelegatedSubnetResourceId.')
+var integrationSubnetId = contains(['private', 'service'], endpointType) && empty(trim(functionAppDelegatedSubnetResourceId))
+  ? fail('Private and service modes require functionAppDelegatedSubnetResourceId.')
   : functionAppDelegatedSubnetResourceId
 var blobDnsZoneId = endpointType == 'private' && empty(trim(azureBlobPrivateDnsZoneResourceId))
   ? fail('Private mode requires azureBlobPrivateDnsZoneResourceId.')
