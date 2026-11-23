@@ -30,6 +30,12 @@ The add-on cannot join externally managed helpers. Azure NetApp Files retains it
 domain join. See the [standard host-pool guidance](../deployments/hostpools/README.md#deployment-vm-domain-join)
 and [FSLogix Storage guidance](../deployments/add-ons/fslogixStorage/README.md#deployment).
 
+The [FSLogix Storage backup contract](../deployments/add-ons/fslogixStorage/README.md#azure-files-snapshot-backup)
+supports existing vaults or opt-in shared/dedicated vault creation with `deployFSLogixBackupVault`,
+`backupVaultScope`, name overrides, `fslogixBackupRetentionDays`, and `fslogixBackupTimeZone`.
+All shared FSLogix backup registration excludes `office-containers`; previously enrolled Office
+shares require explicit operator removal from protection.
+
 ---
 
 ## Naming Convention
@@ -44,14 +50,26 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 - How to align naming across hostpool, sharedServices, imageManagement, and add-ons
 - Named examples for six common conventions
 
+The parameter uses the shared `namingConventionConfig` type; `{}` and partial
+overrides are supported. Prefer `customToken1`/`customToken2` for static custom
+slots. Existing `freeform1`/`freeform2` properties and component names remain
+aliases; if both spellings are supplied, their values must agree. See the
+[add-on quick start](naming-convention.md#add-on-developer-quick-start) for a
+complete naming-only Bicep example. No named preset selector is currently provided.
+
+Networking also accepts this typed object. Its former `nameConvResTypeAtEnd` boolean
+has been removed; see the [Networking migration example](../deployments/networking/README.md#namingconvention)
+for the equivalent resource-type-last component order. Explicit network resource group,
+VNet and subnet names remain explicit.
+
 ---
 
 ## Standard Host-Pool Locations
 
 | Parameter | Default | Purpose |
 | --- | --- | --- |
-| `controlPlaneLocation` | Subscription deployment location | AVD control-plane and shared supporting resources |
-| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers and their naming context |
+| `controlPlaneLocation` | Subscription deployment location | AVD host pool, workspace, application groups and scaling plan |
+| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers, monitoring, Key Vaults, backup and their naming context |
 
 Both use Azure location names such as `eastus2` or `usgovvirginia`, not display
 labels or naming abbreviations. The Portal passes both selections explicitly.
@@ -211,6 +229,10 @@ preserved.
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **fslogixStorage** | `recoveryServicesVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **fslogixStorage** | `fileSharePolicyName` |
+| **fslogixStorage** | `fslogixBackupVaultResourceId` | **hostpool / automatedHostPool** | `existingFilesBackupVaultResourceId` |
+| **fslogixStorage** | `fslogixBackupPolicyName` | **hostpool / automatedHostPool** | `existingFilesBackupPolicyName` |
+| **fslogixStorage** | `fslogixBackupVaultResourceId` | **fslogixStorage** (later expansion) | `recoveryServicesVaultResourceId` |
+| **fslogixStorage** | `fslogixBackupPolicyName` | **fslogixStorage** (later expansion) | `fileSharePolicyName` |
 | **imageManagement** | `computeGalleryResourceId` | **imageBuild** | `computeGalleryResourceId` |
 | **imageManagement** | `artifactsBlobContainerUrl` | **imageBuild** | `artifactsContainerUri` |
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |

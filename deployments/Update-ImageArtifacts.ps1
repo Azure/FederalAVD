@@ -23,7 +23,7 @@ Obtain this from the imageManagement deployment output 'artifactsStorageAccountR
 Mutually exclusive with -StorageAccountName / -ResourceGroupName.
 
 Example:
-  /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsuse2abc123
+  /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsabc123use2
 
 .PARAMETER StorageAccountName
 The name of the image management artifacts storage account.
@@ -84,29 +84,29 @@ Use a path on a high-performance drive when processing large artifact sets.
 
 .EXAMPLE
 # Standard update using resource ID
-.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsuse2abc123"
+.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsabc123use2"
 
 .EXAMPLE
 # Standard update using storage account name and resource group
-.\Update-ImageArtifacts.ps1 -StorageAccountName "saimgassetsuse2abc123" -ResourceGroupName "rg-avd-image-management-use2"
+.\Update-ImageArtifacts.ps1 -StorageAccountName "saimgassetsabc123use2" -ResourceGroupName "rg-avd-image-management-use2"
 
 .EXAMPLE
 # Air-gapped update - skip internet downloads, just re-package and upload existing artifacts
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsuse2abc123" `
+    -StorageAccountName "saimgassetsabc123use2" `
     -ResourceGroupName "rg-avd-image-management-use2" `
     -SkipDownloadingNewSources
 
 .EXAMPLE
 # Clean upload - delete existing blobs first, then upload fresh
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsuse2abc123" `
+    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsabc123use2" `
     -DeleteExistingBlobs
 
 .EXAMPLE
 # Merge additional downloads automatically when customer\parameters\imageManagement\downloads.json exists
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsuse2abc123" `
+    -StorageAccountName "saimgassetsabc123use2" `
     -ResourceGroupName "rg-avd-image-management-use2"
 
 .EXAMPLE

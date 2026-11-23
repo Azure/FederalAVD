@@ -46,13 +46,8 @@ Describe 'Explicit standard host-pool locations' {
         $template.resources.controlPlane.properties.parameters.virtualMachinesRegion.value | Should -Be "[parameters('virtualMachinesLocation')]"
     }
 
-    It 'uses the independent control-plane location for shared resources and the AVD control plane' {
-        foreach ($module in @(
-            'sharedMonitoring', 'sharedFilesBackup', 'sharedOperationsResourceGroup',
-            'sharedMonitoringResourceGroup', 'controlPlaneResourceGroup'
-        )) {
-            $template.resources.$module.properties.parameters.location.value | Should -Be "[parameters('controlPlaneLocation')]"
-        }
+    It 'keeps only AVD control-plane placement tied to the control-plane location' {
+        $template.resources.controlPlaneResourceGroup.properties.parameters.location.value | Should -Be "[parameters('controlPlaneLocation')]"
         $template.resources.sharedAvdWorkspace.properties.parameters.workspaceLocation.value | Should -Be "[parameters('controlPlaneLocation')]"
         $template.resources.controlPlane.properties.parameters.controlPlaneRegion.value | Should -Be "[parameters('controlPlaneLocation')]"
     }
@@ -75,6 +70,68 @@ Describe 'Explicit standard host-pool locations' {
             $sample = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
             [string]::IsNullOrWhiteSpace($sample.parameters.virtualMachinesLocation.value) | Should -Be $false
             $sample.parameters.virtualMachinesLocation.value | Should -Be $sample.parameters.controlPlaneLocation.value
+        }
+    }
+
+    Describe 'Host-pool shared resources follow the storage region' {
+        BeforeAll {
+            . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
+        }
+
+        It 'places monitoring, Key Vaults and Files backup with storage in <Name>' -TestCases @(
+            @{ Name = 'standard'; Path = 'deployments\hostpools\hostpool.json'; LocationParameter = 'virtualMachinesLocation' }
+            @{ Name = 'automated'; Path = 'deployments\automatedHostPools\automatedHostPool.json'; LocationParameter = 'location' }
+        ) {
+            param($Name, $Path, $LocationParameter)
+            $template = Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw | ConvertFrom-Json -Depth 100
+            $vault = $template.resources.sharedFilesBackup
+            $vault.properties.parameters.location.value | Should -Be "[parameters('$LocationParameter')]"
+            $vault.properties.parameters.resourceGroupOperations.value |
+                Should -Be $(if ($Name -eq 'standard') { "[variables('sharedOperationsResourceGroupName')]" } else { "[variables('naming').sharedResourceGroupOperations]" })
+            $vault.properties.parameters.vaultName.value | Should -Be "[variables('naming').sharedRecoveryServicesVaultNameFSLogix]"
+            $group = $template.resources.sharedOperationsResourceGroup
+            $group.properties.parameters.location.value | Should -Be "[parameters('$LocationParameter')]"
+            $group.properties.parameters.name.value |
+                Should -Be $(if ($Name -eq 'standard') { "[variables('sharedOperationsResourceGroupName')]" } else { "[variables('naming').sharedResourceGroupOperations]" })
+            $group.condition | Should -Be "[variables('deploySharedOperationsResourceGroup')]"
+            $vault.dependsOn | Should -Contain 'sharedOperationsResourceGroup'
+            $template.variables.deploySharedOperationsResourceGroup |
+                Should -Be "[or(variables('deploySharedKeyVaults'), variables('deploySharedFilesBackup'))]"
+            ($template.resources.PSObject.Properties.Name -contains 'filesBackupResourceGroup') | Should -Be $false
+            foreach ($module in @('sharedMonitoring', 'sharedMonitoringResourceGroup', 'sharedKeyVaults')) {
+                $template.resources.$module.properties.parameters.location.value | Should -Be "[parameters('$LocationParameter')]"
+            }
+            $monitoring = $template.resources.sharedMonitoring.properties.template
+            foreach ($module in @('logAnalyticsWorkspace', 'dataCollectionEndpoint', 'avdInsightsDataCollectionRule')) {
+                $monitoring.resources.$module.properties.parameters.location.value | Should -Be "[parameters('location')]"
+            }
+            $keyVaults = $template.resources.sharedKeyVaults.properties.template
+            foreach ($module in @('secretsKeyVault', 'encryptionKeyVault')) {
+                $keyVaults.resources.$module.properties.parameters.location.value | Should -Be "[parameters('location')]"
+            }
+            if ($Name -eq 'standard') {
+                $group.subscriptionId | Should -Be $vault.subscriptionId
+            }
+            foreach ($backup in @($false, $true)) {
+                foreach ($keyVaults in @($false, $true)) {
+                    $values = @{
+                        deploySharedFilesBackup = $backup
+                        deploySharedKeyVaults = $keyVaults
+                    }
+                    $expression = $template.variables.deploySharedOperationsResourceGroup.Replace('variables(', 'steps(')
+                    $createGroup = Invoke-TestNamingFormExpression $expression $values
+                    $createGroup | Should -Be ($backup -or $keyVaults)
+                }
+            }
+        }
+
+        It 'passes the selected standalone Shared Services location explicitly to both Key Vaults' {
+            $template = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\sharedServices\sharedServices.json') -Raw | ConvertFrom-Json -Depth 100
+            $template.resources.keyVaults.properties.parameters.location.value | Should -Be "[parameters('location')]"
+            foreach ($module in @('secretsKeyVault', 'encryptionKeyVault')) {
+                $template.resources.keyVaults.properties.template.resources.$module.properties.parameters.location.value |
+                    Should -Be "[parameters('location')]"
+            }
         }
     }
 }

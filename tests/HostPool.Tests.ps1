@@ -43,7 +43,7 @@ BeforeAll {
     $automatedBicepPath = Join-Path $repoRoot 'deployments\automatedHostPools\automatedHostPool.bicep'
     $standardCorePath = $standardBicepPath
     $automatedCorePath = $automatedBicepPath
-    $hostPoolNamingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
+    $hostPoolNamingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep'
     $standardControlPlanePath = Join-Path $repoRoot 'deployments\hostpools\modules\control-plane\controlPlane.bicep'
     $automatedControlPlanePath = Join-Path $repoRoot 'deployments\automatedHostPools\modules\controlPlane.bicep'
     $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -675,7 +675,11 @@ Describe 'FSLogix Storage add-on Portal initialization' {
     }
 
     It 'retains canonical deployment defaults and the object-valued naming parameter' {
-        $template.parameters.namingConvention.type | Should -Be 'object'
+        $schema = $template.parameters.namingConvention
+        while ($schema.'$ref') {
+            $schema = $template.definitions.($schema.'$ref'.Split('/')[-1])
+        }
+        $schema.type | Should -Be 'object'
         ($template.parameters.namingConvention.defaultValue | ConvertTo-Json -Compress) |
             Should -Be ($policy.defaults | ConvertTo-Json -Compress)
         foreach ($name in $form.view.outputs.parameters.PSObject.Properties.Name) {
@@ -867,7 +871,7 @@ Describe 'Standard host-pool optional session host naming overrides' {
 Describe 'Session host resource naming defaults' {
     It 'uses stable shared defaults independent of resource type abbreviations' {
         $repoRoot = Split-Path -Parent $PSScriptRoot
-        $sharedNaming = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep') -Raw
+        $sharedNaming = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep') -Raw
 
         $sharedNaming | Should -Match 'virtualMachineNameConv:.*: namingPolicy.patterns.virtualMachine'
         $sharedNaming | Should -Match 'virtualMachineDiskNameConv:.*: namingPolicy.patterns.osDisk'

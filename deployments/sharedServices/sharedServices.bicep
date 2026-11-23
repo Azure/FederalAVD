@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
-import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, shortScopedUnique, privateEndpointPattern, privateEndpointNicPattern } from '../shared/modules/orchestration/naming/naming.bicep'
+import { sharedServicesNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys the AVD Key Vault prerequisites into the operations resource group: a Secrets Key Vault for
 // credentials (domain join, VM admin) and an Encryption Key Vault for Customer Managed Key (CMK) encryption.
@@ -245,9 +245,8 @@ param tags object = {}
 //   purpose      — REQUIRED. Two Key Vaults are deployed (secrets and encryption). Without 'purpose' they
 //                  produce identical names and the deployment fails.
 //   resourceType — Strongly recommended. Without it resource names carry no type identifier.
-//   location     — Optional. When omitted the location abbreviation is still added to unique-string seeds
-//                  so cross-region deployments produce distinct Key Vault names, but the location segment
-//                  will not appear in resource names.
+//   location     - Optional. The full region always participates in the common scope hash;
+//                  omitting this component only removes the readable location segment.
 //   workload, freeform1, environment, freeform2 — Optional static tokens.
 // Key properties:
 //   components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
@@ -260,7 +259,7 @@ param tags object = {}
 // This object is produced automatically when deploying via the Azure Portal UI.
 // When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.
 @description('Optional. Shared naming-convention overrides. Include purpose to distinguish Secrets and Encryption vaults; omitted properties retain shared defaults.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -277,9 +276,6 @@ param encryptionKeyVaultNameOverride string = ''
 
 // ── Naming Convention ──────────────────────────────────────────────────────────
 
-// Account for air-gapped cloud location prefixes (us-gov, us-sec, etc.)
-var identifier = namingPolicy.resources.operationsResourceGroup.purpose[0]
-
 var effectiveLogAnalyticsWorkspaceSubscription = empty(logAnalyticsWorkspaceSubscriptionId)
   ? subscription().subscriptionId
   : logAnalyticsWorkspaceSubscriptionId
@@ -288,89 +284,33 @@ var createEncryptionKeyVault = deployEncryptionKeyVault && empty(existingEncrypt
 var createFSLogixBackupVault = deployFSLogixBackupVault && empty(existingFSLogixBackupVaultResourceId)
 var deployOperationsResourceGroup = createSecretsKeyVault || createEncryptionKeyVault || createFSLogixBackupVault
 
-var locationAbbreviation = regionAbbreviation(location, environment().name)
+var naming = sharedServicesNames(namingConvention, {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  location: location
+}, {
+  consolidatedResourceGroupName: consolidatedResourceGroupName
+  secretsKeyVaultName: secretsKeyVaultNameOverride
+  encryptionKeyVaultName: encryptionKeyVaultNameOverride
+  controlPlaneResourceGroupName: avdControlPlaneResourceGroupNameOverride
+  workspaceName: avdWorkspaceNameOverride
+  globalFeedResourceGroupName: globalFeedResourceGroupNameOverride
+  globalFeedWorkspaceName: globalFeedWorkspaceNameOverride
+})
 
-// ── Naming convention ────────────────────────────────────────────────────────
-// Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
-// Override any component via the namingConvention parameter.
-
-var cnv_loc      = !empty(namingConvention.?locationAbbreviation ?? '')
-  ? namingConvention.locationAbbreviation
-  : locationAbbreviation
-var cnv_rtCodes = resolveConvention(namingConvention).resourceTypeCodes
-
-// RT is last only when resourceType is explicitly the last non-'none' component.
-var cnv_rtFirst = resourceTypeFirst(namingConvention)
-
-var customRgName = resourceName(namingConvention, 'operationsResourceGroup', cnv_loc, identifier, '')
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Resource group and resource naming now always use buildCustomName via cnv_components.
-
-// Private endpoint naming conventions — follows the same resource-type-first/last convention as all other resources
-var privateEndpointNameConv = privateEndpointPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints)
-
-var privateEndpointNICNameConv = privateEndpointNicPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints, cnv_rtCodes.networkInterfaces)
-
-var operationsResourceGroupName = !empty(consolidatedResourceGroupName) ? consolidatedResourceGroupName : customRgName
-
-// Monitoring resource group and Log Analytics Workspace name - only used when deployMonitoring is true.
-var generatedMonitoringResourceGroupName = resourceName(namingConvention, 'monitoringResourceGroup', cnv_loc, identifier, '')
-
-var monitoringResourceGroupName = !empty(consolidatedResourceGroupName)
-  ? consolidatedResourceGroupName
-  : generatedMonitoringResourceGroupName
-
-// No purpose component - matches the single-workspace naming the host pool deployment's inline
-// monitoring module produces, so both paths agree on the same Log Analytics Workspace name.
-var logAnalyticsWorkspaceName = resourceName(namingConvention, 'logAnalyticsWorkspace', cnv_loc, identifier, '')
-
-// No purpose component - matches the host pool deployment's inline monitoring module naming.
-var dataCollectionEndpointName = resourceName(namingConvention, 'dataCollectionEndpoint', cnv_loc, identifier, '')
-
-var generatedControlPlaneResourceGroupName = resourceName(namingConvention, 'controlPlaneResourceGroup', cnv_loc, identifier, '')
-
-var generatedAvdWorkspaceName = resourceName(namingConvention, 'workspace', cnv_loc, identifier, '')
-
-var generatedGlobalFeedResourceGroupName = resourceName(namingConvention, 'globalFeedResourceGroup', '', identifier, '')
-
-var generatedGlobalFeedWorkspaceName = resourceName(namingConvention, 'globalFeedWorkspace', '', identifier, '')
-
-var controlPlaneResourceGroupName = !empty(consolidatedResourceGroupName)
-  ? consolidatedResourceGroupName
-  : !empty(avdControlPlaneResourceGroupNameOverride)
-      ? avdControlPlaneResourceGroupNameOverride
-      : generatedControlPlaneResourceGroupName
-var avdWorkspaceName = !empty(avdWorkspaceNameOverride) ? avdWorkspaceNameOverride : generatedAvdWorkspaceName
-var globalFeedResourceGroupName = !empty(globalFeedResourceGroupNameOverride)
-  ? globalFeedResourceGroupNameOverride
-  : generatedGlobalFeedResourceGroupName
-var globalFeedWorkspaceName = !empty(globalFeedWorkspaceNameOverride)
-  ? globalFeedWorkspaceNameOverride
-  : generatedGlobalFeedWorkspaceName
-
-// Stable 6-char unique string seeded on subscription + resource group name.
-// Add location to the seed when the convention has no location component,
-// so deployments to different regions don't produce identical Key Vault names.
-// CAF fallback already embeds the location abbreviation in the name itself.
-var uniqueStringOperations = shortScopedUnique(namingConvention, subscription().subscriptionId, operationsResourceGroupName, location)
-
-var effectiveSecretsKeyVaultNameOverride = !empty(secretsKeyVaultNameOverride)
-  ? secretsKeyVaultNameOverride
-  : namingConvention.?secretsKeyVaultNameOverride ?? ''
-var effectiveEncryptionKeyVaultNameOverride = !empty(encryptionKeyVaultNameOverride)
-  ? encryptionKeyVaultNameOverride
-  : namingConvention.?encryptionKeyVaultNameOverride ?? ''
-
-// Unique string is embedded in the purpose slot so the final name matches the original CAF pattern:
-// kv-avd-sec-{unique}-use  (RT-first)  /  avd-sec-{unique}-use-kv  (RT-last)
-// kvSanitize strips underscores/dots — the result always uses hyphens regardless of delimiter.
-var secretsKeyVaultName = !empty(effectiveSecretsKeyVaultNameOverride) ? effectiveSecretsKeyVaultNameOverride : resourceName(namingConvention, 'secretsKeyVault', cnv_loc, identifier, uniqueStringOperations)
-
-var encryptionKeyVaultName = !empty(effectiveEncryptionKeyVaultNameOverride) ? effectiveEncryptionKeyVaultNameOverride : resourceName(namingConvention, 'encryptionKeyVault', cnv_loc, identifier, uniqueStringOperations)
-
-var fslogixBackupVaultName = resourceName(namingConvention, 'filesBackupVault', cnv_loc, identifier, '')
+var operationsResourceGroupName = naming.operationsResourceGroupName
+var monitoringResourceGroupName = naming.monitoringResourceGroupName
+var controlPlaneResourceGroupName = naming.controlPlaneResourceGroupName
+var avdWorkspaceName = naming.avdWorkspaceName
+var globalFeedResourceGroupName = naming.globalFeedResourceGroupName
+var globalFeedWorkspaceName = naming.globalFeedWorkspaceName
+var secretsKeyVaultName = naming.secretsKeyVaultName
+var encryptionKeyVaultName = naming.encryptionKeyVaultName
+var fslogixBackupVaultName = naming.fslogixBackupVaultName
+var logAnalyticsWorkspaceName = naming.logAnalyticsWorkspaceName
+var dataCollectionEndpointName = naming.dataCollectionEndpointName
+var privateEndpointNameConv = naming.privateEndpointNameConv
+var privateEndpointNICNameConv = naming.privateEndpointNICNameConv
 
 // ── Resource Group ─────────────────────────────────────────────────────────────
 
@@ -467,6 +407,7 @@ module keyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bicep' = {
   scope: subscription()
   params: {
     resourceGroupName: operationsResourceGroupName
+    location: location
     deploySecretsKeyVault: createSecretsKeyVault
     secretsKeyVaultName: secretsKeyVaultName
     secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete

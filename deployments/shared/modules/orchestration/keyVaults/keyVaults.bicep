@@ -8,6 +8,8 @@ import { publicNetworkAccessMode, resolveNetworkAccess } from '../networking/fun
 // The caller is responsible for creating the resource group before calling this module.
 @description('Required. Name of the existing target resource group in the deployment subscription.')
 param resourceGroupName string
+@description('Required. Azure region for both vaults, independent of resource group metadata location. Private endpoints use their subnet virtual network region.')
+param location string
 @description('Optional. Resource ID of an existing Key Vault private DNS zone; empty omits the private endpoint DNS zone group.')
 param azureKeyVaultPrivateDnsZoneResourceId string = ''
 @description('Optional. Whether to deploy the credential vault and any supplied nonempty credential secrets.')
@@ -65,7 +67,7 @@ param paasPublicNetworkAccess publicNetworkAccessMode = 'Auto'
 var privateEndpointVnetName = !empty(privateEndpointSubnetResourceId) && privateEndpoint
   ? split(privateEndpointSubnetResourceId, '/')[8]
   : ''
-import { privateEndpointName } from '../naming/naming.bicep'
+import { privateEndpointName } from '../naming/internal.bicep'
 
 var secretList = union(
   !empty(domainJoinUserPassword) ? [{ name: 'DomainJoinUserPassword', value: domainJoinUserPassword }] : [],
@@ -121,6 +123,7 @@ module secretsKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' = if
   scope: resourceGroup(resourceGroupName)
   params: {
     name: secretsKeyVaultName
+    location: location
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'standard'
     enableSoftDelete: secretsKeyVaultEnableSoftDelete
@@ -167,6 +170,7 @@ module encryptionKeyVault '../../resourceModules/keyVault/vaults/deploy.bicep' =
   scope: resourceGroup(resourceGroupName)
   params: {
     name: encryptionKeyVaultName
+    location: location
     tags: tags[?'Microsoft.KeyVault/vaults'] ?? {}
     sku: 'premium'
     enableSoftDelete: true

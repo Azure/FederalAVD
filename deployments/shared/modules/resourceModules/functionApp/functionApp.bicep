@@ -1,5 +1,5 @@
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../../orchestration/networking/functions.bicep'
-import { privateEndpointName } from '../../orchestration/naming/naming.bicep'
+import { privateEndpointName } from '../../orchestration/naming/internal.bicep'
 
 @description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''

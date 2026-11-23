@@ -15,6 +15,7 @@ var serviceCases = filter(range(0, length(cases)), i => i % 2 == 0)
 module vaults '../../deployments/shared/modules/orchestration/keyVaults/keyVaults.bicep' = [for i in serviceCases: {
   params: {
     resourceGroupName: 'network-tests'
+    location: 'eastus'
     secretsKeyVaultName: 'kv-secrets-${i}'
     encryptionKeyVaultName: 'kv-encryption-${i}'
     paasPublicNetworkAccess: cases[i].mode

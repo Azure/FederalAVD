@@ -1,5 +1,5 @@
 metadata name = 'FSLogix file share backup registration'
-metadata description = 'Registers existing Azure Files storage accounts and every requested share with an existing Recovery Services vault and backup policy in the deployment resource group.'
+metadata description = 'Registers existing Azure Files storage accounts and requested non-Office shares with an existing Recovery Services vault and backup policy.'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FSLogix Azure Files Backup Registration
@@ -12,9 +12,9 @@ metadata description = 'Registers existing Azure Files storage accounts and ever
 param vaultName string
 @description('Required. Azure region for the resources deployed by this module.')
 param location string
-@description('Required. Array of share name strings to create or register on every supplied storage account.')
+@description('Required. Shares to protect on every supplied account. office-containers is always excluded.')
 param fileShares array
-@description('Required. Array of existing storage account resource ID strings; every fileShares entry is protected on each account.')
+@description('Required. Existing storage account resource IDs; eligible shares are protected on each account.')
 param storageAccountResourceIds array
 @description('Optional. Name of the existing Azure Files backup policy in the selected Recovery Services vault.')
 param fileSharePolicyName string = 'filesharepolicy'
@@ -24,11 +24,12 @@ param tags object = {}
 param hostPoolResourceId string = ''
 
 var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {}
+var backupFileShares = filter(fileShares, shareName => toLower(shareName) != 'office-containers')
 
 // ─── Protection Containers ─────────────────────────────────────────────────────
 @batchSize(1)
 resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2024-04-01' = [
-  for saId in storageAccountResourceIds: {
+  for saId in storageAccountResourceIds: if (!empty(backupFileShares)) {
     name: '${vaultName}/Azure/storagecontainer;Storage;${split(saId, '/')[4]};${last(split(saId, '/'))}'
     properties: {
       friendlyName: last(split(saId, '/'))
@@ -40,9 +41,8 @@ resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/p
   }
 ]
 
-// Flatten (storageAccount × fileShare) into a single array so every share on every
-// storage account gets its own protected item, regardless of share count.
-var combos = flatten(map(range(0, length(storageAccountResourceIds)), saIdx => map(fileShares, shareName => {
+// Excluding Office shares here also covers callers that supply both container types.
+var combos = flatten(map(range(0, length(storageAccountResourceIds)), saIdx => map(backupFileShares, shareName => {
   saId: storageAccountResourceIds[saIdx]
   rgName: split(storageAccountResourceIds[saIdx], '/')[4]
   saName: last(split(storageAccountResourceIds[saIdx], '/'))!

@@ -10,6 +10,7 @@ Describe 'Shared naming and module metadata contracts' {
         $compiledModules = @{}
         $modulePaths = @{
             NamingFunctions = 'deployments\shared\modules\orchestration\naming\naming.bicep'
+            NamingInternals = 'deployments\shared\modules\orchestration\naming\internal.bicep'
             HostPoolNaming = 'tests\fixtures\naming-bundles.bicep'
             Replacer = 'deployments\add-ons\sessionHostReplacer\main.bicep'
             FunctionApp = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
@@ -28,19 +29,20 @@ Describe 'Shared naming and module metadata contracts' {
             }
             $compiledModules[$module] = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
         }
-        $vectorsPath = Join-Path $repoRoot 'tests\fixtures\naming.bicepparam'
-        $vectorsOutput = Join-Path $testOutputDirectory 'vectors.json'
-        & az bicep build-params --file $vectorsPath --outfile $vectorsOutput
-        if ($LASTEXITCODE -ne 0) {
-            throw "Bicep naming-vector compilation failed: $vectorsPath"
+        foreach ($relative in @(
+            'deployments\shared\data\resourceAbbreviations.json'
+            'deployments\shared\data\locations.json'
+            $modulePaths.NamingFunctions
+            $modulePaths.NamingInternals
+            'tests\fixtures\naming-vectors.bicep'
+            'tests\fixtures\naming-policy.bicep'
+        )) {
+            $destination = Join-Path $testOutputDirectory $relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $destination
         }
-        $vectors = (Get-Content -LiteralPath $vectorsOutput -Raw | ConvertFrom-Json).parameters
-        $policyVectorsOutput = Join-Path $testOutputDirectory 'policy-vectors.json'
-        & az bicep build-params --file (Join-Path $repoRoot 'tests\fixtures\naming-policy.bicepparam') --outfile $policyVectorsOutput
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Bicep policy-vector compilation failed.'
-        }
-        $policyVectors = (Get-Content -LiteralPath $policyVectorsOutput -Raw | ConvertFrom-Json).parameters
+        $vectors = Invoke-TestNamingVectors -TemplateFile (Join-Path $testOutputDirectory 'tests\fixtures\naming-vectors.bicep')
+        $policyVectors = Invoke-TestNamingVectors -TemplateFile (Join-Path $testOutputDirectory 'tests\fixtures\naming-policy.bicep')
         $policy = Get-TestNamingPolicy
         $namingForms = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter 'uiFormDefinition.json' -Recurse |
             ForEach-Object {
@@ -66,14 +68,12 @@ Describe 'Shared naming and module metadata contracts' {
         @{ Name = 'defaultName'; Expected = 'rg-avd-desktop-eus' }
         @{ Name = 'reversedName'; Expected = 'avd-sec-abc123-va-kv' }
         @{ Name = 'omittedComponents'; Expected = 'rg-eus' }
-        @{ Name = 'emptyComponents'; Expected = '' }
-        @{ Name = 'emptyValues'; Expected = '' }
         @{ Name = 'repeatedComponents'; Expected = 'rg-rg-desktop' }
         @{ Name = 'emptyDelimiter'; Expected = 'stavdimages' }
         @{ Name = 'customComponents'; Expected = 'org_prod_avd_desktop_eus_01_rg' }
-        @{ Name = 'preservedWhitespace'; Expected = ' desktop ' }
+        @{ Name = 'preservedCase'; Expected = 'Desktop' }
         @{ Name = 'strippedSeparators'; Expected = 'Abcde' }
-        @{ Name = 'sanitizedVault'; Expected = 'Ab-c-d-e' }
+        @{ Name = 'sanitizedVault'; Expected = 'Ab-c-d-e-sec-abc123' }
     ) {
         param($Name, $Expected)
 
@@ -123,14 +123,17 @@ Describe 'Shared naming and module metadata contracts' {
         $app.resources.privateDnsZoneGroups_storage.name | Should -Match "variables\('storagePrivateEndpointNames'\)"
     }
 
-    It 'documents every exported naming function, type and policy object' {
+    It 'exposes six documented public naming functions and one shared convention type without policy internals' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.NamingFunctions) -Raw
         $documentedExports = [regex]::Matches($source, "(?m)^@export\(\)\r?\n@description\('[^\r\n]+'\)\r?\n(?:func|var|type) (\w+)")
         @($documentedExports).Count | Should -Be ([regex]::Matches($source, '(?m)^@export\(\)').Count)
-        foreach ($name in @('resourceName', 'resourceNameForType', 'functionAppNames', 'hostPoolNames', 'fslogixNames', 'hostPoolNamingContext', 'hostPoolNamingResult', 'fslogixNamingContext', 'fslogixNamingResult', 'namingContext', 'functionAppNamingResult', 'namingPolicy', 'osDiskNamePattern', 'imageStorageName', 'namePattern')) {
+        @($documentedExports).Count | Should -Be 7
+        [regex]::Matches($source, '(?m)^func ').Count | Should -Be 6
+        @($documentedExports | Where-Object { $_.Groups[1].Value -eq 'namingConventionConfig' }).Count | Should -Be 1
+        foreach ($name in @('resourceNameForType', 'functionAppNames', 'hostPoolNames', 'fslogixNames', 'sharedServicesNames', 'imageManagementNames')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should -Be 1
         }
-        foreach ($name in @('buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'deploymentVmName', 'scopedUnique', 'privateEndpointVnetToken', 'fslogixStoragePrefix')) {
+        foreach ($name in @('resourceName', 'namingPolicy', 'resolveConvention', 'regionAbbreviation', 'shortScopedUnique', 'imageStorageName', 'namePattern', 'buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'deploymentVmName', 'scopedUnique', 'privateEndpointVnetToken', 'fslogixStoragePrefix')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should -Be 0
         }
     }
@@ -140,6 +143,109 @@ Describe 'Shared naming and module metadata contracts' {
         $variables = $compiledModules.ScalarPattern.variables | ConvertTo-Json -Depth 100 -Compress
         $variables | Should -Match 'SHNAME-osdisk'
         $variables | Should -Not -Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
+    }
+
+    It 'publishes a sealed optional convention schema while retaining legacy Portal keys' {
+        $schema = $compiledModules.Replacer.parameters.namingConvention
+        while ($schema.'$ref') {
+            $schema = $compiledModules.Replacer.definitions.($schema.'$ref'.Split('/')[-1])
+        }
+        $schema.type | Should -Be 'object'
+        $schema.additionalProperties | Should -Be $false
+        foreach ($key in @('customToken1', 'customToken2', 'freeform1', 'freeform2')) {
+            $schema.properties.$key.type | Should -Be 'string'
+        }
+        foreach ($form in $namingForms) {
+            $binding = [string]$form.Form.view.outputs.parameters.namingConvention
+            foreach ($match in [regex]::Matches($binding, '"([A-Za-z0-9_]+)"\s*:')) {
+                $prefix = $binding.Substring(0, $match.Index)
+                $depth = [regex]::Matches($prefix, '\{').Count - [regex]::Matches($prefix, '\}').Count
+                if ($depth -eq 1) {
+                    ($schema.properties.PSObject.Properties.Name -contains $match.Groups[1].Value) |
+                        Should -Be $true -Because "$($form.Path) emits top-level convention key $($match.Groups[1].Value)"
+                }
+                else {
+                    $depth | Should -Be 2
+                    ($policy.resourceTypes.PSObject.Properties.Name -contains $match.Groups[1].Value) |
+                        Should -Be $true -Because 'nested keys are resource-type abbreviation overrides'
+                }
+            }
+        }
+        $schema.required | Should -BeNullOrEmpty
+    }
+
+    It 'compiles the complete expandable <Example> quick start without an adapter file' -TestCases @(
+        @{ Example = 'Automation Account'; Module = 'automationAccount'; Override = 'automationAccountNameOverride' }
+        @{ Example = 'Function App'; Module = 'app'; Override = 'functionAppNameOverride' }
+    ) {
+        param($Example, $Module, $Override)
+
+        $guide = Get-Content -LiteralPath (Join-Path $repoRoot 'docs\naming-convention.md') -Raw
+        $quickStart = [regex]::Match($guide, '(?s)## Add-on developer quick start\r?\n(.*?)\r?\n---').Groups[1].Value
+        $examples = @([regex]::Matches($quickStart, '(?s)<details>\s*<summary>(.*?)</summary>(.*?)</details>'))
+        $examples.Count | Should -Be 2
+        $exampleBlock = @($examples | Where-Object { $_.Groups[1].Value.StartsWith("${Example}:") })
+        $exampleBlock.Count | Should -Be 1
+        $snippets = @([regex]::Matches($exampleBlock[0].Groups[2].Value, '(?s)```bicep\r?\n(.*?)```'))
+        $snippets.Count | Should -Be 1
+        $snippet = $snippets[0].Groups[1].Value
+        $snippet | Should -Not -BeNullOrEmpty
+        $snippet | Should -Match 'param namingConvention namingConventionConfig = \{\}'
+        $snippet | Should -Match "param $Override string = ''"
+        $snippet | Should -Match "'<purpose>'"
+        $snippet | Should -Match 'resourceGroup\(\)\.name'
+        $directory = Join-Path $testOutputDirectory "deployments\add-ons\quickStart\$Module"
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+        $documentedDirectory = Join-Path $repoRoot 'deployments\add-ons\quickStart'
+        $snippet = [regex]::Replace($snippet, "(?m)(import \{[^\r\n]+\} from |module \w+ )'([^']+)'", {
+            param($match)
+
+            $source = [IO.Path]::GetFullPath((Join-Path $documentedDirectory $match.Groups[2].Value))
+            Test-Path -LiteralPath $source | Should -Be $true
+            $relative = [IO.Path]::GetRelativePath($directory, $source).Replace('\', '/')
+            "$($match.Groups[1].Value)'$relative'"
+        })
+        $fixture = Join-Path $directory 'main.bicep'
+        [IO.File]::WriteAllText($fixture, $snippet)
+        $compiled = Join-Path $directory 'main.json'
+        & az bicep build --file $fixture --outfile $compiled
+        $LASTEXITCODE | Should -Be 0
+        $template = Get-Content -LiteralPath $compiled -Raw | ConvertFrom-Json
+        $template.parameters.namingConvention.defaultValue | Should -Not -BeOfType [string]
+        $moduleParameters = $template.resources.$Module.properties.parameters
+        if ($Example -eq 'Automation Account') {
+            $template.variables.names.automationAccountName | Should -Match "parameters\('automationAccountNameOverride'\)"
+            $template.variables.names.automationAccountName | Should -Match "'Microsoft\.Automation/automationAccounts'"
+            $template.variables.names.logAnalyticsWorkspaceName | Should -Match "parameters\('logAnalyticsWorkspaceNameOverride'\)"
+            $template.variables.names.logAnalyticsWorkspaceName | Should -Match "'Microsoft\.OperationalInsights/workspaces'"
+            $moduleParameters.automationAccountName.value | Should -Be "[variables('names').automationAccountName]"
+            $template.resources.workspace.properties.parameters.name.value | Should -Be "[variables('names').logAnalyticsWorkspaceName]"
+            $moduleParameters.logAnalyticsWorkspaceResourceId.value | Should -Match "reference\('workspace'\)\.outputs\.resourceId"
+            $template.resources.automationAccount.dependsOn | Should -Contain 'workspace'
+            $template.outputs.automationAccountResourceId.value | Should -Match "reference\('automationAccount'\)"
+            $template.outputs.logAnalyticsWorkspaceResourceId.value | Should -Match "reference\('workspace'\)"
+        }
+        else {
+            $template.variables.names | Should -Match "parameters\('functionAppNameOverride'\)"
+            foreach ($key in @('functionAppName', 'storageAccountName', 'applicationInsightsName', 'privateEndpointNameConv', 'privateEndpointNICNameConv')) {
+                $moduleParameters.$key.value | Should -Be "[variables('names').$key]"
+            }
+        }
+    }
+
+    It 'rejects invalid typed convention defaults at compilation: <Name>' -TestCases @(
+        @{ Name = 'wrong property type'; Expression = '{ workload: 42 }' }
+        @{ Name = 'misspelled property'; Expression = "{ worklod: 'avd' }" }
+        @{ Name = 'unknown component'; Expression = "{ components: ['purpose', 'unknown'] }" }
+        @{ Name = 'wrong abbreviation type'; Expression = '{ resourceTypeCodes: { keyVaults: 42 } }' }
+    ) {
+        param($Name, $Expression)
+
+        $fixture = Join-Path $testOutputDirectory 'tests\fixtures\invalid-convention.bicep'
+        [IO.File]::WriteAllText($fixture, "import { namingConventionConfig } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'`nparam namingConvention namingConventionConfig = $Expression`noutput convention object = namingConvention")
+        $raw = @(& az bicep build --file $fixture --outfile (Join-Path $testOutputDirectory 'invalid-convention.json') 2>&1)
+        $LASTEXITCODE | Should -Not -Be 0
+        ($raw -join [Environment]::NewLine) | Should -Match 'BCP'
     }
 
     It 'does not embed the policy catalog or generic naming functions in small consumers' {
@@ -160,8 +266,8 @@ Describe 'Shared naming and module metadata contracts' {
         @{ Path = 'deployments\automatedHostPools\automatedHostPool.bicep'; Functions = @('hostPoolNames') }
         @{ Path = 'deployments\hostpoolPoc\hostpoolPoc.bicep'; Functions = @('hostPoolNames') }
         @{ Path = 'deployments\add-ons\fslogixStorage\main.bicep'; Functions = @('fslogixNames') }
-        @{ Path = 'deployments\sharedServices\sharedServices.bicep'; Functions = @('resourceName', 'shortScopedUnique') }
-        @{ Path = 'deployments\imageManagement\imageManagement.bicep'; Functions = @('resourceName', 'imageStorageName', 'validateImageStoragePrefix') }
+        @{ Path = 'deployments\sharedServices\sharedServices.bicep'; Functions = @('sharedServicesNames') }
+        @{ Path = 'deployments\imageManagement\imageManagement.bicep'; Functions = @('imageManagementNames') }
         @{ Path = 'deployments\add-ons\sessionHostReplacer\main.bicep'; Functions = @('functionAppNames', 'resourceNameForType') }
         @{ Path = 'deployments\networking\networking.bicep'; Functions = @('resourceName') }
         @{ Path = 'deployments\imageBuild\imageBuild.bicep'; Functions = @('imageBuildRunId', 'namePattern') }
@@ -179,7 +285,7 @@ Describe 'Shared naming and module metadata contracts' {
         param($Path, $Functions)
 
         $source = Get-Content -LiteralPath (Join-Path $repoRoot $Path) -Raw
-        $source | Should -Match "(?m)^import \{[^}]+\} from '[^']+/naming\.bicep'"
+        $source | Should -Match "(?m)^import \{[^}]+\} from '[^']+/naming/(naming|internal)\.bicep'"
         foreach ($name in $Functions) {
             $source | Should -Match "(?m)^import \{[^}\r\n]*\b$name\b"
         }
@@ -190,7 +296,7 @@ Describe 'Shared naming and module metadata contracts' {
         $canonical = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
         (Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\functions.bicep')) | Should -Be $false
         foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter '*.bicep' -Recurse -File) {
-            if ($file.FullName -eq $canonical) { continue }
+            if ($file.FullName -in @($canonical, (Join-Path $repoRoot $modulePaths.NamingInternals))) { continue }
             $source = Get-Content -LiteralPath $file.FullName -Raw
             $source | Should -Not -Match "from '[^']*/naming/functions\.bicep'"
             $source | Should -Not -Match 'loadJsonContent\([^\r\n]*namingPolicy\.json'
@@ -200,11 +306,11 @@ Describe 'Shared naming and module metadata contracts' {
     }
 
     It 'evaluates current resource roles and uses centralized SHR naming' {
-        $policyVectors.roleNames.value.Count | Should -Be (@($policy.resources.PSObject.Properties).Count * 13)
+        $policyVectors.roleNames.value.Count | Should -Be (@($policy.resources.PSObject.Properties).Count * 10 - 6)
         (Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.bicep')) | Should -Be $false
         (Test-Path -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\naming.json')) | Should -Be $false
         foreach ($case in $policyVectors.roleNames.value) {
-            $case.actual | Should -BeOfType ([string])
+            $case.actual | Should -Be $case.expected
         }
     }
 
@@ -214,8 +320,7 @@ Describe 'Shared naming and module metadata contracts' {
             ($case.actual.Length -le 24) | Should -Be $true
             $case.actual | Should -Match '^[a-z0-9]+$'
         }
-        $policyVectors.scopedSeeds.value.withLocation | Should -Be $policyVectors.scopedSeeds.value.expectedWithLocation
-        $policyVectors.scopedSeeds.value.withoutLocation | Should -Be $policyVectors.scopedSeeds.value.expectedWithoutLocation
+        $policyVectors.scopedSeeds.value.actual | Should -Be $policyVectors.scopedSeeds.value.expected
         $policyVectors.shortSeed.value | Should -Be $policyVectors.expectedShortSeed.value
         $policyVectors.runId.value | Should -Be $policyVectors.expectedRunId.value
     }
@@ -281,6 +386,53 @@ Describe 'Shared naming and module metadata contracts' {
         $policyVectors.patterns.value.key | Should -Be 'finance-shr-storage-cmk'
         $policyVectors.patterns.value.buildGroup | Should -Be 'rg-dev-avd-image-builds-va-202610181234-abc123'
         $policyVectors.patterns.value.definition | Should -Be 'vmid-MicrosoftWindowsDesktop-windows11-win1125h2avd'
+    }
+
+    It 'preserves network names with equivalent conventions and applies shared overrides' {
+        $source = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\networking\networking.bicep') -Raw
+        $source | Should -Match 'param namingConvention namingConventionConfig'
+        $source | Should -Not -Match 'nameConvResTypeAtEnd|legacyConvention'
+        $cases = @(
+            @{ Convention = '{}'; Location = 'eastus2'; Cloud = 'AzureCloud'; Expected = @('ng-avd-use2', 'pip-avd-use2', 'rt-avd-use2', 'nsg-avd-use2') }
+            @{ Convention = "{ components: ['workload', 'purpose', 'location', 'resourceType'] }"; Location = 'eastus2'; Cloud = 'AzureCloud'; Expected = @('avd-use2-ng', 'avd-use2-pip', 'avd-use2-rt', 'avd-use2-nsg') }
+            @{ Convention = '{}'; Location = 'usgovvirginia'; Cloud = 'AzureUSGovernment'; Expected = @('ng-avd-va', 'pip-avd-va', 'rt-avd-va', 'nsg-avd-va') }
+            @{ Convention = "{ components: ['customToken1', 'environment', 'workload', 'location', 'resourceType'], customToken1: 'org', environment: 'prod', workload: 'desktop', delimiter: '_', locationAbbreviation: 'site', resourceTypeCodes: { natGateways: 'nat' } }"; Location = 'eastus2'; Cloud = 'AzureCloud'; Expected = @('org_prod_desktop_site_nat', 'org_prod_desktop_site_pip', 'org_prod_desktop_site_rt', 'org_prod_desktop_site_nsg') }
+            @{ Convention = "{ components: ['resourceType', 'location'], locationAbbreviation: '' }"; Location = 'eastus2'; Cloud = 'AzureCloud'; Expected = @('ng-use2', 'pip-use2', 'rt-use2', 'nsg-use2') }
+        )
+        $variables = @('natGatewayName', 'publicIPName', 'routeTableName', 'nsgName')
+        $lines = @(
+            "targetScope = 'local'"
+            "import { namingConventionConfig } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
+            "import { regionAbbreviation, resourceName } from '../../deployments/shared/modules/orchestration/naming/internal.bicep'"
+        )
+        $outputs = @()
+        $abbreviation = [regex]::Match($source, '(?m)^var locationAbbreviation = ([^\r\n]+)').Groups[1].Value
+        $abbreviation | Should -Not -BeNullOrEmpty
+        for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
+            $case = $cases[$caseIndex]
+            $lines += "param namingConvention$caseIndex namingConventionConfig = $($case.Convention)"
+            $region = $abbreviation.Replace('environment().name', "'$($case.Cloud)'").
+                Replace('namingConvention', "namingConvention$caseIndex") -replace '\blocation\b', "'$($case.Location)'"
+            $lines += "var locationAbbreviation$caseIndex = $region"
+            foreach ($variable in $variables) {
+                $expression = [regex]::Match($source, "(?m)^var $variable = ([^\r\n]+)").Groups[1].Value
+                $expression | Should -Not -BeNullOrEmpty
+                $expression = $expression.Replace('namingConvention', "namingConvention$caseIndex").
+                    Replace('locationAbbreviation', "locationAbbreviation$caseIndex")
+                $lines += "var $variable$caseIndex = $expression"
+                $outputs += "$variable$caseIndex"
+            }
+        }
+        $lines += "output encodedResults string = base64(string({ $(($outputs | ForEach-Object { "${_}: $_" }) -join ', ') }))"
+        $fixture = Join-Path $testOutputDirectory 'tests\fixtures\networking.bicep'
+        [IO.File]::WriteAllLines($fixture, $lines)
+        $actual = Invoke-TestNamingVectors -TemplateFile $fixture
+        for ($caseIndex = 0; $caseIndex -lt $cases.Count; $caseIndex++) {
+            for ($variableIndex = 0; $variableIndex -lt $variables.Count; $variableIndex++) {
+                $actual.("$($variables[$variableIndex])$caseIndex").value |
+                    Should -Be $cases[$caseIndex].Expected[$variableIndex]
+            }
+        }
     }
 
     It 'keeps Portal forms self-contained without hidden naming-policy controls' {
@@ -442,6 +594,7 @@ Describe 'Shared naming and module metadata contracts' {
             'deployments\shared\data\resourceAbbreviations.json'
             'deployments\shared\data\locations.json'
             $modulePaths.NamingFunctions
+            $modulePaths.NamingInternals
             $modulePaths.Replacer
             'deployments\hostpools\uiFormDefinition.json'
             'deployments\automatedHostPools\uiFormDefinition.json'
@@ -456,7 +609,7 @@ Describe 'Shared naming and module metadata contracts' {
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $destination
         }
-        $copiedPolicyPath = Join-Path $copyRoot $modulePaths.NamingFunctions
+        $copiedPolicyPath = Join-Path $copyRoot $modulePaths.NamingInternals
         $originalPolicy = Get-Content -LiteralPath $copiedPolicyPath -Raw
         $changedPolicy = $originalPolicy.Replace("workload: 'avd'", "workload: 'desktop'").
             Replace("sharedFslogix: 'fslogix'", "sharedFslogix: 'profiles'").
@@ -469,11 +622,11 @@ Describe 'Shared naming and module metadata contracts' {
         $defaultOutput = Join-Path $copyRoot 'hostpool-defaults.json'
         $defaultDeclaration = [regex]::Match(
             (Get-Content -LiteralPath (Join-Path $copyRoot $modulePaths.Replacer) -Raw),
-            '(?ms)^param namingConvention object = \{.*?^\}'
+            '(?ms)^param namingConvention namingConventionConfig = \{.*?^\}'
         ).Value
         $defaultDeclaration | Should -Not -BeNullOrEmpty
         $defaultFixture = Join-Path $copyRoot 'deployments\add-ons\sessionHostReplacer\naming-defaults.bicep'
-        [IO.File]::WriteAllText($defaultFixture, $defaultDeclaration + "`noutput convention object = namingConvention")
+        [IO.File]::WriteAllText($defaultFixture, "import { namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'`n" + $defaultDeclaration + "`noutput convention object = namingConvention")
         & az bicep build --file $defaultFixture --outfile $defaultOutput
         if ($LASTEXITCODE -ne 0) { throw 'Literal naming defaults did not compile.' }
         $default = (Get-Content -LiteralPath $defaultOutput -Raw | ConvertFrom-Json).parameters.namingConvention.defaultValue
@@ -484,11 +637,11 @@ Describe 'Shared naming and module metadata contracts' {
                 Should -Be (Get-FileHash -LiteralPath (Join-Path $repoRoot $relative)).Hash
         }
         $lines = @(
-            'using none'
-            "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
-            'param changedPolicy = namingPolicy'
+            "targetScope = 'local'"
+            "import { namingPolicy, osDiskNamePattern, resourceName, namePattern } from '../../deployments/shared/modules/orchestration/naming/internal.bicep'"
+            "import { sharedServicesNames, imageManagementNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'"
+            'var changedPolicy = namingPolicy'
             'var namingConvention = {}'
-            "var cnv_loc = 'va'"
             "var regionAbbr = 'va'"
             "var locationAbbreviation = 'va'"
             "var identifier = 'finance'"
@@ -500,10 +653,13 @@ Describe 'Shared naming and module metadata contracts' {
             "var virtualMachineDiskNameConv = ''"
             "var userAssignedIdentityName = ''"
             "var userAssignedIdentityNameConv = 'uai-TOKEN-va'"
+            "var context = { subscriptionId: '00000000-1111-2222-3333-444444444444', cloud: 'AzureUSGovernment', location: 'usgovvirginia' }"
+            "var sharedNames = sharedServicesNames(namingConvention, context, { secretsKeyVaultName: 'explicit-secrets', encryptionKeyVaultName: 'explicit-encryption' })"
+            "var imageNames = imageManagementNames(namingConvention, context, 'PlatformManaged')"
+            'var sharedServices = sharedNames.operationsResourceGroupName'
+            'var imageManagement = imageNames.resourceGroupName'
         )
         $consumers = @(
-            @{ Name = 'sharedServices'; Path = 'deployments\sharedServices\sharedServices.bicep'; Variable = 'customRgName' }
-            @{ Name = 'imageManagement'; Path = 'deployments\imageManagement\imageManagement.bicep'; Variable = 'customResourceGroupName' }
             @{ Name = 'networking'; Path = 'deployments\networking\networking.bicep'; Variable = 'natGatewayName' }
             @{ Name = 'imageBuild'; Path = 'deployments\imageBuild\imageBuild.bicep'; Variable = 'imageVmName' }
             @{ Name = 'osDisks'; Path = $modulePaths.SessionHostVMs; Variable = 'osDiskNames' }
@@ -512,35 +668,33 @@ Describe 'Shared naming and module metadata contracts' {
             $source = Get-Content -LiteralPath (Join-Path $repoRoot $consumer.Path) -Raw
             $match = [regex]::Matches($source, "(?m)^var $($consumer.Variable) = ([^\r\n]+)")
             $match.Count | Should -Be 1
-            $lines += "param $($consumer.Name) = $($match[0].Groups[1].Value)"
+            $lines += "var $($consumer.Name) = $($match[0].Groups[1].Value)"
             if ($consumer.Name -eq 'osDisks') {
                 $customDiskExpression = $match[0].Groups[1].Value -replace '\bvirtualMachineDiskNameConv\b', "'custom-SHNAME-disk'"
-                $lines += "param customOsDisks = $customDiskExpression"
+                $lines += "var customOsDisks = $customDiskExpression"
             }
         }
         $helperSource = Get-Content -LiteralPath (Join-Path $repoRoot $modulePaths.DeploymentHelper) -Raw
         $helperMatch = [regex]::Match($helperSource, '(?s)var deploymentUserAssignedIdentityName =\s*(.*?)\r?\nvar virtualMachineAdminUserName')
         $helperMatch.Success | Should -Be $true
-        $lines += "param helperDefault = $($helperMatch.Groups[1].Value)"
+        $lines += "var helperDefault = $($helperMatch.Groups[1].Value)"
         $explicitHelperExpression = $helperMatch.Groups[1].Value -replace '\buserAssignedIdentityName\b', "'explicit-helper'"
-        $lines += "param helperExplicit = $explicitHelperExpression"
+        $lines += "var helperExplicit = $explicitHelperExpression"
         foreach ($name in @('avdAlerts', 'storageQuotaManager', 'updateRouteTableWithM365Routes')) {
             $source = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\add-ons\$name\main.bicep") -Raw
             $match = [regex]::Matches($source, "(?m)^var automationAccountName = !empty\(automationAccountNameOverride\)\r?\n  \? automationAccountNameOverride\r?\n  : ([^\r\n]+)")
             $match.Count | Should -Be 1
-            $lines += "param $name = $($match[0].Groups[1].Value)"
+            $lines += "var $name = $($match[0].Groups[1].Value)"
         }
-        $fixture = Join-Path $copyRoot 'tests\fixtures\propagation.bicepparam'
+        $lines += "output encodedResults string = base64(string({ changedPolicy: changedPolicy, sharedServices: sharedServices, imageManagement: imageManagement, networking: networking, imageBuild: imageBuild, osDisks: osDisks, customOsDisks: customOsDisks, helperDefault: helperDefault, helperExplicit: helperExplicit, avdAlerts: avdAlerts, storageQuotaManager: storageQuotaManager, updateRouteTableWithM365Routes: updateRouteTableWithM365Routes }))"
+        $fixture = Join-Path $copyRoot 'tests\fixtures\propagation.bicep'
         New-Item -ItemType Directory -Path (Split-Path -Parent $fixture) -Force | Out-Null
         [System.IO.File]::WriteAllLines($fixture, $lines)
-        $output = Join-Path $copyRoot 'propagation.json'
-        & az bicep build-params --file $fixture --outfile $output
-        if ($LASTEXITCODE -ne 0) { throw 'Changed-policy propagation fixture did not compile.' }
-        $names = (Get-Content -LiteralPath $output -Raw | ConvertFrom-Json).parameters
+        $names = Invoke-TestNamingVectors -TemplateFile $fixture
         $names.changedPolicy.value.defaults.workload | Should -Be 'desktop'
         $names.changedPolicy.value.identifiers.sharedFslogix | Should -Be 'profiles'
         $names.sharedServices.value | Should -Be 'rg-desktop-ops-va'
-        $names.imageManagement.value | Should -Be 'rg-desktop-finance-va'
+        $names.imageManagement.value | Should -Be 'rg-desktop-image-management-va'
         $names.networking.value | Should -Be 'ng-desktop-va'
         $names.avdAlerts.value | Should -Be 'aa-desktop-alerts-va'
         $names.storageQuotaManager.value | Should -Be 'aa-sqm-finance-va'
@@ -607,7 +761,78 @@ Describe 'Portal naming without resource-name previews' {
         [string]::IsNullOrWhiteSpace($form.view.outputs.parameters.$Output) | Should -Be $false
     }
 
-    It 'retains Key Vault truncation warnings and complete-name override validation in <Directory>' -TestCases @(
+    Describe 'Portal naming hidden component outputs in <Directory>' -ForEach @(
+        @{ Directory = 'imageManagement' }
+        @{ Directory = 'sharedServices' }
+        @{ Directory = 'hostpools' }
+        @{ Directory = 'automatedHostPools' }
+    ) {
+        BeforeAll {
+            $form = Get-Content -LiteralPath (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json
+            $step = $form.view.properties.steps | Where-Object name -eq 'tagsAndNaming'
+            $naming = $step.elements | Where-Object name -eq 'naming'
+            $defaults = @{}
+            foreach ($control in $naming.elements) {
+                $defaults[$control.name] = if ($control.type -eq 'Microsoft.Common.DropDown') {
+                    ($control.constraints.allowedValues | Where-Object label -eq $control.defaultValue).value
+                } else {
+                    $control.defaultValue
+                }
+            }
+            $binding = $form.view.outputs.parameters.namingConvention
+            $templates = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot "deployments\$Directory") -Filter '*.json' -File |
+                Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) })
+            $templates.Count | Should -Be 1
+            $template = Get-Content -LiteralPath $templates[0].FullName -Raw | ConvertFrom-Json
+            $schema = $template.parameters.namingConvention
+            while ($schema.'$ref') {
+                $schema = $template.definitions.($schema.'$ref'.Split('/')[-1])
+            }
+            $allowedComponents = $schema.properties.components.allowedValues
+            $allowedComponents | Should -Not -BeNullOrEmpty
+        }
+
+        It 'submits valid defaults when the hidden sixth component is unset' {
+            foreach ($unset in @($null, '')) {
+                $values = $defaults.Clone()
+                $values.component6 = $unset
+                $result = Invoke-TestNamingFormExpression $binding @{ tagsAndNaming = @{ naming = $values } }
+                ($result.components -join ',') | Should -Be 'resourceType,workload,purpose,location,none,none'
+                @($result.components | Where-Object { $_ -notin $allowedComponents }).Count | Should -Be 0
+            }
+        }
+
+        It 'normalizes every hidden component after an earlier stop selection' {
+            foreach ($stop in 2..6) {
+                foreach ($unset in @($null, '')) {
+                    $values = $defaults.Clone()
+                    $values["component$stop"] = 'none'
+                    for ($index = $stop + 1; $index -le 6; $index++) {
+                        $values["component$index"] = $unset
+                    }
+                    $result = Invoke-TestNamingFormExpression $binding @{ tagsAndNaming = @{ naming = $values } }
+                    $result.components.Count | Should -Be 6
+                    @($result.components | Where-Object { $_ -notin $allowedComponents }).Count | Should -Be 0
+                    for ($index = 1; $index -le 6; $index++) {
+                        $expected = if ($index -lt $stop) { $defaults["component$index"] } else { 'none' }
+                        $result.components[$index - 1] | Should -Be $expected
+                    }
+                }
+            }
+        }
+
+        It 'preserves all six explicitly selected components' {
+            $values = $defaults.Clone()
+            $expected = @('freeform1', 'environment', 'workload', 'purpose', 'location', 'resourceType')
+            for ($index = 1; $index -le 6; $index++) {
+                $values["component$index"] = $expected[$index - 1]
+            }
+            $result = Invoke-TestNamingFormExpression $binding @{ tagsAndNaming = @{ naming = $values } }
+            ($result.components -join ',') | Should -Be ($expected -join ',')
+        }
+    }
+
+    It 'explains Key Vault length failures and retains complete-name override validation in <Directory>' -TestCases @(
         @{ Directory = 'hostpools' }
         @{ Directory = 'sharedServices' }
     ) {
@@ -618,5 +843,10 @@ Describe 'Portal naming without resource-name previews' {
         $source | Should -Match '"name": "secretsKeyVaultNameOverride"'
         $source | Should -Match '"name": "encryptionKeyVaultNameOverride"'
         $source | Should -Match 'checkNameAvailability'
+        $form = $source | ConvertFrom-Json
+        $warning = Get-TestFormElement -Elements $form.view.properties.steps.elements |
+            Where-Object name -eq 'kvNameTruncationWarning'
+        $warning.options.text | Should -Not -Match '^\['
+        $warning.options.text | Should -Match 'Overlength generated names fail deployment; they are not truncated'
     }
 }

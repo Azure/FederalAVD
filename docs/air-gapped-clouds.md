@@ -441,8 +441,9 @@ inventories and parameter details for each step.
    Do not reuse or promote the PoC into a pilot or production environment. Return to this checklist
    and deploy a new environment through the full **AVD Host Pool** Template Spec.
 
-   The standard [deduplicated publisher](design.md#deduplicated-template-spec-publisher)
-   packages shared templates inside the same target-cloud Template Spec without public downloads.
+   The standard [Template Spec publisher](design.md#deduplicated-template-spec-publisher)
+   prefers self-contained templates and uses bundled linked artifacts only when size requires them.
+   Both formats remain inside the target-cloud Template Spec without public downloads.
    Use `-WhatIf` and a separate test-name suffix first, and verify publication and actual
    deployments in the target enclave.
 

@@ -85,6 +85,13 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
 10. Removes the temporary deployment helper and its resource group after final session-host
   provisioning is submitted.
 
+Shared monitoring (Log Analytics, DCR and DCE), credentials/encryption Key Vaults, and the
+Azure Files backup vault follow the FSLogix storage/session-host `location`, not
+`controlPlaneLocation`. Their shared Monitoring and Operations groups and generated names
+use that same host region, matching Shared Services deployed there. Only AVD control-plane
+resources retain `controlPlaneLocation`. Existing selections do not relocate resources or
+re-register protected storage.
+
 When creating a workspace, production control-plane resources share one resource group per
 control-plane region and naming convention, not one per persona. For example, the default convention places the `admin` and
 `finance` host pools in `rg-avd-control-plane-eus` when their control-plane region is East US.

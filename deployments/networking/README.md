@@ -326,13 +326,31 @@ If zones already exist, provide their resource IDs:
 
 ### Naming & Tagging
 
-#### `nameConvResTypeAtEnd`
+#### `namingConvention`
 
-- **Type:** Boolean
-- **Default:** `false`
-- **Description:** Resource naming convention (CAF-style)
-  - `false` - `rg-avd-networking-use2`
-  - `true` - `avd-networking-use2-rg`
+- **Type:** Shared typed object (`namingConventionConfig`)
+- **Default:** Resource type first, workload `avd`, hyphen delimiter. `{}` also selects these defaults.
+- **Description:** The same [naming convention](../../docs/naming-convention.md) used by other
+  FederalAVD deployments. Controls generated NAT gateway, public IP, route table and NSG names.
+  Explicit resource group, VNet and subnet names, VNet-derived
+  DDoS plan and peering names, and provider-required private DNS zone names are not rewritten.
+- **Portal:** Select resource type first or last. Use a parameter file for other convention settings.
+
+The old `nameConvResTypeAtEnd` parameter has been removed. Delete it from existing parameter
+files. If it was `false`, omit `namingConvention` or pass `{}` to retain the same names. If it
+was `true`, use this ARM parameter entry to retain the same names:
+
+```json
+"namingConvention": {
+  "value": {
+    "components": ["workload", "purpose", "location", "resourceType"]
+  }
+}
+```
+
+For example, the default NAT gateway name in `eastus2` remains `ng-avd-use2`; the
+resource-type-last convention produces `avd-use2-ng`. Networking's generated names retain
+their empty purpose slot; no new `networking` token or hash is added.
 
 #### `tags`
 

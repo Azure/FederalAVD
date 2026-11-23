@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
 
-Template Spec publisher that stores identical inline templates once.
+Template Spec publisher that prefers self-contained templates.
 
 .DESCRIPTION
 
@@ -9,8 +9,8 @@ Uses the active Azure context and the ARM REST API to publish the complete packa
 
 Repeated nested templates and compiler annotations increase package size. To help
 stay within the Template Spec content limit, the publisher filters annotations and
-deduplicates eligible templates in an in-memory publication copy. Bicep sources
-and tracked ARM files are not changed.
+deduplicates eligible templates only when needed in an in-memory publication copy.
+Bicep sources and tracked ARM files are not changed.
 
 Annotation filtering removes Bicep compiler provenance (_generator and
 __bicep_imported_from!) and nested-template parameter/output/type descriptions.
@@ -21,7 +21,14 @@ Filtering targets recognized template/schema locations, not similarly named
 properties in literal application data. Full module documentation remains in
 the repository sources.
 
-After filtering, identical eligible nested templates are identified by SHA-256
+After filtering, packages within the size budget are published with nested
+templates inline. Oversized packages use deduplication instead. If Azure rejects
+an inline version with TemplateSpecTooLarge or HTTP 413, publication retries once
+with a smaller, preflighted deduplicated package at the same version. Other errors
+are not retried. Linked packages can prevent deployment-history Portal Redeploy;
+deploy again from the original Template Spec version in that case.
+
+For deduplication, identical eligible nested templates are identified by SHA-256
 and stored once as linked artifacts inside the same Template Spec version.
 References use bundled relative paths, not public URLs or separately published
 Template Specs. Only templates with explicit inner expression scope are extracted;
@@ -29,7 +36,7 @@ outer/default-scope subtrees stay inline to preserve expression behavior.
 Unique inner-scope ancestors of extracted duplicates are also linked when needed
 to preserve relative-link origin. Pre-existing relative template links are rejected.
 
-Before any Azure writes, every selected package is serialized and size-checked,
+Before any Azure writes, every selected package and eligible retry is serialized and size-checked,
 including the main template, all linked artifacts, Portal form, and location
 envelope. A 16,384-byte safety reserve is included in the 2,000,000-byte budget.
 Exceeding that budget stops publication; output reports savings and headroom.
@@ -67,8 +74,9 @@ file path or JSON string. The parameter declares these defaults:
   workload = 'avd'
 
 The components array must include purpose so each Template Spec has a distinct name.
-Other supported component values are environment, freeform1, freeform2, and none.
-Optional properties include environment, freeform1, freeform2, locationAbbreviation,
+Other supported component values are environment, customToken1, customToken2, and none.
+The freeform1/freeform2 names remain aliases; conflicting alias values are rejected.
+Optional properties include environment, customToken1, customToken2, locationAbbreviation,
 and resourceTypeCodes (for example @{ resourceGroups = 'rg'; templateSpecs = 'ts' }).
 Missing properties use defaults; empty component values are omitted from names.
 This controls publishing names only, not the naming of resources later deployed
@@ -174,6 +182,30 @@ function Get-ObjectPropertyValue {
     return $DefaultValue
 }
 
+function Get-ConventionCustomToken {
+    param (
+        [Parameter(Mandatory = $true)]
+        [object]$Convention,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet(1, 2)]
+        [int]$Index
+    )
+
+    $preferred = Get-ObjectPropertyValue -InputObject $Convention -PropertyName "customToken$Index"
+    $legacy = Get-ObjectPropertyValue -InputObject $Convention -PropertyName "freeform$Index"
+    foreach ($value in @($preferred, $legacy)) {
+        if ($null -ne $value -and $value -isnot [string]) {
+            throw "NamingConvention customToken$Index and freeform$Index must be strings."
+        }
+    }
+    if ($null -ne $preferred -and $null -ne $legacy -and $preferred -cne $legacy) {
+        throw "NamingConvention.customToken$Index and freeform$Index are aliases and must agree when both are supplied."
+    }
+    if ($null -ne $preferred) { return $preferred }
+    if ($null -ne $legacy) { return $legacy }
+    return ''
+}
+
 function New-ConventionName {
     param (
         [Parameter(Mandatory = $true)]
@@ -205,6 +237,8 @@ function New-ConventionName {
         environment = $Environment
         freeform1 = $Freeform1
         freeform2 = $Freeform2
+        customToken1 = $Freeform1
+        customToken2 = $Freeform2
     }
 
     $nameParts = foreach ($component in $Components) {
@@ -463,13 +497,13 @@ function New-DeduplicatedTemplateSpecPackage {
         RootTemplate = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $TemplateFile -Raw -ErrorAction Stop))
         UIFormDefinition = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $FormFile -Raw -ErrorAction Stop))
         Artifacts = [System.Collections.Generic.List[Microsoft.Azure.Management.Resources.Models.LinkedTemplateArtifact]]::new()
+        InlinePayload = ''
         OriginalPayloadBytes = 0
         PayloadBytes = 0
     }
     Remove-TemplateSpecInternalAnnotations -Node $package.RootTemplate
-    $package.OriginalPayloadBytes = [Text.Encoding]::UTF8.GetByteCount(
-        (Get-DeduplicatedTemplateSpecPayload -Package $package -Location $Location)
-    )
+    $package.InlinePayload = Get-DeduplicatedTemplateSpecPayload -Package $package -Location $Location
+    $package.OriginalPayloadBytes = [Text.Encoding]::UTF8.GetByteCount($package.InlinePayload)
     $candidates = @{}
     Find-DeduplicatedTemplateCandidates -Template $package.RootTemplate -Candidates $candidates
     $artifacts = @{}
@@ -485,24 +519,83 @@ function New-DeduplicatedTemplateSpecPackage {
     return $package
 }
 
-function Publish-DeduplicatedTemplateSpec {
+function Get-TemplateSpecPublicationPlan {
+    param (
+        [Parameter(Mandatory = $true)]$Package,
+        [Parameter(Mandatory = $true)][string]$Location
+    )
+
+    $deduplicatedPayload = Get-DeduplicatedTemplateSpecPayload -Package $Package -Location $Location
+    $useInline = $Package.OriginalPayloadBytes + 16384 -le 2000000
+    $retryPayload = ''
+    if ($useInline -and $Package.Artifacts.Count -gt 0 -and
+        $Package.PayloadBytes -lt $Package.OriginalPayloadBytes -and
+        $Package.PayloadBytes + 16384 -le 2000000) {
+        $retryPayload = $deduplicatedPayload
+    }
+    return [pscustomobject]@{
+        Packaging = if ($useInline) { 'Inline' } else { 'Deduplicated' }
+        Payload = if ($useInline) { $Package.InlinePayload } else { $deduplicatedPayload }
+        PayloadBytes = if ($useInline) { $Package.OriginalPayloadBytes } else { $Package.PayloadBytes }
+        ArtifactCount = if ($useInline) { 0 } else { $Package.Artifacts.Count }
+        DeduplicatedRetryPayload = $retryPayload
+    }
+}
+
+function Invoke-TemplateSpecPut {
+    param (
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Payload
+    )
+
+    # -Path resolves the management endpoint from the active cloud context.
+    $response = Invoke-AzRestMethod -Path $Path -Method PUT -Payload $Payload -ErrorAction Stop
+    if ([int]$response.StatusCode -notin @(200, 201)) {
+        throw "Template Spec PUT '$Path' failed with HTTP $($response.StatusCode): $($response.Content)"
+    }
+}
+
+function Test-TemplateSpecSizeError {
+    param (
+        [Parameter(Mandatory = $true)][System.Management.Automation.ErrorRecord]$ErrorRecord
+    )
+
+    $response = $ErrorRecord.Exception.PSObject.Properties['Response']
+    if ($null -ne $response -and $null -ne $response.Value -and
+        [int]$response.Value.StatusCode -eq 413) {
+        return $true
+    }
+    $statusCode = $ErrorRecord.Exception.PSObject.Properties['StatusCode']
+    if ($null -ne $statusCode -and $null -ne $statusCode.Value -and [int]$statusCode.Value -eq 413) {
+        return $true
+    }
+    $details = "$($ErrorRecord.ErrorDetails)`n$($ErrorRecord.Exception.Message)"
+    return $details -match '"code"\s*:\s*"TemplateSpecTooLarge"' -or
+        $details -match '(?m)^\s*(?:(?:Error)?Code\s*:\s*)?TemplateSpecTooLarge\b' -or
+        $details -match '\bHTTP 413\b'
+}
+
+function Publish-TemplateSpec {
     param (
         [Parameter(Mandatory = $true)][string]$ResourceId,
         [Parameter(Mandatory = $true)][string]$Version,
         [Parameter(Mandatory = $true)][string]$ParentPayload,
-        [Parameter(Mandatory = $true)][string]$VersionPayload
+        [Parameter(Mandatory = $true)][string]$VersionPayload,
+        [string]$DeduplicatedRetryPayload = ''
     )
 
-    $requests = @(
-        @{ Path = "$($ResourceId)?api-version=2021-05-01"; Payload = $ParentPayload }
-        @{ Path = "$ResourceId/versions/$($Version)?api-version=2021-05-01"; Payload = $VersionPayload }
-    )
-    foreach ($request in $requests) {
-        # -Path resolves the management endpoint from the active cloud context.
-        $response = Invoke-AzRestMethod -Path $request.Path -Method PUT -Payload $request.Payload -ErrorAction Stop
-        if ([int]$response.StatusCode -notin @(200, 201)) {
-            throw "Template Spec PUT '$($request.Path)' failed with HTTP $($response.StatusCode): $($response.Content)"
+    Invoke-TemplateSpecPut -Path "$($ResourceId)?api-version=2021-05-01" -Payload $ParentPayload
+    $versionPath = "$ResourceId/versions/$($Version)?api-version=2021-05-01"
+    try {
+        Invoke-TemplateSpecPut -Path $versionPath -Payload $VersionPayload
+    }
+    catch {
+        if ([string]::IsNullOrEmpty($DeduplicatedRetryPayload) -or -not (Test-TemplateSpecSizeError -ErrorRecord $_)) {
+            throw
         }
+        Write-Warning "Inline publication of '$ResourceId/versions/$Version' exceeded Azure's size limit despite passing offline checks. Retrying once with preflighted linked-artifact deduplication. Original error: $($_.Exception.Message)"
+        Write-Warning 'Linked artifacts can prevent deployment-history Portal Redeploy. Deploy again from the original Template Spec version if needed.'
+        Invoke-TemplateSpecPut -Path $versionPath -Payload $DeduplicatedRetryPayload
     }
 }
 
@@ -539,7 +632,7 @@ if ($null -eq $locationAbbr) {
 }
 
 $components = @(Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'components' -DefaultValue @('resourceType', 'workload', 'purpose', 'location'))
-$allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none')
+$allowedComponents = @('resourceType', 'purpose', 'location', 'workload', 'environment', 'customToken1', 'customToken2', 'freeform1', 'freeform2', 'none')
 $invalidComponents = @($components | Where-Object { $_ -notin $allowedComponents })
 if ($invalidComponents.Count -gt 0) {
     throw "NamingConvention.components contains unsupported values: $($invalidComponents -join ', ')."
@@ -551,8 +644,8 @@ if ($components -notcontains 'purpose') {
 $delimiter = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'delimiter' -DefaultValue '-')
 $workload = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'workload' -DefaultValue 'avd')
 $environment = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'environment' -DefaultValue '')
-$freeform1 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform1' -DefaultValue '')
-$freeform2 = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'freeform2' -DefaultValue '')
+$freeform1 = Get-ConventionCustomToken -Convention $NamingConvention -Index 1
+$freeform2 = Get-ConventionCustomToken -Convention $NamingConvention -Index 2
 $locationAbbreviationOverride = [string](Get-ObjectPropertyValue -InputObject $NamingConvention -PropertyName 'locationAbbreviation' -DefaultValue '')
 if (-not [string]::IsNullOrWhiteSpace($locationAbbreviationOverride)) {
     $locationAbbr = $locationAbbreviationOverride
@@ -681,14 +774,19 @@ foreach ($templateSpec in $templateSpecs) {
         throw "Template Spec '$($templateSpec.DisplayName)' has no publishing purpose. Check its catalog entry in tools\New-TemplateSpecs.ps1. Nothing has been published."
     }
     $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $templateSpec.TemplateFile -FormFile $templateSpec.UiFormDefinition -Location $Location
-    $templateSpec.PublicationPayload = Get-DeduplicatedTemplateSpecPayload -Package $package -Location $Location
-    $budgetedBytes = $package.PayloadBytes + 16384
+    $publication = Get-TemplateSpecPublicationPlan -Package $package -Location $Location
+    $templateSpec.PublicationPayload = $publication.Payload
+    $templateSpec.DeduplicatedRetryPayload = $publication.DeduplicatedRetryPayload
+    $budgetedBytes = $publication.PayloadBytes + 16384
     Write-Output "$($templateSpec.DisplayName) publication size check:"
-    Write-Output ("  Before deduplication: {0:N0} bytes; after: {1:N0} bytes; saved: {2:N0} bytes." -f $package.OriginalPayloadBytes, $package.PayloadBytes, ($package.OriginalPayloadBytes - $package.PayloadBytes))
-    Write-Output ("  Packaged linked artifacts: {0}; the measured request includes every artifact and the Portal form." -f $package.Artifacts.Count)
+    Write-Output ("  Filtered inline: {0:N0} bytes; deduplicated candidate: {1:N0} bytes; potential savings: {2:N0} bytes." -f $package.OriginalPayloadBytes, $package.PayloadBytes, ($package.OriginalPayloadBytes - $package.PayloadBytes))
+    Write-Output ("  Selected packaging: {0}; linked artifacts: {1}. The measured request includes every artifact and the Portal form." -f $publication.Packaging, $publication.ArtifactCount)
     Write-Output '  Reserved safety margin: 16,384 bytes (16 KiB; not appended to the template).'
     if ($budgetedBytes -gt 2000000) {
         throw "$($templateSpec.DisplayName): complete request plus safety reserve is $budgetedBytes bytes, exceeding the 2,000,000-byte budget. Nothing has been published."
+    }
+    if ($publication.Packaging -eq 'Deduplicated') {
+        Write-Warning "$($templateSpec.DisplayName) requires linked-artifact packaging to fit the size budget. Deployment-history Portal Redeploy may not resolve artifacts; deploy again from this Template Spec version if needed."
     }
     $remainingBytes = 2000000 - $budgetedBytes
     Write-Output ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f $budgetedBytes, $remainingBytes)
@@ -755,9 +853,10 @@ foreach ($templateSpec in $templateSpecs) {
     }
     $resourceId = '/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Resources/templateSpecs/{2}' -f `
         $Context.Subscription.Id, [Uri]::EscapeDataString($ResourceGroupName), [Uri]::EscapeDataString($templateSpec.Name)
-    if ($PSCmdlet.ShouldProcess("$($templateSpec.Name)/$version", "Publish deduplicated Template Spec in $cloud")) {
-        Publish-DeduplicatedTemplateSpec -ResourceId $resourceId -Version $version `
-            -ParentPayload (ConvertTo-Json -InputObject $parent -Depth 100) -VersionPayload $templateSpec.PublicationPayload
+    if ($PSCmdlet.ShouldProcess("$($templateSpec.Name)/$version", "Publish Template Spec in $cloud")) {
+        Publish-TemplateSpec -ResourceId $resourceId -Version $version `
+            -ParentPayload (ConvertTo-Json -InputObject $parent -Depth 100) -VersionPayload $templateSpec.PublicationPayload `
+            -DeduplicatedRetryPayload $templateSpec.DeduplicatedRetryPayload
         $publishedCount++
         Write-Output "Published $($templateSpec.DisplayName): $resourceId/versions/$version"
     }

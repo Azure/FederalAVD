@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { namingPolicy, resolveConvention, resourceTypeFirst, regionAbbreviation, resourceName, privateEndpointPattern, privateEndpointNicPattern, imageStorageName, validateImageStoragePrefix, namePattern } from '../shared/modules/orchestration/naming/naming.bicep'
+import { imageManagementNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../shared/modules/orchestration/networking/functions.bicep'
 
 // Deploys the Azure Virtual Desktop image management infrastructure: storage account for build artifacts,
@@ -118,9 +118,8 @@ param deployImageBuildResourceGroup bool = true
 //   purpose      — REQUIRED. Multiple resources of the same type exist in this deployment (two storage accounts,
 //                  two UAIs, multiple DES). Without 'purpose' they produce identical names and the deployment fails.
 //   resourceType — Strongly recommended. Without it resource names carry no type identifier.
-//   location     — Optional. When omitted the location abbreviation is still embedded in storage account names
-//                  and added to unique-string seeds so cross-region deployments remain collision-free, but other
-//                  resource names will not contain a location segment.
+//   location     - Optional. Storage keeps its readable location token, and the full region
+//                  always participates in the common scope hash. Other names omit this segment.
 //   workload, freeform1, environment, freeform2 — Optional static tokens.
 // Key properties:
 //   components          — ordered array of name components, e.g. ["resourceType","workload","purpose","location"]
@@ -135,68 +134,36 @@ param deployImageBuildResourceGroup bool = true
 // This object is produced automatically when deploying via the Azure Portal UI.
 // When deploying via ARM/Bicep CLI, omit to accept the defaults or override individual properties.
 @description('Optional. Shared naming-convention overrides. Keep purpose to distinguish same-type resources; imageManagementStoragePrefix accepts 1-5 lowercase alphanumeric characters when supplied.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
 }
 
-// Naming conventions
-// Override any component via the namingConvention parameter.
-// account for air-gapped cloud location prefixes
-// ── Naming convention ────────────────────────────────────────────────────────
-// Default: Cloud Adoption Framework (CAF) — resourceType-workload-purpose-location.
-// Override any component via the namingConvention parameter.
+var naming = imageManagementNames(namingConvention, {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  location: location
+}, keyManagementGalleryImageVersions)
 
-var cnv_loc = !empty(namingConvention.?locationAbbreviation ?? '') ? namingConvention.locationAbbreviation : regionAbbreviation(location, environment().name)
-
-var cnv_rtCodes = resolveConvention(namingConvention).resourceTypeCodes
-
-// RT is last only when resourceType is explicitly the last non-'none' component.
-var cnv_rtFirst = resourceTypeFirst(namingConvention)
-
-// Per-resource names always built from cnv_components
-var customResourceGroupName = resourceName(namingConvention, 'imageManagementResourceGroup', cnv_loc, identifier, '')
-
-var customGalleryName = resourceName(namingConvention, 'imageGallery', cnv_loc, identifier, '')
-
-var customIdentityName = resourceName(namingConvention, 'imageBlobIdentity', cnv_loc, identifier, '')
-
-var customEncryptionIdentityName = resourceName(namingConvention, 'imageStorageEncryptionIdentity', cnv_loc, identifier, '')
-
-// Storage account names: alphanumeric only, max 24 chars, globally unique.
-// Pattern uses only RT abbreviation + purpose + location + uniqueString — no workload,
-// environment, or freeform tokens. Those components eat into the 24-char budget at the
-// expense of the uniqueness suffix without adding meaningful disambiguation (the
-// containing resource group already carries the full convention name).
-// RT position mirrors the convention: prefix when RT-first, suffix when RT-last.
-var imageManagementStoragePrefix = string(namingConvention.?imageManagementStoragePrefix ?? '')
-var effectiveImageManagementStoragePrefix = validateImageStoragePrefix(imageManagementStoragePrefix, cnv_loc)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Image Management has a shared role identifier rather than a customer persona/index.
-var identifier = namingPolicy.identifiers.imageManagement
-
-var resourceGroupName = customResourceGroupName
-// Image build RG: uses the same naming convention framework as all other resources.
-// Purpose is 'image-builds' to distinguish it from the management RG ('image-management').
-var imageBuildRgName = resourceName(namingConvention, 'imageBuildResourceGroup', cnv_loc, identifier, '')
+var resourceGroupName = naming.resourceGroupName
+var imageBuildRgName = naming.imageBuildResourceGroupName
 
 var artifactsBlobContainerName = 'artifacts'
-var galleryName = customGalleryName
-var identityName = customIdentityName
+var galleryName = naming.galleryName
+var identityName = naming.identityName
 var vnetName = !empty(privateEndpointSubnetResourceId) ? split(privateEndpointSubnetResourceId, '/')[8] : ''
-var privateEndpointNameConv = replace(privateEndpointPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints), 'VNETID', vnetName)
+var privateEndpointNameConv = replace(naming.privateEndpointNameConv, 'VNETID', vnetName)
 
 var privateEndpointName = replace(
   replace(privateEndpointNameConv, 'SUBRESOURCE', 'blob'),
   'RESOURCE',
   artifactsStorageAccountName
 )
-var customNetworkInterfaceName = replace(replace(replace(privateEndpointNicPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints, cnv_rtCodes.networkInterfaces), 'VNETID', vnetName), 'SUBRESOURCE', 'blob'), 'RESOURCE', artifactsStorageAccountName)
+var customNetworkInterfaceName = replace(replace(replace(naming.privateEndpointNICNameConv, 'VNETID', vnetName), 'SUBRESOURCE', 'blob'), 'RESOURCE', artifactsStorageAccountName)
 
-// Both accounts use the shared artifacts-purpose budget and the existing scope seed.
-var artifactsStorageAccountName = imageStorageName(namingConvention, 'artifacts', cnv_loc, subscription().subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix)
+// Both accounts share the owning-scope hash; their readable purposes distinguish them.
+var artifactsStorageAccountName = naming.artifactsStorageAccountName
 
 var sasExpirationPeriod = '180.00:00:00' // 180 days
 var storageKind = 'StorageV2'
@@ -207,11 +174,11 @@ var storageSkuName = 'Standard_LRS'
 var artifactsStorageAccessTier = 'Hot'
 var logsStorageAccessTier = 'Hot'
 
-var storageEncryptionKeyName = namePattern('imageStorageKey', { identifier: identifier })
+var storageEncryptionKeyName = naming.storageEncryptionKeyName
 
 // Single encryption UAI shared by both storage accounts.
 // Result: uai-avd-image-management-encryption-{loc}
-var storageEncryptionIdentityName = customEncryptionIdentityName
+var storageEncryptionIdentityName = naming.storageEncryptionIdentityName
 // Both storage accounts share the same key — no operational benefit to separate keys
 // for same-solution, same-sensitivity storage in the same resource group.
 var cmkKeyNames = (deployArtifactsStorageAccount || deployBuildLogsStorageAccount) ? [storageEncryptionKeyName] : []
@@ -219,15 +186,15 @@ var cmkKeyNames = (deployArtifactsStorageAccount || deployBuildLogsStorageAccoun
 // Disk encryption set names — one for standard CMK gallery encryption, one for Confidential VM DES.
 // galleryDiskEncryptionKeyName / galleryConfidentialVmDiskEncryptionKeyName are Key Vault key names
 // (not ARM resources) so they use a fixed descriptive format independent of the naming convention.
-var galleryDiskEncryptionSetName = resourceName(namingConvention, contains(keyManagementGalleryImageVersions, 'Platform') ? 'imageGalleryDoubleEncryptionKeys' : 'imageGalleryCustomerKeys', cnv_loc, identifier, '')
+var galleryDiskEncryptionSetName = naming.galleryDiskEncryptionSetName
 
-var galleryDiskEncryptionKeyName = namePattern('imageGalleryKey', { identifier: identifier })
+var galleryDiskEncryptionKeyName = naming.galleryDiskEncryptionKeyName
 
-var galleryConfidentialVmDiskEncryptionSetName = resourceName(namingConvention, 'imageGalleryConfidentialKeys', cnv_loc, identifier, '')
+var galleryConfidentialVmDiskEncryptionSetName = naming.galleryConfidentialVmDiskEncryptionSetName
 
-var galleryConfidentialVmDiskEncryptionKeyName = namePattern('imageGalleryConfidentialKey', { identifier: identifier })
+var galleryConfidentialVmDiskEncryptionKeyName = naming.galleryConfidentialVmDiskEncryptionKeyName
 
-var logsStorageName = imageStorageName(namingConvention, 'logs', cnv_loc, subscription().subscriptionId, resourceGroupName, location, effectiveImageManagementStoragePrefix)
+var logsStorageName = naming.logsStorageAccountName
 
 var logsContainerName = 'image-customization-logs'
 var logsPrivateEndpointName = replace(
@@ -235,7 +202,7 @@ var logsPrivateEndpointName = replace(
   'RESOURCE',
   logsStorageName
 )
-var logsCustomNetworkInterfaceName = replace(replace(replace(privateEndpointNicPattern(cnv_rtFirst, cnv_rtCodes.privateEndpoints, cnv_rtCodes.networkInterfaces), 'VNETID', vnetName), 'SUBRESOURCE', 'blob'), 'RESOURCE', logsStorageName)
+var logsCustomNetworkInterfaceName = replace(replace(replace(naming.privateEndpointNICNameConv, 'VNETID', vnetName), 'SUBRESOURCE', 'blob'), 'RESOURCE', logsStorageName)
 
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: resourceGroupName

@@ -256,8 +256,10 @@ provenance. Filtering is limited to recognized template/schema locations, not
 similarly named properties in literal application data, and runs before hashing
 and deduplication.
 
-The publisher deduplicates eligible nested templates into linked artifacts in the
-filtered publication copy and publishes the complete package with the Template Spec REST API.
+The publisher prefers a self-contained, annotation-filtered template with inline
+nested templates. It selects linked-artifact deduplication only when the filtered
+inline package exceeds the size budget or Azure rejects inline publication as too
+large. It publishes the complete package with the Template Spec REST API.
 It does not depend on input minification or change SDK serialization settings.
 Before any resource creation or publication, every selected package is measured
 using the installed Az.Resources SDK's normal version-request serializer, including
@@ -266,10 +268,11 @@ the main template, linked artifacts, Portal form, and location envelope. A
 it is not data appended to the template. Output separates the measured request,
 reserved margin, total checked, and remaining headroom against the 2,000,000-byte
 budget. A warning highlights each package with 200,000 bytes (10%) or less
-remaining after the safety reserve; exceeding the budget still stops publication
-before any Azure writes. Publication packaging is performed in memory.
+remaining after the safety reserve. If inline content exceeds the budget, the
+publisher selects the deduplicated candidate; if that also exceeds the budget,
+publication stops before any Azure writes. Publication packaging is performed in memory.
 
-Run `Invoke-Pester -Script tests\TemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
+Run `Invoke-Pester -Path tests\TemplateSpecs.Tests.ps1,tests\DeduplicatedTemplateSpecs.Tests.ps1,tests\HostPoolOrchestratorSize.Tests.ps1`
 after changes affecting publication. These offline checks require Az.Resources,
 cover all current template/form pairs, enforce the publication budget and a
 4,000,000-byte tracked ARM file budget, and verify annotation filtering preserves
@@ -312,7 +315,7 @@ The authoritative references are:
 
 #### Implementation and validation
 
-`tools/New-TemplateSpecs.ps1` uses deduplicated REST publication and supports
+`tools/New-TemplateSpecs.ps1` uses inline-first REST publication and supports
 `-TemplateSpecNameSuffix` for isolated test names and `-WhatIf` for preflight without
 Azure writes. Without a suffix it targets the existing standard names.
 Only `-Location` is mandatory. The resource-group name defaults to the naming convention
@@ -320,7 +323,28 @@ with purpose `operations`; `-ResourceGroupName` remains an optional override. Af
 preflight, the publisher reuses the resolved group or creates it if missing, subject to
 `ShouldProcess`. The redundant `-createResourceGroup` parameter has been removed; callers
 that supplied it must omit it.
-Offline checks do not establish live publication or deployment compatibility.
+Before any writes, it prepares both the filtered inline payload and the
+deduplicated candidate for each selected entry. A complete inline request plus
+the 16,384-byte reserve at or below 2,000,000 bytes is selected without linked
+artifacts. Otherwise, the deduplicated candidate must fit the same budget.
+Selection is per template and size-based, not a hard-coded list of solutions.
+
+An inline publication can still exceed Azure's service-side accounting. When the
+version PUT returns `TemplateSpecTooLarge` or HTTP 413, or throws an exception
+carrying that code/status, the publisher warns and retries the same version once
+with the preflighted deduplicated payload. This retry is available only when the
+candidate contains linked artifacts, is smaller, and fits the offline budget.
+Parent Template Spec failures, unrelated version errors, and a failed deduplicated
+retry stop publication; they do not trigger another attempt. The retry remains
+inside the original `ShouldProcess` approval, and `-WhatIf` sends no PUT requests.
+See Microsoft's [Template Spec size limitation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/template-specs-known-issues).
+
+Linked-artifact versions can fail when replayed through deployment history's
+Portal **Redeploy** action because the extracted template can lose its artifact
+context. Deploy again from the original Template Spec version in that case.
+Inline-first selection avoids introducing that dependency when unnecessary; it
+does not repair deployment records created from older linked versions.
+Offline checks do not establish live publication, Portal Redeploy, or deployment compatibility.
 Version incrementing remains enabled by default;
 disabling it overwrites version `1.0.0`.
 The publisher retrieves existing versions by omitting `-Version`
@@ -333,8 +357,8 @@ return a collection as a single pipeline object.
 names and version-read failures stop publication rather than silently selecting
 `1.0.0`.
 
-The publisher filters the same publication-only annotations, identifies
-byte-identical JSON bodies with SHA-256, and extracts only static deployment
+For the deduplicated candidate, the publisher filters the same publication-only
+annotations, identifies byte-identical JSON bodies with SHA-256, and extracts only static deployment
 templates with explicitly declared inner expression scope. It traverses both
 symbolic resource objects and resource arrays, including nested deployments, but
 does not rewrite templates carried as variable/default/output data for later
@@ -404,8 +428,49 @@ The deployment utilizes the Cloud Adoption Framework naming conventions and orga
 The authoritative naming policy and executable deployment naming logic are native
 Bicep behind the single
 [naming.bicep entry point](../deployments/shared/modules/orchestration/naming/naming.bicep).
-All deployment families consume it. Host pools call its `hostPoolNames` bundle
-directly; standalone FSLogix calls `fslogixNames`, without a host-pool dependency.
+The public interface has six functions: `resourceNameForType`, `functionAppNames`,
+`hostPoolNames`, `fslogixNames`, `sharedServicesNames` and `imageManagementNames`.
+`resourceNameForType` accepts official Azure resource types without API versions,
+not internal catalog keys. Ambiguous types require `context.namingVariant`:
+`functionapp` for `Microsoft.Web/sites`, or `Desktop`/`RemoteApp` for
+`Microsoft.DesktopVirtualization/applicationGroups`. The reverse lookup is derived
+from the central type rules. Unsupported or missing selectors fail; bundles supply
+their known variants internally. Names, hashes and abbreviation override keys are
+unchanged. See the [resource naming interface](naming-convention.md#resource-naming-interface).
+The shared sealed `namingConventionConfig` type defines optional settings and
+supported component names. `customToken1`/`customToken2` are position-neutral
+names for the existing freeform slots; old property and component spellings remain
+aliases. Supplying conflicting alias values fails. No named preset selector is
+provided until distinct layouts are agreed.
+Networking accepts this same typed object. Its former resource-type-at-end boolean
+and translation helper have been removed; component order selects the layout.
+Equivalent first/last component orders retain its generated names, while explicit
+resource group, VNet and subnet names remain caller-owned.
+Host pools, standalone FSLogix, Shared Services and Image Management call their
+bundles directly; the library owns their location lookup and uniqueness seeds.
+Policy data, role composition and resource-module helpers live in
+[internal.bicep](../deployments/shared/modules/orchestration/naming/internal.bicep);
+its Bicep exports support repository-internal composition, not a public extension
+contract. Internal roles are thin adapters to the same composer, formatter and
+convention/type validators used by `resourceNameForType`. They retain explicit
+role-specific purposes, casing/delimiters and workload exceptions; adapters do not
+implement another naming engine. A new add-on can call the public generic API or
+Function App bundle directly, without adding a role or adapter file. See the
+[copyable quick start](naming-convention.md#add-on-developer-quick-start).
+Stable resource hashes use one recipe: lowercased subscription, owning
+resource group and full location. Cloud selects the region-abbreviation map,
+but cloud, purpose, host-pool identifier, resource type and convention are not
+hash inputs. Shared `sec` and `enc` vaults share a
+suffix; their names do not depend on the consuming host pool. Image Management
+and generated FSLogix storage prefixes use the same scope recipe with their
+specialized readable patterns. Per-run build IDs, operation IDs and endpoint
+shortening remain separate lifecycle identifiers.
+This intentionally changes older generated hash-based names; there is no
+automatic rename, resource adoption or data migration. Existing-resource IDs and
+supported explicit names take precedence. Review the
+[migration guidance](naming-convention.md#one-scope-one-hash) before redeployment.
+Key Vault and Function App generation fails on overlength names instead of
+silently truncating; explicit overrides are resolved first.
 Standard host pools take an explicit `virtualMachinesLocation`, defaulting to
 `controlPlaneLocation`.
 Replacer uses the common Function App naming bundle, not a separate naming engine.
@@ -419,9 +484,8 @@ adopted-resource identities take precedence. See the
 [shared naming contract and review](../deployments/shared/modules/orchestration/naming/README.md#portal-and-deployment-boundary)
 for ownership, naming constraints and the identifier-based API for new
 add-ons. The generic API covers all 36 convention-named abbreviation types and
-budgets readable identifiers around the configured stable suffix (13 characters,
-or six for 24-character Key Vault names). Resource groups use subscription-scoped
-seeds; VM resource names are distinct from Windows computer names.
+uses six-character hashes for globally named types and no hash for scope-local
+types. VM resource names are distinct from Windows computer names.
 
 The diagram below highlights how the resource groups are created based on the parameters.
 
@@ -519,7 +583,7 @@ The diagram illustrates the following resource group distribution. In the table 
 | ------- | :-------: | ------------ | ----- |
 | Global Feed | global feed workspace | rg-avd-global-feed | One per Tenant |
 | Monitoring | Log Analytics Workspace<br>AVD Insights Data Collection Rule<br>Data Collection Endpoint | rg-avd-monitoring-va | One per region |
-| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (Azure Files backup, pooled host pools) | rg-avd-operations-va | One per region. AVD Shared Services owns the shared FSLogix vault and Azure Files backup policy. Host pools and standalone FSLogix storage deployments register their own shares as protected items. Standard host pools can also create the vault. VM backup vaults for personal host pools are per-host-pool resources in the Hosts resource group. |
+| Operations | Secrets Key Vault<br>Encryption Key Vault<br>Recovery Services Vault (Azure Files backup, pooled host pools) | rg-avd-operations-va | One per region. AVD Shared Services, standard host pools, or the FSLogix Storage add-on can create the shared vault and policy through the common backup module. Consuming deployments register profile shares; Office shares are excluded. The FSLogix Storage add-on can alternatively create a dedicated vault in its storage resource group. VM backup vaults for personal host pools are per-host-pool resources in the Hosts resource group. |
 | Control Plane | feed workspace<br>application groups<br>hostpools<br>scaling plans | rg-avd-control-plane-va | One per region |
 | Hosts | virtual machines<br>disk encryption set<br>Recovery Services Vault (VM backup, personal host pools only) | rg-hr-01-hosts-va<br>rg-hr-02-hosts-va | One per identifier or per index (if specified). Disk Encryption Set is created here when CMK is used for VM disks. Recovery Services Vault for VM backup is deployed here when `recoveryServices = true` on a personal host pool — one vault per host pool, not shared. |
 | Storage | NetApp Storage Accounts<br>Storage Account(s)<br>function app<br>storage encryption UAI | rg-hr-01-storage-va<br>rg-hr-02-storage-va | One per identifier or per index (if specified). Storage encryption User-Assigned Identity is created here when CMK is used for FSLogix storage. |
@@ -536,6 +600,23 @@ retagging it. Its subscription must match the target control-plane subscription:
 host pools, set `controlPlaneSubscriptionId` when it differs from the deployment subscription;
 automated host pools use the deployment subscription. Keep the selected control-plane region
 consistent with the workspace region.
+
+Monitoring (Log Analytics, DCR and DCE), credentials and encryption Key Vaults, and FSLogix
+Azure Files snapshot backup follow the storage/session-host region, not the control-plane
+region. Standard and automated host pools create those shared resources in that region's
+Monitoring and Operations groups, using the same naming rules as Shared Services deployed
+in that region. The FSLogix Storage add-on uses the same shared `files` vault rule.
+Key Vault regions are passed explicitly rather than inferred from resource group metadata.
+The AVD host pool, workspace, application groups and scaling plan retain control-plane placement.
+
+Existing resource IDs and supported explicit names retain their selection; these changes
+do not relocate resources. With different host and control-plane regions, generated shared
+resource names and Key Vault scope hashes now follow the host region. Review existing
+deployments before redeployment rather than implicitly creating replacement shared services.
+For an existing backup configuration, keep supplying the existing vault and policy IDs/names.
+This correction does not move an existing vault or reassign protected storage automatically.
+If changing vaults is required, use an approved operator transition; an Azure Files storage
+account cannot be registered with two backup vaults simultaneously.
 
 > **Resource group changes:** Changing the target resource group does not relocate existing
 > resources. A different resource group produces different resource IDs and can create a second
@@ -576,7 +657,8 @@ The three add-ons (Session Host Replacer, Session Hosts, Storage Quota Manager) 
 
 ### Implementation location
 
-The naming implementation lives in [naming.bicep](../deployments/shared/modules/orchestration/naming/naming.bicep).
+The public naming interface lives in [naming.bicep](../deployments/shared/modules/orchestration/naming/naming.bicep);
+its implementation lives in [internal.bicep](../deployments/shared/modules/orchestration/naming/internal.bicep).
 Standard and automated host pools and the dedicated PoC import `hostPoolNames`;
 standalone FSLogix storage imports the focused `fslogixNames` bundle.
 AVD Shared Services, Image Management and other deployment families consume the

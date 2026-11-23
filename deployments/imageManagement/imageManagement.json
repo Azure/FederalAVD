@@ -5,11 +5,224 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.48.1.52935",
-      "templateHash": "12655722326403741251"
+      "version": "0.49.2.45890",
+      "templateHash": "6985997534358623793"
     }
   },
   "definitions": {
+    "_1.fslogixNamingContext": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        },
+        "cloud": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Explicit subscription, cloud and deployment location for legacy FSLogix naming. Existing resource-group overrides are applied after naming and do not change its uniqueness seed.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.imageManagementNamingResult": {
+      "type": "object",
+      "properties": {
+        "resourceGroupName": {
+          "type": "string"
+        },
+        "imageBuildResourceGroupName": {
+          "type": "string"
+        },
+        "galleryName": {
+          "type": "string"
+        },
+        "identityName": {
+          "type": "string"
+        },
+        "storageEncryptionIdentityName": {
+          "type": "string"
+        },
+        "artifactsStorageAccountName": {
+          "type": "string"
+        },
+        "logsStorageAccountName": {
+          "type": "string"
+        },
+        "storageEncryptionKeyName": {
+          "type": "string"
+        },
+        "galleryDiskEncryptionSetName": {
+          "type": "string"
+        },
+        "galleryDiskEncryptionKeyName": {
+          "type": "string"
+        },
+        "galleryConfidentialVmDiskEncryptionSetName": {
+          "type": "string"
+        },
+        "galleryConfidentialVmDiskEncryptionKeyName": {
+          "type": "string"
+        },
+        "privateEndpointNameConv": {
+          "type": "string"
+        },
+        "privateEndpointNICNameConv": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Internal Image Management bundle result.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.namingContext": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        },
+        "resourceGroupName": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "cloud": {
+          "type": "string"
+        },
+        "namingVariant": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "metadata": {
+        "description": "Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group and location; cloud selects the region map only. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.namingConventionConfig": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "type": "array",
+          "allowedValues": [
+            "customToken1",
+            "customToken2",
+            "environment",
+            "freeform1",
+            "freeform2",
+            "location",
+            "none",
+            "purpose",
+            "resourceType",
+            "workload"
+          ],
+          "nullable": true
+        },
+        "delimiter": {
+          "type": "string",
+          "nullable": true
+        },
+        "workload": {
+          "type": "string",
+          "nullable": true
+        },
+        "environment": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken1": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken2": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform1": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform2": {
+          "type": "string",
+          "nullable": true
+        },
+        "resourceTypeCodes": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "nullable": true
+        },
+        "locationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "cpLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "vmsLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "imageManagementStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "secretsKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "encryptionKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineDiskNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNicNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "description": "Shared optional convention settings. Custom tokens can appear anywhere in components; freeform1/freeform2 remain supported aliases. Explicit resource-name patterns are not reformatted.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "namingConventionConfig": {
+      "$ref": "#/definitions/_1.namingConventionConfig",
+      "metadata": {
+        "description": "Optional shared convention properties, including customToken1/customToken2 and their legacy freeform aliases. Partial overrides are supported; unknown properties and wrong value types are rejected.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+        }
+      }
+    },
     "publicNetworkAccessMode": {
       "type": "string",
       "allowedValues": [
@@ -30,6 +243,27 @@
     {
       "namespace": "_1",
       "members": {
+        "applyTypeFormat": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('rule').format, 'storage'), _1.stripSeps(parameters('value')), if(equals(parameters('rule').format, 'gallery'), replace(parameters('value'), '-', '_'), if(equals(parameters('rule').format, 'hyphen'), _1.kvSanitize(parameters('value')), if(equals(parameters('rule').format, 'literal'), parameters('value'), fail('Unsupported resource-type naming format.')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "buildCustomName": {
           "parameters": [
             {
@@ -76,7 +310,24 @@
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "canonicalNamingCloud": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(toLower(parameters('cloud')), 'azurecloud'), 'AzureCloud', if(equals(toLower(parameters('cloud')), 'azureusgovernment'), 'AzureUSGovernment', if(startsWith(toLower(parameters('cloud')), 'us'), parameters('cloud'), fail('Identifier-based naming supports AzureCloud, AzureUSGovernment and US-prefixed air-gapped cloud environments.'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -126,15 +377,52 @@
           "metadata": {
             "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "formatName": {
+        "composeTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.formatTypeName(_1.cnv(parameters('convention').components, parameters('convention').delimiter, parameters('code'), if(empty(parameters('unique')), parameters('identifier'), format('{0}{1}{2}', parameters('identifier'), parameters('convention').delimiter, parameters('unique'))), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "formatTypeName": {
           "parameters": [
             {
               "type": "string",
-              "name": "name"
+              "name": "value"
             },
             {
               "type": "object",
@@ -143,11 +431,160 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('namingPolicy').resourceTypes.keyVaults.lengthLimit), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('namingPolicy').resourceTypes.functionApps.lengthLimit), parameters('name'))))]"
+            "value": "[if(or(coalesce(tryGet(parameters('rule'), 'preserveCase'), false()), equals(parameters('rule').format, 'literal')), _1.applyTypeFormat(parameters('value'), parameters('rule')), toLower(_1.applyTypeFormat(parameters('value'), parameters('rule'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "imageManagementNames": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "galleryKeyManagement"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.imageManagementNamingResult",
+            "value": "[_1.imageManagementNamesForLocation(parameters('convention'), parameters('context'), parameters('galleryKeyManagement'), if(not(empty(coalesce(tryGet(parameters('convention'), 'locationAbbreviation'), ''))), parameters('convention').locationAbbreviation, _1.regionAbbreviation(parameters('context').location, parameters('context').cloud)), variables('_1.namingPolicy').identifiers.imageManagement)]"
+          },
+          "metadata": {
+            "description": "Internal Image Management bundle implementation; public callers use naming.bicep.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "imageManagementNamesForLocation": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "galleryKeyManagement"
+            },
+            {
+              "type": "string",
+              "name": "abbreviation"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.imageManagementNamingResult",
+            "value": "[_1.imageManagementNamesForScope(parameters('convention'), parameters('context'), parameters('galleryKeyManagement'), parameters('abbreviation'), parameters('identifier'), _1.resourceName(parameters('convention'), 'imageManagementResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), _1.validateImageStoragePrefix(string(coalesce(tryGet(parameters('convention'), 'imageManagementStoragePrefix'), '')), parameters('abbreviation')))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "imageManagementNamesForScope": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.fslogixNamingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "galleryKeyManagement"
+            },
+            {
+              "type": "string",
+              "name": "abbreviation"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "groupName"
+            },
+            {
+              "type": "string",
+              "name": "prefix"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.imageManagementNamingResult",
+            "value": {
+              "resourceGroupName": "[parameters('groupName')]",
+              "imageBuildResourceGroupName": "[_1.resourceName(parameters('convention'), 'imageBuildResourceGroup', parameters('abbreviation'), parameters('identifier'), '')]",
+              "galleryName": "[_1.resourceName(parameters('convention'), 'imageGallery', parameters('abbreviation'), parameters('identifier'), '')]",
+              "identityName": "[_1.resourceName(parameters('convention'), 'imageBlobIdentity', parameters('abbreviation'), parameters('identifier'), '')]",
+              "storageEncryptionIdentityName": "[_1.resourceName(parameters('convention'), 'imageStorageEncryptionIdentity', parameters('abbreviation'), parameters('identifier'), '')]",
+              "artifactsStorageAccountName": "[_1.imageStorageName(parameters('convention'), 'artifacts', parameters('abbreviation'), union(parameters('context'), createObject('resourceGroupName', parameters('groupName'))), parameters('prefix'))]",
+              "logsStorageAccountName": "[_1.imageStorageName(parameters('convention'), 'logs', parameters('abbreviation'), union(parameters('context'), createObject('resourceGroupName', parameters('groupName'))), parameters('prefix'))]",
+              "storageEncryptionKeyName": "[_1.namePattern('imageStorageKey', createObject('identifier', parameters('identifier')))]",
+              "galleryDiskEncryptionSetName": "[_1.resourceName(parameters('convention'), if(contains(parameters('galleryKeyManagement'), 'Platform'), 'imageGalleryDoubleEncryptionKeys', 'imageGalleryCustomerKeys'), parameters('abbreviation'), parameters('identifier'), '')]",
+              "galleryDiskEncryptionKeyName": "[_1.namePattern('imageGalleryKey', createObject('identifier', parameters('identifier')))]",
+              "galleryConfidentialVmDiskEncryptionSetName": "[_1.resourceName(parameters('convention'), 'imageGalleryConfidentialKeys', parameters('abbreviation'), parameters('identifier'), '')]",
+              "galleryConfidentialVmDiskEncryptionKeyName": "[_1.namePattern('imageGalleryConfidentialKey', createObject('identifier', parameters('identifier')))]",
+              "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints)]",
+              "privateEndpointNICNameConv": "[_1.privateEndpointNicPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, _1.resolveConvention(parameters('convention')).resourceTypeCodes.networkInterfaces)]"
+            }
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "imageStorageName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "kind"
+            },
+            {
+              "type": "string",
+              "name": "abbreviation"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "prefix"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.validateTypeName(_1.imageStorageNameResolved(_1.resolveConvention(parameters('convention')), parameters('kind'), parameters('abbreviation'), _1.scopeUnique(_1.validateNamingContext(parameters('context'), 'storageAccounts')), parameters('prefix')), variables('_1.namingPolicy').resourceTypes.storageAccounts)]"
+          },
+          "metadata": {
+            "description": "Names Image Management artifacts/log accounts using the common scope hash and storage formatting. The prefix must first pass validateImageStoragePrefix.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -167,11 +604,7 @@
             },
             {
               "type": "string",
-              "name": "standardUnique"
-            },
-            {
-              "type": "string",
-              "name": "customUnique"
+              "name": "unique"
             },
             {
               "type": "string",
@@ -180,11 +613,28 @@
           ],
           "output": {
             "type": "string",
-            "value": "[__bicep.namePattern(if(not(empty(parameters('prefix'))), 'imageStorageCustomPrefix', if(__bicep.resourceTypeFirst(parameters('convention')), 'imageStorageFirst', 'imageStorageLast')), createObject('storageAccounts', toLower(parameters('convention').resourceTypeCodes.storageAccounts), 'purpose', variables('namingPolicy').imageStoragePurposes[parameters('kind')], 'location', parameters('abbreviation'), 'prefix', parameters('prefix'), 'unique', if(not(empty(parameters('prefix'))), take(parameters('customUnique'), variables('namingPolicy').limits.uniqueSuffix), take(parameters('standardUnique'), max(sub(sub(sub(variables('namingPolicy').resourceTypes.storageAccounts.lengthLimit, length(parameters('convention').resourceTypeCodes.storageAccounts)), length(variables('namingPolicy').imageStoragePurposes.artifacts)), length(parameters('abbreviation'))), 1)))))]"
+            "value": "[_1.namePattern(if(not(empty(parameters('prefix'))), 'imageStorageCustomPrefix', if(_1.resourceTypeFirst(parameters('convention')), 'imageStorageFirst', 'imageStorageLast')), createObject('storageAccounts', toLower(parameters('convention').resourceTypeCodes.storageAccounts), 'purpose', variables('_1.namingPolicy').imageStoragePurposes[parameters('kind')], 'location', parameters('abbreviation'), 'prefix', parameters('prefix'), 'unique', take(parameters('unique'), variables('_1.namingPolicy').limits.uniqueSuffix)))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "isNamingToken": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            }
+          ],
+          "output": {
+            "type": "bool",
+            "value": "[and(and(and(not(empty(parameters('value'))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(first(parameters('value'))))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(last(parameters('value'))))), empty(filter(map(range(0, length(parameters('value'))), lambda('i', toLower(substring(parameters('value'), lambdaVariables('i'), 1)))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789-_.', lambdaVariables('character')))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -202,7 +652,99 @@
           "metadata": {
             "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "namePattern": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "pattern"
+            },
+            {
+              "type": "object",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.render(variables('_1.namingPolicy').patterns[parameters('pattern')], union(createObject('delimiter', variables('_1.namingPolicy').defaults.delimiter), parameters('context')))]"
+          },
+          "metadata": {
+            "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "privateEndpointNicPattern": {
+          "parameters": [
+            {
+              "type": "bool",
+              "name": "first"
+            },
+            {
+              "type": "string",
+              "name": "privateEndpointCode"
+            },
+            {
+              "type": "string",
+              "name": "networkInterfaceCode"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.namePattern(if(parameters('first'), 'privateEndpointNicFirst', 'privateEndpointNicLast'), createObject('networkInterfaces', parameters('networkInterfaceCode'), 'endpoint', _1.privateEndpointPattern(parameters('first'), parameters('privateEndpointCode'))))]"
+          },
+          "metadata": {
+            "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "privateEndpointPattern": {
+          "parameters": [
+            {
+              "type": "bool",
+              "name": "first"
+            },
+            {
+              "type": "string",
+              "name": "privateEndpointCode"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.namePattern(if(parameters('first'), 'privateEndpointFirst', 'privateEndpointLast'), createObject('privateEndpoints', parameters('privateEndpointCode')))]"
+          },
+          "metadata": {
+            "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "regionAbbreviation": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[variables('_1.locationDefinitions')[if(startsWith(toLower(parameters('cloud')), 'us'), 'other', parameters('cloud'))][if(startsWith(toLower(parameters('cloud')), 'us'), substring(parameters('region'), 5, max(sub(length(parameters('region')), 5), 0)), parameters('region'))].abbreviation]"
+          },
+          "metadata": {
+            "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -223,7 +765,28 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "requireNamingToken": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "string",
+              "name": "label"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(_1.isNamingToken(parameters('value')), parameters('value'), fail(format('{0} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.', parameters('label'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -264,11 +827,54 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(contains(createArray('freeform1', 'customToken1'), parameters('comp')), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(contains(createArray('freeform2', 'customToken2'), parameters('comp')), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolveConvention": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', map(coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), lambda('component', if(equals(lambdaVariables('component'), 'customToken1'), 'freeform1', if(equals(lambdaVariables('component'), 'customToken2'), 'freeform2', lambdaVariables('component'))))), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', _1.resolveCustomToken(parameters('convention'), 'customToken1', 'freeform1'), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', _1.resolveCustomToken(parameters('convention'), 'customToken2', 'freeform2'), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
+          },
+          "metadata": {
+            "description": "Resolves shared defaults, custom-token aliases and partial abbreviation overrides. Conflicting alias values fail; explicit empty delimiters and existing default-workload behavior are preserved.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolveCustomToken": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "preferred"
+            },
+            {
+              "type": "string",
+              "name": "legacy"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(and(and(not(equals(tryGet(parameters('convention'), parameters('preferred')), null())), not(equals(tryGet(parameters('convention'), parameters('legacy')), null()))), not(equals(parameters('convention')[parameters('preferred')], parameters('convention')[parameters('legacy')]))), fail(format('namingConvention.{0} and {1} are aliases and must agree when both are supplied.', parameters('preferred'), parameters('legacy'))), coalesce(coalesce(tryGet(parameters('convention'), parameters('preferred')), tryGet(parameters('convention'), parameters('legacy'))), ''))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -297,11 +903,82 @@
           ],
           "output": {
             "type": "string",
-            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+            "value": "[_1.resolvedTypeName(union(_1.validateConvention(parameters('convention'), not(empty(parameters('rule').purpose))), createObject('components', if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components))), if(empty(parameters('rule').type), createObject('format', 'literal', 'fragment', true()), union(variables('_1.namingPolicy').resourceTypes[parameters('rule').type], createObject('format', if(contains(createArray('keyVaults', 'computeGalleries'), parameters('rule').type), variables('_1.namingPolicy').resourceTypes[parameters('rule').type].format, 'literal'), 'preserveCase', true()))), if(empty(parameters('rule').type), '', _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('rule').type], 'Resource type abbreviation')), if(empty(parameters('region')), '', _1.requireNamingToken(parameters('region'), 'Location abbreviation')), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, if(empty(parameters('identifier')), '', _1.requireNamingToken(parameters('identifier'), 'Resource identifier')), parameters('unique')), '')]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolvedTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.validateTypeName(_1.composeTypeName(parameters('convention'), parameters('rule'), parameters('code'), parameters('region'), parameters('identifier'), parameters('unique')), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resourceName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "role"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.resolvedResourceName(_1.resolveConvention(parameters('convention')), variables('_1.namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
+          },
+          "metadata": {
+            "description": "Internal role adapter to the common naming engine. Roles supply purpose, workload exceptions and established casing/formatting; all actual resource names use the shared convention and type validators.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -330,23 +1007,90 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "scopedUnique": {
+        "resourceTypeFirst": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            }
+          ],
+          "output": {
+            "type": "bool",
+            "value": "[or(empty(filter(_1.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), not(equals(last(filter(_1.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), 'resourceType')))]"
+          },
+          "metadata": {
+            "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "scopeUnique": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[uniqueString(toLower(parameters('context').subscriptionId), toLower(parameters('context').resourceGroupName), toLower(parameters('context').location))]"
+          },
+          "metadata": {
+            "description": "One stable resource-scope hash: lowercase subscription, owning resource group and full location. Cloud, purpose, resource type and naming-convention choices never participate. Callers apply their suffix budget.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "stripSeps": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "s"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[replace(replace(replace(parameters('s'), '-', ''), '_', ''), '.', '')]"
+          },
+          "metadata": {
+            "description": "Removes hyphens, underscores, and dots. Callers separately enforce case, length, uniqueness, and the remaining resource naming rules.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateConvention": {
           "parameters": [
             {
               "type": "object",
               "name": "convention"
             },
             {
-              "type": "string",
-              "name": "subscriptionId"
-            },
+              "type": "bool",
+              "name": "requirePurpose"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[if(or(and(parameters('requirePurpose'), not(equals(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1))), greater(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1)), fail('Naming requires exactly one purpose component for resources with a purpose.'), if(empty(filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), fail('Naming requires at least one non-none component.'), if(not(empty(filter(parameters('convention').components, lambda('component', not(contains(createArray('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'), lambdaVariables('component'))))))), fail('Naming contains an unsupported naming-convention component.'), if(or(greater(length(parameters('convention').delimiter), 3), not(empty(filter(map(range(0, length(parameters('convention').delimiter)), lambda('i', substring(parameters('convention').delimiter, lambdaVariables('i'), 1))), lambda('character', not(contains('-_.', lambdaVariables('character')))))))), fail('Naming delimiter must be empty or contain at most three hyphens, underscores or dots.'), if(not(empty(filter(createArray('workload', 'environment', 'freeform1', 'freeform2'), lambda('component', and(and(contains(parameters('convention').components, lambdaVariables('component')), not(empty(parameters('convention')[lambdaVariables('component')]))), not(_1.isNamingToken(parameters('convention')[lambdaVariables('component')]))))))), fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.'), parameters('convention'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateImageStoragePrefix": {
+          "parameters": [
             {
               "type": "string",
-              "name": "resourceGroupName"
+              "name": "prefix"
             },
             {
               "type": "string",
@@ -355,12 +1099,54 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(not(contains(__bicep.resolveConvention(parameters('convention')).components, 'location')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName')))]"
+            "value": "[if(and(not(empty(parameters('prefix'))), or(or(greater(length(parameters('prefix')), variables('_1.namingPolicy').limits.imageManagementStoragePrefix), not(equals(parameters('prefix'), toLower(parameters('prefix'))))), not(empty(filter(map(range(0, length(parameters('prefix'))), lambda('i', substring(parameters('prefix'), lambdaVariables('i'), 1))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789', lambdaVariables('character'))))))))), fail(format('namingConvention.imageManagementStoragePrefix must contain no more than {0} lowercase letters or numbers.', variables('_1.namingPolicy').limits.imageManagementStoragePrefix)), if(and(not(empty(parameters('prefix'))), greater(length(parameters('region')), variables('_1.namingPolicy').limits.imageManagementStorageLocation)), fail(format('The location abbreviation must contain no more than {0} characters when namingConvention.imageManagementStoragePrefix is specified.', variables('_1.namingPolicy').limits.imageManagementStorageLocation)), parameters('prefix')))]"
           },
           "metadata": {
-            "description": "Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.",
+            "description": "Validates the Image Management storage prefix and its location budget before constructing either account name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateNamingContext": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.namingContext",
+            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'microsoft.resources/resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateTypeName": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "name"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(coalesce(tryGet(parameters('rule'), 'fragment'), false()), parameters('name'), if(empty(parameters('name')), fail('Generated name must not be empty.'), if(greater(length(parameters('name')), parameters('rule').lengthLimit), fail(format('Generated name exceeds the {0}-character limit. Shorten the identifier or naming-convention values.', parameters('rule').lengthLimit)), if(and(coalesce(tryGet(parameters('rule'), 'startWithLetter'), false()), not(contains('abcdefghijklmnopqrstuvwxyz', toLower(first(parameters('name')))))), fail('This resource type requires a name starting with a letter. Change the first selected component.'), if(and(coalesce(tryGet(parameters('rule'), 'noConsecutiveHyphens'), false()), contains(parameters('name'), '--')), fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.'), parameters('name'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         }
@@ -369,153 +1155,27 @@
     {
       "namespace": "__bicep",
       "members": {
-        "imageStorageName": {
+        "imageManagementNames": {
           "parameters": [
             {
-              "type": "object",
+              "$ref": "#/definitions/namingConventionConfig",
               "name": "convention"
             },
             {
-              "type": "string",
-              "name": "kind"
-            },
-            {
-              "type": "string",
-              "name": "abbreviation"
-            },
-            {
-              "type": "string",
-              "name": "subscriptionId"
-            },
-            {
-              "type": "string",
-              "name": "resourceGroupName"
-            },
-            {
-              "type": "string",
-              "name": "region"
-            },
-            {
-              "type": "string",
-              "name": "prefix"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.imageStorageNameResolved(__bicep.resolveConvention(parameters('convention')), parameters('kind'), parameters('abbreviation'), _1.scopedUnique(parameters('convention'), parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), parameters('prefix'))]"
-          },
-          "metadata": {
-            "description": "Names Image Management artifacts/log accounts with their shared length budget and existing uniqueness recipes. The prefix must first pass validateImageStoragePrefix.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "namePattern": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "pattern"
-            },
-            {
-              "type": "object",
+              "$ref": "#/definitions/_1.fslogixNamingContext",
               "name": "context"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.render(variables('namingPolicy').patterns[parameters('pattern')], union(createObject('delimiter', variables('namingPolicy').defaults.delimiter), parameters('context')))]"
-          },
-          "metadata": {
-            "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "privateEndpointNicPattern": {
-          "parameters": [
-            {
-              "type": "bool",
-              "name": "first"
             },
             {
               "type": "string",
-              "name": "privateEndpointCode"
-            },
-            {
-              "type": "string",
-              "name": "networkInterfaceCode"
+              "name": "galleryKeyManagement"
             }
           ],
           "output": {
-            "type": "string",
-            "value": "[__bicep.namePattern(if(parameters('first'), 'privateEndpointNicFirst', 'privateEndpointNicLast'), createObject('networkInterfaces', parameters('networkInterfaceCode'), 'endpoint', __bicep.privateEndpointPattern(parameters('first'), parameters('privateEndpointCode'))))]"
+            "$ref": "#/definitions/_1.imageManagementNamingResult",
+            "value": "[_1.imageManagementNames(parameters('convention'), parameters('context'), parameters('galleryKeyManagement'))]"
           },
           "metadata": {
-            "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "privateEndpointPattern": {
-          "parameters": [
-            {
-              "type": "bool",
-              "name": "first"
-            },
-            {
-              "type": "string",
-              "name": "privateEndpointCode"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[__bicep.namePattern(if(parameters('first'), 'privateEndpointFirst', 'privateEndpointLast'), createObject('privateEndpoints', parameters('privateEndpointCode')))]"
-          },
-          "metadata": {
-            "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "regionAbbreviation": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "region"
-            },
-            {
-              "type": "string",
-              "name": "cloud"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[variables('_1.locationDefinitions')[if(startsWith(toLower(parameters('cloud')), 'us'), 'other', parameters('cloud'))][if(startsWith(toLower(parameters('cloud')), 'us'), substring(parameters('region'), 5, max(sub(length(parameters('region')), 5), 0)), parameters('region'))].abbreviation]"
-          },
-          "metadata": {
-            "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resolveConvention": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            }
-          ],
-          "output": {
-            "type": "object",
-            "value": "[union(variables('namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
-          },
-          "metadata": {
-            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
+            "description": "Names Image Management resources, including both storage accounts and gallery encryption resources, using the common owning-scope hash.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
@@ -547,80 +1207,6 @@
             "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/networking/functions.bicep"
-            }
-          }
-        },
-        "resourceName": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            },
-            {
-              "type": "string",
-              "name": "role"
-            },
-            {
-              "type": "string",
-              "name": "region"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "type": "string",
-              "name": "unique"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[_1.resolvedResourceName(__bicep.resolveConvention(parameters('convention')), variables('namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
-          },
-          "metadata": {
-            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault or Function App formatting rule.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "resourceTypeFirst": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "convention"
-            }
-          ],
-          "output": {
-            "type": "bool",
-            "value": "[or(empty(filter(__bicep.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), not(equals(last(filter(__bicep.resolveConvention(parameters('convention')).components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), 'resourceType')))]"
-          },
-          "metadata": {
-            "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "validateImageStoragePrefix": {
-          "parameters": [
-            {
-              "type": "string",
-              "name": "prefix"
-            },
-            {
-              "type": "string",
-              "name": "region"
-            }
-          ],
-          "output": {
-            "type": "string",
-            "value": "[if(and(not(empty(parameters('prefix'))), or(or(greater(length(parameters('prefix')), variables('namingPolicy').limits.imageManagementStoragePrefix), not(equals(parameters('prefix'), toLower(parameters('prefix'))))), not(empty(filter(map(range(0, length(parameters('prefix'))), lambda('i', substring(parameters('prefix'), lambdaVariables('i'), 1))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789', lambdaVariables('character'))))))))), fail(format('namingConvention.imageManagementStoragePrefix must contain no more than {0} lowercase letters or numbers.', variables('namingPolicy').limits.imageManagementStoragePrefix)), if(and(not(empty(parameters('prefix'))), greater(length(parameters('region')), variables('namingPolicy').limits.imageManagementStorageLocation)), fail(format('The location abbreviation must contain no more than {0} characters when namingConvention.imageManagementStoragePrefix is specified.', variables('namingPolicy').limits.imageManagementStorageLocation)), parameters('prefix')))]"
-          },
-          "metadata": {
-            "description": "Validates the Image Management storage prefix and its location budget before constructing either account name.",
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
           }
         }
@@ -777,7 +1363,7 @@
       }
     },
     "namingConvention": {
-      "type": "object",
+      "$ref": "#/definitions/namingConventionConfig",
       "defaultValue": {
         "components": [
           "resourceType",
@@ -812,42 +1398,33 @@
         }
       }
     ],
-    "cnv_loc": "[if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'locationAbbreviation'), ''))), parameters('namingConvention').locationAbbreviation, __bicep.regionAbbreviation(parameters('location'), environment().name))]",
-    "cnv_rtCodes": "[__bicep.resolveConvention(parameters('namingConvention')).resourceTypeCodes]",
-    "cnv_rtFirst": "[__bicep.resourceTypeFirst(parameters('namingConvention'))]",
-    "customResourceGroupName": "[__bicep.resourceName(parameters('namingConvention'), 'imageManagementResourceGroup', variables('cnv_loc'), variables('identifier'), '')]",
-    "customGalleryName": "[__bicep.resourceName(parameters('namingConvention'), 'imageGallery', variables('cnv_loc'), variables('identifier'), '')]",
-    "customIdentityName": "[__bicep.resourceName(parameters('namingConvention'), 'imageBlobIdentity', variables('cnv_loc'), variables('identifier'), '')]",
-    "customEncryptionIdentityName": "[__bicep.resourceName(parameters('namingConvention'), 'imageStorageEncryptionIdentity', variables('cnv_loc'), variables('identifier'), '')]",
-    "imageManagementStoragePrefix": "[string(coalesce(tryGet(parameters('namingConvention'), 'imageManagementStoragePrefix'), ''))]",
-    "effectiveImageManagementStoragePrefix": "[__bicep.validateImageStoragePrefix(variables('imageManagementStoragePrefix'), variables('cnv_loc'))]",
-    "identifier": "[variables('namingPolicy').identifiers.imageManagement]",
-    "resourceGroupName": "[variables('customResourceGroupName')]",
-    "imageBuildRgName": "[__bicep.resourceName(parameters('namingConvention'), 'imageBuildResourceGroup', variables('cnv_loc'), variables('identifier'), '')]",
+    "naming": "[__bicep.imageManagementNames(parameters('namingConvention'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'location', parameters('location')), parameters('keyManagementGalleryImageVersions'))]",
+    "resourceGroupName": "[variables('naming').resourceGroupName]",
+    "imageBuildRgName": "[variables('naming').imageBuildResourceGroupName]",
     "artifactsBlobContainerName": "artifacts",
-    "galleryName": "[variables('customGalleryName')]",
-    "identityName": "[variables('customIdentityName')]",
+    "galleryName": "[variables('naming').galleryName]",
+    "identityName": "[variables('naming').identityName]",
     "vnetName": "[if(not(empty(parameters('privateEndpointSubnetResourceId'))), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
-    "privateEndpointNameConv": "[replace(__bicep.privateEndpointPattern(variables('cnv_rtFirst'), variables('cnv_rtCodes').privateEndpoints), 'VNETID', variables('vnetName'))]",
+    "privateEndpointNameConv": "[replace(variables('naming').privateEndpointNameConv, 'VNETID', variables('vnetName'))]",
     "privateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('artifactsStorageAccountName'))]",
-    "customNetworkInterfaceName": "[replace(replace(replace(__bicep.privateEndpointNicPattern(variables('cnv_rtFirst'), variables('cnv_rtCodes').privateEndpoints, variables('cnv_rtCodes').networkInterfaces), 'VNETID', variables('vnetName')), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('artifactsStorageAccountName'))]",
-    "artifactsStorageAccountName": "[__bicep.imageStorageName(parameters('namingConvention'), 'artifacts', variables('cnv_loc'), subscription().subscriptionId, variables('resourceGroupName'), parameters('location'), variables('effectiveImageManagementStoragePrefix'))]",
+    "customNetworkInterfaceName": "[replace(replace(replace(variables('naming').privateEndpointNICNameConv, 'VNETID', variables('vnetName')), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('artifactsStorageAccountName'))]",
+    "artifactsStorageAccountName": "[variables('naming').artifactsStorageAccountName]",
     "sasExpirationPeriod": "180.00:00:00",
     "storageKind": "StorageV2",
     "storageSkuName": "Standard_LRS",
     "artifactsStorageAccessTier": "Hot",
     "logsStorageAccessTier": "Hot",
-    "storageEncryptionKeyName": "[__bicep.namePattern('imageStorageKey', createObject('identifier', variables('identifier')))]",
-    "storageEncryptionIdentityName": "[variables('customEncryptionIdentityName')]",
+    "storageEncryptionKeyName": "[variables('naming').storageEncryptionKeyName]",
+    "storageEncryptionIdentityName": "[variables('naming').storageEncryptionIdentityName]",
     "cmkKeyNames": "[if(or(parameters('deployArtifactsStorageAccount'), parameters('deployBuildLogsStorageAccount')), createArray(variables('storageEncryptionKeyName')), createArray())]",
-    "galleryDiskEncryptionSetName": "[__bicep.resourceName(parameters('namingConvention'), if(contains(parameters('keyManagementGalleryImageVersions'), 'Platform'), 'imageGalleryDoubleEncryptionKeys', 'imageGalleryCustomerKeys'), variables('cnv_loc'), variables('identifier'), '')]",
-    "galleryDiskEncryptionKeyName": "[__bicep.namePattern('imageGalleryKey', createObject('identifier', variables('identifier')))]",
-    "galleryConfidentialVmDiskEncryptionSetName": "[__bicep.resourceName(parameters('namingConvention'), 'imageGalleryConfidentialKeys', variables('cnv_loc'), variables('identifier'), '')]",
-    "galleryConfidentialVmDiskEncryptionKeyName": "[__bicep.namePattern('imageGalleryConfidentialKey', createObject('identifier', variables('identifier')))]",
-    "logsStorageName": "[__bicep.imageStorageName(parameters('namingConvention'), 'logs', variables('cnv_loc'), subscription().subscriptionId, variables('resourceGroupName'), parameters('location'), variables('effectiveImageManagementStoragePrefix'))]",
+    "galleryDiskEncryptionSetName": "[variables('naming').galleryDiskEncryptionSetName]",
+    "galleryDiskEncryptionKeyName": "[variables('naming').galleryDiskEncryptionKeyName]",
+    "galleryConfidentialVmDiskEncryptionSetName": "[variables('naming').galleryConfidentialVmDiskEncryptionSetName]",
+    "galleryConfidentialVmDiskEncryptionKeyName": "[variables('naming').galleryConfidentialVmDiskEncryptionKeyName]",
+    "logsStorageName": "[variables('naming').logsStorageAccountName]",
     "logsContainerName": "image-customization-logs",
     "logsPrivateEndpointName": "[replace(replace(variables('privateEndpointNameConv'), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
-    "logsCustomNetworkInterfaceName": "[replace(replace(replace(__bicep.privateEndpointNicPattern(variables('cnv_rtFirst'), variables('cnv_rtCodes').privateEndpoints, variables('cnv_rtCodes').networkInterfaces), 'VNETID', variables('vnetName')), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
+    "logsCustomNetworkInterfaceName": "[replace(replace(replace(variables('naming').privateEndpointNICNameConv, 'VNETID', variables('vnetName')), 'SUBRESOURCE', 'blob'), 'RESOURCE', variables('logsStorageName'))]",
     "effectiveStoragePermittedIPs": "[filter(parameters('storagePermittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
     "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), equals(parameters('storageNetworkAccess'), 'PrivateEndpoint'), or(not(empty(variables('effectiveStoragePermittedIPs'))), not(empty(parameters('storageServiceEndpointSubnetResourceIds')))))]",
     "storageNetworkAcls": {
@@ -1147,9 +1724,7 @@
       }
     },
     "_1.locationDefinitions": "[variables('_1._3')]",
-    "_1.osDiskNamePattern": "SHNAME-osdisk",
-    "_1.resourceAbbreviations": "[variables('_1._2')]",
-    "namingPolicy": {
+    "_1.namingPolicy": {
       "defaults": {
         "components": [
           "resourceType",
@@ -1175,69 +1750,88 @@
       },
       "resourceTypes": {
         "functionApps": {
+          "azureResourceType": "Microsoft.Web/sites",
+          "namingVariant": "functionapp",
           "lengthLimit": 60,
           "format": "hyphen",
           "globallyUnique": true
         },
         "storageAccounts": {
+          "azureResourceType": "Microsoft.Storage/storageAccounts",
           "lengthLimit": 24,
           "format": "storage",
           "globallyUnique": true
         },
         "applicationInsights": {
+          "azureResourceType": "Microsoft.Insights/components",
           "lengthLimit": 260,
           "format": "hyphen"
         },
         "appServicePlans": {
+          "azureResourceType": "Microsoft.Web/serverfarms",
           "lengthLimit": 60,
           "format": "hyphen"
         },
         "userAssignedIdentities": {
+          "azureResourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
           "lengthLimit": 128,
           "format": "hyphen"
         },
         "automationAccounts": {
+          "azureResourceType": "Microsoft.Automation/automationAccounts",
           "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "availabilitySets": {
+          "azureResourceType": "Microsoft.Compute/availabilitySets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "computeGalleries": {
+          "azureResourceType": "Microsoft.Compute/galleries",
           "lengthLimit": 80,
           "format": "gallery"
         },
         "dataCollectionEndpoints": {
+          "azureResourceType": "Microsoft.Insights/dataCollectionEndpoints",
           "lengthLimit": 44,
           "format": "hyphen"
         },
         "dataCollectionRules": {
+          "azureResourceType": "Microsoft.Insights/dataCollectionRules",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "desktopApplicationGroups": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/applicationGroups",
+          "namingVariant": "Desktop",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "remoteApplicationGroups": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/applicationGroups",
+          "namingVariant": "RemoteApp",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskAccesses": {
+          "azureResourceType": "Microsoft.Compute/diskAccesses",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskEncryptionSets": {
+          "azureResourceType": "Microsoft.Compute/diskEncryptionSets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "hostPools": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/hostPools",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "keyVaults": {
+          "azureResourceType": "Microsoft.KeyVault/vaults",
           "lengthLimit": 24,
           "format": "hyphen",
           "globallyUnique": true,
@@ -1246,83 +1840,103 @@
           "noConsecutiveHyphens": true
         },
         "logAnalyticsWorkspaces": {
+          "azureResourceType": "Microsoft.OperationalInsights/workspaces",
           "lengthLimit": 63,
           "format": "hyphen"
         },
         "natGateways": {
+          "azureResourceType": "Microsoft.Network/natGateways",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "netAppAccounts": {
+          "azureResourceType": "Microsoft.NetApp/netAppAccounts",
           "lengthLimit": 128,
           "format": "hyphen"
         },
         "netAppCapacityPools": {
+          "azureResourceType": "Microsoft.NetApp/netAppAccounts/capacityPools",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "networkInterfaces": {
+          "azureResourceType": "Microsoft.Network/networkInterfaces",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "networkSecurityGroups": {
+          "azureResourceType": "Microsoft.Network/networkSecurityGroups",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "osdisks": {
+          "azureResourceType": "Microsoft.Compute/disks",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "privateEndpoints": {
+          "azureResourceType": "Microsoft.Network/privateEndpoints",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "privateLinkScopes": {
+          "azureResourceType": "Microsoft.Insights/privateLinkScopes",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "publicIPAddresses": {
+          "azureResourceType": "Microsoft.Network/publicIPAddresses",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "recoveryServicesVaults": {
+          "azureResourceType": "Microsoft.RecoveryServices/vaults",
           "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "resourceGroups": {
+          "azureResourceType": "Microsoft.Resources/resourceGroups",
           "lengthLimit": 90,
           "format": "hyphen"
         },
         "routeTables": {
+          "azureResourceType": "Microsoft.Network/routeTables",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "scalingPlans": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/scalingPlans",
           "lengthLimit": 63,
           "format": "hyphen"
         },
         "templateSpecs": {
+          "azureResourceType": "Microsoft.Resources/templateSpecs",
           "lengthLimit": 90,
           "format": "hyphen"
         },
         "virtualMachines": {
+          "azureResourceType": "Microsoft.Compute/virtualMachines",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "virtualNetworks": {
+          "azureResourceType": "Microsoft.Network/virtualNetworks",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "subnets": {
+          "azureResourceType": "Microsoft.Network/virtualNetworks/subnets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "workspaces": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/workspaces",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "imageDefinitions": {
+          "azureResourceType": "Microsoft.Compute/galleries/images",
           "lengthLimit": 80,
           "format": "hyphen"
         }
@@ -1640,9 +2254,9 @@
         "storageCmkKey": "{identifier}-storage-cmk",
         "imageGalleryKey": "{identifier}-gallery-cmk",
         "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
-        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
-        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
-        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+        "imageStorageFirst": "{storageAccounts}{purpose}{unique}{location}",
+        "imageStorageLast": "{purpose}{unique}{location}{storageAccounts}",
+        "imageStorageCustomPrefix": "{prefix}{purpose}{unique}{location}",
         "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
         "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
         "imageBuildVm": "{prefix}img-{unique}",
@@ -1670,7 +2284,9 @@
         "sessionHosts": "session-hosts",
         "sessionHostPolicy": "session-host-policy"
       }
-    }
+    },
+    "_1.osDiskNamePattern": "SHNAME-osdisk",
+    "_1.resourceAbbreviations": "[variables('_1._2')]"
   },
   "resources": {
     "resourceGroup": {
@@ -1718,8 +2334,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "2239996996056168575"
+              "version": "0.49.2.45890",
+              "templateHash": "8609529858917770162"
             },
             "name": "Azure Compute Gallery",
             "description": "Deploys an Azure Compute Gallery with optional user-assigned identities; image definitions, versions and role assignments are managed separately."
@@ -1831,8 +2447,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "9072655300844897940"
+              "version": "0.49.2.45890",
+              "templateHash": "15575170420369594572"
             },
             "name": "Resource group",
             "description": "Deploys a resource group at subscription scope with caller-supplied name, region and optional tags; resources within the group are managed separately."
@@ -1914,8 +2530,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "888486078838877110"
+              "version": "0.49.2.45890",
+              "templateHash": "3881104354286983188"
             },
             "name": "Resource group role assignment",
             "description": "Assigns an existing role to a principal at the deployment resource group scope; the caller must have role-assignment permissions."
@@ -2016,8 +2632,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7465970199175626474"
+              "version": "0.49.2.45890",
+              "templateHash": "4675357121791106424"
             },
             "name": "User-assigned managed identity",
             "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -2128,8 +2744,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7403143418049330961"
+              "version": "0.49.2.45890",
+              "templateHash": "10139659775394482390"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -2342,8 +2958,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -2495,8 +3111,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -2604,8 +3220,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -2786,8 +3402,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -2953,8 +3569,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12759822695435844990"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10565702832032312147"
                     },
                     "name": "Disk encryption set",
                     "description": "Deploys a disk encryption set referencing an existing Key Vault key, optionally resolving its current version. Key access permissions are managed separately."
@@ -3119,8 +3735,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3292,8 +3908,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3502,8 +4118,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7403143418049330961"
+              "version": "0.49.2.45890",
+              "templateHash": "10139659775394482390"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -3716,8 +4332,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -3869,8 +4485,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -3978,8 +4594,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -4160,8 +4776,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -4327,8 +4943,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12759822695435844990"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10565702832032312147"
                     },
                     "name": "Disk encryption set",
                     "description": "Deploys a disk encryption set referencing an existing Key Vault key, optionally resolving its current version. Key access permissions are managed separately."
@@ -4493,8 +5109,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -4666,8 +5282,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -4876,8 +5492,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7403143418049330961"
+              "version": "0.49.2.45890",
+              "templateHash": "10139659775394482390"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -5090,8 +5706,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -5243,8 +5859,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "7465970199175626474"
+                      "version": "0.49.2.45890",
+                      "templateHash": "4675357121791106424"
                     },
                     "name": "User-assigned managed identity",
                     "description": "Deploys a user-assigned managed identity and returns its resource ID, name, client ID and principal ID. Resource attachments and permissions are managed separately."
@@ -5352,8 +5968,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -5534,8 +6150,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "5295465107915733041"
+                      "version": "0.49.2.45890",
+                      "templateHash": "9250259685917170013"
                     },
                     "name": "Key Vault key",
                     "description": "Creates or updates a key under an existing Key Vault in the deployment resource group, with optional rotation and release policies. Vault SKU and permissions must support the selected key type."
@@ -5701,8 +6317,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "12759822695435844990"
+                      "version": "0.49.2.45890",
+                      "templateHash": "10565702832032312147"
                     },
                     "name": "Disk encryption set",
                     "description": "Deploys a disk encryption set referencing an existing Key Vault key, optionally resolving its current version. Key access permissions are managed separately."
@@ -5867,8 +6483,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -6040,8 +6656,8 @@
                   "metadata": {
                     "_generator": {
                       "name": "bicep",
-                      "version": "0.48.1.52935",
-                      "templateHash": "13651154066928410161"
+                      "version": "0.49.2.45890",
+                      "templateHash": "12871399245494088431"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -6264,8 +6880,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "17785469489675376614"
+              "version": "0.49.2.45890",
+              "templateHash": "3600459726864579106"
             },
             "name": "Storage account",
             "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
@@ -6704,8 +7320,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "12714254774232459205"
+              "version": "0.49.2.45890",
+              "templateHash": "8593949396308875417"
             },
             "name": "Blob service settings",
             "description": "Configures the default Blob service on an existing storage account, including soft delete, versioning, change feed and optional diagnostics. Containers are managed separately."
@@ -6969,8 +7585,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "13564035929144746920"
+              "version": "0.49.2.45890",
+              "templateHash": "548595818639133627"
             },
             "name": "Blob container",
             "description": "Deploys a container in the default Blob service of an existing storage account; account-level settings must permit any requested anonymous access."
@@ -7074,8 +7690,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "15245018200911253295"
+              "version": "0.49.2.45890",
+              "templateHash": "9996145834195031428"
             },
             "name": "Private endpoint",
             "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -7240,8 +7856,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7464833657221451085"
+              "version": "0.49.2.45890",
+              "templateHash": "15889666481930604460"
             },
             "name": "Storage account role assignments",
             "description": "Applies deterministic role assignments at an existing storage account in the deployment resource group."
@@ -7418,8 +8034,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "17785469489675376614"
+              "version": "0.49.2.45890",
+              "templateHash": "3600459726864579106"
             },
             "name": "Storage account",
             "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
@@ -7846,8 +8462,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "12714254774232459205"
+              "version": "0.49.2.45890",
+              "templateHash": "8593949396308875417"
             },
             "name": "Blob service settings",
             "description": "Configures the default Blob service on an existing storage account, including soft delete, versioning, change feed and optional diagnostics. Containers are managed separately."
@@ -8111,8 +8727,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "13564035929144746920"
+              "version": "0.49.2.45890",
+              "templateHash": "548595818639133627"
             },
             "name": "Blob container",
             "description": "Deploys a container in the default Blob service of an existing storage account; account-level settings must permit any requested anonymous access."
@@ -8221,8 +8837,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "12977561762021688932"
+              "version": "0.49.2.45890",
+              "templateHash": "16185042676730181992"
             },
             "name": "Blob lifecycle management policy",
             "description": "Creates or updates the default lifecycle management policy on an existing storage account using the complete caller-supplied rule array."
@@ -8310,8 +8926,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "15245018200911253295"
+              "version": "0.49.2.45890",
+              "templateHash": "9996145834195031428"
             },
             "name": "Private endpoint",
             "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
@@ -8476,8 +9092,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.48.1.52935",
-              "templateHash": "7464833657221451085"
+              "version": "0.49.2.45890",
+              "templateHash": "15889666481930604460"
             },
             "name": "Storage account role assignments",
             "description": "Applies deterministic role assignments at an existing storage account in the deployment resource group."

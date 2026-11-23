@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "2991273745968829051"
+      "templateHash": "11095373015341892834"
     }
   },
   "definitions": {
@@ -266,7 +266,7 @@
       "metadata": {
         "description": "Explicit subscription, cloud and deployment location for legacy FSLogix naming. Existing resource-group overrides are applied after naming and do not change its uniqueness seed.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -322,7 +322,7 @@
       "metadata": {
         "description": "Storage, private-endpoint and temporary deployment-resource names shared by standalone FSLogix and host pools, including raw and effective location abbreviations.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -354,7 +354,7 @@
       "metadata": {
         "description": "Parameter-only VM, control-plane, feed and subscription context for host-pool naming. Empty globalFeedLocation disables the feed group; an existing workspace must belong to sharedServicesSubscriptionId.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -506,7 +506,138 @@
       "metadata": {
         "description": "Host-pool naming contract containing consumed names and the shared FSLogix bundle. Retained names and uniqueness seeds are preserved for identical context and convention inputs.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.namingContext": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        },
+        "resourceGroupName": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "cloud": {
+          "type": "string"
+        },
+        "namingVariant": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "metadata": {
+        "description": "Actual target context for identifier-based naming. Globally named types hash the subscription, owning resource group and location; cloud selects the region map only. Resource groups accept an empty resourceGroupName; scope-local names do not add a hash.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+        }
+      }
+    },
+    "_1.namingConventionConfig": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "type": "array",
+          "allowedValues": [
+            "customToken1",
+            "customToken2",
+            "environment",
+            "freeform1",
+            "freeform2",
+            "location",
+            "none",
+            "purpose",
+            "resourceType",
+            "workload"
+          ],
+          "nullable": true
+        },
+        "delimiter": {
+          "type": "string",
+          "nullable": true
+        },
+        "workload": {
+          "type": "string",
+          "nullable": true
+        },
+        "environment": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken1": {
+          "type": "string",
+          "nullable": true
+        },
+        "customToken2": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform1": {
+          "type": "string",
+          "nullable": true
+        },
+        "freeform2": {
+          "type": "string",
+          "nullable": true
+        },
+        "resourceTypeCodes": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": {
+            "type": "string"
+          },
+          "nullable": true
+        },
+        "locationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "cpLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "vmsLocationAbbreviation": {
+          "type": "string",
+          "nullable": true
+        },
+        "fslogixStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "imageManagementStoragePrefix": {
+          "type": "string",
+          "nullable": true
+        },
+        "secretsKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "encryptionKeyVaultNameOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineDiskNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        },
+        "virtualMachineNicNameConvOverride": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false,
+      "metadata": {
+        "description": "Shared optional convention settings. Custom tokens can appear anywhere in components; freeform1/freeform2 remain supported aliases. Explicit resource-name patterns are not reformatted.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
         }
       }
     },
@@ -570,6 +701,15 @@
         }
       }
     },
+    "namingConventionConfig": {
+      "$ref": "#/definitions/_1.namingConventionConfig",
+      "metadata": {
+        "description": "Optional shared convention properties, including customToken1/customToken2 and their legacy freeform aliases. Partial overrides are supported; unknown properties and wrong value types are rejected.",
+        "__bicep_imported_from!": {
+          "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+        }
+      }
+    },
     "publicNetworkAccessMode": {
       "type": "string",
       "allowedValues": [
@@ -608,6 +748,48 @@
     {
       "namespace": "_1",
       "members": {
+        "applyTypeFormat": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(parameters('rule').format, 'storage'), _1.stripSeps(parameters('value')), if(equals(parameters('rule').format, 'gallery'), replace(parameters('value'), '-', '_'), if(equals(parameters('rule').format, 'hyphen'), _1.kvSanitize(parameters('value')), if(equals(parameters('rule').format, 'literal'), parameters('value'), fail('Unsupported resource-type naming format.')))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "azureResourceTypeKey": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "variant"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[coalesce(tryGet(variables('_1.azureResourceTypeKeys'), format('{0}|{1}', toLower(parameters('resourceType')), toLower(parameters('variant')))), fail(format('Unsupported Azure resource type or namingVariant: {0} ({1}). Use a registered official resource type without an API version. Microsoft.Web/sites requires namingVariant functionapp; Microsoft.DesktopVirtualization/applicationGroups requires Desktop or RemoteApp. Legacy naming keys are not accepted.', parameters('resourceType'), parameters('variant'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
         "buildCustomName": {
           "parameters": [
             {
@@ -654,7 +836,24 @@
           "metadata": {
             "description": "Joins the selected component values in order, omitting empty values and unknown component names. Does not sanitize, truncate, or add uniqueness.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "canonicalNamingCloud": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "cloud"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(equals(toLower(parameters('cloud')), 'azurecloud'), 'AzureCloud', if(equals(toLower(parameters('cloud')), 'azureusgovernment'), 'AzureUSGovernment', if(startsWith(toLower(parameters('cloud')), 'us'), parameters('cloud'), fail('Identifier-based naming supports AzureCloud, AzureUSGovernment and US-prefixed air-gapped cloud environments.'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -704,7 +903,44 @@
           "metadata": {
             "description": "Builds a convention-based name after excluding none components. Uses the same argument order as buildCustomName.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "composeTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.formatTypeName(_1.cnv(parameters('convention').components, parameters('convention').delimiter, parameters('code'), if(empty(parameters('unique')), parameters('identifier'), format('{0}{1}{2}', parameters('identifier'), parameters('convention').delimiter, parameters('unique'))), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -730,15 +966,15 @@
           "metadata": {
             "description": "Names the temporary deployment VM using the existing separator-removal, uniqueness and Windows computer-name length rule.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "formatName": {
+        "formatTypeName": {
           "parameters": [
             {
               "type": "string",
-              "name": "name"
+              "name": "value"
             },
             {
               "type": "object",
@@ -747,11 +983,11 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('rule').type, 'keyVaults'), take(_1.kvSanitize(parameters('name')), variables('_1.namingPolicy').resourceTypes.keyVaults.lengthLimit), if(equals(parameters('rule').type, 'computeGalleries'), replace(parameters('name'), '-', '_'), if(equals(parameters('rule').type, 'functionApps'), take(parameters('name'), variables('_1.namingPolicy').resourceTypes.functionApps.lengthLimit), parameters('name'))))]"
+            "value": "[if(or(coalesce(tryGet(parameters('rule'), 'preserveCase'), false()), equals(parameters('rule').format, 'literal')), _1.applyTypeFormat(parameters('value'), parameters('rule')), toLower(_1.applyTypeFormat(parameters('value'), parameters('rule'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -777,7 +1013,7 @@
           "metadata": {
             "description": "Returns the legacy-compatible FSLogix bundle without a naming deployment or a host-pool dependency. Explicit caller overrides remain outside this bundle.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -806,7 +1042,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -835,11 +1071,11 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.fslogixNamingResult",
-            "value": "[_1.fslogixNamesWithSeed(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.shortScopedUnique(parameters('convention'), parameters('context').subscriptionId, parameters('storageGroupName'), parameters('context').location))]"
+            "value": "[_1.fslogixNamesWithSeed(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), take(_1.scopeUnique(union(parameters('context'), createObject('resourceGroupName', parameters('storageGroupName')))), variables('_1.namingPolicy').limits.uniqueSuffix))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -896,7 +1132,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -933,7 +1169,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -955,7 +1191,7 @@
           "metadata": {
             "description": "Preserves FSLogix domain-compatible storage-prefix normalization and length budgeting, or uses the central default pattern.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -984,7 +1220,33 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "hostPoolNames": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.hostPoolNamingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.hostPoolNamingResult",
+            "value": "[_1.hostPoolNamesForLocation(parameters('convention'), parameters('identifier'), parameters('context'), _1.fslogixNames(parameters('convention'), parameters('identifier'), createObject('subscriptionId', parameters('context').subscriptionId, 'cloud', parameters('context').cloud, 'location', parameters('context').virtualMachinesLocation)), if(not(empty(coalesce(tryGet(parameters('convention'), 'cpLocationAbbreviation'), ''))), parameters('convention').cpLocationAbbreviation, _1.regionAbbreviation(parameters('context').controlPlaneLocation, parameters('context').cloud)))]"
+          },
+          "metadata": {
+            "description": "Composes host-pool names with storage, monitoring, Key Vault and backup names in the VM region and AVD control-plane names in the control-plane region.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1013,11 +1275,11 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[_1.hostPoolNamesWithScopes(parameters('convention'), parameters('identifier'), parameters('context'), parameters('storage'), parameters('abbreviation'), _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), _1.resourceName(parameters('convention'), 'diskEncryptionSetPattern', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''))]"
+            "value": "[_1.hostPoolNamesWithScopes(parameters('convention'), parameters('identifier'), parameters('context'), parameters('storage'), parameters('abbreviation'), _1.resourceName(parameters('convention'), 'operationsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), _1.resourceName(parameters('convention'), 'diskEncryptionSetPattern', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1049,53 +1311,33 @@
             },
             {
               "type": "string",
-              "name": "sharedOperationsGroup"
-            },
-            {
-              "type": "string",
               "name": "diskEncryptionPattern"
             }
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', _1.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('sharedOperationsGroup'), 'sharedResourceGroupMonitoring', _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('abbreviation'), parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.hostPoolVaultName(parameters('convention'), 'secretsKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedKeyVaultNameEncryption', _1.hostPoolVaultName(parameters('convention'), 'encryptionKeyVault', parameters('abbreviation'), parameters('identifier'), _1.shortScopedUnique(parameters('convention'), parameters('context').sharedServicesSubscriptionId, parameters('sharedOperationsGroup'), parameters('context').controlPlaneLocation)), 'sharedRecoveryServicesVaultNameFSLogix', _1.resourceName(parameters('convention'), 'filesBackupVault', parameters('abbreviation'), parameters('identifier'), ''), 'sharedDataCollectionEndpointName', _1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('abbreviation'), parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', _1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('abbreviation'), parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), _1.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', _1.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', _1.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', _1.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', _1.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', _1.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', _1.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('_1.namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('_1.namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('_1.namingPolicy').patterns.nic), 'diskAccessName', _1.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
+            "value": "[union(parameters('storage'), createObject('resourceGroupOperations', parameters('operationsGroup'), 'resourceGroupConsolidated', _1.resourceName(parameters('convention'), 'consolidatedResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupOperations', parameters('operationsGroup'), 'sharedResourceGroupMonitoring', _1.resourceName(parameters('convention'), 'monitoringResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedResourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'sharedKeyVaultNameSecrets', _1.sharedVaultName(parameters('convention'), 'secretsKeyVault', parameters('storage').vmLocationAbbreviation, createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('operationsGroup'), 'location', parameters('context').virtualMachinesLocation, 'cloud', parameters('context').cloud)), 'sharedKeyVaultNameEncryption', _1.sharedVaultName(parameters('convention'), 'encryptionKeyVault', parameters('storage').vmLocationAbbreviation, createObject('subscriptionId', parameters('context').sharedServicesSubscriptionId, 'resourceGroupName', parameters('operationsGroup'), 'location', parameters('context').virtualMachinesLocation, 'cloud', parameters('context').cloud)), 'sharedRecoveryServicesVaultNameFSLogix', _1.resourceName(parameters('convention'), 'filesBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedDataCollectionEndpointName', _1.resourceName(parameters('convention'), 'dataCollectionEndpoint', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'sharedLogAnalyticsWorkspaceName', _1.resourceName(parameters('convention'), 'logAnalyticsWorkspace', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'globalFeedResourceGroupName', if(not(empty(parameters('context').globalFeedLocation)), _1.resourceName(parameters('convention'), 'globalFeedResourceGroup', '', parameters('identifier'), ''), ''), 'globalFeedWorkspaceName', _1.resourceName(parameters('convention'), 'globalFeedWorkspace', '', parameters('identifier'), ''), 'resourceGroupControlPlane', _1.hostPoolControlPlaneGroup(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation')), 'workspaceName', if(empty(parameters('context').existingFeedWorkspaceResourceId), _1.resourceName(parameters('convention'), 'hostWorkspace', parameters('abbreviation'), parameters('identifier'), ''), last(split(parameters('context').existingFeedWorkspaceResourceId, '/'))), 'sharedWorkspaceName', _1.resourceName(parameters('convention'), 'workspace', parameters('abbreviation'), parameters('identifier'), ''), 'desktopApplicationGroupName', _1.resourceName(parameters('convention'), 'desktopApplicationGroup', parameters('abbreviation'), parameters('identifier'), ''), 'hostPoolName', _1.resourceName(parameters('convention'), 'hostPool', parameters('abbreviation'), parameters('identifier'), ''), 'scalingPlanName', _1.resourceName(parameters('convention'), 'scalingPlan', parameters('abbreviation'), parameters('identifier'), ''), 'recoveryServicesVaultNameVMs', _1.resourceName(parameters('convention'), 'vmBackupVault', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'policyRemediationIdentityName', replace(parameters('storage').userAssignedIdentityNameConv, 'TOKEN', _1.namePattern('policyIdentityPurpose', createObject('delimiter', parameters('storage').delimiter))), 'resourceGroupHosts', _1.resourceName(parameters('convention'), 'hostsResourceGroup', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'availabilitySetNameConv', _1.namePattern('availabilitySet', createObject('name', _1.resourceName(parameters('convention'), 'availabilitySet', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'delimiter', parameters('storage').delimiter)), 'virtualMachineNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNameConvOverride'), ''))), parameters('convention').virtualMachineNameConvOverride, variables('_1.namingPolicy').patterns.virtualMachine), 'virtualMachineDiskNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineDiskNameConvOverride'), ''))), parameters('convention').virtualMachineDiskNameConvOverride, variables('_1.namingPolicy').patterns.osDisk), 'virtualMachineNicNameConv', if(not(empty(coalesce(tryGet(parameters('convention'), 'virtualMachineNicNameConvOverride'), ''))), parameters('convention').virtualMachineNicNameConvOverride, variables('_1.namingPolicy').patterns.nic), 'diskAccessName', _1.resourceName(parameters('convention'), 'diskAccess', parameters('storage').vmLocationAbbreviation, parameters('identifier'), ''), 'diskEncryptionSetNameConfidentialVMs', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('confidentialDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNameCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('customerDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'diskEncryptionSetNamePlatformAndCustomerManaged', replace(parameters('diskEncryptionPattern'), 'TOKEN', _1.namePattern('doubleEncryptionDiskPurpose', createObject('delimiter', parameters('storage').delimiter))), 'encryptionKeyNameVMs', _1.namePattern('vmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameConfidentialVMs', _1.namePattern('confidentialVmKey', createObject('identifier', parameters('identifier'))), 'encryptionKeyNameRecoveryServices', _1.namePattern('recoveryServicesKey', createObject('identifier', parameters('identifier')))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "hostPoolVaultName": {
+        "isNamingToken": {
           "parameters": [
             {
-              "type": "object",
-              "name": "convention"
-            },
-            {
               "type": "string",
-              "name": "role"
-            },
-            {
-              "type": "string",
-              "name": "abbreviation"
-            },
-            {
-              "type": "string",
-              "name": "identifier"
-            },
-            {
-              "type": "string",
-              "name": "unique"
+              "name": "value"
             }
           ],
           "output": {
-            "type": "string",
-            "value": "[if(not(empty(if(equals(parameters('role'), 'secretsKeyVault'), coalesce(tryGet(parameters('convention'), 'secretsKeyVaultNameOverride'), ''), coalesce(tryGet(parameters('convention'), 'encryptionKeyVaultNameOverride'), '')))), if(equals(parameters('role'), 'secretsKeyVault'), parameters('convention').secretsKeyVaultNameOverride, parameters('convention').encryptionKeyVaultNameOverride), _1.resourceName(parameters('convention'), parameters('role'), parameters('abbreviation'), parameters('identifier'), parameters('unique')))]"
+            "type": "bool",
+            "value": "[and(and(and(not(empty(parameters('value'))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(first(parameters('value'))))), contains('abcdefghijklmnopqrstuvwxyz0123456789', toLower(last(parameters('value'))))), empty(filter(map(range(0, length(parameters('value'))), lambda('i', toLower(substring(parameters('value'), lambdaVariables('i'), 1)))), lambda('character', not(contains('abcdefghijklmnopqrstuvwxyz0123456789-_.', lambdaVariables('character')))))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1113,7 +1355,7 @@
           "metadata": {
             "description": "Replaces underscores and dots with hyphens for Key Vault naming. Does not truncate or validate the complete name.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1135,7 +1377,7 @@
           "metadata": {
             "description": "Renders one centrally defined name pattern with caller-supplied context. Literal Azure-required names and explicit customer names are not convention-generated.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1161,7 +1403,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint NIC pattern with the same resource-type placement as the endpoint.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1183,7 +1425,7 @@
           "metadata": {
             "description": "Builds the shared private endpoint pattern; the consuming module replaces RESOURCE, SUBRESOURCE and VNETID.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1205,7 +1447,7 @@
           "metadata": {
             "description": "Resolves the target-cloud location abbreviation. Callers apply their existing explicit location-abbreviation overrides before using this result.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1226,7 +1468,28 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "requireNamingToken": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "value"
+            },
+            {
+              "type": "string",
+              "name": "label"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(_1.isNamingToken(parameters('value')), parameters('value'), fail(format('{0} must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.', parameters('label'))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1267,11 +1530,11 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(equals(parameters('comp'), 'freeform1'), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(equals(parameters('comp'), 'freeform2'), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
+            "value": "[if(equals(parameters('comp'), 'resourceType'), parameters('rtCode'), if(equals(parameters('comp'), 'purpose'), parameters('component'), if(equals(parameters('comp'), 'location'), parameters('loc'), if(contains(createArray('freeform1', 'customToken1'), parameters('comp')), parameters('ff1'), if(equals(parameters('comp'), 'environment'), parameters('env'), if(contains(createArray('freeform2', 'customToken2'), parameters('comp')), parameters('ff2'), if(equals(parameters('comp'), 'workload'), parameters('workload'), '')))))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1284,12 +1547,37 @@
           ],
           "output": {
             "type": "object",
-            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', coalesce(tryGet(parameters('convention'), 'freeform1'), ''), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', coalesce(tryGet(parameters('convention'), 'freeform2'), ''), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
+            "value": "[union(variables('_1.namingPolicy').defaults, parameters('convention'), createObject('components', map(coalesce(tryGet(parameters('convention'), 'components'), variables('_1.namingPolicy').defaults.components), lambda('component', if(equals(lambdaVariables('component'), 'customToken1'), 'freeform1', if(equals(lambdaVariables('component'), 'customToken2'), 'freeform2', lambdaVariables('component'))))), 'delimiter', coalesce(tryGet(parameters('convention'), 'delimiter'), variables('_1.namingPolicy').defaults.delimiter), 'workload', if(not(empty(coalesce(tryGet(parameters('convention'), 'workload'), ''))), parameters('convention').workload, variables('_1.namingPolicy').defaults.workload), 'freeform1', _1.resolveCustomToken(parameters('convention'), 'customToken1', 'freeform1'), 'environment', coalesce(tryGet(parameters('convention'), 'environment'), ''), 'freeform2', _1.resolveCustomToken(parameters('convention'), 'customToken2', 'freeform2'), 'resourceTypeCodes', union(variables('_1.resourceAbbreviations'), coalesce(tryGet(parameters('convention'), 'resourceTypeCodes'), createObject()))))]"
           },
           "metadata": {
-            "description": "Resolves shared defaults and merges partial abbreviation overrides. Explicit empty delimiters are preserved; an empty workload retains the existing default-workload behavior.",
+            "description": "Resolves shared defaults, custom-token aliases and partial abbreviation overrides. Conflicting alias values fail; explicit empty delimiters and existing default-workload behavior are preserved.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolveCustomToken": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "preferred"
+            },
+            {
+              "type": "string",
+              "name": "legacy"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(and(and(not(equals(tryGet(parameters('convention'), parameters('preferred')), null())), not(equals(tryGet(parameters('convention'), parameters('legacy')), null()))), not(equals(parameters('convention')[parameters('preferred')], parameters('convention')[parameters('legacy')]))), fail(format('namingConvention.{0} and {1} are aliases and must agree when both are supplied.', parameters('preferred'), parameters('legacy'))), coalesce(coalesce(tryGet(parameters('convention'), parameters('preferred')), tryGet(parameters('convention'), parameters('legacy'))), ''))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1318,11 +1606,48 @@
           ],
           "output": {
             "type": "string",
-            "value": "[_1.formatName(_1.cnv(if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components), parameters('convention').delimiter, if(empty(parameters('rule').type), '', parameters('convention').resourceTypeCodes[parameters('rule').type]), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, parameters('identifier'), parameters('unique')), parameters('region'), parameters('convention').freeform1, parameters('convention').environment, parameters('convention').freeform2, parameters('convention').workload), parameters('rule'))]"
+            "value": "[_1.resolvedTypeName(union(_1.validateConvention(parameters('convention'), not(empty(parameters('rule').purpose))), createObject('components', if(coalesce(tryGet(parameters('rule'), 'omitWorkload'), false()), filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'workload')))), parameters('convention').components))), if(empty(parameters('rule').type), createObject('format', 'literal', 'fragment', true()), union(variables('_1.namingPolicy').resourceTypes[parameters('rule').type], createObject('format', if(contains(createArray('keyVaults', 'computeGalleries'), parameters('rule').type), variables('_1.namingPolicy').resourceTypes[parameters('rule').type].format, 'literal'), 'preserveCase', true()))), if(empty(parameters('rule').type), '', _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('rule').type], 'Resource type abbreviation')), if(empty(parameters('region')), '', _1.requireNamingToken(parameters('region'), 'Location abbreviation')), _1.resourcePurpose(parameters('rule'), parameters('convention').delimiter, if(empty(parameters('identifier')), '', _1.requireNamingToken(parameters('identifier'), 'Resource identifier')), parameters('unique')), '')]"
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resolvedTypeName": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            },
+            {
+              "type": "string",
+              "name": "code"
+            },
+            {
+              "type": "string",
+              "name": "region"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "type": "string",
+              "name": "unique"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.validateTypeName(_1.composeTypeName(parameters('convention'), parameters('rule'), parameters('code'), parameters('region'), parameters('identifier'), parameters('unique')), parameters('rule'))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1354,9 +1679,39 @@
             "value": "[_1.resolvedResourceName(_1.resolveConvention(parameters('convention')), variables('_1.namingPolicy').resources[parameters('role')], parameters('region'), parameters('identifier'), parameters('unique'))]"
           },
           "metadata": {
-            "description": "Generates a resource name from its authoritative role definition, shared convention and deployment context. Applies the resource-specific gallery, Key Vault or Function App formatting rule.",
+            "description": "Internal role adapter to the common naming engine. Roles supply purpose, workload exceptions and established casing/formatting; all actual resource names use the shared convention and type validators.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "resourceNameForType": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            },
+            {
+              "type": "string",
+              "name": "identifier"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.scopedTypeName(_1.validateConvention(_1.resolveConvention(parameters('convention')), true()), _1.azureResourceTypeKey(parameters('resourceType'), coalesce(tryGet(parameters('context'), 'namingVariant'), '')), parameters('identifier'), _1.validateNamingContext(parameters('context'), parameters('resourceType')))]"
+          },
+          "metadata": {
+            "description": "Names an official Azure resource type without an API version. Ambiguous types require context.namingVariant. Globally named types share a scope hash independent of purpose; scope-local types have no hash. Overlength names fail.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1385,7 +1740,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1403,11 +1758,11 @@
           "metadata": {
             "description": "Tests the final selected component, ignoring none entries. Empty component selections use resource-type-first patterns.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "scopedUnique": {
+        "scopedTypeName": {
           "parameters": [
             {
               "type": "object",
@@ -1415,29 +1770,46 @@
             },
             {
               "type": "string",
-              "name": "subscriptionId"
+              "name": "resourceType"
             },
             {
               "type": "string",
-              "name": "resourceGroupName"
+              "name": "identifier"
             },
             {
-              "type": "string",
-              "name": "region"
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[if(not(contains(_1.resolveConvention(parameters('convention')).components, 'location')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), uniqueString(parameters('subscriptionId'), parameters('resourceGroupName')))]"
+            "value": "[if(not(contains(variables('_1.namingPolicy').resourceTypes, parameters('resourceType'))), fail('Unsupported identifier-based resource type. Use a resource type registered in namingPolicy.resourceTypes.'), _1.resolvedTypeName(parameters('convention'), variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], _1.requireNamingToken(parameters('convention').resourceTypeCodes[parameters('resourceType')], 'Resource type abbreviation'), _1.typeLocationAbbreviation(parameters('convention'), parameters('context')), _1.requireNamingToken(parameters('identifier'), 'Add-on identifier'), if(coalesce(tryGet(variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], 'globallyUnique'), false()), take(_1.scopeUnique(parameters('context')), coalesce(tryGet(variables('_1.namingPolicy').resourceTypes[parameters('resourceType')], 'uniqueLength'), variables('_1.namingPolicy').limits.defaultUniqueLength)), '')))]"
           },
           "metadata": {
-            "description": "Computes the shared subscription/resource-group uniqueness seed, adding the region when location is omitted from the selected naming components. Returns the full hash so resource-specific length budgets can be applied separately.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
-        "shortScopedUnique": {
+        "scopeUnique": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[uniqueString(toLower(parameters('context').subscriptionId), toLower(parameters('context').resourceGroupName), toLower(parameters('context').location))]"
+          },
+          "metadata": {
+            "description": "One stable resource-scope hash: lowercase subscription, owning resource group and full location. Cloud, purpose, resource type and naming-convention choices never participate. Callers apply their suffix budget.",
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "sharedVaultName": {
           "parameters": [
             {
               "type": "object",
@@ -1445,25 +1817,24 @@
             },
             {
               "type": "string",
-              "name": "subscriptionId"
+              "name": "role"
             },
             {
               "type": "string",
-              "name": "resourceGroupName"
+              "name": "abbreviation"
             },
             {
-              "type": "string",
-              "name": "region"
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
             }
           ],
           "output": {
             "type": "string",
-            "value": "[take(_1.scopedUnique(parameters('convention'), parameters('subscriptionId'), parameters('resourceGroupName'), parameters('region')), variables('_1.namingPolicy').limits.uniqueSuffix)]"
+            "value": "[if(not(empty(if(equals(parameters('role'), 'secretsKeyVault'), coalesce(tryGet(parameters('convention'), 'secretsKeyVaultNameOverride'), ''), coalesce(tryGet(parameters('convention'), 'encryptionKeyVaultNameOverride'), '')))), if(equals(parameters('role'), 'secretsKeyVault'), parameters('convention').secretsKeyVaultNameOverride, parameters('convention').encryptionKeyVaultNameOverride), _1.resourceNameForType(union(parameters('convention'), createObject('locationAbbreviation', parameters('abbreviation'))), 'Microsoft.KeyVault/vaults', first(variables('_1.namingPolicy').resources[parameters('role')].purpose), parameters('context')))]"
           },
           "metadata": {
-            "description": "Applies the existing six-character scope uniqueness suffix without requiring adapters to own the policy limit.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1481,7 +1852,7 @@
           "metadata": {
             "description": "Removes hyphens, underscores, and dots. Callers separately enforce case, length, uniqueness, and the remaining resource naming rules.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         },
@@ -1498,7 +1869,91 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "typeLocationAbbreviation": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[_1.requireNamingToken(if(not(empty(coalesce(tryGet(parameters('convention'), 'locationAbbreviation'), ''))), parameters('convention').locationAbbreviation, if(not(empty(coalesce(tryGet(parameters('convention'), 'vmsLocationAbbreviation'), ''))), parameters('convention').vmsLocationAbbreviation, _1.regionAbbreviation(toLower(parameters('context').location), parameters('context').cloud))), 'Location abbreviation')]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateConvention": {
+          "parameters": [
+            {
+              "type": "object",
+              "name": "convention"
+            },
+            {
+              "type": "bool",
+              "name": "requirePurpose"
+            }
+          ],
+          "output": {
+            "type": "object",
+            "value": "[if(or(and(parameters('requirePurpose'), not(equals(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1))), greater(length(filter(parameters('convention').components, lambda('component', equals(lambdaVariables('component'), 'purpose')))), 1)), fail('Naming requires exactly one purpose component for resources with a purpose.'), if(empty(filter(parameters('convention').components, lambda('component', not(equals(lambdaVariables('component'), 'none'))))), fail('Naming requires at least one non-none component.'), if(not(empty(filter(parameters('convention').components, lambda('component', not(contains(createArray('resourceType', 'purpose', 'location', 'workload', 'environment', 'freeform1', 'freeform2', 'none'), lambdaVariables('component'))))))), fail('Naming contains an unsupported naming-convention component.'), if(or(greater(length(parameters('convention').delimiter), 3), not(empty(filter(map(range(0, length(parameters('convention').delimiter)), lambda('i', substring(parameters('convention').delimiter, lambdaVariables('i'), 1))), lambda('character', not(contains('-_.', lambdaVariables('character')))))))), fail('Naming delimiter must be empty or contain at most three hyphens, underscores or dots.'), if(not(empty(filter(createArray('workload', 'environment', 'freeform1', 'freeform2'), lambda('component', and(and(contains(parameters('convention').components, lambdaVariables('component')), not(empty(parameters('convention')[lambdaVariables('component')]))), not(_1.isNamingToken(parameters('convention')[lambdaVariables('component')]))))))), fail('Selected naming-convention values must contain only ASCII letters, numbers, hyphens, underscores or dots, and start and end with a letter or number.'), parameters('convention'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateNamingContext": {
+          "parameters": [
+            {
+              "$ref": "#/definitions/_1.namingContext",
+              "name": "context"
+            },
+            {
+              "type": "string",
+              "name": "resourceType"
+            }
+          ],
+          "output": {
+            "$ref": "#/definitions/_1.namingContext",
+            "value": "[if(or(or(not(empty(filter(createArray(parameters('context').subscriptionId, parameters('context').location, parameters('context').cloud), lambda('value', or(empty(trim(lambdaVariables('value'))), not(equals(lambdaVariables('value'), trim(lambdaVariables('value'))))))))), not(equals(parameters('context').resourceGroupName, trim(parameters('context').resourceGroupName)))), and(empty(parameters('context').resourceGroupName), not(equals(toLower(parameters('resourceType')), 'microsoft.resources/resourcegroups')))), fail('Naming context requires subscriptionId, location and cloud without surrounding whitespace, plus resourceGroupName for resources below subscription scope.'), union(parameters('context'), createObject('cloud', _1.canonicalNamingCloud(parameters('context').cloud))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
+            }
+          }
+        },
+        "validateTypeName": {
+          "parameters": [
+            {
+              "type": "string",
+              "name": "name"
+            },
+            {
+              "type": "object",
+              "name": "rule"
+            }
+          ],
+          "output": {
+            "type": "string",
+            "value": "[if(coalesce(tryGet(parameters('rule'), 'fragment'), false()), parameters('name'), if(empty(parameters('name')), fail('Generated name must not be empty.'), if(greater(length(parameters('name')), parameters('rule').lengthLimit), fail(format('Generated name exceeds the {0}-character limit. Shorten the identifier or naming-convention values.', parameters('rule').lengthLimit)), if(and(coalesce(tryGet(parameters('rule'), 'startWithLetter'), false()), not(contains('abcdefghijklmnopqrstuvwxyz', toLower(first(parameters('name')))))), fail('This resource type requires a name starting with a letter. Change the first selected component.'), if(and(coalesce(tryGet(parameters('rule'), 'noConsecutiveHyphens'), false()), contains(parameters('name'), '--')), fail('This resource type does not allow consecutive hyphens. Change the identifier, delimiter or selected values.'), parameters('name'))))))]"
+          },
+          "metadata": {
+            "__bicep_imported_from!": {
+              "sourceTemplate": "../shared/modules/orchestration/naming/internal.bicep"
             }
           }
         }
@@ -1510,7 +1965,7 @@
         "hostPoolNames": {
           "parameters": [
             {
-              "type": "object",
+              "$ref": "#/definitions/namingConventionConfig",
               "name": "convention"
             },
             {
@@ -1524,10 +1979,10 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.hostPoolNamingResult",
-            "value": "[_1.hostPoolNamesForLocation(parameters('convention'), parameters('identifier'), parameters('context'), _1.fslogixNames(parameters('convention'), parameters('identifier'), createObject('subscriptionId', parameters('context').subscriptionId, 'cloud', parameters('context').cloud, 'location', parameters('context').virtualMachinesLocation)), if(not(empty(coalesce(tryGet(parameters('convention'), 'cpLocationAbbreviation'), ''))), parameters('convention').cpLocationAbbreviation, _1.regionAbbreviation(parameters('context').controlPlaneLocation, parameters('context').cloud)))]"
+            "value": "[_1.hostPoolNames(parameters('convention'), parameters('identifier'), parameters('context'))]"
           },
           "metadata": {
-            "description": "Returns the complete legacy-compatible host-pool bundle by composing FSLogix names with compute and control-plane names. All locations and scope seeds are explicit; no VNet lookup or naming deployment is required.",
+            "description": "Names host-pool compute, control-plane and shared FSLogix resources using explicit target locations and subscriptions.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
             }
@@ -1552,7 +2007,7 @@
       }
     },
     "namingConvention": {
-      "type": "object",
+      "$ref": "#/definitions/namingConventionConfig",
       "defaultValue": {
         "components": [
           "resourceType",
@@ -1672,7 +2127,7 @@
       "defaultValue": "[parameters('controlPlaneLocation')]",
       "minLength": 1,
       "metadata": {
-        "description": "Optional. Azure location for session hosts and supporting resources. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location."
+        "description": "Optional. Azure location for session hosts, storage, monitoring, Key Vaults and backup. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location."
       }
     },
     "controlPlaneSubscriptionId": {
@@ -3111,6 +3566,7 @@
         }
       }
     },
+    "_1.azureResourceTypeKeys": "[toObject(items(variables('_1.namingPolicy').resourceTypes), lambda('rule', format('{0}|{1}', toLower(lambdaVariables('rule').value.azureResourceType), toLower(coalesce(tryGet(lambdaVariables('rule').value, 'namingVariant'), '')))), lambda('rule', lambdaVariables('rule').key))]",
     "_1.locationDefinitions": "[variables('_1._3')]",
     "_1.namingPolicy": {
       "defaults": {
@@ -3138,69 +3594,88 @@
       },
       "resourceTypes": {
         "functionApps": {
+          "azureResourceType": "Microsoft.Web/sites",
+          "namingVariant": "functionapp",
           "lengthLimit": 60,
           "format": "hyphen",
           "globallyUnique": true
         },
         "storageAccounts": {
+          "azureResourceType": "Microsoft.Storage/storageAccounts",
           "lengthLimit": 24,
           "format": "storage",
           "globallyUnique": true
         },
         "applicationInsights": {
+          "azureResourceType": "Microsoft.Insights/components",
           "lengthLimit": 260,
           "format": "hyphen"
         },
         "appServicePlans": {
+          "azureResourceType": "Microsoft.Web/serverfarms",
           "lengthLimit": 60,
           "format": "hyphen"
         },
         "userAssignedIdentities": {
+          "azureResourceType": "Microsoft.ManagedIdentity/userAssignedIdentities",
           "lengthLimit": 128,
           "format": "hyphen"
         },
         "automationAccounts": {
+          "azureResourceType": "Microsoft.Automation/automationAccounts",
           "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "availabilitySets": {
+          "azureResourceType": "Microsoft.Compute/availabilitySets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "computeGalleries": {
+          "azureResourceType": "Microsoft.Compute/galleries",
           "lengthLimit": 80,
           "format": "gallery"
         },
         "dataCollectionEndpoints": {
+          "azureResourceType": "Microsoft.Insights/dataCollectionEndpoints",
           "lengthLimit": 44,
           "format": "hyphen"
         },
         "dataCollectionRules": {
+          "azureResourceType": "Microsoft.Insights/dataCollectionRules",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "desktopApplicationGroups": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/applicationGroups",
+          "namingVariant": "Desktop",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "remoteApplicationGroups": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/applicationGroups",
+          "namingVariant": "RemoteApp",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskAccesses": {
+          "azureResourceType": "Microsoft.Compute/diskAccesses",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "diskEncryptionSets": {
+          "azureResourceType": "Microsoft.Compute/diskEncryptionSets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "hostPools": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/hostPools",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "keyVaults": {
+          "azureResourceType": "Microsoft.KeyVault/vaults",
           "lengthLimit": 24,
           "format": "hyphen",
           "globallyUnique": true,
@@ -3209,83 +3684,103 @@
           "noConsecutiveHyphens": true
         },
         "logAnalyticsWorkspaces": {
+          "azureResourceType": "Microsoft.OperationalInsights/workspaces",
           "lengthLimit": 63,
           "format": "hyphen"
         },
         "natGateways": {
+          "azureResourceType": "Microsoft.Network/natGateways",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "netAppAccounts": {
+          "azureResourceType": "Microsoft.NetApp/netAppAccounts",
           "lengthLimit": 128,
           "format": "hyphen"
         },
         "netAppCapacityPools": {
+          "azureResourceType": "Microsoft.NetApp/netAppAccounts/capacityPools",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "networkInterfaces": {
+          "azureResourceType": "Microsoft.Network/networkInterfaces",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "networkSecurityGroups": {
+          "azureResourceType": "Microsoft.Network/networkSecurityGroups",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "osdisks": {
+          "azureResourceType": "Microsoft.Compute/disks",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "privateEndpoints": {
+          "azureResourceType": "Microsoft.Network/privateEndpoints",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "privateLinkScopes": {
+          "azureResourceType": "Microsoft.Insights/privateLinkScopes",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "publicIPAddresses": {
+          "azureResourceType": "Microsoft.Network/publicIPAddresses",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "recoveryServicesVaults": {
+          "azureResourceType": "Microsoft.RecoveryServices/vaults",
           "lengthLimit": 50,
           "format": "hyphen",
           "startWithLetter": true
         },
         "resourceGroups": {
+          "azureResourceType": "Microsoft.Resources/resourceGroups",
           "lengthLimit": 90,
           "format": "hyphen"
         },
         "routeTables": {
+          "azureResourceType": "Microsoft.Network/routeTables",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "scalingPlans": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/scalingPlans",
           "lengthLimit": 63,
           "format": "hyphen"
         },
         "templateSpecs": {
+          "azureResourceType": "Microsoft.Resources/templateSpecs",
           "lengthLimit": 90,
           "format": "hyphen"
         },
         "virtualMachines": {
+          "azureResourceType": "Microsoft.Compute/virtualMachines",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "virtualNetworks": {
+          "azureResourceType": "Microsoft.Network/virtualNetworks",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "subnets": {
+          "azureResourceType": "Microsoft.Network/virtualNetworks/subnets",
           "lengthLimit": 80,
           "format": "hyphen"
         },
         "workspaces": {
+          "azureResourceType": "Microsoft.DesktopVirtualization/workspaces",
           "lengthLimit": 64,
           "format": "hyphen"
         },
         "imageDefinitions": {
+          "azureResourceType": "Microsoft.Compute/galleries/images",
           "lengthLimit": 80,
           "format": "hyphen"
         }
@@ -3603,9 +4098,9 @@
         "storageCmkKey": "{identifier}-storage-cmk",
         "imageGalleryKey": "{identifier}-gallery-cmk",
         "imageGalleryConfidentialKey": "{identifier}-gallery-cvm-cmk",
-        "imageStorageFirst": "{storageAccounts}{purpose}{location}{unique}",
-        "imageStorageLast": "{purpose}{location}{unique}{storageAccounts}",
-        "imageStorageCustomPrefix": "{prefix}{purpose}{location}{unique}",
+        "imageStorageFirst": "{storageAccounts}{purpose}{unique}{location}",
+        "imageStorageLast": "{purpose}{unique}{location}{storageAccounts}",
+        "imageStorageCustomPrefix": "{prefix}{purpose}{unique}{location}",
         "imageBuildResourceGroup": "{resourceGroups}-{prefix}{workload}-image-builds-{location}-{timestamp}-{unique}",
         "imageBuildCustomResourceGroup": "{name}-{timestamp}-{unique}",
         "imageBuildVm": "{prefix}img-{unique}",
@@ -3676,7 +4171,7 @@
             "value": "[variables('naming').sharedDataCollectionEndpointName]"
           },
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('virtualMachinesLocation')]"
           },
           "logAnalyticsWorkspaceName": {
             "value": "[variables('naming').sharedLogAnalyticsWorkspaceName]"
@@ -4485,6 +4980,9 @@
           "resourceGroupName": {
             "value": "[variables('sharedOperationsResourceGroupName')]"
           },
+          "location": {
+            "value": "[parameters('virtualMachinesLocation')]"
+          },
           "deploySecretsKeyVault": {
             "value": "[parameters('deploySecretsKeyVault')]"
           },
@@ -4555,7 +5053,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "3349261047609684738"
+              "templateHash": "1727531124347487297"
             },
             "name": "Shared Key Vault orchestration",
             "description": "Deploys optional credential and encryption vaults in an existing resource group, with optional credential secrets, diagnostics, firewall allowances, and private endpoints."
@@ -4607,7 +5105,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 },
@@ -4659,7 +5157,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -4671,6 +5169,12 @@
               "type": "string",
               "metadata": {
                 "description": "Required. Name of the existing target resource group in the deployment subscription."
+              }
+            },
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. Azure region for both vaults, independent of resource group metadata location. Private endpoints use their subnet virtual network region."
               }
             },
             "azureKeyVaultPrivateDnsZoneResourceId": {
@@ -4877,6 +5381,9 @@
                 "parameters": {
                   "name": {
                     "value": "[parameters('secretsKeyVaultName')]"
+                  },
+                  "location": {
+                    "value": "[parameters('location')]"
                   },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
@@ -5501,6 +6008,9 @@
                   "name": {
                     "value": "[parameters('encryptionKeyVaultName')]"
                   },
+                  "location": {
+                    "value": "[parameters('location')]"
+                  },
                   "tags": {
                     "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.KeyVault/vaults'), createObject())]"
                   },
@@ -6114,7 +6624,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17561306986889829960"
+              "templateHash": "14470143987845243080"
             },
             "name": "AVD workspace orchestration",
             "description": "Creates or updates AVD feed and global workspaces across resource groups with optional private endpoints and diagnostics."
@@ -6161,7 +6671,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -6184,7 +6694,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../naming/naming.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -7521,7 +8031,7 @@
             "value": "[variables('sharedOperationsResourceGroupName')]"
           },
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('virtualMachinesLocation')]"
           },
           "logAnalyticsWorkspaceResourceId": "[if(parameters('enableMonitoring'), if(variables('deploySharedMonitoring'), createObject('value', reference('sharedMonitoring').outputs.logAnalyticsWorkspaceResourceId.value), createObject('value', parameters('existingLogAnalyticsWorkspaceResourceId'))), createObject('value', ''))]",
           "privateEndpoint": {
@@ -8362,7 +8872,7 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('virtualMachinesLocation')]"
           },
           "name": {
             "value": "[variables('sharedOperationsResourceGroupName')]"
@@ -8446,7 +8956,7 @@
         "mode": "Incremental",
         "parameters": {
           "location": {
-            "value": "[parameters('controlPlaneLocation')]"
+            "value": "[parameters('virtualMachinesLocation')]"
           },
           "name": {
             "value": "[variables('sharedMonitoringResourceGroupName')]"
@@ -12237,7 +12747,7 @@
           },
           "existingFeedWorkspaceResourceId": "[if(variables('manageFeedWorkspace'), createObject('value', reference('sharedAvdWorkspace').outputs.workspaceResourceId.value), createObject('value', parameters('existingFeedWorkspaceResourceId')))]",
           "hostPoolCustomTags": {
-            "value": "[union(variables('hostsResourceGroupIdTag'), variables('storageResourceGroupIdTag'), createObject('hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), parameters('namingConvention').workload, 'avd'), 'vmsLocationAbbreviation', variables('naming').vmLocationAbbreviation))))]"
+            "value": "[union(variables('hostsResourceGroupIdTag'), variables('storageResourceGroupIdTag'), createObject('hpIdentifier', variables('hpBaseName'), 'hpNamingConvention', string(createObject('components', coalesce(tryGet(parameters('namingConvention'), 'components'), createArray('resourceType', 'workload', 'purpose', 'location')), 'delimiter', coalesce(tryGet(parameters('namingConvention'), 'delimiter'), '-'), 'workload', if(not(empty(coalesce(tryGet(parameters('namingConvention'), 'workload'), ''))), coalesce(tryGet(parameters('namingConvention'), 'workload'), 'avd'), 'avd'), 'vmsLocationAbbreviation', variables('naming').vmLocationAbbreviation))))]"
           },
           "hostPoolMaxSessionLimit": {
             "value": "[parameters('hostPoolMaxSessionLimit')]"
@@ -12307,7 +12817,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "13464372014884853735"
+              "templateHash": "2630159873042667129"
             }
           },
           "definitions": {
@@ -12634,7 +13144,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
+                      "sourceTemplate": "../../../shared/modules/orchestration/naming/internal.bicep"
                     }
                   }
                 }
@@ -12657,7 +13167,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../../shared/modules/orchestration/naming/naming.bicep"
+                      "sourceTemplate": "../../../shared/modules/orchestration/naming/internal.bicep"
                     }
                   }
                 }
@@ -15034,7 +15544,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "10016582391448763206"
+              "templateHash": "254604854940849240"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -16425,7 +16935,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "17076028695979067069"
+                      "templateHash": "1384374400907396021"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -16477,7 +16987,7 @@
                           "metadata": {
                             "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                             "__bicep_imported_from!": {
-                              "sourceTemplate": "../../naming/naming.bicep"
+                              "sourceTemplate": "../../naming/internal.bicep"
                             }
                           }
                         },
@@ -16529,7 +17039,7 @@
                           "metadata": {
                             "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                             "__bicep_imported_from!": {
-                              "sourceTemplate": "../../naming/naming.bicep"
+                              "sourceTemplate": "../../naming/internal.bicep"
                             }
                           }
                         }
@@ -19430,10 +19940,10 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "10352049559264767359"
+                      "templateHash": "2132894057681700020"
                     },
                     "name": "FSLogix file share backup registration",
-                    "description": "Registers existing Azure Files storage accounts and every requested share with an existing Recovery Services vault and backup policy in the deployment resource group."
+                    "description": "Registers existing Azure Files storage accounts and requested non-Office shares with an existing Recovery Services vault and backup policy."
                   },
                   "parameters": {
                     "vaultName": {
@@ -19451,13 +19961,13 @@
                     "fileShares": {
                       "type": "array",
                       "metadata": {
-                        "description": "Required. Array of share name strings to create or register on every supplied storage account."
+                        "description": "Required. Shares to protect on every supplied account. office-containers is always excluded."
                       }
                     },
                     "storageAccountResourceIds": {
                       "type": "array",
                       "metadata": {
-                        "description": "Required. Array of existing storage account resource ID strings; every fileShares entry is protected on each account."
+                        "description": "Required. Existing storage account resource IDs; eligible shares are protected on each account."
                       }
                     },
                     "fileSharePolicyName": {
@@ -19484,7 +19994,8 @@
                   },
                   "variables": {
                     "parentResourceTags": "[if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject())]",
-                    "combos": "[flatten(map(range(0, length(parameters('storageAccountResourceIds'))), lambda('saIdx', map(parameters('fileShares'), lambda('shareName', createObject('saId', parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], 'rgName', split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')[4], 'saName', last(split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')), 'shareName', lambdaVariables('shareName')))))))]"
+                    "backupFileShares": "[filter(parameters('fileShares'), lambda('shareName', not(equals(toLower(lambdaVariables('shareName')), 'office-containers'))))]",
+                    "combos": "[flatten(map(range(0, length(parameters('storageAccountResourceIds'))), lambda('saIdx', map(variables('backupFileShares'), lambda('shareName', createObject('saId', parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], 'rgName', split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')[4], 'saName', last(split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')), 'shareName', lambdaVariables('shareName')))))))]"
                   },
                   "resources": [
                     {
@@ -19494,6 +20005,7 @@
                         "mode": "serial",
                         "batchSize": 1
                       },
+                      "condition": "[not(empty(variables('backupFileShares')))]",
                       "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
                       "apiVersion": "2024-04-01",
                       "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}', parameters('vaultName'), split(parameters('storageAccountResourceIds')[copyIndex()], '/')[4], last(split(parameters('storageAccountResourceIds')[copyIndex()], '/')))]",

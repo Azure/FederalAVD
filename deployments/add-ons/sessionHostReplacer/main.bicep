@@ -5,7 +5,8 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { namingPolicy, namePattern, functionAppNames, resourceNameForType, scopeIdUnique } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy, namePattern, scopeIdUnique } from '../../shared/modules/orchestration/naming/internal.bicep'
 
 // ========== //
 // Parameters //
@@ -33,7 +34,7 @@ param tags object = {}
 // Should match the convention used when deploying the host pool. Pre-populated from the
 // hpNamingConvention tag on the host pool resource.
 @description('Optional. Function App infrastructure naming convention; match the host pool convention. The Portal populates it from the hpNamingConvention tag.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -606,7 +607,7 @@ var naming = functionAppNames(effectiveNamingConvention, applicationIdentifier, 
 var appServicePlanName = !empty(existingAppServicePlanResourceId)
   ? last(split(existingAppServicePlanResourceId, '/'))
   : !empty(appServicePlanNameOverride) ? appServicePlanNameOverride
-    : resourceNameForType(effectiveNamingConvention, 'appServicePlans', namingPolicy.identifiers.sessionHostReplacer, union(namingContext, {
+    : resourceNameForType(effectiveNamingConvention, 'Microsoft.Web/serverfarms', namingPolicy.identifiers.sessionHostReplacer, union(namingContext, {
       resourceGroupName: aspResourceGroupName
     }))
 var privateEndpointNameConv = naming.privateEndpointNameConv
@@ -628,7 +629,7 @@ var storageAccountName = naming.storageAccountName
 var storageEncryptionIdentityName = naming.storageEncryptionIdentityName
 var templateSpecNameFinal = !empty(sessionHostTemplateSpecResourceId)
   ? last(split(sessionHostTemplateSpecResourceId, '/'))
-  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'templateSpecs', namingPolicy.templateSpecs.sessionHosts, namingContext)
+  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'Microsoft.Resources/templateSpecs', namingPolicy.templateSpecs.sessionHosts, namingContext)
 var encryptionKeyName = namePattern('storageCmkKey', { identifier: applicationIdentifier })
 
 // Start storage CMK provisioning before the Function App prerequisites. This gives the

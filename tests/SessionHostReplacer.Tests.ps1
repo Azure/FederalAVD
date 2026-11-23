@@ -8,7 +8,7 @@ BeforeAll {
     $bicepPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep'
     $templatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.json'
     $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\uiFormDefinition.json'
-    $namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
+    $namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep'
     $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
     $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
     $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'
@@ -2178,7 +2178,7 @@ Describe 'Session Host Replacer rollback operator experience' {
 Describe 'Session Host Replacer Application Insights isolation' {
     It 'uses the common purpose-based Insights name independently of Function App overrides' {
         Get-Content -LiteralPath $namingPath -Raw |
-            Should -Match "applicationInsightsName: resourceNameForType\(convention, 'applicationInsights', identifier, context\)"
+            Should -Match "applicationInsightsName: resourceNameForType\(convention, 'Microsoft\.Insights/components', identifier, context\)"
         Get-Content -LiteralPath $bicepPath -Raw |
             Should -Match 'var appInsightsName = naming.applicationInsightsName'
         $policy = Get-TestNamingPolicy

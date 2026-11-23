@@ -107,12 +107,13 @@ Describe 'Published host-pool orchestrator payload sizes' {
         }
     }
 
-    It 'publishes complete deduplicated requests using the cloud-aware REST API' {
+    It 'publishes complete requests with a preflighted fallback using the cloud-aware REST API' {
         $publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
         $publisher = Get-Content -LiteralPath $publisherPath -Raw
 
-        $publisher | Should -Match 'Publish-DeduplicatedTemplateSpec -ResourceId'
+        $publisher | Should -Match 'Publish-TemplateSpec -ResourceId'
         $publisher | Should -Match '-VersionPayload \$templateSpec\.PublicationPayload'
+        $publisher | Should -Match '-DeduplicatedRetryPayload \$templateSpec\.DeduplicatedRetryPayload'
         $publisher | Should -Match 'Invoke-AzRestMethod -Path'
         $publisher | Should -Not -Match 'ConvertTo-MinifiedJson'
         $publisher | Should -Not -Match 'SerializationSettings\.Formatting\s*='
@@ -131,7 +132,7 @@ Describe 'Template Spec publication size messages' {
         $preflight = $publisherAst.Find({
             param($node)
             $node -is [System.Management.Automation.Language.ForEachStatementAst] -and
-            $node.Body.Extent.Text.Contains('$budgetedBytes = $package.PayloadBytes + 16384')
+            $node.Body.Extent.Text.Contains('$budgetedBytes = $publication.PayloadBytes + 16384')
         }, $true)
         $body = $preflight.Body.Extent.Text
         $start = $body.IndexOf('$budgetedBytes =')
@@ -147,12 +148,13 @@ Describe 'Template Spec publication size messages' {
         param($Bytes)
 
         $package = @{ PayloadBytes = $Bytes; OriginalPayloadBytes = $Bytes; Artifacts = @() }
+        $publication = @{ PayloadBytes = $Bytes; Packaging = 'Inline'; ArtifactCount = 0 }
         $templateSpec = @{ DisplayName = 'Test template' }
         $messages = @(& $sizeCheck)
         $messages.Count | Should -Be 5
         $messages[0] | Should -Be 'Test template publication size check:'
-        $messages[1] | Should -Be ("  Before deduplication: {0:N0} bytes; after: {0:N0} bytes; saved: 0 bytes." -f $Bytes)
-        $messages[2] | Should -Be '  Packaged linked artifacts: 0; the measured request includes every artifact and the Portal form.'
+        $messages[1] | Should -Be ("  Filtered inline: {0:N0} bytes; deduplicated candidate: {0:N0} bytes; potential savings: 0 bytes." -f $Bytes)
+        $messages[2] | Should -Be '  Selected packaging: Inline; linked artifacts: 0. The measured request includes every artifact and the Portal form.'
         $messages[3] | Should -Be '  Reserved safety margin: 16,384 bytes (16 KiB; not appended to the template).'
         $messages[4] | Should -Be ("  Total checked: {0:N0} / 2,000,000 bytes; remaining headroom: {1:N0} bytes." -f ($Bytes + 16384), (2000000 - $Bytes - 16384))
     }
@@ -167,6 +169,7 @@ Describe 'Template Spec publication size messages' {
 
         $bytes = 2000000 - 16384 - $Headroom
         $package = @{ PayloadBytes = $bytes; OriginalPayloadBytes = $bytes; Artifacts = @() }
+        $publication = @{ PayloadBytes = $bytes; Packaging = 'Inline'; ArtifactCount = 0 }
         $templateSpec = @{ DisplayName = 'Test template' }
         $records = @(& $sizeCheck 3>&1)
         $warnings = @($records | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
@@ -178,6 +181,7 @@ Describe 'Template Spec publication size messages' {
 
     It 'rejects content one byte over budget and explains the excess' {
         $package = @{ PayloadBytes = 1983617; OriginalPayloadBytes = 1983617; Artifacts = @() }
+        $publication = @{ PayloadBytes = 1983617; Packaging = 'Deduplicated'; ArtifactCount = 0 }
         $templateSpec = @{ DisplayName = 'Test template' }
         { & $sizeCheck } | Should -Throw -ExpectedMessage '*exceeding*'
         { & $sizeCheck } | Should -Throw -ExpectedMessage '*Nothing has been published*'

@@ -191,7 +191,7 @@ Set-AzContext -Subscription "<subscription-id>"
 cd C:\repos\FederalAVD\deployments
 
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-usgv/providers/Microsoft.Storage/storageAccounts/saimgassetsusgvabc123"
+    -StorageAccountResourceId "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-usgv/providers/Microsoft.Storage/storageAccounts/saimgassetsabc123usgv"
 ```
 
 ### Standard Update (by Name + Resource Group)
@@ -200,7 +200,7 @@ Useful when you know the storage account name but don't have the full resource I
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsusgvabc123" `
+    -StorageAccountName "saimgassetsabc123usgv" `
     -ResourceGroupName "rg-avd-image-management-usgv"
 ```
 
@@ -210,7 +210,7 @@ Skip the download phase and re-package the existing staged artifacts directory c
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsusgvabc123" `
+    -StorageAccountName "saimgassetsabc123usgv" `
     -ResourceGroupName "rg-avd-image-management-usgv" `
     -SkipDownloadingNewSources
 ```
@@ -221,7 +221,7 @@ Delete all existing blobs first, then upload fresh:
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsusgvabc123" `
+    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsabc123usgv" `
     -DeleteExistingBlobs
 ```
 
@@ -231,7 +231,7 @@ Merge additional downloads (e.g., PowerShell 7, VS Code, LGPO) on top of the aut
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsusgvabc123" `
+    -StorageAccountName "saimgassetsabc123usgv" `
     -ResourceGroupName "rg-avd-image-management-usgv"
 ```
 
@@ -598,7 +598,7 @@ Each subdirectory is compressed into a zip file and uploaded to the `artifacts` 
 On successful completion, the script prints the artifacts container URL:
 
 ```text
-Artifacts container URL: 'https://saimgassetsusgvabc123.blob.core.usgovcloudapi.net/artifacts/'
+Artifacts container URL: 'https://saimgassetsabc123usgv.blob.core.usgovcloudapi.net/artifacts/'
 ```
 
 Pass this URL as `artifactsContainerUri` in image build deployments.

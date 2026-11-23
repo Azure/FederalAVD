@@ -1,4 +1,5 @@
-import { namingPolicy as policy, functionAppNames, resourceNameForType, privateEndpointName, shortScopedUnique, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames, resourceNameForType, fslogixNames } from '../../deployments/shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy as policy, privateEndpointName, scopeUnique } from '../../deployments/shared/modules/orchestration/naming/internal.bicep'
 
 var context = {
   subscriptionId: '00000000-1111-2222-3333-444444444444'
@@ -27,20 +28,20 @@ var cases = flatten(map(profiles, profile => map(types, type => {
   profile: profile.label
   type: type
   identifier: profile.identifier
-  actual: resourceNameForType(profile.convention, type, profile.identifier, context)
+  actual: resourceNameForType(profile.convention, policy.resourceTypes[type].azureResourceType, profile.identifier, union(context, { namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
   hash: (policy.resourceTypes[type].?globallyUnique ?? false)
-    ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), toLower(profile.identifier)), policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
+    ? take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
     : ''
 })))
 var abbreviations = loadJsonContent('../../deployments/shared/data/resourceAbbreviations.json')
 var boundaries = map(types, type => {
   type: type
-  actual: resourceNameForType({}, type, join(map(range(0, policy.resourceTypes[type].lengthLimit - (type == 'storageAccounts'
+  actual: resourceNameForType({}, policy.resourceTypes[type].azureResourceType, join(map(range(0, policy.resourceTypes[type].lengthLimit - (type == 'storageAccounts'
     ? length('${abbreviations[type]}avduse') + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength)
-    : length('${abbreviations[type]}-avd--use') + ((policy.resourceTypes[type].?globallyUnique ?? false) ? 1 + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength) : 0))), index => 'a'), ''), context)
+    : length('${abbreviations[type]}-avd--use') + ((policy.resourceTypes[type].?globallyUnique ?? false) ? 1 + (policy.resourceTypes[type].?uniqueLength ?? policy.limits.defaultUniqueLength) : 0))), index => 'a'), ''), union(context, { namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
 })
 var bundle = functionAppNames({}, 'inventory', context, {})
-var identityExpected = resourceNameForType({}, 'userAssignedIdentities', 'inventory-storage-cmk', context)
+var identityExpected = resourceNameForType({}, 'Microsoft.ManagedIdentity/userAssignedIdentities', 'inventory-storage-cmk', context)
 var seeds = map([
   context
   union(context, { subscriptionId: '00000000-1111-2222-3333-555555555555' })
@@ -48,9 +49,9 @@ var seeds = map([
   union(context, { location: 'westus2' })
   union(context, { location: 'usgovvirginia', cloud: 'AzureUSGovernment' })
 ], target => {
-  name: resourceNameForType({}, 'functionApps', 'inventory', target)
-  storage: resourceNameForType({}, 'storageAccounts', 'inventory', target)
-  hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location), toLower(target.cloud), 'inventory'), policy.limits.defaultUniqueLength)
+  name: resourceNameForType({}, 'Microsoft.Web/sites', 'inventory', union(target, { namingVariant: 'functionapp' }))
+  storage: resourceNameForType({}, 'Microsoft.Storage/storageAccounts', 'inventory', target)
+  hash: take(uniqueString(toLower(target.subscriptionId), toLower(target.resourceGroupName), toLower(target.location)), policy.limits.defaultUniqueLength)
 })
 var caseOnly = functionAppNames({}, 'INVENTORY', {
   subscriptionId: toUpper(context.subscriptionId)
@@ -89,10 +90,15 @@ output encodedResults string = base64(string({
   bundle: bundle
   identityExpected: identityExpected
   seeds: seeds
+  cloudOnlyTypes: map(['keyVaults', 'storageAccounts', 'functionApps'], type => {
+    type: type
+    baseline: resourceNameForType({ locationAbbreviation: 'e1' }, policy.resourceTypes[type].azureResourceType, 'fin', union(context, { namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
+    alternateCloud: resourceNameForType({ locationAbbreviation: 'e1' }, policy.resourceTypes[type].azureResourceType, 'fin', union(context, { cloud: 'AzureUSGovernment', namingVariant: policy.resourceTypes[type].?namingVariant ?? '' }))
+  })
   caseOnly: caseOnly
   caseOnlyTypes: map(types, type => {
     type: type
-    actual: resourceNameForType({}, toUpper(type), 'FIN', context)
+    actual: resourceNameForType({}, toUpper(policy.resourceTypes[type].azureResourceType), 'FIN', union(context, { namingVariant: toUpper(policy.resourceTypes[type].?namingVariant ?? '') }))
   })
   redeployment: redeployment
   alternateIdentifier: alternateIdentifier
@@ -101,16 +107,16 @@ output encodedResults string = base64(string({
   overrides: overrides
   applications: map(['finance-shr', 'hr-shr', 'finance-job'], identifier => {
     names: functionAppNames({}, identifier, context, {})
-    sharedPlan: resourceNameForType({}, 'appServicePlans', 'shr', context)
-    hash: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location), toLower(context.cloud), identifier), policy.limits.defaultUniqueLength)
+    sharedPlan: resourceNameForType({}, 'Microsoft.Web/serverfarms', 'shr', context)
+    hash: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), policy.limits.defaultUniqueLength)
   })
   locationTag: functionAppNames({ vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
   locationPrecedence: functionAppNames({ locationAbbreviation: 'e2', vmsLocationAbbreviation: 'e1' }, 'finance-shr', context, {})
   noLocation: noLocation
   clouds: clouds
   resourceGroups: [
-    resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: '' }))
-    resourceNameForType({}, 'resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))
+    resourceNameForType({}, 'Microsoft.Resources/resourceGroups', 'inventory', union(context, { resourceGroupName: '' }))
+    resourceNameForType({}, 'Microsoft.Resources/resourceGroups', 'inventory', union(context, { resourceGroupName: 'rg-orchestrator' }))
   ]
   endpointTokens: map(vnetNames, vnet => {
     actual: privateEndpointName('VNETID', '', '', vnet)
@@ -122,16 +128,16 @@ output encodedResults string = base64(string({
   })))
   prefixes: map(['', 'customer-prefix', 'CUSTOMER-LONG-STORAGE-PREFIX'], prefix => {
     actual: fslogixNames({ fslogixStoragePrefix: prefix }, 'finance', { subscriptionId: context.subscriptionId, cloud: context.cloud, location: context.location }).fslogixStorageAccountNamePrefix
-    expected: empty(prefix) ? 'fslogix${take(uniqueString(context.subscriptionId, 'rg-avd-finance-storage-use'), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
+    expected: empty(prefix) ? 'fslogix${take(uniqueString(toLower(context.subscriptionId), 'rg-avd-finance-storage-use', toLower(context.location)), 6)}' : take(toLower(replace(prefix, '-', '')), 13)
   })
   shortSeeds: [
     {
-      actual: shortScopedUnique({}, context.subscriptionId, context.resourceGroupName, context.location)
-      expected: take(uniqueString(context.subscriptionId, context.resourceGroupName), 6)
+      actual: take(scopeUnique(context), 6)
+      expected: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), 6)
     }
     {
-      actual: shortScopedUnique({ components: ['resourceType', 'purpose'] }, context.subscriptionId, context.resourceGroupName, context.location)
-      expected: take(uniqueString(context.subscriptionId, context.resourceGroupName, context.location), 6)
+      actual: take(scopeUnique({ subscriptionId: toUpper(context.subscriptionId), resourceGroupName: toUpper(context.resourceGroupName), location: toUpper(context.location), cloud: toLower(context.cloud) }), 6)
+      expected: take(uniqueString(toLower(context.subscriptionId), toLower(context.resourceGroupName), toLower(context.location)), 6)
     }
   ]
 }))

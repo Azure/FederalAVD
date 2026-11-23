@@ -276,6 +276,67 @@ Describe 'Deduplicated publication packages' {
     }
 }
 
+Describe 'Inline-first Template Spec publication plans' {
+    It 'selects <Packaging> at the inline budget boundary of <InlineBytes> bytes' -TestCases @(
+        @{ InlineBytes = 1983616; Packaging = 'Inline'; ExpectedBytes = 1983616; HasRetry = $true }
+        @{ InlineBytes = 1983617; Packaging = 'Deduplicated'; ExpectedBytes = 1000000; HasRetry = $false }
+    ) {
+        param($InlineBytes, $Packaging, $ExpectedBytes, $HasRetry)
+
+        Mock Get-DeduplicatedTemplateSpecPayload { 'deduplicated' }
+        $package = @{
+            InlinePayload = 'inline'
+            OriginalPayloadBytes = $InlineBytes
+            PayloadBytes = 1000000
+            Artifacts = @('artifact')
+        }
+        $plan = Get-TemplateSpecPublicationPlan -Package $package -Location usgovvirginia
+        $plan.Packaging | Should -Be $Packaging
+        $plan.PayloadBytes | Should -Be $ExpectedBytes
+        $plan.Payload | Should -Be $(if ($Packaging -eq 'Inline') { 'inline' } else { 'deduplicated' })
+        (-not [string]::IsNullOrEmpty($plan.DeduplicatedRetryPayload)) | Should -Be $HasRetry
+        $plan.ArtifactCount | Should -Be $(if ($Packaging -eq 'Inline') { 0 } else { 1 })
+    }
+
+    It 'does not prepare a retry when deduplication <Reason>' -TestCases @(
+        @{ Reason = 'has no artifacts'; Artifacts = @(); DeduplicatedBytes = 100 }
+        @{ Reason = 'does not reduce size'; Artifacts = @('artifact'); DeduplicatedBytes = 200 }
+        @{ Reason = 'increases size'; Artifacts = @('artifact'); DeduplicatedBytes = 201 }
+    ) {
+        param($Reason, $Artifacts, $DeduplicatedBytes)
+
+        Mock Get-DeduplicatedTemplateSpecPayload { 'deduplicated' }
+        $package = @{ InlinePayload = 'inline'; OriginalPayloadBytes = 200; PayloadBytes = $DeduplicatedBytes; Artifacts = $Artifacts }
+        $plan = Get-TemplateSpecPublicationPlan -Package $package -Location usgovvirginia
+        $plan.Packaging | Should -Be 'Inline'
+        $plan.DeduplicatedRetryPayload | Should -BeNullOrEmpty
+    }
+
+    It 'selects a complete budgeted payload without changing deployment content for <Name>' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location usgovvirginia
+        $plan = Get-TemplateSpecPublicationPlan -Package $package -Location usgovvirginia
+        ([Text.Encoding]::UTF8.GetByteCount($plan.Payload)) | Should -Be $plan.PayloadBytes
+        ($plan.PayloadBytes + 16384) | Should -Not -BeGreaterThan 2000000
+        if ($package.OriginalPayloadBytes + 16384 -le 2000000) {
+            $plan.Packaging | Should -Be 'Inline'
+            $payload = [Newtonsoft.Json.Linq.JObject]::Parse($plan.Payload)
+            $payload['properties']['linkedTemplates'].Count | Should -Be 0
+            $expected = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $TemplateFile -Raw))
+            Remove-TemplateSpecInternalAnnotations -Node $expected
+            [Newtonsoft.Json.Linq.JToken]::DeepEquals($expected, $payload['properties']['mainTemplate']) | Should -Be $true
+        }
+        else {
+            $plan.Packaging | Should -Be 'Deduplicated'
+        }
+        if ($plan.DeduplicatedRetryPayload) {
+            $plan.DeduplicatedRetryPayload | Should -Be (Get-DeduplicatedTemplateSpecPayload -Package $package -Location usgovvirginia)
+            ([Text.Encoding]::UTF8.GetByteCount($plan.DeduplicatedRetryPayload) + 16384) | Should -Not -BeGreaterThan 2000000
+        }
+    }
+}
+
 Describe 'Explicit cloud-context Template Spec publication' {
     It 'sends the complete version through -Path without calling the native packager' {
         $script:putCalls = [System.Collections.Generic.List[object]]::new()
@@ -288,7 +349,7 @@ Describe 'Explicit cloud-context Template Spec publication' {
             -TemplateFile (Join-Path $repoRoot 'deployments\hostpools\hostpool.json') `
             -FormFile (Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json') -Location usgovvirginia
         $payload = Get-DeduplicatedTemplateSpecPayload $package usgovvirginia
-        Publish-DeduplicatedTemplateSpec -ResourceId '/subscriptions/test/resourceGroups/rg/providers/Microsoft.Resources/templateSpecs/spec' `
+        Publish-TemplateSpec -ResourceId '/subscriptions/test/resourceGroups/rg/providers/Microsoft.Resources/templateSpecs/spec' `
             -Version '2.0.0' -ParentPayload '{}' -VersionPayload $payload
         $script:putCalls.Count | Should -Be 2
         $script:putCalls[1].Payload | Should -Be $payload
@@ -300,14 +361,128 @@ Describe 'Explicit cloud-context Template Spec publication' {
     It 'stops on HTTP <StatusCode> without sending the version' -TestCases @(
         @{ StatusCode = 400 }
         @{ StatusCode = 403 }
+        @{ StatusCode = 413 }
         @{ StatusCode = 500 }
     ) {
         param($StatusCode)
 
         Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = $StatusCode; Content = 'server failure' } }
-        { Publish-DeduplicatedTemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' -VersionPayload '{}' } |
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' -VersionPayload '{}' -DeduplicatedRetryPayload '{"retry":true}' } |
             Should -Throw -ExpectedMessage ("*" + [WildcardPattern]::Escape("HTTP $StatusCode") + "*")
         Assert-MockCalled Invoke-AzRestMethod -Times 1 -Exactly -Scope It
+    }
+
+    It 'retries the same version once for <FailureKind> size failures' -TestCases @(
+        @{ FailureKind = 'returned TemplateSpecTooLarge' }
+        @{ FailureKind = 'returned HTTP 413' }
+        @{ FailureKind = 'thrown TemplateSpecTooLarge' }
+        @{ FailureKind = 'thrown size error code' }
+        @{ FailureKind = 'thrown HTTP 413 response' }
+        @{ FailureKind = 'thrown HTTP 413 status code' }
+    ) {
+        param($FailureKind)
+
+        $script:putCalls = [System.Collections.Generic.List[object]]::new()
+        Mock Invoke-AzRestMethod {
+            param($Path, $Method, $Payload)
+            $script:putCalls.Add(@{ Path = $Path; Payload = $Payload })
+            if ($script:putCalls.Count -eq 2) {
+                if ($FailureKind -eq 'thrown TemplateSpecTooLarge') {
+                    $errorRecord = [Management.Automation.ErrorRecord]::new(
+                        [InvalidOperationException]::new('Azure rejected the request'), 'AzureFailure',
+                        [Management.Automation.ErrorCategory]::InvalidOperation, $null
+                    )
+                    $errorRecord.ErrorDetails = [Management.Automation.ErrorDetails]::new('{"error":{"code":"TemplateSpecTooLarge","message":"Size limit exceeded."}}')
+                    throw $errorRecord
+                }
+                if ($FailureKind -eq 'thrown size error code') {
+                    throw 'TemplateSpecTooLarge: Size limit exceeded.'
+                }
+                if ($FailureKind -eq 'thrown HTTP 413 response') {
+                    $exception = [InvalidOperationException]::new('Azure rejected the request')
+                    $exception | Add-Member -NotePropertyName Response -NotePropertyValue ([pscustomobject]@{ StatusCode = 413 })
+                    throw $exception
+                }
+                if ($FailureKind -eq 'thrown HTTP 413 status code') {
+                    throw [Net.Http.HttpRequestException]::new('Request rejected', $null, [Net.HttpStatusCode]::RequestEntityTooLarge)
+                }
+                if ($FailureKind -eq 'returned HTTP 413') {
+                    return [pscustomobject]@{ StatusCode = 413; Content = 'Request entity too large' }
+                }
+                return [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+            }
+            [pscustomobject]@{ StatusCode = 201; Content = '{}' }
+        }
+        $warnings = @()
+        Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '2.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' -WarningVariable warnings
+        $script:putCalls.Count | Should -Be 3
+        $script:putCalls[1].Payload | Should -Be '{"inline":true}'
+        $script:putCalls[2].Payload | Should -Be '{"linked":true}'
+        $script:putCalls[2].Path | Should -Be $script:putCalls[1].Path
+        ($warnings -join "`n") | Should -Match 'Retrying once'
+        ($warnings -join "`n") | Should -Match 'Portal Redeploy'
+    }
+
+    It 'does not retry unrelated version failure HTTP <StatusCode>' -TestCases @(
+        @{ StatusCode = 400 }
+        @{ StatusCode = 401 }
+        @{ StatusCode = 403 }
+        @{ StatusCode = 404 }
+        @{ StatusCode = 409 }
+        @{ StatusCode = 429 }
+        @{ StatusCode = 500 }
+    ) {
+        param($StatusCode)
+
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            [pscustomobject]@{ StatusCode = $StatusCode; Content = '{"error":{"code":"InvalidTemplateSpec","message":"Invalid content"}}' }
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/TemplateSpecTooLarge' -Version '1.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' } |
+            Should -Throw -ExpectedMessage "*HTTP $StatusCode*"
+        Assert-MockCalled Invoke-AzRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'preserves unrelated transport exceptions without retrying' {
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            throw 'Fixture transport failure'
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' } |
+            Should -Throw -ExpectedMessage '*Fixture transport failure*'
+        Assert-MockCalled Invoke-AzRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'surfaces size errors when no smaller fallback is available' {
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' -VersionPayload '{}' } |
+            Should -Throw -ExpectedMessage '*TemplateSpecTooLarge*'
+        Assert-MockCalled Invoke-AzRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'surfaces a failed deduplicated retry without retrying again' {
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' } |
+            Should -Throw -ExpectedMessage '*TemplateSpecTooLarge*'
+        Assert-MockCalled Invoke-AzRestMethod -Times 3 -Exactly -Scope It
     }
 }
 
@@ -426,6 +601,11 @@ function global:Get-AzTemplateSpec {
 function global:Invoke-AzRestMethod {
     [CmdletBinding()]param($Path, $Method, $Payload)
     $global:RestCalls.Add([pscustomobject]@{ Path = $Path; Method = $Method; Payload = $Payload })
+    if ($global:FixtureMode -in @('InlineTooLarge', 'RetryTooLarge') -and $global:RestCalls.Count -ge 2) {
+        if ($global:RestCalls.Count -eq 2 -or $global:FixtureMode -eq 'RetryTooLarge') {
+            return [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+        }
+    }
     $status = if ($global:FixtureMode -eq 'Forbidden') { 403 } else { 201 }
     [pscustomobject]@{ StatusCode = $status; Content = 'fixture response' }
 }
@@ -501,6 +681,8 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         @{ Mode = 'WhatIfConventionMissing'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'VersionReadFailure'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Forbidden'; ExpectedPuts = 1; ExpectedCreates = 0 }
+        @{ Mode = 'InlineTooLarge'; ExpectedPuts = 3; ExpectedCreates = 0 }
+        @{ Mode = 'RetryTooLarge'; ExpectedPuts = 3; ExpectedCreates = 0 }
     ) {
         param($Mode, $ExpectedPuts, $ExpectedCreates)
 
@@ -532,13 +714,16 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         elseif ($Mode -eq 'Forbidden') {
             $result.Failure | Should -Match 'HTTP 403'
         }
+        elseif ($Mode -eq 'RetryTooLarge') {
+            $result.Failure | Should -Match 'TemplateSpecTooLarge'
+        }
         else {
             $result.Failure | Should -BeNullOrEmpty
         }
         if ($ExpectedPuts -eq 2) {
             $parent = $result.RestCalls[0].Payload | ConvertFrom-Json
             $version = $result.RestCalls[1].Payload | ConvertFrom-Json
-            $version.properties.linkedTemplates.Count | Should -Be 28
+            $version.properties.linkedTemplates.Count | Should -Be 0
             $version.properties.mainTemplate.languageVersion | Should -Be '2.0'
             $result.RestCalls[1].Path | Should -Match '-dedup-test/versions/'
             $result.RestCalls[1].Path | Should -Match '^/subscriptions/'
@@ -547,6 +732,15 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
                 $parent.tags.owner | Should -Be 'preserved'
                 $result.RestCalls[1].Path | Should -Match '/versions/5.0.0\?'
                 $result.SpecReads | Should -Be 2
+            }
+            if ($ExpectedPuts -eq 3) {
+                $inline = $result.RestCalls[1].Payload | ConvertFrom-Json
+                $linked = $result.RestCalls[2].Payload | ConvertFrom-Json
+                $inline.properties.linkedTemplates.Count | Should -Be 0
+                $linked.properties.linkedTemplates.Count | Should -Be 28
+                $result.RestCalls[2].Path | Should -Be $result.RestCalls[1].Path
+                $linked.properties.uiFormDefinition | ConvertTo-Json -Depth 100 -Compress |
+                    Should -Be ($inline.properties.uiFormDefinition | ConvertTo-Json -Depth 100 -Compress)
             }
             if ($Mode -eq 'EmptyVersions') {
                 $parent.tags.owner | Should -Be 'preserved'
