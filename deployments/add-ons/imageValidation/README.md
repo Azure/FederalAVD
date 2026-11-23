@@ -280,9 +280,8 @@ consuming entry templates after changes to shared modules. Do not hand-edit ARM.
   does not configure disk network restrictions in the current shared VM module.
   Creating disk-access infrastructure does not establish `AllowPrivate` or `DenyAll`
   enforcement on the actual OS disk.
-- Image enumeration does not follow pagination or handle an empty list explicitly.
-  Aggregate replication completion does not establish availability in the selected
-  VM region. A successful final polling attempt can still hit the timeout check.
+- Image enumeration does not handle an empty list explicitly. Aggregate replication
+  completion does not establish availability in the selected VM region.
 - VM disappearance does not prove OS-disk cleanup or NIC detachment has completed.
   VM input JSON/Boolean parsing occurs after deletion, so invalid runtime settings
   can fail after removing the previous VM.
