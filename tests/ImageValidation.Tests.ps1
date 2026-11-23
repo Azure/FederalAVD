@@ -140,7 +140,8 @@ Describe 'Image validation infrastructure' {
         $vmTemplate.resources.customizations.properties.parameters.customizations.value |
             Should Be "[parameters('vmCustomizations')]"
         ($vmTemplate.resources.customizations.dependsOn -contains 'virtualMachine') | Should Be $true
-        $vmTemplate.resources.extension_GuestAttestation.condition | Should Be "[parameters('integrityMonitoring')]"
+        $vmTemplate.resources.extension_GuestAttestation.condition |
+            Should Be "[and(not(equals(parameters('securityType'), 'Standard')), variables('integrityMonitoringValidation'))]"
     }
 
     It 'enables monitoring only when an existing workspace is supplied' {

@@ -32,7 +32,8 @@ Describe 'Image validation Portal form' {
         $outputs.subnetResourceId | Should Be "[steps('virtualMachine').network.subnet]"
         $outputs.privateIPAddress | Should Be "[steps('virtualMachine').network.privateIPAddress]"
         $outputs.virtualMachineSize | Should Be "[steps('virtualMachine').general.size]"
-        $outputs.integrityMonitoring | Should Be "[steps('virtualMachine').security.integrityMonitoring]"
+        $outputs.integrityMonitoring |
+            Should Be "[if(and(equals(steps('virtualMachine').security.securityType, 'TrustedLaunch'), steps('virtualMachine').security.secureBoot, steps('virtualMachine').security.vTpm), steps('virtualMachine').security.integrityMonitoring, false)]"
         $outputs.secureBoot | Should Be "[steps('virtualMachine').security.secureBoot]"
         $outputs.vTpm | Should Be "[steps('virtualMachine').security.vTpm]"
     }
