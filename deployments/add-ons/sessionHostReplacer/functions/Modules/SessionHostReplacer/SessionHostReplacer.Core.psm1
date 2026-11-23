@@ -374,7 +374,7 @@ function Clear-ShrLogContext {
 function Write-ShrEvent {
     param(
         [ValidateSet('SHR_TIMER', 'SHR_EVENT')][string] $Category = 'SHR_EVENT',
-        [Parameter(Mandatory)][string] $Event,
+        [Parameter(Mandatory)][Alias('Event')][string] $EventName,
         [System.Collections.IDictionary] $State,
         [System.Collections.IDictionary] $Metrics
     )
@@ -391,12 +391,12 @@ function Write-ShrEvent {
         }
     }
     $counts = $script:ShrLogContext.Metrics
-    $phase = $Event
-    if ($Event -eq 'AuthorizationExpired') {
+    $phase = $EventName
+    if ($EventName -eq 'AuthorizationExpired') {
         $phase = 'AuthorizationExpired'
     } elseif ($State -and $State['Status'] -in @('Completed', 'NeedsAttention', 'Superseded')) {
         $phase = [string]$State['Status']
-    } elseif ($Event -in @('Progress', 'Waiting')) {
+    } elseif ($EventName -in @('Progress', 'Waiting')) {
         $phase = if ($State['CleanupIntent']) { 'WaitingForCleanup' }
         elseif ($counts['RunningDeployments'] -gt 0) { 'WaitingForDeployment' }
         elseif ($counts.ContainsKey('NewHostsSafeToProceed') -and -not $counts['NewHostsSafeToProceed']) { 'WaitingForHealth' }
@@ -414,7 +414,7 @@ function Write-ShrEvent {
     # Emit only this allowlist; operation state and deployment bodies can contain credentials.
     $data = [ordered]@{
         SchemaVersion = 1
-        Event = $Event
+        Event = $EventName
         Trigger = $script:ShrLogContext.Trigger
         CycleId = $script:ShrLogContext.CycleId
         Batch = $script:ShrLogContext.Batch
@@ -456,7 +456,7 @@ function Write-ShrEvent {
         $data.InDrain = $counts['InDrain']
         $data.RunningDeployments = $counts['RunningDeployments']
     }
-    $level = if ($Event -in @('Checkpoint', 'Reconciling', 'Progress', 'DeploymentObserved')) { 'Trace' } else { 'Information' }
+    $level = if ($EventName -in @('Checkpoint', 'Reconciling', 'Progress', 'DeploymentObserved')) { 'Trace' } else { 'Information' }
     Write-LogEntry -Message "$Category | $($data | ConvertTo-Json -Depth 4 -Compress)" -Level $level
 }
 
@@ -952,17 +952,21 @@ function Invoke-GraphApiWithRetry {
             if ($_.Exception.Response) {
                 # Try to get detailed error message from response body
                 try {
-                    $errorStream = $_.Exception.Response.GetResponseStream()
-                    $reader = New-Object System.IO.StreamReader($errorStream)
-                    $errorBody = $reader.ReadToEnd()
-                    $reader.Close()
+                    if ($_.Exception.Response -is [System.Net.Http.HttpResponseMessage]) {
+                        $errorBody = $_.Exception.Response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                    } else {
+                        $errorStream = $_.Exception.Response.GetResponseStream()
+                        $reader = New-Object System.IO.StreamReader($errorStream)
+                        try { $errorBody = $reader.ReadToEnd() }
+                        finally { $reader.Dispose() }
+                    }
                     
                     if ($errorBody) {
                         Write-LogEntry -Message "Graph API error response: $errorBody" -Level Error
                     }
                 }
                 catch {
-                    # Ignore errors reading error stream
+                    Write-LogEntry -Message 'Graph error-response details could not be read or emitted; the original request failure will still be handled.' -Level Trace
                 }
             }
             

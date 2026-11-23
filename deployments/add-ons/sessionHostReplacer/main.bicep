@@ -5,7 +5,8 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
-import { namingPolicy, namePattern, functionAppNames, resourceNameForType, scopeIdUnique } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { functionAppNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { namingPolicy, namePattern, scopeIdUnique } from '../../shared/modules/orchestration/naming/internal.bicep'
 
 // ========== //
 // Parameters //
@@ -33,7 +34,7 @@ param tags object = {}
 // Should match the convention used when deploying the host pool. Pre-populated from the
 // hpNamingConvention tag on the host pool resource.
 @description('Optional. Function App infrastructure naming convention; match the host pool convention. The Portal populates it from the hpNamingConvention tag.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -606,7 +607,7 @@ var naming = functionAppNames(effectiveNamingConvention, applicationIdentifier, 
 var appServicePlanName = !empty(existingAppServicePlanResourceId)
   ? last(split(existingAppServicePlanResourceId, '/'))
   : !empty(appServicePlanNameOverride) ? appServicePlanNameOverride
-    : resourceNameForType(effectiveNamingConvention, 'appServicePlans', namingPolicy.identifiers.sessionHostReplacer, union(namingContext, {
+    : resourceNameForType(effectiveNamingConvention, 'Microsoft.Web/serverfarms', namingPolicy.identifiers.sessionHostReplacer, union(namingContext, {
       resourceGroupName: aspResourceGroupName
     }))
 var privateEndpointNameConv = naming.privateEndpointNameConv
@@ -628,7 +629,7 @@ var storageAccountName = naming.storageAccountName
 var storageEncryptionIdentityName = naming.storageEncryptionIdentityName
 var templateSpecNameFinal = !empty(sessionHostTemplateSpecResourceId)
   ? last(split(sessionHostTemplateSpecResourceId, '/'))
-  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'templateSpecs', namingPolicy.templateSpecs.sessionHosts, namingContext)
+  : !empty(templateSpecName) ? templateSpecName : resourceNameForType(effectiveNamingConvention, 'Microsoft.Resources/templateSpecs', namingPolicy.templateSpecs.sessionHosts, namingContext)
 var encryptionKeyName = namePattern('storageCmkKey', { identifier: applicationIdentifier })
 
 // Start storage CMK provisioning before the Function App prerequisites. This gives the
@@ -857,6 +858,13 @@ module roleAssignmentHostPoolSubscription '../../shared/modules/resourceModules/
   }
 }
 
+module scalingPlanPermissions 'modules/scalingPlanPermissions.bicep' = {
+  scope: subscription(hostPoolSubscriptionId)
+  params: {
+    principalId: functionApp.outputs.functionAppPrincipalId
+  }
+}
+
 module roleAssignmentsRGs '../../shared/modules/resourceModules/authorization/roleAssignments/resourceGroup/deploy.bicep' = [
   for rgRole in roleAssignmentsResourceGroups: {
     scope: resourceGroup(split(rgRole.resourceGroupId, '/')[2], split(rgRole.resourceGroupId, '/')[4])
@@ -942,12 +950,20 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           value: string(initiationEnabled)
         }
         {
+          name: 'ContinuationTimeoutHours'
+          value: string(continuationTimeoutHours)
+        }
+        {
           name: 'AzureWebJobs.session-host-replacer-worker.Disabled'
           value: 'false'
         }
         {
-          name: 'ContinuationTimeoutHours'
-          value: string(continuationTimeoutHours)
+          name: 'AzureWebJobs.session-host-replacer-initiator.Disabled'
+          value: 'false'
+        }
+        {
+          name: 'AzureWebJobs.session-host-replacer.Disabled'
+          value: 'true'
         }
         {
           name: 'AzureFunctionsJobHost__functionTimeout'
@@ -1194,9 +1210,10 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
       '../Modules/SessionHostReplacer/SessionHostReplacer.psd1': loadTextContent('functions/Modules/SessionHostReplacer/SessionHostReplacer.psd1')
     }, sharedFunctionFiles)
     functionAppName: functionApp.outputs.functionAppName
-    functionName: 'session-host-replacer'
+    functionName: 'session-host-replacer-initiator'
     schedule: '%TimerSchedule%'
   }
+  dependsOn: [scalingPlanPermissions]
 }
 
 module workerCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
@@ -1217,7 +1234,6 @@ module workbook 'modules/workBook/workbook.bicep' = if (deployWorkbook && !empty
   params: {
     workbookName: workbookName
     location: workbookLocation
-    applicationInsightsResourceId: functionApp.outputs.applicationInsightsResourceId
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
     tags: union({ 'cm-resource-parent': logAnalyticsWorkspaceResourceId }, tags[?'Microsoft.Insights/workbooks'] ?? {})
   }

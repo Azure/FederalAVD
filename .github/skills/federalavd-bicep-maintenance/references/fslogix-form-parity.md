@@ -8,8 +8,10 @@ Use these notes when changing the standard host-pool or standalone FSLogix Stora
   or a Kerberos encryption selector.
 - The standard host-pool Bicep entry point retains
   `fslogixStorageKerberosEncryptionType` for compatibility, but its portal form does not expose it.
-- The add-on only consumes an existing Recovery Services vault and Azure Files backup policy. It
-  does not create either resource.
+- The add-on can consume an existing Recovery Services vault/policy or create a shared regional
+  vault in the operations resource group or a dedicated vault in the storage resource group.
+  All FSLogix callers exclude Office container shares from backup enrollment. See the
+  [add-on backup contract](../../../../deployments/add-ons/fslogixStorage/README.md#azure-files-snapshot-backup).
 
 ## Remaining Differences
 

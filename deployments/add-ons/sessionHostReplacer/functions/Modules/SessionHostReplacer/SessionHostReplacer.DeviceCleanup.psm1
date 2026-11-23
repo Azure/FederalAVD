@@ -133,7 +133,8 @@ function Assert-SessionHostNamesAvailable {
         [string]$HostPoolSubscriptionId = (Read-FunctionAppSetting HostPoolSubscriptionId),
         [string]$HostPoolResourceGroupName = (Read-FunctionAppSetting HostPoolResourceGroupName),
         [string]$HostPoolName = (Read-FunctionAppSetting HostPoolName),
-        [string]$ResourceManagerUri = (Get-ResourceManagerUri)
+        [string]$ResourceManagerUri = (Get-ResourceManagerUri),
+        [string]$ClientId = (Read-FunctionAppSetting UserAssignedIdentityClientId)
     )
 
     try {
@@ -200,7 +201,7 @@ function Assert-SessionHostNamesAvailable {
 
         if ($RemoveEntraDevice -or $RemoveIntuneDevice) {
             if ([string]::IsNullOrWhiteSpace($GraphToken)) {
-                $GraphToken = Get-AccessToken -ResourceUri (Get-GraphEndpoint)
+                $GraphToken = Get-AccessToken -ResourceUri (Get-GraphEndpoint) -ClientId $ClientId
             }
             if ([string]::IsNullOrWhiteSpace($graphToken)) { throw 'Required Graph token acquisition failed; deployment batch is blocked.' }
         }
@@ -229,12 +230,12 @@ function Assert-SessionHostNamesAvailable {
         foreach ($verificationHost in $hostsToVerify) {
             if ($continuation) { Assert-ShrWorkerLease }
             if ($RemoveEntraDevice) {
-                $verificationHost.EntraDevice = Get-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name -Directory Entra
+                $verificationHost.EntraDevice = Get-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name -Directory Entra -ClientId $ClientId
                 $verificationHost.EntraIDConfirmed = $null -eq $verificationHost.EntraDevice
             }
             if ($RemoveIntuneDevice) {
                 if ($continuation) { Assert-ShrWorkerLease }
-                $verificationHost.IntuneDevice = Get-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name -Directory Intune
+                $verificationHost.IntuneDevice = Get-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name -Directory Intune -ClientId $ClientId
                 $verificationHost.IntuneConfirmed = $null -eq $verificationHost.IntuneDevice
             }
         }
@@ -257,11 +258,11 @@ function Assert-SessionHostNamesAvailable {
         foreach ($verificationHost in $hostsToVerify) {
             if ($verificationHost.EntraDevice) {
                 Remove-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name `
-                    -Id $verificationHost.EntraDevice.id -Directory Entra
+                    -Id $verificationHost.EntraDevice.id -Directory Entra -ClientId $ClientId
             }
             if ($verificationHost.IntuneDevice) {
                 Remove-SessionHostDirectoryDevice -GraphToken $GraphToken -Name $verificationHost.Name `
-                    -Id $verificationHost.IntuneDevice.id -Directory Intune
+                    -Id $verificationHost.IntuneDevice.id -Directory Intune -ClientId $ClientId
             }
         }
         foreach ($registration in $staleRegistrations) {
@@ -281,7 +282,7 @@ function Assert-SessionHostNamesAvailable {
             $verification = Wait-SessionHostDeletionVerification -ARMToken $ARMToken -GraphToken $GraphToken `
                 -HostsToVerify $hostsToVerify -RemoveEntraDevice $RemoveEntraDevice -RemoveIntuneDevice $RemoveIntuneDevice `
                 -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName `
-                -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri
+                -HostPoolName $HostPoolName -ResourceManagerUri $ResourceManagerUri -ClientId $ClientId
             if ($verification.TotalHosts -ne $SessionHosts.Count -or @($verification.IncompleteHosts).Count -gt 0) {
                 throw 'Required VM, AVD registration, or directory cleanup remains incomplete; deployment batch is blocked.'
             }

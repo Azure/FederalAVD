@@ -16,6 +16,8 @@ deployment batches while previously selected old hosts continue draining.
 
 Initiation is always separate from progress. Both functions run in the
 same Function App; there is no additional VM or Function App.
+`session-host-replacer-initiator` authorizes batches on `%TimerSchedule%`;
+`session-host-replacer-worker` reconciles progress every minute.
 
 ```mermaid
 flowchart TD
@@ -91,6 +93,39 @@ exist. This is not a completion-time guarantee: health, schedule, quota, subnet 
 capacity and session gates still apply. The SideBySide deployment ceiling applies with or without
 progressive batching; the planner retains its twice-target temporary-capacity ceiling.
 
+### Live gallery replica safeguard
+
+Before replacement planning, the worker reads the selected **exact image version** with
+`$expand=ReplicationStatus` from Azure Resource Manager. This happens on every planning pass,
+including continuation passes and later scheduled batches; the image stays pinned, but its
+replica capacity is not cached. In-progress deployments are observed without starting another batch.
+
+For the session-host region, the ceiling is **20 VMs per configured replica**. The regional
+`regionalReplicaCount` overrides the version-wide `replicaCount`; counts from other regions are
+never added. This follows [Microsoft's replica-sizing recommendation](https://learn.microsoft.com/azure/virtual-machines/azure-compute-gallery#scaling),
+not a guaranteed Azure concurrency limit. The publishing profile and regional replication status
+come from the [gallery image version GET API](https://learn.microsoft.com/rest/api/compute/gallery-image-versions/get).
+Configured replicas are not a live count of free deployment slots. Other pools and deployments
+can use the same image, so this is a per-pool safeguard, not a cross-pool reservation.
+
+The planner applies this ceiling after existing mode-specific limits and progressive scale-up,
+before selecting destructive replacement candidates. It cannot increase a smaller existing
+allowance. DeleteFirst pending-host recovery and the final submission path also honor the
+ceiling. A saved deployment retry that still exceeds it stops rather than silently splitting
+the durable request; restore replica capacity and use the normal operation-recovery procedure.
+An already accepted deployment is not canceled or resized.
+
+Failed queries, missing/invalid counts, missing regional data or replication other than
+`Completed` block new replacement planning and log an Error; later reconciliation can retry the
+read. Full replication is required: shallow replication is deliberately blocked rather than
+assuming that its single source can support full-replica concurrency. Marketplace images have
+no customer-controlled gallery replicas and retain their existing batch behavior.
+
+Information-level `IMAGE_REPLICA_CAP` logs record the exact image, region, effective count,
+count source, replication status and ceiling. `IMAGE_REPLICA_BATCH` records the existing policy
+allowance and resulting planned batch; `IMAGE_REPLICA_SUBMISSION` records the final submission
+count, including retries. No new app setting or additional role assignment is required.
+
 ### Coordination and Recovery Boundaries
 
 - The `shrContinuation` table stores one operation entity per fully qualified host pool, separate from
@@ -137,8 +172,18 @@ progressive batching; the planner retains its twice-target temporary-capacity ce
   Pending host mappings preserve planner priority through checkpoint serialization and reload;
   placement remains keyed by exact hostname. Invalid ARM deployment collection envelopes fail
   closed rather than being interpreted as an empty deployment list.
+- Target count is operational, not a reason to stop an otherwise matching configuration.
+  New operations retain the original configured value for fingerprint verification, separately
+  from the effective batch target. A SideBySide initiation can adopt an increased or decreased
+  target only after the previous deployment settles, exact-image readiness and scaling handoff
+  pass, and no cleanup is pending. A count-only boundary need not submit a deployment. Existing
+  intents and name reservations remain unchanged; a completed intent cannot be reused to grow
+  capacity without a new authorization. DeleteFirst adopts the request on its next operation.
+  A request for `0` retains the active target and enables fresh auto-detection for the next operation.
+  Legacy fingerprints are accepted only when the original target can be verified; other protected
+  settings, leases, deadlines and mutation guards are not bypassed.
 - The deadline is established once (`continuationTimeoutHours`, default 72, range 1-720); new
-  reconciliation ticks and additional SideBySide batches do not reset it. Unexpected failures, changed initiating configuration and expired
+  reconciliation ticks and additional SideBySide batches do not reset it. Unexpected failures, changed protected configuration and expired
   deadlines stop in `NeedsAttention`, retaining the batch, pins and recovery information.
   At an enabled initiation tick, a rejected first SideBySide submission can be automatically
   superseded after a template-only correction. The timer proves the protected settings otherwise
@@ -186,6 +231,23 @@ flowchart TD
 
 Exact-image evidence is written whenever a latest-image host has AVD status `Available` and no failed AVD health checks. Drain mode does not prevent evidence from being written.
 
+Before cleanup or replacement, SHR checks the assigned scaling plan. An enabled plan must
+have a nonempty `exclusionTag` matching `Tag_ScalingPlanExclusionTag`. The leased worker
+repairs mismatches only after a full-resource read proves exactly one host-pool reference
+to this pool; disabled references to other pools also prevent repair. Read-only initiation
+hands repairable mismatches to the worker. Already-matching shared plans remain supported.
+Blank SHR names, shared mismatches, failed requests and unverifiable repairs block replacement.
+Disabled or absent plans need no match; MaintenanceWindow never repairs an enabled plan.
+When changing a nonblank plan name, existing VM exclusions are copied and verified first,
+preserving administrator ownership and old tags. The worker rechecks membership, patches
+only `exclusionTag` with `If-Match` when available, and reads back the result. Membership
+checking and updating are not guaranteed atomic without an ETag; avoid concurrent edits.
+
+Each selected retirement host is protected by the exclusion tag before drain or other
+lifecycle mutations. Missing protection is repaired on each retirement pass, including
+hosts already draining. Existing exclusion values are preserved regardless of ownership.
+Reasserting drain after external interference preserves the original grace-period timestamp.
+
 Every scaling-exclusion cleanup path additionally requires an online, non-draining, automation-enabled
 host on the exact image with the matching validation token. Shutdown-retention hosts and
 administrator-owned exclusions are preserved. A cached token alone never authorizes release of an
@@ -222,8 +284,8 @@ flowchart TD
     I --> Z
     H -- Yes --> J{"Old hosts eligible<br/>for removal?"}
     J -- No --> Z
-    J -- Yes --> K["Enable drain mode on<br/>selected old hosts"]
-    K --> L["Set drain timestamp and<br/>replacer scaling exclusion"]
+    J -- Yes --> K["Ensure scaling exclusion,<br/>then enable drain mode"]
+    K --> L["Set or preserve<br/>drain timestamp"]
     L --> M["Notify each active<br/>AVD user session"]
     M --> N{Sessions remain?}
     N -- Yes, within grace period --> Z
@@ -273,8 +335,8 @@ flowchart TD
     J --> K{Any hosts safe to remove?}
     K -- No --> Z
     K -- Yes --> L["Save hostname and<br/>placement mapping"]
-    L --> M["Enable drain mode on<br/>selected old hosts"]
-    M --> N["Set drain timestamp and<br/>replacer scaling exclusion"]
+    L --> M["Ensure scaling exclusion,<br/>then enable drain mode"]
+    M --> N["Set or preserve<br/>drain timestamp"]
     N --> O["Notify each active<br/>AVD user session"]
     O --> P{Sessions remain?}
     P -- Yes, within grace period --> Z
@@ -362,8 +424,9 @@ Maintenance-override behavior:
 - Autoscale must be disabled. Failure to query scaling-plan state also fails closed.
 - The function explicitly calls the AVD user-session logoff operation and re-queries sessions;
   deleting a VM does not substitute for logoff.
-- Notification delay is evaluated on timer invocations. With the default 30-minute timer, forced
-  sign-out can begin up to approximately 30 minutes after the requested delay elapses.
+- Notification delay for an active batch is evaluated by the minute reconciler, independently of
+  the initiation schedule. Running invocations, restarts and leases can delay checks; the cadence
+  does not guarantee an exact sign-out time.
 - A full-pool outage, including one-host replacement, requires explicit authorization.
 - The configured replacement mode must be DeleteFirst.
 - Any shutdown-retention VM blocks scheduling and execution; maintenance does not purge retained

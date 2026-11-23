@@ -1,5 +1,6 @@
 targetScope = 'subscription'
-import { legacyConvention, regionAbbreviation, resourceName } from '../shared/modules/orchestration/naming/naming.bicep'
+import { namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
+import { regionAbbreviation, resourceName } from '../shared/modules/orchestration/naming/internal.bicep'
 
 // Deploys the core networking infrastructure for Azure Virtual Desktop: Virtual Network, subnets,
 // Network Security Groups, route tables, and optional Azure Firewall or NVA routing configuration.
@@ -42,8 +43,12 @@ param rdpShortpathManagedNetworks bool = false
 @description('Optional. Enables RDP Shortpath for public networks using STUN/ICE. Deploys a NAT Gateway for cone-shaped NAT, adds AVD service bypass routes on NVA deployments, and adds an NSG rule allowing inbound UDP 3390 from Internet.')
 param rdpShortpathPublicNetworks bool = false
 
-@description('Optional. Determines if the resources should be named with the resource type at the end.')
-param nameConvResTypeAtEnd bool = false
+@description('Optional. Shared naming convention for generated network resource names. Explicit resource group, VNet and subnet names remain unchanged.')
+param namingConvention namingConventionConfig = {
+  components: ['resourceType', 'workload', 'purpose', 'location']
+  delimiter: '-'
+  workload: 'avd'
+}
 
 @description('Conditional. The IP Address the network virtual appliance. Required when "defaultRouting" is "nva".')
 param nvaIPAddress string = ''
@@ -144,9 +149,8 @@ var cloud = toLower(environment().name)
 var cloudSuffix = replace(replace(replace(environment().resourceManager, 'https://management.azure.', ''), 'https://management.', ''), '/', '')
 
 var locations = startsWith(cloud, 'us') ? (loadJsonContent('../shared/data/locations.json')).other : (loadJsonContent('../shared/data/locations.json'))[environment().name]
-var locationAbbreviation = regionAbbreviation(location, environment().name)
+var locationAbbreviation = !empty(namingConvention.?locationAbbreviation ?? '') ? (namingConvention.?locationAbbreviation ?? '') : regionAbbreviation(location, environment().name)
 var recoveryServicesGeo = startsWith(cloud, 'us') ? azureRecoveryServicesGeoCode : locations[location].recoveryServicesGeo
-var namingConvention = legacyConvention(nameConvResTypeAtEnd)
 var natGatewayName = resourceName(namingConvention, 'networkNatGateway', locationAbbreviation, '', '')
 var publicIPName = resourceName(namingConvention, 'networkPublicIP', locationAbbreviation, '', '')
 var routeTableName = resourceName(namingConvention, 'networkRouteTable', locationAbbreviation, '', '')

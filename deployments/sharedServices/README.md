@@ -230,6 +230,12 @@ Do not commit secret values to parameter files.
 
 Select public access independently of private endpoints. Disabled retains supplied IP rules;
 restricted mode denies unmatched traffic even with an empty list; Enabled allows all networks.
+In the Portal form, **Operations Resources > Network Access** groups the **Public Endpoint / Private
+Endpoint** selector with **Key Vault public network access** and the restricted-mode IP list.
+Public Endpoint is the default. Selecting Private Endpoint reveals the subnet and private DNS
+settings and defaults Key Vault public access to Disabled; public access remains independently
+selectable. The selector maps to the existing `privateEndpoint` boolean, so automation parameter
+files and the deployment contract are unchanged. Service Endpoint is not offered by this form.
 The existing trusted-service bypass remains configured and can still apply when public access is
 Disabled. With `Auto`, private endpoints without IPs disable public access; IPs enable restricted
 access; without either, all networks are allowed. See the
@@ -265,6 +271,9 @@ session host uses its own system-assigned managed identity.
 This deployment creates the vault and policy. Each consuming host-pool or FSLogix Storage deployment
 registers its own eligible Azure Files storage account and share with that vault and policy. Azure
 NetApp Files is not protected by this Azure Files backup policy.
+The shared FSLogix registration module never enrolls `office-containers`; only profile shares
+are protected for the standard layouts. Existing Office protected items must be stopped through
+the approved backup-management process; incremental deployments do not remove them.
 
 ### Naming and Tags
 

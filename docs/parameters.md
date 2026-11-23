@@ -24,6 +24,24 @@ conventions or an additional app-settings parameter.
 | 🏢 **Host Pool (standard management)** | [hostpools/README.md — Parameters](../deployments/hostpools/README.md#parameters) | [hostpools/README.md — Examples](../deployments/hostpools/README.md#examples) |
 | 🏢 **Automated Host Pool (Session Host Configuration)** | [automatedHostPools/README.md](../deployments/automatedHostPools/README.md) | [starter parameters](../customer-examples/parameters/automatedHostPools/example.automatedHostPool.parameters.json) |
 
+For automated host pools, `desktopFriendlyName` is optional (default `''`, maximum 20 characters).
+Leave **Session Desktop Friendly Name** blank, omit the deployment parameter, or pass an empty
+string to skip renaming the session desktop.
+
+Standard and automated host pools and the FSLogix Storage add-on accept
+`domainJoinDeploymentVirtualMachine` (default `false`). For AD DS or Entra Domain Services, it
+joins an otherwise-required temporary helper using existing domain information and credentials.
+Host pools reuse the session-host OU; the add-on uses its deployment VM OU override or storage OU.
+The add-on cannot join externally managed helpers. Azure NetApp Files retains its automatic helper
+domain join. See the [standard host-pool guidance](../deployments/hostpools/README.md#deployment-vm-domain-join)
+and [FSLogix Storage guidance](../deployments/add-ons/fslogixStorage/README.md#deployment).
+
+The [FSLogix Storage backup contract](../deployments/add-ons/fslogixStorage/README.md#azure-files-snapshot-backup)
+supports existing vaults or opt-in shared/dedicated vault creation with `deployFSLogixBackupVault`,
+`backupVaultScope`, name overrides, `fslogixBackupRetentionDays`, and `fslogixBackupTimeZone`.
+All shared FSLogix backup registration excludes `office-containers`; previously enrolled Office
+shares require explicit operator removal from protection.
+
 ---
 
 ## Naming Convention
@@ -38,14 +56,26 @@ See the **[Naming Convention guide](naming-convention.md)** for:
 - How to align naming across hostpool, sharedServices, imageManagement, and add-ons
 - Named examples for six common conventions
 
+The parameter uses the shared `namingConventionConfig` type; `{}` and partial
+overrides are supported. Prefer `customToken1`/`customToken2` for static custom
+slots. Existing `freeform1`/`freeform2` properties and component names remain
+aliases; if both spellings are supplied, their values must agree. See the
+[add-on quick start](naming-convention.md#add-on-developer-quick-start) for a
+complete naming-only Bicep example. No named preset selector is currently provided.
+
+Networking also accepts this typed object. Its former `nameConvResTypeAtEnd` boolean
+has been removed; see the [Networking migration example](../deployments/networking/README.md#namingconvention)
+for the equivalent resource-type-last component order. Explicit network resource group,
+VNet and subnet names remain explicit.
+
 ---
 
 ## Standard Host-Pool Locations
 
 | Parameter | Default | Purpose |
 | --- | --- | --- |
-| `controlPlaneLocation` | Subscription deployment location | AVD control-plane and shared supporting resources |
-| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers and their naming context |
+| `controlPlaneLocation` | Subscription deployment location | AVD host pool, workspace, application groups and scaling plan |
+| `virtualMachinesLocation` | `controlPlaneLocation` | Session hosts, storage, deployment helpers, monitoring, Key Vaults, backup and their naming context |
 
 Both use Azure location names such as `eastus2` or `usgovvirginia`, not display
 labels or naming abbreviations. The Portal passes both selections explicitly.
@@ -138,6 +168,13 @@ and [App Service access restrictions](https://learn.microsoft.com/en-us/azure/ap
 
 ## Add-Ons
 
+SHR's `functionAppResourceGroupName` defaults to the session-host VM resource group name.
+The Portal exposes it as **Infrastructure > Session Host Replacer Resource Group**, selecting an
+existing RG in the deployment subscription. It scopes pool-specific replacer resources, not the
+session-host VMs or shared dependencies. App Service Plan placement remains independently
+configurable; in direct deployments an omitted plan RG defaults to the replacer RG.
+See [resource placement and rebuild cautions](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#dedicated-replacer-resource-group).
+
 For Session Host Replacer gallery-image pilots, `includeExcludedImageVersions` defaults to `false`.
 Enable it only on pilot pools to test excluded candidates before promotion. See
 [pilot selection and promotion](../deployments/add-ons/sessionHostReplacer/README.md#pilot-image-selection-and-promotion)
@@ -198,6 +235,10 @@ preserved.
 | **sharedServices** | `fslogixBackupPolicyName` | **hostpool** | `existingFilesBackupPolicyName` |
 | **sharedServices** | `fslogixBackupVaultResourceId` | **fslogixStorage** | `recoveryServicesVaultResourceId` |
 | **sharedServices** | `fslogixBackupPolicyName` | **fslogixStorage** | `fileSharePolicyName` |
+| **fslogixStorage** | `fslogixBackupVaultResourceId` | **hostpool / automatedHostPool** | `existingFilesBackupVaultResourceId` |
+| **fslogixStorage** | `fslogixBackupPolicyName` | **hostpool / automatedHostPool** | `existingFilesBackupPolicyName` |
+| **fslogixStorage** | `fslogixBackupVaultResourceId` | **fslogixStorage** (later expansion) | `recoveryServicesVaultResourceId` |
+| **fslogixStorage** | `fslogixBackupPolicyName` | **fslogixStorage** (later expansion) | `fileSharePolicyName` |
 | **imageManagement** | `computeGalleryResourceId` | **imageBuild** | `computeGalleryResourceId` |
 | **imageManagement** | `artifactsBlobContainerUrl` | **imageBuild** | `artifactsContainerUri` |
 | **imageManagement** | `managedIdentityResourceId` | **imageBuild** | `userAssignedIdentityResourceId` |

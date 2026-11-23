@@ -24,57 +24,66 @@ $Script:Name = 'Install-Windows11RSAT'
 $Script:Log = $null
 
 function New-Log {
-    $logDirectory = Join-Path -Path $env:SystemRoot -ChildPath 'Logs\Software'
-    if (-not (Test-Path -LiteralPath $logDirectory)) {
-        New-Item -Path $logDirectory -ItemType Directory -Force | Out-Null
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
+    )
+    if ($env:SUPPRESS_FILELOG -eq '1') { return }
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $Script:Log = Join-Path -Path $logDirectory -ChildPath "$Script:Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
 function Write-Log {
-    param(
-        [ValidateSet('Info', 'Warning', 'Error')]
-        [string]$Category = 'Info',
-
-        [Parameter(Mandatory = $true)]
-        [string]$Message
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
     )
-
-    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t$Message"
-    Add-Content -LiteralPath $Script:Log -Value $content -ErrorAction SilentlyContinue
-    Write-Output $content
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
+    }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
+    }
 }
 
 function Assert-SupportedHost {
+    param (
+        [int]$MinimumBuild = 0,
+        [switch]$ClientOnly
+    )
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         throw 'Administrator or SYSTEM privileges are required.'
     }
-
-    if (-not [Environment]::Is64BitOperatingSystem) {
-        throw 'This artifact supports only x64 Windows 11.'
-    }
-
-    $operatingSystem = Get-CimInstance -ClassName Win32_OperatingSystem
-    $productType = [int]$operatingSystem.ProductType
-    $editionId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction SilentlyContinue).EditionID
+    if (-not [Environment]::Is64BitOperatingSystem) { throw 'A 64-bit Windows operating system is required.' }
     $build = [Environment]::OSVersion.Version.Build
-
-    # Windows 11 Enterprise multi-session reports ProductType 3 (server) with EditionID ServerRdsh.
-    $isClient = $productType -eq 1
-    $isMultiSession = $productType -eq 3 -and $editionId -eq 'ServerRdsh'
-    if ((-not $isClient -and -not $isMultiSession) -or $build -lt 22000) {
-        throw "This artifact supports only Windows 11 Enterprise and Windows 11 Enterprise multi-session. Detected '$($operatingSystem.Caption)' (ProductType $productType, EditionID '$editionId') build $build."
+    if ($build -lt $MinimumBuild) { throw "Windows build $build is unsupported; build $MinimumBuild or later is required." }
+    if ($ClientOnly) {
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+        $edition = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name EditionID -ErrorAction Stop).EditionID
+        if ([int]$os.ProductType -ne 1 -and -not ([int]$os.ProductType -eq 3 -and $edition -eq 'ServerRdsh')) {
+            throw "Windows client or Enterprise multi-session is required; detected '$($os.Caption)' (EditionID '$edition')."
+        }
+        Write-Log -Message "Detected '$($os.Caption)' (EditionID '$edition') build $build."
     }
-
-    Write-Log -Message "Detected '$($operatingSystem.Caption)' (ProductType $productType, EditionID '$editionId') build $build."
 }
 
-New-Log
+New-Log -Path (Join-Path $env:SystemRoot 'Logs\Software') -Name 'Install-Windows11RSAT'
 Write-Log -Message "Starting '$PSCommandPath'."
-Assert-SupportedHost
+Assert-SupportedHost -MinimumBuild 22000 -ClientOnly
 
 $offlineSourceAvailable = $false
 if (Test-Path -LiteralPath $SourcePath -PathType Container) {

@@ -965,7 +965,7 @@ Builds a Windows 11 AVD image from marketplace with Windows Updates; creates a n
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
         },
         "artifactsContainerUri": {
-            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+            "value": "https://saimgassetsabc123use2.blob.core.windows.net/artifacts/"
         }
     }
 }
@@ -992,7 +992,7 @@ Builds an image with LGPO and VS Code installed from the artifacts storage accou
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
         },
         "artifactsContainerUri": {
-            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+            "value": "https://saimgassetsabc123use2.blob.core.windows.net/artifacts/"
         },
         "customizations": {
             "value": [
@@ -1021,7 +1021,7 @@ Builds an image with LGPO and VS Code installed from the artifacts storage accou
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
         },
         "artifactsContainerUri": {
-            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+            "value": "https://saimgassetsabc123use2.blob.core.windows.net/artifacts/"
         },
         "installUpdates": { "value": true },
         "updateService": { "value": "WSUS" },
@@ -1049,7 +1049,7 @@ Creates a new named image definition and replicates the image version to multipl
             "value": "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uai-avd-image-management-use2"
         },
         "artifactsContainerUri": {
-            "value": "https://saimgassetsuse2abc123.blob.core.windows.net/artifacts/"
+            "value": "https://saimgassetsabc123use2.blob.core.windows.net/artifacts/"
         },
         "imageDefinitionPublisher": { "value": "Contoso" },
         "imageDefinitionOffer": { "value": "Windows11" },

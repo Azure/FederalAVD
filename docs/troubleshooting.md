@@ -79,6 +79,26 @@ Get-AzRoleAssignment -Scope $scope -RoleDefinitionName $roleDefinition -ObjectId
 
 After removing the conflicting assignment(s), redeploy — ARM will recreate the assignment at its deterministic GUID.
 
+## FSLogix Initialization Hangs When a Storage Key Starts With a Slash
+
+Older templates passed Azure Files keys to `cmdkey.exe` without quoting the password value.
+A valid Base64 key beginning with `/` could trigger a password prompt under Run Command, leaving
+fresh EntraId/AzureFiles session hosts waiting until the 900-second initialization timeout and
+preventing subsequent agent registration.
+
+Use regenerated templates containing the self-contained native `CredWriteW` credential writer. The
+same correction is included in the storage-key update add-on. Updating repository scripts alone
+does not update an already published Template Spec or a previously submitted deployment.
+Rebuild/republish the affected template and retry through the approved host-deployment process.
+Do not regenerate an active account key merely to avoid its first character; coordinate all
+consumers using the [key-update add-on's rotation precautions](../deployments/add-ons/updateStorageAccountKeyOnSessionHosts/README.md#credential-storage-and-rotation-safety).
+
+If the native write reports a Win32 error, verify the actual Run Command identity, permission to
+use `Add-Type`, effective credential-storage policy and required restart. The
+[credential-storage security option](https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/network-access-do-not-allow-storage-of-passwords-and-credentials-for-network-authentication)
+can prohibit persistence, and local policy cannot guarantee overriding domain or MDM settings.
+Never include storage keys in troubleshooting output.
+
 ## Redeployment
 
 If you need to redeploy this solution due to an error or to add resources, be sure the virtual machines (aka session hosts) are turned on.  For "pooled" host pools, you must disable scaling as well.  If the virtual machines are shutdown, the deployment will fail since virtual machine extensions cannot be updated when virtual machines are in a shutdown state.

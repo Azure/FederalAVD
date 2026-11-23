@@ -354,153 +354,35 @@
               }
             },
             {
-              "name": "privateEndpoint",
-              "type": "Microsoft.Common.CheckBox",
-              "label": "Deploy Private Endpoints",
-              "toolTip": "Deploy private endpoints into the selected subnet. Key Vault public access is selected separately below; the FSLogix backup vault retains its service-specific private networking behavior."
-            },
-            {
-              "name": "networkSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Network Configuration",
-              "visible": "[steps('operations').privateEndpoint]",
-              "elements": [
-                {
-                  "name": "virtualNetworksApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('operations').privateEndpoint, not(empty(steps('basics').subscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
-                  }
-                },
-                {
-                  "name": "virtualNetwork",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Virtual Network",
-                  "multiLine": true,
-                  "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "subnetsApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[not(empty(steps('operations').networkSection.virtualNetwork))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('operations').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
-                  }
-                },
-                {
-                  "name": "privateEndpointSubnet",
-                  "type": "Microsoft.Common.DropDown",
-                  "label": "Private Endpoint Subnet",
-                  "toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "privateDnsSection",
-              "type": "Microsoft.Common.Section",
-              "label": "Private DNS Zone",
-              "visible": "[steps('operations').privateEndpoint]",
-              "elements": [
-                {
-                  "name": "enablePrivateDNSIntegration",
-                  "type": "Microsoft.Common.CheckBox",
-                  "label": "Enable Private DNS Zone Integration",
-                  "defaultValue": true,
-                  "toolTip": "Automatically register Key Vault private endpoints with an Azure Private DNS Zone for proper name resolution."
-                },
-                {
-                  "name": "privateDNSZonesSubscription",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
-                  "label": "Private DNS Zone Subscription",
-                  "defaultValue": "[steps('basics').subscription.displayName]",
-                  "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
-                  "constraints": {
-                    "required": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
-                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
-                  }
-                },
-                {
-                  "name": "privateDNSZonesApi",
-                  "type": "Microsoft.Solutions.ArmApiControl",
-                  "condition": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('operations').privateDnsSection.privateDNSZonesSubscription)))]",
-                  "request": {
-                    "method": "GET",
-                    "path": "[concat(steps('operations').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
-                  }
-                },
-                {
-                  "name": "keyVaultPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
-                  "label": "Key Vault Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
-                  "toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
-                  "constraints": {
-                    "required": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                },
-                {
-                  "name": "azureBackupPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
-                  "label": "Azure Backup Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                },
-                {
-                  "name": "azureBlobPrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
-                  "label": "Azure Blob Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                },
-                {
-                  "name": "azureQueuePrivateDnsZone",
-                  "type": "Microsoft.Common.DropDown",
-                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
-                  "label": "Azure Queue Private DNS Zone",
-                  "multiLine": true,
-                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
-                  "constraints": {
-                    "required": true,
-                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
-                  }
-                }
-              ]
-            },
-            {
               "name": "permittedIPsSection",
               "type": "Microsoft.Common.Section",
-              "label": "Key Vault Public Network Access",
+              "label": "Network Access",
               "elements": [
+                {
+                  "name": "networkAccess",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Network Access",
+                  "defaultValue": "Public Endpoint",
+                  "toolTip": "Connectivity configuration for deployed Key Vaults and the optional FSLogix backup vault. Private Endpoint creates private endpoints in the selected subnet. Key Vault public access is selected separately below; backup vault private endpoints disable backup vault public access.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      {
+                        "label": "Public Endpoint",
+                        "value": "PublicEndpoint"
+                      },
+                      {
+                        "label": "Private Endpoint",
+                        "value": "PrivateEndpoint"
+                      }
+                    ]
+                  }
+                },
                 {
                   "name": "paasPublicNetworkAccess",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Public network access",
-                  "defaultValue": "[if(steps('operations').privateEndpoint, 'Disabled', 'Enabled')]",
+                  "label": "Key Vault public network access",
+                  "defaultValue": "[if(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), 'Disabled', 'Enabled')]",
                   "toolTip": "Applies to newly deployed Key Vaults independently of private endpoints. Existing vaults and backup/monitoring access are unchanged.",
                   "constraints": {
                     "required": true,
@@ -565,6 +447,138 @@
                         }
                       }
                     ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "networkSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Private Endpoint Network",
+              "visible": "[equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint')]",
+              "elements": [
+                {
+                  "name": "virtualNetworksApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), not(empty(steps('basics').subscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('basics').subscription.id, '/providers/Microsoft.Network/virtualNetworks?api-version=2022-11-01')]"
+                  }
+                },
+                {
+                  "name": "virtualNetwork",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Virtual Network",
+                  "multiLine": true,
+                  "toolTip": "Select the virtual network containing the private endpoint subnet. Only virtual networks in the selected region are shown.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('operations').networkSection.virtualNetworksApi.value, (vnet) => equals(vnet.location, steps('basics').location.name)), (vnet) => parse(concat('{\"label\":\"', vnet.name, '\",\"description\":\"Resource Group: ', first(skip(split(vnet.id, '/'), 4)), '\",\"value\":{\"name\":\"', vnet.name, '\",\"id\":\"', vnet.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "subnetsApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), not(empty(steps('operations').networkSection.virtualNetwork)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('operations').networkSection.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                  }
+                },
+                {
+                  "name": "privateEndpointSubnet",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Private Endpoint Subnet",
+                  "toolTip": "Select the subnet for Key Vault private endpoints. Must not have any service delegations.",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('operations').networkSection.subnetsApi.value, (snet) => empty(snet.properties.delegations)), (snet) => parse(concat('{\"label\":\"', snet.name, '\",\"value\":\"', snet.id, '\"}')))]"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "privateDnsSection",
+              "type": "Microsoft.Common.Section",
+              "label": "Private DNS Zone",
+              "visible": "[equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint')]",
+              "elements": [
+                {
+                  "name": "enablePrivateDNSIntegration",
+                  "type": "Microsoft.Common.CheckBox",
+                  "label": "Enable Private DNS Zone Integration",
+                  "defaultValue": true,
+                  "toolTip": "Automatically register Key Vault private endpoints with an Azure Private DNS Zone for proper name resolution."
+                },
+                {
+                  "name": "privateDNSZonesSubscription",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
+                  "label": "Private DNS Zone Subscription",
+                  "defaultValue": "[steps('basics').subscription.displayName]",
+                  "toolTip": "Select the subscription that contains your Private DNS Zones. In hub-and-spoke topologies this is typically the hub/connectivity subscription.",
+                  "constraints": {
+                    "required": "[steps('operations').privateDnsSection.enablePrivateDNSIntegration]",
+                    "allowedValues": "[map(steps('basics').subscriptionsApi.value, (sub) => parse(concat('{\"label\":\"', sub.displayName, '\",\"value\":{\"displayName\":\"', sub.displayName, '\",\"id\":\"', sub.id, '\"}}')))]"
+                  }
+                },
+                {
+                  "name": "privateDNSZonesApi",
+                  "type": "Microsoft.Solutions.ArmApiControl",
+                  "condition": "[and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration, not(empty(steps('operations').privateDnsSection.privateDNSZonesSubscription)))]",
+                  "request": {
+                    "method": "GET",
+                    "path": "[concat(steps('operations').privateDnsSection.privateDNSZonesSubscription.id, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                  }
+                },
+                {
+                  "name": "keyVaultPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
+                  "label": "Key Vault Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => zone.name))]",
+                  "toolTip": "Select the Private DNS Zone for Key Vault (privatelink.vaultcore.azure.net or privatelink.vaultcore.usgovcloudapi.net for Azure Government).",
+                  "constraints": {
+                    "required": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault))]",
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'vaultcore')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "azureBackupPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
+                  "label": "Azure Backup Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => zone.name))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, '.backup.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "azureBlobPrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
+                  "label": "Azure Blob Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => zone.name))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.blob.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
+                  }
+                },
+                {
+                  "name": "azureQueuePrivateDnsZone",
+                  "type": "Microsoft.Common.DropDown",
+                  "visible": "[and(steps('operations').privateDnsSection.enablePrivateDNSIntegration, steps('operations').resources.deployFSLogixBackupVault)]",
+                  "label": "Azure Queue Private DNS Zone",
+                  "multiLine": true,
+                  "defaultValue": "[first(map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => zone.name))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": "[map(filter(steps('operations').privateDnsSection.privateDNSZonesApi.value, (zone) => contains(zone.name, 'privatelink.queue.')), (zone) => parse(concat('{\"label\":\"', zone.name, '\",\"description\":\"Resource Group: ', first(skip(split(zone.id, '/'), 4)), '\",\"value\":\"', zone.id, '\"}')))]"
                   }
                 }
               ]
@@ -1653,7 +1667,7 @@
                   "visible": "[greater(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''))),24)]",
                   "options": {
                     "style": "Warning",
-                    "text": "[concat('Key Vault base name is ',string(length(concat(if(equals(steps('tagsAndNaming').naming.component1,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component1,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component1,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component1,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component1,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component1,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue))))))),if(and(not(equals(steps('tagsAndNaming').naming.component2,'none')),not(empty(steps('tagsAndNaming').naming.component2))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component2,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component2,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component2,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component2,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component2,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component2,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component3,'none')),not(empty(steps('tagsAndNaming').naming.component3))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component3,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component3,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component3,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component3,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component3,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component3,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component4,'none')),not(empty(steps('tagsAndNaming').naming.component4))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component4,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component4,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component4,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component4,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component4,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component4,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component5,'none')),not(empty(steps('tagsAndNaming').naming.component5))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component5,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component5,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component5,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component5,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component5,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component5,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),''),if(and(not(equals(steps('tagsAndNaming').naming.component6,'none')),not(empty(steps('tagsAndNaming').naming.component6))),concat(steps('tagsAndNaming').naming.delimiter,if(equals(steps('tagsAndNaming').naming.component6,'resourceType'),if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv),if(equals(steps('tagsAndNaming').naming.component6,'purpose'),'sec-xxxxxx',if(equals(steps('tagsAndNaming').naming.component6,'location'),if(not(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride)),steps('tagsAndNaming').naming.locationAbbreviationOverride,'xxxx'),if(equals(steps('tagsAndNaming').naming.component6,'freeform1'),if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value),if(equals(steps('tagsAndNaming').naming.component6,'environment'),if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue),if(equals(steps('tagsAndNaming').naming.component6,'freeform2'),if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value),if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue)))))))),'')))),' characters — the name will be automatically truncated to 24 characters at deployment. Consider shortening your naming convention to preserve uniqueness.')]"
+                    "text": "Generated Key Vault names must not exceed 24 characters. Shorten the naming convention or enter complete Secrets and Encryption Key Vault name overrides for the vaults being deployed. Overlength generated names fail deployment; they are not truncated."
                   }
                 },
                 {
@@ -1790,9 +1804,9 @@
         "domainJoinUserPassword": "[if(steps('operations').resources.deploySecretsKeyVault, steps('operations').credentials.domainJoinUserPassword, '')]",
         "deployEncryptionKeyVault": "[steps('operations').resources.deployEncryptionKeyVault]",
         "encryptionKeyVaultRetentionInDays": "[if(steps('operations').resources.deployEncryptionKeyVault, steps('operations').encKvRetentionInDays, 90)]",
-        "privateEndpoint": "[steps('operations').privateEndpoint]",
-        "privateEndpointSubnetResourceId": "[if(steps('operations').privateEndpoint, steps('operations').networkSection.privateEndpointSubnet, '')]",
-        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault)), steps('operations').privateDnsSection.keyVaultPrivateDnsZone, '')]",
+        "privateEndpoint": "[equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint')]",
+        "privateEndpointSubnetResourceId": "[if(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').networkSection.privateEndpointSubnet, '')]",
+        "azureKeyVaultPrivateDnsZoneResourceId": "[if(and(equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration, or(steps('operations').resources.deploySecretsKeyVault, steps('operations').resources.deployEncryptionKeyVault)), steps('operations').privateDnsSection.keyVaultPrivateDnsZone, '')]",
         "permittedIPs": "[filter(map(steps('operations').permittedIPsSection.permittedIPs, (item) => item.ipAddress), (ip) => not(empty(ip)))]",
         "paasPublicNetworkAccess": "[steps('operations').permittedIPsSection.paasPublicNetworkAccess]",
         "deployMonitoring": "[steps('monitoring').deployMonitoring]",
@@ -1817,9 +1831,9 @@
         "fslogixBackupPolicyName": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.policyName, 'filesharepolicy')]",
         "fslogixBackupRetentionDays": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.retentionDays, 30)]",
         "fslogixBackupTimeZone": "[if(steps('operations').resources.deployFSLogixBackupVault, steps('operations').policySettings.timeZone, 'UTC')]",
-        "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBackupPrivateDnsZone, '')]",
-        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBlobPrivateDnsZone, '')]",
-        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, steps('operations').privateEndpoint, steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
+        "azureBackupPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBackupPrivateDnsZone, '')]",
+        "azureBlobPrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureBlobPrivateDnsZone, '')]",
+        "azureQueuePrivateDnsZoneResourceId": "[if(and(steps('operations').resources.deployFSLogixBackupVault, equals(steps('operations').permittedIPsSection.networkAccess, 'PrivateEndpoint'), steps('operations').privateDnsSection.enablePrivateDNSIntegration), steps('operations').privateDnsSection.azureQueuePrivateDnsZone, '')]",
         "secretsKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.secretsKeyVaultNameOverride),'',steps('tagsAndNaming').naming.secretsKeyVaultNameOverride)]",
         "encryptionKeyVaultNameOverride": "[if(empty(steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride),'',steps('tagsAndNaming').naming.encryptionKeyVaultNameOverride)]",
         "namingConvention": "[parse(concat('{\"components\":[\"', steps('tagsAndNaming').naming.component1, '\",\"', if(empty(steps('tagsAndNaming').naming.component2),'none',steps('tagsAndNaming').naming.component2), '\",\"', if(empty(steps('tagsAndNaming').naming.component3),'none',steps('tagsAndNaming').naming.component3), '\",\"', if(empty(steps('tagsAndNaming').naming.component4),'none',steps('tagsAndNaming').naming.component4), '\",\"', if(empty(steps('tagsAndNaming').naming.component5),'none',steps('tagsAndNaming').naming.component5), '\",\"', if(empty(steps('tagsAndNaming').naming.component6),'none',steps('tagsAndNaming').naming.component6), '\"],\"delimiter\":\"', steps('tagsAndNaming').naming.delimiter, '\",\"freeform1\":\"', if(empty(steps('tagsAndNaming').naming.freeform1Value),'',steps('tagsAndNaming').naming.freeform1Value), '\",\"environment\":\"', if(empty(steps('tagsAndNaming').naming.environmentValue),'',steps('tagsAndNaming').naming.environmentValue), '\",\"freeform2\":\"', if(empty(steps('tagsAndNaming').naming.freeform2Value),'',steps('tagsAndNaming').naming.freeform2Value), '\",\"workload\":\"', if(empty(steps('tagsAndNaming').naming.workloadValue),'',steps('tagsAndNaming').naming.workloadValue), '\",\"locationAbbreviation\":\"', if(empty(steps('tagsAndNaming').naming.locationAbbreviationOverride),'',steps('tagsAndNaming').naming.locationAbbreviationOverride), '\",\"resourceTypeCodes\":{\"resourceGroups\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRg),'rg',steps('tagsAndNaming').naming.rtCodeRg), '\",\"keyVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeKv),'kv',steps('tagsAndNaming').naming.rtCodeKv), '\",\"recoveryServicesVaults\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeRsv),'rsv',steps('tagsAndNaming').naming.rtCodeRsv), '\",\"workspaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeWorkspace),'vdws',steps('tagsAndNaming').naming.rtCodeWorkspace), '\",\"privateEndpoints\":\"', if(empty(steps('tagsAndNaming').naming.rtCodePe),'pe',steps('tagsAndNaming').naming.rtCodePe), '\",\"networkInterfaces\":\"', if(empty(steps('tagsAndNaming').naming.rtCodeNic),'nic',steps('tagsAndNaming').naming.rtCodeNic), '\"}}'))]",

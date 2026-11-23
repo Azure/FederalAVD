@@ -89,6 +89,13 @@ When a matching `vc_redist.<arch>.exe` file is present in the folder, the instal
 it directly and skips the download entirely — no internet access is required during the image
 build.
 
+## Script structure
+
+Main selects architectures, filenames, URLs, silent arguments, and success codes. The parameterized
+`Get-InstallerFile` helper prefers pre-staged files and uses the connected download fallback only
+when needed. `Invoke-ApplicationProcess` bounds execution and surfaces failures; main logs and
+aggregates execution failures by architecture. Both helpers remain embedded in the root script.
+
 ## What the script does
 
 1. For each requested architecture (`x64`, `x86`, or both):

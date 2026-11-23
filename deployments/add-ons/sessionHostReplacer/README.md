@@ -2,7 +2,8 @@
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Features Overview](../../../docs/features.md) | [Quick Start Guide](../../../docs/quick-start.md)
 
-Automated Azure Function for managing Azure Virtual Desktop session host lifecycle through continuous image updates with flexible replacement strategies.
+Replace Azure Virtual Desktop session-host VMs with new VMs built from a newer desktop image,
+using limited batches, readiness checks and controlled retirement of old hosts.
 
 > **Supported host pools:** Use this add-on only with Azure Virtual Desktop **standard management**
 > host pools. It creates, registers, drains, and deletes VMs directly. Don't use it with an
@@ -25,39 +26,30 @@ Automated Azure Function for managing Azure Virtual Desktop session host lifecyc
 
 ## Overview
 
-The Session Host Replacer monitors AVD session hosts and automatically replaces them when new images are available. It handles the complete lifecycle including detection, draining, deployment, deletion, and device cleanup.
+The Session Host Replacer (SHR) automates moving a host pool onto a newer desktop image. After
+you build and test an image containing Windows and application updates, SHR replaces the hosts
+running the previous image. It does not build the image, patch existing VMs or rebuild the host pool.
 
-**Key Benefits:**
+SHR manages the transition in limited batches: it drains old hosts, notifies users, checks that
+replacements are ready, and tracks deployment and required cleanup through completion. SideBySide
+creates replacements before retiring old hosts; DeleteFirst removes a capacity-safe batch first
+and reuses its names. These choices trade temporary extra capacity for temporary capacity reduction,
+not guaranteed uninterrupted sessions or application correctness.
 
-- **Flexible Replacement Strategies**: Choose between SideBySide (zero-downtime) or DeleteFirst (cost-optimized) modes
-- **Zero-downtime rolling updates** with automatic capacity management (SideBySide mode)
-- **Cost-optimized replacements** with controlled capacity reduction (DeleteFirst mode)
-- **Dynamic capacity from scaling plans**: Automatic adjustment of safety floors based on scaling plan schedules (DeleteFirst mode)
-- **Zero-touch image updates** with automatic version tracking
-- **Graceful user session handling** with configurable grace periods
-- **Progressive scale-up** for gradual, validated rollouts
-- **Shutdown retention** for rollback capability (SideBySide mode)
-- **Auto-detect target count** for dynamic scaling plan compatibility
-- **Device cleanup** (Entra ID + Intune) with automatic hostname reuse
-- **Multi-cloud support** (Commercial, GCC High, DoD, China; US Secret/Top Secret)
+**Start with the [design overview](../../../docs/session-host-replacer.md)** for the replacement
+process, capacity trade-offs and safeguards. This README provides deployment instructions,
+configuration and detailed operator procedures.
 
 ## Features
 
 ### Core Capabilities
 
-- **Image Version Tracking**: Detects outdated images and triggers updates
-- **Flexible Replacement Strategies**: Choose between SideBySide and DeleteFirst modes
-- **Graceful Draining**: Configurable grace period for active sessions (default: 24 hours)
-- **Minimum Drain Time**: Safety buffer for zero-session hosts before deletion (default: 15 minutes)
-- **New Host Availability Check**: Safety mechanism that prevents deleting old hosts if newly deployed replacements aren't healthy and available
-- **Progressive Scale-Up**: Gradual rollouts starting with small percentages and scaling up after success
-- **Shutdown Retention**: Rollback capability by retaining old hosts in shutdown state (SideBySide mode)
-- **Auto-Detect Target Count**: Maintains current host count, compatible with dynamic scaling plans
-- **Tag-Based Opt-In**: Only affects hosts tagged with `IncludeInAutoReplace: true`
-- **Device Cleanup**: Removes Entra ID and Intune device records automatically
-- **Failed Deployment Recovery**: Automatic cleanup of partial resources with persistent tracking
-- **Registration Verification**: Validates hosts successfully register before marking deployments as complete
-- **Deployment State Persistence**: Tracks deleted hosts across function runs until deployment succeeds
+- Exact image selection with eligibility, replication, rollout-delay and rollback rules.
+- SideBySide or DeleteFirst replacement with independent batch and capacity safeguards.
+- Configurable minimum drain and active-session grace periods; expiry can interrupt sessions.
+- Optional progressive scale-up and SideBySide shutdown retention for operator-initiated rollback.
+- Explicit or cycle-based auto-detected target count, tag-based participation and scaling handoff.
+- Verified name reuse, required device cleanup and persisted deployment/recovery state.
 
 ### Enterprise Features
 
@@ -66,53 +58,49 @@ The Session Host Replacer monitors AVD session hosts and automatically replaces 
 - **Multi-Cloud**: Commercial, GCC, GCC High, DoD, US Government Secret, and US Government Top Secret environments
 - **Comprehensive Monitoring**: Application Insights integration with pre-built dashboard
 - **Template Spec Integration**: Consistent deployments with versioning
-- **Real-Time Visibility**: Azure Monitor Workbook dashboard for deployment tracking and host pool health
+- **Last-Reported Visibility**: Azure Monitor Workbook separates timer health, cycle progress and inventory freshness
 - **Dedicated Host Support**: Preserves and reuses dedicated host assignments (DeleteFirst mode)
 
 ### Performance & Efficiency Features
 
-The Session Host Replacer includes several optimizations to minimize Azure API calls, execution time, and costs:
-
-- **VM Caching**: Fetches all VMs once at function start and reuses throughout execution, updating cache after deletions instead of re-querying (reduces API calls by ~60%)
-- **Lightweight Up-to-Date Check**: Fast pre-check to detect if pool is already current before expensive operations
-- **Early Exit Path**: Immediately exits when no work needed, bypassing deployment/deletion logic and expensive API queries
-- **Lazy Power State Loading**: Queries VM power states only for deletion decisions or scaling-aware readiness validation
-- **Focused Steady-State Validation**: Up-to-date pools skip replacement planning but still validate latest-image hosts when an enabled scaling plan is present
-- **Conditional Operations**: Skips deployment and deletion calculations when the lightweight check confirms up-to-date status
-
-**Performance Impact**: Functions typically complete in <10 seconds when pool is up-to-date (vs 30-60 seconds for full evaluation), reducing execution costs by 70-80% for steady-state operations.
+An idle reconciler returns after an operation lookup. With no active operation, initiation uses
+read-only inventory, image, deployment and readiness checks to avoid creating an unnecessary
+operation. Active work reuses inventory where safe but refreshes evidence at safety gates.
+These reduce redundant work; this guide makes no benchmarked latency, API-reduction or cost-saving
+guarantee.
 
 ## Replacement Modes
 
-The Session Host Replacer supports three distinct replacement strategies to accommodate different operational priorities:
+The Session Host Replacer supports two replacement modes and a one-time maintenance override
+for an existing DeleteFirst configuration.
 
 ### SideBySide Mode (Default)
 
-**Best for**: Zero-downtime requirements, production environments, large host pools
+**Best for**: Availability-first environments with temporary capacity headroom
 
 **How it works**:
 
 - Deploys new session hosts **before** deleting old ones
-- Host pool temporarily doubles in size during replacement cycles
+- Host pool can grow to twice its target size during replacement cycles
 - New hosts are added, users naturally migrate, then old hosts are removed
-- No capacity reduction at any point
+- Readiness and online-capacity checks gate old-host retirement
 
 **Characteristics**:
 
-- ✅ **Zero downtime** - users always have available capacity
+- ✅ **Capacity protection** - validate replacements before retiring old hosts; not a zero-downtime guarantee
 - ✅ **Maximum safety** - new hosts validated before old ones removed
 - ✅ **Availability protection** - blocks deletions if new hosts fail health checks
 - ✅ **Shutdown retention option** - keep old hosts powered off for rollback
 - ✅ **Auto-detect target count** - compatible with scaling plans
 - ✅ **Progressive scale-up** - gradual rollouts with validation
 - ❌ **Higher temporary cost** - pays for both old and new hosts during transition
-- ❌ **Requires capacity headroom** - subnet, quotas, dedicated hosts must support 2x size
+- ❌ **Requires capacity headroom** - plan subnet and compute capacity for up to 2x the target
 
 **Configuration parameters**:
 
 - `replacementMode`: `SideBySide`
 - `targetSessionHostCount`: 0 (auto-detect) or specific number
-- `maxDeploymentBatchSize`: Maximum deployments per run (default: 100)
+- `maxDeploymentBatchSize`: Maximum hosts per authorized deployment batch (default: 100)
 - `minimumHostIndex`: Minimum starting index for hostname numbering - gap-filling logic starts from this index (default: 1, applies to both DeleteFirst and SideBySide modes)
 - `enableShutdownRetention`: Keep old hosts shutdown for rollback (default: false)
 - `shutdownRetentionDays`: Days to retain shutdown hosts (default: 3)
@@ -202,9 +190,9 @@ scheduling a future request cannot strand work that was already in flight.
 
 During the window, the function drains a batch, notifies AVD sessions, waits for the requested delay,
 explicitly calls the AVD user-session logoff operation, verifies zero sessions, deletes the hosts,
-and deploys the approved image with the same names and placement. Delay is checked on timer
-invocations, so the default 30-minute schedule can begin forced sign-out up to approximately
-30 minutes after the delay elapses.
+and deploys the approved image with the same names and placement. The minute reconciler checks the
+delay for an active batch independently of the initiation schedule. Invocations, restarts and
+leases can delay checks; the cadence does not guarantee an exact sign-out time.
 
 The durable request ID prevents replay. After the window closes, no new destructive batch starts,
 but already draining or deleted hosts continue through recovery. After completion or expiry, the
@@ -223,9 +211,9 @@ request.
 | Feature | SideBySide | DeleteFirst | Maintenance override |
 | --- | --- | --- | --- |
 | **Operation** | Continuous | Continuous | Temporarily expedites configured DeleteFirst |
-| **Downtime** | None | Temporary capacity reduction | Authorized outage possible |
+| **Capacity trade-off** | Temporary extra hosts; readiness-gated retirement | Temporary capacity reduction | Authorized outage possible |
 | **User sign-out** | Grace-period removal | Grace-period removal | Notify, explicit AVD logoff, verify zero sessions |
-| **Hostname reuse** | No | Yes | Yes |
+| **Hostname reuse** | Available names, not old-to-new preservation | Exact names | Exact names |
 | **Dedicated host support** | No | Yes | Yes |
 | **Shutdown retention** | Yes (optional) | No | No |
 | **Scaling plan** | Supported | Supported | Must be disabled |
@@ -236,7 +224,7 @@ request.
 
 **Choose SideBySide if**:
 
-- Zero downtime is a hard requirement
+- Availability takes priority over temporary resource cost
 - You have sufficient subnet IP space and Azure quotas
 - Cost of temporary doubling is acceptable
 - You want rollback capability via shutdown retention
@@ -258,6 +246,39 @@ request.
 - No shutdown-retention VMs remain from a prior SideBySide configuration
 
 ## Prerequisites
+
+### Scaling Plan Exclusion Contract
+
+If autoscale is enabled for the host pool, its scaling plan's **Exclusion tag** must match
+SHR's `tagScalingPlanExclusionTag` (Function App setting `Tag_ScalingPlanExclusionTag`).
+The default tag name is `ScalingPlanExclusion`; `SessionHostReplacer` is the VM tag's
+ownership value, not the name to enter in the scaling plan.
+
+For an enabled plan assigned **only to this host pool**, the leased worker automatically
+repairs a blank or different exclusion name before cleanup or replacement begins. It reads
+the full scaling plan to confirm membership; even a disabled reference to another pool
+makes the plan shared. Initiation discovery stays read-only and hands repairable work to
+the worker. Maintenance overrides do not repair plans; they still require autoscale disabled.
+
+A shared plan with matching names remains supported. A shared mismatch, blank SHR tag name,
+failed read/write, or unverifiable repair stops processing before replacement. Configure
+matching nonempty names manually and use checked recovery if the operation is `NeedsAttention`.
+Disabled or absent plans do not require a match.
+
+When replacing a nonblank plan tag name, SHR first copies existing VM exclusions for this
+pool to the new name and verifies them. Old tags are retained, and administrator ownership
+is preserved so it cannot become a releasable SHR exclusion. Only `properties.exclusionTag`
+is patched on the plan; schedules and assignments are not rewritten. SHR rechecks full
+membership immediately before the patch, uses `If-Match` when an ETag is supplied, and
+verifies the resulting plan. Do not edit plan assignments or exclusion tags concurrently:
+the API does not always provide an ETag, so membership checking and updating are not
+guaranteed atomic.
+
+SHR establishes VM exclusion protection before draining a selected retirement host and
+repairs missing protection on subsequent retirement passes. Existing administrator-owned
+values, including empty values, are preserved. Reasserting drain does not restart an
+existing grace period. `fixSessionHostTags` repairs participation and deployment-timestamp
+tags only; retirement protection is independent of that setting.
 
 ### Required Before Deployment
 
@@ -284,6 +305,11 @@ The Session Host Replacer Function App supports two identity options:
 
 - `Desktop Virtualization Contributor` on Host Pool Resource Group
 - `Reader` on Host Pool Subscription (for scaling plan queries)
+- A subscription-scoped `FederalAVD SHR Scaling Plan Configuration (...)` custom role with
+  only `Microsoft.DesktopVirtualization/scalingPlans/read` and `/write`, for unshared-plan
+  exclusion repair. Deployment requires custom-role definition and assignment permissions
+  in the host-pool subscription. RBAC permits plan updates; the unshared/property-only
+  restriction is enforced by SHR's runtime checks, not by RBAC.
 - `Contributor` on Session Host Resource Group  
 - `Reader` on Image Gallery/Marketplace
 
@@ -291,6 +317,11 @@ The Session Host Replacer Function App supports two identity options:
 
 - `Device.ReadWrite.All` - For Entra ID device deletion
 - `DeviceManagementManagedDevices.ReadWrite.All` - For Intune device deletion
+
+Standalone `Remove-VirtualMachine` calls honor the optional `ClientId` override throughout
+immediate directory cleanup, deletion verification, and Graph endpoint retries. Otherwise,
+cleanup uses the configured managed identity. With `DeferCleanup`, the caller remains
+responsible for subsequent cleanup and its identity.
 
 > [!IMPORTANT]
 > **Every replacement mode:** Native Entra joined hosts require Entra cleanup and, when Intune
@@ -738,7 +769,7 @@ The custom UI form provides a guided experience with tooltips and validation:
    - **Identity**: Domain join configuration
    - **Session Hosts**: VM configuration, image, networking
    - **User Profiles**: FSLogix settings (optional)
-   - **Infrastructure**: App Service Plan, encryption, zero trust networking
+   - **Infrastructure**: Replacer resource group (defaults to the hosts RG), App Service Plan, encryption, zero trust networking
    - **Monitoring**: Application Insights, Log Analytics workspace
    - **Advanced**: Resource-name overrides, session-host naming and resource tags (optional)
 5. Review and click **Create**
@@ -748,6 +779,11 @@ Here is a screen shot of the form:
 ![Deploy Template Spec](../../../docs/images/sessionHostReplacerUI.png)
 
 The form automatically validates inputs and provides helpful descriptions for each parameter.
+
+For an isolated per-pool rebuild boundary, select an existing **Session Host Replacer Resource
+Group** on **Infrastructure**. Shared resource selections remain independent. This does not move
+an existing deployment, and deleting the RG also deletes SHR operation/recovery state; do not
+delete it during outstanding work. See [placement and safe rebuild prerequisites](deployment-guide.md#dedicated-replacer-resource-group).
 
 ##### Brownfield Deployments with Custom Naming
 
@@ -998,11 +1034,11 @@ Set to a specific number (e.g., 100) to maintain that exact count throughout rep
 
 #### Auto-Detect Mode (Recommended)
 
-Set to `0` to automatically maintain the current count when replacement cycles begin:
+Set to `0` to automatically capture the current count when a replacement operation begins:
 
-- Function captures initial count when first outdated host is detected
-- This count is maintained throughout the entire replacement cycle
-- After all hosts are replaced, the next cycle captures the new current count
+- Function captures registered and unresolved recovery hosts at operation start
+- This count is retained while the operation's authorized batches finish
+- The next operation captures the new current count rather than reusing the previous operation's target
 - **Perfect for dynamic scaling plans**: Function adapts to whatever count your scaling plan has set
 - **Manual scaling compatible**: Make temporary adjustments between image updates
 
@@ -1017,6 +1053,31 @@ Set to `0` to automatically maintain the current count when replacement cycles b
 
 Auto-detect mode is supported in both replacement modes. In DeleteFirst mode, the captured target is persisted with the recovery state so retries continue toward the same cycle target.
 
+**Positive target changes are accepted during an active operation.** Increases and decreases
+do not stop reconciliation merely because the count changed. An existing deployment, cleanup
+intent and active batch retain their authorization; a count update does not cancel or rewrite them.
+SideBySide adopts the requested target at the next scheduled, health- and handoff-checked batch
+boundary. DeleteFirst finishes its authorized batch and uses the new target in the next operation.
+Capacity floors, buffer space, image-replica ceilings and user-session protection still apply.
+Reducing the target may require more than one batch; it does not immediately delete excess hosts.
+
+Setting the target to `0` preserves the active operation's effective target, including an initiating
+explicit target before its first batch. Auto-detection resumes on the next operation, rather than
+counting temporary SideBySide duplicates. The configuration helper updates app settings but does
+not inspect operation state: an accepted update is a requested target, not proof of immediate resizing.
+`TARGET_UPDATE` logs record the previous and new effective targets when an authorized boundary adopts
+the change. Keep the matching deployment parameters in sync.
+
+New operations record their original configured target separately from the effective batch target
+so other protected settings remain fingerprinted. Existing operations can retain their fingerprint
+after a target change when it can be verified against the saved effective target or auto-detect
+configuration. If an older operation has no checkpointed target and its original explicit value
+cannot be verified, restore that value or finish it before upgrading; the worker does not guess.
+An operation already stopped by the old count-change guard still requires the
+[preview-first recovery procedure](#recover-a-stopped-operation); it is not resumed automatically.
+Normal recovery now permits target-only changes but preserves saved intents and the active target.
+Do not delete state or rewrite a fingerprint to bypass unrelated configuration checks.
+
 ### Tag Schema
 
 Session hosts use these tags for automation:
@@ -1027,7 +1088,7 @@ Session hosts use these tags for automation:
 | `AutoReplaceDeployTimestamp` | Birth timestamp for tracking | `2024-12-01T10:00:00Z` | At deployment |
 | `AutoReplacePendingDrainTimestamp` | When draining started | `2024-12-15T14:30:00Z` | When placed in drain mode |
 | `AutoReplaceShutdownTimestamp` | When host was shutdown (SideBySide with retention) | `2024-12-20T16:00:00Z` | When shutdown for retention |
-| `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | Set at deployment, during drain mode, and shutdown retention. Checked and restored on retained VMs each run; removed only from active hosts when the cycle completes or retention begins |
+| `ScalingPlanExclusion` | Exclude from scaling | `SessionHostReplacer` | Set at deployment and before retirement; missing protection is repaired during retirement and retention. Administrator-owned values are preserved. Only SHR-owned values on exact-image validated, online, non-draining, non-retained hosts are released |
 
 ## Canonical Replacement Flow
 
@@ -1048,63 +1109,69 @@ configuration, monitoring, maintenance, and troubleshooting guidance.
 
 ## Roll Back to Shutdown-Retention Hosts
 
-Shutdown retention preserves the old-image VMs and their AVD registrations, but rollback is an
-operator-controlled action. Do not only power on retained VMs: they remain drained, carry retention
-and scaling-exclusion tags, and still use an image older than the gallery version selected by the
-replacer.
-
-Use `Invoke-SessionHostRollback.ps1` to perform the guarded restoration:
+**Roll back with one command and one confirmation** from the repository root in a signed-in
+PowerShell 7.4+ session:
 
 ```powershell
-# Preview every retained host that would be restored.
-.\Invoke-SessionHostRollback.ps1 `
+.\deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1 `
   -FunctionAppName <function-app-name> `
-  -FunctionAppResourceGroupName <function-app-resource-group> `
-  -StopFunctionApp `
-  -WhatIf
-
-# Restore selected retained hosts.
-.\Invoke-SessionHostRollback.ps1 `
-  -FunctionAppName <function-app-name> `
-  -FunctionAppResourceGroupName <function-app-resource-group> `
-  -SessionHostName avd-001, avd-002 `
-  -StopFunctionApp `
-  -Confirm:$false `
-  -PassThru
+  -FunctionAppResourceGroupName <function-app-resource-group>
 ```
 
-The script:
+The command discovers retained hosts **in this host pool**, shows the image and affected hosts,
+and validates the plan before stopping SHR. It starts hosts in batches of up to ten concurrent
+start requests, waits for AVD health, restores session acceptance, removes retention/drain controls,
+and re-enables management. It drains and excludes the bad-image hosts from SHR and, when configured,
+autoscale. Existing sessions are not signed out and no VMs are deleted; validate user access and
+remove the drained bad-image hosts later through your approved process.
 
-1. Fails closed unless the Function App is stopped, or stops it when `-StopFunctionApp` is supplied.
-2. Discovers the deployment settings and VMs carrying the configured shutdown-retention tag.
-3. Starts each selected VM and waits for `Available` status with no failed AVD health checks.
-4. Sets the configured automation opt-in tag to `false` before returning the host to service.
-5. Sets `AllowNewSession=true`.
-6. Removes the shutdown-retention tag and removes the scaling exclusion only when its value is
-   `SessionHostReplacer`.
+SHR restarts **pinned to the restored image for this pool only**. Gallery exclusions and other
+pools are unchanged. The command preserves durable recovery evidence and conditionally supersedes
+an interrupted operation only when its checkpointed deployments are fully provisioned and
+registered, with no pending cleanup/recovery work.
 
-After restoration:
+- Add `-WhatIf` for a read-only preview.
+- If multiple retained image generations exist, the error lists them. Rerun with
+  `-ImageVersion <major.minor.patch>`; `-SessionHostName` optionally limits restored hosts.
+- Guided resume requires enough healthy known-good hosts to meet the configured target
+  (or the current managed count in auto-detect mode), Table data access, and private-network
+  connectivity to SHR storage. It supports retained versions of the pool's configured Compute
+  Gallery image definition, not marketplace images or cross-definition migrations.
+  Unfinished ARM deployments, cleanup, maintenance, or recovery
+  mappings block it **before stopping SHR**. Add `-RestoreOnly` for emergency restoration instead:
+  restored hosts remain excluded, other hosts are untouched, and SHR remains stopped.
+- On a failure after stopping SHR, the command keeps it stopped and prints the phase, started
+  and restored hosts, and the retry command. Resolve the error and rerun that command; its pool
+  checkpoint supports interrupted restoration. Do not redeploy SHR while this pin is in use:
+  deployment parameters can overwrite the pinned `SessionHostParameters`.
 
-1. Validate user access and capacity on the restored generation.
-2. Drain the bad-image generation and migrate or sign out its sessions.
-3. Establish the desired image state. Prefer publishing the corrected known-good image as a newer
-   Compute Gallery version. If intentionally making an older gallery version current, review
-   `AllowImageVersionRollback` before automation replaces hosts running the newer bad version.
-4. Remove the bad-image hosts through the approved operator process.
-5. Set the configured automation opt-in tag back to `true` only on hosts that should re-enter
-   replacement management.
-6. Start the Function App and monitor the workbook and traces for the next invocation.
+**Remove the pin and resume normal image updates** after publishing a corrected higher version
+or excluding the bad version:
 
-The script intentionally does not drain or delete the bad-image generation, alter gallery versions,
-re-enable host automation, or restart the Function App.
+```powershell
+.\deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1 `
+  -FunctionAppName <function-app-name> `
+  -FunctionAppResourceGroupName <function-app-resource-group> `
+  -ResumeLatest
+```
+
+This restores gallery-definition selection, checks the currently selected eligible version,
+and refuses to unpin if it would select a known bad image recorded by the rollback. It leaves
+bad-image hosts drained/excluded. The `ShutdownRetentionRollback` app setting retains recovery
+history; a `FollowingLatest` status means the image reference is no longer pinned.
+No `AllowImageVersionRollback` change is needed: those hosts
+are deliberately outside SHR management. `-StopFunctionApp` remains accepted for compatibility,
+but stopping and restarting are now automatic in the default guided workflow. Use `-RestoreOnly`
+for the earlier stop-after-restoration behavior. `-PassThru` now returns one operation summary
+with `RestoredHosts`, `DrainedHosts`, `Image`, and `FunctionAppState`, rather than one object per host.
 
 ## Two-Timer Execution
 
 SHR has one execution model: an initiation timer and a one-minute reconciliation timer.
 Deploy the complete SHR template; changing only an app setting or uploading one script does not
-install this model. See the [execution overview](../../../docs/session-host-replacer.md#execution-model).
+install this model. See the [execution overview](../../../docs/session-host-replacer.md#the-design-in-one-minute).
 
-The existing `session-host-replacer` timer authorizes a replacement batch and selects an exact image.
+The `session-host-replacer-initiator` timer authorizes a replacement batch and selects an exact image.
 The `session-host-replacer-worker` reconciliation timer then monitors deployment, validates health, releases
 eligible hosts to autoscale and safely removes the approved old hosts without waiting for the next
 initiation tick. It uses the same Function App, identity, storage account and lifecycle engine. Another
@@ -1115,6 +1182,10 @@ planner and readiness gates. An idle, healthy pool creates no operation.
 The minute reconciler performs only the operation lookup when no active work exists; it does not
 inventory the pool, select images or run the lifecycle engine. Pending capacity, validation,
 handoff, deployment or recovery work still reaches the worker.
+Successful idle reconciliation emits no routine SHR application logs. State-read failures,
+active work and stopped-operation observations remain visible. Native Functions invocation
+telemetry remains enabled and supplies the workbook's timer-health/frequency views; absence
+of an SHR timer message is not evidence that an idle worker failed to run.
 Maintenance requests and shutdown-retention inventory conservatively retain worker processing.
 Existing authorized operations resume on reconciliation ticks, independently of the initiation schedule.
 After deploying this behavior, verify a scheduled tick against an idle, validated pool logs
@@ -1129,6 +1200,13 @@ ceiling of 10 can therefore deploy two batches while old hosts remain occupied, 
 40 VMs. Batch-size and temporary-capacity ceilings still apply; quota and subnet capacity must allow
 the surge. **DeleteFirst** still completes the current retirement/redeployment batch first.
 See the [canonical deployment and retirement gates](replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+
+Gallery-backed deployments also have an automatic **20 VMs per regional image replica** ceiling.
+SHR queries the selected exact version live before planning, including continuation passes, and
+uses the smaller of this ceiling and existing batch allowances. Missing replica data, incomplete
+replication or failed queries block new planning and are logged. Marketplace behavior is unchanged.
+See the [live replica safeguard](replacement-flow.md#live-gallery-replica-safeguard) for recovery,
+shallow-replication restrictions and the `IMAGE_REPLICA_CAP` / batch/submission logs.
 
 See [timer sequencing and coordination](replacement-flow.md#two-timer-execution) for operation scope,
 duplicate/crash handling, deadlines and lease behavior.
@@ -1977,117 +2055,26 @@ $orphanedVMs = $vms | Where-Object {
 
 ### Monitoring Best Practices
 
-1. **Set up Alerts:**
+Review timer outcomes, cycle status/wait reason and inventory age separately. Investigate
+`NeedsAttention` even when recent invocations succeed: polling a stopped operation is read-only
+and does not replay the original error. Check deployment and registration recovery, cleanup
+blockers, progressive batch growth and retained-host expiry during a rollout.
 
-   ```kusto
-   // Alert on repeated failures
-   traces
-   | where customDimensions.Category == "Function.session-host-replacer"
-   | where severityLevel >= 3
-   | summarize ErrorCount=count() by bin(timestamp, 1h)
-   | where ErrorCount > 5
-   
-   // Alert on DeleteFirst mode deletion failures (critical)
-   traces  
-   | where message contains "CRITICAL ERROR" and message contains "deletion failures"
-   | where timestamp > ago(1h)
-   
-   // Alert on progressive scale-up failures
-   traces
-   | where message contains "Reset consecutive successes" and severityLevel >= 2
-   | where timestamp > ago(1h)
-   ```
+Use the [logging guide](logging-guide.md#query-both-timers) for scoped queries and the
+[suggested alerts](alerts/alerts-guide.md) for conditions, example queries and operator responses.
+These recommendations are not deployed by SHR; the legacy standalone pack does not implement
+them. See its [coverage limitations](alerts/alerts-guide.md#current-coverage-limitations).
 
-2. **Daily Health Check Queries:**
-
-   ```kusto
-   // Current state summary
-   traces
-   | where customDimensions.Category == "Function.session-host-replacer"
-   | where message contains "METRICS"
-   | order by timestamp desc
-   | take 1
-   | project timestamp, message
-   
-   // Recent deployment activity
-   traces
-   | where message contains "Deployment submitted"
-   | where timestamp > ago(7d)
-   | summarize Deployments=count(), HostsDeployed=sum(toint(extract(@"(\d+) VMs requested", 1, message))) by bin(timestamp, 1d)
-   
-   // Replacement cycle progress
-   traces
-   | where message contains "SETTINGS" or message contains "METRICS"
-   | where timestamp > ago(1d)
-   | order by timestamp desc
-   | project timestamp, ReplacementMode=extract(@"ReplacementMode: (\w+)", 1, message),
-             ToReplace=extract(@"ToReplace: (\d+)", 1, message),
-             InDrain=extract(@"InDrain: (\d+)", 1, message),
-             RunningDeployments=extract(@"RunningDeployments: (\d+)", 1, message)
-   ```
-
-3. **Weekly Health Check:**
-   - Review successful replacement count via workbook dashboard
-   - Check average age of fleet
-   - Verify no stuck deployments (running > 2 hours)
-   - Confirm device cleanup working (no orphaned Entra/Intune devices)
-   - Validate progressive scale-up trajectory (if enabled)
-   - Check shutdown retention cleanup (SideBySide mode)
-
-4. **Monthly Review:**
-   - Assess replacement mode effectiveness (cost vs. downtime)
-   - Review batch size and progressive scale-up settings
-   - Evaluate grace period effectiveness (too long/short?)
-   - Check for orphaned devices in Entra ID/Intune
-   - Validate Template Spec currency
-   - Review capacity planning (subnet IPs, quotas, dedicated hosts)
+Before each image release, review quota/subnet headroom, batch limits, grace periods, image
+eligibility and the [pilot acceptance checklist](../../../docs/monthly-image-operations.md).
 
 ### Debug Logging
 
-Enable verbose logging in Application Insights:
-
-```kusto
-// All function execution
-traces
-| where customDimensions.Category == "Function.session-host-replacer"
-| order by timestamp desc
-
-// Graph API calls
-traces
-| where message contains "Graph" or message contains "device"
-| order by timestamp desc
-
-// Deployment activity
-traces
-| where message contains "deploy" or message contains "Template Spec"
-| order by timestamp desc
-
-// Drain and deletion activity
-traces
-| where message contains "drain" or message contains "delete" or message contains "shutdown"
-| order by timestamp desc
-
-// Progressive scale-up tracking
-traces
-| where message contains "consecutive successes" or message contains "CurrentPercentage"
-| order by timestamp desc
-
-// Mode-specific queries
-// DeleteFirst: Hostname reuse tracking
-traces
-| where message contains "Captured dedicated host properties" or message contains "Reuse deleted names"
-| order by timestamp desc
-
-// SideBySide: Shutdown retention tracking  
-traces
-| where message contains "shutdown retention" or message contains "expired shutdown"
-| order by timestamp desc
-
-// Errors only
-traces
-| where severityLevel >= 3
-| order by timestamp desc
-```
+A query cannot enable verbose logging. Follow
+[Temporarily collect Trace diagnostics](logging-guide.md#temporarily-collect-trace-diagnostics)
+to permit both PowerShell emission and Functions host collection. Include both timer functions
+and their `.User` log categories; use native exceptions as well as traces when investigating a
+failed invocation. Restore normal logging after diagnosis.
 
 ### Monitoring Dashboard
 
@@ -2101,11 +2088,26 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
 3. Or open the resource group containing the selected Log Analytics workspace and select the
   **AVD Session Host Replacer - Enterprise Dashboard** workbook
 4. **Select Host Pool**: Use the dropdown to filter by a specific host pool or view all
+5. **Select Time Range**: Application Insights sources are resolved automatically; no component
+   selection is required. Cycle and cycle-invocation controls appear only under
+   **Investigation > Cycles**.
+   The internal workspace and telemetry-source parameters are hidden in normal viewing mode;
+   they remain available in edit mode.
+
+The default **Operations** page starts with **Last Reported Inventory** KPIs and freshness,
+then **Host Pool Consistency**, compact latest-cycle status and timer health. KPI counts sum
+the latest reported snapshot for each selected host pool; an empty selection does not become
+zero-valued health tiles. Image consistency is not host health/readiness, and pools without
+eligible hosts have no meaningful image percentage. These are observations, not live inventory.
+Use **Show trends and activity** for secondary charts; the engine action mix counts action
+observations, not successful deployments. Cycle timelines, logs and detailed errors are on
+**Investigation**, not Operations.
 
 #### Trace one replacement cycle
 
 1. Select the host pool and a time range that includes the cycle's initiation and latest progress.
-2. Select its **Cycle** ID. This is the durable SHR operation ID, shared across both timers and
+2. Open **Page > Investigation**, choose **Investigate > Cycles**, and select its **Cycle** ID.
+   This is the durable SHR operation ID, shared across both timers and
    successive invocations, not Application Insights' native operation ID.
 3. Read the cycle summary: status, activity/reason, batch, pinned image definition/version, target,
    deadline, initiation hold, last observation and lease expiry. **Waiting** is not automatically
@@ -2116,6 +2118,75 @@ automation status, cycle progress and host inventory. It reads telemetry, not li
    existing ARM deployment resource; it does not deploy anything.
 5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
    follow the cycle across invocations. The timeline retains the whole selected cycle.
+   Cycle invocation logs show **Timestamp**, **Level** and **Message**; click a message to read
+   it in full. Use **Show technical cycle-log details** for correlation IDs and exception payloads.
+
+#### Inspect a current SHR invocation
+
+Select **Page > Investigation**, then **Investigate > Invocations**. The latest 200 native
+completed request records show timestamp,
+host pool, role (Initiator or Worker), outcome and duration. This includes the current initiator
+and reconciliation worker, including idle ticks.
+The retired single-timer function is excluded. Select an entry in
+**Invocation to inspect** for its latest 500 trace/exception records in chronological order,
+showing only **Timestamp**, **Level** and **Message**. Click a message to read it in full.
+**Show technical details** loads the request's Function App, correlation IDs, role instance and
+full exception payloads on demand; these fields remain in the query logic but do not clutter the
+normal list or selector. Narrow the time range to reach older executions. Cycle and cycle-invocation
+filters do not constrain this page; host-pool and time filters do.
+Use **Investigate > Errors and Recovery** for detailed error logs and failed-deployment activity.
+
+Missing invocation IDs remain missing; the selector uses a separately labeled request-ID key.
+Log correlation falls back to a nonempty native operation ID when invocation identity is absent.
+Host-pool mapping uses the Application Insights component's `cm-resource-parent` resource tag,
+not a recent pool-prefixed trace. Idle invocations therefore remain visible when a specific host
+pool is selected, even if the time range contains no SHR application messages. Components must
+be linked to the deployed workspace and tagged with their host-pool resource ID; missing tags or
+Resource Graph visibility can prevent discovery. Missing, filtered or sampled telemetry is not
+proof of success.
+
+#### Test the workspace-scoped workbook
+
+Test against the current main-branch SHR function code. Publish the workbook module to a new
+test workbook ID so the existing workbook is preserved. The workbook-only deployment does not
+upgrade function code or configuration; update the test SHR deployment separately if needed.
+Use PowerShell with an approved Azure context and workload resource IDs:
+
+```powershell
+$WorkspaceId = '/subscriptions/<subscription>/resourceGroups/<workload-rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>'
+$TestWorkbookId = [guid]::NewGuid().ToString()
+New-AzResourceGroupDeployment `
+    -ResourceGroupName '<workload-workspace-rg>' `
+    -TemplateFile '.\deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep' `
+    -workbookName $TestWorkbookId `
+    -location '<approved-workbook-region>' `
+    -logAnalyticsWorkspaceResourceId $WorkspaceId
+```
+
+Select the workspace's subscription before running. Record `$TestWorkbookId` to identify the test
+copy; its display name matches the normal dashboard. The deployment identity needs workbook write
+access to that resource group. Readers need workload workspace query access and component/resource
+visibility for the pickers; no central workspace access is required or granted.
+
+In Azure Government, verify **Operations**, **Configuration** and all three **Investigation**
+views render. Confirm image consistency appears near the KPIs, Operations has no cycle/log
+selectors, and changing the selected cycle does not filter the Operations status. Compare a
+known request ID with one row in the workload workspace and a policy-exported copy centrally:
+the history should show one execution. Select successful, failed and idle executions for both timers,
+confirm outcome/duration and correlated native exceptions and traces, change host-pool/time
+selections, and test missing identity/empty results. Include an idle-only time range with no SHR
+messages and verify filtering by host pool still shows the native executions. Cycle pages require emitted cycle events;
+idle ticks need not have an active cycle. Test with an operator lacking central workspace access.
+Check the full exception detail payload only under approved telemetry permissions.
+
+Offline workbook tests require exactly one workload-workspace scope for every telemetry query
+and reject `FunctionAppLogs`, `AzureDiagnostics`, and cross-resource `app()`/`workspace()` queries.
+This keeps diagnostic-log copies out of the workbook's Application Insights result sets.
+
+This changes only workbook queries. It does not remove stored copies, modify central diagnostic
+policy, fix duplication within one workspace, or change the Portal's Application Insights-backed
+invocation view. Existing saved workbook copies need their own update. Offline tests do not prove
+live KQL execution, access or Portal rendering.
 
 The timer-health table separates **Initiation** from **Reconciliation** and shows their last
 observed starts, outcomes and failures. It does not mark sparse initiation schedules as delayed
@@ -2144,10 +2215,9 @@ logs are not backfilled. See [logging and correlation](logging-guide.md#cycle-co
   - Hosts in shutdown retention (SideBySide mode)
 
 - **🎯 Host Pool Consistency**
-  - Hosts by image version
-  - Hosts by age distribution
-  - Replacement status breakdown
-  - Replacement mode indicator
+  - Latest-reported image configuration
+  - Hosts on the latest image and needing replacement
+  - Image alignment percentage and observation time, distinct from health/readiness
 
 - **🔄 Deployment Progress**
   - Deployment activity timeline
@@ -2246,9 +2316,10 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
   and resource group
 - **One Application Insights per Function App** deploys into the Function App resource group and
   uses the same host-pool identity components as the Function App
-- **Cross-Region Queries**: The workbook queries all regional Application Insights instances in your subscription
-- **Multi-Region Filtering**: Use the **Application Insights** parameter to select which regions to view
-- **Host Pool Filtering**: Use the **Host Pool** parameter to filter to specific pools or view all
+- **Workspace-Scoped Queries**: The workbook queries only its deployed workload workspace's
+  `AppTraces`, `AppRequests` and `AppExceptions`; component IDs filter records within that boundary
+- **Host Pool Filtering**: Select a host pool or view all monitored pools across regions; the
+  workbook automatically resolves the associated Application Insights components
 
 **Deployment Behavior:**
 
@@ -2258,7 +2329,11 @@ The Session Host Replacer uses a **centralized workbook** pattern for enterprise
   workbook, even when their Function Apps and session hosts use different resource groups
 - **Different Workspaces**: Receive separate workbooks so their monitoring boundaries remain
   independent
-- The workbook automatically discovers all Session Host Replacer Application Insights instances
+- Hidden Resource Graph discovery resolves components linked to this workspace using their
+  `cm-resource-parent` host-pool resource IDs. The visible picker lists the associated host pools
+  using resource-ID values, so same-named pools do not share a telemetry scope. The deployment
+  injects the workspace query scope. Telemetry exported by policy
+  to another workspace is not combined into the dashboard; those exports remain untouched.
 - The workbook is associated with the selected Log Analytics workspace and is available from
   **Log Analytics workspace > Workbooks**. It can also be found by display name from
   **Azure Monitor > Workbooks**.
@@ -2306,6 +2381,20 @@ configuration, validates mode-specific combinations, shows a before-and-after di
 complete collection back so unrelated Function App settings are preserved. App-setting changes
 restart the Function App.
 
+Supported by the helper does not mean mutable during an active operation:
+
+| Setting category | Active-operation behavior |
+| --- | --- |
+| Initiation hold, drain timings, capacity percentage, batch ceilings, progressive-scale-up controls and retention days | Read by later invocations; existing authorized work and live safety checks still govern what can happen |
+| Target host count | Positive changes apply at safe batch boundaries; `0` preserves the active target and enables auto-detection for the next operation |
+| Retention enablement, rollback permission and excluded-image inclusion | Protected by the operation fingerprint; a change stops reconciliation in `NeedsAttention` |
+| Continuation timeout | Establishes the deadline for a new operation; does not extend the active operation |
+| Image publication-age delay | Does not replace the image already pinned to an active operation |
+
+See [target-count changes](#target-session-host-count) and the
+[coordination and recovery boundaries](replacement-flow.md#coordination-and-recovery-boundaries)
+before changing settings while work is in progress.
+
 The script intentionally does not change replacement mode, timer schedule, identities, networking,
 device-cleanup permissions, template references, or other deployment resources. Change those
 through the Template Spec or Bicep deployment.
@@ -2323,69 +2412,17 @@ Required permissions:
 
 ### Updating the Function
 
-**Option 1: Portal (Quick Updates)**
+Use the [complete-template upgrade procedure](deployment-guide.md#upgrading-an-existing-deployment).
+It covers holding initiation, stopping the app, preserving active state and installing both
+bindings plus shared code before restart.
 
-1. Navigate to Function App → App Service Editor
-2. Edit `Modules/SessionHostReplacer/SessionHostReplacer.psm1`
-3. Save changes
-4. Restart Function App
+Do not update only one module or ZIP the source `functions` folder and publish it directly.
+The deployment builds two function directories/bindings and installs shared code as `shr-cycle.ps1`;
+the source folder alone is not that deployable layout. Historical queue transport and duplicate
+diagnostic collection also require explicit, ownership-checked cleanup; incremental deployment
+does not remove those resources.
 
-**Option 2: PowerShell Deployment**
-
-```powershell
-$sourcePath = ".\deployments\add-ons\SessionHostReplacer\functions"
-$zipPath = ".\SessionHostReplacer.zip"
-
-Compress-Archive -Path "$sourcePath\*" -DestinationPath $zipPath -Force
-
-Publish-AzWebApp -ResourceGroupName "rg-management" `
-    -Name "func-sessionhostreplacer" `
-    -ArchivePath $zipPath -Force
-
-Restart-AzFunctionApp -ResourceGroupName "rg-management" `
-    -Name "func-sessionhostreplacer" -Force
-```
-
-**Option 3: Azure CLI**
-
-```bash
-cd deployments/add-ons/sessionHostReplacer
-zip -r SessionHostReplacer.zip functions/*
-
-az functionapp deployment source config-zip \
-  --resource-group rg-management \
-  --name func-sessionhostreplacer \
-  --src SessionHostReplacer.zip
-
-az functionapp restart \
-  --resource-group rg-management \
-  --name func-sessionhostreplacer
-```
-
-### Monitoring Best Practices
-
-1. **Set up Alerts:**
-
-   ```kusto
-   // Alert on repeated failures
-   traces
-   | where customDimensions.Category == "Function.session-host-replacer"
-   | where severityLevel >= 3
-   | summarize ErrorCount=count() by bin(timestamp, 1h)
-   | where ErrorCount > 5
-   ```
-
-2. **Weekly Health Check:**
-   - Review successful replacement count
-   - Check average age of fleet
-   - Verify no stuck deployments
-   - Confirm device cleanup working
-
-3. **Monthly Review:**
-   - Assess batch size (progressive scale-up)
-   - Review grace period effectiveness
-   - Check for orphaned devices
-   - Validate Template Spec currency
+For ongoing health checks, use [Monitoring Best Practices](#monitoring-best-practices) above.
 
 ## Additional Resources
 

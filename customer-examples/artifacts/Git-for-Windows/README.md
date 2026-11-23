@@ -14,7 +14,8 @@ This artifact installs, upgrades, or removes Git for Windows x64.
 Install is the default. It first removes an existing machine-wide Git installation, writes the
 repository's unattended setup configuration, and installs the staged EXE. Removal runs
 `%ProgramFiles%\Git\unins000.exe /VERYSILENT /NORESTART`; a missing uninstaller is success. Upgrade
-and explicit removal use the same function, so their behavior cannot drift.
+and explicit removal use the same main-owned uninstall sequence and parameterized
+`Invoke-ApplicationProcess` helper, so their behavior cannot drift.
 
 The `GitForWindows` downloads entry retrieves the latest `*64-bit.exe` asset from
 `git-for-windows/git` and stages it as `Git-64-bit.exe`. The lifecycle script never downloads

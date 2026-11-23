@@ -1,71 +1,79 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-Import-Module Az.Resources -ErrorAction Stop
-$publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
-$parseErrors = $null
-$publisherAst = [System.Management.Automation.Language.Parser]::ParseFile($publisherPath, [ref]$null, [ref]$parseErrors)
-if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
-foreach ($function in $publisherAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
-    Invoke-Expression $function.Extent.Text
+BeforeDiscovery {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $sizeCases = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter uiFormDefinition.json -Recurse -File | ForEach-Object {
+        $form = $_.FullName
+        Get-ChildItem -LiteralPath $_.DirectoryName -Filter *.json -File |
+            Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) } |
+            ForEach-Object { @{ Name = $_.FullName.Substring($repoRoot.Length + 1); TemplateFile = $_.FullName; FormFile = $form } }
+    })
 }
-$sizeCases = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter uiFormDefinition.json -Recurse -File | ForEach-Object {
-    $form = $_.FullName
-    Get-ChildItem -LiteralPath $_.DirectoryName -Filter *.json -File |
-        Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) } |
-        ForEach-Object { @{ Name = $_.FullName.Substring($repoRoot.Length + 1); TemplateFile = $_.FullName; FormFile = $form } }
-})
 
-function Expand-TestTemplateArtifacts {
-    param(
-        [Newtonsoft.Json.Linq.JObject]$Template,
-        [hashtable]$Artifacts,
-        [string]$Directory = '',
-        [bool]$HasLinkContext = $true
-    )
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    Import-Module Az.Resources -ErrorAction Stop
+    $publisherPath = Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1'
+    $parseErrors = $null
+    $publisherAst = [System.Management.Automation.Language.Parser]::ParseFile($publisherPath, [ref]$null, [ref]$parseErrors)
+    if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+    foreach ($function in $publisherAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)) {
+        Invoke-Expression $function.Extent.Text
+    }
+    $sizeCases = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'deployments') -Filter uiFormDefinition.json -Recurse -File | ForEach-Object {
+        $form = $_.FullName
+        Get-ChildItem -LiteralPath $_.DirectoryName -Filter *.json -File |
+            Where-Object { Test-Path -LiteralPath ([IO.Path]::ChangeExtension($_.FullName, '.bicep')) } |
+            ForEach-Object { @{ Name = $_.FullName.Substring($repoRoot.Length + 1); TemplateFile = $_.FullName; FormFile = $form } }
+    })
+    function Expand-TestTemplateArtifacts {
+        param(
+            [Newtonsoft.Json.Linq.JObject]$Template,
+            [hashtable]$Artifacts,
+            [string]$Directory = '',
+            [bool]$HasLinkContext = $true
+        )
 
-    $resources = $Template['resources']
-    $values = [System.Collections.Generic.List[Newtonsoft.Json.Linq.JObject]]::new()
-    if ($resources -is [Newtonsoft.Json.Linq.JObject]) {
-        foreach ($property in $resources.Properties()) { $values.Add($property.Value) }
-    }
-    elseif ($resources -is [Newtonsoft.Json.Linq.JArray]) {
-        foreach ($resource in $resources) { $values.Add($resource) }
-    }
-    foreach ($resource in $values) {
-        if ([string]$resource['type'] -ine 'Microsoft.Resources/deployments') { continue }
-        $properties = $resource['properties']
-        $childDirectory = $Directory
-        $childHasLinkContext = $false
-        $link = $properties['templateLink']
-        if ($null -ne $link -and $null -ne $link['relativePath']) {
-            if (-not $HasLinkContext) { throw 'Inline deployment cannot resolve relative artifact links.' }
-            $path = $Directory + [string]$link['relativePath']
-            if (-not $Artifacts.ContainsKey($path)) { throw "Missing artifact '$path'." }
-            $properties['template'] = $Artifacts[$path].DeepClone()
-            $properties['expressionEvaluationOptions'] = [Newtonsoft.Json.Linq.JObject]::Parse('{"scope":"inner"}')
-            $properties.Remove('templateLink') | Out-Null
-            $childDirectory = $path.Substring(0, $path.LastIndexOf('/') + 1)
-            $childHasLinkContext = $true
+        $resources = $Template['resources']
+        $values = [System.Collections.Generic.List[Newtonsoft.Json.Linq.JObject]]::new()
+        if ($resources -is [Newtonsoft.Json.Linq.JObject]) {
+            foreach ($property in $resources.Properties()) { $values.Add($property.Value) }
         }
-        if ($properties['template'] -is [Newtonsoft.Json.Linq.JObject]) {
-            Expand-TestTemplateArtifacts -Template $properties['template'] -Artifacts $Artifacts -Directory $childDirectory -HasLinkContext $childHasLinkContext
+        elseif ($resources -is [Newtonsoft.Json.Linq.JArray]) {
+            foreach ($resource in $resources) { $values.Add($resource) }
+        }
+        foreach ($resource in $values) {
+            if ([string]$resource['type'] -ine 'Microsoft.Resources/deployments') { continue }
+            $properties = $resource['properties']
+            $childDirectory = $Directory
+            $childHasLinkContext = $false
+            $link = $properties['templateLink']
+            if ($null -ne $link -and $null -ne $link['relativePath']) {
+                if (-not $HasLinkContext) { throw 'Inline deployment cannot resolve relative artifact links.' }
+                $path = $Directory + [string]$link['relativePath']
+                if (-not $Artifacts.ContainsKey($path)) { throw "Missing artifact '$path'." }
+                $properties['template'] = $Artifacts[$path].DeepClone()
+                $properties['expressionEvaluationOptions'] = [Newtonsoft.Json.Linq.JObject]::Parse('{"scope":"inner"}')
+                $properties.Remove('templateLink') | Out-Null
+                $childDirectory = $path.Substring(0, $path.LastIndexOf('/') + 1)
+                $childHasLinkContext = $true
+            }
+            if ($properties['template'] -is [Newtonsoft.Json.Linq.JObject]) {
+                Expand-TestTemplateArtifacts -Template $properties['template'] -Artifacts $Artifacts -Directory $childDirectory -HasLinkContext $childHasLinkContext
+            }
         }
     }
-}
+    function New-TestDeduplicationPackage {
+        param([Newtonsoft.Json.Linq.JObject]$Template, [string]$Directory)
 
-function New-TestDeduplicationPackage {
-    param([Newtonsoft.Json.Linq.JObject]$Template, [string]$Directory)
+        $file = Join-Path $Directory 'main.json'
+        $form = Join-Path $Directory 'form.json'
+        [IO.File]::WriteAllText($file, $Template.ToString())
+        [IO.File]::WriteAllText($form, '{}')
+        return New-DeduplicatedTemplateSpecPackage -TemplateFile $file -FormFile $form -Location usgovvirginia
+    }
+    function New-TestInlineDeployment {
+        param([Newtonsoft.Json.Linq.JObject]$Template, [string]$Scope = 'inner')
 
-    $file = Join-Path $Directory 'main.json'
-    $form = Join-Path $Directory 'form.json'
-    [IO.File]::WriteAllText($file, $Template.ToString())
-    [IO.File]::WriteAllText($form, '{}')
-    return New-DeduplicatedTemplateSpecPackage -TemplateFile $file -FormFile $form -Location usgovvirginia
-}
-
-function New-TestInlineDeployment {
-    param([Newtonsoft.Json.Linq.JObject]$Template, [string]$Scope = 'inner')
-
-    $resource = [Newtonsoft.Json.Linq.JObject]::Parse(@'
+        $resource = [Newtonsoft.Json.Linq.JObject]::Parse(@'
 {
   "type":"Microsoft.Resources/deployments",
   "apiVersion":"2024-03-01",
@@ -81,11 +89,12 @@ function New-TestInlineDeployment {
   }
 }
 '@)
-    $resource['properties']['template'] = $Template.DeepClone()
-    if ($Scope -ne 'default') {
-        $resource['properties']['expressionEvaluationOptions'] = [Newtonsoft.Json.Linq.JObject]::FromObject(@{ scope = $Scope })
+        $resource['properties']['template'] = $Template.DeepClone()
+        if ($Scope -ne 'default') {
+            $resource['properties']['expressionEvaluationOptions'] = [Newtonsoft.Json.Linq.JObject]::FromObject(@{ scope = $Scope })
+        }
+        return ,$resource
     }
-    return ,$resource
 }
 
 Describe 'Deduplicated publication packages' {
@@ -95,25 +104,25 @@ Describe 'Deduplicated publication packages' {
         $sourceHash = (Get-FileHash -LiteralPath $TemplateFile).Hash
         $formHash = (Get-FileHash -LiteralPath $FormFile).Hash
         $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location usgovvirginia
-        $package.PayloadBytes | Should Not BeGreaterThan $package.OriginalPayloadBytes
-        ($package.PayloadBytes + 16384) | Should BeLessThan 2000000
+        $package.PayloadBytes | Should -Not -BeGreaterThan $package.OriginalPayloadBytes
+        ($package.PayloadBytes + 16384) | Should -BeLessThan 2000000
         $payload = [Newtonsoft.Json.Linq.JObject]::Parse((Get-DeduplicatedTemplateSpecPayload -Package $package -Location usgovvirginia))
-        $payload['properties']['linkedTemplates'].Count | Should Be $package.Artifacts.Count
+        $payload['properties']['linkedTemplates'].Count | Should -Be $package.Artifacts.Count
         $artifacts = @{}
         foreach ($artifact in $package.Artifacts) { $artifacts[$artifact.Path] = $artifact.Template }
         $restored = $package.RootTemplate.DeepClone()
         Expand-TestTemplateArtifacts -Template $restored -Artifacts $artifacts
         $expected = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $TemplateFile -Raw))
         Remove-TemplateSpecInternalAnnotations -Node $expected
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($expected, $restored) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($expected, $restored) | Should -Be $true
         $expectedForm = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $FormFile -Raw))
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($expectedForm, $package.UIFormDefinition) | Should Be $true
-        (Get-FileHash -LiteralPath $TemplateFile).Hash | Should Be $sourceHash
-        (Get-FileHash -LiteralPath $FormFile).Hash | Should Be $formHash
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($expectedForm, $package.UIFormDefinition) | Should -Be $true
+        (Get-FileHash -LiteralPath $TemplateFile).Hash | Should -Be $sourceHash
+        (Get-FileHash -LiteralPath $FormFile).Hash | Should -Be $formHash
         if ($Name -eq 'deployments\hostpools\hostpool.json') {
-            ($package.OriginalPayloadBytes - $package.PayloadBytes) | Should BeGreaterThan 240000
-            ($package.PayloadBytes + 16384) | Should BeLessThan 1600000
-            $package.Artifacts.Count | Should Be 28
+            ($package.OriginalPayloadBytes - $package.PayloadBytes) | Should -BeGreaterThan 240000
+            ($package.PayloadBytes + 16384) | Should -BeLessThan 1600000
+            $package.Artifacts.Count | Should -Be 28
         }
     }
 
@@ -143,14 +152,14 @@ Describe 'Deduplicated publication packages' {
             $root['resources'] = $resources
         }
         $package = New-TestDeduplicationPackage -Template $root -Directory $TestDrive
-        $package.Artifacts.Count | Should Be 2
+        $package.Artifacts.Count | Should -Be 2
         $artifacts = @{}
         foreach ($artifact in $package.Artifacts) { $artifacts[$artifact.Path] = $artifact.Template }
         $restored = $package.RootTemplate.DeepClone()
         Expand-TestTemplateArtifacts $restored $artifacts
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $restored) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $restored) | Should -Be $true
         $second = New-TestDeduplicationPackage -Template $root -Directory $TestDrive
-        (Get-DeduplicatedTemplateSpecPayload $package usgovvirginia) | Should Be (Get-DeduplicatedTemplateSpecPayload $second usgovvirginia)
+        (Get-DeduplicatedTemplateSpecPayload $package usgovvirginia) | Should -Be (Get-DeduplicatedTemplateSpecPayload $second usgovvirginia)
     }
 
     It 'links unique ancestors of duplicate leaves without crossing inline boundaries for <Shape>' -TestCases @(
@@ -178,15 +187,15 @@ Describe 'Deduplicated publication packages' {
         }
         $root['resources'] = $resources
         $package = New-TestDeduplicationPackage $root $TestDrive
-        $package.Artifacts.Count | Should Be 5
+        $package.Artifacts.Count | Should -Be 5
         $artifacts = @{}
         foreach ($artifact in $package.Artifacts) { $artifacts[$artifact.Path] = $artifact.Template }
         $restored = $package.RootTemplate.DeepClone()
         Expand-TestTemplateArtifacts $restored $artifacts
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $restored) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $restored) | Should -Be $true
         foreach ($deployment in (Get-DeduplicatedTemplateResources $package.RootTemplate)) {
-            $deployment['properties']['template'] | Should BeNullOrEmpty
-            [string]$deployment['properties']['templateLink']['relativePath'] | Should Match '^artifacts/'
+            $deployment['properties']['template'] | Should -BeNullOrEmpty
+            [string]$deployment['properties']['templateLink']['relativePath'] | Should -Match '^artifacts/'
         }
     }
 
@@ -195,7 +204,7 @@ Describe 'Deduplicated publication packages' {
         $parent = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[{"type":"Microsoft.Resources/deployments","properties":{"templateLink":{"relativePath":"artifacts/leaf.json"}}}]}')
         $root['resources'].Add((New-TestInlineDeployment $parent))
         { Expand-TestTemplateArtifacts $root @{ 'artifacts/leaf.json' = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[]}') } } |
-            Should Throw 'Inline deployment cannot resolve relative artifact links.'
+            Should -Throw -ExpectedMessage '*Inline deployment cannot resolve relative artifact links.*'
     }
 
     It 'keeps duplicate descendants below <Scope>-scope boundaries inline' -TestCases @(
@@ -211,8 +220,8 @@ Describe 'Deduplicated publication packages' {
         $root = $leaf.DeepClone()
         $root['resources'].Add((New-TestInlineDeployment $parent $Scope))
         $package = New-TestDeduplicationPackage $root $TestDrive
-        $package.Artifacts.Count | Should Be 0
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should Be $true
+        $package.Artifacts.Count | Should -Be 0
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should -Be $true
     }
 
     It 'leaves <Scope>-scope templates inline' -TestCases @(
@@ -227,8 +236,8 @@ Describe 'Deduplicated publication packages' {
         $root['resources'].Add((New-TestInlineDeployment $leaf $Scope))
         $root['resources'].Add((New-TestInlineDeployment $leaf $Scope))
         $package = New-TestDeduplicationPackage $root $TestDrive
-        $package.Artifacts.Count | Should Be 0
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should Be $true
+        $package.Artifacts.Count | Should -Be 0
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should -Be $true
     }
 
     It 'does not transform ARM-shaped data in variables, defaults, outputs or runtime payloads' {
@@ -241,8 +250,8 @@ Describe 'Deduplicated publication packages' {
 }
 '@)
         $package = New-TestDeduplicationPackage $template $TestDrive
-        $package.Artifacts.Count | Should Be 0
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($template, $package.RootTemplate) | Should Be $true
+        $package.Artifacts.Count | Should -Be 0
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($template, $package.RootTemplate) | Should -Be $true
     }
 
     It 'does not coalesce different template bodies' {
@@ -252,18 +261,79 @@ Describe 'Deduplicated publication packages' {
             $root['resources'].Add((New-TestInlineDeployment $leaf))
         }
         $package = New-TestDeduplicationPackage $root $TestDrive
-        $package.Artifacts.Count | Should Be 0
+        $package.Artifacts.Count | Should -Be 0
     }
 
     It 'rejects pre-existing relative links instead of silently losing artifacts' {
         $root = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":{"linked":{"type":"Microsoft.Resources/deployments","properties":{"templateLink":{"relativePath":"existing.json"}}}}}')
-        { New-TestDeduplicationPackage $root $TestDrive } | Should Throw 'self-contained ARM input'
+        { New-TestDeduplicationPackage $root $TestDrive } | Should -Throw -ExpectedMessage '*self-contained ARM input*'
     }
 
     It 'preserves remote and Template Spec ID links without downloading them' {
         $root = [Newtonsoft.Json.Linq.JObject]::Parse('{"resources":[{"type":"Microsoft.Resources/deployments","properties":{"templateLink":{"id":"/subscriptions/test/spec/version"}}},{"type":"Microsoft.Resources/deployments","properties":{"templateLink":{"uri":"https://example.invalid/template.json"}}}]}')
         $package = New-TestDeduplicationPackage $root $TestDrive
-        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should Be $true
+        [Newtonsoft.Json.Linq.JToken]::DeepEquals($root, $package.RootTemplate) | Should -Be $true
+    }
+}
+
+Describe 'Inline-first Template Spec publication plans' {
+    It 'selects <Packaging> at the inline budget boundary of <InlineBytes> bytes' -TestCases @(
+        @{ InlineBytes = 1983616; Packaging = 'Inline'; ExpectedBytes = 1983616; HasRetry = $true }
+        @{ InlineBytes = 1983617; Packaging = 'Deduplicated'; ExpectedBytes = 1000000; HasRetry = $false }
+    ) {
+        param($InlineBytes, $Packaging, $ExpectedBytes, $HasRetry)
+
+        Mock Get-DeduplicatedTemplateSpecPayload { 'deduplicated' }
+        $package = @{
+            InlinePayload = 'inline'
+            OriginalPayloadBytes = $InlineBytes
+            PayloadBytes = 1000000
+            Artifacts = @('artifact')
+        }
+        $plan = Get-TemplateSpecPublicationPlan -Package $package -Location usgovvirginia
+        $plan.Packaging | Should -Be $Packaging
+        $plan.PayloadBytes | Should -Be $ExpectedBytes
+        $plan.Payload | Should -Be $(if ($Packaging -eq 'Inline') { 'inline' } else { 'deduplicated' })
+        (-not [string]::IsNullOrEmpty($plan.DeduplicatedRetryPayload)) | Should -Be $HasRetry
+        $plan.ArtifactCount | Should -Be $(if ($Packaging -eq 'Inline') { 0 } else { 1 })
+    }
+
+    It 'does not prepare a retry when deduplication <Reason>' -TestCases @(
+        @{ Reason = 'has no artifacts'; Artifacts = @(); DeduplicatedBytes = 100 }
+        @{ Reason = 'does not reduce size'; Artifacts = @('artifact'); DeduplicatedBytes = 200 }
+        @{ Reason = 'increases size'; Artifacts = @('artifact'); DeduplicatedBytes = 201 }
+    ) {
+        param($Reason, $Artifacts, $DeduplicatedBytes)
+
+        Mock Get-DeduplicatedTemplateSpecPayload { 'deduplicated' }
+        $package = @{ InlinePayload = 'inline'; OriginalPayloadBytes = 200; PayloadBytes = $DeduplicatedBytes; Artifacts = $Artifacts }
+        $plan = Get-TemplateSpecPublicationPlan -Package $package -Location usgovvirginia
+        $plan.Packaging | Should -Be 'Inline'
+        $plan.DeduplicatedRetryPayload | Should -BeNullOrEmpty
+    }
+
+    It 'selects a complete budgeted payload without changing deployment content for <Name>' -TestCases $sizeCases {
+        param($Name, $TemplateFile, $FormFile)
+
+        $package = New-DeduplicatedTemplateSpecPackage -TemplateFile $TemplateFile -FormFile $FormFile -Location usgovvirginia
+        $plan = Get-TemplateSpecPublicationPlan -Package $package -Location usgovvirginia
+        ([Text.Encoding]::UTF8.GetByteCount($plan.Payload)) | Should -Be $plan.PayloadBytes
+        ($plan.PayloadBytes + 16384) | Should -Not -BeGreaterThan 2000000
+        if ($package.OriginalPayloadBytes + 16384 -le 2000000) {
+            $plan.Packaging | Should -Be 'Inline'
+            $payload = [Newtonsoft.Json.Linq.JObject]::Parse($plan.Payload)
+            $payload['properties']['linkedTemplates'].Count | Should -Be 0
+            $expected = [Newtonsoft.Json.Linq.JObject]::Parse((Get-Content -LiteralPath $TemplateFile -Raw))
+            Remove-TemplateSpecInternalAnnotations -Node $expected
+            [Newtonsoft.Json.Linq.JToken]::DeepEquals($expected, $payload['properties']['mainTemplate']) | Should -Be $true
+        }
+        else {
+            $plan.Packaging | Should -Be 'Deduplicated'
+        }
+        if ($plan.DeduplicatedRetryPayload) {
+            $plan.DeduplicatedRetryPayload | Should -Be (Get-DeduplicatedTemplateSpecPayload -Package $package -Location usgovvirginia)
+            ([Text.Encoding]::UTF8.GetByteCount($plan.DeduplicatedRetryPayload) + 16384) | Should -Not -BeGreaterThan 2000000
+        }
     }
 }
 
@@ -279,26 +349,161 @@ Describe 'Explicit cloud-context Template Spec publication' {
             -TemplateFile (Join-Path $repoRoot 'deployments\hostpools\hostpool.json') `
             -FormFile (Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json') -Location usgovvirginia
         $payload = Get-DeduplicatedTemplateSpecPayload $package usgovvirginia
-        Publish-DeduplicatedTemplateSpec -ResourceId '/subscriptions/test/resourceGroups/rg/providers/Microsoft.Resources/templateSpecs/spec' `
+        Publish-TemplateSpec -ResourceId '/subscriptions/test/resourceGroups/rg/providers/Microsoft.Resources/templateSpecs/spec' `
             -Version '2.0.0' -ParentPayload '{}' -VersionPayload $payload
-        $script:putCalls.Count | Should Be 2
-        $script:putCalls[1].Payload | Should Be $payload
-        $script:putCalls[1].Path | Should Be '/subscriptions/test/resourceGroups/rg/providers/Microsoft.Resources/templateSpecs/spec/versions/2.0.0?api-version=2021-05-01'
+        $script:putCalls.Count | Should -Be 2
+        $script:putCalls[1].Payload | Should -Be $payload
+        $script:putCalls[1].Path | Should -Be '/subscriptions/test/resourceGroups/rg/providers/Microsoft.Resources/templateSpecs/spec/versions/2.0.0?api-version=2021-05-01'
         $source = Get-Content -LiteralPath $publisherPath -Raw
-        $source | Should Not Match 'TemplateSpecPackagingEngine|New-AzTemplateSpec\s+`|https://management\.azure\.com'
+        $source | Should -Not -Match 'TemplateSpecPackagingEngine|New-AzTemplateSpec\s+`|https://management\.azure\.com'
     }
 
     It 'stops on HTTP <StatusCode> without sending the version' -TestCases @(
         @{ StatusCode = 400 }
         @{ StatusCode = 403 }
+        @{ StatusCode = 413 }
         @{ StatusCode = 500 }
     ) {
         param($StatusCode)
 
         Mock Invoke-AzRestMethod { [pscustomobject]@{ StatusCode = $StatusCode; Content = 'server failure' } }
-        { Publish-DeduplicatedTemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' -VersionPayload '{}' } |
-            Should Throw "HTTP $StatusCode"
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' -VersionPayload '{}' -DeduplicatedRetryPayload '{"retry":true}' } |
+            Should -Throw -ExpectedMessage ("*" + [WildcardPattern]::Escape("HTTP $StatusCode") + "*")
         Assert-MockCalled Invoke-AzRestMethod -Times 1 -Exactly -Scope It
+    }
+
+    It 'retries the same version once for <FailureKind> size failures' -TestCases @(
+        @{ FailureKind = 'returned TemplateSpecTooLarge' }
+        @{ FailureKind = 'returned HTTP 413' }
+        @{ FailureKind = 'thrown TemplateSpecTooLarge' }
+        @{ FailureKind = 'thrown size error code' }
+        @{ FailureKind = 'thrown HTTP 413 response' }
+        @{ FailureKind = 'thrown HTTP 413 status code' }
+    ) {
+        param($FailureKind)
+
+        $script:putCalls = [System.Collections.Generic.List[object]]::new()
+        Mock Invoke-AzRestMethod {
+            param($Path, $Method, $Payload)
+            $script:putCalls.Add(@{ Path = $Path; Payload = $Payload })
+            if ($script:putCalls.Count -eq 2) {
+                if ($FailureKind -eq 'thrown TemplateSpecTooLarge') {
+                    $errorRecord = [Management.Automation.ErrorRecord]::new(
+                        [InvalidOperationException]::new('Azure rejected the request'), 'AzureFailure',
+                        [Management.Automation.ErrorCategory]::InvalidOperation, $null
+                    )
+                    $errorRecord.ErrorDetails = [Management.Automation.ErrorDetails]::new('{"error":{"code":"TemplateSpecTooLarge","message":"Size limit exceeded."}}')
+                    throw $errorRecord
+                }
+                if ($FailureKind -eq 'thrown size error code') {
+                    throw 'TemplateSpecTooLarge: Size limit exceeded.'
+                }
+                if ($FailureKind -eq 'thrown HTTP 413 response') {
+                    $exception = [InvalidOperationException]::new('Azure rejected the request')
+                    $exception | Add-Member -NotePropertyName Response -NotePropertyValue ([pscustomobject]@{ StatusCode = 413 })
+                    throw $exception
+                }
+                if ($FailureKind -eq 'thrown HTTP 413 status code') {
+                    throw [Net.Http.HttpRequestException]::new('Request rejected', $null, [Net.HttpStatusCode]::RequestEntityTooLarge)
+                }
+                if ($FailureKind -eq 'returned HTTP 413') {
+                    return [pscustomobject]@{ StatusCode = 413; Content = 'Request entity too large' }
+                }
+                return [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+            }
+            [pscustomobject]@{ StatusCode = 201; Content = '{}' }
+        }
+        $warnings = @()
+        Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '2.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' -WarningVariable warnings
+        $script:putCalls.Count | Should -Be 3
+        $script:putCalls[1].Payload | Should -Be '{"inline":true}'
+        $script:putCalls[2].Payload | Should -Be '{"linked":true}'
+        $script:putCalls[2].Path | Should -Be $script:putCalls[1].Path
+        ($warnings -join "`n") | Should -Match 'Retrying once'
+        ($warnings -join "`n") | Should -Match 'Portal Redeploy'
+    }
+
+    It 'does not retry unrelated version failure HTTP <StatusCode>' -TestCases @(
+        @{ StatusCode = 400 }
+        @{ StatusCode = 401 }
+        @{ StatusCode = 403 }
+        @{ StatusCode = 404 }
+        @{ StatusCode = 409 }
+        @{ StatusCode = 429 }
+        @{ StatusCode = 500 }
+    ) {
+        param($StatusCode)
+
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            [pscustomobject]@{ StatusCode = $StatusCode; Content = '{"error":{"code":"InvalidTemplateSpec","message":"Invalid content"}}' }
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/TemplateSpecTooLarge' -Version '1.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' } |
+            Should -Throw -ExpectedMessage "*HTTP $StatusCode*"
+        Assert-MockCalled Invoke-AzRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'preserves unrelated transport exceptions without retrying' {
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            throw 'Fixture transport failure'
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' } |
+            Should -Throw -ExpectedMessage '*Fixture transport failure*'
+        Assert-MockCalled Invoke-AzRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'surfaces size errors when no smaller fallback is available' {
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' -VersionPayload '{}' } |
+            Should -Throw -ExpectedMessage '*TemplateSpecTooLarge*'
+        Assert-MockCalled Invoke-AzRestMethod -Times 2 -Exactly -Scope It
+    }
+
+    It 'surfaces a failed deduplicated retry without retrying again' {
+        $script:putCount = 0
+        Mock Invoke-AzRestMethod {
+            $script:putCount++
+            if ($script:putCount -eq 1) { return [pscustomobject]@{ StatusCode = 201; Content = '{}' } }
+            [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+        }
+        { Publish-TemplateSpec -ResourceId '/subscriptions/test/spec' -Version '1.0.0' -ParentPayload '{}' `
+            -VersionPayload '{"inline":true}' -DeduplicatedRetryPayload '{"linked":true}' } |
+            Should -Throw -ExpectedMessage '*TemplateSpecTooLarge*'
+        Assert-MockCalled Invoke-AzRestMethod -Times 3 -Exactly -Scope It
+    }
+}
+
+Describe 'Publisher parameter contract' {
+    It 'requires only Location and does not expose a resource-group creation flag' {
+        $parameters = $publisherAst.ParamBlock.Parameters
+        ($parameters.Name.VariablePath.UserPath -contains 'createResourceGroup') | Should -Be $false
+        $mandatory = @($parameters | Where-Object { $_.Extent.Text -match 'Mandatory\s*=\s*\$true' })
+        $mandatory.Count | Should -Be 1
+        $mandatory[0].Name.VariablePath.UserPath | Should -Be 'Location'
+        $resourceGroup = $parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'ResourceGroupName' }
+        $resourceGroup.DefaultValue.SafeGetValue() | Should -Be ''
+    }
+
+    It 'declares the default naming convention in the parameter' {
+        $parameter = $publisherAst.ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -eq 'NamingConvention' }
+        $defaults = $parameter.DefaultValue.SafeGetValue()
+        ($defaults.components -join ',') | Should -Be 'resourceType,workload,purpose,location'
+        $defaults.delimiter | Should -Be '-'
+        $defaults.workload | Should -Be 'avd'
     }
 }
 
@@ -312,10 +517,19 @@ Import-Module Az.Resources -ErrorAction Stop
 $global:FixtureMode = $Mode
 $global:RestCalls = [System.Collections.Generic.List[object]]::new()
 $global:ResourceGroupCreates = 0
+$global:CreatedResourceGroup = $null
 $global:SpecReads = 0
 $root = Split-Path -Parent (Split-Path -Parent $PublisherPath)
 $abbreviations = Get-Content -Raw (Join-Path $root 'deployments\shared\data\resourceAbbreviations.json') | ConvertFrom-Json
 $global:SpecName = "$($abbreviations.templateSpecs)-avd-hostpool-va-dedup-test"
+$global:ExpectedResourceGroup = 'rg-test'
+if ($Mode -like '*Convention*') {
+    $global:ExpectedResourceGroup = "$($abbreviations.resourceGroups)-avd-operations-va"
+}
+if ($Mode -eq 'CustomConvention') {
+    $global:ExpectedResourceGroup = 'group_ops_operations_prod'
+    $global:SpecName = "$($abbreviations.templateSpecs)_ops_hostpool_prod-dedup-test"
+}
 function global:Get-AzContext {
     [CmdletBinding()]param()
     [pscustomobject]@{
@@ -325,17 +539,21 @@ function global:Get-AzContext {
 }
 function global:Get-AzResourceGroup {
     [CmdletBinding()]param()
-    if ($global:FixtureMode -notin @('Create', 'WhatIfMissing')) {
-        [pscustomobject]@{ ResourceGroupName = 'rg-test' }
+    if ($global:FixtureMode -eq 'ResourceGroupReadFailure') { throw 'Fixture resource group access denied' }
+    if ($global:FixtureMode -notin @('Create', 'WhatIfMissing', 'ConventionCreate', 'WhatIfConventionMissing', 'ResourceGroupCreateFailure')) {
+        [pscustomobject]@{ ResourceGroupName = $global:ExpectedResourceGroup }
     }
 }
 function global:New-AzResourceGroup {
     [CmdletBinding()]param($Name, $Location)
     $global:ResourceGroupCreates++
+    $global:CreatedResourceGroup = [pscustomobject]@{ Name = $Name; Location = $Location }
+    if ($global:FixtureMode -eq 'ResourceGroupCreateFailure') { throw 'Fixture resource group creation denied' }
 }
 function global:Get-AzTemplateSpec {
     [CmdletBinding()]param($ResourceGroupName, $Name, [ValidatePattern('^[-\w\._\(\)]+$')][string]$Version)
     $global:SpecReads++
+    if ($ResourceGroupName -ne $global:ExpectedResourceGroup) { throw "Unexpected resource group '$ResourceGroupName'." }
     if (-not $Name -and $global:FixtureMode -like 'Collection*') {
         $specs = [System.Collections.Generic.List[Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]]::new()
         $other = [Microsoft.Azure.Commands.ResourceManager.Cmdlets.SdkModels.PSTemplateSpec]::new()
@@ -383,6 +601,11 @@ function global:Get-AzTemplateSpec {
 function global:Invoke-AzRestMethod {
     [CmdletBinding()]param($Path, $Method, $Payload)
     $global:RestCalls.Add([pscustomobject]@{ Path = $Path; Method = $Method; Payload = $Payload })
+    if ($global:FixtureMode -in @('InlineTooLarge', 'RetryTooLarge') -and $global:RestCalls.Count -ge 2) {
+        if ($global:RestCalls.Count -eq 2 -or $global:FixtureMode -eq 'RetryTooLarge') {
+            return [pscustomobject]@{ StatusCode = 400; Content = '{"error":{"code":"TemplateSpecTooLarge"}}' }
+        }
+    }
     $status = if ($global:FixtureMode -eq 'Forbidden') { 403 } else { 201 }
     [pscustomobject]@{ StatusCode = $status; Content = 'fixture response' }
 }
@@ -397,6 +620,25 @@ try {
         createCustomImage = $false
         CreateAddOns = $false
     }
+    if ($Mode -like '*Convention*') { $arguments.Remove('ResourceGroupName') }
+    if ($Mode -eq 'PartialConvention') {
+        $arguments.NamingConvention = @{ environment = 'prod' }
+    }
+    if ($Mode -eq 'WhitespaceConvention') { $arguments.ResourceGroupName = '   ' }
+    if ($Mode -in @('CustomConvention', 'ExplicitConvention')) {
+        $arguments.NamingConvention = @{
+            components = @('resourceType', 'workload', 'purpose', 'environment')
+            delimiter = '_'
+            workload = 'ops'
+            environment = 'prod'
+            resourceTypeCodes = @{ resourceGroups = 'group' }
+        }
+    }
+    if ($Mode -eq 'ExplicitConvention') {
+        $arguments.ResourceGroupName = 'rg-test'
+        $global:ExpectedResourceGroup = 'rg-test'
+        $global:SpecName = "$($abbreviations.templateSpecs)_ops_hostpool_prod-dedup-test"
+    }
     if ($Mode -like 'WhatIf*') { $arguments.WhatIf = $true }
     $output = @(& $PublisherPath @arguments)
 }
@@ -407,6 +649,8 @@ $result = @{
     Failure = $failure
     RestCalls = @($global:RestCalls.ToArray())
     ResourceGroupCreates = $global:ResourceGroupCreates
+    CreatedResourceGroup = $global:CreatedResourceGroup
+    ExpectedResourceGroup = $global:ExpectedResourceGroup
     SpecReads = $global:SpecReads
     Output = @($output | ForEach-Object { [string]$_ })
 }
@@ -424,63 +668,95 @@ Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compr
         @{ Mode = 'EmptyVersions'; ExpectedPuts = 2; ExpectedCreates = 0 }
         @{ Mode = 'NonNumericVersion'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Create'; ExpectedPuts = 2; ExpectedCreates = 1 }
+        @{ Mode = 'ConventionExisting'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'ConventionCreate'; ExpectedPuts = 2; ExpectedCreates = 1 }
+        @{ Mode = 'WhitespaceConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'CustomConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'PartialConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'ExplicitConvention'; ExpectedPuts = 2; ExpectedCreates = 0 }
+        @{ Mode = 'ResourceGroupReadFailure'; ExpectedPuts = 0; ExpectedCreates = 0 }
+        @{ Mode = 'ResourceGroupCreateFailure'; ExpectedPuts = 0; ExpectedCreates = 1 }
         @{ Mode = 'WhatIf'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'WhatIfMissing'; ExpectedPuts = 0; ExpectedCreates = 0 }
+        @{ Mode = 'WhatIfConventionMissing'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'VersionReadFailure'; ExpectedPuts = 0; ExpectedCreates = 0 }
         @{ Mode = 'Forbidden'; ExpectedPuts = 1; ExpectedCreates = 0 }
+        @{ Mode = 'InlineTooLarge'; ExpectedPuts = 3; ExpectedCreates = 0 }
+        @{ Mode = 'RetryTooLarge'; ExpectedPuts = 3; ExpectedCreates = 0 }
     ) {
         param($Mode, $ExpectedPuts, $ExpectedCreates)
 
         $lines = @(& (Join-Path $PSHOME 'pwsh.exe') -NoProfile -File $harnessPath -PublisherPath $publisherPath -Mode $Mode)
-        $LASTEXITCODE | Should Be 0
+        $LASTEXITCODE | Should -Be 0
         $record = @($lines | Where-Object { $_ -like 'RESULT:*' })
-        $record.Count | Should Be 1
+        $record.Count | Should -Be 1
         $result = $record[0].Substring(7) | ConvertFrom-Json
-        @($result.RestCalls).Count | Should Be $ExpectedPuts
-        $result.ResourceGroupCreates | Should Be $ExpectedCreates
-        if ($Mode -eq 'CollectionWrongLocation') {
-            $result.Failure | Should Match "is in 'westus2', not 'usgovvirginia'"
-            $result.SpecReads | Should Be 1
+        @($result.RestCalls).Count | Should -Be $ExpectedPuts
+        $result.ResourceGroupCreates | Should -Be $ExpectedCreates
+        if ($ExpectedCreates -eq 1) {
+            $result.CreatedResourceGroup.Name | Should -Be $result.ExpectedResourceGroup
+            $result.CreatedResourceGroup.Location | Should -Be 'usgovvirginia'
+        }
+        if ($Mode -in @('ResourceGroupReadFailure', 'ResourceGroupCreateFailure')) {
+            $result.Failure | Should -Match 'Fixture resource group .* denied'
+            $result.SpecReads | Should -Be 0
+        }
+        elseif ($Mode -eq 'CollectionWrongLocation') {
+            $result.Failure | Should -Match "is in 'westus2', not 'usgovvirginia'"
+            $result.SpecReads | Should -Be 1
         }
         elseif ($Mode -eq 'VersionReadFailure') {
-            $result.Failure | Should Match 'Fixture version access denied'
+            $result.Failure | Should -Match 'Fixture version access denied'
         }
         elseif ($Mode -eq 'NonNumericVersion') {
-            $result.Failure | Should Match "Cannot increment non-numeric Template Spec version 'release-preview'"
+            $result.Failure | Should -Match "Cannot increment non-numeric Template Spec version 'release-preview'"
         }
         elseif ($Mode -eq 'Forbidden') {
-            $result.Failure | Should Match 'HTTP 403'
+            $result.Failure | Should -Match 'HTTP 403'
+        }
+        elseif ($Mode -eq 'RetryTooLarge') {
+            $result.Failure | Should -Match 'TemplateSpecTooLarge'
         }
         else {
-            $result.Failure | Should BeNullOrEmpty
+            $result.Failure | Should -BeNullOrEmpty
         }
         if ($ExpectedPuts -eq 2) {
             $parent = $result.RestCalls[0].Payload | ConvertFrom-Json
             $version = $result.RestCalls[1].Payload | ConvertFrom-Json
-            $version.properties.linkedTemplates.Count | Should Be 28
-            $version.properties.mainTemplate.languageVersion | Should Be '2.0'
-            $result.RestCalls[1].Path | Should Match '-dedup-test/versions/'
-            $result.RestCalls[1].Path | Should Match '^/subscriptions/'
+            $version.properties.linkedTemplates.Count | Should -Be 0
+            $version.properties.mainTemplate.languageVersion | Should -Be '2.0'
+            $result.RestCalls[1].Path | Should -Match '-dedup-test/versions/'
+            $result.RestCalls[1].Path | Should -Match '^/subscriptions/'
+            $result.RestCalls[1].Path | Should -Match ([regex]::Escape("/resourceGroups/$($result.ExpectedResourceGroup)/"))
             if ($Mode -in @('Existing', 'CollectionExisting')) {
-                $parent.tags.owner | Should Be 'preserved'
-                $result.RestCalls[1].Path | Should Match '/versions/5.0.0\?'
-                $result.SpecReads | Should Be 2
+                $parent.tags.owner | Should -Be 'preserved'
+                $result.RestCalls[1].Path | Should -Match '/versions/5.0.0\?'
+                $result.SpecReads | Should -Be 2
+            }
+            if ($ExpectedPuts -eq 3) {
+                $inline = $result.RestCalls[1].Payload | ConvertFrom-Json
+                $linked = $result.RestCalls[2].Payload | ConvertFrom-Json
+                $inline.properties.linkedTemplates.Count | Should -Be 0
+                $linked.properties.linkedTemplates.Count | Should -Be 28
+                $result.RestCalls[2].Path | Should -Be $result.RestCalls[1].Path
+                $linked.properties.uiFormDefinition | ConvertTo-Json -Depth 100 -Compress |
+                    Should -Be ($inline.properties.uiFormDefinition | ConvertTo-Json -Depth 100 -Compress)
             }
             if ($Mode -eq 'EmptyVersions') {
-                $parent.tags.owner | Should Be 'preserved'
-                $result.RestCalls[1].Path | Should Match '/versions/1.0.0\?'
+                $parent.tags.owner | Should -Be 'preserved'
+                $result.RestCalls[1].Path | Should -Match '/versions/1.0.0\?'
             }
             if ($Mode -eq 'CollectionMissing') {
-                $parent.tags | Should BeNullOrEmpty
-                $result.RestCalls[1].Path | Should Match '/versions/1.0.0\?'
-                $result.SpecReads | Should Be 1
+                $parent.tags | Should -BeNullOrEmpty
+                $result.RestCalls[1].Path | Should -Match '/versions/1.0.0\?'
+                $result.SpecReads | Should -Be 1
             }
         }
         if ($Mode -like 'WhatIf*') {
-            ($result.Output -join "`n") | Should Match 'WhatIf complete. No resources were created or published.'
+            ($result.Output -join "`n") | Should -Match 'WhatIf complete. No resources were created or published.'
         }
         if ($Mode -eq 'WhatIfMissing') {
-            $result.SpecReads | Should Be 0
+            $result.SpecReads | Should -Be 0
         }
     }
 }

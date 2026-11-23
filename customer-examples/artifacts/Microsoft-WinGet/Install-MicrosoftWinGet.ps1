@@ -33,40 +33,48 @@ $Script:Name = 'Install-MicrosoftWinGet'
 $ErrorActionPreference = 'Stop'
 
 function Write-Log {
-    param([string]$Message)
-
-    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    $content = "[$timestamp] $Message"
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
+    )
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
     if ($env:SUPPRESS_FILELOG -ne '1') {
-        Add-Content -Path $Script:Log -Value $content -ErrorAction SilentlyContinue
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
     }
-    Write-Output $content
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
+    }
 }
 
 function New-Log {
-    param([string]$Path)
-
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
+    )
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    if (-not (Test-Path -LiteralPath $Path)) {
-        New-Item -Path $Path -ItemType Directory -Force | Out-Null
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-    $date = Get-Date -UFormat '%Y-%m-%d %H-%M-%S'
-    $Script:Log = Join-Path $Path "$Script:Name-$date.log"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
 function Get-SingleFile {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Path,
-
-        [Parameter(Mandatory)]
-        [string]$Filter,
-
-        [Parameter(Mandatory)]
-        [string]$Description
+    param (
+        [Parameter(Mandatory = $true)][Alias('Root')][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Filter,
+        [string]$Description = 'file',
+        [switch]$Recurse
     )
-
-    $files = @(Get-ChildItem -LiteralPath $Path -File -Filter $Filter -ErrorAction Stop)
+    $files = @(Get-ChildItem -LiteralPath $Path -Filter $Filter -File -Recurse:$Recurse -ErrorAction Stop)
     if ($files.Count -ne 1) {
         throw "Expected exactly one $Description matching '$Filter' in '$Path'; found $($files.Count)."
     }
@@ -176,7 +184,7 @@ function Select-RequiredDependencies {
     return $required.ToArray()
 }
 
-New-Log (Join-Path $env:SystemRoot 'Logs')
+New-Log (Join-Path $env:SystemRoot 'Logs') -Name 'Install-MicrosoftWinGet'
 Write-Log 'Install-MicrosoftWinGet: Starting'
 Write-Log "Script location : $PSScriptRoot"
 

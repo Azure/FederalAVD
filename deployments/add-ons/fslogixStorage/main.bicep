@@ -2,7 +2,7 @@ targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
-import { fslogixNames } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { fslogixNames, sharedServicesNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string
@@ -11,7 +11,7 @@ param location string
 param identifier string = 'fslogix'
 
 @description('Optional. Naming convention used to derive resource names when explicit overrides are not supplied.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -37,6 +37,9 @@ param deploymentVirtualMachineNicName string = ''
 
 @description('Optional. Size of the temporary deployment VM.')
 param deploymentVirtualMachineSize string = 'Standard_B2s'
+
+@description('Optional. Domain join the add-on-created deployment VM using the configured domain and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join.')
+param domainJoinDeploymentVirtualMachine bool = false
 
 @description('Conditional. Subnet resource ID required when this add-on creates a temporary deployment VM. Not used for Entra ID storage-account-key authentication or an externally managed deployment VM.')
 param deploymentVirtualMachineSubnetResourceId string = ''
@@ -77,7 +80,7 @@ param domainName string = ''
 @description('Optional. OU path for storage computer objects.')
 param organizationalUnitPath string = ''
 
-@description('Optional. OU path used when the temporary deployment VM must be domain joined for Azure NetApp Files configuration.')
+@description('Optional. OU path for a domain-joined deployment VM. When empty, uses organizationalUnitPath.')
 param deploymentVirtualMachineOrganizationalUnitPath string = ''
 
 @description('Optional. Existing user-assigned identity resource ID with permissions to update and consent to storage account enterprise applications for Entra Kerberos.')
@@ -195,6 +198,30 @@ param recoveryServicesVaultResourceId string = ''
 @description('Optional. Name of the Azure Files backup policy in the Recovery Services vault.')
 param fileSharePolicyName string = 'filesharepolicy'
 
+@description('Optional. Create a snapshot backup vault and policy when no existing vault ID is supplied. Azure Files only.')
+param deployFSLogixBackupVault bool = false
+
+@description('Optional. Shared uses the regional operations resource group; Dedicated uses the storage resource group.')
+@allowed([
+  'Shared'
+  'Dedicated'
+])
+param backupVaultScope string = 'Shared'
+
+@description('Optional. Name override for a newly deployed backup vault.')
+param backupVaultName string = ''
+
+@description('Optional. Operations resource group name override for a new Shared backup vault. Dedicated always uses the storage resource group.')
+param backupResourceGroupName string = ''
+
+@description('Optional. Daily snapshot retention for a newly deployed backup policy.')
+@minValue(1)
+@maxValue(200)
+param fslogixBackupRetentionDays int = 30
+
+@description('Optional. Windows time zone for the new backup policy daily schedule at 23:00.')
+param fslogixBackupTimeZone string = 'UTC'
+
 @description('Optional. Indicates that the Azure NetApp account already has the required Active Directory connection.')
 param existingSharedActiveDirectoryConnection bool = false
 
@@ -246,6 +273,29 @@ var fslogixShareNamesLookup = {
 
 var storageSolution = split(fslogixStorageService, ' ')[0]
 var storageSku = split(fslogixStorageService, ' ')[1]
+var createFSLogixBackupVault = storageSolution == 'AzureFiles' && deployFSLogixBackupVault && empty(recoveryServicesVaultResourceId)
+var effectiveBackupResourceGroupName = backupVaultScope == 'Dedicated'
+  ? effectiveStorageResourceGroupName
+  : !empty(backupResourceGroupName) ? backupResourceGroupName : backupNaming.operationsResourceGroupName
+var effectiveBackupVaultName = !empty(backupVaultName)
+  ? backupVaultName
+  : backupVaultScope == 'Shared'
+      ? backupNaming.fslogixBackupVaultName
+      : resourceNameForType(namingConvention, 'Microsoft.RecoveryServices/vaults', '${identifier}-backup', {
+          subscriptionId: subscription().subscriptionId
+          resourceGroupName: effectiveStorageResourceGroupName
+          cloud: environment().name
+          location: location
+        })
+var backupConfigurationIsValid = storageSolution == 'AzureFiles' || (!deployFSLogixBackupVault && empty(recoveryServicesVaultResourceId))
+  ? true
+  : fail('Recovery Services snapshot backup is supported only for Azure Files.')
+var backupResourceGroupNamesAreDistinct = !deployDeploymentVirtualMachine || ((!createFSLogixBackupVault || toLower(effectiveBackupResourceGroupName) != toLower(effectiveDeploymentResourceGroupName)) && (empty(recoveryServicesVaultResourceId) || toLower(split(recoveryServicesVaultResourceId, '/')[4]) != toLower(effectiveDeploymentResourceGroupName)))
+  ? true
+  : fail('The backup vault must not reside in the temporary deployment resource group, which cleanup deletes.')
+var effectiveRecoveryServicesVaultResourceId = createFSLogixBackupVault
+  ? fslogixBackupVault!.outputs.recoveryServicesVaultResourceId
+  : recoveryServicesVaultResourceId
 var effectiveStorageResourceGroupName = !empty(storageResourceGroupName) ? storageResourceGroupName : naming.resourceGroupStorage
 var effectiveDeploymentResourceGroupName = !empty(deploymentResourceGroupName) ? deploymentResourceGroupName : naming.resourceGroupDeployment
 var effectiveDeploymentVirtualMachineName = !empty(deploymentVirtualMachineName) ? deploymentVirtualMachineName : naming.depVirtualMachineName
@@ -282,6 +332,9 @@ var netAppResourceGroupConfigurationIsValid = storageSolution != 'AzureNetAppFil
   : fail('An existing storage resource group is required when reusing an Azure NetApp Files account or capacity pool.')
 var deploymentVirtualMachineRequired = identitySolution != 'EntraId'
 var deployDeploymentVirtualMachine = manageDeploymentVirtualMachine && deploymentVirtualMachineRequired
+var deploymentVmDomainJoinIsValid = !domainJoinDeploymentVirtualMachine || (deployDeploymentVirtualMachine && contains(identitySolution, 'DomainServices') && !empty(domainName) && (!empty(credentialsKeyVaultResourceId) || (!empty(domainJoinUserPrincipalName) && !empty(domainJoinUserPassword))))
+  ? true
+  : fail('domainJoinDeploymentVirtualMachine requires an add-on-managed deployment VM, ActiveDirectoryDomainServices or EntraDomainServices, domainName, and domain-join credentials or credentialsKeyVaultResourceId. Join an externally managed VM through its owning deployment.')
 var resourceGroupNamesAreDistinct = !deployDeploymentVirtualMachine || toLower(effectiveStorageResourceGroupName) != toLower(effectiveDeploymentResourceGroupName)
   ? true
   : fail('The temporary deployment resource group must differ from the storage resource group because cleanup deletes the entire temporary group.')
@@ -299,6 +352,11 @@ var naming = fslogixNames(namingConvention, identifier, {
   cloud: environment().name
   location: location
 })
+var backupNaming = sharedServicesNames(namingConvention, {
+  subscriptionId: subscription().subscriptionId
+  cloud: environment().name
+  location: location
+}, {})
 
 resource credentialsKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(credentialsKeyVaultResourceId)) {
   name: last(split(credentialsKeyVaultResourceId, '/'))
@@ -355,7 +413,7 @@ module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/dep
         : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
-    domainJoinDeploymentVirtualMachine: storageSolution == 'AzureNetAppFiles'
+    domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || storageSolution == 'AzureNetAppFiles'
     identitySolution: identitySolution
     ouPath: !empty(deploymentVirtualMachineOrganizationalUnitPath)
       ? deploymentVirtualMachineOrganizationalUnitPath
@@ -399,9 +457,43 @@ module storageCmk '../../shared/modules/orchestration/customerManagedKeys/storag
   dependsOn: [storageResourceGroup]
 }
 
+module backupResourceGroup '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createFSLogixBackupVault && backupVaultScope == 'Shared') {
+  params: {
+    name: backupResourceGroupNamesAreDistinct ? effectiveBackupResourceGroupName : effectiveBackupResourceGroupName
+    location: location
+    tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
+  }
+}
+
+// Snapshot data remains in Azure Files; this metadata vault does not require a backup private endpoint.
+// Existing vaults and policies are never modified by this add-on.
+module fslogixBackupVault '../../shared/modules/resourceModules/recoveryServices/fslogixBackupVault.bicep' = if (createFSLogixBackupVault) {
+  params: {
+    createVault: true
+    manageBackupPolicy: true
+    vaultName: effectiveBackupVaultName
+    resourceGroupOperations: effectiveBackupResourceGroupName
+    location: location
+    logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId
+    privateEndpoint: false
+    privateEndpointNameConv: effectivePrivateEndpointNameConvention
+    privateEndpointNICNameConv: effectivePrivateEndpointNicNameConvention
+    tags: union(tags, {
+      'Microsoft.RecoveryServices/vaults': union(
+        tags[?'Microsoft.RecoveryServices/vaults'] ?? {},
+        backupVaultScope == 'Dedicated' && !empty(parentResourceId) ? { 'cm-resource-parent': parentResourceId } : {}
+      )
+    })
+    timeZone: fslogixBackupTimeZone
+    fileSharePolicyName: fileSharePolicyName
+    backupRetentionDays: fslogixBackupRetentionDays
+  }
+  dependsOn: [backupResourceGroup, storageResourceGroup]
+}
+
 module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
   params: {
-    activeDirectoryConnection: storageIdentityConfigurationIsValid && netAppResourceGroupConfigurationIsValid
+    activeDirectoryConnection: storageIdentityConfigurationIsValid && netAppResourceGroupConfigurationIsValid && deploymentVmDomainJoinIsValid
       ? netAppDeploymentMode == 'CreateAll' || existingSharedActiveDirectoryConnection
       : existingSharedActiveDirectoryConnection
     createNetAppAccount: netAppDeploymentMode == 'CreateAll'
@@ -436,7 +528,7 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     #disable-next-line BCP318
     encryptionKeyVaultUri: deployStorageCmk ? encryptionKeyVault!.properties.vaultUri : ''
     encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
-    fileSharePolicyName: fileSharePolicyName
+    fileSharePolicyName: backupConfigurationIsValid && backupResourceGroupNamesAreDistinct ? fileSharePolicyName : fileSharePolicyName
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     fslogixFileShares: fileShareNames
@@ -459,7 +551,7 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     privateEndpointNameConv: effectivePrivateEndpointNameConvention
     privateEndpointNICNameConv: effectivePrivateEndpointNicNameConvention
     privateEndpointSubnetResourceId: privateEndpointSubnetResourceId
-    recoveryServicesVaultResourceId: recoveryServicesVaultResourceId
+    recoveryServicesVaultResourceId: effectiveRecoveryServicesVaultResourceId
     resourceGroupDeployment: effectiveDeploymentResourceGroupName
     resourceGroupStorage: effectiveStorageResourceGroupName
     shareSizeInGB: shareSizeInGB
@@ -511,3 +603,14 @@ output fslogixConfiguration object = {
 output netAppServerFqdns array = fslogix.outputs.netAppServerFqdns
 output netAppVolumeResourceIds array = fslogix.outputs.netAppVolumeResourceIds
 output storageAccountResourceIds array = fslogix.outputs.storageAccountResourceIds
+
+@description('Selected snapshot backup vault ID; empty when backup is disabled.')
+output fslogixBackupVaultResourceId string = effectiveRecoveryServicesVaultResourceId
+
+@description('Selected snapshot backup policy name; empty when backup is disabled.')
+output fslogixBackupPolicyName string = empty(effectiveRecoveryServicesVaultResourceId) ? '' : fileSharePolicyName
+
+@description('Selected snapshot backup policy resource ID; empty when backup is disabled.')
+output fslogixBackupPolicyResourceId string = empty(effectiveRecoveryServicesVaultResourceId)
+  ? ''
+  : '${effectiveRecoveryServicesVaultResourceId}/backupPolicies/${fileSharePolicyName}'

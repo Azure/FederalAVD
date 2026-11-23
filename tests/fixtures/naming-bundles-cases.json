@@ -1,0 +1,293 @@
+[
+  {
+    "name": "default",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "split-location",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "westus2",
+      "controlPlaneLocation": "westus2",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "government",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "AzureUSGovernment",
+      "virtualMachinesLocation": "usgovvirginia",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "usgovarizona",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "secret",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "USSec",
+      "virtualMachinesLocation": "usseceast",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "usseceast",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "top-secret",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "USNat",
+      "virtualMachinesLocation": "usnatnorth",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "usnatnorth",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "type-last",
+    "identifier": "finance",
+    "convention": {
+      "components": [
+        "workload",
+        "purpose",
+        "location",
+        "resourceType"
+      ]
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "empty-delimiter",
+    "identifier": "finance",
+    "convention": {
+      "delimiter": ""
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "underscore",
+    "identifier": "finance",
+    "convention": {
+      "delimiter": "_"
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "dot",
+    "identifier": "finance",
+    "convention": {
+      "delimiter": "."
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "no-location-east",
+    "identifier": "finance",
+    "convention": {
+      "components": [
+        "resourceType",
+        "workload",
+        "purpose"
+      ]
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "no-location-west",
+    "identifier": "finance",
+    "convention": {
+      "components": [
+        "resourceType",
+        "workload",
+        "purpose"
+      ]
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "westus2",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "abbreviation-overrides",
+    "identifier": "finance",
+    "convention": {
+      "resourceTypeCodes": {
+        "networkInterfaces": "net",
+        "osdisks": "os",
+        "privateEndpoints": "pep"
+      },
+      "cpLocationAbbreviation": "cpx",
+      "vmsLocationAbbreviation": "vmx"
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "explicit-overrides",
+    "identifier": "finance",
+    "convention": {
+      "virtualMachineDiskNameConvOverride": "disk-SHNAME",
+      "secretsKeyVaultNameOverride": "kv-explicit-secrets",
+      "virtualMachineNicNameConvOverride": "nic-SHNAME",
+      "encryptionKeyVaultNameOverride": "kv-explicit-encryption",
+      "virtualMachineNameConvOverride": "explicit-SHNAME"
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "storage-prefix",
+    "identifier": "finance",
+    "convention": {
+      "fslogixStoragePrefix": "CUSTOM-Long-Prefix-1234567"
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "adopted-workspace",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": "/subscriptions/00000000-1111-2222-3333-444444444444/resourceGroups/Existing-Feed-RG/providers/Microsoft.DesktopVirtualization/workspaces/Existing-Feed"
+    }
+  },
+  {
+    "name": "shared-subscription",
+    "identifier": "finance",
+    "convention": {},
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "westus2",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-555555555555",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  },
+  {
+    "name": "custom-components",
+    "identifier": "finance",
+    "convention": {
+      "environment": "prod",
+      "freeform2": "x",
+      "freeform1": "org",
+      "delimiter": "_",
+      "components": [
+        "freeform1",
+        "environment",
+        "purpose",
+        "freeform2",
+        "resourceType"
+      ]
+    },
+    "context": {
+      "cloud": "AzureCloud",
+      "virtualMachinesLocation": "eastus",
+      "globalFeedLocation": "",
+      "controlPlaneLocation": "eastus",
+      "sharedServicesSubscriptionId": "00000000-1111-2222-3333-444444444444",
+      "subscriptionId": "00000000-1111-2222-3333-444444444444",
+      "existingFeedWorkspaceResourceId": ""
+    }
+  }
+]

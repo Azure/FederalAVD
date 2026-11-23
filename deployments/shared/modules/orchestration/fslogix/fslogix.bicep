@@ -191,7 +191,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   }
 }
 
-// Register all Azure Files storage accounts and shares with the Recovery Services Vault for snapshot backup.
+// Register Azure Files storage accounts and non-Office shares for snapshot backup.
 // Scoped to the vault's resource group so ARM child resource declarations resolve correctly.
 module backupRegistration 'modules/fslogixBackupItems.bicep' = if (storageSolution == 'AzureFiles' && !empty(recoveryServicesVaultResourceId)) {
   scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])

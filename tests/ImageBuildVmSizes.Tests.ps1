@@ -1,73 +1,73 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    function Invoke-ImageBuildFormExpression {
+        param([string]$Expression, [hashtable]$Steps)
 
-function Invoke-ImageBuildFormExpression {
-    param([string]$Expression, [hashtable]$Steps)
-
-    function Get-ImageBuildFormLength {
-        param($Value)
-        if ($Value -is [string]) { $Value.Length } else { $Value.Count }
-    }
-
-    # Evaluate the scalar functions used by these controls, not the Portal runtime.
-    $functions = @{
-        steps = { param($name) $Steps[$name] }.GetNewClosure()
-        'if' = { param($condition, $yes, $no) if ($condition) { ,$yes } else { ,$no } }
-        coalesce = { foreach ($value in $args) { if ($null -ne $value) { return ,$value } } }
-        contains = {
-            param($value, $search)
-            if ($value -is [string]) { $value.Contains($search) } else { $value -ccontains $search }
+        function Get-ImageBuildFormLength {
+            param($Value)
+            if ($Value -is [string]) { $Value.Length } else { $Value.Count }
         }
-        equals = { param($left, $right) [object]::Equals($left, $right) }
-        'and' = { $false -notin $args }
-        'or' = { $true -in $args }
-        'not' = { param($value) -not $value }
-        parse = { param($value) ,($value | ConvertFrom-Json) }
-    }
-    $body = $Expression.Substring(1, $Expression.Length - 2)
-    $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|coalesce|contains|equals|and|or|not|length|parse)\(|\b(?:true|false)\b", {
-        param($match)
-        if ($match.Value.StartsWith("'")) {
-            $match.Value
-        } elseif ($match.Value -eq 'length(') {
-            '(Get-ImageBuildFormLength '
-        } elseif ($match.Value.EndsWith('(')) {
-            '$functions.' + $match.Value.TrimEnd('(') + '.InvokeReturnAsIs('
-        } else {
-            '$' + $match.Value
+
+        # Evaluate the scalar functions used by these controls, not the Portal runtime.
+        $functions = @{
+            steps = { param($name) $Steps[$name] }.GetNewClosure()
+            'if' = { param($condition, $yes, $no) if ($condition) { ,$yes } else { ,$no } }
+            coalesce = { foreach ($value in $args) { if ($null -ne $value) { return ,$value } } }
+            contains = {
+                param($value, $search)
+                if ($value -is [string]) { $value.Contains($search) } else { $value -ccontains $search }
+            }
+            equals = { param($left, $right) [object]::Equals($left, $right) }
+            'and' = { $false -notin $args }
+            'or' = { $true -in $args }
+            'not' = { param($value) -not $value }
+            parse = { param($value) ,($value | ConvertFrom-Json) }
         }
-    })
-    & ([scriptblock]::Create($body))
-}
+        $body = $Expression.Substring(1, $Expression.Length - 2)
+        $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|coalesce|contains|equals|and|or|not|length|parse)\(|\b(?:true|false)\b", {
+            param($match)
+            if ($match.Value.StartsWith("'")) {
+                $match.Value
+            } elseif ($match.Value -eq 'length(') {
+                '(Get-ImageBuildFormLength '
+            } elseif ($match.Value.EndsWith('(')) {
+                '$functions.' + $match.Value.TrimEnd('(') + '.InvokeReturnAsIs('
+            } else {
+                '$' + $match.Value
+            }
+        })
+        & ([scriptblock]::Create($body))
+    }
+    function New-ImageBuildFormContext {
+        param(
+            [string]$SecurityType,
+            [bool]$Existing,
+            [hashtable]$Sizes,
+            [bool]$Accelerated = $false,
+            [bool]$Hibernate = $false,
+            [bool]$Nvme = $false
+        )
 
-function New-ImageBuildFormContext {
-    param(
-        [string]$SecurityType,
-        [bool]$Existing,
-        [hashtable]$Sizes,
-        [bool]$Accelerated = $false,
-        [bool]$Hibernate = $false,
-        [bool]$Nvme = $false
-    )
-
-    $inactiveSecurity = if ($SecurityType -eq 'ConfidentialVM') { 'Standard' } else { 'ConfidentialVM' }
-    @{
-        imageDest = @{
-            imageDefinition = @{
-                useExImageDef = $Existing
-                securityType = $(if ($Existing) { $inactiveSecurity } else { $SecurityType })
-                isAcceleratedNetworkSupported = $(if ($Existing) { -not $Accelerated } else { $Accelerated })
-                isHibernateSupported = $(if ($Existing) { -not $Hibernate } else { $Hibernate })
-                isNVMeSupported = $(if ($Existing) { -not $Nvme } else { $Nvme })
-                existingImageDefinition = @{
-                    SecurityType = $(if ($Existing) { $SecurityType } else { $inactiveSecurity })
-                    IsAcceleratedNetworkSupported = $(if ($Existing) { $Accelerated } else { -not $Accelerated })
-                    IsHibernateSupported = $(if ($Existing) { $Hibernate } else { -not $Hibernate })
-                    DiskControllerTypes = $(if ($Existing -eq $Nvme) { 'NVMe' } else { 'SCSI' })
+        $inactiveSecurity = if ($SecurityType -eq 'ConfidentialVM') { 'Standard' } else { 'ConfidentialVM' }
+        @{
+            imageDest = @{
+                imageDefinition = @{
+                    useExImageDef = $Existing
+                    securityType = $(if ($Existing) { $inactiveSecurity } else { $SecurityType })
+                    isAcceleratedNetworkSupported = $(if ($Existing) { -not $Accelerated } else { $Accelerated })
+                    isHibernateSupported = $(if ($Existing) { -not $Hibernate } else { $Hibernate })
+                    isNVMeSupported = $(if ($Existing) { -not $Nvme } else { $Nvme })
+                    existingImageDefinition = @{
+                        SecurityType = $(if ($Existing) { $SecurityType } else { $inactiveSecurity })
+                        IsAcceleratedNetworkSupported = $(if ($Existing) { $Accelerated } else { -not $Accelerated })
+                        IsHibernateSupported = $(if ($Existing) { $Hibernate } else { -not $Hibernate })
+                        DiskControllerTypes = $(if ($Existing -eq $Nvme) { 'NVMe' } else { 'SCSI' })
+                    }
                 }
             }
+            basics = @{ resourceSkusApi = @{ transformed = $Sizes } }
+            imageSource = @{ sku = 'win11' }
         }
-        basics = @{ resourceSkusApi = @{ transformed = $Sizes } }
-        imageSource = @{ sku = 'win11' }
     }
 }
 
@@ -179,45 +179,45 @@ Describe 'Image-build VM-size compatibility' {
         @{ Name = 'defaultVMSizes'; Expected = 'scsi-accelerated|scsi-basic|dual-accelerated|hibernation-basic|hibernation-accelerated|legacy-scsi' }
     ) {
         param($Name, $Expected)
-        ($results[$Name] -join '|') | Should Be $Expected
+        ($results[$Name] -join '|') | Should -Be $Expected
     }
 
     It 'keeps the default VM size and controller aligned in generated ARM' {
-        $template.parameters.vmSize.defaultValue | Should Be 'Standard_D4as_v6'
-        $template.parameters.vmSize.minLength | Should Be 1
-        ($template.parameters.vmSize.PSObject.Properties.Name -contains 'allowedValues') | Should Be $false
-        $template.parameters.imageDefinitionIsHigherStoragePerformanceSupported.defaultValue | Should Be $true
+        $template.parameters.vmSize.defaultValue | Should -Be 'Standard_D4as_v6'
+        $template.parameters.vmSize.minLength | Should -Be 1
+        ($template.parameters.vmSize.PSObject.Properties.Name -contains 'allowedValues') | Should -Be $false
+        $template.parameters.imageDefinitionIsHigherStoragePerformanceSupported.defaultValue | Should -Be $true
         $imageController = $template.resources.imageVm.properties.parameters.diskControllerType
         $orchestrationController = $template.resources.orchestrationVm.properties.parameters.diskControllerType
-        $imageController | Should Match "'NVMe'"
-        $imageController | Should Be $orchestrationController
+        $imageController | Should -Match "'NVMe'"
+        $imageController | Should -Be $orchestrationController
     }
 
     It 'lets the dropdown use its first compatible option instead of an unavailable fixed default' {
-        $vmSize.type | Should Be 'Microsoft.Common.DropDown'
-        $vmSize.filter | Should Be $true
-        $vmSize.constraints.required | Should Be $true
-        ($vmSize.PSObject.Properties.Name -contains 'defaultValue') | Should Be $false
-        $results.nvmeAccelNetVMSizes[0] | Should Be 'Standard_D4as_v6'
-        $withoutPreferredResult[0] | Should Be 'dual-accelerated'
+        $vmSize.type | Should -Be 'Microsoft.Common.DropDown'
+        $vmSize.filter | Should -Be $true
+        $vmSize.constraints.required | Should -Be $true
+        ($vmSize.PSObject.Properties.Name -contains 'defaultValue') | Should -Be $false
+        $results.nvmeAccelNetVMSizes[0] | Should -Be 'Standard_D4as_v6'
+        $withoutPreferredResult[0] | Should -Be 'dual-accelerated'
     }
 
     It 'keeps empty regions empty rather than substituting an incompatible size' {
         foreach ($property in $emptyRegion.PSObject.Properties) {
-            @($property.Value).Count | Should Be 0
+            @($property.Value).Count | Should -Be 0
         }
     }
 
     It 'uses a valid NVMe default for hibernation without resetting controls on security changes' {
         $condition = "equals(coalesce(steps('imageDest').imageDefinition.isHibernateSupported, false), true)"
-        $nvme.defaultValue | Should Be "[if($condition, 'No', 'Yes')]"
-        $nvme.constraints.allowedValues.StartsWith("[if($condition,") | Should Be $true
-        $accelerated.defaultValue | Should Be 'Yes'
+        $nvme.defaultValue | Should -Be "[if($condition, 'No', 'Yes')]"
+        $nvme.constraints.allowedValues.StartsWith("[if($condition,") | Should -Be $true
+        $accelerated.defaultValue | Should -Be 'Yes'
         foreach ($control in @($accelerated, $hibernate)) {
-            ($control.constraints.allowedValues -is [array]) | Should Be $true
-            ($control.constraints.allowedValues.value -join '|') | Should Be 'True|False'
+            ($control.constraints.allowedValues -is [array]) | Should -Be $true
+            ($control.constraints.allowedValues.value -join '|') | Should -Be 'True|False'
         }
-        $nvme.constraints.allowedValues | Should Not Match 'securityType'
+        $nvme.constraints.allowedValues | Should -Not -Match 'securityType'
     }
 
     It 'uses ordinary build-feature filtering for <SecurityType> on both definition paths' -TestCases @(
@@ -241,29 +241,29 @@ Describe 'Image-build VM-size compatibility' {
                 $context = New-ImageBuildFormContext -SecurityType $SecurityType -Existing $existing -Sizes $results `
                     -Accelerated $combination.Accelerated -Hibernate $combination.Hibernate -Nvme $combination.Nvme
                 $selected = @(Invoke-ImageBuildFormExpression $selectorExpression $context)
-                ($selected -join '|') | Should Be ($results[$combination.List] -join '|')
-                (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be $true
-                (Invoke-ImageBuildFormExpression $incompatibleWarning.visible $context) | Should Be $false
-                (Invoke-ImageBuildFormExpression $regionalWarning.visible $context) | Should Be $false
+                ($selected -join '|') | Should -Be ($results[$combination.List] -join '|')
+                (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be $true
+                (Invoke-ImageBuildFormExpression $incompatibleWarning.visible $context) | Should -Be $false
+                (Invoke-ImageBuildFormExpression $regionalWarning.visible $context) | Should -Be $false
                 foreach ($binding in $featureOutputs.GetEnumerator()) {
                     $expected = if ($existing) { $false } else { $context.imageDest.imageDefinition[$binding.Value] }
-                    (Invoke-ImageBuildFormExpression $form.view.outputs.parameters.($binding.Key) $context) | Should Be $expected
+                    (Invoke-ImageBuildFormExpression $form.view.outputs.parameters.($binding.Key) $context) | Should -Be $expected
                 }
                 if (-not $existing) {
-                    (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should Be $false
+                    (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should -Be $false
                     $choices = $security.constraints.allowedValues
-                    ($choices.value -contains $SecurityType) | Should Be $true
-                    ($choices.value -contains 'ConfidentialVM') | Should Be $true
+                    ($choices.value -contains $SecurityType) | Should -Be $true
+                    ($choices.value -contains 'ConfidentialVM') | Should -Be $true
                     $choices = $accelerated.constraints.allowedValues
-                    ($choices.value -contains $true) | Should Be $true
+                    ($choices.value -contains $true) | Should -Be $true
                     $choices = $hibernate.constraints.allowedValues
-                    ($choices.value -contains $true) | Should Be $true
+                    ($choices.value -contains $true) | Should -Be $true
                     $choices = Invoke-ImageBuildFormExpression $nvme.constraints.allowedValues $context
-                    ($choices.value -contains $true) | Should Be (-not $combination.Hibernate)
+                    ($choices.value -contains $true) | Should -Be (-not $combination.Hibernate)
                     $expectedDefault = if ($combination.Hibernate) { 'No' } else { 'Yes' }
-                    (Invoke-ImageBuildFormExpression $nvme.defaultValue $context) | Should Be $expectedDefault
+                    (Invoke-ImageBuildFormExpression $nvme.defaultValue $context) | Should -Be $expectedDefault
                     foreach ($control in @($accelerated, $hibernate, $nvme)) {
-                        (Invoke-ImageBuildFormExpression $control.visible $context) | Should Be $true
+                        (Invoke-ImageBuildFormExpression $control.visible $context) | Should -Be $true
                     }
                 }
             }
@@ -274,31 +274,31 @@ Describe 'Image-build VM-size compatibility' {
         foreach ($existing in @($false, $true)) {
             $context = New-ImageBuildFormContext -SecurityType 'ConfidentialVM' -Existing $existing -Sizes $results
             $selected = @(Invoke-ImageBuildFormExpression $selectorExpression $context)
-            ($selected -join '|') | Should Be ($results.confidentialVMSizes -join '|')
-            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be $true
+            ($selected -join '|') | Should -Be ($results.confidentialVMSizes -join '|')
+            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be $true
             if (-not $existing) {
-                (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should Be $true
+                (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should -Be $true
                 foreach ($control in @($accelerated, $hibernate, $nvme)) {
-                    (Invoke-ImageBuildFormExpression $control.visible $context) | Should Be $false
+                    (Invoke-ImageBuildFormExpression $control.visible $context) | Should -Be $false
                 }
                 $choices = $security.constraints.allowedValues
-                ($choices.value -contains 'ConfidentialVM') | Should Be $true
+                ($choices.value -contains 'ConfidentialVM') | Should -Be $true
             }
         }
         foreach ($feature in @('Accelerated', 'Hibernate', 'Nvme')) {
             $parameters = @{ SecurityType = 'ConfidentialVM'; Existing = $true; Sizes = $results; $feature = $true }
             $context = New-ImageBuildFormContext @parameters
-            (Invoke-ImageBuildFormExpression $incompatibleWarning.visible $context) | Should Be $true
-            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be $false
+            (Invoke-ImageBuildFormExpression $incompatibleWarning.visible $context) | Should -Be $true
+            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be $false
         }
     }
 
     It 'keeps all security choices available independently of the feature controls' {
-        ($security.constraints.allowedValues -is [array]) | Should Be $true
-        $security.constraints.allowedValues.Count | Should Be 6
+        ($security.constraints.allowedValues -is [array]) | Should -Be $true
+        $security.constraints.allowedValues.Count | Should -Be 6
         ($security.constraints.allowedValues.value -join '|') |
-            Should Be 'Standard|TrustedLaunch|TrustedLaunchSupported|ConfidentialVM|ConfidentialVMSupported|TrustedLaunchAndConfidentialVmSupported'
-        ($security.constraints.allowedValues.label -contains $security.defaultValue) | Should Be $true
+            Should -Be 'Standard|TrustedLaunch|TrustedLaunchSupported|ConfidentialVM|ConfidentialVMSupported|TrustedLaunchAndConfidentialVmSupported'
+        ($security.constraints.allowedValues.label -contains $security.defaultValue) | Should -Be $true
     }
 
     It 'forces new ConfidentialVM feature outputs off despite every possible stale selection' {
@@ -310,29 +310,29 @@ Describe 'Image-build VM-size compatibility' {
                     $context = New-ImageBuildFormContext -SecurityType 'ConfidentialVM' -Existing $false -Sizes $sizes `
                         -Accelerated $accelValue -Hibernate $hibernateValue -Nvme $nvmeValue
                     foreach ($binding in $featureOutputs.GetEnumerator()) {
-                        (Invoke-ImageBuildFormExpression $form.view.outputs.parameters.($binding.Key) $context) | Should Be $false
+                        (Invoke-ImageBuildFormExpression $form.view.outputs.parameters.($binding.Key) $context) | Should -Be $false
                     }
                     $selected = @(Invoke-ImageBuildFormExpression $selectorExpression $context)
-                    ($selected -join '|') | Should Be ($results.confidentialVMSizes -join '|')
-                    (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be $true
-                    (Invoke-ImageBuildFormExpression $hibernationWarning.visible $context) | Should Be $false
-                    (Invoke-ImageBuildFormExpression $newFeatureWarning.visible $context) | Should Be $false
-                    (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should Be $true
+                    ($selected -join '|') | Should -Be ($results.confidentialVMSizes -join '|')
+                    (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be $true
+                    (Invoke-ImageBuildFormExpression $hibernationWarning.visible $context) | Should -Be $false
+                    (Invoke-ImageBuildFormExpression $newFeatureWarning.visible $context) | Should -Be $false
+                    (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should -Be $true
                     foreach ($control in @($accelerated, $hibernate, $nvme)) {
-                        (Invoke-ImageBuildFormExpression $control.visible $context) | Should Be $false
+                        (Invoke-ImageBuildFormExpression $control.visible $context) | Should -Be $false
                     }
                     foreach ($supportedType in @('TrustedLaunchSupported', 'ConfidentialVMSupported', 'TrustedLaunchAndConfidentialVmSupported')) {
                         $context.imageDest.imageDefinition.securityType = $supportedType
                         foreach ($binding in $featureOutputs.GetEnumerator()) {
                             $expected = $context.imageDest.imageDefinition[$binding.Value]
-                            (Invoke-ImageBuildFormExpression $form.view.outputs.parameters.($binding.Key) $context) | Should Be $expected
+                            (Invoke-ImageBuildFormExpression $form.view.outputs.parameters.($binding.Key) $context) | Should -Be $expected
                         }
-                        (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should Be $false
+                        (Invoke-ImageBuildFormExpression $confidentialWarning.visible $context) | Should -Be $false
                     }
                 }
             }
         }
-        $confidentialWarning.options.style | Should Be 'Info'
+        $confidentialWarning.options.style | Should -Be 'Info'
     }
 
     It 'does not hide supported definitions when only the Confidential SKU list is empty' {
@@ -341,38 +341,38 @@ Describe 'Image-build VM-size compatibility' {
         foreach ($securityType in @('ConfidentialVMSupported', 'TrustedLaunchAndConfidentialVmSupported', 'ConfidentialVM')) {
             $context = New-ImageBuildFormContext -SecurityType $securityType -Existing $true -Sizes $sizes
             $isConfidential = $securityType -eq 'ConfidentialVM'
-            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be (-not $isConfidential)
-            (Invoke-ImageBuildFormExpression $regionalWarning.visible $context) | Should Be $isConfidential
+            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be (-not $isConfidential)
+            (Invoke-ImageBuildFormExpression $regionalWarning.visible $context) | Should -Be $isConfidential
         }
     }
 
     It 'preserves hibernation controller and regional restrictions for supported definitions' {
         foreach ($securityType in @('TrustedLaunchSupported', 'ConfidentialVMSupported', 'TrustedLaunchAndConfidentialVmSupported')) {
             $context = New-ImageBuildFormContext -SecurityType $securityType -Existing $true -Sizes $results -Hibernate $true -Nvme $true
-            (Invoke-ImageBuildFormExpression $incompatibleWarning.visible $context) | Should Be $true
-            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be $false
+            (Invoke-ImageBuildFormExpression $incompatibleWarning.visible $context) | Should -Be $true
+            (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be $false
             $sizes = $results.Clone()
             $sizes.hibernationAccelNetVMSizes = @()
             foreach ($existing in @($false, $true)) {
                 $context = New-ImageBuildFormContext -SecurityType $securityType -Existing $existing -Sizes $sizes -Hibernate $true -Accelerated $true
-                (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should Be $false
-                (Invoke-ImageBuildFormExpression $regionalWarning.visible $context) | Should Be $existing
-                (Invoke-ImageBuildFormExpression $newFeatureWarning.visible $context) | Should Be (-not $existing)
+                (Invoke-ImageBuildFormExpression $vmSize.visible $context) | Should -Be $false
+                (Invoke-ImageBuildFormExpression $regionalWarning.visible $context) | Should -Be $existing
+                (Invoke-ImageBuildFormExpression $newFeatureWarning.visible $context) | Should -Be (-not $existing)
             }
         }
     }
 
     It 'preserves the existing selector branches and output parameter bindings' {
-        @($transforms.PSObject.Properties).Count | Should Be 7
-        $vmSize.constraints.allowedValues | Should Not Match 'scsiOnlyVMSizes|scsiAccelNetVMSizes'
-        $vmSize.constraints.allowedValues | Should Match 'existingImageDefinition\.DiskControllerTypes'
-        $vmSize.constraints.allowedValues | Should Match 'transformed\.acceleratedNetworkingVMSizes'
-        $vmSize.constraints.allowedValues | Should Match 'transformed\.defaultVMSizes'
-        $vmSize.constraints.allowedValues.StartsWith("[map(if(steps('imageDest').imageDefinition.useExImageDef,") | Should Be $true
-        $form.view.outputs.parameters.vmSize | Should Be "[steps('vmProps').vmSize]"
+        @($transforms.PSObject.Properties).Count | Should -Be 7
+        $vmSize.constraints.allowedValues | Should -Not -Match 'scsiOnlyVMSizes|scsiAccelNetVMSizes'
+        $vmSize.constraints.allowedValues | Should -Match 'existingImageDefinition\.DiskControllerTypes'
+        $vmSize.constraints.allowedValues | Should -Match 'transformed\.acceleratedNetworkingVMSizes'
+        $vmSize.constraints.allowedValues | Should -Match 'transformed\.defaultVMSizes'
+        $vmSize.constraints.allowedValues.StartsWith("[map(if(steps('imageDest').imageDefinition.useExImageDef,") | Should -Be $true
+        $form.view.outputs.parameters.vmSize | Should -Be "[steps('vmProps').vmSize]"
         foreach ($binding in $featureOutputs.GetEnumerator()) {
             $form.view.outputs.parameters.($binding.Key) |
-                Should Be "[if(and(equals(steps('imageDest').imageDefinition.useExImageDef, false), not(equals(steps('imageDest').imageDefinition.securityType, 'ConfidentialVM'))), steps('imageDest').imageDefinition.$($binding.Value), false)]"
+                Should -Be "[if(and(equals(steps('imageDest').imageDefinition.useExImageDef, false), not(equals(steps('imageDest').imageDefinition.securityType, 'ConfidentialVM'))), steps('imageDest').imageDefinition.$($binding.Value), false)]"
         }
     }
 }

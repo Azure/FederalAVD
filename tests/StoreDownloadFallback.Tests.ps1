@@ -1,14 +1,15 @@
-$path = Join-Path (Split-Path -Parent $PSScriptRoot) 'deployments\Update-ImageArtifacts.ps1'
-$ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
-foreach ($name in @('Get-MicrosoftStorePackageUrl', 'Save-MicrosoftStorePackages', 'Invoke-WingetOrStoreDownload', 'Optimize-SharedDependencies')) {
-    $definition = $ast.Find({
-        param($node)
-        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
-    }, $true)
-    . ([scriptblock]::Create($definition.Extent.Text))
+BeforeAll {
+    $path = Join-Path (Split-Path -Parent $PSScriptRoot) 'deployments\Update-ImageArtifacts.ps1'
+    $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$null)
+    foreach ($name in @('Get-MicrosoftStorePackageUrl', 'Save-MicrosoftStorePackages', 'Invoke-WingetOrStoreDownload', 'Optimize-SharedDependencies')) {
+        $definition = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+        }, $true)
+        . ([scriptblock]::Create($definition.Extent.Text))
+    }
+    function winget { throw 'Tests must mock WinGet; the real executable must never run.' }
 }
-
-function winget { throw 'Tests must mock WinGet; the real executable must never run.' }
 
 Describe 'Automatic Store fallback eligibility' {
     It 'limits fallback to connected x64-compatible preserve-layout Store product IDs' {
@@ -21,14 +22,14 @@ Describe 'Automatic Store fallback eligibility' {
             'param($downloadsParametersPrefix, $PreserveLayout, $Download, $WingetSource, $WingetArch)' +
             "`n" + $assignment.Right.Extent.Text
         )
-        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should Be $true
-        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore neutral) | Should Be $true
-        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } winget x64) | Should Be $false
-        (& $evaluate public $false @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should Be $false
-        (& $evaluate public $true @{ WingetId = 'Microsoft.PowerShell' } msstore x64) | Should Be $false
-        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore arm64) | Should Be $false
-        (& $evaluate secret $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should Be $false
-        (& $evaluate topsecret $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should Be $false
+        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should -Be $true
+        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore neutral) | Should -Be $true
+        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } winget x64) | Should -Be $false
+        (& $evaluate public $false @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should -Be $false
+        (& $evaluate public $true @{ WingetId = 'Microsoft.PowerShell' } msstore x64) | Should -Be $false
+        (& $evaluate public $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore arm64) | Should -Be $false
+        (& $evaluate secret $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should -Be $false
+        (& $evaluate topsecret $true @{ WingetId = '9N4WGH0Z6VHQ' } msstore x64) | Should -Be $false
     }
 }
 
@@ -92,23 +93,23 @@ Describe 'Microsoft Store fallback package staging' {
         Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output
         $main = @(Get-ChildItem -LiteralPath $global:FederalAvdStoreFallbackTest.Output -File)
-        $main.Count | Should Be 1
-        $main[0].Name | Should Be 'Example.App_2.0.0.0_neutral_~_abcdefghijklm.msixbundle'
+        $main.Count | Should -Be 1
+        $main[0].Name | Should -Be 'Example.App_2.0.0.0_neutral_~_abcdefghijklm.msixbundle'
         $dependencies = @(Get-ChildItem (Join-Path $global:FederalAvdStoreFallbackTest.Output 'Dependencies') -Recurse -File)
-        $dependencies.Count | Should Be 3
-        @($dependencies | Where-Object Name -match 'arm|1\.0\.0\.0').Count | Should Be 0
-        $global:FederalAvdStoreFallbackTest.Downloads.Count | Should Be 4
-        @($global:FederalAvdStoreFallbackTest.Downloads | Where-Object Scheme -ne https).Count | Should Be 0
+        $dependencies.Count | Should -Be 3
+        @($dependencies | Where-Object Name -match 'arm|1\.0\.0\.0').Count | Should -Be 0
+        $global:FederalAvdStoreFallbackTest.Downloads.Count | Should -Be 4
+        @($global:FederalAvdStoreFallbackTest.Downloads | Where-Object Scheme -ne https).Count | Should -Be 0
         Optimize-SharedDependencies -ParentDir $global:FederalAvdStoreFallbackTest.Root | Out-Null
-        @(Get-ChildItem (Join-Path $global:FederalAvdStoreFallbackTest.Root 'SharedDependencies') -File).Count | Should Be 3
+        @(Get-ChildItem (Join-Path $global:FederalAvdStoreFallbackTest.Root 'SharedDependencies') -File).Count | Should -Be 3
     }
 
     It 'fails instead of falling back to an older unencrypted main version' {
         $global:FederalAvdStoreFallbackTest.Packages += New-TestStoreLink 'Example.App' '3.0.0.0' neutral $true $true
         { Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output } |
-            Should Throw 'newest Store package'
-        $global:FederalAvdStoreFallbackTest.Downloads.Count | Should Be 0
+            Should -Throw -ExpectedMessage '*newest Store package*'
+        $global:FederalAvdStoreFallbackTest.Downloads.Count | Should -Be 0
     }
 
     It 'does not mistake a same-family resource package for the main app' {
@@ -118,29 +119,29 @@ Describe 'Microsoft Store fallback package staging' {
         Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output
         @(Get-ChildItem -LiteralPath $global:FederalAvdStoreFallbackTest.Output -File)[0].Name |
-            Should Be 'Example.App_2.0.0.0_neutral_~_abcdefghijklm.msixbundle'
+            Should -Be 'Example.App_2.0.0.0_neutral_~_abcdefghijklm.msixbundle'
     }
 
     It 'fails explicitly when the newest required dependency is encrypted' {
         $global:FederalAvdStoreFallbackTest.Packages += New-TestStoreLink 'Example.Framework' '3.0.0.0' x64 $false $true
         { Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output } |
-            Should Throw 'newest Store dependency'
+            Should -Throw -ExpectedMessage '*newest Store dependency*'
     }
 
     It 'checks SHA256 even when a legacy SHA1 digest is also supplied and removes failed partial files' {
         $global:FederalAvdStoreFallbackTest.Corrupt = $true
         { Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output } |
-            Should Throw 'SHA256 mismatch'
-        @(Get-ChildItem -LiteralPath $global:FederalAvdStoreFallbackTest.Output -Recurse -File).Count | Should Be 0
+            Should -Throw -ExpectedMessage '*SHA256 mismatch*'
+        @(Get-ChildItem -LiteralPath $global:FederalAvdStoreFallbackTest.Output -Recurse -File).Count | Should -Be 0
     }
 
     It 'allows Microsoft-provided HTTP only when SHA256 can verify the package' {
         $global:FederalAvdStoreFallbackTest.Packages[1].Url = 'http://tlu.dl.delivery.mp.microsoft.com/package'
         Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output
-        @($global:FederalAvdStoreFallbackTest.Downloads | Where-Object Scheme -eq http).Count | Should Be 1
+        @($global:FederalAvdStoreFallbackTest.Downloads | Where-Object Scheme -eq http).Count | Should -Be 1
     }
 
     It 'rejects HTTP packages without SHA256 instead of accepting only a SHA1 digest' {
@@ -148,29 +149,29 @@ Describe 'Microsoft Store fallback package staging' {
         $global:FederalAvdStoreFallbackTest.Packages[1].Sha256Digest = ''
         { Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output } |
-            Should Throw 'requires a SHA256 digest'
-        $global:FederalAvdStoreFallbackTest.Downloads.Count | Should Be 0
+            Should -Throw -ExpectedMessage '*requires a SHA256 digest*'
+        $global:FederalAvdStoreFallbackTest.Downloads.Count | Should -Be 0
     }
 
     It 'can verify a legacy SHA1 digest for a Microsoft-provided HTTPS URL' {
         $global:FederalAvdStoreFallbackTest.Packages[1].Sha256Digest = ''
         Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output
-        @(Get-ChildItem -LiteralPath $global:FederalAvdStoreFallbackTest.Output -File).Count | Should Be 1
+        @(Get-ChildItem -LiteralPath $global:FederalAvdStoreFallbackTest.Output -File).Count | Should -Be 1
     }
 
     It 'rejects a byte-size mismatch before accepting the downloaded file' {
         $global:FederalAvdStoreFallbackTest.Packages[1].Size = 100
         { Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output } |
-            Should Throw 'byte-size mismatch'
+            Should -Throw -ExpectedMessage '*byte-size mismatch*'
     }
 
     It 'does not stage dependencies as the main app when the catalog family is missing' {
         foreach ($package in $global:FederalAvdStoreFallbackTest.Packages) { $package.IsMainPackage = $false }
         { Save-MicrosoftStorePackages -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreFallbackTest.Output } |
-            Should Throw 'no identifiable x64/neutral main package'
+            Should -Throw -ExpectedMessage '*no identifiable x64/neutral main package*'
     }
 
     It 'packages an existing-style customer entry end to end and persists deduplicated offline files' {
@@ -218,16 +219,16 @@ function Get-MicrosoftStorePackageUrl {
         finally {
             $env:TEMP = $originalTemp
         }
-        Test-Path (Join-Path $repo 'export\BuiltIn-UWP-Apps.zip') | Should Be $true
+        Test-Path (Join-Path $repo 'export\BuiltIn-UWP-Apps.zip') | Should -Be $true
         Get-Content -LiteralPath (Join-Path $repo 'export\uploadedFileVersionInfo.txt') -Raw |
-            Should Match 'DownloadProvider = MicrosoftStore'
-        @(Get-ChildItem (Join-Path $customer 'artifacts\BuiltIn-UWP-Apps\SharedDependencies') -File).Count | Should Be 3
-        Test-Path (Join-Path $customer 'artifacts\BuiltIn-UWP-Apps\HEVCVideoExtension\Dependencies') | Should Be $false
+            Should -Match 'DownloadProvider = MicrosoftStore'
+        @(Get-ChildItem (Join-Path $customer 'artifacts\BuiltIn-UWP-Apps\SharedDependencies') -File).Count | Should -Be 3
+        Test-Path (Join-Path $customer 'artifacts\BuiltIn-UWP-Apps\HEVCVideoExtension\Dependencies') | Should -Be $false
         $archive = [IO.Compression.ZipFile]::OpenRead((Join-Path $repo 'export\BuiltIn-UWP-Apps.zip'))
         try {
-            ($archive.Entries.FullName -join "`n") | Should Match 'Example.App_2.0.0.0'
-            ($archive.Entries.FullName -join "`n") | Should Match 'SharedDependencies'
-            ($archive.Entries.FullName -join "`n") | Should Not Match 'Example.App_1.0.0.0'
+            ($archive.Entries.FullName -join "`n") | Should -Match 'Example.App_2.0.0.0'
+            ($archive.Entries.FullName -join "`n") | Should -Match 'SharedDependencies'
+            ($archive.Entries.FullName -join "`n") | Should -Not -Match 'Example.App_1.0.0.0'
         }
         finally {
             $archive.Dispose()
@@ -268,7 +269,7 @@ Describe 'WinGet-first download routing' {
     It 'does not call the Store resolver when WinGet succeeds' {
         $result = Invoke-WingetOrStoreDownload -ProductId 9N4WGH0Z6VHQ -WingetArguments @('download') `
             -OutputDirectory $global:FederalAvdStoreRoutingTest.Root -AllowStoreFallback $true
-        $result.Source | Should Be WinGet
+        $result.Source | Should -Be WinGet
         Assert-MockCalled Save-MicrosoftStorePackages -Times 0 -Exactly -Scope It
     }
 
@@ -276,8 +277,8 @@ Describe 'WinGet-first download routing' {
         $global:FederalAvdStoreRoutingTest.ExitCode = 1
         $result = Invoke-WingetOrStoreDownload -ProductId 9N4WGH0Z6VHQ -WingetArguments @('download') `
             -OutputDirectory $global:FederalAvdStoreRoutingTest.Root -AllowStoreFallback $true
-        $result.Source | Should Be MicrosoftStore
-        Test-Path (Join-Path $global:FederalAvdStoreRoutingTest.Root 'winget.msix') | Should Be $false
+        $result.Source | Should -Be MicrosoftStore
+        Test-Path (Join-Path $global:FederalAvdStoreRoutingTest.Root 'winget.msix') | Should -Be $false
         Assert-MockCalled Save-MicrosoftStorePackages -Times 1 -Exactly -Scope It -ParameterFilter { $ProductId -eq '9N4WGH0Z6VHQ' }
     }
 
@@ -285,7 +286,7 @@ Describe 'WinGet-first download routing' {
         $global:FederalAvdStoreRoutingTest.HasWinGet = $false
         $result = Invoke-WingetOrStoreDownload -ProductId 9N4WGH0Z6VHQ `
             -OutputDirectory $global:FederalAvdStoreRoutingTest.Root -AllowStoreFallback $true
-        $result.Source | Should Be MicrosoftStore
+        $result.Source | Should -Be MicrosoftStore
         Assert-MockCalled winget -Times 0 -Exactly -Scope It
     }
 
@@ -293,14 +294,14 @@ Describe 'WinGet-first download routing' {
         $global:FederalAvdStoreRoutingTest.HasPackage = $false
         $result = Invoke-WingetOrStoreDownload -ProductId 9N4WGH0Z6VHQ -WingetArguments @('download') `
             -OutputDirectory $global:FederalAvdStoreRoutingTest.Root -AllowStoreFallback $true
-        $result.Source | Should Be MicrosoftStore
+        $result.Source | Should -Be MicrosoftStore
     }
 
     It 'does not fall back for ineligible entries' {
         $global:FederalAvdStoreRoutingTest.ExitCode = 1
         { Invoke-WingetOrStoreDownload -ProductId Microsoft.PowerShell -WingetArguments @('download') `
             -OutputDirectory $global:FederalAvdStoreRoutingTest.Root -AllowStoreFallback $false } |
-            Should Throw 'exit code 1'
+            Should -Throw -ExpectedMessage '*exit code 1*'
         Assert-MockCalled Save-MicrosoftStorePackages -Times 0 -Exactly -Scope It
     }
 
@@ -309,6 +310,6 @@ Describe 'WinGet-first download routing' {
         $global:FederalAvdStoreRoutingTest.FailFallback = $true
         { Invoke-WingetOrStoreDownload -ProductId 9N4WGH0Z6VHQ -WingetArguments @('download') `
             -OutputDirectory $global:FederalAvdStoreRoutingTest.Root -AllowStoreFallback $true } |
-            Should Throw 'Store fallback failed'
+            Should -Throw -ExpectedMessage '*Store fallback failed*'
     }
 }

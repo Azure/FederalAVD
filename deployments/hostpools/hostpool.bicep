@@ -4,7 +4,7 @@ import { publicNetworkAccessMode } from '../shared/modules/orchestration/network
 import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
-import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
+import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -94,7 +94,7 @@ param index int = -1
 // Produced automatically by the Portal UI; when deploying via ARM/Bicep CLI, omit to accept the
 // defaults.
 @description('Optional. Shared naming-convention overrides; omitted properties retain defaults. Include purpose to distinguish same-type resources. Abbreviations may be supplied separately.')
-param namingConvention object = {
+param namingConvention namingConventionConfig = {
   components: ['resourceType', 'workload', 'purpose', 'location']
   delimiter: '-'
   workload: 'avd'
@@ -174,7 +174,7 @@ param vmOUPath string = ''
 param controlPlaneLocation string = deployment().location
 
 @minLength(1)
-@description('Optional. Azure location for session hosts and supporting resources. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location.')
+@description('Optional. Azure location for session hosts, storage, monitoring, Key Vaults and backup. Defaults to controlPlaneLocation and must match the session-host subnet virtual network location.')
 param virtualMachinesLocation string = controlPlaneLocation
 
 @description('Optional. The subscription Id where the AVD Control Plane resources are deployed. If not provided, the deployment subscription will be used.')
@@ -758,6 +758,9 @@ param tags object = {}
 @description('Optional. The vm size of the management VM.')
 param deploymentVmSize string = 'Standard_B2s'
 
+@description('Optional. Domain join an otherwise-required deployment VM using the session-host domain, OU, and credentials. Requires AD DS or Entra Domain Services. Azure NetApp Files retains its automatic domain join.')
+param domainJoinDeploymentVirtualMachine bool = false
+
 var cmkIsRequested = contains(keyManagementStorage, 'CustomerManaged') || contains(
   keyManagementRecoveryServicesVault,
   'CustomerManaged'
@@ -781,7 +784,7 @@ module sharedMonitoring '../shared/modules/orchestration/monitoring/monitoring.b
   params: {
     azureMonitorPrivateLinkScopeResourceId: azureMonitorPrivateLinkScopeResourceId
     dataCollectionEndpointName: naming.sharedDataCollectionEndpointName
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     logAnalyticsWorkspaceName: naming.sharedLogAnalyticsWorkspaceName
     resourceGroupMonitoring: sharedMonitoringResourceGroupName
     tags: tags
@@ -809,6 +812,7 @@ module sharedKeyVaults '../shared/modules/orchestration/keyVaults/keyVaults.bice
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
     resourceGroupName: sharedOperationsResourceGroupName
+    location: virtualMachinesLocation
     deploySecretsKeyVault: deploySecretsKeyVault
     secretsKeyVaultName: naming.sharedKeyVaultNameSecrets
     secretsKeyVaultEnableSoftDelete: secretsKeyVaultEnableSoftDelete
@@ -887,7 +891,7 @@ module sharedFilesBackup '../shared/modules/resourceModules/recoveryServices/fsl
     manageBackupPolicy: true
     vaultName: naming.sharedRecoveryServicesVaultNameFSLogix
     resourceGroupOperations: sharedOperationsResourceGroupName
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     logAnalyticsWorkspaceResourceId: sharedLogAnalyticsWorkspaceResourceId
     privateEndpoint: sharedPrivateEndpoint
     privateEndpointSubnetResourceId: operationsPrivateEndpointSubnetResourceId
@@ -922,6 +926,9 @@ var effectiveMonitoringSubscription = empty(monitoringSubscriptionId)
 var rbacSubs = union([effectiveControlPlaneSubscription], [subscription().subscriptionId])
 
 var createDeploymentVm = (deployFSLogixStorage && identitySolution != 'EntraId') || confidentialVMOSDiskEncryption || !empty(desktopFriendlyName)
+var deploymentVmDomainJoinIsValid = !domainJoinDeploymentVirtualMachine || (createDeploymentVm && contains(identitySolution, 'DomainServices') && !empty(domainName) && (!empty(existingCredentialsKeyVaultResourceId) || (!empty(domainJoinUserPrincipalName) && !empty(domainJoinUserPassword))))
+  ? true
+  : fail('domainJoinDeploymentVirtualMachine requires an otherwise-required deployment VM, ActiveDirectoryDomainServices or EntraDomainServices, domainName, and domain-join credentials or existingCredentialsKeyVaultResourceId.')
 var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups)
 
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
@@ -1340,7 +1347,7 @@ var vmConfigurationTags = union(
 module sharedOperationsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedOperationsResourceGroup) {
   scope: subscription(effectiveControlPlaneSubscription)
   params: {
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     name: sharedOperationsResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -1349,7 +1356,7 @@ module sharedOperationsResourceGroup '../shared/modules/resourceModules/resource
 module sharedMonitoringResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (deploySharedMonitoring) {
   scope: subscription(effectiveMonitoringSubscription)
   params: {
-    location: controlPlaneLocation
+    location: virtualMachinesLocation
     name: sharedMonitoringResourceGroupName
     tags: tags[?'Microsoft.Resources/resourceGroups'] ?? {}
   }
@@ -1376,7 +1383,7 @@ module controlPlaneResourceGroup '../shared/modules/resourceModules/resources/re
 
 module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = {
   params: {
-    location: virtualMachinesLocation
+    location: deploymentVmDomainJoinIsValid ? virtualMachinesLocation : virtualMachinesLocation
     name: effectiveHostsResourceGroup
     tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, vmConfigurationTags, fslogixConfigurationTags, {
       'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.hostPoolName}'
@@ -1437,7 +1444,7 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
-    domainJoinDeploymentVirtualMachine: split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
+    domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
@@ -1576,7 +1583,7 @@ module controlPlane 'modules/control-plane/controlPlane.bicep' = {
       hpNamingConvention: string({
         components: namingConvention.?components ?? ['resourceType', 'workload', 'purpose', 'location']
         delimiter: namingConvention.?delimiter ?? '-'
-        workload: !empty(namingConvention.?workload ?? '') ? namingConvention.workload : 'avd'
+        workload: !empty(namingConvention.?workload ?? '') ? namingConvention.?workload ?? 'avd' : 'avd'
         vmsLocationAbbreviation: naming.vmLocationAbbreviation
       })
     })

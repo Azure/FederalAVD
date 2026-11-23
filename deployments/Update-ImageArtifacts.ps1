@@ -23,7 +23,7 @@ Obtain this from the imageManagement deployment output 'artifactsStorageAccountR
 Mutually exclusive with -StorageAccountName / -ResourceGroupName.
 
 Example:
-  /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsuse2abc123
+  /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-use2/providers/Microsoft.Storage/storageAccounts/saimgassetsabc123use2
 
 .PARAMETER StorageAccountName
 The name of the image management artifacts storage account.
@@ -79,34 +79,34 @@ delivery service if winget fails or is unavailable. The fallback stages verified
 x64-compatible packages and dependencies. It is disabled for air-gapped download manifests.
 
 .PARAMETER TempDir
-Temporary directory used during artifact packaging. Defaults to $Env:Temp.
+Temporary directory used during artifact packaging. Defaults to [System.IO.Path]::GetTempPath().
 Use a path on a high-performance drive when processing large artifact sets.
 
 .EXAMPLE
 # Standard update using resource ID
-.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsuse2abc123"
+.\Update-ImageArtifacts.ps1 -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsabc123use2"
 
 .EXAMPLE
 # Standard update using storage account name and resource group
-.\Update-ImageArtifacts.ps1 -StorageAccountName "saimgassetsuse2abc123" -ResourceGroupName "rg-avd-image-management-use2"
+.\Update-ImageArtifacts.ps1 -StorageAccountName "saimgassetsabc123use2" -ResourceGroupName "rg-avd-image-management-use2"
 
 .EXAMPLE
 # Air-gapped update - skip internet downloads, just re-package and upload existing artifacts
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsuse2abc123" `
+    -StorageAccountName "saimgassetsabc123use2" `
     -ResourceGroupName "rg-avd-image-management-use2" `
     -SkipDownloadingNewSources
 
 .EXAMPLE
 # Clean upload - delete existing blobs first, then upload fresh
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsuse2abc123" `
+    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsabc123use2" `
     -DeleteExistingBlobs
 
 .EXAMPLE
 # Merge additional downloads automatically when customer\parameters\imageManagement\downloads.json exists
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsuse2abc123" `
+    -StorageAccountName "saimgassetsabc123use2" `
     -ResourceGroupName "rg-avd-image-management-use2"
 
 .EXAMPLE
@@ -151,7 +151,8 @@ param(
     [string]$CustomerDownloadsMode = 'Merge',
 
     [Parameter(Mandatory = $false)]
-    [string]$TempDir = "$Env:Temp",
+    [ValidateNotNullOrEmpty()]
+    [string]$TempDir = [System.IO.Path]::GetTempPath(),
 
     [Parameter(Mandatory = $false)]
     [switch]$CopyDownloadsToCustomerArtifacts
@@ -159,6 +160,13 @@ param(
 
 #region Variables
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($TempDir)) {
+    throw 'TempDir must be a nonempty filesystem directory path.'
+}
+if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    throw 'Run Update-ImageArtifacts.ps1 from a saved file in a complete FederalAVD checkout, not pasted code or Invoke-Expression.'
+}
+$RunningOnWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or ($IsWindows -eq $true)
 $ScriptStartTime = Get-Date
 $LocalPackageMode = $PSCmdlet.ParameterSetName -eq 'LocalPackage'
 
@@ -338,6 +346,60 @@ function Get-InternetUrl {
     }
 
     Return [string]$ResolvedUrls[0]
+}
+
+function Get-GitHubAssetRelease {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)][string]$Repo,
+        [Parameter(Mandatory)][string[]]$FileNamePatterns,
+        [Parameter(Mandatory)][string]$SoftwareName,
+        [Parameter(Mandatory)][hashtable]$ReleaseCache
+    )
+
+    $ReleasesUri = "https://api.github.com/repos/$Repo/releases"
+    if (-not $ReleaseCache.ContainsKey($Repo)) {
+        $ReleaseCache[$Repo] = @{
+            Latest = Invoke-RestMethod -Method GET -Uri "$ReleasesUri/latest" -ErrorAction Stop
+        }
+    }
+    $Cached = $ReleaseCache[$Repo]
+    $Candidates = @($Cached.Latest)
+    $CheckingLatest = $true
+    while ($Candidates.Count -gt 0) {
+        foreach ($Candidate in $Candidates) {
+            $MissingPatterns = @()
+            foreach ($Pattern in $FileNamePatterns) {
+                $Matches = @($Candidate.assets | Where-Object name -like $Pattern)
+                if ($Matches.Count -gt 1) {
+                    throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$Pattern' in '$Repo' release '$($Candidate.tag_name)'; found $($Matches.Count)."
+                }
+                if ($Matches.Count -eq 0) {
+                    $MissingPatterns += $Pattern
+                }
+            }
+            if ($MissingPatterns.Count -eq 0) {
+                if (-not $CheckingLatest) {
+                    Write-Warning "[$SoftwareName] Using GitHub release '$($Candidate.tag_name)' from '$Repo' instead of latest '$($Cached.Latest.tag_name)' because the latest release lacks required assets."
+                }
+                return $Candidate
+            }
+        }
+        if (-not $CheckingLatest) {
+            break
+        }
+        Write-Warning "[$SoftwareName] Latest GitHub release '$($Cached.Latest.tag_name)' in '$Repo' is missing asset pattern(s): $($MissingPatterns -join ', '). Checking the 100 most recent releases for a stable release containing all required assets."
+        if (-not $Cached.ContainsKey('Releases')) {
+            $Cached.Releases = Invoke-RestMethod -Method GET -Uri "${ReleasesUri}?per_page=100" -ErrorAction Stop
+        }
+        $Candidates = @(
+            $Cached.Releases |
+                Where-Object { -not $_.draft -and -not $_.prerelease -and $_.tag_name -ne $Cached.Latest.tag_name } |
+                Sort-Object { [datetime]$_.published_at } -Descending
+        )
+        $CheckingLatest = $false
+    }
+    throw "[$SoftwareName] No stable GitHub release in '$Repo' matches every required asset pattern ($($FileNamePatterns -join ', ')) within the 100 most recent releases."
 }
 
 Function Get-InternetFile {
@@ -1241,7 +1303,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             break
         }
     }
-    If ($RequiresWinget -and -not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
+    If ($RequiresWinget -and $RunningOnWindows -and -not (Get-Command -Name 'winget' -ErrorAction SilentlyContinue)) {
         Write-Output "Winget not found. Attempting to register the App Installer package..."
         try {
             # 'Register' re-associates an already-staged Appx package with the current user context.
@@ -1270,16 +1332,21 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
     $packageCount = ($Downloads.PSObject.Properties.Name).Count
     Write-Output "Processing $packageCount package(s) from '$downloadFilePath'."
 
-    # Cache release metadata by repository so multiple assets requested from the same release
-    # are resolved atomically and do not consume one GitHub API request per asset.
+    # Cache latest and recent releases, but resolve each entry's complete asset set together.
     $GitHubReleaseCache = @{}
 
-    # Clean winget's own working directory so stale files from previous runs do not
-    # accumulate. winget creates %TEMP%\WinGet independently of --download-directory.
-    $WingetTempDir = Join-Path -Path $Env:TEMP -ChildPath 'WinGet'
-    If (Test-Path -Path $WingetTempDir) {
-        Write-Output "Cleaning winget temp directory '$WingetTempDir'..."
-        Remove-Item -Path $WingetTempDir -Recurse -Force -ErrorAction SilentlyContinue
+    # WinGet's cache is separate from the caller-selected artifact staging directory.
+    If ($RunningOnWindows -and $RequiresWinget) {
+        $WingetTempRoot = if ([string]::IsNullOrWhiteSpace($env:TEMP)) {
+            [System.IO.Path]::GetTempPath()
+        } else {
+            $env:TEMP
+        }
+        $WingetTempDir = Join-Path -Path $WingetTempRoot -ChildPath 'WinGet'
+        If (Test-Path -Path $WingetTempDir) {
+            Write-Output "Cleaning winget temp directory '$WingetTempDir'..."
+            Remove-Item -Path $WingetTempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     foreach ($key in $Downloads.PSObject.Properties.Name) {
@@ -1335,15 +1402,13 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
         }
         ElseIf ($null -ne $Download.GitHubRepo -and $Download.GitHubRepo -ne '') {
             $Repo = $Download.GitHubRepo
-            $ReleasesUri = "https://api.github.com/repos/$Repo/releases/latest"
             Write-Output "[$SoftwareName] Retrieving URL from GitHub ($Repo)..."
-            If (-not $GitHubReleaseCache.ContainsKey($Repo)) {
-                $GitHubReleaseCache[$Repo] = Invoke-RestMethod -Method GET -Uri $ReleasesUri
-            }
             $FileNamePatterns = @($Download.GitHubFileNamePatterns | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+            $RequiredPatterns = if ($FileNamePatterns.Count -gt 0) { $FileNamePatterns } else { @($Download.GitHubFileNamePattern) }
+            $Release = Get-GitHubAssetRelease -Repo $Repo -FileNamePatterns $RequiredPatterns -SoftwareName $SoftwareName -ReleaseCache $GitHubReleaseCache
             If ($FileNamePatterns.Count -gt 0) {
                 foreach ($FileNamePattern in $FileNamePatterns) {
-                    $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                    $MatchingAssets = @($Release.assets | Where-Object name -like $FileNamePattern)
                     If ($MatchingAssets.Count -ne 1) {
                         Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
                     }
@@ -1353,11 +1418,11 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
                         Digest = [string]$MatchingAssets[0].digest
                     }
                 }
-                Write-Output "[$SoftwareName] Resolved $($DownloadAssets.Count) asset(s) from release '$($GitHubReleaseCache[$Repo].tag_name)'."
+                Write-Output "[$SoftwareName] Resolved $($DownloadAssets.Count) asset(s) from release '$($Release.tag_name)'."
             }
             Else {
                 $FileNamePattern = $Download.GitHubFileNamePattern
-                $MatchingAssets = @($GitHubReleaseCache[$Repo].assets | Where-Object name -like $FileNamePattern)
+                $MatchingAssets = @($Release.assets | Where-Object name -like $FileNamePattern)
                 If ($MatchingAssets.Count -ne 1) {
                     Throw "[$SoftwareName] Expected exactly one GitHub release asset matching '$FileNamePattern' in '$Repo'; found $($MatchingAssets.Count)."
                 }
@@ -1594,7 +1659,7 @@ if ((!$SkipDownloadingNewSources) -and (Test-Path -Path $downloadFilePath)) {
             $VersionText = @(
                 "SoftwareName = $SoftwareName"
                 "GitHubRepo = $Repo"
-                "GitHubRelease = $($GitHubReleaseCache[$Repo].tag_name)"
+                "GitHubRelease = $($Release.tag_name)"
             )
             foreach ($DownloadAsset in $DownloadAssets) {
                 $DownloadedAssetPath = @(Get-InternetFile `

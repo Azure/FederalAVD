@@ -4,9 +4,6 @@ param workbookName string
 @description('Required. The location for the workbook.')
 param location string
 
-@description('Required. The resource ID of the Application Insights instance for this region.')
-param applicationInsightsResourceId string
-
 @description('Required. The resource ID of the Log Analytics workspace that provides the shared monitoring boundary.')
 param logAnalyticsWorkspaceResourceId string
 
@@ -15,11 +12,12 @@ param tags object = {}
 
 var workbookDisplayName = 'AVD Session Host Replacer - Enterprise Dashboard'
 
-// Load the workbook template and inject the Application Insights resource ID
+// Query only the primary workspace, even when policy exports the same component's telemetry elsewhere.
+// Schema adapters in the workbook preserve the existing dashboard parsers and native correlation.
 var workbookTemplateBase = loadJsonContent('workbookTemplate.json')
 var workbookTemplateWithFallback = union(workbookTemplateBase, {
   fallbackResourceIds: [
-    applicationInsightsResourceId
+    logAnalyticsWorkspaceResourceId
   ]
 })
 
@@ -30,7 +28,7 @@ resource workbook 'Microsoft.Insights/workbooks@2023-06-01' = {
   kind: 'shared'
   properties: {
     displayName: workbookDisplayName
-    serializedData: string(workbookTemplateWithFallback)
+    serializedData: replace(string(workbookTemplateWithFallback), '__SHR_WORKSPACE_RESOURCE_ID__', logAnalyticsWorkspaceResourceId)
     version: '1.0'
     sourceId: logAnalyticsWorkspaceResourceId
     category: 'workbook'

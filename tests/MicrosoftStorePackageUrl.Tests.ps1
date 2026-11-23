@@ -1,14 +1,16 @@
-$updaterPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'deployments\Update-ImageArtifacts.ps1'
-$updaterAst = [Management.Automation.Language.Parser]::ParseFile($updaterPath, [ref]$null, [ref]$null)
-$resolver = $updaterAst.Find({
-    param($node)
-    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MicrosoftStorePackageUrl'
-}, $true)
-. ([scriptblock]::Create($resolver.Extent.Text))
+BeforeAll {
+    $updaterPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'deployments\Update-ImageArtifacts.ps1'
+    $updaterAst = [Management.Automation.Language.Parser]::ParseFile($updaterPath, [ref]$null, [ref]$null)
+    $resolver = $updaterAst.Find({
+        param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-MicrosoftStorePackageUrl'
+    }, $true)
+    . ([scriptblock]::Create($resolver.Extent.Text))
+}
 
 Describe 'Direct Microsoft Store package link resolver' {
     BeforeEach {
-        # Pester 3 mocks called from another script do not share the test's script scope.
+        # Mocks called from another script do not share the test's script scope.
         $global:FederalAvdStoreResolverTest = @{
             SyncCalls = 0
             Scenario = 'normal'
@@ -119,36 +121,36 @@ Describe 'Direct Microsoft Store package link resolver' {
 
     It 'joins metadata across responses, filters architecture, and selects files by digest' {
         $links = @(Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 -Architecture x64)
-        $links.Count | Should Be 2
-        @($links | Where-Object Architecture -eq x64).Count | Should Be 1
-        @($links | Where-Object Architecture -eq neutral).Count | Should Be 1
-        @($links | Where-Object Architecture -eq x86).Count | Should Be 0
-        $links[0].FileName | Should Be 'example.msix'
-        $links[0].Size | Should Be 123
-        $links[0].Url | Should Be 'https://tlu.dl.delivery.mp.microsoft.com/package'
-        $links[0].IsEncrypted | Should Be $false
-        $links[0].IsMainPackage | Should Be $true
-        $links[0].PackageFamilyName | Should Be 'Example.App_abcdefghijklm'
-        $global:FederalAvdStoreResolverTest.SyncCalls | Should Be 2
+        $links.Count | Should -Be 2
+        @($links | Where-Object Architecture -eq x64).Count | Should -Be 1
+        @($links | Where-Object Architecture -eq neutral).Count | Should -Be 1
+        @($links | Where-Object Architecture -eq x86).Count | Should -Be 0
+        $links[0].FileName | Should -Be 'example.msix'
+        $links[0].Size | Should -Be 123
+        $links[0].Url | Should -Be 'https://tlu.dl.delivery.mp.microsoft.com/package'
+        $links[0].IsEncrypted | Should -Be $false
+        $links[0].IsMainPackage | Should -Be $true
+        $links[0].PackageFamilyName | Should -Be 'Example.App_abcdefghijklm'
+        $global:FederalAvdStoreResolverTest.SyncCalls | Should -Be 2
         $second = $global:FederalAvdStoreResolverTest.Requests[2].Envelope.Body.SyncUpdates
-        $second.cookie.EncryptedData.InnerText | Should Be 'refreshed-cookie'
+        $second.cookie.EncryptedData.InnerText | Should -Be 'refreshed-cookie'
         $installed = @($second.parameters.InstalledNonLeafUpdateIDs.ChildNodes | ForEach-Object InnerText)
-        ($installed -contains '10') | Should Be $true
-        ($installed -contains '11') | Should Be $false
-        @($second.parameters.OtherCachedUpdateIDs.int).Count | Should Be 3
+        ($installed -contains '10') | Should -Be $true
+        ($installed -contains '11') | Should -Be $false
+        @($second.parameters.OtherCachedUpdateIDs.int).Count | Should -Be 3
     }
 
     It 'accepts a Store URL with query parameters and RP ring' {
         $links = @(Get-MicrosoftStorePackageUrl -Uri 'https://apps.microsoft.com/detail/9wzdncrfhvn5?hl=en-US' -Ring RP)
-        $links[0].ProductId | Should Be '9WZDNCRFHVN5'
+        $links[0].ProductId | Should -Be '9WZDNCRFHVN5'
         $global:FederalAvdStoreResolverTest.Requests[1].Envelope.Body.SyncUpdates.parameters.ProductsParameters.DeviceAttributes |
-            Should Match 'FlightRing=RP;'
+            Should -Match 'FlightRing=RP;'
     }
 
     It 'accepts JSON-string fulfillment metadata and deduplicates categories' {
         $global:FederalAvdStoreResolverTest.Scenario = 'string-fulfillment'
-        @(Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5).Count | Should Be 3
-        $global:FederalAvdStoreResolverTest.SyncCalls | Should Be 2
+        @(Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5).Count | Should -Be 3
+        $global:FederalAvdStoreResolverTest.SyncCalls | Should -Be 2
     }
 
     It 'rejects non-Store URLs before making requests' {
@@ -158,44 +160,44 @@ Describe 'Direct Microsoft Store package link resolver' {
         } catch {
             $message = $_.Exception.Message
         }
-        $message | Should Match 'Specify a 12-character Store product ID'
+        $message | Should -Match 'Specify a 12-character Store product ID'
         Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
         Assert-MockCalled Invoke-WebRequest -Times 0 -Exactly -Scope It
     }
 
     It 'reports missing catalog delivery categories' {
         $global:FederalAvdStoreResolverTest.Scenario = 'no-category'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'no Store delivery category'
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*no Store delivery category*'
     }
 
     It 'reports missing delivery cookies' {
         $global:FederalAvdStoreResolverTest.Scenario = 'bad-cookie'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'did not return a cookie'
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*did not return a cookie*'
     }
 
     It 'reports SOAP faults' {
         $global:FederalAvdStoreResolverTest.Scenario = 'fault'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'Test SOAP fault'
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*Test SOAP fault*'
     }
 
     It 'does not silently return partial lists when metadata is missing' {
         $global:FederalAvdStoreResolverTest.Scenario = 'missing-files'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'without an update identity or file list'
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*without an update identity or file list*'
     }
 
     It 'bounds synchronization when the service keeps truncating' {
         $global:FederalAvdStoreResolverTest.Scenario = 'truncated'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'did not complete in 20 requests'
-        $global:FederalAvdStoreResolverTest.SyncCalls | Should Be 20
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*did not complete in 20 requests*'
+        $global:FederalAvdStoreResolverTest.SyncCalls | Should -Be 20
     }
 
     It 'compares base64 digests case-sensitively' {
         $global:FederalAvdStoreResolverTest.Scenario = 'wrong-digest'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'no download location'
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*no download location*'
     }
 
     It 'rejects non-Microsoft download locations' {
         $global:FederalAvdStoreResolverTest.Scenario = 'bad-url'
-        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should Throw 'unexpected download URL'
+        { Get-MicrosoftStorePackageUrl -ProductId 9WZDNCRFHVN5 } | Should -Throw -ExpectedMessage '*unexpected download URL*'
     }
 }

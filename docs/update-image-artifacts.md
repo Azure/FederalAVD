@@ -114,7 +114,28 @@ Secret/Top Secret packages; obtain the target-cloud versions within high instead
 | **DeleteExistingBlobs** | Switch | `$false` | Delete all existing blobs in the container before uploading. Use for a clean refresh rather than incremental update. |
 | **SkipDownloadingNewSources** | Switch | `$false` | Skip all source downloads. On high, use only after every required target-cloud file is staged through approved internal sources. |
 | **CustomerDownloadsMode** | String | `Merge` | `None` ignores the customer download overlay but retains base downloads and customer artifacts. Recommended on high. |
-| **TempDir** | String | `$Env:Temp` | Temporary directory for packaging. Use a path on a high-performance drive for large artifact sets. |
+| **TempDir** | String | `[System.IO.Path]::GetTempPath()` | Platform temporary directory for packaging; does not require `$Env:TEMP`. Use a path on a high-performance drive for large artifact sets. |
+
+### Azure Cloud Shell / Linux
+
+Run the saved script from a complete repository checkout in **PowerShell** Cloud Shell.
+PowerShell sets `$PSScriptRoot` to the script's directory when invoking the file; Cloud Shell
+does not inherently remove it. Do not paste the script body or execute downloaded text with
+`Invoke-Expression`, because the repository-relative paths require the saved script location.
+
+The script uses .NET's platform temporary directory by default, so an unset `$Env:TEMP` is
+supported. `-TempDir` overrides artifact staging; Windows-only WinGet cache maintenance uses
+Windows `TEMP` separately, falling back to the platform temporary directory if unset.
+Empty temporary paths are rejected explicitly.
+Earlier versions also read `$Env:TEMP` again during download initialization, so supplying
+`-TempDir` alone did not prevent that second null-path failure.
+
+WinGet registration, Windows PATH refresh, and WinGet cache cleanup run only on Windows.
+Entries that require an unavailable WinGet executable are skipped with a warning unless they
+qualify for the existing Store fallback. MSI metadata extraction is also Windows-only.
+For packages requiring Windows tooling, prepare them on Windows, stage the completed packages,
+then use `-SkipDownloadingNewSources` in Cloud Shell to package and upload them. Cloud Shell
+does not execute the artifact installers; those run later on Windows image or session-host VMs.
 
 ## Usage Examples
 
@@ -170,7 +191,7 @@ Set-AzContext -Subscription "<subscription-id>"
 cd C:\repos\FederalAVD\deployments
 
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-usgv/providers/Microsoft.Storage/storageAccounts/saimgassetsusgvabc123"
+    -StorageAccountResourceId "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-avd-image-management-usgv/providers/Microsoft.Storage/storageAccounts/saimgassetsabc123usgv"
 ```
 
 ### Standard Update (by Name + Resource Group)
@@ -179,7 +200,7 @@ Useful when you know the storage account name but don't have the full resource I
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsusgvabc123" `
+    -StorageAccountName "saimgassetsabc123usgv" `
     -ResourceGroupName "rg-avd-image-management-usgv"
 ```
 
@@ -189,7 +210,7 @@ Skip the download phase and re-package the existing staged artifacts directory c
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsusgvabc123" `
+    -StorageAccountName "saimgassetsabc123usgv" `
     -ResourceGroupName "rg-avd-image-management-usgv" `
     -SkipDownloadingNewSources
 ```
@@ -200,7 +221,7 @@ Delete all existing blobs first, then upload fresh:
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsusgvabc123" `
+    -StorageAccountResourceId "/subscriptions/.../storageAccounts/saimgassetsabc123usgv" `
     -DeleteExistingBlobs
 ```
 
@@ -210,7 +231,7 @@ Merge additional downloads (e.g., PowerShell 7, VS Code, LGPO) on top of the aut
 
 ```powershell
 .\Update-ImageArtifacts.ps1 `
-    -StorageAccountName "saimgassetsusgvabc123" `
+    -StorageAccountName "saimgassetsabc123usgv" `
     -ResourceGroupName "rg-avd-image-management-usgv"
 ```
 
@@ -298,14 +319,17 @@ Retrieves the latest version from a JSON API endpoint.
 
 #### 4. GitHub Releases
 
-Fetches one or more assets from the latest release of a GitHub repository.
+Fetches one or more assets from the latest release of a GitHub repository. If required assets
+are absent, warns and selects the most recently published stable, non-draft release containing
+all required assets from the 100 most recent releases. PowerShell 7 uses the official x64 ZIP
+for machine-wide image/VM Application deployment rather than falling back to an older MSI release.
 
 ```json
 "PowerShell7": {
     "Description": "PowerShell 7",
     "GitHubRepo": "PowerShell/PowerShell",
-    "GitHubFileNamePattern": "*win-x64.msi",
-    "DestinationFileName": "PowerShell7.msi",
+    "GitHubFileNamePattern": "PowerShell-7.*-win-x64.zip",
+    "DestinationFileName": "PowerShell7.zip",
     "DestinationFolders": [ "Microsoft-PowerShell-7" ]
 }
 ```
@@ -315,16 +339,24 @@ Fetches one or more assets from the latest release of a GitHub repository.
 | `GitHubRepo` | `owner/repo` path on GitHub |
 | `GitHubFileNamePattern` | Wildcard pattern that must match exactly one release asset |
 | `GitHubFileNamePatterns` | Array of wildcard patterns for a grouped download; every pattern must match exactly one asset from the same release |
-| `DestinationCleanupPatterns` | Optional wildcard patterns for stale payload files to remove from each destination before copying grouped assets; authored files are preserved |
+| `DestinationCleanupPatterns` | Optional wildcard patterns for stale payload files to remove from grouped-download destinations before copying the selected release assets |
 
 Use either `GitHubFileNamePattern` with `DestinationFileName` for one asset, or
 `GitHubFileNamePatterns` for a group whose original release filenames must be preserved. A grouped
 download writes directly to its first artifact destination and verifies any SHA256 digest published
-by GitHub. Additional destinations receive the verified files from that first destination.
+by GitHub before copying to additional destinations. Single-file downloads use the existing
+download, rename, and copy flow without automatic stale-payload cleanup.
+
+The [PowerShell 7 artifact](../customer-examples/artifacts/Microsoft-PowerShell-7/README.md)
+owns ZIP installation, native MSI/AppX migration, PATH/shortcut registration, and removal.
+The uploader only downloads and packages its payload; it does not install PowerShell on the
+preparation machine.
 
 Release metadata is cached by repository for the duration of the update. Each pattern must match
-exactly one asset; zero or multiple matches stop that download rather than selecting an arbitrary
-file.
+exactly one asset in the selected release. Multiple matches stop the download rather than selecting
+an arbitrary file; missing assets trigger the stable-release search described above. Grouped assets
+are never mixed across releases. If no complete matching release is found within the search limit,
+or the GitHub API request fails, the script stops with an error.
 
 #### 5. Winget
 
@@ -333,7 +365,8 @@ Downloads the installer for a Winget package by its package identifier or produc
 ```json
 "AdobeAcrobatReaderDC": {
     "Description": "Adobe Acrobat Reader DC",
-    "WingetId": "XPDP273C0XHQH2",
+    "WingetId": "Adobe.Acrobat.Reader.64-bit",
+    "WingetSource": "winget",
     "DestinationFileName": "AcrobatRdrDCx64.exe",
     "DestinationFolders": [ "Adobe-Acrobat-Reader-DC" ]
 }
@@ -342,6 +375,13 @@ Downloads the installer for a Winget package by its package identifier or produc
 | Field | Description |
 | --- | --- |
 | `WingetId` | Winget package identifier or Microsoft Store product code |
+| `WingetSource` | Optional explicit source: `winget` or `msstore` |
+
+The Adobe example deliberately selects the full installer from the `winget` source rather than
+the Store download bootstrapper. Installer variants can require different silent switches;
+renaming a downloaded file does not make the variants interchangeable. See the
+[Adobe artifact instructions](../customer-examples/artifacts/Adobe-Acrobat-Reader-DC/README.md)
+before replacing an existing payload.
 
 #### Automatic Store fallback after WinGet failure
 
@@ -558,7 +598,7 @@ Each subdirectory is compressed into a zip file and uploaded to the `artifacts` 
 On successful completion, the script prints the artifacts container URL:
 
 ```text
-Artifacts container URL: 'https://saimgassetsusgvabc123.blob.core.usgovcloudapi.net/artifacts/'
+Artifacts container URL: 'https://saimgassetsabc123usgv.blob.core.usgovcloudapi.net/artifacts/'
 ```
 
 Pass this URL as `artifactsContainerUri` in image build deployments.

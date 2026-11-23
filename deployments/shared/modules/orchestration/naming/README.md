@@ -5,12 +5,16 @@ FederalAVD resources. Change a rule in the shared policy, not in each deployment
 Callers supply context such as identifier, region, subscription and resource group;
 they supply explicit customer names and existing-resource adoption decisions.
 
+**Creating an add-on?** Start with the [expandable Automation Account and Function App examples](../../../../../docs/naming-convention.md#add-on-developer-quick-start).
+They show imports, the typed parameter, target context, name overrides and complete
+resource-module calls. The sections below describe the library and its maintenance.
+
 ## Where to make a change
 
 | Concern | Owner |
 | --- | --- |
-| Default convention, resource-type rules, role purposes, patterns and resource limits | Exported `namingPolicy` in [naming.bicep](./naming.bicep) |
-| Composition, formatting, location lookup and uniqueness recipes | [naming.bicep](./naming.bicep) |
+| Default convention, resource-type rules, role purposes, patterns and resource limits | Internal `namingPolicy` in [internal.bicep](./internal.bicep) |
+| Composition, formatting, location lookup and uniqueness recipes | [internal.bicep](./internal.bicep) |
 | Default resource abbreviations | [resourceAbbreviations.json](../../../data/resourceAbbreviations.json) |
 | Region abbreviations | [locations.json](../../../data/locations.json) |
 | Host-pool and FSLogix bundles, explicit location context and existing-workspace adoption | `hostPoolNames` and `fslogixNames` in [naming.bicep](./naming.bicep) |
@@ -20,10 +24,15 @@ they supply explicit customer names and existing-resource adoption decisions.
 Standard host pools, automated host pools and the dedicated PoC call the
 `hostPoolNames` bundle directly. The FSLogix Storage add-on calls the focused
 `fslogixNames` bundle and has no host-pool dependency. Shared Services, Image
-Management and Session Host Replacer use the same policy implementation directly.
+Management use their own public bundles; Session Host Replacer uses `functionAppNames`.
 Networking, PoC networking, Automation add-ons and Image
 Build also consume the shared policy. The publisher maintains explicit defaults and
 purpose tokens; Pester checks their alignment with the compiled Bicep policy.
+
+Networking accepts the same typed convention as other deployments. Component order
+replaces its removed resource-type-at-end boolean; there is no boolean-to-convention
+adapter. Existing network roles retain their empty purposes and formatting so the
+equivalent component orders preserve names.
 
 ## One entry point for every deployment
 
@@ -39,13 +48,44 @@ Function App bundle with its host-pool identifier plus the `shr` purpose.
 Private endpoint consumers use the same
 `privateEndpointName` resolver, including its 36/37-character VNet boundary.
 
-`naming.bicep` is the only supported naming import path. Do not create a
-solution-local naming engine.
+The public interface exports exactly six functions:
+`resourceNameForType`, `functionAppNames`, `hostPoolNames`, `fslogixNames`,
+`sharedServicesNames` and `imageManagementNames`, plus the shared
+`namingConventionConfig` type. Import the type for `param namingConvention
+namingConventionConfig = {}`; all properties are optional. Context and result
+shapes remain typed without requiring separate public type imports.
+
+Prefer `customToken1`/`customToken2` for static custom slots, including in
+`components`. The legacy `freeform1`/`freeform2` property and component names
+remain interchangeable aliases. Both property spellings may be supplied only
+with matching values. Unknown convention properties, invalid component names
+and wrong property types fail the typed deployment schema; runtime guards also
+validate dynamic inputs. The publisher applies the same token-alias contract.
+Presets remain deferred; `{}` selects the existing default layout.
+
+[internal.bicep](./internal.bicep) contains the implementation and repository-only
+exports needed by existing specialized callers, resource modules and policy tests.
+Those exports are not a supported extension API. New add-ons use the public
+interface; do not create a solution-local naming engine.
+
+Shared Services calls `sharedServicesNames(convention, context, overrides)`.
+Image Management calls `imageManagementNames(convention, context, galleryKeyManagement)`.
+Both contexts contain `subscriptionId`, `cloud` and the full Azure `location`.
+The bundles own region lookup, role purposes, storage budgets and hash seeds.
+Shared Services overrides cover consolidated/control-plane/global-feed groups,
+workspace names and vault names. Consolidation takes precedence for operations,
+monitoring and control-plane groups, and seeds vault names from the effective
+operations group. Explicit vault arguments take precedence over convention-level
+vault overrides. Image Management retains its existing standard/custom storage
+prefix recipes and single/double-encryption DES selection.
 
 ## Naming resources in a new add-on
 
 Use the same resource-type interface regardless of whether the add-on includes
-a Function App:
+a Function App. Each call returns one name; an add-on may call it for any
+combination of supported resource types. Group the results in a local object if
+helpful. Predefined bundles are optional and can be mixed with direct calls;
+other combinations do not require a new adapter:
 
 ```bicep
 import { resourceNameForType } from '../../shared/modules/orchestration/naming/naming.bicep'
@@ -56,8 +96,8 @@ var context = {
   location: location
   cloud: environment().name
 }
-var storageName = resourceNameForType(namingConvention, 'storageAccounts', '${identifier}-data', context)
-var vaultName = resourceNameForType(namingConvention, 'keyVaults', '${identifier}-secrets', context)
+var storageName = resourceNameForType(namingConvention, 'Microsoft.Storage/storageAccounts', '${identifier}-data', context)
+var vaultName = resourceNameForType(namingConvention, 'Microsoft.KeyVault/vaults', '${identifier}-secrets', context)
 ```
 
 The import path assumes an entry template in `deployments/add-ons/<name>/`.
@@ -65,14 +105,16 @@ An empty convention object uses the shared defaults. Use a distinct identifier
 for multiple resources of the same type in the same scope. Callers still create
 resources, apply explicit overrides and supply existing-resource IDs.
 
-To name a resource group, use `resourceGroups` with `resourceGroupName: ''`;
+To name a resource group, use `Microsoft.Resources/resourceGroups` with `resourceGroupName: ''`;
 its name has no hash and does not depend on that field. Do not make a group's
 generated name depend on itself. For all other types, pass the owning group.
 
 ## Adding or changing a rule
 
-Each `resourceTypes` entry owns its numeric `lengthLimit`, format and optional
-constraints. The separate `limits` section holds special budgets: temporary
+Each `resourceTypes` entry owns its official `azureResourceType`, optional
+`namingVariant`, numeric `lengthLimit`, format and optional constraints. The reverse
+lookup is derived from these entries; every type/variant pair must be unique.
+The separate `limits` section holds special budgets: temporary
 Windows computer names, FSLogix prefixes, Image Management prefixes/locations,
 the short `uniqueSuffix` (six characters), and the generic
 `defaultUniqueLength` (six characters). Types marked `globallyUnique: true`
@@ -86,7 +128,12 @@ owns a separate copy of the `operations` purpose. Changing its purpose changes
 both, including the group used to seed associated globally unique names.
 
 Use `resourceNameForType` or `functionAppNames` for new identifier-based add-ons.
-Role-based deployments use `resourceName`; `namePattern` handles
+Internal role composition uses `resourceName` as a thin adapter to the same
+composer, formatter and validators as `resourceNameForType`. Roles supply
+purpose and intentional workload/casing/format exceptions rather than a second
+naming algorithm. Only intermediate temporary-computer-name fragments bypass
+resource-length checks; their final lifecycle helper applies its own budget.
+`namePattern` handles
 purpose-specific runtime patterns. Do not copy convention
 defaults or invent local resource formatting/hash recipes in a caller.
 
@@ -96,24 +143,34 @@ Storage accounts, Key Vaults and Function Apps need globally unique names in
 their service namespace; deterministic hashes help avoid collisions but do not
 guarantee availability. Most other resources only need uniqueness within their
 owning scope, so a clear purpose or identifier can be sufficient without a hash.
-A hash can also disambiguate identifiers that become identical after formatting
-and names whose convention omits a distinguishing component.
+One scope hash is calculated from the lowercased subscription ID, owning
+resource-group name and full region. It excludes cloud, purpose, host-pool
+identifier, resource type and naming-convention choices. Cloud still selects
+the region-abbreviation map. The default suffix is
+six characters. For example, `kv-avd-sec-abc123-use` and
+`kv-avd-enc-abc123-use` share an illustrative `abc123` suffix. Both shared vault
+paths use `resourceNameForType`; neither uses the consuming host-pool identifier.
+Image Management and generated FSLogix prefixes use the same scope recipe.
 
-The established role-based interface adds uniqueness only where its recipes
-require it. The identifier-based `resourceNameForType` interface adds a hash only
+The `resourceNameForType` interface adds a hash only
 for Storage accounts, Key Vaults and Function Apps. Other types use the formatted
 identifier and selected components without a hash; overlength names fail rather
 than truncate. Callers must select distinct formatted names within the target
 scope, including when identifiers normalize identically or location is omitted.
+For example, `inv_app` and `inv-app` produce the same formatted name and hash;
+the hash is not a second application identity. Use distinct formatted purposes.
 The generic Function App bundle therefore hashes its app and storage names, but
 not its Insights or storage-CMK identity names. Hosting plans are named separately
 with their owner's purpose, without a hash.
 
 SHR uses the generic Function App bundle directly, without its former adapter
-or hashed Insights recipe. Other production role-based recipes remain unchanged,
-including build-run identities and private-endpoint VNet shortening. Changing
-an already deployed name requires an explicit resource-lifecycle decision;
-the common helper does not migrate resources automatically.
+or hashed Insights recipe. Build-run identities, operation IDs and private-endpoint
+VNet shortening serve different lifecycles and are not stable service-scope
+hashes. The new scope recipe intentionally changes earlier generated hash-based
+names. Retain existing resources through supported existing IDs or explicit
+names, or plan a migration; the helper does not rename, rediscover or migrate
+old resources automatically. Image Management has no per-account name override.
+See the [operator migration guidance](../../../../../docs/naming-convention.md#one-scope-one-hash).
 
 After editing the native policy or abbreviation catalog:
 
@@ -134,7 +191,7 @@ also used inside the policy, keeping small imports free of the full catalog.
 
 ### Portal and deployment boundary
 
-The naming policy is a native exported object in `naming.bicep`, not an Azure
+The naming policy is a native internal object in `internal.bicep`, not an Azure
 Policy definition. The separate abbreviation and location catalogs remain JSON.
 There is no policy JSON file, synchronization script or generated Portal snapshot.
 
@@ -168,16 +225,20 @@ Azure acceptance test or proof that arbitrary customer conventions are valid.
 | Surface | Existing behavior and constraint |
 | --- | --- |
 | Convention composition | Shared helpers merge defaults and abbreviation overrides; role purposes remain centralized. Missing `purpose` can make same-type resources collide. |
-| Host pools and Shared Services | Scoped subscription/resource-group seeds match for shared vaults; control-plane and VM regions can differ. Existing workspace adoption and explicit names must remain authoritative. |
+| Host pools and Shared Services | Shared vaults use the same subscription/group/location hash and fixed `sec`/`enc` purposes; consuming host-pool identifiers are irrelevant. Control-plane and VM regions can differ. |
 | Storage | Image Management and FSLogix retain specialized prefix budgets. Replacer uses the common Function App storage name and requires an override if it exceeds 24 characters. |
-| Function Apps and Key Vaults | The identifier-based API validates full generated lengths without truncation. Established role-based `resourceName` formatters retain their existing budgets. |
+| Function Apps and Key Vaults | Generated names fail on overlength instead of truncating. Complete formatted purposes remain readable; globally named resources share the scope suffix. Explicit overrides bypass generated defaults. |
 | Networking and Automation | Some roles intentionally omit a purpose or workload. These are role-specific rules, not defaults for every add-on. |
 | Runtime patterns and Image Build | `SHNAME`, `TOKEN`, `##`, private-endpoint placeholders, and per-run build identities have different lifecycles from stable service names. |
 | Portal | Literal defaults and fallbacks are checked for drift. Existing client-side warnings are advisory, not authoritative deployment naming validation. |
 | Publisher | PowerShell composes Template Spec names from explicit defaults/catalog entries and shared abbreviations/locations. Keep defaults and convention semantics covered by parity tests. |
 
-New add-ons use the identifier-based interface below for explicit validation and
-length budgets. Role-based naming uses `resourceName` and the policy's role recipes.
+New add-ons use the identifier-based interface below. Both paths apply common
+convention validation and type budgets. Role rules can omit purpose only for
+resources with no role purpose, and retain established case and delimiters where
+Azure permits them. Invalid/empty selections, invalid selected tokens and
+overlength role names now fail instead of passing through. Complete explicit
+overrides remain outside generation and retain their existing precedence.
 
 ## Adding a Function App add-on
 
@@ -197,7 +258,7 @@ var names = functionAppNames(namingConvention, '${identifier}-job', context, {
   functionAppName: functionAppNameOverride
   storageAccountName: storageAccountNameOverride
 })
-var sharedPlanName = resourceNameForType(namingConvention, 'appServicePlans', 'functions', context)
+var sharedPlanName = resourceNameForType(namingConvention, 'Microsoft.Web/serverfarms', 'functions', context)
 ```
 
 The snippet assumes the caller already defines the convention, identifier, target
@@ -206,8 +267,12 @@ defaults; do not create another copy of them. If resources target a different
 subscription, pass that actual subscription ID rather than the orchestrator's.
 Use a distinct identifier for each separate add-on instance in the same scope.
 No application-specific policy entry or naming-policy sync is needed.
+There is no requirement to create an add-on-specific adapter file. Use a local
+names object or bundle only to group purpose/context choices, never to duplicate
+validation or hash logic. The [quick start](../../../../../docs/naming-convention.md#add-on-developer-quick-start)
+provides a complete naming-only template.
 
-The returned object has the exported `functionAppNamingResult` type:
+The returned object has the typed `functionAppNamingResult` shape:
 
 | Result property | Consumer |
 | --- | --- |
@@ -224,8 +289,8 @@ host-pool inputs. Create/adopt the hosting plan separately and pass its resource
 ID as `serverFarmId`; a generated plan name is not that ID. Likewise, creating
 the storage CMK identity/key and permissions remains the caller's responsibility.
 
-Pass `{}` as the fourth argument when no overrides are needed. The exported
-`functionAppNameOverrides` type supports `functionAppName`, `storageAccountName`
+Pass `{}` as the fourth argument when no overrides are needed. The typed
+override object supports `functionAppName`, `storageAccountName`
 and `storageEncryptionIdentityName`. Empty values generate defaults. Overrides
 are applied inside the bundle, before evaluating generated names; an explicit
 storage name therefore bypasses an overlength generated storage name.
@@ -244,12 +309,21 @@ Use your add-on's purpose instead of `shr` for an unrelated application.
 ### Resource-type API and naming guarantees
 
 `resourceNameForType(convention, resourceType, identifier, context)` names an
-individual resource. `context` has the exported `namingContext` type, containing
+individual resource. `context` has the typed `namingContext` shape, containing
 `subscriptionId`, `resourceGroupName`, full Azure `location`, and `cloud`.
+Pass an official Azure resource type without an API version, not a catalog key.
+Types and variants are case-insensitive. `Microsoft.Web/sites` requires
+`context.namingVariant: 'functionapp'`; web-app naming is unsupported.
+`Microsoft.DesktopVirtualization/applicationGroups` requires `'Desktop'` or
+`'RemoteApp'`. Other types require an omitted or empty variant. Missing or invalid
+selectors and legacy type keys fail explicitly; no compatibility translation is
+provided. Bundles supply their known variants internally. This interface change
+preserves generated names and hashes; `resourceTypeCodes` retains its catalog keys.
+See the [direct-call examples](../../../../../docs/naming-convention.md#resource-naming-interface).
 The shared `resourceTypes` catalog covers all 36 convention-named types in the
 repository's abbreviation dataset:
 
-| Family | Resource-type keys |
+| Family | Internal catalog keys (not public API arguments) |
 | --- | --- |
 | AVD | `hostPools`, `workspaces`, `desktopApplicationGroups`, `remoteApplicationGroups`, `scalingPlans` |
 | Compute | `availabilitySets`, `computeGalleries`, `diskAccesses`, `diskEncryptionSets`, `osdisks`, `virtualMachines`, `imageDefinitions` |
@@ -277,11 +351,10 @@ Both entry points:
   to underscores. Key Vaults reject consecutive hyphens; vaults and Automation
   Accounts enforce their required initial letter.
 - For the three globally named types only, calculate a stable `uniqueString`
-  from lowercased target subscription, owning resource group, full region, cloud,
-  and full application identifier, not the resource type. The default hash is
-  six characters, so an application's Function App and storage share the same
-  token. Full regions stay in the hash even when the convention
-  omits `location`.
+  from lowercased target subscription, owning resource group and full region.
+  Cloud, purpose, identifier, resource type and convention do not participate.
+  The default hash is six characters, so different purposes in one scope share
+  a token. Full regions stay in the hash even when the convention omits `location`.
 - For all types, retain the complete formatted identifier and selected static
   components. Fail explicitly when the full name exceeds its configured budget;
   no identifier or purpose is silently shortened. Choose a shorter convention
@@ -290,7 +363,7 @@ Both entry points:
   Fail explicitly when the complete name exceeds the limit; shorten the
   identifier or convention values rather than silently truncating. Changing
   subscription or owning resource group does not itself change these names.
-- Keep redeployments and case-only input changes stable. Without a hash,
+- Keep redeployments and case-only input changes stable. Even with a scope hash,
   identifiers that normalize identically generate the same name; callers own
   disambiguation within the target scope.
 
@@ -337,12 +410,15 @@ and [`uniqueString` contract](https://learn.microsoft.com/azure/azure-resource-m
 - Standalone session-host/Replacer availability-set defaults are `avset-##`;
   host-pool generated availability sets include convention context. Their public
   pattern contracts are defined centrally.
-- Image storage, encryption keys and per-run image-build resources use
-  specialized patterns and uniqueness seeds. Resource types need not have
-  identical patterns when their roles differ.
+- Image storage retains specialized readable patterns but uses the common scope
+  hash, with the same six-character suffix for artifacts and logs regardless of
+  custom prefix. Overlength names fail rather than reducing the hash budget.
+  Encryption keys and per-run image-build resources have separate lifecycle
+  patterns. Resource types need not have identical patterns when their roles differ.
 - Names follow the convention subject to resource-specific restrictions. Vault
   names convert `_` and `.` to `-` after component assembly; an empty delimiter
-  remains empty. This formatting is not complete Azure name validation.
+  remains empty. The generic API also validates characters and type-specific
+  constraints; complete explicit overrides remain the caller's responsibility.
 - Shared Services and host-pool vault purpose separators use the configured
   delimiter before Key Vault formatting.
 - Partial abbreviation overrides merge with defaults.
@@ -396,18 +472,23 @@ properties.
 Import only the functions needed by the caller:
 
 ```bicep
-import { resourceName } from './naming.bicep'
+import { resourceNameForType } from './naming.bicep'
 
-var operationsName = resourceName({}, 'operationsResourceGroup', 'va', '', '')
+var operationsName = resourceNameForType({}, 'Microsoft.Resources/resourceGroups', 'operations', {
+  subscriptionId: subscription().subscriptionId
+  resourceGroupName: ''
+  location: 'usgovvirginia'
+  cloud: 'AzureUSGovernment'
+})
 // rg-avd-operations-va
 ```
 
-For a single policy value, prefer a narrow export such as `osDiskNamePattern`.
-It loads `$.patterns.osDisk` directly from the authoritative JSON with
-`loadJsonContent`. Importing the whole `namingPolicy` object for one property
+For internal resource-module consumers of a single policy value, prefer a narrow
+internal export such as `osDiskNamePattern`. The native scalar also supplies
+the policy's OS disk pattern. Importing the whole `namingPolicy` object for one property
 embeds unrelated rules in each consuming ARM template. Exporting a property of
 an already-loaded object does not avoid that expansion with the current compiler.
-Keep file-backed scalar exports out of parameter defaults; use the generated
+Keep imported scalar exports out of parameter defaults; use the
 literal-default workflow described above for those.
 
 Both `buildCustomName` and `cnv` accept, in order:
@@ -422,10 +503,12 @@ Both `buildCustomName` and `cnv` accept, in order:
 8. Freeform value 2.
 9. Workload.
 
-Recognized components are `resourceType`, `purpose`, `location`, `freeform1`,
-`environment`, `freeform2`, and `workload`. Empty values and unknown components
-are omitted. `cnv` also explicitly removes `none` components. Ordering,
-duplicates, case, and nonempty whitespace are preserved.
+The private primitives recognize `resourceType`, `purpose`, `location`,
+`customToken1`/`freeform1`, `environment`, `customToken2`/`freeform2`, and
+`workload`. They only join values; public and role entry points validate inputs
+before calling them, so unknown components, invalid selected tokens and invalid
+empty conventions are rejected rather than silently omitted. `cnv` removes
+`none` components. Role adapters retain established casing and permitted separators.
 
 `stripSeps` removes `-`, `_`, and `.`. `kvSanitize` replaces `_` and `.` with
 `-`. Neither validates a complete Azure resource name, truncates it, changes
@@ -435,8 +518,8 @@ resource-specific rules; callers should not duplicate them.
 ## Validation
 
 [Naming.Tests.ps1](../../../../../tests/Naming.Tests.ps1) compiles executable
-[naming vectors](../../../../../tests/fixtures/naming.bicepparam) with Azure CLI
-Bicep, compares role/storage/seed recipes against independent reference fixtures,
+[naming vectors](../../../../../tests/fixtures/naming-vectors.bicep) with Bicep's
+local ARM runtime, compares role/storage/seed recipes against reference fixtures,
 changes an isolated policy copy to exercise real consumer expressions and Portal
 generation, verifies imports, and checks module, parameter, and output metadata.
 It requires Azure CLI and its Bicep compiler already installed; it does not
@@ -454,10 +537,12 @@ evaluates output-only fixtures, and removes that copy afterwards. It makes no
 Azure resource changes and requires no Azure sign-in.
 
 [NamingBundles.Tests.ps1](../../../../../tests/NamingBundles.Tests.ps1) uses the
-same isolated local runtime to compare both direct bundles against
-[reference outputs](../../../../../tests/fixtures/naming-bundles-legacy.json).
-All 799 host-pool values (47 fields across seventeen profiles) must match the
-fixture, covering all four clouds, split locations, convention/abbreviation
+same isolated local runtime to exercise all four deployment bundles, compare
+Shared Services with host-pool names and check Image Management role/storage
+recipes. It covers explicit overrides, consolidated-group seeds, all four clouds,
+exact Key Vault length boundaries and explicit overlength failures.
+All 799 host-pool values (47 fields across seventeen profiles) are exercised,
+covering all four clouds, split locations, convention/abbreviation
 overrides, existing workspace adoption and separate shared-services subscriptions.
 All fifteen FSLogix properties are checked against the matching
 host-pool values. A source guard prevents unused result fields from accumulating.

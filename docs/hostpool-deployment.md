@@ -27,7 +27,9 @@ monitoring, Key Vaults, and shared FSLogix backup resources.
 
 `controlPlaneLocation` defaults to the subscription deployment location.
 `virtualMachinesLocation` defaults to `controlPlaneLocation` and controls session
-hosts, storage, deployment helpers and their centralized names. The Portal passes
+hosts, storage, deployment helpers, shared monitoring, credentials/encryption Key
+Vaults, backup and their centralized names. Only AVD control-plane resources use
+`controlPlaneLocation`. Existing resource IDs retain their existing placement. The Portal passes
 both selected locations; its VM-location selector defaults to the control-plane
 location and filters VNets to that selection. Split-location deployments can
 choose different control-plane and VM locations.
@@ -605,7 +607,7 @@ Backup behavior depends on host pool type and the `recoveryServices` parameter:
 
 > **Pooled VMs are never backed up.** Users are stateless in pooled pools; profile data lives in FSLogix storage which is what gets backed up instead.
 >
-> **FSLogix backup only applies to Azure Files.** NetApp Files has its own snapshot/replication capabilities and is not enrolled in Recovery Services.
+> **FSLogix backup only applies to Azure Files profile shares.** `office-containers` is always excluded from enrollment. Previously enrolled Office shares require approved operator action to stop protection; incremental redeployment does not remove them. NetApp Files has its own snapshot/replication capabilities and is not enrolled in Recovery Services.
 >
 > **Personal pools have no FSLogix storage.** The `deployFSLogixStorage` parameter is ignored for personal host pools.
 >
@@ -823,11 +825,11 @@ Get-AzWvdUserSession -ResourceGroupName $resourceGroup -HostPoolName $hostPoolNa
 
 Automate the replacement of session hosts when new images become available:
 
-**🔄 [Session Host Replacer](../deployments/add-ons/sessionHostReplacer/README.md)**
+**🔄 [Session Host Replacer](session-host-replacer.md)**
 
 **Features:**
 
-- Zero-downtime rolling updates
+- Bounded rolling replacement with readiness and capacity safeguards
 - Automatic image version detection
 - Delete-First or Side-by-Side replacement modes
 - Progressive scale-up for large deployments

@@ -1,13 +1,14 @@
-$installerPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'customer-examples\artifacts\Windows-11-RSAT\Install-Windows11RSAT.ps1'
-$installerAst = [Management.Automation.Language.Parser]::ParseFile($installerPath, [ref]$null, [ref]$null)
-$start = $installerAst.EndBlock.Statements | Where-Object {
-    $_ -is [Management.Automation.Language.AssignmentStatementAst] -and
-        $_.Left.Extent.Text -eq '$offlineSourceAvailable'
-} | Select-Object -First 1
-$body = (Get-Content -LiteralPath $installerPath -Raw).Substring($start.Extent.StartOffset)
-$installCapabilities = [scriptblock]::Create("param([string]`$SourcePath, [switch]`$OfflineOnly)`n`$ErrorActionPreference = 'Stop'`n$body")
-
-function Write-Log { param($Category, $Message) }
+BeforeAll {
+    $installerPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'customer-examples\artifacts\Windows-11-RSAT\Install-Windows11RSAT.ps1'
+    $installerAst = [Management.Automation.Language.Parser]::ParseFile($installerPath, [ref]$null, [ref]$null)
+    $start = $installerAst.EndBlock.Statements | Where-Object {
+        $_ -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $_.Left.Extent.Text -eq '$offlineSourceAvailable'
+    } | Select-Object -First 1
+    $body = (Get-Content -LiteralPath $installerPath -Raw).Substring($start.Extent.StartOffset)
+    $installCapabilities = [scriptblock]::Create("param([string]`$SourcePath, [switch]`$OfflineOnly)`n`$ErrorActionPreference = 'Stop'`n$body")
+    function Write-Log { param($Category, $Message) }
+}
 
 Describe 'Windows 11 RSAT capability installation' {
     BeforeEach {
@@ -42,14 +43,14 @@ Describe 'Windows 11 RSAT capability installation' {
             $node -is [Management.Automation.Language.CommandAst] -and
                 $node.GetCommandName() -eq 'Add-WindowsCapability'
         }, $true))
-        $commands.Count | Should Be 2
+        $commands.Count | Should -Be 2
         foreach ($command in $commands) {
             $parameters = @($command.CommandElements |
                 Where-Object { $_ -is [Management.Automation.Language.CommandParameterAst] } |
                 ForEach-Object ParameterName)
-            ($parameters -contains 'NoRestart') | Should Be $false
-            ($parameters -contains 'Online') | Should Be $true
-            ($parameters -contains 'Name') | Should Be $true
+            ($parameters -contains 'NoRestart') | Should -Be $false
+            ($parameters -contains 'Online') | Should -Be $true
+            ($parameters -contains 'Name') | Should -Be $true
         }
     }
 
@@ -58,7 +59,7 @@ Describe 'Windows 11 RSAT capability installation' {
         Assert-MockCalled Add-WindowsCapability -Times 3 -Exactly -Scope It -ParameterFilter {
             $Online -and -not $Source -and -not $LimitAccess
         }
-        $global:FederalAvdRsatTest.Logs[-1] | Should Match 'Restart needed: True'
+        $global:FederalAvdRsatTest.Logs[-1] | Should -Match 'Restart needed: True'
     }
 
     It 'keeps offline installation restricted to the staged source' {
@@ -80,7 +81,7 @@ Describe 'Windows 11 RSAT capability installation' {
     It 'does not fall back online after an OfflineOnly failure' {
         Set-Content -LiteralPath (Join-Path $sourcePath 'test.cab') -Value 'fixture' -Encoding ASCII
         $global:FederalAvdRsatTest.FailOffline = $true
-        { & $installCapabilities -SourcePath $sourcePath -OfflineOnly } | Should Throw 'Offline installation'
+        { & $installCapabilities -SourcePath $sourcePath -OfflineOnly } | Should -Throw -ExpectedMessage '*Offline installation*'
         Assert-MockCalled Add-WindowsCapability -Times 0 -Exactly -Scope It -ParameterFilter { -not $Source }
     }
 

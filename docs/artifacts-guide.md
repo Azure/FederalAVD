@@ -337,6 +337,64 @@ The VM Application manifest calls the same script with `-DeploymentType 'Install
 `-DeploymentType 'Uninstall'`. Do not add a separate root-level `Uninstall-Application.ps1` because
 `Invoke-Customization.ps1` might select it as the ZIP entry point.
 
+### Reusable application helpers
+
+Keep application artifacts self-contained: reusable functions are embedded in the root script,
+not imported from another artifact or downloaded module. The main script supplies product names,
+publisher patterns, registry roots, installer/uninstaller arguments, timeouts, and success codes.
+Helpers should not read product-specific outer-scope variables such as `$SoftwareName`,
+`$DownloadUrls`, or `$PSScriptRoot`.
+
+All 23 software installer examples use the same framework. The canonical authoring source is
+[`tools/ArtifactFramework.ps1`](../tools/ArtifactFramework.ps1); each installer embeds only the
+helpers it uses. Neither that source nor the synchronization tool is a runtime dependency.
+Product-specific provisioning, capability installation, host requirements, and lifecycle logic
+remain in the artifact.
+
+Use `Get-InstalledApplications` for parameterized registry discovery and `Remove-MsiApplications`
+for MSI removal. MSI discovery requires `WindowsInstaller=1` and the selected ProductCode
+subkey pattern; GUID-named EXE bundles do not receive MSI ProductCodes. Discovery also returns
+the native installer flag, registered quiet uninstall command, and `BundleCachePath` for
+caller-owned bundle handling. Removal rejects multiple registrations by default. The PowerShell ZIP artifact
+explicitly supplies `-AllowMultiple -VerifyRemoval` for stable/preview cleanup. Do not widen
+matching rules or discard ambiguity guards during a structural refactor. `-ArgumentListFormat`
+preserves product-specific MSI syntax and must contain the `{0}` ProductCode placeholder.
+Discovery and execution errors must surface rather than appear to mean "not installed".
+PowerShell removes matching EXE bundles through their registered native quiet uninstaller
+before rediscovering remaining MSIs. This avoids passing a bundle GUID to `msiexec` or attempting
+to remove an underlying MSI twice. Missing cached uninstallers and surviving registrations fail explicitly.
+
+`Invoke-ApplicationProcess` provides common native execution; `Invoke-MsiProcess` additionally
+retries MSI contention (1618). Retain the child process handle before waiting so Windows
+PowerShell 5.1 can retrieve its exit code. An unavailable exit code is an error, never success.
+Main supplies timeouts and success codes. An explicitly empty
+`-SuccessExitCodes @()` returns raw exit status for existing caller-owned validation, not assumed
+success. WSL retains its 30-minute timeout, VS Code five minutes, and FSLogix its unlimited
+wait (`-TimeoutMs -1`). Shared logging writes informational output to the host stream so it
+cannot contaminate returned file or metadata objects. VC++ retains its pre-staged-first download
+fallback and architecture-specific failure reporting.
+
+After editing canonical helpers, synchronize the selected software packages from the repository root:
+
+```powershell
+$packages = @(
+    'customer-examples\artifacts\Microsoft-PowerShell-7'
+    'customer-examples\artifacts\PuTTY'
+)
+& .\tools\Sync-ArtifactFramework.ps1 -ArtifactPath $packages
+Invoke-Pester -Path tests\ArtifactFramework.Tests.ps1,tests\ArtifactHelpers.Tests.ps1
+```
+
+Repeat synchronization for every installer embedding the changed helper. The AST-based tool
+replaces framework definitions and legacy helper calls without replacing product configuration;
+it preserves UTF-8 BOM presence and validates syntax/ASCII before writing. Review any necessary
+main-call parameter changes explicitly. Use it on customized customer scripts rather than
+overwriting them with examples. Keep customized READMEs and staged payloads unchanged.
+[`ArtifactFramework.Tests.ps1`](../tests/ArtifactFramework.Tests.ps1) enforces canonical helper
+parity across all 23 examples, standalone execution, and synchronization idempotence.
+Run the affected lifecycle tests and package validator as well; offline checks do not prove
+successful installation under image-build SYSTEM or VM Application execution.
+
 ### Special Files
 
 #### uploadedFileVersionInfo.txt

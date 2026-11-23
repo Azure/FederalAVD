@@ -85,6 +85,13 @@ prerequisite deployment, Blue Button fallback, and repeatable PowerShell workflo
 10. Removes the temporary deployment helper and its resource group after final session-host
   provisioning is submitted.
 
+Shared monitoring (Log Analytics, DCR and DCE), credentials/encryption Key Vaults, and the
+Azure Files backup vault follow the FSLogix storage/session-host `location`, not
+`controlPlaneLocation`. Their shared Monitoring and Operations groups and generated names
+use that same host region, matching Shared Services deployed there. Only AVD control-plane
+resources retain `controlPlaneLocation`. Existing selections do not relocate resources or
+re-register protected storage.
+
 When creating a workspace, production control-plane resources share one resource group per
 control-plane region and naming convention, not one per persona. For example, the default convention places the `admin` and
 `finance` host pools in `rg-avd-control-plane-eus` when their control-plane region is East US.
@@ -296,6 +303,10 @@ Publishing makes the guided form available; it does not deploy the workload. In 
 4. On **Review + create**, select **Create**. After the deployment is submitted, select **Download
   template and parameters** and save the generated automated-host-pool parameter file under
   `customer\parameters\automatedHostPools\`; this folder is intentionally excluded from git.
+
+**Session Desktop Friendly Name** is optional. Leave it blank in the form, omit
+`desktopFriendlyName` from deployment parameters, or supply an empty string to skip the
+SessionDesktop rename. A supplied name retains the 20-character limit.
 
 The automated Template Spec is opt-in because the preview resource API is available only in Azure
 Commercial. The form uses the default secret names listed in Prerequisites unless **Customize
@@ -719,6 +730,19 @@ complete. This targeted delay reduces first-deployment validation failures cause
 propagation. The helper also performs SessionDesktop friendly-name updates and optional FSLogix
 storage operations. It uses the session-host subnet, which must allow outbound TCP 443 to the
 `AzureResourceManager` service tag.
+
+On **Operations and Monitoring**, the **Domain join deployment VM** checkbox appears beside the
+deployment VM size for Active Directory Domain Services and Microsoft Entra Domain Services.
+It is unchecked by default. Selecting it reuses the session-host domain name, organizational unit,
+and domain-join credentials, including any existing Key Vault secret overrides. For parameter-file
+deployments, set `domainJoinDeploymentVirtualMachine: true`; other identity solutions reject this
+opt-in. When deploying Azure NetApp Files storage, the form hides the checkbox and submits `true`
+because the helper must domain join. Parameter-file deployments also retain this automatic join.
+
+The helper subnet needs domain-controller connectivity and DNS resolution when domain join is
+enabled. Review the selected OU's policies for compatibility with the temporary Windows Server
+helper and its Run Commands. Deleting the helper VM does not remove its AD computer account;
+include that account in the customer's approved directory cleanup process.
 
 When dynamic scaling is disabled, select the desired initial `sessionHostCount`. ARM first creates
 Session Host Management without a provisioning request, which is the API's zero-host state. It then

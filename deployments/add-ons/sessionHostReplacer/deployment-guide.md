@@ -9,7 +9,7 @@ SHR has one execution model, regardless of SideBySide or DeleteFirst replacement
 
 | Function | Trigger | Responsibility |
 | --- | --- | --- |
-| `session-host-replacer` | Configurable `%TimerSchedule%` | Assess work and authorize new batches |
+| `session-host-replacer-initiator` | Configurable `%TimerSchedule%` | Assess work and authorize new batches |
 | `session-host-replacer-worker` | `0 * * * * *` | Reconcile the current authorized operation every minute |
 
 Both use the same lifecycle engine, managed identity, Blob host storage and Table state.
@@ -40,11 +40,55 @@ cannot safely upgrade the function bindings, shared code and settings together.
 Preserve deployment-specific parameters, including `initiationEnabled` and `continuationTimeoutHours`.
 Follow [verification](#verify-deployment) before enabling production initiation.
 
+## Dedicated Replacer Resource Group
+
+On the Portal form's **Infrastructure** step, **Session Host Replacer Resource Group** defaults
+to the session hosts resource group. Select another existing RG in the deployment subscription
+to isolate this pool's replacer resources. Create that RG before opening the deployment form.
+For PowerShell or Bicep deployments, set the existing `functionAppResourceGroupName` parameter.
+The RG's metadata location does not change the selected session-host and Function App region.
+
+The selected RG contains the Function App, runtime storage (including operation/recovery tables),
+pool-specific Application Insights when enabled, private endpoints when enabled, the dedicated
+storage-encryption identity when CMK is enabled, and a session-host Template Spec when SHR creates
+one. Session-host VMs and the host pool stay in their selected RGs.
+
+Shared resources keep their existing selections: the App Service Plan uses its independent
+existing-plan or plan-RG selection; Log Analytics and the centralized workbook remain with the
+selected workspace; existing networking, DNS zones, Key Vault, app identities and externally
+supplied Template Specs are not relocated. For direct deployments, explicitly set
+`appServicePlanResourceGroupName` or `existingAppServicePlanResourceId` to keep a shared plan outside
+the replacer RG; an omitted plan RG otherwise defaults to `functionAppResourceGroupName`.
+
+**This is a rebuild boundary, not a migration or routine upgrade requirement.** Changing the
+parameter deploys resources at the new scope; it does not move or retire the previous app.
+Never run two replacers for the same host pool. Prefer an in-place update when retaining state.
+
+Before deleting a dedicated RG, hold initiation, allow authorized replacement, drain and cleanup
+work to finish, resolve any stopped operation/pending hostname mappings and retained-host recovery
+needs, then stop the app and confirm no live lease or in-flight deployment remains. Preserve any
+required recovery evidence securely. Deleting the RG permanently removes its SHR state; do not
+reconstruct an active operation by merely redeploying an empty storage account.
+A recreated system-assigned identity has a new principal ID and requires its external Graph
+permissions to be granted again. Review external role assignments and CMK key dependencies
+through the approved cleanup process; deleting the RG is not complete cross-scope cleanup.
+
+After changing this form, live-smoke-test **Infrastructure** and **Advanced** with the default
+hosts RG and a different existing RG. Confirm parameter export, shared plan placement and custom
+Function App name checks use the intended scopes. Offline schema/contract checks do not prove
+Portal rendering or successful Azure deployment.
+
 ## Upgrading an Existing Deployment
 
 This is a breaking contract change: remove `enableQueueContinuation` and the SHR-specific
 `azureQueuePrivateDnsZoneResourceId` from existing SHR parameter files. Do not remove similarly named
 parameters from other solutions. There is no supported switch back to direct timer execution.
+
+Before restarting an upgraded app, verify the [scaling plan exclusion contract](README.md#scaling-plan-exclusion-contract).
+An enabled plan's Exclusion tag must match SHR's configured tag name (default
+`ScalingPlanExclusion`). The worker repairs blank/mismatched names on verified unshared
+plans; shared mismatches still block work. Deploy the new scaling-plan custom role and
+assignment, and allow RBAC propagation before testing repair.
 
 1. Hold new batches with `InitiationEnabled=false` and persist `initiationEnabled=false` in the
    upgrade parameters. Record the current operation ID, image, deadline, accepted deployments and
@@ -59,6 +103,16 @@ parameters from other solutions. There is no supported switch back to direct tim
 4. Deploy the complete template and shared code while the app is stopped. The existing
    `session-host-replacer-worker` function is updated **in place** from queue to timer; a second
    worker name is not created. Its disabled setting is explicitly reset to `false`.
+   The scheduled function is now `session-host-replacer-initiator`. The template explicitly
+   enables it and sets `AzureWebJobs.session-host-replacer.Disabled=true` so the previous
+   scheduled function cannot remain a second active initiator. Incremental deployment does
+   not delete the old child function: verify it is disabled, then remove only that legacy
+   function through the approved operator process while the app is stopped. Do not remove
+   shared engine/modules or operation state.
+   These settings use Microsoft's [function enable/disable mechanism](https://learn.microsoft.com/azure/azure-functions/disable-function)
+   and are enforced on redeployment. Use `InitiationEnabled=false` to hold new batches,
+   not a function's `Disabled` setting; the reconciliation timer must remain enabled to finish
+   authorized work.
 5. Before starting the app, verify both bindings, the shared engine/modules and the new native-timer
    host configuration are installed. Check that the app remained stopped throughout the update.
    Start it only after the code deployment is complete.
@@ -79,6 +133,14 @@ After a successful pilot, inventory dependencies and use the approved cleanup pr
 owned exclusively by the retired SHR queue transport. Never remove shared DNS zones, generic storage
 roles, Blob/Table endpoints or durable operation state indiscriminately.
 
+The shared Function App module now gates its automatic **Storage Queue Data Contributor**
+assignment on `enableQueueStorage`. SHR passes `false`, so new SHR deployments receive host Blob
+and deployment-state Table permissions without the queue role. Queue-enabled module callers keep
+their existing queue access. Upgrading an existing SHR deployment does **not** revoke an earlier
+queue-role assignment; remove that assignment explicitly only after confirming the identity and
+storage-account scope are exclusive to the retired queue transport. An explicitly supplied
+additional role remains caller-owned and is not filtered out by the capability switch.
+
 ## Verify Deployment
 
 ### Offline validation
@@ -93,18 +155,9 @@ az bicep build --file deployments\add-ons\sessionHostReplacer\main.bicep `
 & .github\skills\federalavd-bicep-maintenance\scripts\Test-BicepArmSync.ps1 `
     -BicepPath deployments\add-ons\sessionHostReplacer\main.bicep
 
-$files = @(
-    'tests\SessionHostReplacer.Tests.ps1'
-    'tests\SessionHostReplacer.Continuation.Tests.ps1'
-    'tests\SessionHostReplacer.Replan.Tests.ps1'
-    'tests\SessionHostReplacer.Recovery.Tests.ps1'
-    'tests\SessionHostReplacer.Idle.Tests.ps1'
-    'tests\SessionHostReplacer.ImageSelection.Tests.ps1'
-    'tests\SessionHostReplacer.Timers.Tests.ps1'
-    'tests\SessionHostReplacer.Observability.Tests.ps1'
-    'tests\SessionHostReplacer.Predeployment.Tests.ps1'
-    'tests\TemplateSpecs.Tests.ps1'
-)
+$files = @(Get-ChildItem -Path 'tests\SessionHostReplacer*.Tests.ps1' |
+    ForEach-Object FullName)
+$files += 'tests\TemplateSpecs.Tests.ps1'
 Invoke-Pester -Script $files -PassThru -Show Failed,Summary
 git diff --check
 ```
@@ -114,8 +167,22 @@ git diff --check
 Offline tests prove contracts, not Functions indexing or Azure deployment success. In an isolated
 pilot, including each intended target cloud:
 
-- Confirm exactly the two expected functions load as timer triggers, with the intended initiation
-  schedule and fixed minute reconciliation schedule. Confirm there is no queue listener or bundle
+- With an enabled unshared scaling plan, verify blank and nonblank mismatches are repaired
+  before replacement. Confirm legacy VM exclusions are preserved, only the plan's exclusion
+  name changes, and schedules/assignments remain unchanged. Test denied writes and failed
+  verification: replacement must stop rather than continue unprotected.
+- Add another pool reference, including a disabled reference, and confirm a shared mismatch
+  fails without plan or VM-tag writes. A matching shared plan must continue normally.
+- Avoid concurrent plan/assignment edits during repair; exercise conditional failure when
+  the service supplies an ETag. Offline tests do not establish atomicity for APIs without ETags.
+- Replace eight old hosts, leaving sessions on one. Confirm the occupied old host is excluded
+  before drain, accepts no new sessions, retains its original grace-period deadline and remains
+  excluded through multiple autoscale evaluations. Remove only its SHR-owned VM exclusion tag
+  in the isolated pilot and confirm retirement reconciliation restores it. Confirm existing
+  administrator-owned exclusion values survive retirement and shutdown retention.
+- Confirm the initiator and worker are the only enabled timer functions, with the intended initiation
+  schedule and fixed minute reconciliation schedule. A retained legacy function must remain disabled.
+  Confirm there is no queue listener or bundle
   download requirement after a cold restart.
 - Verify managed identity, private DNS/routing, Blob host locks and Table reads/conditional writes.
 - Use a sparse initiation schedule. Verify an accepted deployment progresses through health,

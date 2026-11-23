@@ -176,6 +176,10 @@ function Get-RecoveryPlan {
     if ($active.Count) { throw 'Related ARM deployments are still active. Wait for them to settle before recovery.' }
 
     $hash = Get-RecoveryHash -Settings $Settings
+    $operationHash = & $coordinator {
+        param($Values, $State)
+        Get-ShrConfigurationHash -Settings $Values -OperationState $State
+    } $Settings $state
     $newTemplate = $null
     $oldTemplate = $null
     if ($RepairTemplateReference) {
@@ -198,11 +202,12 @@ function Get-RecoveryPlan {
             throw 'Saved deployment does not reference a pinned Template Spec version.'
         }
         $matched = & $coordinator {
-            param($Values, $VersionId, $OriginalHash)
-            Test-ShrTemplateReferenceCorrection -Settings $Values -TemplateVersionId $VersionId -ConfigurationHash $OriginalHash
-        } $Settings $oldTemplate $state.ConfigurationHash
+            param($Values, $VersionId, $OriginalHash, $State)
+            Test-ShrTemplateReferenceCorrection -Settings $Values -TemplateVersionId $VersionId `
+                -ConfigurationHash $OriginalHash -OperationState $State
+        } $Settings $oldTemplate $state.ConfigurationHash $state
         if (-not $matched) { throw 'Settings other than SessionHostTemplate changed. Restore those settings before template repair.' }
-        if ($hash -eq $state.ConfigurationHash) { throw 'SessionHostTemplate has not changed; use normal recovery instead.' }
+        if ($operationHash -eq $state.ConfigurationHash) { throw 'SessionHostTemplate has not changed; use normal recovery instead.' }
         $targets = @($intent.HostNames)
         if (-not $targets.Count -or ($targets | Where-Object { $_ -notmatch '^[a-zA-Z0-9-]{1,15}$' })) {
             throw 'Saved deployment target names are invalid.'
@@ -232,7 +237,7 @@ function Get-RecoveryPlan {
                 throw "The saved request is missing required template parameter '$name'."
             }
         }
-    } elseif ($hash -ne $state.ConfigurationHash) {
+    } elseif ($operationHash -ne $state.ConfigurationHash) {
         throw 'Configuration changed. Restore the initiating settings, or use -RepairTemplateReference for a rejected wrong-template deployment.'
     }
     return [PSCustomObject]@{
@@ -324,6 +329,7 @@ try {
         $body.properties.templateLink.id = $checkedPlan.CorrectedTemplateVersion
         $fresh.State.DeploymentIntent.Body = $body | ConvertTo-Json -Depth 40 -Compress
         $fresh.State.ConfigurationHash = $checkedPlan.ConfigurationHash
+        $fresh.State.ConfigurationTargetCount = $freshSettings.TargetSessionHostCount
     }
     $fresh.State.Status = 'Running'
     $fresh.State.LastError = ''

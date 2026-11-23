@@ -378,9 +378,10 @@ Customer-managed key (CMK) encryption is supported for the vault via `keyManagem
 > resource group. Pass `fslogixBackupVaultResourceId` to `existingFilesBackupVaultResourceId` and
 > `fslogixBackupPolicyName` to `existingFilesBackupPolicyName` on every standard or automated pooled
 > host pool. The host pool then registers its newly deployed Azure Files shares without modifying
-> shared policy settings. Standard host pools can create a vault when none is supplied;
-> automated host pools use an existing
-> shared vault only.
+> shared policy settings. Standard and automated host pools can create a shared vault when none
+> is supplied. The vault must be in the storage/session-host region, even when the AVD control
+> plane is elsewhere; deploy Shared Services in that region when creating the vault separately.
+> Host-pool-created Files vaults use that region's shared operations resource group and naming.
 >
 > **Why CMK is not applied to this vault (SC-28 rationale):** Azure Files snapshots are stored in the storage account itself — no user data, CUI, or profile content is transmitted to or stored in the vault. This vault holds only backup scheduling metadata (policy assignments, protection container registrations, job history). SC-28 (Protection of Information at Rest) is satisfied for actual FSLogix profile data by the storage account's own encryption, controlled by `keyManagementStorage`. Applying CMK to this metadata-only vault would provide no incremental SC-28 protection for user data and is therefore not implemented. **SSP language:** *"The shared Azure Backup vault used for FSLogix Azure Files snapshot scheduling contains no user data or CUI. Snapshot data at rest is protected by the storage account encryption key (`keyManagementStorage`), satisfying SC-28 at the data-bearing resource. CMK on the scheduling vault is not required and provides no additional protection."*
 >
@@ -399,14 +400,15 @@ When Session Host Replacer uses `SideBySide` mode with shutdown retention enable
 (old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather
 than deleted. If a new image is discovered to have issues, initiate rollback with the guarded
 [`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
-operator script. It stops the replacer, powers on selected retained hosts, waits for AVD health,
-restores session acceptance, removes replacer-owned retention controls, and opts restored hosts out
-of automation.
+operator script. With one confirmation it stops SHR, starts the selected retained generation
+concurrently, waits for AVD health, restores service, drains/excludes bad-image hosts, pins this
+pool to the restored image, and restarts SHR. It does not delete VMs or sign out existing sessions.
+Validate user access and remove drained bad-image hosts later through the approved process.
 
-After restoration, validate user access, drain the bad-image hosts, establish the corrected
-known-good Compute Gallery version, remove the bad-image generation, explicitly opt the intended
-hosts back into automation, and restart the Function App. See the
-[complete rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
+After publishing a corrected higher version or excluding the bad version, run the same command
+with `-ResumeLatest` to remove the pool-local pin and resume normal image selection. For unsafe
+unfinished work, `-RestoreOnly` provides emergency restoration while leaving SHR stopped.
+See the [rollback quick start](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 
 The **Ringed Rollout** setting (0-30 day delay based on image publication time) stages image
 adoption, but does not enforce approval. Validate the exact excluded candidate in a dedicated pilot
@@ -504,10 +506,16 @@ When `identitySolution = 'EntraId'` (storage key authentication), FSLogix is con
 ### Backup Schedule Is Not Parameterized
 
 Personal host-pool deployments create their VM backup policy when `recoveryServices = true`.
-For shared FSLogix backup, AVD Shared Services owns the Azure Files policy, including
-`fslogixBackupRetentionDays` and `fslogixBackupTimeZone`. The daily schedule runs at 23:00 in the
+For shared FSLogix backup, AVD Shared Services or the FSLogix Storage add-on can create the Azure
+Files policy, including `fslogixBackupRetentionDays` and `fslogixBackupTimeZone`. The add-on also
+supports a dedicated vault in its storage resource group. The daily schedule runs at 23:00 in the
 selected time zone. If you require custom backup windows or intraday snapshots, configure an
 additional policy after deployment.
+
+All FederalAVD FSLogix backup enrollment excludes `office-containers`; profile shares are protected
+on every shard. Office shares remain available for normal use and Cloud Cache replication.
+If Office shares were protected before this exclusion, stop protection through the approved operator
+process. Incremental ARM deployments do not stop existing protection or delete recovery points.
 
 ### FSLogix Office Container Cross-Region
 

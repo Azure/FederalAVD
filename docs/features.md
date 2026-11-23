@@ -654,8 +654,8 @@ session hosts in standard host pools.
 **Key Features:**
 
 - Image version tracking and automatic updates
-- `SideBySide` mode adds and validates replacement hosts before removing old hosts for zero-downtime
-  updates; capacity can temporarily double
+- `SideBySide` mode adds and validates replacement hosts before removing old hosts; capacity can
+  temporarily double. Readiness gates protect capacity, not uninterrupted sessions or application correctness.
 - `DeleteFirst` mode removes eligible hosts before adding replacements to reduce temporary cost,
   quota, and subnet requirements at the expense of a temporary capacity reduction
 - A guarded one-time maintenance request temporarily expedites configured DeleteFirst behavior,

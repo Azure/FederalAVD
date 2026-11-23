@@ -58,7 +58,11 @@ function Get-ShrOperationKey {
 }
 
 function Get-ShrConfigurationHash {
-    param([System.Collections.IDictionary] $Settings)
+    param(
+        [System.Collections.IDictionary] $Settings,
+        [hashtable] $OperationState,
+        [switch] $CaptureTarget
+    )
 
     $values = [ordered]@{}
     foreach ($key in @(
@@ -74,9 +78,42 @@ function Get-ShrConfigurationHash {
         $values[$key] = if ($PSBoundParameters.ContainsKey('Settings')) { $Settings[$key] }
         else { [Environment]::GetEnvironmentVariable($key) }
     }
-    return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
-        [Text.Encoding]::UTF8.GetBytes(($values | ConvertTo-Json -Compress))
-    )).ToLowerInvariant()
+    if ($OperationState -and -not [string]::IsNullOrEmpty($values.TargetSessionHostCount)) {
+        $targetCount = 0
+        if (-not [int]::TryParse([string]$values.TargetSessionHostCount, [ref]$targetCount) -or
+            $targetCount -lt 0 -or $targetCount -gt 1000) {
+            throw 'TargetSessionHostCount must be an integer between 0 and 1000.'
+        }
+    }
+    $calculateHash = {
+        [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+            [Text.Encoding]::UTF8.GetBytes(($values | ConvertTo-Json -Compress))
+        )).ToLowerInvariant()
+    }
+    if ($OperationState -and $OperationState.ContainsKey('ConfigurationTargetCount')) {
+        $values.TargetSessionHostCount = $OperationState.ConfigurationTargetCount
+        return & $calculateHash
+    }
+    $currentHash = & $calculateHash
+    if (-not $OperationState) { return $currentHash }
+    if ($currentHash -eq $OperationState.ConfigurationHash) {
+        if ($CaptureTarget) { $OperationState.ConfigurationTargetCount = $values.TargetSessionHostCount }
+        return $currentHash
+    }
+    # Legacy operations recorded the effective target, not the configured auto-detect value.
+    $priorTargets = @('0', $null)
+    if ($OperationState.TargetCount -gt 0) {
+        $priorTargets += [string]$OperationState.TargetCount
+    }
+    foreach ($target in $priorTargets) {
+        $values.TargetSessionHostCount = $target
+        $hash = & $calculateHash
+        if ($hash -eq $OperationState.ConfigurationHash) {
+            if ($CaptureTarget) { $OperationState.ConfigurationTargetCount = $target }
+            return $hash
+        }
+    }
+    return $currentHash
 }
 
 function Get-ShrOperation {
@@ -231,6 +268,10 @@ function Test-ShrPoolIdle {
     $hostPoolName = Read-FunctionAppSetting HostPoolName
     $hostPoolId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
     $scalingTarget = Get-ScalingPlanCurrentTarget -ARMToken $armToken -HostPoolResourceId $hostPoolId
+    if ($scalingTarget.Source -eq 'InvalidExclusionTag') {
+        if ($scalingTarget.CanRepairExclusionTag) { return $false }
+        throw $scalingTarget.ErrorMessage
+    }
     if ($scalingTarget.Source -eq 'Error') {
         throw 'Cannot assess SHR idle status because the scaling plan query failed.'
     }
@@ -246,13 +287,14 @@ function Test-ShrPoolIdle {
 }
 
 function Test-ShrTemplateReferenceCorrection {
-    param([System.Collections.IDictionary] $Settings, [string] $TemplateVersionId, [string] $ConfigurationHash)
+    param([System.Collections.IDictionary] $Settings, [string] $TemplateVersionId,
+        [string] $ConfigurationHash, [hashtable] $OperationState)
 
     $previousSettings = @{}
     foreach ($key in $Settings.Keys) { $previousSettings[$key] = $Settings[$key] }
     foreach ($candidate in @(($TemplateVersionId -replace '/versions/[^/]+$', ''), $TemplateVersionId)) {
         $previousSettings['SessionHostTemplate'] = $candidate
-        if ((Get-ShrConfigurationHash -Settings $previousSettings) -eq $ConfigurationHash) { return $true }
+        if ((Get-ShrConfigurationHash -Settings $previousSettings -OperationState $OperationState) -eq $ConfigurationHash) { return $true }
     }
     return $false
 }
@@ -276,7 +318,7 @@ function Get-ShrRejectedBatchDecision {
         [DateTimeOffset]$state.LockExpiresUtc -gt [DateTimeOffset]::UtcNow) {
         return @{ Allowed = $false; Reason = 'A validation failure and an expired worker lease are required.' }
     }
-    $currentHash = Get-ShrConfigurationHash
+    $currentHash = Get-ShrConfigurationHash -OperationState $state
     if ($state.ConfigurationHash -eq $currentHash) {
         return @{ Allowed = $false; Reason = 'The rejected configuration has not been corrected.' }
     }
@@ -287,7 +329,7 @@ function Get-ShrRejectedBatchDecision {
         return @{ Allowed = $false; Reason = 'The saved request has no pinned Template Spec version.' }
     }
     if (-not (Test-ShrTemplateReferenceCorrection -Settings ([Environment]::GetEnvironmentVariables()) `
-        -TemplateVersionId $oldTemplate -ConfigurationHash $state.ConfigurationHash)) {
+        -TemplateVersionId $oldTemplate -ConfigurationHash $state.ConfigurationHash -OperationState $state)) {
         return @{ Allowed = $false; Reason = 'Protected settings other than the template reference changed.' }
     }
     $armRoot = Get-ResourceManagerUri
@@ -437,11 +479,15 @@ function Invoke-ShrTimer {
         $Timer, [string] $CyclePath)
 
     Set-ShrLogContext -Trigger $Trigger
+    $invocationResult = @{ Idle = $false }
     try {
-        Write-ShrEvent -Category SHR_TIMER -Event Started
-        if ($Trigger -eq 'Initiation') { Start-ShrContinuation -Timer $Timer }
-        else { Invoke-ShrContinuation -CyclePath $CyclePath }
-        Write-ShrEvent -Category SHR_TIMER -Event Succeeded
+        if ($Trigger -eq 'Initiation') {
+            Write-ShrEvent -Category SHR_TIMER -Event Started
+            Start-ShrContinuation -Timer $Timer
+        } else {
+            Invoke-ShrContinuation -CyclePath $CyclePath -InvocationResult $invocationResult
+        }
+        if (-not $invocationResult.Idle) { Write-ShrEvent -Category SHR_TIMER -Event Succeeded }
     } catch {
         Write-ShrEvent -Category SHR_TIMER -Event Failed
         throw
@@ -531,6 +577,7 @@ function Start-ShrContinuation {
         CleanupIntent = $null
         LastError = ''
         ConfigurationHash = (Get-ShrConfigurationHash)
+        ConfigurationTargetCount = [Environment]::GetEnvironmentVariable('TargetSessionHostCount')
     }
     if ($operation -and $operation.State.Status -eq 'Superseded') {
         $state.SupersedesOperationId = $operation.State.Id
@@ -599,7 +646,12 @@ function Request-ShrWorkerYield {
 }
 
 function Invoke-ShrDeploymentIntent {
-    param([string] $ARMToken, [string[]] $RegisteredSessionHostNames = @())
+    param(
+        [string] $ARMToken,
+        [string[]] $RegisteredSessionHostNames = @(),
+        [ValidateRange(1, [int]::MaxValue)]
+        [int] $ImageReplicaDeploymentLimit = [int]::MaxValue
+    )
 
     $state = Get-ShrWorkerState
     $intent = $state.DeploymentIntent
@@ -649,6 +701,13 @@ function Invoke-ShrDeploymentIntent {
             Save-ShrContinuationCheckpoint
             $intent = $state.DeploymentIntent
         }
+        if (@($intent.HostNames).Count -gt $ImageReplicaDeploymentLimit) {
+            throw "Checkpointed deployment has $(@($intent.HostNames).Count) hosts, exceeding the live image replica ceiling of $ImageReplicaDeploymentLimit. Restore replica capacity before retrying; the saved intent has not been split or submitted."
+        }
+        if ($ImageReplicaDeploymentLimit -lt [int]::MaxValue) {
+            Write-LogEntry -Message "IMAGE_REPLICA_SUBMISSION | ReplicaCeiling: {0} | SubmissionBatch: {1} | Replay: True" `
+                -StringValues $ImageReplicaDeploymentLimit, @($intent.HostNames).Count
+        }
         Invoke-AzureRestMethod -ARMToken $ARMToken -Method PUT -Uri $intent.Uri -Body $intent.Body | Out-Null
         Write-ShrEvent -Event DeploymentSubmitted -State $state
     } else {
@@ -666,14 +725,16 @@ function Invoke-ShrDeploymentIntent {
 
 function Invoke-ShrContinuation {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string] $CyclePath)
+    param([Parameter(Mandatory)][string] $CyclePath, [hashtable] $InvocationResult)
 
     $operation = Get-ShrOperation
     Set-ShrLogContext -Operation $(if ($operation -and $operation.State.Status -notin @('Completed', 'Superseded')) { $operation.State } else { $null })
     if (-not $operation -or
         $operation.State.Status -in @('Completed', 'Superseded')) {
+        if ($null -ne $InvocationResult) { $InvocationResult.Idle = $true }
         return
     }
+    if ($null -ne $InvocationResult) { Write-ShrEvent -Category SHR_TIMER -Event Started }
     if ($operation.State.Status -eq 'NeedsAttention') {
         Write-ShrEvent -Event NeedsAttention -State $operation.State
         Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) is stopped: $($operation.State.LastError)" -Level Trace
@@ -705,7 +766,7 @@ function Invoke-ShrContinuation {
         if ([DateTimeOffset]$operation.State.DeadlineUtc -le $now) {
             throw 'SHR operation deadline expired. Inspect deployment, host health, sessions and capacity before recovery.'
         }
-        if ($operation.State.ConfigurationHash -ne (Get-ShrConfigurationHash)) {
+        if ($operation.State.ConfigurationHash -ne (Get-ShrConfigurationHash -OperationState $operation.State -CaptureTarget)) {
             throw 'SHR operation configuration changed. Restore the initiating configuration or perform operator recovery.'
         }
         $operation.State.NextBatchAuthorization = $null

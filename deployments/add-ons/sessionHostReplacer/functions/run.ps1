@@ -151,6 +151,21 @@ catch {
     throw
 }
 
+# Validate autoscale protection before any cleanup, tag repair, deployment or retirement.
+$hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
+$hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
+$hostPoolName = Read-FunctionAppSetting HostPoolName
+$hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
+$scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId `
+    -RepairExclusionTag:($replacementMode -ne 'MaintenanceWindow')
+if ($scalingPlanTarget.Source -in @('InvalidExclusionTag', 'Error')) {
+    throw $scalingPlanTarget.ErrorMessage
+}
+if ($replacementMode -eq 'MaintenanceWindow' -and
+    $scalingPlanTarget.ScalingPlanName -and $scalingPlanTarget.Source -ne 'Disabled') {
+    throw "MaintenanceWindow requires autoscale to be disabled. Scaling plan '$($scalingPlanTarget.ScalingPlanName)' is enabled or cannot be safely evaluated."
+}
+
 # Fetch ALL VMs in the resource group once to avoid redundant queries throughout the run
 # Power state will be queried lazily for deletion candidates only
 Write-LogEntry -Message "Fetching all VMs in resource group for caching" -Level Trace
@@ -476,8 +491,7 @@ if ($enableShutdownRetention) {
                 Write-LogEntry -Message "VM $vmName is in shutdown retention - will exclude from replacement processing" -Level Trace
 
                 if ($tagScalingPlanExclusionTag -and $tagScalingPlanExclusionTag -ne ' ') {
-                    $scalingPlanExclusionValue = if ($vm.tags.PSObject.Properties.Name -contains $tagScalingPlanExclusionTag) { $vm.tags.$tagScalingPlanExclusionTag } else { $null }
-                    if ($scalingPlanExclusionValue -ne 'SessionHostReplacer') {
+                    if ($vm.tags.PSObject.Properties.Name -notcontains $tagScalingPlanExclusionTag) {
                         try {
                             Write-LogEntry -Message "Restoring scaling plan exclusion tag on shutdown retention VM: $vmName" -Level Warning
                             $tagsUri = "$resourceManagerUri$($sessionHost.ResourceId)/providers/Microsoft.Resources/tags/default?api-version=2021-04-01"
@@ -585,6 +599,15 @@ catch {
     
     Write-LogEntry -Message "SCHEDULE | Function execution completed at: {0}" -StringValues (Get-Date -AsUTC -Format 'o') -Level Trace
     Write-LogEntry -Message "SessionHostReplacer function exiting - no replicated image versions available" -Level Trace
+    return
+}
+
+try {
+    $imageReplicaDeploymentLimit = Get-ImageReplicaDeploymentLimit -ARMToken $ARMToken `
+        -Image $latestImageVersion -Location $sessionHostParameters.Location
+}
+catch {
+    Write-LogEntry -Message "IMAGE_REPLICA_CAP | New deployment and replacement planning blocked: $($_.Exception.Message)" -Level Error
     return
 }
 
@@ -726,41 +749,15 @@ if (-not $skipLightweightCheck) {
     }
 }
 
-# Query the scaling plan before either planning path so an up-to-date pool can establish
-# exact-image validation evidence for healthy hosts.
-$scalingPlanTarget = $null
-if ($replacementMode -in @('DeleteFirst', 'SideBySide', 'MaintenanceWindow')) {
-    try {
-        $hostPoolSubscriptionId = Read-FunctionAppSetting HostPoolSubscriptionId
-        $hostPoolResourceGroupName = Read-FunctionAppSetting HostPoolResourceGroupName
-        $hostPoolName = Read-FunctionAppSetting HostPoolName
-        $hostPoolResourceId = "/subscriptions/$hostPoolSubscriptionId/resourceGroups/$hostPoolResourceGroupName/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName"
-
-        Write-LogEntry -Message "$replacementMode mode: Querying scaling plan" -Level Trace
-        $scalingPlanTarget = Get-ScalingPlanCurrentTarget -ARMToken $ARMToken -HostPoolResourceId $hostPoolResourceId
-
-        if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
-            Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
-        }
-        else {
-            Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
-        }
-    }
-    catch {
-        if ($replacementMode -eq 'MaintenanceWindow') {
-            throw "MaintenanceWindow cannot verify that autoscale is disabled: $($_.Exception.Message)"
-        }
-        Write-LogEntry -Message "Failed to query scaling plan (will use static capacity): $($_.Exception.Message)" -Level Warning
-        $scalingPlanTarget = $null
-    }
+if ($scalingPlanTarget -and $null -ne $scalingPlanTarget.CapacityPercentage) {
+    Write-LogEntry -Message "Dynamic capacity from scaling plan: $($scalingPlanTarget.CapacityPercentage)% (Plan: $($scalingPlanTarget.ScalingPlanName), Schedule: $($scalingPlanTarget.ScheduleName), Phase: $($scalingPlanTarget.Phase))"
+}
+else {
+    Write-LogEntry -Message "No active scaling plan schedule found - will use static MinimumCapacityPercentage setting"
 }
 
 $maintenanceCanStartNewBatch = $true
 if ($replacementMode -eq 'MaintenanceWindow') {
-    if ($scalingPlanTarget.ScalingPlanName -and $scalingPlanTarget.Source -ne 'Disabled') {
-        throw "MaintenanceWindow requires autoscale to be disabled. Scaling plan '$($scalingPlanTarget.ScalingPlanName)' is enabled or cannot be safely evaluated."
-    }
-
     $deploymentState = Get-DeploymentState
     $maintenanceDecision = Get-MaintenanceExecutionDecision `
         -Request $maintenanceRequest `
@@ -853,6 +850,7 @@ $getReplacementPlan = {
         -SessionHosts $sessionHostsFiltered `
         -RunningDeployments $runningDeployments `
         -LatestImageVersion $latestImageVersion `
+        -ImageReplicaDeploymentLimit $imageReplicaDeploymentLimit `
         -AllowImageVersionRollback $allowImageVersionRollback `
         -ScalingPlanTarget $scalingPlanTarget `
         -MaintenanceMaxVmsRemoved $(if ($maintenanceRequest) { $maintenanceRequest.MaxVmsRemoved } else { 1 }) `
@@ -936,6 +934,11 @@ if ($ContinuationContext) {
             $ContinuationContext.NextBatchAuthorization = $null
             $ContinuationContext.NextBatchAuthorized = $false
         }
+        if ($null -ne $ContinuationContext.TargetCount -and
+            $ContinuationContext.TargetCount -ne $hostPoolReplacementPlan.TargetSessionHostCount) {
+            Write-LogEntry -Message "TARGET_UPDATE | PreviousTarget: {0} | NewTarget: {1} | Batch: {2}" `
+                -StringValues $ContinuationContext.TargetCount, $hostPoolReplacementPlan.TargetSessionHostCount, $ContinuationContext.BatchNumber
+        }
         $ContinuationContext.TargetCount = [int]$hostPoolReplacementPlan.TargetSessionHostCount
         $parameterBytes = [Text.Encoding]::Unicode.GetByteCount(
             ($sessionHostParameters | ConvertTo-Json -Depth 20 -Compress)
@@ -960,6 +963,17 @@ if ($ContinuationContext) {
     $hostPoolReplacementPlan.PossibleDeploymentsCount = [Math]::Min(
         $hostPoolReplacementPlan.PossibleDeploymentsCount, $ContinuationContext.BatchDeploymentLimit
     )
+    if ($ContinuationContext.DeploymentIntent) {
+        $intentNames = @($ContinuationContext.DeploymentIntent.HostNames)
+        if ($intentNames.Count -eq 0) { throw 'Checkpointed deployment has no target host names.' }
+        $registeredNames = @($sessionHostsFiltered | Where-Object {
+            -not $_.IsUnavailable -and $_.SessionHostName -in $intentNames
+        } | ForEach-Object { $_.SessionHostName })
+        $unresolvedCount = @($intentNames | Where-Object { $_ -notin $registeredNames }).Count
+        $hostPoolReplacementPlan.PossibleDeploymentsCount = [Math]::Min(
+            $hostPoolReplacementPlan.PossibleDeploymentsCount, $unresolvedCount
+        )
+    }
 }
 
 if ($replacementMode -eq 'MaintenanceWindow' -and -not $maintenanceCanStartNewBatch) {
@@ -1311,7 +1325,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
         # The planning function doesn't know about pending deleted hosts, so it calculates as if pool is short
         # Example: Target=7, Registered=6 (missing the 1 pending), Plan says deploy 1+replacement
         # But we should ONLY deploy the 1 pending, not grow beyond target
-        $pendingHostCount = $unresolvedHosts.Count
+        $pendingHostCount = [Math]::Min($unresolvedHosts.Count, $imageReplicaDeploymentLimit)
         Write-LogEntry -Message "Adjusting deployment count: plan suggested {0}, but limiting to {1} pending host(s) only" -StringValues $hostPoolReplacementPlan.PossibleDeploymentsCount, $pendingHostCount -Level Warning
         $hostPoolReplacementPlan.PossibleDeploymentsCount = $pendingHostCount
     }
@@ -1499,6 +1513,7 @@ if ($replacementMode -in @('DeleteFirst', 'MaintenanceWindow')) {
             $deploymentResult = Deploy-SessionHosts `
                 -ARMToken $ARMToken `
                 -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount `
+                -ImageReplicaDeploymentLimit $imageReplicaDeploymentLimit `
                 -ExistingSessionHostNames $existingSessionHostNames `
                 -PreferredSessionHostNames $deletedSessionHostNames `
                 -PreferredHostProperties $hostPropertyMapping `
@@ -1579,6 +1594,7 @@ else {
         try {
             $deploymentResult = Deploy-SessionHosts -ARMToken $ARMToken `
                 -NewSessionHostsCount $hostPoolReplacementPlan.PossibleDeploymentsCount `
+                -ImageReplicaDeploymentLimit $imageReplicaDeploymentLimit `
                 -ExistingSessionHostNames $existingSessionHostNames `
                 -SessionHostParameters $sessionHostParameters
             
@@ -1909,8 +1925,12 @@ if ($ContinuationContext -and $replacementMode -eq 'SideBySide') {
         $_.ImageVersion -eq $latestImageVersion.Version -and
         $_.ImageDefinition -eq $latestImageVersion.Definition
     }).Count
-    $ContinuationContext.MoreDeploymentsAllowed = $ContinuationContext.DeploymentBatchReady -and
-        $latestHostCount -lt $ContinuationContext.TargetCount
+    $requestedTargetCount = [int](Read-FunctionAppSetting TargetSessionHostCount)
+    if ($requestedTargetCount -eq 0) { $requestedTargetCount = $ContinuationContext.TargetCount }
+    $ContinuationContext.MoreDeploymentsAllowed = $ContinuationContext.DeploymentBatchReady -and (
+        $latestHostCount -lt $requestedTargetCount -or
+        $requestedTargetCount -ne $ContinuationContext.TargetCount
+    )
 }
 
 Write-LogEntry -Message "METRICS | Total: {0} | Enabled: {1} | Target: {2} | ToReplace: {3} ({4}%) | InDrain: {5} | PendingDelete: {6} | ShutdownRetention: {7} | ToDeployNow: {8} | RunningDeployments: {9} | NewHosts: {10}/{11} ({12}%) Available | LatestImage: {13}" `

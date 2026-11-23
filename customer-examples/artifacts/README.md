@@ -72,6 +72,20 @@ command-line syntax instead of PowerShell parameter splatting.
 
 ---
 
+## Application script structure
+
+All 23 software installer examples keep canonical discovery/removal/process/logging helpers embedded
+in their root script, authored in [`ArtifactFramework.ps1`](../../tools/ArtifactFramework.ps1).
+The main script passes product matching rules, arguments, timeouts, and success codes explicitly;
+no external module is required. See the
+[reusable application helper contract](../../docs/artifacts-guide.md#reusable-application-helpers).
+
+Update embedded definitions with
+`& .\tools\Sync-ArtifactFramework.ps1 -ArtifactPath <package directories>` from the repository root.
+[`ArtifactFramework.Tests.ps1`](../../tests/ArtifactFramework.Tests.ps1) enforces identical helper
+implementations. Use framework-only synchronization for customized customer scripts, preserving
+product configuration, READMEs, and staged installers.
+
 ## Available packages
 
 | Package | Description | downloads.json key(s) |
@@ -87,6 +101,7 @@ command-line syntax instead of PowerShell parameter splatting.
 | [Configure-LocalServiceAccount](Configure-LocalServiceAccount/) | Create or update a local service account using a Key Vault password | — |
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
 | [Configure-OneDrivePolicy](Configure-OneDrivePolicy/) | Configure OneDrive Known Folder Move and free-space thresholds | — |
+| [Configure-OneDrivePinnedFolders](Configure-OneDrivePinnedFolders/) | Stage a per-user OneDrive folder-pinning script with a delayed sign-in task and failure retries | — |
 | [Configure-RemoteDesktopPolicy](Configure-RemoteDesktopPolicy/) | Configure Remote Desktop session policies | — |
 | [Configure-SecureNetworkProtocols](Configure-SecureNetworkProtocols/) | Disable legacy TLS/SSL and weak cipher suites | — |
 | [Configure-WindowsUpdatePolicy](Configure-WindowsUpdatePolicy/) | Configure Windows Update / WSUS policy settings | — |

@@ -10,64 +10,71 @@ $Script:Name = 'Deploy-InstallRoot'
 #endregion
 
 #region Supporting Functions
-Function Write-Log {
-    Param (
-        [Parameter(Mandatory = $false, Position = 0)]
-        [ValidateSet("Info", "Warning", "Error")]
-        $Category = 'Info',
-        [Parameter(Mandatory = $true, Position = 1)]
-        $Message
+function Invoke-ApplicationProcess {
+    param (
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000
     )
-
-    $Content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
-    if (-not $env:SUPPRESS_FILELOG) {
-        Add-Content $Script:Log $Content -ErrorAction SilentlyContinue
+    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -ErrorAction Stop
+    # Windows PowerShell needs a retained handle to read ExitCode after WaitForExit.
+    $null = $process.Handle
+    if (-not $process.WaitForExit($TimeoutMs)) { $process.Kill(); throw "$Action timed out." }
+    if ($null -eq $process.ExitCode) { throw "$Action did not report an exit code." }
+    if ($SuccessExitCodes.Count -gt 0 -and $process.ExitCode -notin $SuccessExitCodes) {
+        throw "$Action failed with exit code $($process.ExitCode)."
     }
-    Switch ($Category) {
-        'Info'    { Write-Host $Content }
-        'Error'   { Write-Error $Content -ErrorAction Continue }
-        'Warning' { Write-Warning $Content }
+    return $process
+}
+
+function Write-Log {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)][AllowEmptyString()][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Category = 'Info'
+    )
+    $content = "[$(Get-Date -Format 'MM/dd/yyyy HH:mm:ss')]`t$Category`t`t$Message"
+    if ($env:SUPPRESS_FILELOG -ne '1') {
+        Add-Content -LiteralPath $script:Log -Value $content -ErrorAction Stop
+    }
+    switch ($Category) {
+        'Info' { Write-Host $content }
+        'Warning' { Write-Warning $content }
+        'Error' { Write-Error $content -ErrorAction Continue }
     }
 }
 
 function New-Log {
-    Param (
-        [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Path
+    param (
+        [Parameter(Position = 0)][string]$Path,
+        [string]$Name = 'Artifact',
+        [string]$FilePath
     )
-
     if ($env:SUPPRESS_FILELOG -eq '1') { return }
-    $date = Get-Date -UFormat "%Y-%m-%d %H-%M-%S"
-    Set-Variable logFile -Scope Script
-    $script:logFile = "$Script:Name-$date.log"
-
-    if ((Test-Path $path ) -eq $false) {
-        $null = New-Item -Path $path -type directory
+    if ($FilePath) {
+        $script:Log = $FilePath
+        $Path = Split-Path $FilePath -Parent
     }
-
-    $script:Log = Join-Path $path $logfile
-
-    Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
+    else {
+        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'A log directory or FilePath is required.' }
+        $script:Log = Join-Path $Path "$Name-$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+    }
+    New-Item -Path $Path -ItemType Directory -Force -ErrorAction Stop | Out-Null
+    Add-Content -LiteralPath $script:Log -Value "Date`t`t`tCategory`t`tDetails" -ErrorAction Stop
 }
 
 function Invoke-MsiProcess {
-    [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$ArgumentList,
-        [Parameter(Mandatory = $true)]
-        [string]$Action,
+        [Parameter(Mandatory = $true)][string]$ArgumentList,
+        [Parameter(Mandatory = $true)][string]$Action,
         [int]$TimeoutMs = 600000,
         [int]$MaxAttempts = 11,
         [int]$RetryDelaySeconds = 30
     )
-
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $ArgumentList -PassThru
-        if (-not $process.WaitForExit($TimeoutMs)) {
-            $process.Kill()
-            throw "$Action timed out after $($TimeoutMs / 60000) minutes and was terminated."
-        }
+        $process = Invoke-ApplicationProcess -FilePath 'msiexec.exe' -ArgumentList $ArgumentList `
+            -Action $Action -TimeoutMs $TimeoutMs -SuccessExitCodes @()
         if ($process.ExitCode -ne 1618) { return $process }
         if ($attempt -eq $MaxAttempts) {
             throw "$Action failed after $MaxAttempts attempts with exit code 1618 (another installation is already in progress)."
@@ -77,52 +84,85 @@ function Invoke-MsiProcess {
     }
 }
 
-function Remove-MSIApplication {
+function Get-InstalledApplications {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
-        [string]$Name,
-        [int]$TimeoutMs = 600000
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string]$Publisher = '*',
+        [string[]]$RegistryPaths = @(
+            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+            'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+        ),
+        [string]$ProductCodePattern = '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$',
+        [switch]$RegEx,
+        [switch]$WindowsInstaller
     )
-
-    $uninstallRegistryPaths = @(
-        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
-        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
-    )
-    $installedApplications = @(
-        foreach ($uninstallRegistryPath in $uninstallRegistryPaths) {
-            if (Test-Path -LiteralPath $uninstallRegistryPath) {
-                Get-ChildItem -LiteralPath $uninstallRegistryPath -ErrorAction SilentlyContinue | ForEach-Object {
-                    $application = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
-                    if ($application.DisplayName -like "*$Name*" -and
-                        $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$') {
-                        [pscustomobject]@{
-                            DisplayName = $application.DisplayName
-                            ProductCode = $_.PSChildName
-                        }
+    foreach ($registryPath in $RegistryPaths) {
+        if (Test-Path -LiteralPath $registryPath) {
+            Get-ChildItem -LiteralPath $registryPath -ErrorAction Stop | ForEach-Object {
+                $application = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction Stop
+                $isWindowsInstaller = $application.WindowsInstaller -eq 1
+                $productCode = if ($isWindowsInstaller -and $_.PSChildName -match $ProductCodePattern) { $_.PSChildName } else { '' }
+                $nameMatches = if ($RegEx) { $application.DisplayName -match $Name } else { $application.DisplayName -like $Name }
+                if ($nameMatches -and ($Publisher -eq '*' -or $application.Publisher -like $Publisher) -and
+                    (-not $WindowsInstaller -or $productCode)) {
+                    [pscustomobject]@{
+                        DisplayName = $application.DisplayName
+                        DisplayVersion = $application.DisplayVersion
+                        Publisher = $application.Publisher
+                        InstallLocation = $application.InstallLocation
+                        ProductCode = $productCode
+                        WindowsInstaller = $isWindowsInstaller
+                        RegistryPath = $_.PSPath
+                        QuietUninstallString = $application.QuietUninstallString
+                        BundleCachePath = $application.BundleCachePath
                     }
                 }
             }
         }
-    )
+    }
+}
 
-    if ($installedApplications.Count -eq 0) {
-        Write-Log -Category Info -Message "No MSI installation of '$Name' was found."
+function Remove-MsiApplications {
+    param (
+        [object[]]$Applications = @(),
+        [int[]]$SuccessExitCodes = @(0, 3010),
+        [int]$TimeoutMs = 600000,
+        [switch]$AllowMultiple,
+        [switch]$VerifyRemoval,
+        [string]$ArgumentListFormat = '/x {0} /qn /norestart'
+    )
+    if ($Applications.Count -eq 0) {
+        Write-Log -Message 'No matching MSI installation was found.'
         return
     }
-    if ($installedApplications.Count -gt 1) {
-        $matchedApplications = ($installedApplications | ForEach-Object { "$($_.DisplayName) [$($_.ProductCode)]" }) -join ', '
-        throw "Multiple MSI installations matched '$Name': $matchedApplications"
+    if (-not $AllowMultiple -and $Applications.Count -gt 1) {
+        $matchesText = ($Applications | ForEach-Object { "$($_.DisplayName) [$($_.ProductCode)]" }) -join ', '
+        throw "Multiple MSI installations matched: $matchesText"
     }
-
-    $installedApplication = $installedApplications[0]
-    Write-Log -Category Info -Message "Removing '$($installedApplication.DisplayName)' with ProductCode '$($installedApplication.ProductCode)'."
-    $uninstaller = Invoke-MsiProcess -ArgumentList "/x $($installedApplication.ProductCode) /qn /norestart" -Action "'$Name' MSI uninstaller" -TimeoutMs $TimeoutMs
-    if ($uninstaller.ExitCode -notin $SuccessExitCodes) {
-        throw "'$Name' MSI uninstaller failed with exit code $($uninstaller.ExitCode)."
+    if ($AllowMultiple) { $Applications = @($Applications | Sort-Object ProductCode -Unique) }
+    if (-not $ArgumentListFormat.Contains('{0}')) { throw 'MSI uninstall arguments must include the {0} ProductCode placeholder.' }
+    foreach ($installedApplication in $Applications) {
+        if ($installedApplication.ProductCode -notmatch '^\{[0-9A-Fa-f-]{36}\}$') {
+            throw "A valid MSI ProductCode is required to remove '$($installedApplication.DisplayName)'."
+        }
+        Write-Log -Message "Removing '$($installedApplication.DisplayName)' with ProductCode '$($installedApplication.ProductCode)'."
+        $uninstaller = Invoke-MsiProcess -ArgumentList ($ArgumentListFormat -f $installedApplication.ProductCode) `
+            -Action "'$($installedApplication.DisplayName)' uninstaller" -TimeoutMs $TimeoutMs
+        if ($uninstaller.ExitCode -notin $SuccessExitCodes) {
+            throw "'$($installedApplication.DisplayName)' uninstaller failed with exit code $($uninstaller.ExitCode)."
+        }
+        if ($uninstaller.ExitCode -eq 3010) { Write-Log -Category Warning -Message 'MSI removal requires a reboot.' }
+        if ($VerifyRemoval) {
+            if ([string]::IsNullOrWhiteSpace($installedApplication.RegistryPath)) {
+                throw 'RegistryPath is required to verify MSI removal.'
+            }
+            if (Test-Path -LiteralPath $installedApplication.RegistryPath) {
+                throw "MSI registration remains after removal: '$($installedApplication.ProductCode)'."
+            }
+        }
+        Write-Log -Message "'$($installedApplication.DisplayName)' uninstall completed successfully."
     }
-
-    Write-Log -Category Info -Message "'$Name' MSI uninstall completed successfully."
 }
 
 #endregion
@@ -131,14 +171,16 @@ function Remove-MSIApplication {
 
 #region Initialization
 
-New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs')
+New-Log (Join-Path -Path $Env:SystemRoot -ChildPath 'Logs') -Name 'Deploy-InstallRoot'
 $ErrorActionPreference = 'Stop'
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
 $InstallerTimeoutMs = 600000 # 10 minutes
 
 if ($DeploymentType -eq 'Uninstall') {
-    Remove-MSIApplication -Name $SoftwareName -TimeoutMs $InstallerTimeoutMs
+    $applications = @(Get-InstalledApplications -Name "*$SoftwareName*" -WindowsInstaller `
+        -ProductCodePattern '^\{[0-9A-Fa-f-]{36}\}$')
+    Remove-MsiApplications -Applications $applications -SuccessExitCodes $SuccessExitCodes -TimeoutMs $InstallerTimeoutMs
 }
 else {
     $InstallerFiles = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.msi' -File)
