@@ -234,9 +234,11 @@ resource roleDefinition_keyVaultDeployAction 'Microsoft.Authorization/roleDefini
   properties: {
     roleName: 'KeyVaultDeployAction_${subscription().subscriptionId}'
     description: 'Allows a principal to get but not view Key Vault secrets for an ARM template deployment.'
-    assignableScopes: [
+    assignableScopes: union([
       subscription().id
-    ]
+    ], [
+      split(keyVaultResourceId, '/')[2]
+    ])
     permissions: [
       {
         actions: [
@@ -252,9 +254,11 @@ resource roleDefinition_subnetJoinAction 'Microsoft.Authorization/roleDefinition
   properties: {
     roleName: 'SubnetJoinAction_${subscription().subscriptionId}'
     description: 'Allows a principal to join subnets for an ARM template deployment.'
-    assignableScopes: [
+    assignableScopes: union([
       subscription().id
-    ]
+    ], [
+      split(subnetResourceId, '/')[2]
+    ])
     permissions: [
       {
         actions: [
