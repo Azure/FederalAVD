@@ -47,8 +47,8 @@ param azureKeyVaultPrivateDnsZoneResourceId string = ''
 @description('Optional. Enable boot diagnostics for the validation VM.')
 param bootDiagnostics bool = true
 
-@description('Optional. Name of the disk access resource to protect the validation VM\'s disk.')
-param diskAccessName string = ''
+// @description('Optional. Name of the disk access resource to protect the validation VM\'s disk.')
+// param diskAccessName string = ''
 
 @description('Optional. Disk controller type for the validation VM.')
 @allowed([
@@ -73,13 +73,13 @@ param diskEncryptionType string = 'EncryptionAtRestWithPlatformAndCustomerKeys'
 @maxLength(80)
 param diskName string
 
-@description('Optional. Network access configuration for the validation VM\'s disk.')
-@allowed([
-  'AllowAll'
-  'AllowPrivate'
-  'DenyAll'
-])
-param diskNetworkAccess string = 'DenyAll'
+// @description('Optional. Network access configuration for the validation VM\'s disk.')
+// @allowed([
+//   'AllowAll'
+//   'AllowPrivate'
+//   'DenyAll'
+// ])
+// param diskNetworkAccess string = 'DenyAll'
 
 @description('Optional. Enable encryption at host for the validation VM.')
 param encryptionAtHost bool = true
@@ -282,29 +282,29 @@ module networkInterface '../../shared/modules/resourceModules/network/networkInt
   }
 }
 
-module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
-  scope: rg
-  params: {
-    name: diskAccessName
-    location: location
-    tags: tags[?'Microsoft.Compute/diskAccesses'] ?? {}
-  }
-}
+// module diskAccess '../../shared/modules/resourceModules/compute/diskAccesses/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
+//   scope: rg
+//   params: {
+//     name: diskAccessName
+//     location: location
+//     tags: tags[?'Microsoft.Compute/diskAccesses'] ?? {}
+//   }
+// }
 
-module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
-  scope: rg
-  params: {
-    groupId: 'disks'
-    location: location
-    name: 'pe-${diskAccessName}'
-    privateDNSZoneIds: [
-      blobDnsZoneId
-    ]
-    privateLinkServiceId: diskAccess!.outputs.resourceId
-    subnetResourceId: subnetResourceId
-    tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
-  }
-}
+// module diskAccessPrivateEndpoint '../../shared/modules/resourceModules/network/privateEndpoints/deploy.bicep' = if (diskNetworkAccess == 'AllowPrivate') {
+//   scope: rg
+//   params: {
+//     groupId: 'disks'
+//     location: location
+//     name: 'pe-${diskAccessName}'
+//     privateDNSZoneIds: [
+//       blobDnsZoneId
+//     ]
+//     privateLinkServiceId: diskAccess!.outputs.resourceId
+//     subnetResourceId: subnetResourceId
+//     tags: tags[?'Microsoft.Network/privateEndpoints'] ?? {}
+//   }
+// }
 
 module templateSpec '../../shared/modules/resourceModules/resources/templateSpecs/deploy.bicep' = {
   scope: rg
@@ -452,7 +452,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'diskAccessResourceId'
-        value: diskNetworkAccess == 'AllowPrivate' ? diskAccess!.outputs.resourceId : ''
+        value: '' //diskNetworkAccess == 'AllowPrivate' ? diskAccess!.outputs.resourceId : ''
       }
       {
         name: 'diskControllerType'
@@ -468,7 +468,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       }
       {
         name: 'diskNetworkAccess'
-        value: diskNetworkAccess
+        value: 'AllowAll' //diskNetworkAccess
       }
       {
         name: 'encryptionAtHost'

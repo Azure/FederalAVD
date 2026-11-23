@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "5074953103685795622"
+      "templateHash": "11775467686066731985"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -136,13 +136,6 @@
         "description": "Optional. Enable boot diagnostics for the validation VM."
       }
     },
-    "diskAccessName": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Optional. Name of the disk access resource to protect the validation VM's disk."
-      }
-    },
     "diskControllerType": {
       "type": "string",
       "defaultValue": "SCSI",
@@ -179,18 +172,6 @@
       "maxLength": 80,
       "metadata": {
         "description": "Required. Complete name for the validation VM disk."
-      }
-    },
-    "diskNetworkAccess": {
-      "type": "string",
-      "defaultValue": "DenyAll",
-      "allowedValues": [
-        "AllowAll",
-        "AllowPrivate",
-        "DenyAll"
-      ],
-      "metadata": {
-        "description": "Optional. Network access configuration for the validation VM's disk."
       }
     },
     "encryptionAtHost": {
@@ -1661,270 +1642,6 @@
         }
       },
       "dependsOn": [
-        "rg"
-      ]
-    },
-    "diskAccess": {
-      "condition": "[equals(parameters('diskNetworkAccess'), 'AllowPrivate')]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('diskAccess-{0}', uniqueString('diskAccess', deployment().name))]",
-      "resourceGroup": "[parameters('resourceGroupName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "name": {
-            "value": "[parameters('diskAccessName')]"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "tags": {
-            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/diskAccesses'), createObject())]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.49.2.45890",
-              "templateHash": "9692218098836964198"
-            },
-            "name": "Disk access resource",
-            "description": "Deploys a regional disk access resource; private endpoints and managed disk associations are configured separately."
-          },
-          "parameters": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the disk access resource to deploy."
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Optional. Azure region for the disk access resource; defaults to the deployment resource group region."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags applied to the disk access resource."
-              }
-            }
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Compute/diskAccesses",
-              "apiVersion": "2023-04-02",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]"
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the disk access resource."
-              },
-              "value": "[resourceId('Microsoft.Compute/diskAccesses', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure resource name of the disk access resource."
-              },
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "rg"
-      ]
-    },
-    "diskAccessPrivateEndpoint": {
-      "condition": "[equals(parameters('diskNetworkAccess'), 'AllowPrivate')]",
-      "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
-      "name": "[format('diskAccessPrivateEndpoint-{0}', uniqueString('diskAccessPrivateEndpoint', deployment().name))]",
-      "resourceGroup": "[parameters('resourceGroupName')]",
-      "properties": {
-        "expressionEvaluationOptions": {
-          "scope": "inner"
-        },
-        "mode": "Incremental",
-        "parameters": {
-          "groupId": {
-            "value": "disks"
-          },
-          "location": {
-            "value": "[parameters('location')]"
-          },
-          "name": {
-            "value": "[format('pe-{0}', parameters('diskAccessName'))]"
-          },
-          "privateDNSZoneIds": {
-            "value": [
-              "[variables('blobDnsZoneId')]"
-            ]
-          },
-          "privateLinkServiceId": {
-            "value": "[reference('diskAccess').outputs.resourceId.value]"
-          },
-          "subnetResourceId": {
-            "value": "[parameters('subnetResourceId')]"
-          },
-          "tags": {
-            "value": "[coalesce(tryGet(parameters('tags'), 'Microsoft.Network/privateEndpoints'), createObject())]"
-          }
-        },
-        "template": {
-          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "1.0.0.0",
-          "metadata": {
-            "_generator": {
-              "name": "bicep",
-              "version": "0.49.2.45890",
-              "templateHash": "9996145834195031428"
-            },
-            "name": "Private endpoint",
-            "description": "Deploys a private endpoint in an existing subnet for one target subresource, with an optional NIC name and DNS zone group referencing existing private DNS zones."
-          },
-          "parameters": {
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Required. Name of the private endpoint to deploy."
-              }
-            },
-            "location": {
-              "type": "string",
-              "defaultValue": "[resourceGroup().location]",
-              "metadata": {
-                "description": "Optional. Azure region for the private endpoint; defaults to the deployment resource group region."
-              }
-            },
-            "tags": {
-              "type": "object",
-              "defaultValue": {},
-              "metadata": {
-                "description": "Optional. Tags applied to the private endpoint."
-              }
-            },
-            "subnetResourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the subnet to deploy the private endpoint into."
-              }
-            },
-            "privateLinkServiceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the resource to create the private endpoint for."
-              }
-            },
-            "groupId": {
-              "type": "string",
-              "metadata": {
-                "description": "Group ID (sub-resource) of the private link service."
-              }
-            },
-            "customNetworkInterfaceName": {
-              "type": "string",
-              "defaultValue": "",
-              "metadata": {
-                "description": "Optional. Custom name for the network interface created for this endpoint."
-              }
-            },
-            "privateDNSZoneIds": {
-              "type": "array",
-              "defaultValue": [],
-              "metadata": {
-                "description": "Optional. Private DNS zone group: resource IDs of private DNS zones to register this endpoint in."
-              }
-            }
-          },
-          "variables": {
-            "copy": [
-              {
-                "name": "privateDnsZoneConfigs",
-                "count": "[length(parameters('privateDNSZoneIds'))]",
-                "input": {
-                  "name": "[replace(last(split(parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')], '/')), '.', '-')]",
-                  "properties": {
-                    "privateDnsZoneId": "[parameters('privateDNSZoneIds')[copyIndex('privateDnsZoneConfigs')]]"
-                  }
-                }
-              }
-            ]
-          },
-          "resources": [
-            {
-              "type": "Microsoft.Network/privateEndpoints",
-              "apiVersion": "2023-09-01",
-              "name": "[parameters('name')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "subnet": {
-                  "id": "[parameters('subnetResourceId')]"
-                },
-                "customNetworkInterfaceName": "[if(not(empty(parameters('customNetworkInterfaceName'))), parameters('customNetworkInterfaceName'), null())]",
-                "privateLinkServiceConnections": [
-                  {
-                    "name": "[parameters('name')]",
-                    "properties": {
-                      "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
-                      "groupIds": [
-                        "[parameters('groupId')]"
-                      ]
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "condition": "[not(empty(parameters('privateDNSZoneIds')))]",
-              "type": "Microsoft.Network/privateEndpoints/privateDnsZoneGroups",
-              "apiVersion": "2023-04-01",
-              "name": "[format('{0}/{1}', parameters('name'), 'default')]",
-              "properties": {
-                "privateDnsZoneConfigs": "[variables('privateDnsZoneConfigs')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-              ]
-            }
-          ],
-          "outputs": {
-            "resourceId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the private endpoint."
-              },
-              "value": "[resourceId('Microsoft.Network/privateEndpoints', parameters('name'))]"
-            },
-            "name": {
-              "type": "string",
-              "metadata": {
-                "description": "Azure resource name of the private endpoint."
-              },
-              "value": "[parameters('name')]"
-            }
-          }
-        }
-      },
-      "dependsOn": [
-        "diskAccess",
         "rg"
       ]
     },
@@ -4440,7 +4157,7 @@
             "value": "[reference('keyVault').outputs.resourceId.value]"
           },
           "functionAppAppSettings": {
-            "value": "[concat(createArray(createObject('name', 'acceleratedNetworking', 'value', string(parameters('acceleratedNetworking'))), createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityResourceId', 'value', parameters('artifactsUserAssignedIdentityResourceId')), createObject('name', 'AzureFunctionsJobHost__functionTimeout', 'value', '01:30:00'), createObject('name', 'bootDiagnostics', 'value', string(parameters('bootDiagnostics'))), createObject('name', 'diskAccessResourceId', 'value', if(equals(parameters('diskNetworkAccess'), 'AllowPrivate'), reference('diskAccess').outputs.resourceId.value, '')), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', if(empty(parameters('diskEncryptionSetName')), '', reference('diskEncryptionSet').outputs.resourceId.value)), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'diskNetworkAccess', 'value', parameters('diskNetworkAccess')), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(variables('integrityMonitoringValidation'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'resourceGroupName', 'value', parameters('resourceGroupName')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'subscriptionId', 'value', subscription().subscriptionId), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'templateSpecResourceId', 'value', reference('templateSpec').outputs.versionResourceId.value), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm'))), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
+            "value": "[concat(createArray(createObject('name', 'acceleratedNetworking', 'value', string(parameters('acceleratedNetworking'))), createObject('name', 'artifactsContainerUri', 'value', parameters('artifactsContainerUri')), createObject('name', 'artifactsUserAssignedIdentityResourceId', 'value', parameters('artifactsUserAssignedIdentityResourceId')), createObject('name', 'AzureFunctionsJobHost__functionTimeout', 'value', '01:30:00'), createObject('name', 'bootDiagnostics', 'value', string(parameters('bootDiagnostics'))), createObject('name', 'diskAccessResourceId', 'value', ''), createObject('name', 'diskControllerType', 'value', parameters('diskControllerType')), createObject('name', 'diskEncryptionSetResourceId', 'value', if(empty(parameters('diskEncryptionSetName')), '', reference('diskEncryptionSet').outputs.resourceId.value)), createObject('name', 'diskName', 'value', parameters('diskName')), createObject('name', 'diskNetworkAccess', 'value', 'AllowAll'), createObject('name', 'encryptionAtHost', 'value', string(parameters('encryptionAtHost'))), createObject('name', 'imageVersionResourceId', 'value', parameters('imageVersionResourceId')), createObject('name', 'integrityMonitoring', 'value', string(variables('integrityMonitoringValidation'))), createObject('name', 'keyVaultResourceId', 'value', parameters('keyVaultResourceId')), createObject('name', 'licenseType', 'value', parameters('imageLicenseType')), createObject('name', 'location', 'value', parameters('location')), createObject('name', 'networkInterfaceName', 'value', parameters('networkInterfaceName')), createObject('name', 'privateIPAddress', 'value', parameters('privateIPAddress')), createObject('name', 'resourceGroupName', 'value', parameters('resourceGroupName')), createObject('name', 'secureBoot', 'value', string(parameters('secureBoot'))), createObject('name', 'securityType', 'value', parameters('securityType')), createObject('name', 'subnetResourceId', 'value', parameters('subnetResourceId')), createObject('name', 'subscriptionId', 'value', subscription().subscriptionId), createObject('name', 'tags', 'value', string(coalesce(tryGet(parameters('tags'), 'Microsoft.Compute/virtualMachines'), createObject()))), createObject('name', 'templateSpecResourceId', 'value', reference('templateSpec').outputs.versionResourceId.value), createObject('name', 'virtualMachineName', 'value', parameters('virtualMachineName')), createObject('name', 'virtualMachineSize', 'value', parameters('virtualMachineSize')), createObject('name', 'vmCustomizations', 'value', string(parameters('virtualMachineCustomizations'))), createObject('name', 'vTpm', 'value', string(parameters('vTpm'))), createObject('name', 'WEBSITE_TIME_ZONE', 'value', parameters('timeZone'))))]"
           },
           "functionAppDelegatedSubnetResourceId": {
             "value": "[variables('integrationSubnetId')]"
@@ -5458,7 +5175,6 @@
         }
       },
       "dependsOn": [
-        "diskAccess",
         "diskEncryptionSet",
         "keys",
         "keyVault",
