@@ -23,6 +23,13 @@ param mainTemplate object
 @sys.description('Optional. The UI form definition object to attach to the template spec version. When provided, enables the guided portal deployment experience.')
 param uiFormDefinition object = {}
 
+var properties = empty(uiFormDefinition) ? {
+    mainTemplate: mainTemplate
+  } : {
+    mainTemplate: mainTemplate
+    uiFormDefinition: uiFormDefinition
+  }
+
 resource templateSpec 'Microsoft.Resources/templateSpecs@2022-02-01' = {
   name: name
   location: location
@@ -38,10 +45,7 @@ resource templateSpecVersion 'Microsoft.Resources/templateSpecs/versions@2022-02
   name: version
   location: location
   tags: tags
-  properties: {
-    mainTemplate: mainTemplate
-    uiFormDefinition: !empty(uiFormDefinition) ? uiFormDefinition : null
-  }
+  properties: properties
 }
 
 @sys.description('Resource ID of the parent Template Spec, without the version segment.')

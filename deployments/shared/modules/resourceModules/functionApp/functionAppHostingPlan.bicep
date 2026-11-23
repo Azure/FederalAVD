@@ -14,8 +14,8 @@ param functionAppKind string
 param name string
 @description('Required. Tier and SKU joined by an underscore, for example PremiumV3_P0v3. PremiumV3 SKUs provide Dedicated App Service hosting, not Functions Elastic Premium EP SKUs.')
 param planPricing string
-@description('Required. Tags keyed by resource type. Applies the Microsoft.Web/serverfarms entry when present.')
-param tags object
+@description('Optional. Key-value pairs to apply as tags to the Azure resources.')
+param tags object = {}
 @description('Required. Enables zone redundancy and requests three workers when true; otherwise requests one worker. Verify SKU, region, and scale-unit support before enabling.')
 param zoneRedundant bool
 

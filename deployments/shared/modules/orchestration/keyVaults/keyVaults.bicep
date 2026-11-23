@@ -3,6 +3,7 @@ metadata description = 'Deploys optional credential and encryption vaults in an 
 
 targetScope = 'subscription'
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../networking/functions.bicep'
+
 // Shared module: deploys AVD Secrets Key Vault and/or Encryption Key Vault into an existing resource group.
 // Called by both the standalone Security deployment and the hostpool inline fallback.
 // The caller is responsible for creating the resource group before calling this module.
@@ -40,7 +41,7 @@ param privateEndpointSubnetResourceId string = ''
 param privateEndpointNameConv string = ''
 @description('Optional. Private endpoint NIC name pattern using RESOURCE, SUBRESOURCE, and VNETID substitution tokens.')
 param privateEndpointNICNameConv string = ''
-@description('Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
+@description('Optional. Key-value pairs to apply as tags to the Azure resources.')
 param tags object = {}
 @secure()
 @description('Optional. Local administrator password to store as a credential secret; empty skips this secret.')
@@ -203,7 +204,9 @@ module encryptionKeyVault_pe '../../resourceModules/network/privateEndpoints/dep
 
 @description('Created credential vault resource ID, or an empty string when credential vault deployment is disabled.')
 output secretsKeyVaultResourceId string = deploySecretsKv ? secretsKeyVault!.outputs.resourceId : ''
+
 @description('Created encryption vault resource ID, or an empty string when encryption vault deployment is disabled.')
 output encryptionKeyVaultResourceId string = deployEncryptionKeyVault ? encryptionKeyVault!.outputs.resourceId : ''
+
 @description('Created encryption vault URI, or an empty string when encryption vault deployment is disabled.')
 output encryptionKeyVaultUri string = deployEncryptionKeyVault ? encryptionKeyVault!.outputs.uri : ''

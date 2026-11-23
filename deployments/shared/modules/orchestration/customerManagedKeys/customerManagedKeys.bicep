@@ -43,7 +43,7 @@ param keyExpirationInDays int = 180
 @description('Optional. Azure region for UAIs and DiskEncryptionSets. Defaults to resource group location.')
 param location string = resourceGroup().location
 
-@description('Optional. Tags to apply to created resources. Uses standard Azure resource-type tag bag pattern.')
+@description('Optional. Key-value pairs to apply as tags to the Azure resources.')
 param tags object = {}
 
 @description('Optional. Resource ID to stamp as the cm-resource-parent tag on keys and identities.')
@@ -141,7 +141,7 @@ module paasKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
       attributesEnabled: true
       attributesExportable: false
       rotationPolicy: rotationPolicy
-      tags: parentTag
+      tags: union(parentTag, tags[?'Microsoft.KeyVault/vaults'] ?? {})
     }
   }
 ]
@@ -206,7 +206,7 @@ module diskKeys '../../resourceModules/keyVault/vaults/keys/deploy.bicep' = [
       keyReleasePolicy: (config.?confidentialVMOSDiskEncryption ?? false)
         ? { data: cvmKeyReleasePolicy, contentType: 'application/json; charset=utf-8' }
         : {}
-      tags: parentTag
+      tags: union(parentTag, tags[?'Microsoft.KeyVault/vaults/keys'] ?? {})
     }
   }
 ]
