@@ -1,5 +1,7 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$runPath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1'
+BeforeAll {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    $runPath = Join-Path $repoRoot 'deployments\add-ons\imageValidation\scripts\run.ps1'
+}
 
 Describe 'Image validation infrastructure' {
     BeforeAll {
