@@ -8,14 +8,6 @@
             "Adobe-Acrobat-Reader-DC"
         ]
     },
-    "AmazonWorkSpacesClient": {
-        "Description": "Amazon WorkSpaces Client Installer",
-        "WingetId": "Amazon.WorkSpacesClient",
-        "DestinationFileName": "Amazon-WorkSpacesClient.msi",
-        "DestinationFolders": [
-            "Amazon-Workspaces-Client"
-        ]
-    },
     "AzCli": {
         "Description": "Optional: Azure CLI Installer",
         "DownloadUrl": "https://aka.ms/installazurecliwindowsx64",

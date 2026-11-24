@@ -1,6 +1,6 @@
 BeforeDiscovery {
     $softwareArtifacts = @(
-        '7-Zip', 'Adobe-Acrobat-Reader-DC', 'Amazon-Workspaces-Client', 'BuiltIn-UWP-Apps',
+        '7-Zip', 'Adobe-Acrobat-Reader-DC', 'BuiltIn-UWP-Apps',
         'DoD-InstallRoot', 'Git-for-Windows', 'Google-Chrome-Enterprise', 'LGPO',
         'Microsoft-AVD-Multimedia-Redirection', 'Microsoft-AzCLI', 'Microsoft-Defender-VDI-Onboarding',
         'Microsoft-Edge-Enterprise', 'Microsoft-FSLogix', 'Microsoft-Power-BI-Desktop',

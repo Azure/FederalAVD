@@ -92,7 +92,6 @@ product configuration, READMEs, and staged installers.
 | --- | --- | --- |
 | [7-Zip](7-Zip/) | 7-Zip archiver | `7Zip` |
 | [Adobe-Acrobat-Reader-DC](Adobe-Acrobat-Reader-DC/) | Adobe Acrobat Reader DC | `AdobeAcrobatReaderDC` |
-| [Amazon-Workspaces-Client](Amazon-Workspaces-Client/) | Amazon WorkSpaces client | `AmazonWorkSpacesClient` |
 | [BuiltIn-UWP-Apps](BuiltIn-UWP-Apps/) | Provision built-in Windows UWP apps for all users | `WindowsCalculator`, `MicrosoftPaint`, `SnippingTool`, `Notepad`, `MicrosoftClipchamp`, `MicrosoftPhotos` |
 | [Configure-AVDSessionHostPolicy](Configure-AVDSessionHostPolicy/) | Configure AVD security, graphics, Shortpath, and directional clipboard policies | `AVDAdministrativeTemplates` |
 | [Configure-ChromePolicy](Configure-ChromePolicy/) | Apply Google Chrome Group Policy settings, including search provider enforcement | `ChromeEnterpriseAdministrativeTemplates` |

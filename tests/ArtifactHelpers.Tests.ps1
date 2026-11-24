@@ -2,7 +2,6 @@ BeforeDiscovery {
     $msiCases = @(
         @{ Artifact = '7-Zip'; Script = 'Deploy-7-Zip.ps1'; Name = '*7-Zip*'; Publisher = '*'; NativeOnly = $true; ProductPattern = '^\{[0-9A-Fa-f-]{36}\}$' }
         @{ Artifact = 'Adobe-Acrobat-Reader-DC'; Script = 'Deploy-AdobeReaderDC.ps1'; Name = 'Adobe Acrobat*'; Publisher = 'Adobe*'; NativeOnly = $true; ProductPattern = '^\{AC76BA86-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$' }
-        @{ Artifact = 'Amazon-Workspaces-Client'; Script = 'Deploy-AmazonWorkspacesClient.ps1'; Name = 'Amazon WorkSpaces*'; Publisher = 'Amazon Web Services*'; NativeOnly = $false; ProductPattern = '' }
         @{ Artifact = 'Google-Chrome-Enterprise'; Script = 'Deploy-GoogleChromeEnterprise.ps1'; Name = 'Google Chrome'; Publisher = 'Google*'; NativeOnly = $false; ProductPattern = '' }
         @{ Artifact = 'Microsoft-Edge-Enterprise'; Script = 'Deploy-MicrosoftEdgeEnterprise.ps1'; Name = 'Microsoft Edge'; Publisher = 'Microsoft*'; NativeOnly = $false; ProductPattern = '' }
         @{ Artifact = 'PuTTY'; Script = 'Deploy-PuTTY.ps1'; Name = 'PuTTY release *'; Publisher = 'Simon Tatham'; NativeOnly = $false; ProductPattern = '' }
