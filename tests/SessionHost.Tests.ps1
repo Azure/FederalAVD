@@ -79,6 +79,87 @@ Describe 'SessionHost script regression checks' {
 
 
 
+Describe 'Session-host MSI failure propagation' {
+    BeforeAll {
+        $scriptPath = Join-Path $repoRoot 'deployments\shared\scripts\Initialize-SessionHost.ps1'
+        $ast = [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$null, [ref]$null)
+        $function = $ast.Find({
+            param($node)
+            $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Invoke-MsiWithRetry'
+        }, $true)
+        . ([scriptblock]::Create($function.Extent.Text))
+        function Write-Log { param($Message, $Category) }
+    }
+
+    BeforeEach {
+        $script:msiExitCodes = @(0)
+        $script:msiInvocationCount = 0
+        $script:installationContinued = $false
+        Mock Write-Log {}
+        Mock Start-Sleep {}
+        Mock Start-Process {
+            $exitCode = $script:msiExitCodes[$script:msiInvocationCount]
+            $script:msiInvocationCount++
+            [pscustomobject]@{ ExitCode = $exitCode }
+        }
+    }
+
+    It 'preserves successful MSI exit code <ExitCode>' -TestCases @(
+        @{ ExitCode = 0 }
+        @{ ExitCode = 3010 }
+    ) {
+        param($ExitCode)
+        $script:msiExitCodes = @($ExitCode)
+        Invoke-MsiWithRetry -DisplayName 'Test installer' -ArgumentList @('/i', 'test.msi') -LogPath 'test-msi.log' |
+            Should -Be $ExitCode
+        Should -Invoke Start-Process -Times 1 -Exactly
+        Should -Invoke Start-Sleep -Times 0 -Exactly
+    }
+
+    It 'stops subsequent installation work on MSI exit code <ExitCode>' -TestCases @(
+        @{ ExitCode = 1603 }
+        @{ ExitCode = 1619 }
+    ) {
+        param($ExitCode)
+        $script:msiExitCodes = @($ExitCode)
+        {
+            Invoke-MsiWithRetry -DisplayName 'Test installer' -ArgumentList @('/i', 'test.msi') -LogPath 'test-msi.log'
+            $script:installationContinued = $true
+        } | Should -Throw "*Test installer*Exit code $ExitCode*test-msi.log*"
+        $script:installationContinued | Should -Be $false
+        Should -Invoke Write-Log -Times 1 -Exactly -ParameterFilter { $Category -eq 'Error' }
+        Should -Invoke Start-Process -Times 1 -Exactly
+        Should -Invoke Start-Sleep -Times 0 -Exactly
+    }
+
+    It 'retries an installer-busy result before succeeding' {
+        $script:msiExitCodes = @(1618, 0)
+        Invoke-MsiWithRetry -DisplayName 'Test installer' -ArgumentList @('/i', 'test.msi') -LogPath 'test-msi.log' |
+            Should -Be 0
+        Should -Invoke Start-Process -Times 2 -Exactly
+        Should -Invoke Start-Sleep -Times 1 -Exactly -ParameterFilter { $Seconds -eq 30 }
+    }
+
+    It 'fails after 20 installer-busy attempts with the MSI log path' {
+        $script:msiExitCodes = @(1618) * 20
+        {
+            Invoke-MsiWithRetry -DisplayName 'Test installer' -ArgumentList @('/i', 'test.msi') -LogPath 'test-msi.log'
+        } | Should -Throw '*20 attempts*1618*test-msi.log*'
+        Should -Invoke Start-Process -Times 20 -Exactly
+        Should -Invoke Start-Sleep -Times 19 -Exactly
+    }
+
+    It 'propagates process-launch errors without retrying' {
+        Mock Start-Process { throw 'MSI process launch failed' }
+        {
+            Invoke-MsiWithRetry -DisplayName 'Test installer' -ArgumentList @('/i', 'test.msi') -LogPath 'test-msi.log'
+        } | Should -Throw '*MSI process launch failed*'
+        Should -Invoke Start-Process -Times 1 -Exactly
+        Should -Invoke Start-Sleep -Times 0 -Exactly
+    }
+}
+
 Describe 'Shared session-host policy orchestration' {
     BeforeAll {
         $sharedPolicy = Get-Content -LiteralPath $sharedPolicyPath -Raw

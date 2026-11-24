@@ -26,6 +26,9 @@ Initializes directly managed session hosts and installs the AVD agent in one Run
     Specific Settings, Defender exclusions, and Entra Kerberos policy as selected.
   - Resizes the OS partition to the available disk size.
   - Downloads and installs the AVD agent and boot loader, then waits for the service to start.
+    MSI exit codes `0` and `3010` are accepted; `1618` is retried up to 20 total attempts.
+    Other MSI failures stop initialization and fail the deployment, with the installer name,
+    exit code, and MSI log path reported.
 - **Output:** `C:\Windows\Logs\Initialize-SessionHost.log`
 
 The automated host pool policy workflow uses a different, solution-owned implementation that

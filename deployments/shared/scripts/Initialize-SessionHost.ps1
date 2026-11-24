@@ -140,7 +140,7 @@ function Invoke-MsiWithRetry {
     } while ($ExitCode -eq 1618 -and $RetryCount -lt $MaxRetries) # 1618 = ERROR_INSTALL_ALREADY_RUNNING
     
     if ($ExitCode -eq 1618) {
-        $ErrorMsg = "Install $DisplayName failed after $MaxRetries retries with Exit code $ExitCode (ERROR_INSTALL_ALREADY_RUNNING)"
+        $ErrorMsg = "Install $DisplayName failed after $MaxRetries attempts with Exit code $ExitCode (ERROR_INSTALL_ALREADY_RUNNING). Review MSI log: $LogPath"
         Write-Log -Category Error -Message $ErrorMsg
         throw $ErrorMsg
     }
@@ -149,7 +149,9 @@ function Invoke-MsiWithRetry {
     
     # Exit codes: 0 = success, 3010 = success but restart required
     if ($ExitCode -notin @(0, 3010)) {
-        Write-Log -Category Warning -Message "$DisplayName installation completed with Exit code: $ExitCode"
+        $ErrorMsg = "Install $DisplayName failed with Exit code $ExitCode. Review MSI log: $LogPath"
+        Write-Log -Category Error -Message $ErrorMsg
+        throw $ErrorMsg
     }
     
     return $ExitCode
