@@ -869,7 +869,11 @@ Write-Log -category Info -message "Now Configuring Office 365 Group Policy."
 
 # Pre-compute values used by both the policy and direct-registry paths
 $EnableCachedMode = ($EmailCacheTime -ne 'Not Configured') -or ($CalendarSync -ne 'Not Configured') -or ($CalendarSyncMonths -ne 'Not Configured')
-# Cached Exchange Mode Settings: https://support.microsoft.com/en-us/help/3115009/update-lets-administrators-set-additional-default-sync-slider-windows
+# outlk16.admx L_CachedExchangeModeSyncSlider requires both DWORD values, including zeros.
+# Reset the day override for month/All selections; leave both untouched for Not Configured.
+# https://support.microsoft.com/help/3115009
+[Nullable[int]]$SyncWindowSetting = $null
+[Nullable[int]]$SyncWindowSettingDays = if ($EmailCacheTime -ne 'Not Configured') { 0 } else { $null }
 If ($EmailCacheTime -eq '3 days') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 3 }
 If ($EmailCacheTime -eq '1 week') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 7 }
 If ($EmailCacheTime -eq '2 weeks') { $SyncWindowSetting = 0; $SyncWindowSettingDays = 14 }
@@ -894,10 +898,10 @@ If ($Script:AdmxImported) {
         Write-Log -Message "Configuring Outlook Cached Mode."
         Set-PolicyRegistryValue -Scope User -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -RegistryValue 'Enable' -RegistryType DWord -RegistryData 1
     }
-    If ($SyncWindowSetting) {
+    If ($null -ne $SyncWindowSetting) {
         Set-PolicyRegistryValue -Scope User -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -RegistryValue 'SyncWindowSetting' -RegistryType DWORD -RegistryData $SyncWindowSetting
     }
-    If ($SyncWindowSettingDays) {
+    If ($null -ne $SyncWindowSettingDays) {
         Set-PolicyRegistryValue -Scope User -RegistryKeyPath 'Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode' -RegistryValue 'SyncWindowSettingDays' -RegistryType DWORD -RegistryData $SyncWindowSettingDays
     }
     # --- Computer scope policies via Group Policy ---
@@ -924,11 +928,11 @@ Else {
             If (-not (Test-Path $cachedModeKey)) { New-Item -Path $cachedModeKey -Force | Out-Null }
             Set-ItemProperty -Path $cachedModeKey -Name 'Enable' -Value 1 -Type DWord -Force
         }
-        If ($SyncWindowSetting) {
+        If ($null -ne $SyncWindowSetting) {
             If (-not (Test-Path $cachedModeKey)) { New-Item -Path $cachedModeKey -Force | Out-Null }
             Set-ItemProperty -Path $cachedModeKey -Name 'SyncWindowSetting' -Value $SyncWindowSetting -Type DWord -Force
         }
-        If ($SyncWindowSettingDays) {
+        If ($null -ne $SyncWindowSettingDays) {
             If (-not (Test-Path $cachedModeKey)) { New-Item -Path $cachedModeKey -Force | Out-Null }
             Set-ItemProperty -Path $cachedModeKey -Name 'SyncWindowSettingDays' -Value $SyncWindowSettingDays -Type DWord -Force
         }

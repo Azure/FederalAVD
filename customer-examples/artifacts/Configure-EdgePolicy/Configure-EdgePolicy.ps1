@@ -720,8 +720,10 @@ If ($Script:AdmxImported) {
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'HideFirstRunExperience' -RegistryType 'DWORD' -RegistryData 1
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#nonremovableprofileenabled
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'NonRemovableProfileEnabled' -RegistryType 'DWORD' -RegistryData 1
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#automatichttpsdefault
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'AutomaticHttpsDefault' -RegistryData 0 -RegistryType DWORD
+    # MSEdge.admx HttpsUpgradesEnabled (Edge 136+): DWORD 0 disables automatic upgrades.
+    # This preserves HTTP compatibility; it does not prevent explicit HTTPS navigation.
+    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/httpsupgradesenabled
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'HttpsUpgradesEnabled' -RegistryData 0 -RegistryType DWORD
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#downloadrestrictions
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath 'Software\Policies\Microsoft\Edge' -RegistryValue 'DownloadRestrictions' -RegistryType 'DWORD' -RegistryData 4
     if ($null -ne $SmartScreenAllowListDomains -and $SmartScreenAllowListDomains.Count -gt 0) {
@@ -774,8 +776,8 @@ If ($Script:AdmxImported) {
     Set-ItemProperty -Path $edgeKey -Name 'HideFirstRunExperience' -Value 1 -Type DWord -Force
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#nonremovableprofileenabled
     Set-ItemProperty -Path $edgeKey -Name 'NonRemovableProfileEnabled' -Value 1 -Type DWord -Force
-    # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#automatichttpsdefault
-    Set-ItemProperty -Path $edgeKey -Name 'AutomaticHttpsDefault' -Value 0 -Type DWord -Force
+    # Same HttpsUpgradesEnabled policy and encoding as the Registry.pol path above.
+    Set-ItemProperty -Path $edgeKey -Name 'HttpsUpgradesEnabled' -Value 0 -Type DWord -Force
     # https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies#downloadrestrictions
     Set-ItemProperty -Path $edgeKey -Name 'DownloadRestrictions' -Value 4 -Type DWord -Force
     if ($null -ne $SmartScreenAllowListDomains -and $SmartScreenAllowListDomains.Count -gt 0) {

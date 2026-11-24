@@ -580,7 +580,9 @@ Else {
         Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'DeferQualityUpdates'
         Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'DeferQualityUpdatesPeriodInDays'
     }
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'SetComplianceDeadline' -RegistryType 'DWORD' -RegistryData 1
+    # WindowsUpdate.admx: Windows 11 22H2+ uses separate feature/quality deadline policies.
+    # https://learn.microsoft.com/en-us/windows/deployment/update/wufb-compliancedeadlines
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'SetComplianceDeadlineForFU' -RegistryType 'DWORD' -RegistryData 1
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'ConfigureDeadlineForFeatureUpdates' -RegistryType 'DWORD' -RegistryData 7
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'ConfigureDeadlineGracePeriodForFeatureUpdates' -RegistryType 'DWORD' -RegistryData 2
     Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'ConfigureDeadlineNoAutoReboot'
@@ -590,7 +592,10 @@ Else {
     Remove-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'ConfigureDeadlineNoAutoRebootForQualityUpdates'
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'SetUpdateNotificationLevel' -RegistryType 'DWORD' -RegistryData 1
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'UpdateNotificationLevel' -RegistryType 'DWORD' -RegistryData 1
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'NoUpdateNotificationDuringActiveHours' -RegistryType 'DWORD' -RegistryData 1
+    # WindowsUpdate.admx UpdateNotificationLevel: apply notification suppression only
+    # during active hours; restart deadlines can still require notifications.
+    # https://learn.microsoft.com/en-us/windows/deployment/update/wufb-compliancedeadlines
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $wuKey -RegistryValue 'NoUpdateNotificationsDuringActiveHours' -RegistryType 'DWORD' -RegistryData 1
 
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $auKey -RegistryValue 'AllowMUUpdateService' -RegistryType 'DWORD' -RegistryData 1
     Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $auKey -RegistryValue 'AUOptions' -RegistryType 'DWORD' -RegistryData 4

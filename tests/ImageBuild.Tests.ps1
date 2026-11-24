@@ -182,9 +182,7 @@ Describe 'ImageBuild script regression checks' {
             "'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1",
             "'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData `$WarningMinDiskSpaceLimitInMB",
             "'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData `$MinDiskSpaceLimitInMB",
-            "-Name 'WarningMinDiskSpaceLimitInMB' -Value `$WarningMinDiskSpaceLimitInMB -Type DWord",
-            "-Name 'MinDiskSpaceLimitInMB' -Value `$MinDiskSpaceLimitInMB -Type DWord",
-            "'EnableEnhancedShellExperienceForRemoteApp' -RegistryType DWORD -RegistryData 1"
+            "'UseShellAppRuntimeRemoteApp' -RegistryType DWORD -RegistryData 1"
         )
         foreach ($expectedText in $oneDriveExpectations) {
             if (-not $oneDriveText.Contains($expectedText)) {
@@ -257,6 +255,11 @@ Describe 'OneDrive organization policy configuration' {
             $_.Extent.Text.StartsWith('If ($TenantID -and')
         }
         $configurePolicy = [scriptblock]::Create($configuration.Extent.Text)
+        $remoteAppConfiguration = $oneDriveAst.EndBlock.Statements | Where-Object {
+            $_ -is [Management.Automation.Language.IfStatementAst] -and
+            $_.Extent.Text.StartsWith('If ($EnableRemoteApp)')
+        }
+        $configureRemoteApp = [scriptblock]::Create($remoteAppConfiguration.Extent.Text)
         $flushPolicy = ($definitions | Where-Object Name -eq 'Invoke-PolicyUpdate').Body.GetScriptBlock()
         $tenantStatements = $oneDriveAst.EndBlock.Statements | Where-Object {
             $_.Extent.Text.StartsWith('$TenantId = ([guid]') -or
@@ -276,7 +279,6 @@ Describe 'OneDrive organization policy configuration' {
         $AllowedTenantIds = @($TenantId, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
         $WarningMinDiskSpaceLimitInMB = $null
         $MinDiskSpaceLimitInMB = $null
-        $Script:AdmxImported = $true
         $script:_PRegEnc = [Text.Encoding]::Unicode
         $script:_PolQueue = [System.Collections.Generic.List[hashtable]]::new()
         Mock Write-Log {}
@@ -361,19 +363,201 @@ Describe 'OneDrive organization policy configuration' {
         [BitConverter]::ToUInt32($personal[0].Data, 0) | Should -Be 1
     }
 
-    It 'retains the new policy scopes and values when ADMX import is unavailable' {
-        $Script:AdmxImported = $false
-        Mock Test-Path { $true } -ParameterFilter { $Path -eq 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' }
-        Mock Set-ItemProperty {}
-        & $configurePolicy
-        @($script:_PolQueue | Where-Object Name -eq 'KFMSilentOptInWithNotification').Count | Should -Be 1
-        @($script:_PolQueue | Where-Object Name -eq 'KFMOptInWithWizard').Count | Should -Be 1
-        @($script:_PolQueue | Where-Object { $_.Name -eq 'DisablePersonalSync' -and $_.Scope -eq 'User' }).Count | Should -Be 1
-        Assert-MockCalled Set-ItemProperty -Times 1 -Exactly -Scope It -ParameterFilter {
-            $Path -eq 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive' -and $Name -eq 'FilesOnDemandEnabled' -and $Value -eq 1
+    It 'requires template copying before configuration and contains no direct registry writes' {
+        $statements = @($oneDriveAst.EndBlock.Statements.Extent.Text)
+        $statements.IndexOf('Copy-OneDrivePolicyTemplates') | Should -BeGreaterThan -1
+        $statements.IndexOf('Copy-OneDrivePolicyTemplates') |
+            Should -BeLessThan $statements.IndexOf($configuration.Extent.Text)
+        $oneDriveAst.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.CommandAst] -and
+            $node.GetCommandName() -in @('Set-ItemProperty', 'New-ItemProperty')
+        }, $true).Count | Should -Be 0
+    }
+
+    It 'writes the exact TerminalServer ADMX policy only when RemoteApp is enabled: <Enabled>' -TestCases @(
+        @{ Enabled = $true }
+        @{ Enabled = $false }
+    ) {
+        param($Enabled)
+        $EnableRemoteApp = $Enabled
+        & $configureRemoteApp
+        if ($Enabled) {
+            $script:_PolQueue.Count | Should -Be 1
+            $entry = $script:_PolQueue[0]
+            $entry.Scope | Should -Be 'Computer'
+            $entry.Key | Should -Be 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+            $entry.Name | Should -Be 'UseShellAppRuntimeRemoteApp'
+            $entry.Type | Should -Be 4
+            [BitConverter]::ToUInt32($entry.Data, 0) | Should -Be 1
+            Assert-MockCalled Invoke-PolicyUpdate -Times 1 -Exactly -Scope It
         }
-        Assert-MockCalled Set-ItemProperty -Times 0 -Exactly -Scope It -ParameterFilter { $Name -eq 'DisablePersonalSync' }
-        Assert-MockCalled Invoke-PolicyUpdate -Times 1 -Exactly -Scope It
+        else {
+            $script:_PolQueue.Count | Should -Be 0
+            Assert-MockCalled Invoke-PolicyUpdate -Times 0 -Exactly -Scope It
+        }
+    }
+
+    Context 'Installed OneDrive template discovery' {
+        BeforeEach {
+            $savedEnvironment = @{}
+            foreach ($name in @('ProgramW6432', 'ProgramFiles', 'ProgramFiles(x86)', 'WINDIR')) {
+                $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
+            }
+            $fixtureRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
+            $env:ProgramFiles = Join-Path $fixtureRoot 'Program Files'
+            $env:ProgramW6432 = $env:ProgramFiles
+            ${env:ProgramFiles(x86)} = Join-Path $fixtureRoot 'Program Files (x86)'
+            $env:WINDIR = Join-Path $fixtureRoot 'Windows'
+            $destinationAdmx = Join-Path $env:WINDIR 'PolicyDefinitions\OneDrive.admx'
+            $destinationAdml = Join-Path $env:WINDIR 'PolicyDefinitions\en-us\OneDrive.adml'
+            function New-TestOneDriveTemplates {
+                param(
+                    [string]$Root,
+                    [string]$Language = '',
+                    [string]$Version = '26.218.1108.0004',
+                    [switch]$WithoutAdmx,
+                    [switch]$WithoutAdml
+                )
+                $install = Join-Path $Root 'Microsoft OneDrive'
+                $adm = Join-Path $install "$Version\adm"
+                $languagePath = if ($Language) { Join-Path $adm $Language } else { $adm }
+                $null = New-Item -Path $languagePath -ItemType Directory -Force
+                if (-not $WithoutAdmx) {
+                    Set-Content -LiteralPath (Join-Path $adm 'OneDrive.admx') -Value "ADMX from $Root"
+                }
+                if (-not $WithoutAdml) {
+                    Set-Content -LiteralPath (Join-Path $languagePath 'OneDrive.adml') -Value "ADML from $Root"
+                }
+            }
+        }
+
+        AfterEach {
+            foreach ($name in $savedEnvironment.Keys) {
+                [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name])
+            }
+        }
+
+        It 'copies a matching pair from <Location> with ADML in <Language>' -TestCases @(
+            @{ Location = 'ProgramFiles'; Language = '' }
+            @{ Location = 'ProgramFiles'; Language = 'en-us' }
+            @{ Location = 'ProgramFiles'; Language = 'en' }
+            @{ Location = 'ProgramFiles(x86)'; Language = '' }
+            @{ Location = 'ProgramFiles(x86)'; Language = 'en-us' }
+            @{ Location = 'ProgramFiles(x86)'; Language = 'en' }
+        ) {
+            param($Location, $Language)
+            $root = [Environment]::GetEnvironmentVariable($Location)
+            New-TestOneDriveTemplates -Root $root -Language $Language
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdmx -Raw).Trim() | Should -Be "ADMX from $root"
+            (Get-Content -LiteralPath $destinationAdml -Raw).Trim() | Should -Be "ADML from $root"
+        }
+
+        It 'prefers the English ADML beside the ADMX over alternate language subfolders' {
+            New-TestOneDriveTemplates -Root $env:ProgramFiles
+            $languageDir = Join-Path $env:ProgramFiles 'Microsoft OneDrive\26.218.1108.0004\adm\en-us'
+            $null = New-Item -Path $languageDir -ItemType Directory -Force
+            Set-Content -LiteralPath (Join-Path $languageDir 'OneDrive.adml') -Value 'alternate layout'
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdml -Raw).Trim() |
+                Should -Be "ADML from $env:ProgramFiles"
+        }
+
+        It 'selects the numerically newest complete version across both install roots without an executable' {
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -Version '26.9.1108.0004'
+            New-TestOneDriveTemplates -Root ${env:ProgramFiles(x86)} -Version '26.10.1108.0004'
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdmx -Raw).Trim() |
+                Should -Be "ADMX from ${env:ProgramFiles(x86)}"
+            (Get-Content -LiteralPath $destinationAdml -Raw).Trim() |
+                Should -Be "ADML from ${env:ProgramFiles(x86)}"
+            Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'Microsoft OneDrive\OneDrive.exe') |
+                Should -BeFalse
+        }
+
+        It 'skips a newer folder missing <Missing> and copies both files from the older complete version' -TestCases @(
+            @{ Missing = 'ADMX' }
+            @{ Missing = 'ADML' }
+        ) {
+            param($Missing)
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -Version '26.9.1108.0004'
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -Version '26.10.1108.0004' -WithoutAdmx:($Missing -eq 'ADMX') -WithoutAdml:($Missing -eq 'ADML')
+            $olderAdm = Join-Path $env:ProgramFiles 'Microsoft OneDrive\26.9.1108.0004\adm'
+            Set-Content -LiteralPath (Join-Path $olderAdm 'OneDrive.admx') -Value 'older ADMX'
+            Set-Content -LiteralPath (Join-Path $olderAdm 'OneDrive.adml') -Value 'older ADML'
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdmx -Raw).Trim() | Should -Be 'older ADMX'
+            (Get-Content -LiteralPath $destinationAdml -Raw).Trim() | Should -Be 'older ADML'
+        }
+
+        It 'ignores non-version folders and numeric names that cannot be parsed as versions' {
+            foreach ($name in @('Update', '26.999.9999.0004.backup', '999999999999.1.1.1', '26.999')) {
+                New-TestOneDriveTemplates -Root $env:ProgramFiles -Version $name
+            }
+            New-TestOneDriveTemplates -Root ${env:ProgramFiles(x86)}
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdmx -Raw).Trim() |
+                Should -Be "ADMX from ${env:ProgramFiles(x86)}"
+        }
+
+        It 'does not combine an ADMX and ADML from different incomplete versions' {
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -Version '26.9.1108.0004' -WithoutAdmx
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -Version '26.10.1108.0004' -WithoutAdml
+            { Copy-OneDrivePolicyTemplates } | Should -Throw '*were not found*'
+        }
+
+        It 'checks native Program Files from a 32-bit PowerShell environment' {
+            $env:ProgramW6432 = Join-Path $fixtureRoot 'Native Program Files'
+            $env:ProgramFiles = ${env:ProgramFiles(x86)}
+            New-TestOneDriveTemplates -Root $env:ProgramW6432
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdmx -Raw).Trim() |
+                Should -Be "ADMX from $env:ProgramW6432"
+        }
+
+        It 'tries x86 when the native installation is missing its <Missing> template' -TestCases @(
+            @{ Missing = 'ADMX' }
+            @{ Missing = 'ADML' }
+        ) {
+            param($Missing)
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -WithoutAdmx:($Missing -eq 'ADMX') -WithoutAdml:($Missing -eq 'ADML')
+            New-TestOneDriveTemplates -Root ${env:ProgramFiles(x86)}
+            Copy-OneDrivePolicyTemplates
+            (Get-Content -LiteralPath $destinationAdmx -Raw).Trim() |
+                Should -Be "ADMX from ${env:ProgramFiles(x86)}"
+            (Get-Content -LiteralPath $destinationAdml -Raw).Trim() |
+                Should -Be "ADML from ${env:ProgramFiles(x86)}"
+        }
+
+        It 'rejects missing <Missing> even when old destination templates exist' -TestCases @(
+            @{ Missing = 'ADMX' }
+            @{ Missing = 'ADML' }
+        ) {
+            param($Missing)
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -WithoutAdmx:($Missing -eq 'ADMX') -WithoutAdml:($Missing -eq 'ADML')
+            $null = New-Item -Path (Split-Path $destinationAdml) -ItemType Directory -Force
+            Set-Content -LiteralPath $destinationAdmx -Value 'stale ADMX'
+            Set-Content -LiteralPath $destinationAdml -Value 'stale ADML'
+            { Copy-OneDrivePolicyTemplates } | Should -Throw '*were not found*'
+            $script:_PolQueue.Count | Should -Be 0
+        }
+
+        It 'rejects an installation with only a non-English ADML' {
+            New-TestOneDriveTemplates -Root $env:ProgramFiles -Language 'de'
+            { Copy-OneDrivePolicyTemplates } | Should -Throw '*were not found*'
+        }
+
+        It 'fails explicitly when OneDrive is not installed' {
+            { Copy-OneDrivePolicyTemplates } | Should -Throw '*Install or repair OneDrive*'
+        }
+
+        It 'propagates template copy failures instead of configuring policy' {
+            New-TestOneDriveTemplates -Root $env:ProgramFiles
+            Mock Copy-Item { throw 'Template copy denied' }
+            { Copy-OneDrivePolicyTemplates } | Should -Throw '*Template copy denied*'
+            $script:_PolQueue.Count | Should -Be 0
+        }
     }
 
     It 'replaces stale allowlist entries on reruns while preserving unrelated machine and user policies' {

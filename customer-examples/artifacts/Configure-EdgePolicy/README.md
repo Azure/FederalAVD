@@ -233,6 +233,19 @@ be collapsed - the multi-line here-string above can be passed directly.
 
 ### 2. Policy Application
 
+Automatic HTTP-to-HTTPS upgrades are disabled with `HttpsUpgradesEnabled=0`
+(Computer DWORD under `SOFTWARE\Policies\Microsoft\Edge`) in both the Registry.pol and
+direct-registry fallback paths. This preserves the artifact's intended HTTP compatibility;
+explicit HTTPS navigation is still available, but automatic upgrades no longer provide their
+usual transport-security benefit.
+
+The mapping was checked against `MSEdge.admx` and its matching English ADML, together with
+[Microsoft's HttpsUpgradesEnabled reference](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/httpsupgradesenabled).
+This policy requires Edge 136 or later and supports dynamic refresh. It replaces
+`AutomaticHttpsDefault`, which Microsoft marks obsolete and ineffective after Edge 139.
+Use a supported current Edge version and verify the effective value in `edge://policy`;
+older staged administrative templates will not display the new policy in Group Policy Editor.
+
 - Writes settings directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required
 - Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
 - `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
