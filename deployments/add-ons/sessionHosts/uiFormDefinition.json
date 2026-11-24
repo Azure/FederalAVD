@@ -1749,7 +1749,7 @@
                   "multiLine": true,
                   "multiselect": true,
                   "toolTip": "",
-                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
+                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalProfileStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslLocalProfileStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
                   "constraints": {
                     "allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
                     "required": true
@@ -1831,7 +1831,7 @@
                   "multiLine": true,
                   "multiselect": true,
                   "toolTip": "",
-                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
+                  "defaultValue": "[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteProfileStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslRemoteProfileStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
                   "constraints": {
                     "allowedValues": "[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\", \"value\":\"', sa.id, '\"}')))]",
                     "required": false

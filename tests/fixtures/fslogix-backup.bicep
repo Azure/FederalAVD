@@ -12,7 +12,7 @@ module unsharded '../../deployments/shared/modules/orchestration/fslogix/modules
     vaultName: 'unsharded'
     location: 'eastus'
     fileShares: ['profile-containers', 'office-containers']
-    storageAccountResourceIds: take(accounts, 1)
+    profileStorageAccountResourceIds: take(accounts, 1)
   }
 }
 
@@ -22,7 +22,7 @@ module sharded '../../deployments/shared/modules/orchestration/fslogix/modules/f
     vaultName: 'sharded'
     location: 'eastus'
     fileShares: ['profile-containers', 'office-containers', 'OFFICE-CONTAINERS']
-    storageAccountResourceIds: accounts
+    profileStorageAccountResourceIds: accounts
     fileSharePolicyName: 'profile-snapshots'
   }
 }
@@ -33,7 +33,7 @@ module officeOnly '../../deployments/shared/modules/orchestration/fslogix/module
     vaultName: 'office-only'
     location: 'eastus'
     fileShares: ['office-containers']
-    storageAccountResourceIds: accounts
+    profileStorageAccountResourceIds: accounts
   }
 }
 
@@ -43,6 +43,6 @@ module profilesOnly '../../deployments/shared/modules/orchestration/fslogix/modu
     vaultName: 'profiles-only'
     location: 'eastus'
     fileShares: ['profile-containers']
-    storageAccountResourceIds: accounts
+    profileStorageAccountResourceIds: accounts
   }
 }

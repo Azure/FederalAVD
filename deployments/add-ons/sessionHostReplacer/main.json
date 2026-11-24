@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "1701212008355872674"
+      "templateHash": "14379255863634021801"
     }
   },
   "definitions": {
@@ -156,7 +156,7 @@
           "type": "string",
           "nullable": true
         },
-        "fslogixStoragePrefix": {
+        "fslogixProfileStoragePrefix": {
           "type": "string",
           "nullable": true
         },
@@ -2070,7 +2070,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.49.2.45890",
-          "templateHash": "14424943353030176786"
+          "templateHash": "135155929170046477"
         }
       },
       "definitions": {
@@ -2879,7 +2879,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "17876908219525370839"
+                  "templateHash": "6108907013552746274"
                 },
                 "name": "Session host deployment orchestration",
                 "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
@@ -3872,7 +3872,7 @@
                         "_generator": {
                           "name": "bicep",
                           "version": "0.49.2.45890",
-                          "templateHash": "449304165876096083"
+                          "templateHash": "5095762826246673066"
                         },
                         "name": "Session host VM batch orchestration",
                         "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
@@ -4439,13 +4439,13 @@
                         "[string('copy')]": [
                           {
                             "name": "fslogixLocalProfileStorageAccountNames",
-                            "count": "[[length(variables('effectiveFslogixLocalStorageAccountResourceIds'))]",
-                            "input": "[[last(split(variables('effectiveFslogixLocalStorageAccountResourceIds')[copyIndex('fslogixLocalProfileStorageAccountNames')], '/'))]"
+                            "count": "[[length(variables('effectiveFslogixLocalProfileStorageAccountResourceIds'))]",
+                            "input": "[[last(split(variables('effectiveFslogixLocalProfileStorageAccountResourceIds')[copyIndex('fslogixLocalProfileStorageAccountNames')], '/'))]"
                           },
                           {
                             "name": "fslogixRemoteProfileStorageAccountNames",
-                            "count": "[[length(variables('effectiveFslogixRemoteStorageAccountResourceIds'))]",
-                            "input": "[[last(split(variables('effectiveFslogixRemoteStorageAccountResourceIds')[copyIndex('fslogixRemoteProfileStorageAccountNames')], '/'))]"
+                            "count": "[[length(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds'))]",
+                            "input": "[[last(split(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds')[copyIndex('fslogixRemoteProfileStorageAccountNames')], '/'))]"
                           },
                           {
                             "name": "fslogixLocalOfficeStorageAccountNames",
@@ -4477,8 +4477,8 @@
                         "storageSuffix": "[[environment().suffixes.storage]",
                         "sessionHostCount": "[[length(parameters('sessionHostNames'))]",
                         "validatedOfficeStorageAccounts": "[[if(and(parameters('fslogixConfigureSessionHosts'), equals(parameters('fslogixStorageService'), 'AzureFiles')), __bicep.validateOfficeStorageAccounts(parameters('fslogixLocalProfileStorageAccountResourceIds'), parameters('fslogixRemoteProfileStorageAccountResourceIds'), parameters('fslogixLocalOfficeStorageAccountResourceIds'), parameters('fslogixRemoteOfficeStorageAccountResourceIds'), contains(parameters('fslogixContainerType'), 'Office'), parameters('fslogixOSSGroups')), createObject('local', createArray(), 'remote', createArray()))]",
-                        "effectiveFslogixLocalStorageAccountResourceIds": "[[if(equals(parameters('identitySolution'), 'EntraId'), take(parameters('fslogixLocalProfileStorageAccountResourceIds'), 1), parameters('fslogixLocalProfileStorageAccountResourceIds'))]",
-                        "effectiveFslogixRemoteStorageAccountResourceIds": "[[if(equals(parameters('identitySolution'), 'EntraId'), take(parameters('fslogixRemoteProfileStorageAccountResourceIds'), 1), parameters('fslogixRemoteProfileStorageAccountResourceIds'))]",
+                        "effectiveFslogixLocalProfileStorageAccountResourceIds": "[[if(equals(parameters('identitySolution'), 'EntraId'), take(parameters('fslogixLocalProfileStorageAccountResourceIds'), 1), parameters('fslogixLocalProfileStorageAccountResourceIds'))]",
+                        "effectiveFslogixRemoteProfileStorageAccountResourceIds": "[[if(equals(parameters('identitySolution'), 'EntraId'), take(parameters('fslogixRemoteProfileStorageAccountResourceIds'), 1), parameters('fslogixRemoteProfileStorageAccountResourceIds'))]",
                         "effectiveFslogixLocalOfficeStorageAccountResourceIds": "[[if(equals(parameters('identitySolution'), 'EntraId'), take(variables('validatedOfficeStorageAccounts').local, 1), variables('validatedOfficeStorageAccounts').local)]",
                         "effectiveFslogixRemoteOfficeStorageAccountResourceIds": "[[if(equals(parameters('identitySolution'), 'EntraId'), take(variables('validatedOfficeStorageAccounts').remote, 1), variables('validatedOfficeStorageAccounts').remote)]",
                         "identityType": "[[if(if(or(not(contains(parameters('identitySolution'), 'DomainServices')), parameters('enableMonitoring')), true(), false()), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'SystemAssigned, UserAssigned', 'SystemAssigned'), if(not(empty(parameters('artifactsUserAssignedIdentityResourceId'))), 'UserAssigned', 'None'))]",
@@ -4498,15 +4498,15 @@
                         "localStorageAccounts": {
                           "[string('copy')]": {
                             "name": "localStorageAccounts",
-                            "count": "[[length(variables('effectiveFslogixLocalStorageAccountResourceIds'))]"
+                            "count": "[[length(variables('effectiveFslogixLocalProfileStorageAccountResourceIds'))]"
                           },
                           "condition": "[[equals(parameters('identitySolution'), 'EntraId')]",
                           "existing": true,
                           "type": "Microsoft.Storage/storageAccounts",
                           "apiVersion": "2023-01-01",
-                          "subscriptionId": "[[split(variables('effectiveFslogixLocalStorageAccountResourceIds')[copyIndex()], '/')[2]]",
-                          "resourceGroup": "[[split(variables('effectiveFslogixLocalStorageAccountResourceIds')[copyIndex()], '/')[4]]",
-                          "name": "[[last(split(variables('effectiveFslogixLocalStorageAccountResourceIds')[copyIndex()], '/'))]"
+                          "subscriptionId": "[[split(variables('effectiveFslogixLocalProfileStorageAccountResourceIds')[copyIndex()], '/')[2]]",
+                          "resourceGroup": "[[split(variables('effectiveFslogixLocalProfileStorageAccountResourceIds')[copyIndex()], '/')[4]]",
+                          "name": "[[last(split(variables('effectiveFslogixLocalProfileStorageAccountResourceIds')[copyIndex()], '/'))]"
                         },
                         "localOfficeStorageAccounts": {
                           "[string('copy')]": {
@@ -4537,15 +4537,15 @@
                         "remoteStorageAccounts": {
                           "[string('copy')]": {
                             "name": "remoteStorageAccounts",
-                            "count": "[[length(variables('effectiveFslogixRemoteStorageAccountResourceIds'))]"
+                            "count": "[[length(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds'))]"
                           },
                           "condition": "[[equals(parameters('identitySolution'), 'EntraId')]",
                           "existing": true,
                           "type": "Microsoft.Storage/storageAccounts",
                           "apiVersion": "2023-01-01",
-                          "subscriptionId": "[[split(variables('effectiveFslogixRemoteStorageAccountResourceIds')[copyIndex()], '/')[2]]",
-                          "resourceGroup": "[[split(variables('effectiveFslogixRemoteStorageAccountResourceIds')[copyIndex()], '/')[4]]",
-                          "name": "[[last(split(variables('effectiveFslogixRemoteStorageAccountResourceIds')[copyIndex()], '/'))]"
+                          "subscriptionId": "[[split(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds')[copyIndex()], '/')[2]]",
+                          "resourceGroup": "[[split(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds')[copyIndex()], '/')[4]]",
+                          "name": "[[last(split(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds')[copyIndex()], '/'))]"
                         },
                         "networkInterface": {
                           "[string('copy')]": {
@@ -4938,7 +4938,7 @@
                                 "value": "[[parameters('fslogixStorageService')]"
                               }
                             ],
-                            "protectedParameters": "[[if(parameters('fslogixConfigureSessionHosts'), createArray(createObject('name', 'RegistrationToken', 'value', last(listRegistrationTokens('hostPool', '2023-09-05').value).token), createObject('name', 'LocalProfileStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixLocalStorageAccountResourceIds')))), createArray(listkeys(format('localStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray()))), createObject('name', 'RemoteProfileStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixRemoteStorageAccountResourceIds')))), createArray(listkeys(format('remoteStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray()))), createObject('name', 'LocalOfficeStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixLocalOfficeStorageAccountResourceIds')))), createArray(listkeys(format('localOfficeStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray()))), createObject('name', 'RemoteOfficeStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixRemoteOfficeStorageAccountResourceIds')))), createArray(listkeys(format('remoteOfficeStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray())))), createArray(createObject('name', 'RegistrationToken', 'value', last(listRegistrationTokens('hostPool', '2023-09-05').value).token)))]",
+                            "protectedParameters": "[[if(parameters('fslogixConfigureSessionHosts'), createArray(createObject('name', 'RegistrationToken', 'value', last(listRegistrationTokens('hostPool', '2023-09-05').value).token), createObject('name', 'LocalProfileStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixLocalProfileStorageAccountResourceIds')))), createArray(listkeys(format('localStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray()))), createObject('name', 'RemoteProfileStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixRemoteProfileStorageAccountResourceIds')))), createArray(listkeys(format('remoteStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray()))), createObject('name', 'LocalOfficeStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixLocalOfficeStorageAccountResourceIds')))), createArray(listkeys(format('localOfficeStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray()))), createObject('name', 'RemoteOfficeStorageAccountKeys', 'value', string(if(and(equals(parameters('identitySolution'), 'EntraId'), not(empty(variables('effectiveFslogixRemoteOfficeStorageAccountResourceIds')))), createArray(listkeys(format('remoteOfficeStorageAccounts[{0}]', 0), '2023-01-01').keys[0].value), createArray())))), createArray(createObject('name', 'RegistrationToken', 'value', last(listRegistrationTokens('hostPool', '2023-09-05').value).token)))]",
                             "source": {
                               "script": "[[variables('$fxv#0')]"
                             },
@@ -7227,7 +7227,7 @@
                       "multiLine": true,
                       "multiselect": true,
                       "toolTip": "",
-                      "defaultValue": "[[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslLocalStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
+                      "defaultValue": "[[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslLocalProfileStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslLocalProfileStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
                       "constraints": {
                         "allowedValues": "[[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => and(equals(sa.location, steps('hosts').scope.location.name), or(and(not(empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))), equals(first(skip(split(sa.id, '/'), 4)), steps('basics').hostsRGProps.tags.storageResourceGroup)), empty(coalesce(steps('basics').hostsRGProps.tags.storageResourceGroup, ''))))), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)),  ', Location: ', sa.location, '\", \"value\":\"', sa.id, '\"}')))]",
                         "required": true
@@ -7309,7 +7309,7 @@
                       "multiLine": true,
                       "multiselect": true,
                       "toolTip": "",
-                      "defaultValue": "[[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslRemoteStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
+                      "defaultValue": "[[if(and(not(empty(steps('userProfiles').azureFiles.storageAccountsApi)), not(empty(steps('basics').hostsRGProps.tags)), not(empty(steps('basics').hostsRGProps.tags.fslRemoteProfileStorageAccountNames))), filter(parse(steps('basics').hostsRGProps.tags.fslRemoteProfileStorageAccountNames), (name) => contains(map(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => sa.name), name)), parse('[]'))]",
                       "constraints": {
                         "allowedValues": "[[map(filter(steps('userProfiles').azureFiles.storageAccountsApi.transformed.list, (sa) => equals(sa.location, steps('userProfiles').azureFiles.remoteLocation)), (sa) => parse(concat('{\"label\":\"', sa.name, '\",\"description\":\"Resource Group: ', first(skip(split(sa.id, '/'), 4)), '\", \"value\":\"', sa.id, '\"}')))]",
                         "required": false
@@ -8030,7 +8030,7 @@
       },
       "limits": {
         "deploymentVm": 15,
-        "fslogixStoragePrefix": 13,
+        "fslogixProfileStoragePrefix": 13,
         "uniqueSuffix": 6,
         "defaultUniqueLength": 6,
         "imageManagementStoragePrefix": 5,
@@ -8533,7 +8533,7 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixProfileStoragePrefix": "fslpc{unique}",
         "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",

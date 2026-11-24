@@ -15,7 +15,7 @@ param location string
 @description('Required. Shares to protect on every supplied account. office-containers is always excluded.')
 param fileShares array
 @description('Required. Existing storage account resource IDs; eligible shares are protected on each account.')
-param storageAccountResourceIds array
+param profileStorageAccountResourceIds array
 @description('Optional. Name of the existing Azure Files backup policy in the selected Recovery Services vault.')
 param fileSharePolicyName string = 'filesharepolicy'
 @description('Optional. Tag bags keyed by Azure resource type; each bag is applied to resources of that type.')
@@ -29,7 +29,7 @@ var backupFileShares = filter(fileShares, shareName => toLower(shareName) != 'of
 // ─── Protection Containers ─────────────────────────────────────────────────────
 @batchSize(1)
 resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers@2024-04-01' = [
-  for saId in storageAccountResourceIds: if (!empty(backupFileShares)) {
+  for saId in profileStorageAccountResourceIds: if (!empty(backupFileShares)) {
     name: '${vaultName}/Azure/storagecontainer;Storage;${split(saId, '/')[4]};${last(split(saId, '/'))}'
     properties: {
       friendlyName: last(split(saId, '/'))
@@ -42,10 +42,10 @@ resource protectionContainers 'Microsoft.RecoveryServices/vaults/backupFabrics/p
 ]
 
 // Excluding Office shares here also covers callers that supply both container types.
-var combos = flatten(map(range(0, length(storageAccountResourceIds)), saIdx => map(backupFileShares, shareName => {
-  saId: storageAccountResourceIds[saIdx]
-  rgName: split(storageAccountResourceIds[saIdx], '/')[4]
-  saName: last(split(storageAccountResourceIds[saIdx], '/'))!
+var combos = flatten(map(range(0, length(profileStorageAccountResourceIds)), saIdx => map(backupFileShares, shareName => {
+  saId: profileStorageAccountResourceIds[saIdx]
+  rgName: split(profileStorageAccountResourceIds[saIdx], '/')[4]
+  saName: last(split(profileStorageAccountResourceIds[saIdx], '/'))!
   shareName: shareName
 })))
 

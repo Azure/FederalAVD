@@ -55,7 +55,7 @@ param fslogixAdminGroups entraGroupType[]
 @description('Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands.')
 param appUpdateUserAssignedIdentityResourceId string
 @description('Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption.')
-param fslogixEncryptionKeyNameConv string
+param fslogixProfileEncryptionKeyNameConv string
 @description('Required. FSLogix container selection; determines fixed Profile and optional Office share names.')
 param fslogixContainerType string
 @description('Required. Sharding selection forwarded to Azure Files permission configuration; None disables sharding.')
@@ -97,7 +97,7 @@ param shareSizeInGB int
 @description('Required. Location token appended to anf- for the NetApp Active Directory SMB server name.')
 param smbServerLocation string
 @description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
-param storageAccountNamePrefix string
+param profileStorageAccountNamePrefix string
 @description('Required. Office account prefix, paired with Profile account indices; unused when Office containers are disabled or storage is NetApp.')
 param officeStorageAccountNamePrefix string
 @description('Required. Office encryption-key pattern containing ##; unused without Office accounts or customer-managed encryption.')
@@ -213,7 +213,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     profileProvisionedThroughputMiBps: profileProvisionedThroughputMiBps
     officeProvisionedIops: officeProvisionedIops
     officeProvisionedThroughputMiBps: officeProvisionedThroughputMiBps
-    fslogixEncryptionKeyNameConv: fslogixEncryptionKeyNameConv
+    fslogixProfileEncryptionKeyNameConv: fslogixProfileEncryptionKeyNameConv
     encryptionKeyVaultUri: encryptionKeyVaultUri
     encryptionUserAssignedIdentityResourceId: keyManagementStorageAccounts == 'PlatformManaged'
       ? ''
@@ -234,7 +234,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     shareAdminGroups: fslogixAdminGroups
     shareSizeInGB: shareSizeInGB
     shareUserGroups: fslogixUserGroups
-    storageAccountNamePrefix: storageAccountNamePrefix
+    profileStorageAccountNamePrefix: profileStorageAccountNamePrefix
     storageCount: storageCount
     storageIndex: storageIndex
     storageSku: storageSku
@@ -254,7 +254,7 @@ module backupRegistration 'modules/fslogixBackupItems.bicep' = if (storageSoluti
     vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
     location: location
     fileShares: ['profile-containers']
-    storageAccountResourceIds: azureFiles!.outputs.storageAccountResourceIds
+    profileStorageAccountResourceIds: azureFiles!.outputs.profileStorageAccountResourceIds
     fileSharePolicyName: fileSharePolicyName
     tags: tags
     hostPoolResourceId: hostPoolResourceId
@@ -272,8 +272,8 @@ output netAppServerFqdns array = storageSolution == 'AzureNetAppFiles'
   ? azureNetAppFiles!.outputs.smbServerFqdns
   : []
 @description('Created Profile Azure Files account IDs in ascending shard index order; empty for NetApp storage.')
-output storageAccountResourceIds array = storageSolution == 'AzureFiles'
-  ? azureFiles!.outputs.storageAccountResourceIds
+output profileStorageAccountResourceIds array = storageSolution == 'AzureFiles'
+  ? azureFiles!.outputs.profileStorageAccountResourceIds
   : []
 @description('Created Office Azure Files account IDs, paired by index with Profile accounts; empty when disabled or using NetApp.')
 output officeStorageAccountResourceIds array = storageSolution == 'AzureFiles'

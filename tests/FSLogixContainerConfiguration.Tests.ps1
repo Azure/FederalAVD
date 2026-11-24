@@ -169,17 +169,17 @@ Describe 'FSLogix container type source of truth' {
         )
     }
 
-    It 'retains published compatibility fields without forwarding redundant runtime inputs' {
+    It 'removes obsolete policy compatibility fields without forwarding redundant runtime inputs' {
         $remediation = Get-Content (Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\ConfigureSessionHost.json') -Raw | ConvertFrom-Json -Depth 100
-        $remediation.parameters.fslogixFileShareNames.defaultValue.Count | Should -Be 0
+        $remediation.parameters.PSObject.Properties.Name | Should -Not -Contain 'fslogixFileShareNames'
         $command = $remediation.resources | Where-Object type -eq 'Microsoft.Compute/virtualMachines/runCommands'
         $command.properties.parameters.name | Should -Contain 'ContainerType'
         $command.properties.parameters.name | Should -Not -Contain 'Shares'
         $command.properties.parameters.name | Should -Not -Contain 'CloudCache'
         $addon = Get-Content (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.bicep') -Raw
-        $addon | Should -Match 'fileShareNames: fileShareNames'
+        $addon | Should -Not -Match '(?m)^\s+fileShareNames: fileShareNames'
         $policy = Get-Content (Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\configureSessionHost.policyDefinition.bicep') -Raw
-        $policy | Should -Match 'fslogixFileShareNames:'
+        $policy | Should -Not -Match 'fslogixFileShareNames:'
         $policy | Should -Match 'provisioningState'
     }
 }

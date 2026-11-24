@@ -340,7 +340,7 @@ Example PowerShell invocation:
 | `fslogixBackupPolicyName` | Effective pooled FSLogix Azure Files backup policy name |
 | `fslogixBackupPolicyResourceId` | Effective pooled FSLogix backup policy resource ID |
 | `virtualMachineNames` | Array of deployed session host VM names |
-| `fslogixLocalStorageAccountResourceIds` | Storage account(s) for FSLogix profiles |
+| `fslogixLocalProfileStorageAccountResourceIds` | Storage account(s) for FSLogix profiles |
 
 When configuring SHR or the additional-host template, map the producer's local/remote storage
 account outputs to `fslogixLocalProfileStorageAccountResourceIds` and

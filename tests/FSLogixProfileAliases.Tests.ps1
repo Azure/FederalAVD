@@ -110,10 +110,10 @@ Describe 'Lifecycle canonical FSLogix inputs' {
         Invoke-TestNamingFormExpression $control.defaultValue @{ basics = @{ hostsRGProps = @{ tags = @{ fslContainerType = 'Unknown' } } } } | Should -Be 'Unknown'
     }
 
-    It 'adapts published policy parameters to canonical remediation inputs' {
+    It 'uses canonical Profile names across public policy and remediation parameters' {
         $source = Get-Content (Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\configureSessionHost.policyDefinition.bicep') -Raw
         foreach ($location in @('Local', 'Remote')) {
-            $value = [regex]::Escape("'[parameters(\'fslogix${location}StorageAccountResourceIds\')]'")
+            $value = [regex]::Escape("'[parameters(\'fslogix${location}ProfileStorageAccountResourceIds\')]'")
             $source | Should -Match "fslogix${location}ProfileStorageAccountResourceIds:\s+\{\s+value: $value"
         }
     }

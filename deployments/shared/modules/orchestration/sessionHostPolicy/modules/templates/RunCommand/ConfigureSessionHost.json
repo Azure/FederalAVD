@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "14837268908957398120"
+      "templateHash": "8071042005169106476"
     },
     "name": "Session host configuration remediation template",
     "description": "Deploys automated session-host initialization as a named Run Command on an existing VM for policy remediation."
@@ -21,13 +21,6 @@
       "type": "string",
       "metadata": {
         "description": "Required. FSLogix container selection used to derive share names and Cloud Cache behavior."
-      }
-    },
-    "fslogixFileShareNames": {
-      "type": "array",
-      "defaultValue": [],
-      "metadata": {
-        "description": "Legacy compatibility input; fixed share names are derived from fslogixContainerType."
       }
     },
     "fslogixLocalProfileStorageAccountResourceIds": {

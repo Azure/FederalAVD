@@ -158,18 +158,18 @@ var validatedOfficeStorageAccounts = fslogixConfigureSessionHosts && fslogixStor
     )
   : { local: [], remote: [] }
 
-var effectiveFslogixLocalStorageAccountResourceIds = identitySolution == 'EntraId'
+var effectiveFslogixLocalProfileStorageAccountResourceIds = identitySolution == 'EntraId'
   ? take(fslogixLocalProfileStorageAccountResourceIds, 1)
   : fslogixLocalProfileStorageAccountResourceIds
-var effectiveFslogixRemoteStorageAccountResourceIds = identitySolution == 'EntraId'
+var effectiveFslogixRemoteProfileStorageAccountResourceIds = identitySolution == 'EntraId'
   ? take(fslogixRemoteProfileStorageAccountResourceIds, 1)
   : fslogixRemoteProfileStorageAccountResourceIds
-var fslogixLocalProfileStorageAccountNames = [for id in effectiveFslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
-var fslogixRemoteProfileStorageAccountNames = [for id in effectiveFslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
-var fslogixLocalProfileStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixLocalStorageAccountResourceIds)
+var fslogixLocalProfileStorageAccountNames = [for id in effectiveFslogixLocalProfileStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixRemoteProfileStorageAccountNames = [for id in effectiveFslogixRemoteProfileStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixLocalProfileStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixLocalProfileStorageAccountResourceIds)
   ? [localStorageAccounts[0].listkeys().keys[0].value]
   : []
-var fslogixRemoteProfileStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixRemoteStorageAccountResourceIds)
+var fslogixRemoteProfileStorageAccountKeys = identitySolution == 'EntraId' && !empty(effectiveFslogixRemoteProfileStorageAccountResourceIds)
   ? [remoteStorageAccounts[0].listkeys().keys[0].value]
   : []
 var effectiveFslogixLocalOfficeStorageAccountResourceIds = identitySolution == 'EntraId'
@@ -218,7 +218,7 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existin
 }
 
 resource localStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
-  for resId in effectiveFslogixLocalStorageAccountResourceIds: if (identitySolution == 'EntraId') {
+  for resId in effectiveFslogixLocalProfileStorageAccountResourceIds: if (identitySolution == 'EntraId') {
     name: last(split(resId, '/'))
     scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
   }
@@ -239,7 +239,7 @@ resource remoteOfficeStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-
 ]
 
 resource remoteStorageAccounts 'Microsoft.Storage/storageAccounts@2023-01-01' existing = [
-  for resId in effectiveFslogixRemoteStorageAccountResourceIds: if (identitySolution == 'EntraId') {
+  for resId in effectiveFslogixRemoteProfileStorageAccountResourceIds: if (identitySolution == 'EntraId') {
     name: last(split(resId, '/'))
     scope: resourceGroup(split(resId, '/')[2], split(resId, '/')[4])
   }

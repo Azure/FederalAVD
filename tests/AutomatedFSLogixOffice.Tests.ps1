@@ -39,7 +39,7 @@ Describe 'Automated FSLogix Office contract' {
         foreach ($parameter in @('officeStorageAccountNamePrefix', 'officeEncryptionKeyNameConv', 'officeStorageSku', 'officeStorageRedundancy', 'officeShareSizeInGB')) {
             $entrySource | Should -Match "$parameter`: "
         }
-        $entrySource | Should -Match 'output fslogixOfficeStorageAccountResourceIds array'
+        $entrySource | Should -Match 'output fslogixLocalOfficeStorageAccountResourceIds array'
         $entrySource | Should -Match 'storageKeyNames: concat\('
         $entrySource | Should -Match 'naming\.encryptionKeyNameFSLogixOffice'
     }
@@ -73,7 +73,7 @@ Describe 'Automated FSLogix Office contract' {
 
     It 'persists ordered Profile and Office names together in host resource-group lifecycle tags' {
         foreach ($role in @('Local', 'Remote')) {
-            foreach ($kind in @('', 'Office')) {
+            foreach ($kind in @('Profile', 'Office')) {
                 $configurationProperty = $role.Substring(0, 1).ToLowerInvariant() + $role.Substring(1) + $kind + 'StorageAccountResourceIds'
                 $mapping = "fsl${role}${kind}StorageAccountNames: string(map(fslogixConfiguration.$configurationProperty, id => last(split(id, '/'))))"
                 $policySource | Should -Match ([regex]::Escape($mapping))
@@ -81,13 +81,13 @@ Describe 'Automated FSLogix Office contract' {
         }
         $policySource | Should -Match "var fslogixStorageAccountTags = fslogixConfiguration.storageService == 'AzureFiles'"
         $policySource | Should -Match '\}, fslogixStorageAccountTags\)'
-        $policySource | Should -Match 'tags: union\(existingSessionHostResourceGroup.tags \?\? \{\}, resourceGroupTags\)'
+        $policySource | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\(existingSessionHostResourceGroup.tags \?\? \{\}, resourceGroupTags\)\)'
         $entrySource | Should -Match 'fslogixConfiguration: deployFSLogixStorage \? deployedFslogixConfiguration : existingFslogixConfiguration'
     }
 
     It 'keeps the named-command compliance lifecycle unchanged' {
         $definitionSource | Should -Match "defaultValue: 'ConfigureSessionHost'"
-        $definitionSource | Should -Match "version: '1\.0\.0'"
+        $definitionSource | Should -Match "version: '2\.0\.0'"
         $definitionSource | Should -Match "field: 'Microsoft.Compute/virtualMachines/runCommands/provisioningState'\s+equals: 'Succeeded'"
     }
 

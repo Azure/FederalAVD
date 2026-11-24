@@ -46,8 +46,9 @@ FullLanguage and permitted `Add-Type` execution are prerequisites. This does not
 domain/MDM credential-storage policy or make PowerShell telemetry secret-safe.
 
 Custom script invocations must use the explicit Profile name/key arguments; generic local/remote
-storage argument names are not aliases. Public policy parameter names and lifecycle tags remain
-unchanged.
+storage argument names are not aliases. Policy parameters and lifecycle tags also use explicit
+Profile names; existing deployments must follow
+[contract migration](../../../docs/design.md#consumer-contract-migration-and-consistency).
 
 Storage-key mode sets the ADMX Machine **Access Network as Computer Object** policy (supported-on
 `v2105`) to DWORD `1` separately at `HKLM\SOFTWARE\FSLogix\Profiles` and

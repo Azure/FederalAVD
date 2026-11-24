@@ -157,14 +157,19 @@ Bicep entry point.
 ## Managed Identity Responsibilities
 
 FSLogix initialization uses `fslogixContainerType` as the source for fixed share names and Cloud
-Cache. Keep the legacy `fslogixFileShareNames` policy/remediation parameter accepted for existing
-assignments, but do not forward it to the initializer. The automated adapter's legacy
-`fileShareNames` configuration property is optional compatibility data, not a naming override.
-Published local/remote account policy parameters also remain unchanged. Map those Profile arrays
-to `fslogixLocalProfileStorageAccountResourceIds` and `fslogixRemoteProfileStorageAccountResourceIds`
-inside the nested remediation template; do not rename existing policy assignment parameters.
-Do not change the successful named Run Command compliance check to force this cleanup onto
-already-compliant hosts.
+Cache. The canonical policy/remediation contract omits the obsolete `fslogixFileShareNames`
+parameter and uses `fslogixLocalProfileStorageAccountResourceIds` and
+`fslogixRemoteProfileStorageAccountResourceIds` at both boundaries.
+
+This breaking contract uses definition
+`avdSessionHostConfiguration-ProfileAccounts-DeployIfNotExists` (metadata version `2.0.0`) and
+resource-group assignment `avd-sh-config-profile`. Do not reuse the old definition or assignment
+identity: Azure Policy does not support removing definition parameters in place. Existing
+deployments must retire the old `avd-sh-config` assignment through the approved operator process,
+then redeploy the automated host pool. Delete the old subscription definition only after all its
+assignments have migrated. See [contract migration](../../../../../docs/design.md#consumer-contract-migration-and-consistency).
+The named `ConfigureSessionHost` Run Command and successful-provisioning compliance condition
+remain unchanged; this contract migration does not force already-compliant hosts to rerun.
 
 Keep these identities distinct:
 

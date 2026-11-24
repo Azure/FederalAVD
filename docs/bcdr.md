@@ -92,14 +92,14 @@ The host pool template supports Cloud Cache across both Azure Files and Azure Ne
 | --- | --- |
 | `fslogixContainerType` | Must be `CloudCacheProfileContainer` or `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` or `deployFSLogixStorage` | Creates the **primary-region** storage during deployment |
-| `fslogixExistingRemoteStorageAccountResourceIds` | **Pre-provisioned** secondary-region Azure Files accounts |
+| `fslogixExistingRemoteProfileStorageAccountResourceIds` | **Pre-provisioned** secondary-region Azure Files accounts |
 | `fslogixExistingRemoteNetAppVolumeResourceIds` | **Pre-provisioned** secondary-region Azure NetApp Files volumes |
 
 The template configures FSLogix `CCDLocations` registry keys on every session host to include the primary-region storage first (preferred read path), followed by all remote locations. The local deployment-created storage is automatically included; pre-existing remote storage is appended.
 
 ### Prerequisites for Cross-Region Cloud Cache
 
-1. **Secondary-region storage must be pre-provisioned** — the host pool template does not create remote storage accounts. Deploy a second host pool in the secondary region using the same `identifier` and `index` (or set `deployFSLogixStorage = true` in a secondary region host pool deployment) to create the storage first, then pass its resource ID as `fslogixExistingRemoteStorageAccountResourceIds` in the primary region deployment.
+1. **Secondary-region storage must be pre-provisioned** — the host pool template does not create remote storage accounts. Deploy a second host pool in the secondary region using the same `identifier` and `index` (or set `deployFSLogixStorage = true` in a secondary region host pool deployment) to create the storage first, then pass its resource ID as `fslogixExistingRemoteProfileStorageAccountResourceIds` in the primary region deployment.
 
 2. **Network reachability** — session hosts must be able to reach the remote storage account's SMB endpoint (port 445) over your WAN fabric (ExpressRoute, VPN, or VNet peering). Azure Private Endpoints on the secondary storage account must be resolvable from the primary region.
 
@@ -113,7 +113,7 @@ The template configures FSLogix `CCDLocations` registry keys on every session ho
 {
   "fslogixContainerType": { "value": "CloudCacheProfileContainer" },
   "fslogixStorageService": { "value": "AzureFiles Premium" },
-  "fslogixExistingRemoteStorageAccountResourceIds": {
+  "fslogixExistingRemoteProfileStorageAccountResourceIds": {
     "value": [
       "/subscriptions/<sub>/resourceGroups/rg-finance-01-storage-tx/providers/Microsoft.Storage/storageAccounts/safslogixfinance01tx"
     ]

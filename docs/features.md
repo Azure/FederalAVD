@@ -502,7 +502,7 @@ The `fslogixStorageIndex` parameter (0-99) allows you to:
 
 For business continuity, you can configure Cloud Cache with remote storage accounts:
 
-- `fslogixExistingRemoteStorageAccountResourceIds` - Storage accounts in different regions
+- `fslogixExistingRemoteProfileStorageAccountResourceIds` - Storage accounts in different regions
 - `fslogixExistingRemoteNetAppVolumeResourceIds` - NetApp volumes in different regions
 
 This supports active/active disaster recovery configurations as documented in the FSLogix Cloud Cache guidance.
@@ -876,7 +876,7 @@ availability = 'availabilityZones'
 availabilityZones = ['1', '2', '3']
 fslogixContainerType = 'CloudCacheProfileContainer'
 fslogixStorageService = 'AzureFiles Premium'
-fslogixExistingRemoteStorageAccountResourceIds = [           // Reference primary region storage
+fslogixExistingRemoteProfileStorageAccountResourceIds = [           // Reference primary region storage
   '/subscriptions/.../resourceGroups/rg-finance-01-storage-usgovaz/providers/Microsoft.Storage/storageAccounts/stfinance01usgovaz'
 ]
 deployFSLogixStorage = true                                   // Deploy storage in primary region
@@ -892,14 +892,14 @@ availabilityZones = ['1', '2', '3']
 fslogixContainerType = 'CloudCacheProfileContainer'
 fslogixStorageService = 'AzureFiles Premium'
 deployFSLogixStorage = true                                   // Deploy storage in secondary region
-fslogixExistingRemoteStorageAccountResourceIds = [           // Reference primary region storage
+fslogixExistingRemoteProfileStorageAccountResourceIds = [           // Reference primary region storage
   '/subscriptions/.../resourceGroups/rg-finance-01-storage-use/providers/Microsoft.Storage/storageAccounts/stfinance01use'
 ]
 controlPlaneLocation = 'usgovvirginia'
 ```
 
 **Session Host Configuration:**
-FSLogix session hosts in each region are configured via registry to use both local and remote storage locations. The Cloud Cache type automatically handles synchronization and failover between the locations. The `fslogixExistingRemoteStorageAccountResourceIds` parameter adds the remote region's storage account to the FSLogix configuration.
+FSLogix session hosts in each region are configured via registry to use both local and remote storage locations. The Cloud Cache type automatically handles synchronization and failover between the locations. The `fslogixExistingRemoteProfileStorageAccountResourceIds` parameter adds the remote region's storage account to the FSLogix configuration.
 
 **Deployment Considerations:**
 

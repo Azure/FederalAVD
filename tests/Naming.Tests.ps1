@@ -133,7 +133,7 @@ Describe 'Shared naming and module metadata contracts' {
         foreach ($name in @('resourceNameForType', 'functionAppNames', 'hostPoolNames', 'fslogixNames', 'sharedServicesNames', 'imageManagementNames')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should -Be 1
         }
-        foreach ($name in @('resourceName', 'namingPolicy', 'resolveConvention', 'regionAbbreviation', 'shortScopedUnique', 'imageStorageName', 'namePattern', 'buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'deploymentVmName', 'scopedUnique', 'privateEndpointVnetToken', 'fslogixStoragePrefix')) {
+        foreach ($name in @('resourceName', 'namingPolicy', 'resolveConvention', 'regionAbbreviation', 'shortScopedUnique', 'imageStorageName', 'namePattern', 'buildCustomName', 'cnv', 'stripSeps', 'kvSanitize', 'deploymentVmName', 'scopedUnique', 'privateEndpointVnetToken', 'fslogixProfileStoragePrefix')) {
             @($documentedExports | Where-Object { $_.Groups[1].Value -eq $name }).Count | Should -Be 0
         }
     }

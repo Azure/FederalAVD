@@ -224,7 +224,7 @@
     "name": "storage-prefix",
     "identifier": "finance",
     "convention": {
-      "fslogixStoragePrefix": "CUSTOM-Long-Prefix-1234567"
+      "fslogixProfileStoragePrefix": "CUSTOM-Long-Prefix-1234567"
     },
     "context": {
       "cloud": "AzureCloud",

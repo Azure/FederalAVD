@@ -8,9 +8,6 @@ metadata description = 'Deploys automated session-host initialization as a named
 param configureFSLogix bool
 @description('Required. FSLogix container selection used to derive share names and Cloud Cache behavior.')
 param fslogixContainerType string
-@description('Legacy compatibility input; fixed share names are derived from fslogixContainerType.')
-#disable-next-line no-unused-params
-param fslogixFileShareNames array = []
 @description('Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization.')
 param fslogixLocalProfileStorageAccountResourceIds array
 @description('Optional. Existing local Office Azure Files account IDs paired with local Profile accounts in shard order.')

@@ -22,7 +22,7 @@ param domainJoinUserPrincipalName string
 @description('Required. DNS domain name for selected domain operations; otherwise pass an empty string.')
 param domainName string
 @description('Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption.')
-param fslogixEncryptionKeyNameConv string
+param fslogixProfileEncryptionKeyNameConv string
 @description('Required. URI of the existing encryption Key Vault, including the trailing slash; used for customer-managed storage keys.')
 param encryptionKeyVaultUri string
 @description('Required. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption.')
@@ -64,7 +64,7 @@ param shareSizeInGB int
 @description('Required. Array of user group objects with id and name; the selected identity mode determines which field is forwarded.')
 param shareUserGroups array
 @description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
-param storageAccountNamePrefix string
+param profileStorageAccountNamePrefix string
 @description('Required. Distinct Office account prefix; Office accounts use the same shard indices as Profile accounts.')
 @minLength(3)
 @maxLength(13)
@@ -141,8 +141,8 @@ var fileShares = fslogixShareNames(containerType)
 var storageRoles = concat(
   [
     {
-      prefix: storageAccountNamePrefix
-      keyPattern: fslogixEncryptionKeyNameConv
+      prefix: profileStorageAccountNamePrefix
+      keyPattern: fslogixProfileEncryptionKeyNameConv
       sku: storageSku
       configuration: resolveFilesConfiguration(storageSku, storageRedundancy, profileStorageBillingModel, shareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
       shares: take(fileShares, 1)
@@ -153,10 +153,10 @@ var storageRoles = concat(
   length(fileShares) > 1
     ? [
         {
-          prefix: toLower(officeStorageAccountNamePrefix) != toLower(storageAccountNamePrefix)
+          prefix: toLower(officeStorageAccountNamePrefix) != toLower(profileStorageAccountNamePrefix)
             ? officeStorageAccountNamePrefix
             : fail('Profile and Office Azure Files storage account prefixes must differ.')
-          keyPattern: keyManagementStorageAccounts == 'PlatformManaged' || toLower(officeEncryptionKeyNameConv) != toLower(fslogixEncryptionKeyNameConv)
+          keyPattern: keyManagementStorageAccounts == 'PlatformManaged' || toLower(officeEncryptionKeyNameConv) != toLower(fslogixProfileEncryptionKeyNameConv)
             ? officeEncryptionKeyNameConv
             : fail('Profile and Office customer-managed encryption keys must use different name patterns.')
           sku: officeStorageSku
@@ -487,7 +487,7 @@ module grantStorageApplicationsConsent '../../../resourceModules/compute/virtual
 // Profile accounts occupy the first storageCount entries; Office accounts start at that offset.
 // Return separate arrays with identical shard ordering for downstream routing and Profile-only backup.
 @description('Created storage account resource IDs in ascending index order starting at storageIndex.')
-output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]
+output profileStorageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]
 @description('Created Office account IDs paired by shard index with Profile accounts; empty when Office containers are disabled.')
 output officeStorageAccountResourceIds array = [
   for i in range(0, length(fileShares) > 1 ? storageCount : 0): storageAccounts[i + storageCount].outputs.resourceId

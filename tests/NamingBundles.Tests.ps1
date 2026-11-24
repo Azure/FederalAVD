@@ -67,12 +67,12 @@ Describe 'Direct centralized naming bundles' {
         foreach ($case in $actual) {
             $case.fslogix.fslogixOfficeStorageAccountNamePrefix | Should -Match '^fsloc[a-z0-9]+$'
             $scenario = $profiles | Where-Object name -eq $case.name
-            if (-not $scenario.convention.fslogixStoragePrefix) {
-                $case.fslogix.fslogixStorageAccountNamePrefix | Should -Match '^fslpc[a-z0-9]+$'
-                $case.fslogix.fslogixStorageAccountNamePrefix.Substring(5) |
+            if (-not $scenario.convention.fslogixProfileStoragePrefix) {
+                $case.fslogix.fslogixProfileStorageAccountNamePrefix | Should -Match '^fslpc[a-z0-9]+$'
+                $case.fslogix.fslogixProfileStorageAccountNamePrefix.Substring(5) |
                     Should -Be $case.fslogix.fslogixOfficeStorageAccountNamePrefix.Substring(5)
             }
-            $case.fslogix.encryptionKeyNameFSLogixOffice | Should -Not -Be $case.fslogix.encryptionKeyNameFSLogix
+            $case.fslogix.encryptionKeyNameFSLogixOffice | Should -Not -Be $case.fslogix.encryptionKeyNameFSLogixProfile
         }
     }
 
@@ -92,8 +92,8 @@ Describe 'Direct centralized naming bundles' {
         $explicit.hostPool.sharedKeyVaultNameEncryption | Should -Be 'kv-explicit-encryption'
         $east = $actual | Where-Object name -eq 'no-location-east'
         $west = $actual | Where-Object name -eq 'no-location-west'
-        $east.fslogix.fslogixStorageAccountNamePrefix | Should -Not -Be $west.fslogix.fslogixStorageAccountNamePrefix
-        $east.fslogix.encryptionKeyNameFSLogix | Should -Not -Be $west.fslogix.encryptionKeyNameFSLogix
+        $east.fslogix.fslogixProfileStorageAccountNamePrefix | Should -Not -Be $west.fslogix.fslogixProfileStorageAccountNamePrefix
+        $east.fslogix.encryptionKeyNameFSLogixProfile | Should -Not -Be $west.fslogix.encryptionKeyNameFSLogixProfile
     }
 
     It 'exposes no host-pool result property without a production consumer' {

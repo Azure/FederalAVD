@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4753937522984957944"
+      "templateHash": "16896680689545818694"
     }
   },
   "definitions": {
@@ -170,13 +170,13 @@
         "netAppCapacityPoolName": {
           "type": "string"
         },
-        "fslogixStorageAccountNamePrefix": {
+        "fslogixProfileStorageAccountNamePrefix": {
           "type": "string"
         },
         "fslogixOfficeStorageAccountNamePrefix": {
           "type": "string"
         },
-        "encryptionKeyNameFSLogix": {
+        "encryptionKeyNameFSLogixProfile": {
           "type": "string"
         },
         "encryptionKeyNameFSLogixOffice": {
@@ -264,13 +264,13 @@
         "netAppCapacityPoolName": {
           "type": "string"
         },
-        "fslogixStorageAccountNamePrefix": {
+        "fslogixProfileStorageAccountNamePrefix": {
           "type": "string"
         },
         "fslogixOfficeStorageAccountNamePrefix": {
           "type": "string"
         },
-        "encryptionKeyNameFSLogix": {
+        "encryptionKeyNameFSLogixProfile": {
           "type": "string"
         },
         "encryptionKeyNameFSLogixOffice": {
@@ -489,7 +489,7 @@
           "type": "string",
           "nullable": true
         },
-        "fslogixStoragePrefix": {
+        "fslogixProfileStoragePrefix": {
           "type": "string",
           "nullable": true
         },
@@ -1110,9 +1110,9 @@
               "resourceGroupStorage": "[parameters('storageGroupName')]",
               "netAppAccountName": "[_1.resourceName(parameters('convention'), 'netAppAccount', parameters('abbreviation'), parameters('identifier'), '')]",
               "netAppCapacityPoolName": "[_1.resourceName(parameters('convention'), 'netAppCapacityPool', parameters('abbreviation'), parameters('identifier'), '')]",
-              "fslogixStorageAccountNamePrefix": "[parameters('prefix')]",
+              "fslogixProfileStorageAccountNamePrefix": "[parameters('prefix')]",
               "fslogixOfficeStorageAccountNamePrefix": "[parameters('officePrefix')]",
-              "encryptionKeyNameFSLogix": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('prefix')))]",
+              "encryptionKeyNameFSLogixProfile": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('prefix')))]",
               "encryptionKeyNameFSLogixOffice": "[_1.namePattern('fslogixKey', createObject('identifier', parameters('identifier'), 'storagePrefix', parameters('officePrefix')))]",
               "privateEndpointNameConv": "[_1.privateEndpointPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints)]",
               "privateEndpointNICNameConv": "[_1.privateEndpointNicPattern(_1.resourceTypeFirst(parameters('convention')), _1.resolveConvention(parameters('convention')).resourceTypeCodes.privateEndpoints, _1.resolveConvention(parameters('convention')).resourceTypeCodes.networkInterfaces)]",
@@ -1156,7 +1156,7 @@
           ],
           "output": {
             "$ref": "#/definitions/_1.fslogixNamingResult",
-            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.fslogixStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixStoragePrefix'), ''), parameters('unique')), _1.fslogixOfficeStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixOfficeStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
+            "value": "[_1.fslogixNamesWithPrefix(parameters('convention'), parameters('identifier'), parameters('context'), parameters('abbreviation'), parameters('storageGroupName'), _1.fslogixProfileStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixProfileStoragePrefix'), ''), parameters('unique')), _1.fslogixOfficeStoragePrefix(coalesce(tryGet(parameters('convention'), 'fslogixOfficeStoragePrefix'), ''), parameters('unique')), _1.deploymentVmName(parameters('convention'), parameters('abbreviation'), parameters('identifier')))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -1177,7 +1177,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(not(empty(parameters('prefix'))), take(toLower(replace(parameters('prefix'), '-', '')), variables('_1.namingPolicy').limits.fslogixStoragePrefix), _1.namePattern('fslogixOfficeStoragePrefix', createObject('unique', parameters('unique'))))]"
+            "value": "[if(not(empty(parameters('prefix'))), take(toLower(replace(parameters('prefix'), '-', '')), variables('_1.namingPolicy').limits.fslogixProfileStoragePrefix), _1.namePattern('fslogixOfficeStoragePrefix', createObject('unique', parameters('unique'))))]"
           },
           "metadata": {
             "__bicep_imported_from!": {
@@ -1185,7 +1185,7 @@
             }
           }
         },
-        "fslogixStoragePrefix": {
+        "fslogixProfileStoragePrefix": {
           "parameters": [
             {
               "type": "string",
@@ -1198,7 +1198,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[if(not(empty(parameters('prefix'))), take(toLower(replace(parameters('prefix'), '-', '')), variables('_1.namingPolicy').limits.fslogixStoragePrefix), _1.namePattern('fslogixStoragePrefix', createObject('unique', parameters('unique'))))]"
+            "value": "[if(not(empty(parameters('prefix'))), take(toLower(replace(parameters('prefix'), '-', '')), variables('_1.namingPolicy').limits.fslogixProfileStoragePrefix), _1.namePattern('fslogixProfileStoragePrefix', createObject('unique', parameters('unique'))))]"
           },
           "metadata": {
             "description": "Preserves FSLogix domain-compatible storage-prefix normalization and length budgeting, or uses the central default pattern.",
@@ -2584,7 +2584,7 @@
       "nullable": true,
       "maxLength": 13,
       "metadata": {
-        "description": "Optional. Preferred Profile Azure Files account prefix. Overrides namingConvention.fslogixStoragePrefix when supplied; null retains legacy naming."
+        "description": "Optional. Preferred Profile Azure Files account prefix. Overrides namingConvention.fslogixProfileStoragePrefix when supplied; null retains legacy naming."
       }
     },
     "fslogixProfileStorageBillingModel": {
@@ -2843,7 +2843,7 @@
         "description": "Optional. Groups granted user access to FSLogix storage and used for sharding."
       }
     },
-    "fslogixExistingLocalStorageAccountResourceIds": {
+    "fslogixExistingLocalProfileStorageAccountResourceIds": {
       "type": "array",
       "items": {
         "type": "string"
@@ -2853,17 +2853,7 @@
         "description": "Optional. Existing local Azure Files storage account resource IDs used to configure FSLogix without deploying storage."
       }
     },
-    "fslogixExistingLocalProfileStorageAccountResourceIds": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "nullable": true,
-      "metadata": {
-        "description": "Optional. Preferred existing local Profile account IDs. A supplied array, including an empty array, overrides the legacy Profile array."
-      }
-    },
-    "fslogixExistingRemoteStorageAccountResourceIds": {
+    "fslogixExistingRemoteProfileStorageAccountResourceIds": {
       "type": "array",
       "items": {
         "type": "string"
@@ -2871,16 +2861,6 @@
       "defaultValue": [],
       "metadata": {
         "description": "Optional. Existing remote Azure Files storage account resource IDs used by FSLogix Cloud Cache."
-      }
-    },
-    "fslogixExistingRemoteProfileStorageAccountResourceIds": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "nullable": true,
-      "metadata": {
-        "description": "Optional. Preferred existing remote Profile account IDs. A supplied array, including an empty array, overrides the legacy Profile array."
       }
     },
     "fslogixExistingLocalOfficeStorageAccountResourceIds": {
@@ -3241,11 +3221,9 @@
     "fslogixAzureFilesTuningIsValid": "[if(or(not(equals(variables('fslogixStorageSolution'), 'AzureNetAppFiles')), and(and(and(and(and(and(and(and(and(and(equals(parameters('fslogixProfileStorageTier'), null()), or(equals(parameters('fslogixProfileStorageRedundancy'), null()), equals(parameters('fslogixProfileStorageRedundancy'), 'LocallyRedundant'))), equals(parameters('fslogixProfileStorageBillingModel'), 'Legacy')), equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit')), equals(parameters('fslogixProfileProvisionedIops'), 0)), equals(parameters('fslogixProfileProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeProvisionedIops'), 0)), equals(parameters('fslogixOfficeProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeStorageTier'), 'Inherit')), equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit')), equals(parameters('fslogixOfficeShareSizeInGB'), 0))), true(), fail('Azure Files tier, billing, redundancy and performance tuning cannot be used with Azure NetApp Files.'))]",
     "effectiveFslogixProfileStorageTier": "[if(and(variables('fslogixAzureFilesTuningIsValid'), equals(variables('fslogixStorageSolution'), 'AzureFiles')), coalesce(parameters('fslogixProfileStorageTier'), split(parameters('fslogixStorageService'), ' ')[1]), split(parameters('fslogixStorageService'), ' ')[1])]",
     "effectiveFslogixProfileStorageRedundancy": "[coalesce(parameters('fslogixProfileStorageRedundancy'), parameters('fslogixStorageRedundancy'))]",
-    "effectiveFslogixProfileStorageAccountNamePrefix": "[if(and(equals(variables('fslogixStorageSolution'), 'AzureNetAppFiles'), not(empty(parameters('fslogixProfileStorageAccountNamePrefix')))), fail('Profile storage account prefix overrides apply only to Azure Files.'), coalesce(parameters('fslogixProfileStorageAccountNamePrefix'), variables('naming').fslogixStorageAccountNamePrefix))]",
+    "effectiveFslogixProfileStorageAccountNamePrefix": "[if(and(equals(variables('fslogixStorageSolution'), 'AzureNetAppFiles'), not(empty(parameters('fslogixProfileStorageAccountNamePrefix')))), fail('Profile storage account prefix overrides apply only to Azure Files.'), coalesce(parameters('fslogixProfileStorageAccountNamePrefix'), variables('naming').fslogixProfileStorageAccountNamePrefix))]",
     "effectiveFslogixProfileShareSizeInGB": "[coalesce(parameters('fslogixProfileShareSizeInGB'), parameters('fslogixShareSizeInGB'))]",
     "effectiveFslogixOfficeStorageBillingModel": "[if(equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit'), parameters('fslogixProfileStorageBillingModel'), if(equals(parameters('fslogixOfficeStorageBillingModel'), 'ProvisionedV2'), 'ProvisionedV2', 'Legacy'))]",
-    "effectiveFslogixExistingLocalProfileStorageAccountResourceIds": "[coalesce(parameters('fslogixExistingLocalProfileStorageAccountResourceIds'), parameters('fslogixExistingLocalStorageAccountResourceIds'))]",
-    "effectiveFslogixExistingRemoteProfileStorageAccountResourceIds": "[coalesce(parameters('fslogixExistingRemoteProfileStorageAccountResourceIds'), parameters('fslogixExistingRemoteStorageAccountResourceIds'))]",
     "fslogixOfficeEnabled": "[contains(parameters('fslogixContainerType'), 'Office')]",
     "effectiveFslogixOfficeStorageSku": "[if(equals(parameters('fslogixOfficeStorageTier'), 'Inherit'), variables('effectiveFslogixProfileStorageTier'), parameters('fslogixOfficeStorageTier'))]",
     "effectiveFslogixOfficeStorageRedundancy": "[if(equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit'), variables('effectiveFslogixProfileStorageRedundancy'), parameters('fslogixOfficeStorageRedundancy'))]",
@@ -3253,12 +3231,12 @@
     "fslogixStorageCount": "[if(equals(parameters('fslogixShardOptions'), 'None'), 1, length(parameters('fslogixUserGroups')))]",
     "deployFslogixStorageCmk": "[and(and(parameters('deployFSLogixStorage'), equals(variables('fslogixStorageSolution'), 'AzureFiles')), contains(parameters('fslogixKeyManagementStorage'), 'CustomerManaged'))]",
     "fslogixShardingConfigurationIsValid": "[if(or(or(and(not(parameters('deployFSLogixStorage')), not(parameters('fslogixConfigureSessionHosts'))), equals(parameters('fslogixShardOptions'), 'None')), not(empty(parameters('fslogixUserGroups')))), true(), fail('fslogixUserGroups must contain at least one group when sharding is enabled.'))]",
-    "fslogixExistingLocalStorageConfigurationIsValid": "[or(or(or(not(parameters('fslogixConfigureSessionHosts')), parameters('deployFSLogixStorage')), not(equals(variables('fslogixStorageSolution'), 'AzureFiles'))), equals(length(variables('effectiveFslogixExistingLocalProfileStorageAccountResourceIds')), variables('fslogixStorageCount')))]",
-    "fslogixExistingRemoteStorageConfigurationIsValid": "[or(or(or(not(parameters('fslogixConfigureSessionHosts')), not(equals(variables('fslogixStorageSolution'), 'AzureFiles'))), empty(variables('effectiveFslogixExistingRemoteProfileStorageAccountResourceIds'))), equals(length(variables('effectiveFslogixExistingRemoteProfileStorageAccountResourceIds')), variables('fslogixStorageCount')))]",
-    "existingProfileAccountIds": "[map(concat(variables('effectiveFslogixExistingLocalProfileStorageAccountResourceIds'), variables('effectiveFslogixExistingRemoteProfileStorageAccountResourceIds')), lambda('id', toLower(lambdaVariables('id'))))]",
+    "fslogixExistingLocalStorageConfigurationIsValid": "[or(or(or(not(parameters('fslogixConfigureSessionHosts')), parameters('deployFSLogixStorage')), not(equals(variables('fslogixStorageSolution'), 'AzureFiles'))), equals(length(parameters('fslogixExistingLocalProfileStorageAccountResourceIds')), variables('fslogixStorageCount')))]",
+    "fslogixExistingRemoteStorageConfigurationIsValid": "[or(or(or(not(parameters('fslogixConfigureSessionHosts')), not(equals(variables('fslogixStorageSolution'), 'AzureFiles'))), empty(parameters('fslogixExistingRemoteProfileStorageAccountResourceIds'))), equals(length(parameters('fslogixExistingRemoteProfileStorageAccountResourceIds')), variables('fslogixStorageCount')))]",
+    "existingProfileAccountIds": "[map(concat(parameters('fslogixExistingLocalProfileStorageAccountResourceIds'), parameters('fslogixExistingRemoteProfileStorageAccountResourceIds')), lambda('id', toLower(lambdaVariables('id'))))]",
     "existingOfficeAccountIds": "[map(concat(parameters('fslogixExistingLocalOfficeStorageAccountResourceIds'), parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds')), lambda('id', toLower(lambdaVariables('id'))))]",
     "existingLocalOfficeCountIsValid": "[or(parameters('deployFSLogixStorage'), equals(length(parameters('fslogixExistingLocalOfficeStorageAccountResourceIds')), variables('fslogixStorageCount')))]",
-    "existingRemoteOfficeCountIsValid": "[equals(length(parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds')), length(variables('effectiveFslogixExistingRemoteProfileStorageAccountResourceIds')))]",
+    "existingRemoteOfficeCountIsValid": "[equals(length(parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds')), length(parameters('fslogixExistingRemoteProfileStorageAccountResourceIds')))]",
     "existingOfficeAccountsAreDistinct": "[and(empty(intersection(variables('existingProfileAccountIds'), variables('existingOfficeAccountIds'))), equals(length(union(variables('existingOfficeAccountIds'), createArray())), length(variables('existingOfficeAccountIds'))))]",
     "fslogixExistingOfficeStorageConfigurationIsValid": "[if(or(not(parameters('fslogixConfigureSessionHosts')), not(equals(variables('fslogixStorageSolution'), 'AzureFiles'))), true(), if(variables('fslogixOfficeEnabled'), and(and(variables('existingLocalOfficeCountIsValid'), variables('existingRemoteOfficeCountIsValid')), variables('existingOfficeAccountsAreDistinct')), empty(variables('existingOfficeAccountIds'))))]",
     "fslogixExistingStorageConfigurationIsValid": "[if(and(and(variables('fslogixExistingLocalStorageConfigurationIsValid'), variables('fslogixExistingRemoteStorageConfigurationIsValid')), variables('fslogixExistingOfficeStorageConfigurationIsValid')), true(), fail('Existing FSLogix Azure Files storage requires one Profile account per shard and, when Office is enabled, one distinct Office account per Profile account in matching local/remote shard order. Office arrays must be empty for Profile-only containers.'))]",
@@ -3584,7 +3562,7 @@
       },
       "limits": {
         "deploymentVm": 15,
-        "fslogixStoragePrefix": 13,
+        "fslogixProfileStoragePrefix": 13,
         "uniqueSuffix": 6,
         "defaultUniqueLength": 6,
         "imageManagementStoragePrefix": 5,
@@ -4087,7 +4065,7 @@
         "confidentialDiskPurpose": "confvm{delimiter}customer{delimiter}keys",
         "customerDiskPurpose": "customer{delimiter}keys",
         "doubleEncryptionDiskPurpose": "platform{delimiter}and{delimiter}customer{delimiter}keys",
-        "fslogixStoragePrefix": "fslpc{unique}",
+        "fslogixProfileStoragePrefix": "fslpc{unique}",
         "fslogixOfficeStoragePrefix": "fsloc{unique}",
         "fslogixKey": "{identifier}-{storagePrefix}##-cmk",
         "vmKey": "{identifier}-vm-cmk",
@@ -15585,7 +15563,7 @@
             "value": "[variables('hostPoolResourceId')]"
           },
           "storageKeyNames": {
-            "value": "[concat(map(range(0, variables('fslogixStorageCount')), lambda('i', replace(variables('naming').encryptionKeyNameFSLogix, '##', padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))), if(variables('fslogixOfficeEnabled'), map(range(0, variables('fslogixStorageCount')), lambda('i', replace(variables('naming').encryptionKeyNameFSLogixOffice, '##', padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))), createArray()))]"
+            "value": "[concat(map(range(0, variables('fslogixStorageCount')), lambda('i', replace(variables('naming').encryptionKeyNameFSLogixProfile, '##', padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))), if(variables('fslogixOfficeEnabled'), map(range(0, variables('fslogixStorageCount')), lambda('i', replace(variables('naming').encryptionKeyNameFSLogixOffice, '##', padLeft(add(lambdaVariables('i'), parameters('fslogixStorageIndex')), 2, '0')))), createArray()))]"
           },
           "identityName": {
             "value": "[replace(variables('naming').userAssignedIdentityNameConv, 'TOKEN', format('storage{0}cmk', variables('naming').delimiter))]"
@@ -16195,8 +16173,8 @@
           "fslogixAdminGroups": {
             "value": "[parameters('fslogixAdminGroups')]"
           },
-          "fslogixEncryptionKeyNameConv": {
-            "value": "[variables('naming').encryptionKeyNameFSLogix]"
+          "fslogixProfileEncryptionKeyNameConv": {
+            "value": "[variables('naming').encryptionKeyNameFSLogixProfile]"
           },
           "officeEncryptionKeyNameConv": {
             "value": "[variables('naming').encryptionKeyNameFSLogixOffice]"
@@ -16293,7 +16271,7 @@
           "smbServerLocation": {
             "value": "[variables('naming').vmsLocAbbr]"
           },
-          "storageAccountNamePrefix": {
+          "profileStorageAccountNamePrefix": {
             "value": "[variables('effectiveFslogixProfileStorageAccountNamePrefix')]"
           },
           "officeStorageAccountNamePrefix": {
@@ -16329,7 +16307,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "14684269960969185885"
+              "templateHash": "8379195390063645170"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -16529,7 +16507,7 @@
                 "description": "Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands."
               }
             },
-            "fslogixEncryptionKeyNameConv": {
+            "fslogixProfileEncryptionKeyNameConv": {
               "type": "string",
               "metadata": {
                 "description": "Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption."
@@ -16660,7 +16638,7 @@
                 "description": "Required. Location token appended to anf- for the NetApp Active Directory SMB server name."
               }
             },
-            "storageAccountNamePrefix": {
+            "profileStorageAccountNamePrefix": {
               "type": "string",
               "metadata": {
                 "description": "Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex."
@@ -17844,8 +17822,8 @@
                   "officeProvisionedThroughputMiBps": {
                     "value": "[parameters('officeProvisionedThroughputMiBps')]"
                   },
-                  "fslogixEncryptionKeyNameConv": {
-                    "value": "[parameters('fslogixEncryptionKeyNameConv')]"
+                  "fslogixProfileEncryptionKeyNameConv": {
+                    "value": "[parameters('fslogixProfileEncryptionKeyNameConv')]"
                   },
                   "encryptionKeyVaultUri": {
                     "value": "[parameters('encryptionKeyVaultUri')]"
@@ -17899,8 +17877,8 @@
                   "shareUserGroups": {
                     "value": "[parameters('fslogixUserGroups')]"
                   },
-                  "storageAccountNamePrefix": {
-                    "value": "[parameters('storageAccountNamePrefix')]"
+                  "profileStorageAccountNamePrefix": {
+                    "value": "[parameters('profileStorageAccountNamePrefix')]"
                   },
                   "storageCount": {
                     "value": "[parameters('storageCount')]"
@@ -17935,7 +17913,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "6358761308650429683"
+                      "templateHash": "5582233066231511368"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -18174,7 +18152,7 @@
                         "description": "Required. DNS domain name for selected domain operations; otherwise pass an empty string."
                       }
                     },
-                    "fslogixEncryptionKeyNameConv": {
+                    "fslogixProfileEncryptionKeyNameConv": {
                       "type": "string",
                       "metadata": {
                         "description": "Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption."
@@ -18301,7 +18279,7 @@
                         "description": "Required. Array of user group objects with id and name; the selected identity mode determines which field is forwarded."
                       }
                     },
-                    "storageAccountNamePrefix": {
+                    "profileStorageAccountNamePrefix": {
                       "type": "string",
                       "metadata": {
                         "description": "Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex."
@@ -18472,7 +18450,7 @@
                       "channelEncryption": "AES-128-CCM;AES-128-GCM;AES-256-GCM;"
                     },
                     "fileShares": "[__bicep.fslogixShareNames(parameters('containerType'))]",
-                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('storageAccountNamePrefix'), 'keyPattern', parameters('fslogixEncryptionKeyNameConv'), 'sku', parameters('storageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('storageSku'), parameters('storageRedundancy'), parameters('profileStorageBillingModel'), parameters('shareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('shareSizeInGB'), 'commandPrefix', '')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('storageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageSku'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
+                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('storageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('storageSku'), parameters('storageRedundancy'), parameters('profileStorageBillingModel'), parameters('shareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('shareSizeInGB'), 'commandPrefix', '')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageSku'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
                     "accountConfigurations": "[flatten(map(variables('storageRoles'), lambda('role', map(range(0, parameters('storageCount')), lambda('index', union(lambdaVariables('role'), createObject('name', format('{0}{1}', lambdaVariables('role').prefix, padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')), 'keyName', replace(lambdaVariables('role').keyPattern, '##', padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')))))))))]",
                     "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
                     "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
@@ -21136,7 +21114,7 @@
                     }
                   },
                   "outputs": {
-                    "storageAccountResourceIds": {
+                    "profileStorageAccountResourceIds": {
                       "type": "array",
                       "metadata": {
                         "description": "Created storage account resource IDs in ascending index order starting at storageIndex."
@@ -21184,8 +21162,8 @@
                       "profile-containers"
                     ]
                   },
-                  "storageAccountResourceIds": {
-                    "value": "[reference('azureFiles').outputs.storageAccountResourceIds.value]"
+                  "profileStorageAccountResourceIds": {
+                    "value": "[reference('azureFiles').outputs.profileStorageAccountResourceIds.value]"
                   },
                   "fileSharePolicyName": {
                     "value": "[parameters('fileSharePolicyName')]"
@@ -21204,7 +21182,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "2132894057681700020"
+                      "templateHash": "13377468297212196903"
                     },
                     "name": "FSLogix file share backup registration",
                     "description": "Registers existing Azure Files storage accounts and requested non-Office shares with an existing Recovery Services vault and backup policy."
@@ -21228,7 +21206,7 @@
                         "description": "Required. Shares to protect on every supplied account. office-containers is always excluded."
                       }
                     },
-                    "storageAccountResourceIds": {
+                    "profileStorageAccountResourceIds": {
                       "type": "array",
                       "metadata": {
                         "description": "Required. Existing storage account resource IDs; eligible shares are protected on each account."
@@ -21259,23 +21237,23 @@
                   "variables": {
                     "parentResourceTags": "[if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject())]",
                     "backupFileShares": "[filter(parameters('fileShares'), lambda('shareName', not(equals(toLower(lambdaVariables('shareName')), 'office-containers'))))]",
-                    "combos": "[flatten(map(range(0, length(parameters('storageAccountResourceIds'))), lambda('saIdx', map(variables('backupFileShares'), lambda('shareName', createObject('saId', parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], 'rgName', split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')[4], 'saName', last(split(parameters('storageAccountResourceIds')[lambdaVariables('saIdx')], '/')), 'shareName', lambdaVariables('shareName')))))))]"
+                    "combos": "[flatten(map(range(0, length(parameters('profileStorageAccountResourceIds'))), lambda('saIdx', map(variables('backupFileShares'), lambda('shareName', createObject('saId', parameters('profileStorageAccountResourceIds')[lambdaVariables('saIdx')], 'rgName', split(parameters('profileStorageAccountResourceIds')[lambdaVariables('saIdx')], '/')[4], 'saName', last(split(parameters('profileStorageAccountResourceIds')[lambdaVariables('saIdx')], '/')), 'shareName', lambdaVariables('shareName')))))))]"
                   },
                   "resources": [
                     {
                       "copy": {
                         "name": "protectionContainers",
-                        "count": "[length(parameters('storageAccountResourceIds'))]",
+                        "count": "[length(parameters('profileStorageAccountResourceIds'))]",
                         "mode": "serial",
                         "batchSize": 1
                       },
                       "condition": "[not(empty(variables('backupFileShares')))]",
                       "type": "Microsoft.RecoveryServices/vaults/backupFabrics/protectionContainers",
                       "apiVersion": "2024-04-01",
-                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}', parameters('vaultName'), split(parameters('storageAccountResourceIds')[copyIndex()], '/')[4], last(split(parameters('storageAccountResourceIds')[copyIndex()], '/')))]",
+                      "name": "[format('{0}/Azure/storagecontainer;Storage;{1};{2}', parameters('vaultName'), split(parameters('profileStorageAccountResourceIds')[copyIndex()], '/')[4], last(split(parameters('profileStorageAccountResourceIds')[copyIndex()], '/')))]",
                       "properties": {
-                        "friendlyName": "[last(split(parameters('storageAccountResourceIds')[copyIndex()], '/'))]",
-                        "sourceResourceId": "[parameters('storageAccountResourceIds')[copyIndex()]]",
+                        "friendlyName": "[last(split(parameters('profileStorageAccountResourceIds')[copyIndex()], '/'))]",
+                        "sourceResourceId": "[parameters('profileStorageAccountResourceIds')[copyIndex()]]",
                         "backupManagementType": "AzureStorage",
                         "containerType": "StorageContainer"
                       },
@@ -21330,12 +21308,12 @@
               },
               "value": "[if(equals(parameters('storageSolution'), 'AzureNetAppFiles'), reference('azureNetAppFiles').outputs.smbServerFqdns.value, createArray())]"
             },
-            "storageAccountResourceIds": {
+            "profileStorageAccountResourceIds": {
               "type": "array",
               "metadata": {
                 "description": "Created Profile Azure Files account IDs in ascending shard index order; empty for NetApp storage."
               },
-              "value": "[if(equals(parameters('storageSolution'), 'AzureFiles'), reference('azureFiles').outputs.storageAccountResourceIds.value, createArray())]"
+              "value": "[if(equals(parameters('storageSolution'), 'AzureFiles'), reference('azureFiles').outputs.profileStorageAccountResourceIds.value, createArray())]"
             },
             "officeStorageAccountResourceIds": {
               "type": "array",
@@ -21488,7 +21466,7 @@
             "value": "[parameters('virtualMachinesTimeZone')]"
           },
           "configureFSLogix": "[if(and(and(variables('fslogixShardingConfigurationIsValid'), variables('fslogixExistingStorageConfigurationIsValid')), variables('fslogixExistingNetAppConfigurationIsValid')), createObject('value', parameters('fslogixConfigureSessionHosts')), createObject('value', parameters('fslogixConfigureSessionHosts')))]",
-          "fslogixConfiguration": "[if(parameters('deployFSLogixStorage'), createObject('value', createObject('identitySolution', parameters('identitySolution'), 'storageService', variables('fslogixStorageSolution'), 'containerType', parameters('fslogixContainerType'), 'localStorageAccountResourceIds', reference('fslogixStorage').outputs.storageAccountResourceIds.value, 'remoteStorageAccountResourceIds', variables('effectiveFslogixExistingRemoteProfileStorageAccountResourceIds'), 'localOfficeStorageAccountResourceIds', reference('fslogixStorage').outputs.officeStorageAccountResourceIds.value, 'remoteOfficeStorageAccountResourceIds', parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds'), 'localNetAppServerFqdns', reference('fslogixStorage').outputs.netAppServerFqdns.value, 'remoteNetAppServerFqdns', if(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value), 'objectSpecificSettingsGroups', if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray()), 'profileSizeInMBs', parameters('fslogixProfileSizeInMBs'))), createObject('value', createObject('identitySolution', parameters('identitySolution'), 'storageService', variables('fslogixStorageSolution'), 'containerType', parameters('fslogixContainerType'), 'localStorageAccountResourceIds', variables('effectiveFslogixExistingLocalProfileStorageAccountResourceIds'), 'remoteStorageAccountResourceIds', variables('effectiveFslogixExistingRemoteProfileStorageAccountResourceIds'), 'localOfficeStorageAccountResourceIds', parameters('fslogixExistingLocalOfficeStorageAccountResourceIds'), 'remoteOfficeStorageAccountResourceIds', parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds'), 'localNetAppServerFqdns', if(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.localNetAppVolumeSmbServerFqdns.value), 'remoteNetAppServerFqdns', if(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value), 'objectSpecificSettingsGroups', if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray()), 'profileSizeInMBs', parameters('fslogixProfileSizeInMBs'))))]",
+          "fslogixConfiguration": "[if(parameters('deployFSLogixStorage'), createObject('value', createObject('identitySolution', parameters('identitySolution'), 'storageService', variables('fslogixStorageSolution'), 'containerType', parameters('fslogixContainerType'), 'localProfileStorageAccountResourceIds', reference('fslogixStorage').outputs.profileStorageAccountResourceIds.value, 'remoteProfileStorageAccountResourceIds', parameters('fslogixExistingRemoteProfileStorageAccountResourceIds'), 'localOfficeStorageAccountResourceIds', reference('fslogixStorage').outputs.officeStorageAccountResourceIds.value, 'remoteOfficeStorageAccountResourceIds', parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds'), 'localNetAppServerFqdns', reference('fslogixStorage').outputs.netAppServerFqdns.value, 'remoteNetAppServerFqdns', if(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value), 'objectSpecificSettingsGroups', if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray()), 'profileSizeInMBs', parameters('fslogixProfileSizeInMBs'))), createObject('value', createObject('identitySolution', parameters('identitySolution'), 'storageService', variables('fslogixStorageSolution'), 'containerType', parameters('fslogixContainerType'), 'localProfileStorageAccountResourceIds', parameters('fslogixExistingLocalProfileStorageAccountResourceIds'), 'remoteProfileStorageAccountResourceIds', parameters('fslogixExistingRemoteProfileStorageAccountResourceIds'), 'localOfficeStorageAccountResourceIds', parameters('fslogixExistingLocalOfficeStorageAccountResourceIds'), 'remoteOfficeStorageAccountResourceIds', parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds'), 'localNetAppServerFqdns', if(empty(parameters('fslogixExistingLocalNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.localNetAppVolumeSmbServerFqdns.value), 'remoteNetAppServerFqdns', if(empty(parameters('fslogixExistingRemoteNetAppVolumeResourceIds')), createArray(), reference('existingNetAppVolumeFqdns').outputs.remoteNetAppVolumeSmbServerFqdns.value), 'objectSpecificSettingsGroups', if(equals(parameters('fslogixShardOptions'), 'ShardOSS'), map(parameters('fslogixUserGroups'), lambda('group', lambdaVariables('group').name)), createArray()), 'profileSizeInMBs', parameters('fslogixProfileSizeInMBs'))))]",
           "artifactsContainerUri": {
             "value": "[parameters('artifactsContainerUri')]"
           },
@@ -21513,7 +21491,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1897491044752700848"
+              "templateHash": "3779554419222445065"
             }
           },
           "definitions": {
@@ -21546,20 +21524,13 @@
                     "ProfileOfficeContainer"
                   ]
                 },
-                "fileShareNames": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "nullable": true
-                },
-                "localStorageAccountResourceIds": {
+                "localProfileStorageAccountResourceIds": {
                   "type": "array",
                   "items": {
                     "type": "string"
                   }
                 },
-                "remoteStorageAccountResourceIds": {
+                "remoteProfileStorageAccountResourceIds": {
                   "type": "array",
                   "items": {
                     "type": "string"
@@ -21668,6 +21639,30 @@
               }
             }
           },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "removeLegacyFslogixAccountTags": {
+                  "parameters": [
+                    {
+                      "type": "object",
+                      "name": "tags"
+                    }
+                  ],
+                  "output": {
+                    "type": "object",
+                    "value": "[toObject(filter(items(parameters('tags')), lambda('tag', not(contains(createArray('fsllocalstorageaccountnames', 'fslremotestorageaccountnames'), toLower(lambdaVariables('tag').key))))), lambda('tag', lambdaVariables('tag').key), lambda('tag', lambdaVariables('tag').value))]"
+                  },
+                  "metadata": {
+                    "__bicep_imported_from!": {
+                      "sourceTemplate": "../../shared/modules/orchestration/fslogix/modules/configuration.bicep"
+                    }
+                  }
+                }
+              }
+            }
+          ],
           "parameters": {
             "location": {
               "type": "string",
@@ -21790,8 +21785,8 @@
                 "identitySolution": "EntraKerberos-CloudOnly",
                 "storageService": "AzureFiles",
                 "containerType": "ProfileContainer",
-                "localStorageAccountResourceIds": [],
-                "remoteStorageAccountResourceIds": [],
+                "localProfileStorageAccountResourceIds": [],
+                "remoteProfileStorageAccountResourceIds": [],
                 "localOfficeStorageAccountResourceIds": [],
                 "remoteOfficeStorageAccountResourceIds": [],
                 "localNetAppServerFqdns": [],
@@ -21853,17 +21848,17 @@
             "managedIdentityOperatorRoleDefinitionId": "f1a07417-d97a-45cb-824c-7a7467783830",
             "storageAccountKeyOperatorRoleDefinitionId": "81a9662b-bebf-436f-a333-f67b29880f12",
             "fslogixOfficeEnabled": "[contains(parameters('fslogixConfiguration').containerType, 'Office')]",
-            "profileStorageAccountIds": "[map(concat(parameters('fslogixConfiguration').localStorageAccountResourceIds, parameters('fslogixConfiguration').remoteStorageAccountResourceIds), lambda('id', toLower(lambdaVariables('id'))))]",
+            "profileStorageAccountIds": "[map(concat(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds, parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds), lambda('id', toLower(lambdaVariables('id'))))]",
             "officeStorageAccountIds": "[map(concat(parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds, parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds), lambda('id', toLower(lambdaVariables('id'))))]",
-            "localOfficeAccountsArePaired": "[equals(length(parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds), length(parameters('fslogixConfiguration').localStorageAccountResourceIds))]",
-            "remoteOfficeAccountsArePaired": "[equals(length(parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds), length(parameters('fslogixConfiguration').remoteStorageAccountResourceIds))]",
+            "localOfficeAccountsArePaired": "[equals(length(parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds), length(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds))]",
+            "remoteOfficeAccountsArePaired": "[equals(length(parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds), length(parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds))]",
             "officeAccountsAreValid": "[if(variables('fslogixOfficeEnabled'), and(and(variables('localOfficeAccountsArePaired'), variables('remoteOfficeAccountsArePaired')), empty(intersection(variables('profileStorageAccountIds'), variables('officeStorageAccountIds')))), empty(variables('officeStorageAccountIds')))]",
             "accountIdsAreUnique": "[and(equals(length(union(variables('profileStorageAccountIds'), createArray())), length(variables('profileStorageAccountIds'))), equals(length(union(variables('officeStorageAccountIds'), createArray())), length(variables('officeStorageAccountIds'))))]",
-            "remoteAccountCountIsValid": "[or(empty(parameters('fslogixConfiguration').remoteStorageAccountResourceIds), equals(length(parameters('fslogixConfiguration').remoteStorageAccountResourceIds), length(parameters('fslogixConfiguration').localStorageAccountResourceIds)))]",
-            "objectSpecificGroupCountIsValid": "[or(empty(parameters('fslogixConfiguration').objectSpecificSettingsGroups), equals(length(parameters('fslogixConfiguration').objectSpecificSettingsGroups), length(parameters('fslogixConfiguration').localStorageAccountResourceIds)))]",
-            "pairedStorageAccountsAreValid": "[if(or(or(not(parameters('configureFSLogix')), not(equals(parameters('fslogixConfiguration').storageService, 'AzureFiles'))), and(and(and(and(not(empty(parameters('fslogixConfiguration').localStorageAccountResourceIds)), variables('officeAccountsAreValid')), variables('accountIdsAreUnique')), variables('remoteAccountCountIsValid')), variables('objectSpecificGroupCountIsValid'))), true(), fail('FSLogix Azure Files requires ordered, distinct Profile/Office account pairs for each local and remote shard; object-specific groups must match shard counts.'))]",
-            "storageKeyConfigurationIsValid": "[if(or(or(not(parameters('configureFSLogix')), not(equals(parameters('fslogixConfiguration').identitySolution, 'EntraId'))), and(and(and(equals(parameters('fslogixConfiguration').storageService, 'AzureFiles'), equals(length(parameters('fslogixConfiguration').localStorageAccountResourceIds), 1)), lessOrEquals(length(parameters('fslogixConfiguration').remoteStorageAccountResourceIds), 1)), empty(parameters('fslogixConfiguration').objectSpecificSettingsGroups))), true(), fail('Storage-key EntraId FSLogix requires one Azure Files account per enabled role and location, without object-specific sharding.'))]",
-            "storageKeyAccountResourceIds": "[if(and(and(and(parameters('configureFSLogix'), equals(parameters('fslogixConfiguration').identitySolution, 'EntraId')), variables('pairedStorageAccountsAreValid')), variables('storageKeyConfigurationIsValid')), concat(parameters('fslogixConfiguration').localStorageAccountResourceIds, parameters('fslogixConfiguration').remoteStorageAccountResourceIds, parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds, parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds), createArray())]",
+            "remoteAccountCountIsValid": "[or(empty(parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds), equals(length(parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds), length(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds)))]",
+            "objectSpecificGroupCountIsValid": "[or(empty(parameters('fslogixConfiguration').objectSpecificSettingsGroups), equals(length(parameters('fslogixConfiguration').objectSpecificSettingsGroups), length(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds)))]",
+            "pairedStorageAccountsAreValid": "[if(or(or(not(parameters('configureFSLogix')), not(equals(parameters('fslogixConfiguration').storageService, 'AzureFiles'))), and(and(and(and(not(empty(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds)), variables('officeAccountsAreValid')), variables('accountIdsAreUnique')), variables('remoteAccountCountIsValid')), variables('objectSpecificGroupCountIsValid'))), true(), fail('FSLogix Azure Files requires ordered, distinct Profile/Office account pairs for each local and remote shard; object-specific groups must match shard counts.'))]",
+            "storageKeyConfigurationIsValid": "[if(or(or(not(parameters('configureFSLogix')), not(equals(parameters('fslogixConfiguration').identitySolution, 'EntraId'))), and(and(and(equals(parameters('fslogixConfiguration').storageService, 'AzureFiles'), equals(length(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds), 1)), lessOrEquals(length(parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds), 1)), empty(parameters('fslogixConfiguration').objectSpecificSettingsGroups))), true(), fail('Storage-key EntraId FSLogix requires one Azure Files account per enabled role and location, without object-specific sharding.'))]",
+            "storageKeyAccountResourceIds": "[if(and(and(and(parameters('configureFSLogix'), equals(parameters('fslogixConfiguration').identitySolution, 'EntraId')), variables('pairedStorageAccountsAreValid')), variables('storageKeyConfigurationIsValid')), concat(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds, parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds, parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds, parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds), createArray())]",
             "policyOwnerId": "[if(empty(parameters('hostPoolResourceId')), 'FederalAVD-AutomatedHostPool', parameters('hostPoolResourceId'))]",
             "inheritResourceGroupTagPolicyResourceId": "[tenantResourceId('Microsoft.Authorization/policyDefinitions', 'cd3aa116-8754-49c9-a813-ad46512ece54')]",
             "monitoringConfigurationIsValid": "[if(or(not(parameters('enableMonitoring')), not(empty(parameters('dataCollectionRuleResourceId')))), true(), fail('dataCollectionRuleResourceId is required when enableMonitoring is true.'))]",
@@ -21876,7 +21871,7 @@
             "finalSessionHostCustomizationName": "[if(not(empty(parameters('sessionHostCustomizations'))), replace(last(parameters('sessionHostCustomizations')).name, ' ', '-'), 'PrivateCustomization-Final')]",
             "configureSessionHostCompute": "[or(parameters('encryptionAtHost'), greater(parameters('diskSizeGB'), 0))]",
             "parentResourceTags": "[if(empty(parameters('hostPoolResourceId')), createObject(), createObject('cm-resource-parent', parameters('hostPoolResourceId')))]",
-            "fslogixStorageAccountTags": "[if(equals(parameters('fslogixConfiguration').storageService, 'AzureFiles'), createObject('fslLocalStorageAccountNames', string(map(parameters('fslogixConfiguration').localStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/'))))), 'fslRemoteStorageAccountNames', string(map(parameters('fslogixConfiguration').remoteStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/'))))), 'fslLocalOfficeStorageAccountNames', string(map(parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/'))))), 'fslRemoteOfficeStorageAccountNames', string(map(parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())]",
+            "fslogixStorageAccountTags": "[if(equals(parameters('fslogixConfiguration').storageService, 'AzureFiles'), createObject('fslLocalProfileStorageAccountNames', string(map(parameters('fslogixConfiguration').localProfileStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/'))))), 'fslRemoteProfileStorageAccountNames', string(map(parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/'))))), 'fslLocalOfficeStorageAccountNames', string(map(parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/'))))), 'fslRemoteOfficeStorageAccountNames', string(map(parameters('fslogixConfiguration').remoteOfficeStorageAccountResourceIds, lambda('id', last(split(lambdaVariables('id'), '/')))))), createObject())]",
             "resourceGroupTags": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), variables('parentResourceTags'), if(empty(parameters('hostPoolResourceId')), createObject(), createObject('FederalAVD-SessionHostPolicy-Owner', parameters('hostPoolResourceId'))), variables('fslogixStorageAccountTags'))]",
             "managedIdentityTags": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.ManagedIdentity/userAssignedIdentities'), createObject()), variables('parentResourceTags'))]"
           },
@@ -21906,7 +21901,7 @@
                     "value": "[reference('existingSessionHostResourceGroup', '2024-03-01', 'full').location]"
                   },
                   "tags": {
-                    "value": "[union(coalesce(reference('existingSessionHostResourceGroup', '2024-03-01', 'full').tags, createObject()), variables('resourceGroupTags'))]"
+                    "value": "[__bicep.removeLegacyFslogixAccountTags(union(coalesce(reference('existingSessionHostResourceGroup', '2024-03-01', 'full').tags, createObject()), variables('resourceGroupTags')))]"
                   }
                 },
                 "template": {
@@ -22218,7 +22213,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "16385804772410507387"
+                      "templateHash": "14104650774874138047"
                     },
                     "name": "Session host configuration policy definition",
                     "description": "Defines a subscription DeployIfNotExists policy for the session-host initialization Run Command."
@@ -22226,9 +22221,9 @@
                   "parameters": {
                     "policyDefinitionName": {
                       "type": "string",
-                      "defaultValue": "avdSessionHostConfiguration-DeployIfNotExists",
+                      "defaultValue": "avdSessionHostConfiguration-ProfileAccounts-DeployIfNotExists",
                       "metadata": {
-                        "description": "Optional. Name of the subscription policy definition to create or update."
+                        "description": "Optional. Name of the subscription policy definition for the canonical Profile/Office account contract."
                       }
                     },
                     "policyDefinitionDisplayName": {
@@ -22254,7 +22249,7 @@
                         "_generator": {
                           "name": "bicep",
                           "version": "0.49.2.45890",
-                          "templateHash": "14837268908957398120"
+                          "templateHash": "8071042005169106476"
                         },
                         "name": "Session host configuration remediation template",
                         "description": "Deploys automated session-host initialization as a named Run Command on an existing VM for policy remediation."
@@ -22270,13 +22265,6 @@
                           "type": "string",
                           "metadata": {
                             "description": "Required. FSLogix container selection used to derive share names and Cloud Cache behavior."
-                          }
-                        },
-                        "fslogixFileShareNames": {
-                          "type": "array",
-                          "defaultValue": [],
-                          "metadata": {
-                            "description": "Legacy compatibility input; fixed share names are derived from fslogixContainerType."
                           }
                         },
                         "fslogixLocalProfileStorageAccountResourceIds": {
@@ -22499,7 +22487,7 @@
                           "category": "Azure Virtual Desktop",
                           "solution": "Automated AVD Host Pools",
                           "component": "Session Host Governance",
-                          "version": "1.0.0"
+                          "version": "2.0.0"
                         },
                         "parameters": {
                           "effect": {
@@ -22574,24 +22562,14 @@
                               "displayName": "FSLogix container type"
                             }
                           },
-                          "fslogixFileShareNames": {
-                            "type": "Array",
-                            "defaultValue": [
-                              "profile-containers"
-                            ],
-                            "metadata": {
-                              "displayName": "FSLogix file share names (legacy compatibility)",
-                              "description": "Fixed share names are derived from fslogixContainerType; retained for existing assignments."
-                            }
-                          },
-                          "fslogixLocalStorageAccountResourceIds": {
+                          "fslogixLocalProfileStorageAccountResourceIds": {
                             "type": "Array",
                             "defaultValue": [],
                             "metadata": {
                               "displayName": "Local Azure Files storage account resource IDs"
                             }
                           },
-                          "fslogixRemoteStorageAccountResourceIds": {
+                          "fslogixRemoteProfileStorageAccountResourceIds": {
                             "type": "Array",
                             "defaultValue": [],
                             "metadata": {
@@ -22676,7 +22654,7 @@
                                       "value": "[[parameters('fslogixContainerType')]"
                                     },
                                     "fslogixLocalProfileStorageAccountResourceIds": {
-                                      "value": "[[parameters('fslogixLocalStorageAccountResourceIds')]"
+                                      "value": "[[parameters('fslogixLocalProfileStorageAccountResourceIds')]"
                                     },
                                     "fslogixLocalOfficeStorageAccountResourceIds": {
                                       "value": "[[parameters('fslogixLocalOfficeStorageAccountResourceIds')]"
@@ -22688,7 +22666,7 @@
                                       "value": "[[parameters('fslogixOSSGroups')]"
                                     },
                                     "fslogixRemoteProfileStorageAccountResourceIds": {
-                                      "value": "[[parameters('fslogixRemoteStorageAccountResourceIds')]"
+                                      "value": "[[parameters('fslogixRemoteProfileStorageAccountResourceIds')]"
                                     },
                                     "fslogixRemoteOfficeStorageAccountResourceIds": {
                                       "value": "[[parameters('fslogixRemoteOfficeStorageAccountResourceIds')]"
@@ -29005,7 +28983,7 @@
                 "mode": "Incremental",
                 "parameters": {
                   "name": {
-                    "value": "avd-sh-config"
+                    "value": "avd-sh-config-profile"
                   },
                   "location": {
                     "value": "[parameters('location')]"
@@ -29045,11 +29023,11 @@
                       "fslogixContainerType": {
                         "value": "[parameters('fslogixConfiguration').containerType]"
                       },
-                      "fslogixLocalStorageAccountResourceIds": {
-                        "value": "[parameters('fslogixConfiguration').localStorageAccountResourceIds]"
+                      "fslogixLocalProfileStorageAccountResourceIds": {
+                        "value": "[parameters('fslogixConfiguration').localProfileStorageAccountResourceIds]"
                       },
-                      "fslogixRemoteStorageAccountResourceIds": {
-                        "value": "[parameters('fslogixConfiguration').remoteStorageAccountResourceIds]"
+                      "fslogixRemoteProfileStorageAccountResourceIds": {
+                        "value": "[parameters('fslogixConfiguration').remoteProfileStorageAccountResourceIds]"
                       },
                       "fslogixLocalOfficeStorageAccountResourceIds": {
                         "value": "[parameters('fslogixConfiguration').localOfficeStorageAccountResourceIds]"
@@ -31403,13 +31381,21 @@
       "type": "string",
       "value": "[reference('sessionHostResourceGroup').outputs.resourceId.value]"
     },
-    "fslogixStorageAccountResourceIds": {
+    "fslogixLocalProfileStorageAccountResourceIds": {
       "type": "array",
-      "value": "[if(parameters('deployFSLogixStorage'), reference('fslogixStorage').outputs.storageAccountResourceIds.value, createArray())]"
+      "value": "[if(parameters('deployFSLogixStorage'), reference('fslogixStorage').outputs.profileStorageAccountResourceIds.value, parameters('fslogixExistingLocalProfileStorageAccountResourceIds'))]"
     },
-    "fslogixOfficeStorageAccountResourceIds": {
+    "fslogixLocalOfficeStorageAccountResourceIds": {
       "type": "array",
-      "value": "[if(parameters('deployFSLogixStorage'), reference('fslogixStorage').outputs.officeStorageAccountResourceIds.value, createArray())]"
+      "value": "[if(parameters('deployFSLogixStorage'), reference('fslogixStorage').outputs.officeStorageAccountResourceIds.value, parameters('fslogixExistingLocalOfficeStorageAccountResourceIds'))]"
+    },
+    "fslogixRemoteProfileStorageAccountResourceIds": {
+      "type": "array",
+      "value": "[parameters('fslogixExistingRemoteProfileStorageAccountResourceIds')]"
+    },
+    "fslogixRemoteOfficeStorageAccountResourceIds": {
+      "type": "array",
+      "value": "[parameters('fslogixExistingRemoteOfficeStorageAccountResourceIds')]"
     },
     "policyIdentityResourceId": {
       "type": "string",

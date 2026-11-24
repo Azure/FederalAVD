@@ -437,12 +437,14 @@ Forms export the preferred names, not both spellings.
 | `fslogixProfileShareSizeInGB` | `fslogixShareSizeInGB` |
 | `fslogixProfileStorageRedundancy` | `fslogixStorageRedundancy` |
 | `fslogixProfileStorageTier` | Tier from `fslogixStorageService` (Azure Files only) |
-| `fslogixProfileStorageAccountNamePrefix` | Generated naming, including `namingConvention.fslogixStoragePrefix` |
-| `fslogixExistingLocalProfileStorageAccountResourceIds` | `fslogixExistingLocalStorageAccountResourceIds` |
-| `fslogixExistingRemoteProfileStorageAccountResourceIds` | `fslogixExistingRemoteStorageAccountResourceIds` |
+| `fslogixProfileStorageAccountNamePrefix` | Generated naming, including `namingConvention.fslogixProfileStoragePrefix` |
 
-A supplied empty account-ID array clears the legacy array. Authentication, shard count/order,
-groups and indices remain shared between Profile and Office; they are not renamed.
+Existing Profile account inputs use only `fslogixExistingLocalProfileStorageAccountResourceIds`
+and `fslogixExistingRemoteProfileStorageAccountResourceIds`, defaulting to empty arrays; generic
+account-ID aliases are removed. Resource-group discovery uses explicit Profile tags. Rename saved
+parameter/naming keys and redeploy to refresh tags before updating consumers; see
+[contract migration](../../docs/design.md#consumer-contract-migration-and-consistency).
+Authentication, shard count/order, groups and indices remain shared between Profile and Office.
 
 | Setting | Bicep default | Meaning |
 | --- | --- | --- |
@@ -478,8 +480,8 @@ Each Office array must have the same length and shard order as its Profile array
 ID may overlap a Profile ID. Omit both remote arrays when remote storage is not required.
 Storage-account-key authentication still selects the first pair per location.
 
-For expansion, retain the `fslogixLocalStorageAccountResourceIds`,
-`fslogixLocalOfficeStorageAccountResourceIds`, `fslogixRemoteStorageAccountResourceIds`, and
+For expansion, retain the `fslogixLocalProfileStorageAccountResourceIds`,
+`fslogixLocalOfficeStorageAccountResourceIds`, `fslogixRemoteProfileStorageAccountResourceIds`, and
 `fslogixRemoteOfficeStorageAccountResourceIds` outputs and pass them to the corresponding consumer
 inputs. Do not substitute Profile IDs for Office IDs.
 
@@ -891,7 +893,7 @@ New-AzSubscriptionDeployment `
 
 ### Storage
 
-- `storageAccountResourceIds` - Array of storage account resource IDs
+- `profileStorageAccountResourceIds` - Array of storage account resource IDs
 - `fileShareNames` - Array of file share names
 - `netAppFilesVolumeResourceId` - ANF volume resource ID (if applicable)
 

@@ -374,7 +374,7 @@ With `ProfileOfficeContainer` or `CloudCacheProfileOfficeContainer`, Azure Files
 separate Profile and Office accounts. There is one account per role without sharding, or one
 paired account per role for each shard group. Both arrays use the same group ordering and
 `storageIndex`. `fslogixProfileStorageAccountNamePrefix` is the preferred nullable Profile override,
-falling back to the legacy `storageAccountNamePrefix` when null;
+falling back to the legacy `profileStorageAccountNamePrefix` when null;
 `officeStorageAccountNamePrefix` independently overrides Office names and must differ from Profile.
 CMK creates distinct indexed keys for both roles using the same encryption identity.
 Office shares are never enrolled in backup.
@@ -399,12 +399,18 @@ Bicep omission preserves `AzureFiles Standard`, `LocallyRedundant`, 100 GiB and 
 | `Premium` | SSD / provisioned v2 | `FileStorage` | `PremiumV2_LRS`, `PremiumV2_ZRS` |
 
 `StorageV2` is an account kind, **not** the provisioned v2 billing model. Only LRS/ZRS are offered.
-The nullable aliases `fslogixProfileShareSizeInGB`, `fslogixProfileStorageRedundancy` and
-`fslogixProfileStorageAccountNamePrefix` override `shareSizeInGB`, `fslogixStorageRedundancy` and
-`storageAccountNamePrefix` when supplied. An empty preferred prefix requests generated naming,
-even when the old prefix is supplied. `fslogixProfileStorageTier` overrides the Azure Files tier
+The nullable overrides `fslogixProfileShareSizeInGB` and `fslogixProfileStorageRedundancy` override
+`shareSizeInGB` and `fslogixStorageRedundancy` when supplied.
+`fslogixProfileStorageAccountNamePrefix` is the sole Profile prefix input; blank requests generated
+naming. The generic prefix alias is removed. `fslogixProfileStorageTier` overrides the Azure Files tier
 from `fslogixStorageService`; null derives it from that unchanged backend compatibility parameter.
 Forms export preferred names only. Shared authentication, sharding, count, groups and index are unchanged.
+
+Profile account outputs are `profileStorageAccountResourceIds` and the configuration object's
+`localProfileStorageAccountResourceIds` / `remoteProfileStorageAccountResourceIds`. The remote input
+is `remoteProfileStorageAccountResourceIds`; Office arrays remain separate. See
+[contract migration](../../../docs/design.md#consumer-contract-migration-and-consistency) before
+updating saved files or output-consuming automation.
 
 `fslogixProfileProvisionedIops`, `fslogixProfileProvisionedThroughputMiBps`,
 `fslogixOfficeProvisionedIops` and `fslogixOfficeProvisionedThroughputMiBps` default to `0`.
@@ -431,15 +437,15 @@ See the [Office separation example](../../../customer-examples/parameters/add-on
 copy it into `customer/parameters/` and customize it before use.
 
 For Cloud Cache with Office containers, pair `remoteOfficeStorageAccountResourceIds` with
-`remoteStorageAccountResourceIds`, one-for-one in shard order. The role arrays must not overlap;
-omit both when remote storage is not selected. Local outputs `storageAccountResourceIds` and
+`remoteProfileStorageAccountResourceIds`, one-for-one in shard order. The role arrays must not overlap;
+omit both when remote storage is not selected. Local outputs `profileStorageAccountResourceIds` and
 `officeStorageAccountResourceIds` contain Profile-only and Office-only IDs respectively.
 The configuration object uses `localOfficeStorageAccountResourceIds` and
 `remoteOfficeStorageAccountResourceIds` alongside the existing Profile fields.
 
 Pass both role arrays to consumers and host-pool expansion. Standard host pools use
-`fslogixExistingLocalStorageAccountResourceIds` / `fslogixExistingLocalOfficeStorageAccountResourceIds`
-and `fslogixExistingRemoteStorageAccountResourceIds` / `fslogixExistingRemoteOfficeStorageAccountResourceIds`.
+`fslogixExistingLocalProfileStorageAccountResourceIds` / `fslogixExistingLocalOfficeStorageAccountResourceIds`
+and `fslogixExistingRemoteProfileStorageAccountResourceIds` / `fslogixExistingRemoteOfficeStorageAccountResourceIds`.
 There is no fallback to Profile IDs.
 
 Changing defaults or enabling separation does not migrate data, rename accounts, delete old
@@ -456,8 +462,8 @@ output fslogixConfiguration object = {
   storageService: storageService
   containerType: containerType
   fileShareNames: fileShareNames
-  localStorageAccountResourceIds: storageAccountResourceIds
-  remoteStorageAccountResourceIds: remoteStorageAccountResourceIds
+  localProfileStorageAccountResourceIds: profileStorageAccountResourceIds
+  remoteProfileStorageAccountResourceIds: remoteProfileStorageAccountResourceIds
   localOfficeStorageAccountResourceIds: officeStorageAccountResourceIds
   remoteOfficeStorageAccountResourceIds: remoteOfficeStorageAccountResourceIds
   localNetAppServerFqdns: netAppServerFqdns

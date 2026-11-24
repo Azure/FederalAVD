@@ -3,6 +3,7 @@ targetScope = 'subscription'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
 import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/internal.bicep'
+import { removeLegacyFslogixAccountTags } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 @maxLength(16)
 @description('Required. Short name identifying the disposable PoC deployment.')
@@ -123,8 +124,8 @@ var fslogixConfigurationTags = deployFSLogixStorage
       fslStorageService: 'AzureFiles'
       fslFileShareNames: string(fslogixFileShareNames)
       fslSharding: 'None'
-      fslLocalStorageAccountNames: string([
-        '${naming.fslogixStorageAccountNamePrefix}01'
+      fslLocalProfileStorageAccountNames: string([
+        '${naming.fslogixProfileStorageAccountNamePrefix}01'
       ])
     }
   : {}
@@ -136,12 +137,12 @@ module resourceGroup '../shared/modules/resourceModules/resources/resourceGroups
   params: {
     location: location
     name: resourceGroupName
-    tags: union(
+    tags: removeLegacyFslogixAccountTags(union(
       tags[?'Microsoft.Resources/resourceGroups'] ?? {},
       vmConfigurationTags,
       fslogixConfigurationTags,
       parentTag
-    )
+    ))
   }
 }
 
@@ -332,7 +333,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     domainName: ''
     encryptionKeyVaultUri: ''
     fslogixAdminGroups: []
-    fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
+    fslogixProfileEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixProfile
     officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
     fslogixContainerType: 'ProfileContainer'
     fslogixShardOptions: 'None'
@@ -355,7 +356,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     resourceGroupStorage: resourceGroupName
     shareSizeInGB: 100
     smbServerLocation: naming.vmsLocAbbr
-    storageAccountNamePrefix: naming.fslogixStorageAccountNamePrefix
+    profileStorageAccountNamePrefix: naming.fslogixProfileStorageAccountNamePrefix
     officeStorageAccountNamePrefix: naming.fslogixOfficeStorageAccountNamePrefix
     storageCount: 1
     storageIndex: 1
@@ -408,7 +409,7 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     fslogixConfigureSessionHosts: deployFSLogixStorage
     fslogixContainerType: 'ProfileContainer'
     fslogixLocalProfileStorageAccountResourceIds: deployFSLogixStorage
-      ? fslogix!.outputs.storageAccountResourceIds
+      ? fslogix!.outputs.profileStorageAccountResourceIds
       : []
     fslogixLocalNetAppVolumeResourceIds: []
     fslogixLocalOfficeStorageAccountResourceIds: []
@@ -476,8 +477,8 @@ output workspaceResourceId string = workspace.outputs.workspaceResourceId
 output logAnalyticsWorkspaceResourceId string = logAnalyticsWorkspaceResourceId
 output avdInsightsDataCollectionRuleResourceId string = avdInsightsDataCollectionRuleResourceId
 output dataCollectionEndpointResourceId string = dataCollectionEndpointResourceId
-output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage
-  ? fslogix!.outputs.storageAccountResourceIds
+output fslogixLocalProfileStorageAccountResourceIds array = deployFSLogixStorage
+  ? fslogix!.outputs.profileStorageAccountResourceIds
   : []
 output fslogixLocalOfficeStorageAccountResourceIds array = []
 output hostResourceGroupId string = subscriptionResourceId('Microsoft.Resources/resourceGroups', resourceGroupName)

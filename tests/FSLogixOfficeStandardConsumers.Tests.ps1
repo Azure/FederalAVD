@@ -121,16 +121,16 @@ Describe 'Standard FSLogix Office consumer contracts' {
     It 'emits paired local and remote Office name tags alongside Profile tags on the hosts resource group' {
         $sourceText = Get-Content (Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep') -Raw
         $tagBlocks = @{}
-        foreach ($tagName in @('fslLocalStorageAccountNames', 'fslRemoteStorageAccountNames', 'fslLocalOfficeStorageAccountNames', 'fslRemoteOfficeStorageAccountNames')) {
+        foreach ($tagName in @('fslLocalProfileStorageAccountNames', 'fslRemoteProfileStorageAccountNames', 'fslLocalOfficeStorageAccountNames', 'fslRemoteOfficeStorageAccountNames')) {
             $tagBlocks[$tagName] = [regex]::Match($sourceText, '(?ms)^var ' + $tagName + ' = .*?(?=^var |\z)').Value
             $tagBlocks[$tagName] | Should -Match ($tagName + ': string\(map\(')
             $tagBlocks[$tagName] | Should -Not -Match '\b(sort|union|filter)\('
         }
-        foreach ($tagName in @('fslLocalStorageAccountNames', 'fslLocalOfficeStorageAccountNames')) {
+        foreach ($tagName in @('fslLocalProfileStorageAccountNames', 'fslLocalOfficeStorageAccountNames')) {
             $tagBlocks[$tagName] | Should -Match 'range\(0, fslogixStorageCount\)'
             $tagBlocks[$tagName] | Should -Match "padLeft\(i \+ fslogixStorageIndex, 2, '0'\)"
         }
-        $tagBlocks.fslLocalStorageAccountNames | Should -Match 'effectiveFslogixProfileStorageAccountNamePrefix'
+        $tagBlocks.fslLocalProfileStorageAccountNames | Should -Match 'effectiveFslogixProfileStorageAccountNamePrefix'
         $tagBlocks.fslLocalOfficeStorageAccountNames | Should -Match 'naming\.fslogixOfficeStorageAccountNamePrefix'
         $tagBlocks.fslLocalOfficeStorageAccountNames | Should -Match "map\(effectiveFslogixExistingLocalOfficeStorageAccountResourceIds, id => last\(split\(id, '/'\)\)\)"
         $tagBlocks.fslRemoteOfficeStorageAccountNames | Should -Match "map\(effectiveFslogixExistingRemoteOfficeStorageAccountResourceIds, id => last\(split\(id, '/'\)\)\)"
@@ -140,7 +140,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
         foreach ($tagName in $tagBlocks.Keys) {
             $configurationTags | Should -Match ('(?m)^\s+' + $tagName + ',')
         }
-        $sourceText | Should -Match "(?s)module hostsResourceGroup .*?tags: union\(tags\[\?'Microsoft.Resources/resourceGroups'\] \?\? \{\}, vmConfigurationTags, fslogixConfigurationTags,"
+        $sourceText | Should -Match "(?s)module hostsResourceGroup .*?tags: removeLegacyFslogixAccountTags\(union\(tags\[\?'Microsoft.Resources/resourceGroups'\] \?\? \{\}, vmConfigurationTags, fslogixConfigurationTags,"
     }
 
     It 'keeps the disposable PoC Profile-only while accepting the shared naming contract' {
@@ -157,7 +157,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
         $sourceText | Should -Match 'localOfficeStorageAccountResourceIds: fslogix\.outputs\.officeStorageAccountResourceIds'
         $sourceText | Should -Match 'remoteOfficeStorageAccountResourceIds: remoteOfficeStorageAccountConfigurationIsValid'
         $sourceText | Should -Match 'officeStorageAccountPrefixesAreDistinct'
-        $sourceText | Should -Match 'toLower\(effectiveStorageAccountNamePrefix\) != toLower\(effectiveOfficeStorageAccountNamePrefix\)'
+        $sourceText | Should -Match 'toLower\(effectiveProfileStorageAccountNamePrefix\) != toLower\(effectiveOfficeStorageAccountNamePrefix\)'
         $sourceText | Should -Match 'length\(effectiveOfficeStorageAccountNamePrefix\) >= 3'
         $sourceText | Should -Match 'storageCount: remoteStorageAccountConfigurationIsValid && remoteOfficeStorageAccountConfigurationIsValid'
     }

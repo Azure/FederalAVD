@@ -105,13 +105,10 @@ SHR forwards one conditional FSLogix parameter object without alias resolution o
 Existing Profile and Office shard ordering is unchanged; public entry points validate selections.
 Profile-only PoC metadata and backup targets use literal names; NetApp volume counts are calculated
 directly instead of constructing a share array solely to count it.
-The storage add-on's `fileShareNames` output and existing lifecycle tags remain available as
-derived compatibility data. Published policy/remediation share-name inputs remain accepted for
-assignment compatibility but no longer select names; container type is authoritative. They are
-not custom-share-name configuration points. This changes neither the named Run Command compliance
-check nor the remediation lifecycle for already-compliant automated hosts.
-Published policy account parameter names remain stable; the policy boundary maps them to explicit
-Profile inputs in the nested remediation template.
+The storage add-on's `fileShareNames` output is derived data, not a naming override. The canonical
+policy/remediation contract removes obsolete share-name inputs and uses explicit Profile account
+parameters at every boundary. This changes neither the named Run Command compliance check nor the
+remediation lifecycle for already-compliant automated hosts.
 
 Both initialization scripts and their Run Command callers use
 `LocalProfileStorageAccountNames`, `RemoteProfileStorageAccountNames`,
@@ -119,7 +116,10 @@ Both initialization scripts and their Run Command callers use
 Office arguments. Keys remain protected Run Command parameters. Custom script invocations must
 use these explicit Profile names; the generic script argument names are not aliases.
 Shared initialization builds separate credential-only collections instead of appending Office
-accounts to the Profile collections. Existing lifecycle tags and public policy names are unchanged.
+accounts to the Profile collections. Profile lifecycle tags are
+`fslLocalProfileStorageAccountNames` and `fslRemoteProfileStorageAccountNames`; separate Office
+tags retain their names. Writers remove the obsolete generic Profile tags while preserving
+unrelated metadata. Portal discovery reads only the canonical tags.
 
 #### Consumer contract migration and consistency
 
@@ -131,9 +131,45 @@ Regenerate the Portal export and review all account arrays before resuming repla
 This changes deployment/configuration contracts, not storage resources or existing profile data.
 
 Host-pool producer inputs retain `Existing` because that entry point can create or adopt storage;
-consumers omit it because storage must already exist. Existing producer output names remain stable:
-map `fslogixLocalStorageAccountResourceIds` to the consumer's local Profile input and do the same
-for remote Profile accounts. Storage creation, billing, quota and backup controls remain producer-owned.
+consumers omit it because storage must already exist. Producer aliases have been removed: use
+`fslogixExistingLocalProfileStorageAccountResourceIds` and
+`fslogixExistingRemoteProfileStorageAccountResourceIds`, each defaulting to an empty array.
+Both host-pool entry points expose local/remote Profile and Office ID outputs; automated local
+outputs now also report adopted accounts, matching the standard host pool. The storage add-on
+exposes `profileStorageAccountResourceIds` alongside `officeStorageAccountResourceIds`, and its
+configuration output uses `localProfileStorageAccountResourceIds` and
+`remoteProfileStorageAccountResourceIds`. Storage creation, billing, quota and backup controls
+remain producer-owned.
+
+This is a breaking account/discovery contract. Update saved customer files and output-consuming
+automation before redeployment:
+
+| Old contract | Canonical replacement |
+| --- | --- |
+| `fslogixExistingLocalStorageAccountResourceIds` / `fslogixExistingRemoteStorageAccountResourceIds` | Insert `Profile` before `StorageAccountResourceIds` |
+| `fslogixLocalStorageAccountResourceIds` / `fslogixRemoteStorageAccountResourceIds` | Insert `Profile` before `StorageAccountResourceIds` |
+| Automated `fslogixStorageAccountResourceIds` / `fslogixOfficeStorageAccountResourceIds` outputs | `fslogixLocalProfileStorageAccountResourceIds` / `fslogixLocalOfficeStorageAccountResourceIds` |
+| Storage add-on `storageAccountResourceIds` / `remoteStorageAccountResourceIds` | `profileStorageAccountResourceIds` / `remoteProfileStorageAccountResourceIds` |
+| Storage add-on `storageAccountNamePrefix` | `fslogixProfileStorageAccountNamePrefix` |
+| `namingConvention.fslogixStoragePrefix` | `namingConvention.fslogixProfileStoragePrefix` |
+| `fslLocalStorageAccountNames` / `fslRemoteStorageAccountNames` tags | `fslLocalProfileStorageAccountNames` / `fslRemoteProfileStorageAccountNames` |
+
+Preserve each value and array order when renaming; default generated resource names are unchanged.
+Redeploy the owning host-pool producer to refresh canonical resource-group tags before using the
+updated additional-host or SHR form. Until then, select accounts explicitly rather than expecting
+old tags to populate the form. Customer files are not rewritten automatically.
+
+For automated host pools, the policy uses a new definition identity
+`avdSessionHostConfiguration-ProfileAccounts-DeployIfNotExists` and a new resource-group assignment
+`avd-sh-config-profile`. Microsoft [does not support removing existing policy-definition
+parameters in place](https://learn.microsoft.com/en-us/azure/governance/policy/concepts/definition-structure-parameters#adding-or-removing-parameters).
+Pause host provisioning/replacements and complete or cancel old remediation tasks before migration.
+After confirming ownership and resource-group scope, retire the legacy `avd-sh-config` assignment
+through the approved operator process, then redeploy the automated host pool to create the new
+assignment and refresh tags. Do not leave both assignments active. Remove the old subscription
+definition only after all assignments referencing it have migrated. The existing successful
+`ConfigureSessionHost` commands remain compliant; no forced guest rerun or storage data migration
+is introduced. Validate assignment, RBAC, tag discovery, and a new-host deployment live.
 
 Consumer default and validation decisions:
 

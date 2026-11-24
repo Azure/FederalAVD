@@ -98,10 +98,12 @@ re-register protected storage.
 for every Profile shard. New generated names use the `fslpc` (Profile) and `fsloc` (Office) role
 prefixes with the same index; explicit naming overrides remain available. Both roles use the same
 ordered user-group mapping, private endpoint and identity preparation, and independent CMK keys.
-`fslogixStorageAccountResourceIds` contains only Profile accounts;
-`fslogixOfficeStorageAccountResourceIds` contains only Office accounts.
+`fslogixLocalProfileStorageAccountResourceIds` contains only local Profile accounts;
+`fslogixLocalOfficeStorageAccountResourceIds` contains only local Office accounts. Local outputs
+report created or adopted accounts; corresponding remote Profile and Office outputs report the
+supplied remote accounts.
 The policy stage records local and remote account names in host resource-group lifecycle tags
-`fslLocalStorageAccountNames`, `fslRemoteStorageAccountNames`,
+`fslLocalProfileStorageAccountNames`, `fslRemoteProfileStorageAccountNames`,
 `fslLocalOfficeStorageAccountNames`, and `fslRemoteOfficeStorageAccountNames`. Each tag contains
 the role's ordered JSON array of names, preserving the configuration shard index for Portal defaults.
 
@@ -128,14 +130,19 @@ Preferred nullable Profile aliases override the old inputs when supplied:
 `fslogixProfileShareSizeInGB` over `fslogixShareSizeInGB`,
 `fslogixProfileStorageRedundancy` over `fslogixStorageRedundancy`,
 `fslogixProfileStorageTier` over the Azure Files tier in `fslogixStorageService`,
-`fslogixProfileStorageAccountNamePrefix` over generated naming (including legacy
-`namingConvention.fslogixStoragePrefix`), and
-`fslogixExistingLocalProfileStorageAccountResourceIds` /
-`fslogixExistingRemoteProfileStorageAccountResourceIds` over the corresponding legacy arrays without
-`Profile` in their names. Null retains legacy behavior; a supplied empty array clears the old array.
+`fslogixProfileStorageAccountNamePrefix` over generated naming, including
+`namingConvention.fslogixProfileStoragePrefix`. Existing account inputs use only the explicit
+`fslogixExistingLocalProfileStorageAccountResourceIds` and
+`fslogixExistingRemoteProfileStorageAccountResourceIds` arrays; generic account-ID aliases are removed.
 The Portal exports preferred spellings only. Shared authentication, groups, count and index are unchanged.
 Profile tier overrides do not change Azure NetApp Files service levels, and nondefault Azure Files-only
 tuning is rejected during storage creation.
+
+The canonical account policy uses definition
+`avdSessionHostConfiguration-ProfileAccounts-DeployIfNotExists` and assignment
+`avd-sh-config-profile`. Existing deployments require retirement of the legacy assignment and
+renaming saved inputs/naming keys before redeployment; tags then refresh to the canonical names.
+See [contract and policy migration](../../docs/design.md#consumer-contract-migration-and-consistency).
 
 `fslogixProfileProvisionedIops`, `fslogixProfileProvisionedThroughputMiBps`,
 `fslogixOfficeProvisionedIops`, and `fslogixOfficeProvisionedThroughputMiBps` default to `0`:

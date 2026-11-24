@@ -17,9 +17,9 @@ Describe 'Evaluated Azure Files role configuration' {
         function Invoke-OfficeAccountConfiguration {
             param([hashtable]$Overrides = @{})
             $inputs = [ordered]@{
-                storageAccountNamePrefix = 'pcfixture'
+                profileStorageAccountNamePrefix = 'pcfixture'
                 officeStorageAccountNamePrefix = 'ocfixture'
-                fslogixEncryptionKeyNameConv = 'pc-key-##'
+                fslogixProfileEncryptionKeyNameConv = 'pc-key-##'
                 officeEncryptionKeyNameConv = 'oc-key-##'
                 keyManagementStorageAccounts = 'CustomerManaged'
                 storageSku = 'Premium'
@@ -300,7 +300,7 @@ Describe 'Lifecycle ordered account defaults' {
         $fields = @('existingLocalStorageAccounts', 'existingLocalOfficeStorageAccounts', 'existingRemoteStorageAccounts', 'existingRemoteOfficeStorageAccounts')
         $expressions = @($fields | ForEach-Object { $name = $_; ($elements | Where-Object name -eq $name).defaultValue })
         $expected = @(@('fslpc02','fslpc01'), @('fsloc02','fsloc01'), @('fslpc12','fslpc11'), @('fsloc12','fsloc11'))
-        $tagNames = @('fslLocalStorageAccountNames','fslLocalOfficeStorageAccountNames','fslRemoteStorageAccountNames','fslRemoteOfficeStorageAccountNames')
+        $tagNames = @('fslLocalProfileStorageAccountNames','fslLocalOfficeStorageAccountNames','fslRemoteProfileStorageAccountNames','fslRemoteOfficeStorageAccountNames')
         $tags = @{}
         for ($i = 0; $i -lt $tagNames.Count; $i++) { $tags[$tagNames[$i]] = ConvertTo-Json -InputObject $expected[$i] -Compress }
         $list = @($expected | ForEach-Object { $_ } | Sort-Object | ForEach-Object { @{ name = $_ } })

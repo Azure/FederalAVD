@@ -67,15 +67,12 @@ Microsoft recommends SSD. See the
 | `fslogixProfileStorageTier` | Media portion of `fslogixStorageService` |
 | `fslogixProfileStorageRedundancy` | `fslogixStorageRedundancy` |
 | `fslogixProfileShareSizeInGB` | `fslogixShareSizeInGB` (host pools), `shareSizeInGB` (storage add-on) |
-| `fslogixExistingLocalProfileStorageAccountResourceIds` | `fslogixExistingLocalStorageAccountResourceIds` |
-| `fslogixExistingRemoteProfileStorageAccountResourceIds` | `fslogixExistingRemoteStorageAccountResourceIds` |
-| `fslogixProfileStorageAccountNamePrefix` | `storageAccountNamePrefix` (storage add-on); existing `namingConvention.fslogixStoragePrefix` or generated naming (host pools) |
-| `fslogixLocalProfileStorageAccountResourceIds` (additional hosts/SHR) | `fslogixLocalStorageAccountResourceIds` |
-| `fslogixRemoteProfileStorageAccountResourceIds` (additional hosts/SHR) | `fslogixRemoteStorageAccountResourceIds` |
+| `fslogixProfileStorageAccountNamePrefix` | `namingConvention.fslogixProfileStoragePrefix` or generated naming; blank in the storage add-on uses generated naming |
 
-Preferred values take precedence when supplied, including empty arrays; omission falls back
-to the compatibility input. Existing names and defaults are not removed. Shared authentication,
-shard count/index and group inputs remain neutral. Backend selection remains in
+Tier, redundancy and quota overrides retain the fallbacks listed above. Account-ID aliases and the
+storage add-on's generic prefix alias have been removed. Use the canonical Profile account inputs
+and tags; see [migration requirements](design.md#consumer-contract-migration-and-consistency).
+Shared authentication, shard count/index and group inputs remain neutral. Backend selection remains in
 `fslogixStorageService`; the Profile tier override applies only to Azure Files.
 
 For each role, `fslogixProfileProvisionedIops` / `fslogixOfficeProvisionedIops` and

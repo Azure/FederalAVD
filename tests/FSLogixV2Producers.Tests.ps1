@@ -56,28 +56,24 @@ BeforeAll {
             profileThroughput = 'fslogixProfileProvisionedThroughputMiBps'
             officeIops = 'fslogixOfficeProvisionedIops'
             officeThroughput = 'fslogixOfficeProvisionedThroughputMiBps'
-            namingPrefix = 'naming.fslogixStorageAccountNamePrefix'
+            namingPrefix = 'naming.fslogixProfileStorageAccountNamePrefix'
         }
         if ($isAddon) {
-            $variables += 'selectedProfileStorageAccountNamePrefix', 'effectiveStorageAccountNamePrefix'
-            $outputs.prefix = 'effectiveStorageAccountNamePrefix'
+            $variables += 'effectiveProfileStorageAccountNamePrefix'
+            $outputs.prefix = 'effectiveProfileStorageAccountNamePrefix'
         }
         else {
             $variables += 'effectiveFslogixProfileStorageAccountNamePrefix'
             $outputs.prefix = 'effectiveFslogixProfileStorageAccountNamePrefix'
             if ($Kind -eq 'Standard') {
-                $variables += 'selectedFslogixExistingLocalProfileStorageAccountResourceIds',
-                    'selectedFslogixExistingRemoteProfileStorageAccountResourceIds',
-                    'effectiveFslogixExistingLocalStorageAccountResourceIds',
-                    'effectiveFslogixExistingRemoteStorageAccountResourceIds'
-                $outputs.local = 'effectiveFslogixExistingLocalStorageAccountResourceIds'
-                $outputs.remote = 'effectiveFslogixExistingRemoteStorageAccountResourceIds'
-            }
-            else {
                 $variables += 'effectiveFslogixExistingLocalProfileStorageAccountResourceIds',
                     'effectiveFslogixExistingRemoteProfileStorageAccountResourceIds'
                 $outputs.local = 'effectiveFslogixExistingLocalProfileStorageAccountResourceIds'
                 $outputs.remote = 'effectiveFslogixExistingRemoteProfileStorageAccountResourceIds'
+            }
+            else {
+                $outputs.local = 'fslogixExistingLocalProfileStorageAccountResourceIds'
+                $outputs.remote = 'fslogixExistingRemoteProfileStorageAccountResourceIds'
             }
         }
 
@@ -93,7 +89,7 @@ BeforeAll {
             return [string]$Value
         }
 
-        $lines = @("targetScope = 'local'", "var naming = { fslogixStorageAccountNamePrefix: 'legacyprefix' }")
+        $lines = @("targetScope = 'local'", "var naming = { fslogixProfileStorageAccountNamePrefix: 'legacyprefix' }")
         if ($UseProductionNaming) {
             $namingModule = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\naming.bicep'
             $relativeNamingModule = [IO.Path]::GetRelativePath($fixtureDirectory, $namingModule).Replace('\', '/')
@@ -127,10 +123,9 @@ BeforeAll {
             'fslogixProfileProvisionedIops', 'fslogixProfileProvisionedThroughputMiBps',
             'fslogixOfficeProvisionedIops', 'fslogixOfficeProvisionedThroughputMiBps'
         )
-        if ($isAddon) { $inputNames += 'shareSizeInGB', 'storageAccountNamePrefix' }
+        if ($isAddon) { $inputNames += 'shareSizeInGB' }
         else {
-            $inputNames += 'fslogixShareSizeInGB', 'fslogixExistingLocalStorageAccountResourceIds',
-                'fslogixExistingRemoteStorageAccountResourceIds', 'fslogixExistingLocalProfileStorageAccountResourceIds',
+            $inputNames += 'fslogixShareSizeInGB', 'fslogixExistingLocalProfileStorageAccountResourceIds',
                 'fslogixExistingRemoteProfileStorageAccountResourceIds'
             if ($Kind -eq 'Standard') {
                 $identity = if ($Overrides.ContainsKey('identitySolution')) { $Overrides.identitySolution } else { 'ActiveDirectoryDomainServices' }
@@ -225,12 +220,12 @@ Describe 'FSLogix producer v2 inputs' {
             $result.officeRedundancy.value | Should -Be 'LocallyRedundant'
         }
 
-        It 'evaluates explicit legacy prefix fallback and a conflicting preferred prefix using production naming' {
+        It 'evaluates canonical Profile prefix overrides using production naming' {
             $overrides = if ($Kind -eq 'Addon') {
-                @{ storageAccountNamePrefix = 'oldprefix' }
+                @{ fslogixProfileStorageAccountNamePrefix = 'oldprefix' }
             }
             else {
-                @{ namingConvention = @{ fslogixStoragePrefix = 'oldprefix' } }
+                @{ namingConvention = @{ fslogixProfileStoragePrefix = 'oldprefix' } }
             }
             $legacy = Invoke-ProducerExpressions $source $Kind $overrides -UseProductionNaming
             $legacy.prefix.value | Should -Be 'oldprefix'
@@ -275,7 +270,7 @@ Describe 'FSLogix producer v2 inputs' {
                 shareSizeInGB = "${effectivePrefix}ProfileShareSizeInGB"
                 fslogixStorageRedundancy = "${effectivePrefix}ProfileStorageRedundancy"
                 storageSku = $(if ($Kind -eq 'Addon') { 'storageSku' } else { 'effectiveFslogixProfileStorageTier' })
-                storageAccountNamePrefix = $(if ($Kind -eq 'Addon') { 'effectiveStorageAccountNamePrefix' } else { 'effectiveFslogixProfileStorageAccountNamePrefix' })
+                profileStorageAccountNamePrefix = $(if ($Kind -eq 'Addon') { 'effectiveProfileStorageAccountNamePrefix' } else { 'effectiveFslogixProfileStorageAccountNamePrefix' })
                 profileStorageBillingModel = 'fslogixProfileStorageBillingModel'
                 officeStorageBillingModel = "${effectivePrefix}OfficeStorageBillingModel"
                 profileProvisionedIops = 'fslogixProfileProvisionedIops'
@@ -291,27 +286,27 @@ Describe 'FSLogix producer v2 inputs' {
 
             if ($Kind -eq 'Standard') {
                 $hosts = Get-ProducerSourceBlock $source 'module' 'sessionHosts'
-                $hosts | Should -Match 'fslogixLocalProfileStorageAccountResourceIds: deployFSLogixStorage\s+\? fslogix!\.outputs\.storageAccountResourceIds\s+: effectiveFslogixExistingLocalStorageAccountResourceIds'
-                $hosts | Should -Match '(?m)^\s+fslogixRemoteProfileStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds$'
-                $source | Should -Match '(?m)^output fslogixRemoteStorageAccountResourceIds array = effectiveFslogixExistingRemoteStorageAccountResourceIds$'
-                $source | Should -Match '(?m)^output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage\s+\? fslogix!\.outputs\.storageAccountResourceIds\s+: effectiveFslogixExistingLocalStorageAccountResourceIds'
+                $hosts | Should -Match 'fslogixLocalProfileStorageAccountResourceIds: deployFSLogixStorage\s+\? fslogix!\.outputs\.profileStorageAccountResourceIds\s+: effectiveFslogixExistingLocalProfileStorageAccountResourceIds'
+                $hosts | Should -Match '(?m)^\s+fslogixRemoteProfileStorageAccountResourceIds: effectiveFslogixExistingRemoteProfileStorageAccountResourceIds$'
+                $source | Should -Match '(?m)^output fslogixRemoteProfileStorageAccountResourceIds array = effectiveFslogixExistingRemoteProfileStorageAccountResourceIds$'
+                $source | Should -Match '(?m)^output fslogixLocalProfileStorageAccountResourceIds array = deployFSLogixStorage\s+\? fslogix!\.outputs\.profileStorageAccountResourceIds\s+: effectiveFslogixExistingLocalProfileStorageAccountResourceIds'
                 $source | Should -Match '(?m)^var effectiveNamingConvention = union\(\s+namingConvention,'
             }
             elseif ($Kind -eq 'Automated') {
                 $existing = Get-ProducerSourceBlock $source 'var' 'existingFslogixConfiguration'
                 $deployed = Get-ProducerSourceBlock $source 'var' 'deployedFslogixConfiguration'
-                $existing | Should -Match '(?m)^\s+localStorageAccountResourceIds: effectiveFslogixExistingLocalProfileStorageAccountResourceIds$'
-                $existing | Should -Match '(?m)^\s+remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteProfileStorageAccountResourceIds$'
-                $deployed | Should -Match '(?m)^\s+localStorageAccountResourceIds: fslogixStorage!\.outputs\.storageAccountResourceIds$'
-                $deployed | Should -Match '(?m)^\s+remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteProfileStorageAccountResourceIds$'
+                $existing | Should -Match '(?m)^\s+localProfileStorageAccountResourceIds: fslogixExistingLocalProfileStorageAccountResourceIds$'
+                $existing | Should -Match '(?m)^\s+remoteProfileStorageAccountResourceIds: fslogixExistingRemoteProfileStorageAccountResourceIds$'
+                $deployed | Should -Match '(?m)^\s+localProfileStorageAccountResourceIds: fslogixStorage!\.outputs\.profileStorageAccountResourceIds$'
+                $deployed | Should -Match '(?m)^\s+remoteProfileStorageAccountResourceIds: fslogixExistingRemoteProfileStorageAccountResourceIds$'
                 $policy = Get-ProducerSourceBlock $source 'module' 'sessionHostPolicy'
                 $policy | Should -Match '(?m)^\s+fslogixConfiguration: deployFSLogixStorage \? deployedFslogixConfiguration : existingFslogixConfiguration$'
                 $source | Should -Match '(?m)^var effectiveNamingConvention = union\(\s+namingConvention,'
             }
             else {
                 $configuration = Get-ProducerSourceBlock $source 'output' 'fslogixConfiguration'
-                $configuration | Should -Match '(?m)^\s+localStorageAccountResourceIds: fslogix\.outputs\.storageAccountResourceIds$'
-                $configuration | Should -Match '(?m)^\s+remoteStorageAccountResourceIds: remoteStorageAccountConfigurationIsValid \? remoteStorageAccountResourceIds : \[\]$'
+                $configuration | Should -Match '(?m)^\s+localProfileStorageAccountResourceIds: fslogix\.outputs\.profileStorageAccountResourceIds$'
+                $configuration | Should -Match '(?m)^\s+remoteProfileStorageAccountResourceIds: remoteStorageAccountConfigurationIsValid \? remoteProfileStorageAccountResourceIds : \[\]$'
             }
         }
 
@@ -325,8 +320,8 @@ Describe 'FSLogix producer v2 inputs' {
             $bindings.PSObject.Properties.Name | Should -Not -Contain 'fslogixStorageRedundancy'
             $bindings.PSObject.Properties.Name | Should -Not -Contain 'fslogixShareSizeInGB'
             $bindings.PSObject.Properties.Name | Should -Not -Contain 'shareSizeInGB'
-            $bindings.PSObject.Properties.Name | Should -Not -Contain 'storageAccountNamePrefix'
-            $bindings.namingConvention | Should -Not -Match 'fslogixStoragePrefix'
+            $bindings.PSObject.Properties.Name | Should -Not -Contain 'profileStorageAccountNamePrefix'
+            $bindings.namingConvention | Should -Not -Match 'fslogixProfileStoragePrefix'
         }
 
         It 'defaults the UI to v2 and explains capacity-based automatic performance with safe hidden outputs' {
@@ -446,15 +441,15 @@ Describe 'FSLogix producer v2 inputs' {
         }
     }
 
-    It 'evaluates legacy nonempty fallback and preferred empty/nonempty local and remote array precedence' {
+    It 'evaluates canonical empty and ordered local/remote Profile arrays' {
         foreach ($case in @(
             @{ Kind = 'Standard'; Entry = 'deployments\hostpools\hostpool.bicep' }
             @{ Kind = 'Automated'; Entry = 'deployments\automatedHostPools\automatedHostPool.bicep' }
         )) {
             $text = Get-Content (Join-Path $repoRoot $case.Entry) -Raw
             $overrides = @{
-                fslogixExistingLocalStorageAccountResourceIds = @('old-local')
-                fslogixExistingRemoteStorageAccountResourceIds = @('old-remote')
+                fslogixExistingLocalProfileStorageAccountResourceIds = @('old-local')
+                fslogixExistingRemoteProfileStorageAccountResourceIds = @('old-remote')
             }
             $legacy = Invoke-ProducerExpressions $text $case.Kind $overrides
             @($legacy.local.value) | Should -Be @('old-local')
@@ -475,10 +470,9 @@ Describe 'FSLogix producer v2 inputs' {
         }
     }
 
-    It 'evaluates generated add-on naming when an empty preferred prefix overrides a nonempty legacy prefix' {
+    It 'evaluates generated add-on naming for an empty Profile prefix' {
         $text = Get-Content (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\main.bicep') -Raw
         $result = Invoke-ProducerExpressions $text 'Addon' @{
-            storageAccountNamePrefix = 'oldprefix'
             fslogixProfileStorageAccountNamePrefix = ''
         } -UseProductionNaming
         $result.prefix.value | Should -Be $result.namingPrefix.value
@@ -488,29 +482,29 @@ Describe 'FSLogix producer v2 inputs' {
 
     It 'wires resolved standard-host existing IDs and deployed prefix into persisted lifecycle tags' {
         $text = (Get-Content (Join-Path $repoRoot 'deployments\hostpools\hostpool.bicep') -Raw).Replace("`r`n", "`n")
-        $local = [regex]::Match($text, '(?m)^var fslLocalStorageAccountNames\b[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*').Value
-        $remote = [regex]::Match($text, '(?m)^var fslRemoteStorageAccountNames\b[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*').Value
+        $local = [regex]::Match($text, '(?m)^var fslLocalProfileStorageAccountNames\b[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*').Value
+        $remote = [regex]::Match($text, '(?m)^var fslRemoteProfileStorageAccountNames\b[^\r\n]*(?:\r?\n[ \t]+[^\r\n]*)*').Value
         $local | Should -Match '\$\{effectiveFslogixProfileStorageAccountNamePrefix\}\$\{padLeft\(i \+ fslogixStorageIndex'
-        $local | Should -Match 'fslLocalStorageAccountNames: string\(map\(\s+effectiveFslogixExistingLocalStorageAccountResourceIds,\s+id => last\(split\(id, ''/''\)\)'
-        $remote | Should -Match 'fslRemoteStorageAccountNames: string\(map\(\s+effectiveFslogixExistingRemoteStorageAccountResourceIds,\s+id => last\(split\(id, ''/''\)\)'
-        $local | Should -Not -Match 'naming\.fslogixStorageAccountNamePrefix|\bfslogixExistingLocalStorageAccountResourceIds\b'
+        $local | Should -Match 'fslLocalProfileStorageAccountNames: string\(map\(\s+effectiveFslogixExistingLocalProfileStorageAccountResourceIds,\s+id => last\(split\(id, ''/''\)\)'
+        $remote | Should -Match 'fslRemoteProfileStorageAccountNames: string\(map\(\s+effectiveFslogixExistingRemoteProfileStorageAccountResourceIds,\s+id => last\(split\(id, ''/''\)\)'
+        $local | Should -Not -Match 'naming\.fslogixProfileStorageAccountNamePrefix|\bfslogixExistingLocalStorageAccountResourceIds\b'
         $remote | Should -Not -Match '\bfslogixExistingRemoteStorageAccountResourceIds\b'
-        $text | Should -Match '(?m)^var hasAssociatedFslStorage = deployFSLogixStorage \|\| !empty\(effectiveFslogixExistingLocalStorageAccountResourceIds\)'
-        $text | Should -Match '(?ms)^var fslogixConfigurationTags = hasAssociatedFslStorage\s+\? union\(.*?\bfslLocalStorageAccountNames,\s+fslRemoteStorageAccountNames,'
+        $text | Should -Match '(?m)^var hasAssociatedFslStorage = deployFSLogixStorage \|\| !empty\(effectiveFslogixExistingLocalProfileStorageAccountResourceIds\)'
+        $text | Should -Match '(?ms)^var fslogixConfigurationTags = hasAssociatedFslStorage\s+\? union\(.*?\bfslLocalProfileStorageAccountNames,\s+fslRemoteProfileStorageAccountNames,'
         $resourceGroup = Get-ProducerSourceBlock $text 'module' 'hostsResourceGroup'
-        $resourceGroup | Should -Match 'tags: union\([^\r\n]*\bfslogixConfigurationTags\b'
+        $resourceGroup | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\([^\r\n]*\bfslogixConfigurationTags\b'
     }
 
     It 'persists both resolved automated-policy Profile arrays as lifecycle tags and policy parameters' {
         $text = (Get-Content (Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep') -Raw).Replace("`r`n", "`n")
         foreach ($role in @('Local', 'Remote')) {
-            $property = $role.Substring(0, 1).ToLowerInvariant() + $role.Substring(1) + 'StorageAccountResourceIds'
-            $text | Should -Match ('(?m)^\s+fsl' + $role + 'StorageAccountNames: string\(map\(fslogixConfiguration\.' + $property + ', id => last\(split\(id, ''/''\)\)\)\)$')
+            $property = $role.Substring(0, 1).ToLowerInvariant() + $role.Substring(1) + 'ProfileStorageAccountResourceIds'
+            $text | Should -Match ('(?m)^\s+fsl' + $role + 'ProfileStorageAccountNames: string\(map\(fslogixConfiguration\.' + $property + ', id => last\(split\(id, ''/''\)\)\)\)$')
             $text | Should -Match ('(?m)^\s+value: fslogixConfiguration\.' + $property + '$')
         }
         $text | Should -Match '(?ms)^var resourceGroupTags = union\(.*?\}, fslogixStorageAccountTags\)'
         $tags = Get-ProducerSourceBlock $text 'module' 'sessionHostResourceGroupTags'
-        $tags | Should -Match 'tags: union\(existingSessionHostResourceGroup\.tags \?\? \{\}, resourceGroupTags\)'
+        $tags | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\(existingSessionHostResourceGroup\.tags \?\? \{\}, resourceGroupTags\)\)'
     }
 
     It 'places standard-host Office controls in the Azure Files section they are exported from' {

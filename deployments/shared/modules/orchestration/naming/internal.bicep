@@ -12,7 +12,7 @@ var namingPolicy object = {
   identifiers: { imageManagement: 'image-management', sessionHostReplacer: 'shr', sharedFslogix: 'fslogix' }
   limits: {
     deploymentVm: 15
-    fslogixStoragePrefix: 13
+    fslogixProfileStoragePrefix: 13
     uniqueSuffix: 6
     defaultUniqueLength: 6
     imageManagementStoragePrefix: 5
@@ -123,7 +123,7 @@ var namingPolicy object = {
     confidentialDiskPurpose: 'confvm{delimiter}customer{delimiter}keys'
     customerDiskPurpose: 'customer{delimiter}keys'
     doubleEncryptionDiskPurpose: 'platform{delimiter}and{delimiter}customer{delimiter}keys'
-    fslogixStoragePrefix: 'fslpc{unique}'
+    fslogixProfileStoragePrefix: 'fslpc{unique}'
     fslogixOfficeStoragePrefix: 'fsloc{unique}'
     fslogixKey: '{identifier}-{storagePrefix}##-cmk'
     vmKey: '{identifier}-vm-cmk'
@@ -182,7 +182,7 @@ type namingConventionConfig = {
   locationAbbreviation: string?
   cpLocationAbbreviation: string?
   vmsLocationAbbreviation: string?
-  fslogixStoragePrefix: string?
+  fslogixProfileStoragePrefix: string?
   fslogixOfficeStoragePrefix: string?
   imageManagementStoragePrefix: string?
   secretsKeyVaultNameOverride: string?
@@ -493,12 +493,12 @@ func privateEndpointName(pattern string, resourceName string, subresource string
   replace(replace(replace(pattern, 'SUBRESOURCE', subresource), 'RESOURCE', resourceName), 'VNETID', privateEndpointVnetToken(vnetName))
 
 @description('Preserves FSLogix domain-compatible storage-prefix normalization and length budgeting, or uses the central default pattern.')
-func fslogixStoragePrefix(prefix string, unique string) string =>
-  !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixStoragePrefix)
-    : namePattern('fslogixStoragePrefix', { unique: unique })
+func fslogixProfileStoragePrefix(prefix string, unique string) string =>
+  !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixProfileStoragePrefix)
+    : namePattern('fslogixProfileStoragePrefix', { unique: unique })
 
 func fslogixOfficeStoragePrefix(prefix string, unique string) string =>
-  !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixStoragePrefix)
+  !empty(prefix) ? take(toLower(replace(prefix, '-', '')), namingPolicy.limits.fslogixProfileStoragePrefix)
     : namePattern('fslogixOfficeStoragePrefix', { unique: unique })
 
 // FSLogix bundle, shared with host pools.
@@ -521,9 +521,9 @@ type fslogixNamingResult = {
   resourceGroupStorage: string
   netAppAccountName: string
   netAppCapacityPoolName: string
-  fslogixStorageAccountNamePrefix: string
+  fslogixProfileStorageAccountNamePrefix: string
   fslogixOfficeStorageAccountNamePrefix: string
-  encryptionKeyNameFSLogix: string
+  encryptionKeyNameFSLogixProfile: string
   encryptionKeyNameFSLogixOffice: string
   privateEndpointNameConv: string
   privateEndpointNICNameConv: string
@@ -541,9 +541,9 @@ func fslogixNamesWithPrefix(convention object, identifier string, context fslogi
   resourceGroupStorage: storageGroupName
   netAppAccountName: resourceName(convention, 'netAppAccount', abbreviation, identifier, '')
   netAppCapacityPoolName: resourceName(convention, 'netAppCapacityPool', abbreviation, identifier, '')
-  fslogixStorageAccountNamePrefix: prefix
+  fslogixProfileStorageAccountNamePrefix: prefix
   fslogixOfficeStorageAccountNamePrefix: officePrefix
-  encryptionKeyNameFSLogix: namePattern('fslogixKey', { identifier: identifier, storagePrefix: prefix })
+  encryptionKeyNameFSLogixProfile: namePattern('fslogixKey', { identifier: identifier, storagePrefix: prefix })
   encryptionKeyNameFSLogixOffice: namePattern('fslogixKey', { identifier: identifier, storagePrefix: officePrefix })
   privateEndpointNameConv: privateEndpointPattern(resourceTypeFirst(convention), resolveConvention(convention).resourceTypeCodes.privateEndpoints)
   privateEndpointNICNameConv: privateEndpointNicPattern(resourceTypeFirst(convention), resolveConvention(convention).resourceTypeCodes.privateEndpoints, resolveConvention(convention).resourceTypeCodes.networkInterfaces)
@@ -553,7 +553,7 @@ func fslogixNamesWithPrefix(convention object, identifier string, context fslogi
 }
 
 func fslogixNamesWithSeed(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string, unique string) fslogixNamingResult =>
-  fslogixNamesWithPrefix(convention, identifier, context, abbreviation, storageGroupName, fslogixStoragePrefix(convention.?fslogixStoragePrefix ?? '', unique), fslogixOfficeStoragePrefix(convention.?fslogixOfficeStoragePrefix ?? '', unique), deploymentVmName(convention, abbreviation, identifier))
+  fslogixNamesWithPrefix(convention, identifier, context, abbreviation, storageGroupName, fslogixProfileStoragePrefix(convention.?fslogixProfileStoragePrefix ?? '', unique), fslogixOfficeStoragePrefix(convention.?fslogixOfficeStoragePrefix ?? '', unique), deploymentVmName(convention, abbreviation, identifier))
 
 func fslogixNamesForLocation(convention object, identifier string, context fslogixNamingContext, abbreviation string, storageGroupName string) fslogixNamingResult =>
   fslogixNamesWithSeed(convention, identifier, context, abbreviation, storageGroupName, take(scopeUnique(union(context, { resourceGroupName: storageGroupName })), namingPolicy.limits.uniqueSuffix))
@@ -689,9 +689,9 @@ type hostPoolNamingResult = {
   resourceGroupStorage: string
   netAppAccountName: string
   netAppCapacityPoolName: string
-  fslogixStorageAccountNamePrefix: string
+  fslogixProfileStorageAccountNamePrefix: string
   fslogixOfficeStorageAccountNamePrefix: string
-  encryptionKeyNameFSLogix: string
+  encryptionKeyNameFSLogixProfile: string
   encryptionKeyNameFSLogixOffice: string
   privateEndpointNameConv: string
   privateEndpointNICNameConv: string

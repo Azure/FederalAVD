@@ -3,8 +3,9 @@ metadata description = 'Defines a subscription DeployIfNotExists policy for the 
 
 targetScope = 'subscription'
 
-@description('Optional. Name of the subscription policy definition to create or update.')
-param policyDefinitionName string = 'avdSessionHostConfiguration-DeployIfNotExists'
+// Renaming/removing policy parameters requires a new definition, not an in-place update.
+@description('Optional. Name of the subscription policy definition for the canonical Profile/Office account contract.')
+param policyDefinitionName string = 'avdSessionHostConfiguration-ProfileAccounts-DeployIfNotExists'
 @description('Optional. Display name stored on the subscription policy definition.')
 param policyDefinitionDisplayName string = 'Configure automated AVD session host virtual machines'
 @description('Optional. Description stored on the subscription policy definition; does not change its policy rule.')
@@ -22,7 +23,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
       category: 'Azure Virtual Desktop'
       solution: 'Automated AVD Host Pools'
       component: 'Session Host Governance'
-      version: '1.0.0'
+      version: '2.0.0'
     }
     parameters: {
       effect: {
@@ -97,24 +98,14 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           displayName: 'FSLogix container type'
         }
       }
-      fslogixFileShareNames: {
-        type: 'Array'
-        defaultValue: [
-          'profile-containers'
-        ]
-        metadata: {
-          displayName: 'FSLogix file share names (legacy compatibility)'
-          description: 'Fixed share names are derived from fslogixContainerType; retained for existing assignments.'
-        }
-      }
-      fslogixLocalStorageAccountResourceIds: {
+      fslogixLocalProfileStorageAccountResourceIds: {
         type: 'Array'
         defaultValue: []
         metadata: {
           displayName: 'Local Azure Files storage account resource IDs'
         }
       }
-      fslogixRemoteStorageAccountResourceIds: {
+      fslogixRemoteProfileStorageAccountResourceIds: {
         type: 'Array'
         defaultValue: []
         metadata: {
@@ -200,7 +191,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                   value: '[parameters(\'fslogixContainerType\')]'
                 }
                 fslogixLocalProfileStorageAccountResourceIds: {
-                  value: '[parameters(\'fslogixLocalStorageAccountResourceIds\')]'
+                  value: '[parameters(\'fslogixLocalProfileStorageAccountResourceIds\')]'
                 }
                 fslogixLocalOfficeStorageAccountResourceIds: {
                   value: '[parameters(\'fslogixLocalOfficeStorageAccountResourceIds\')]'
@@ -212,7 +203,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                   value: '[parameters(\'fslogixOSSGroups\')]'
                 }
                 fslogixRemoteProfileStorageAccountResourceIds: {
-                  value: '[parameters(\'fslogixRemoteStorageAccountResourceIds\')]'
+                  value: '[parameters(\'fslogixRemoteProfileStorageAccountResourceIds\')]'
                 }
                 fslogixRemoteOfficeStorageAccountResourceIds: {
                   value: '[parameters(\'fslogixRemoteOfficeStorageAccountResourceIds\')]'
