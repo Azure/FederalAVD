@@ -1,6 +1,13 @@
 metadata name = 'Azure Files provisioning configuration'
 metadata description = 'Resolves legacy or provisioned-v2 SMB storage settings without changing existing-account resources.'
 
+// Public entry points validate container types; internal selection only needs the Office marker.
+// Profile is always first so array positions remain stable for storage roles and NetApp volumes.
+@export()
+func fslogixShareNames(containerType string) string[] => contains(containerType, 'Office')
+  ? ['profile-containers', 'office-containers']
+  : ['profile-containers']
+
 type filesConfiguration = {
   kind: string
   skuName: string
@@ -13,6 +20,10 @@ type filesConfiguration = {
 // Keep billing separate from media: Standard provisioned v2 uses FileStorage, not StorageV2.
 // Recommendations follow https://learn.microsoft.com/azure/storage/files/understanding-billing.
 // A zero performance input requests the recommendation for this role's own capacity.
+// Integer division rounds down; adding divisor - 1 implements ceiling(capacity / divisor).
+// SSD and HDD use different base rates; min() caps automatic values at the tier's maximum.
+// Nonzero inputs are preserved after validation. Legacy rejects explicit performance inputs
+// and returns zeros rather than calculating provisioned-v2 recommendations.
 @export()
 func resolveFilesConfiguration(tier string, redundancy string, billingModel string, capacityGiB int, iops int, throughputMiBps int) filesConfiguration => contains(['Standard', 'Premium'], tier) && contains(['LocallyRedundant', 'ZoneRedundant'], redundancy) && contains(['Legacy', 'ProvisionedV2'], billingModel)
   ? billingModel == 'ProvisionedV2'

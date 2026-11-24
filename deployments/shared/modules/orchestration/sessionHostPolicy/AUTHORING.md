@@ -156,6 +156,16 @@ Bicep entry point.
 
 ## Managed Identity Responsibilities
 
+FSLogix initialization uses `fslogixContainerType` as the source for fixed share names and Cloud
+Cache. Keep the legacy `fslogixFileShareNames` policy/remediation parameter accepted for existing
+assignments, but do not forward it to the initializer. The automated adapter's legacy
+`fileShareNames` configuration property is optional compatibility data, not a naming override.
+Published local/remote account policy parameters also remain unchanged. Map those Profile arrays
+to `fslogixLocalProfileStorageAccountResourceIds` and `fslogixRemoteProfileStorageAccountResourceIds`
+inside the nested remediation template; do not rename existing policy assignment parameters.
+Do not change the successful named Run Command compliance check to force this cleanup onto
+already-compliant hosts.
+
 Keep these identities distinct:
 
 - The policy assignment identity deploys remediation resources.

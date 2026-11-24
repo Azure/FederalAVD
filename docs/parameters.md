@@ -89,6 +89,15 @@ Existing-resource arrays do not resize, convert or migrate accounts. See the
 
 ---
 
+FSLogix share names are fixed by `fslogixContainerType`, not independently configurable.
+Profile modes use `profile-containers`; Profile + Office modes additionally use
+`office-containers`. The same selection determines Cloud Cache. SHR and additional-host templates
+accept only the four canonical container values and explicit local/remote Profile and Office arrays.
+Generic consumer account input aliases and legacy container labels have been removed.
+The storage add-on retains its derived `fileShareNames` output. Legacy policy share-name
+parameters remain accepted for compatibility but do not override the container type.
+See the [container configuration contract](design.md#container-type-is-the-fslogix-configuration-source-of-truth).
+
 ## Naming Convention
 
 Most FederalAVD deployments control resource names through the `namingConvention` parameter. The default value produces CAF-compliant names. When customized, pass the same parameter object to solutions that support it for a consistent enterprise naming strategy. Image Validation instead takes complete resource names. Azure Virtual Desktop owns automated session-host VM, OS disk, and NIC names and exposes only a VM name prefix; see [Solution Limitations](limitations.md#automated-host-pool-limitations).

@@ -3,6 +3,7 @@ targetScope = 'subscription'
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
 import { fslogixNames, sharedServicesNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
+import { fslogixShareNames } from '../../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string
@@ -314,23 +315,6 @@ param remoteNetAppVolumeResourceIds string[] = []
 @description('Optional. Tags keyed by Azure resource type, matching the host pool deployment tag contract.')
 param tags object = {}
 
-var fslogixShareNamesLookup = {
-  CloudCacheProfileContainer: [
-    'profile-containers'
-  ]
-  CloudCacheProfileOfficeContainer: [
-    'profile-containers'
-    'office-containers'
-  ]
-  ProfileContainer: [
-    'profile-containers'
-  ]
-  ProfileOfficeContainer: [
-    'profile-containers'
-    'office-containers'
-  ]
-}
-
 var storageSolution = split(fslogixStorageService, ' ')[0]
 var azureFilesTuningIsValid = storageSolution != 'AzureNetAppFiles' || (fslogixProfileStorageTier == null && (fslogixProfileStorageRedundancy == null || fslogixProfileStorageRedundancy == 'LocallyRedundant') && empty(fslogixProfileStorageAccountNamePrefix) && fslogixProfileStorageBillingModel == 'Legacy' && fslogixOfficeStorageBillingModel == 'Inherit' && fslogixProfileProvisionedIops == 0 && fslogixProfileProvisionedThroughputMiBps == 0 && fslogixOfficeProvisionedIops == 0 && fslogixOfficeProvisionedThroughputMiBps == 0 && fslogixOfficeStorageTier == 'Inherit' && fslogixOfficeStorageRedundancy == 'Inherit' && fslogixOfficeShareSizeInGB == 0)
   ? true
@@ -393,7 +377,7 @@ var effectiveEncryptionUserAssignedIdentityName = !empty(encryptionUserAssignedI
 var effectiveNetAppAccountName = !empty(netAppAccountName) ? netAppAccountName : naming.netAppAccountName
 var effectiveNetAppCapacityPoolName = !empty(netAppCapacityPoolName) ? netAppCapacityPoolName : naming.netAppCapacityPoolName
 var effectiveSmbServerLocation = !empty(smbServerLocation) ? smbServerLocation : naming.vmsLocAbbr
-var fileShareNames = fslogixShareNamesLookup[fslogixContainerType]
+var fileShareNames = fslogixShareNames(fslogixContainerType)
 var storageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 var remoteStorageAccountConfigurationIsValid = empty(remoteStorageAccountResourceIds) || length(remoteStorageAccountResourceIds) == storageCount
   ? true
@@ -624,7 +608,7 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
-    fslogixFileShares: fileShareNames
+    fslogixContainerType: fslogixContainerType
     fslogixShardOptions: shardingConfigurationIsValid ? fslogixShardOptions : fslogixShardOptions
     fslogixSoftDeleteRetentionDays: softDeleteRetentionDays
     fslogixStorageRedundancy: effectiveProfileStorageRedundancy
@@ -673,7 +657,7 @@ module remoteNetAppVolumeFqdns '../../shared/modules/orchestration/fslogix/modul
   params: {
     localNetAppVolumeResourceIds: []
     remoteNetAppVolumeResourceIds: remoteNetAppConfigurationIsValid ? remoteNetAppVolumeResourceIds : []
-    shareNames: fileShareNames
+    fslogixContainerType: fslogixContainerType
   }
 }
 

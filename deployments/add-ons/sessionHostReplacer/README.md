@@ -783,12 +783,27 @@ finish the storage/data transition before updating SHR, and follow existing stop
 and active-cycle configuration precautions. Replacements receive both role mappings.
 See [upgrade precautions](../../../docs/design.md#separate-profile-and-office-azure-files-accounts).
 
-New Portal exports use `fslogixLocalProfileStorageAccountResourceIds` and
-`fslogixRemoteProfileStorageAccountResourceIds`. They take precedence over the retained legacy
-`fslogixLocalStorageAccountResourceIds` and `fslogixRemoteStorageAccountResourceIds` inputs when
-supplied, including empty arrays. SHR still serializes the legacy keys for compatibility with
-previously published session-host Template Specs. Resource-group tag names and shard order
-are unchanged. Both legacy and v2 SMB storage can be consumed without resizing or SKU conversion.
+Portal exports and replacement deployments use `fslogixLocalProfileStorageAccountResourceIds` and
+`fslogixRemoteProfileStorageAccountResourceIds` directly, with empty arrays as defaults.
+Generic local/remote account aliases and legacy container labels are no longer accepted.
+Use `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, or
+`CloudCacheProfileOfficeContainer`. `fslogixOSSGroups` contains ordered group names for per-group
+ObjectSpecific settings, not Entra object IDs used by the storage NTFS provisioning command.
+
+Before upgrading, stop new initiations and follow the active-cycle configuration precautions.
+Republish the additional-host Template Spec and update SHR together; update an external
+`sessionHostTemplateSpecResourceId` when one is supplied. Rename old generic account keys to
+their explicit Profile counterparts and regenerate/review the Portal parameter export.
+Resource-group tag names and shard order are unchanged. This does not migrate data, resize
+accounts, or convert legacy/v2 storage. See the
+[consumer contract migration](../../../docs/design.md#consumer-contract-migration-and-consistency).
+
+The FSLogix container-size default is **30,000 MB**, matching the
+[documented FSLogix default](https://learn.microsoft.com/en-us/fslogix/how-to-configure-profile-containers).
+The Portal preserves an existing container-size tag instead of replacing it with that default.
+Integrity monitoring defaults on; explicit selections remain configurable.
+`diskSizeGB` accepts `0`, `32`, `64`, `128`, `256`, `512`, `1024`, or `2048`, matching the
+session-host template. Zero inherits the image default; explicit sizes must accommodate the image.
 
 Here is a screen shot of the form:
 

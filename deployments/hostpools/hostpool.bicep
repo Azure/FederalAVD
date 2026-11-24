@@ -5,6 +5,7 @@ import { artifactCustomizationType } from '../shared/modules/resourceModules/typ
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
+import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -1237,23 +1238,6 @@ var effectiveHostsResourceGroup = naming.resourceGroupHosts
 var effectiveStorageResourceGroup = naming.resourceGroupStorage
 var effectiveOperationsResourceGroup = naming.resourceGroupOperations
 
-var fslogixShareNamesLookup = {
-  CloudCacheProfileContainer: [
-    'profile-containers'
-  ]
-  CloudCacheProfileOfficeContainer: [
-    'profile-containers'
-    'office-containers'
-  ]
-  ProfileContainer: [
-    'profile-containers'
-  ]
-  ProfileOfficeContainer: [
-    'profile-containers'
-    'office-containers'
-  ]
-}
-
 // ============================================================================
 // Derived Variables
 // All vars below depend on the naming convention block above.
@@ -1287,7 +1271,7 @@ var effectiveFslogixProfileShareSizeInGB = fslogixProfileShareSizeInGB ?? fslogi
 var effectiveFslogixOfficeStorageBillingModel = fslogixOfficeStorageBillingModel == 'Inherit' ? fslogixProfileStorageBillingModel : fslogixOfficeStorageBillingModel == 'ProvisionedV2' ? 'ProvisionedV2' : 'Legacy'
 var selectedFslogixExistingLocalProfileStorageAccountResourceIds = fslogixExistingLocalProfileStorageAccountResourceIds ?? fslogixExistingLocalStorageAccountResourceIds
 var selectedFslogixExistingRemoteProfileStorageAccountResourceIds = fslogixExistingRemoteProfileStorageAccountResourceIds ?? fslogixExistingRemoteStorageAccountResourceIds
-var fslogixFileShareNames = fslogixShareNamesLookup[fslogixContainerType]
+var fslogixFileShareNames = fslogixShareNames(fslogixContainerType)
 var fslogixOfficeEnabled = contains(fslogixContainerType, 'OfficeContainer')
 var effectiveFslogixOfficeStorageTier = fslogixOfficeStorageTier == 'Inherit' ? effectiveFslogixProfileStorageTier : fslogixOfficeStorageTier
 var effectiveFslogixOfficeStorageRedundancy = fslogixOfficeStorageRedundancy == 'Inherit' ? effectiveFslogixProfileStorageRedundancy : fslogixOfficeStorageRedundancy
@@ -1366,7 +1350,7 @@ var fslRemoteOfficeStorageAccountNames = fslogixOfficeEnabled && !empty(effectiv
 var fslLocalNetAppVolumeResourceIds = deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureNetAppFiles')
   ? {
       fslLocalNetAppVolumeResourceIds: string(map(
-        fslogixShareNamesLookup[fslogixContainerType],
+        fslogixFileShareNames,
         share =>
           '/subscriptions/${subscription().subscriptionId}/resourceGroups/${effectiveStorageResourceGroup}/providers/Microsoft.NetApp/netAppAccounts/${naming.netAppAccountName}/capacityPools/${naming.netAppCapacityPoolName}/volumes/${share}'
       ))
@@ -1387,7 +1371,7 @@ var fslogixConfigurationTags = hasAssociatedFslStorage
       { fslContainerType: fslogixContainerType },
       { fslContainerSizeInMBs: fslogixSizeInMBs },
       { fslStorageService: split(fslogixStorageService, ' ')[0] },
-      { fslFileShareNames: string(fslogixShareNamesLookup[fslogixContainerType]) },
+      { fslFileShareNames: string(fslogixFileShareNames) },
       { fslSharding: fslogixShardOptions },
       fslLocalStorageAccountNames,
       fslRemoteStorageAccountNames,
@@ -1764,7 +1748,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
-    fslogixFileShares: fslogixFileShareNames
+    fslogixContainerType: fslogixContainerType
     fslogixShardOptions: fslogixShardOptions
     fslogixUserGroups: fslogixUserGroups
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
@@ -1874,8 +1858,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
       ? fslogixConfigureSessionHosts
       : fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
-    fslogixFileShareNames: fslogixFileShareNames
-    fslogixLocalStorageAccountResourceIds: deployFSLogixStorage
+    fslogixLocalProfileStorageAccountResourceIds: deployFSLogixStorage
       ? fslogix!.outputs.storageAccountResourceIds
       : effectiveFslogixExistingLocalStorageAccountResourceIds
     fslogixLocalOfficeStorageAccountResourceIds: deployFSLogixStorage
@@ -1886,7 +1869,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
       : fslogixExistingLocalNetAppVolumeResourceIds
     fslogixOSSGroups: fslogixShardOptions == 'ShardOSS' ? map(fslogixUserGroups, group => group.name) : []
     fslogixRemoteNetAppVolumeResourceIds: fslogixExistingRemoteNetAppVolumeResourceIds
-    fslogixRemoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
+    fslogixRemoteProfileStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds
     fslogixRemoteOfficeStorageAccountResourceIds: effectiveFslogixExistingRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: split(fslogixStorageService, ' ')[0]

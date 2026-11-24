@@ -12,8 +12,9 @@ Configures a policy-created automated session host after VM provisioning.
 
 - **Used by:** The shared Session Host Policy `ConfigureSessionHost` nested Run Command template
 - **Parameters:** `StorageSuffix`, `TimeZone`, GPU flags, and FSLogix storage settings including
-  `ConfigureFSLogix`, `CloudCache`, `IdentitySolution`, local and remote storage locations,
-  `OSSGroups`, `Shares`, `SizeInMBs`, and `StorageService`
+  `ConfigureFSLogix`, `ContainerType`, `IdentitySolution`, local and remote storage locations,
+  `OSSGroups`, `SizeInMBs`, and `StorageService`. `ContainerType` determines the fixed share
+  names, Office-container enablement, and Cloud Cache behavior.
 - **Behavior:** Configures time zone, GPU settings, FSLogix Profile and ODFC containers, Cloud Cache,
   Object Specific Settings, Defender exclusions, and Entra Kerberos policy as selected; also resizes
   the operating-system partition.
@@ -25,15 +26,16 @@ installs the AVD agent using a host pool registration token. Automated host pool
 registered by the policy-governed provisioning workflow, so this solution-owned implementation only
 applies post-provisioning host configuration.
 
-Azure Files Office containers use `LocalOfficeStorageAccountNames` and
+Azure Files Profile containers use `LocalProfileStorageAccountNames` and
+`RemoteProfileStorageAccountNames`. Office containers use `LocalOfficeStorageAccountNames` and
 `RemoteOfficeStorageAccountNames`, never the Profile name arrays. Initialization validates one
 distinct Office account per Profile shard in matching local/remote order and preserves the same
 SID-index mapping. Azure NetApp Files retains its ordered Profile/Office server arrays.
 
 The canonical remediation template also accepts storage-key `EntraId` configurations, although the
 automated public entry currently exposes identity-based authentication only. Keys for each role
-are supplied in Run Command `protectedParameters`: `LocalStorageAccountKeys`,
-`RemoteStorageAccountKeys`, `LocalOfficeStorageAccountKeys`, and `RemoteOfficeStorageAccountKeys`.
+are supplied in Run Command `protectedParameters`: `LocalProfileStorageAccountKeys`,
+`RemoteProfileStorageAccountKeys`, `LocalOfficeStorageAccountKeys`, and `RemoteOfficeStorageAccountKeys`.
 The policy adapter grants its remediation identity Storage Account Key Operator at each selected
 account, only for storage-key configurations. Initialization requires one account/key per role and
 location, installs each credential separately as SYSTEM, and fails missing/overlapping pairs.
@@ -42,6 +44,10 @@ and key rotation, not `cmdkey` or a key-bearing child-process command line. Lead
 quoted-looking keys retain their exact bytes. Native failures stop initialization; PowerShell
 FullLanguage and permitted `Add-Type` execution are prerequisites. This does not override
 domain/MDM credential-storage policy or make PowerShell telemetry secret-safe.
+
+Custom script invocations must use the explicit Profile name/key arguments; generic local/remote
+storage argument names are not aliases. Public policy parameter names and lifecycle tags remain
+unchanged.
 
 Storage-key mode sets the ADMX Machine **Access Network as Computer Object** policy (supported-on
 `v2105`) to DWORD `1` separately at `HKLM\SOFTWARE\FSLogix\Profiles` and

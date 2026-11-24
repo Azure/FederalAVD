@@ -8,7 +8,7 @@ Describe 'Evaluated Azure Files role configuration' {
         $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('FederalAVD-OfficeStorage-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $testDirectory -ErrorAction Stop | Out-Null
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep') -Raw
-        $match = [regex]::Match($source, '(?ms)^var storageRoles = .*?(?=^// Network ACLs)')
+        $match = [regex]::Match($source, '(?ms)^var fileShares = .*?(?=^// Network ACLs)')
         if (-not $match.Success) { throw 'Production role/account expressions were not found.' }
         $roleExpressions = $match.Value
         $configurationModule = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\configuration.bicep'
@@ -30,7 +30,7 @@ Describe 'Evaluated Azure Files role configuration' {
                 officeShareSizeInGB = 1024
                 storageCount = 2
                 storageIndex = 3
-                fileShares = @('profile-containers', 'office-containers')
+                containerType = 'ProfileOfficeContainer'
                 profileStorageBillingModel = 'Legacy'
                 officeStorageBillingModel = 'Legacy'
                 profileProvisionedIops = 0
@@ -39,7 +39,7 @@ Describe 'Evaluated Azure Files role configuration' {
                 officeProvisionedThroughputMiBps = 0
             }
             foreach ($key in $Overrides.Keys) { $inputs[$key] = $Overrides[$key] }
-            $lines = @("targetScope = 'local'", "import { resolveFilesConfiguration } from '$relativeConfigurationModule'")
+            $lines = @("targetScope = 'local'", "import { resolveFilesConfiguration, fslogixShareNames } from '$relativeConfigurationModule'")
             foreach ($entry in $inputs.GetEnumerator()) {
                 if ($entry.Value -is [array]) {
                     $literal = '[' + (($entry.Value | ForEach-Object { "'$_'" }) -join ', ') + ']'
@@ -73,7 +73,7 @@ Describe 'Evaluated Azure Files role configuration' {
     }
 
     It 'preserves Profile-only account count and names' {
-        $accounts = @(Invoke-OfficeAccountConfiguration @{ fileShares = @('profile-containers') })
+        $accounts = @(Invoke-OfficeAccountConfiguration @{ containerType = 'ProfileContainer' })
         $accounts.Count | Should -Be 2
         $accounts.name | Should -Be @('pcfixture03', 'pcfixture04')
     }
@@ -256,7 +256,7 @@ Describe 'Lifecycle Office parameter bindings' {
         $profiles = [pscustomobject]@{
             configureSessionHosts = $true
             storageService = 'AzureFiles'
-            fslogixContainerType = 'ProfileContainer OfficeContainer CloudCache'
+            fslogixContainerType = 'CloudCacheProfileOfficeContainer'
             azureFiles = [pscustomobject]@{
                 existingLocalOfficeStorageAccounts = @('office-shard2', 'office-shard1')
                 existingRemoteOfficeStorageAccounts = @('remote-office2', 'remote-office1')
@@ -340,8 +340,24 @@ Describe 'Executable standard initializer Office routing' {
         $routing = [scriptblock]::Create($source.Substring($start, $end - $start))
         $credentials = [scriptblock]::Create($source.Substring($credentialStart, $credentialEnd - $credentialStart))
 
+        $tokens = $null
+        $parseErrors = $null
+        $initializerAst = [System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$parseErrors)
+        $jsonParser = $initializerAst.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'ConvertFrom-JsonString'
+        }, $true)
+        if ($null -eq $jsonParser) { throw 'Production JSON parser was not found.' }
+        . ([scriptblock]::Create($jsonParser.Extent.Text))
+        $containerAssignments = @($initializerAst.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left.Extent.Text -in @('$CloudCacheBool', '$ProfileShareName', '$OfficeShareName')
+        }, $true))
+        if ($containerAssignments.Count -ne 3) { throw 'Production container-type configuration was not found.' }
+        $containerConfiguration = [scriptblock]::Create(($containerAssignments.Extent.Text -join "`n"))
+
         function Write-Log { param($Message) }
-        function ConvertFrom-JsonString { param($JsonString, $Name, [switch]$SensitiveValues) ConvertFrom-Json $JsonString -NoEnumerate }
         function Get-CimInstance { param($ClassName) [pscustomobject]@{ Domain = 'example.test' } }
         function Convert-GroupToSID { param($DomainName, $GroupName) "SID-$GroupName" }
         function Set-StorageAccountCredential {
@@ -356,10 +372,10 @@ Describe 'Executable standard initializer Office routing' {
                 IdentitySolution = 'ActiveDirectoryDomainServices'
                 StorageSuffix = 'core.usgovcloudapi.net'
                 OSSGroups = '[]'
-                LocalStorageAccountNames = '["pc01","pc02"]'
-                LocalStorageAccountKeys = '[]'
-                RemoteStorageAccountNames = '[]'
-                RemoteStorageAccountKeys = '[]'
+                LocalProfileStorageAccountNames = '["pc01","pc02"]'
+                LocalProfileStorageAccountKeys = '[]'
+                RemoteProfileStorageAccountNames = '[]'
+                RemoteProfileStorageAccountKeys = '[]'
                 LocalOfficeStorageAccountNames = '["oc01","oc02"]'
                 LocalOfficeStorageAccountKeys = '[]'
                 RemoteOfficeStorageAccountNames = '[]'
@@ -369,17 +385,48 @@ Describe 'Executable standard initializer Office routing' {
             }
             foreach ($key in $Overrides.Keys) { $inputs[$key] = $Overrides[$key] }
             foreach ($entry in $inputs.GetEnumerator()) { Set-Variable -Name $entry.Key -Value $entry.Value }
-            $ProfileShareName = 'profile-containers'
-            $OfficeShareName = if ($Office) { 'office-containers' } else { $null }
-            $CloudCacheBool = $CloudCache
+            $ContainerType = if ($Office) {
+                if ($CloudCache) { 'CloudCacheProfileOfficeContainer' } else { 'ProfileOfficeContainer' }
+            }
+            else {
+                if ($CloudCache) { 'CloudCacheProfileContainer' } else { 'ProfileContainer' }
+            }
+            . $containerConfiguration
             $SizeInMBsInt = 30720
             $OSSGroupsArray = @()
             $RegSettings = [Collections.Generic.List[object]]::new()
             $script:capturedCredentials = [Collections.Generic.List[object]]::new()
             . $routing
             . $credentials
-            [pscustomobject]@{ Settings = $RegSettings.ToArray(); Credentials = $script:capturedCredentials.ToArray() }
+            [pscustomobject]@{
+                Settings = $RegSettings.ToArray()
+                Credentials = $script:capturedCredentials.ToArray()
+                LocalProfileNames = $LocalProfileStorageAccountNamesArray
+                RemoteProfileNames = $RemoteProfileStorageAccountNamesArray
+                LocalProfileKeys = $LocalProfileStorageAccountKeysArray
+                RemoteProfileKeys = $RemoteProfileStorageAccountKeysArray
+            }
         }
+    }
+
+    It 'emits no items for an empty array through the production JSON parser' {
+        @(ConvertFrom-JsonString -JsonString '[]' -Name 'empty').Count | Should -Be 0
+    }
+
+    It 'routes local-only Entra Kerberos <Mode> with empty remote and key arrays' -TestCases @(
+        @{ Mode = 'permission shards'; Groups = '[]'; LocationCount = 2 }
+        @{ Mode = 'object-specific shards'; Groups = '["group1","group2"]'; LocationCount = 4 }
+    ) {
+        param($Mode, $Groups, $LocationCount)
+        $result = Invoke-OfficeRouting -Overrides @{
+            IdentitySolution = 'EntraKerberos-CloudOnly'
+            OSSGroups = $Groups
+        }
+        $locations = @($result.Settings | Where-Object Name -eq 'VHDLocations')
+        $locations.Count | Should -Be $LocationCount
+        $locations[0].Value[0] | Should -Be '\\pc01.file.core.usgovcloudapi.net\profile-containers'
+        $locations[1].Value[0] | Should -Be '\\oc01.file.core.usgovcloudapi.net\office-containers'
+        $result.Credentials.Count | Should -Be 0
     }
 
     It 'routes VHDLocations to separate role accounts without credentials for AD DS' {
@@ -395,7 +442,7 @@ Describe 'Executable standard initializer Office routing' {
     It 'preserves local/remote Cloud Cache pairing for each OSS group' {
         $result = Invoke-OfficeRouting -CloudCache $true -Overrides @{
             OSSGroups = '["group1","group2"]'
-            RemoteStorageAccountNames = '["remote-pc01","remote-pc02"]'
+            RemoteProfileStorageAccountNames = '["remote-pc01","remote-pc02"]'
             RemoteOfficeStorageAccountNames = '["remote-oc01","remote-oc02"]'
         }
         $locations = @($result.Settings | Where-Object Name -eq 'CCDLocations')
@@ -422,27 +469,31 @@ Describe 'Executable standard initializer Office routing' {
 
     It 'writes the exact keys for both roles at both locations' {
         $result = Invoke-OfficeRouting -Overrides @{
-            LocalStorageAccountKeys = '["pk1","pk2"]'
+            LocalProfileStorageAccountKeys = '["pk1","pk2"]'
             LocalOfficeStorageAccountKeys = '["ok1","ok2"]'
-            RemoteStorageAccountNames = '["remote-pc01","remote-pc02"]'
-            RemoteStorageAccountKeys = '["rpk1","rpk2"]'
+            RemoteProfileStorageAccountNames = '["remote-pc01","remote-pc02"]'
+            RemoteProfileStorageAccountKeys = '["rpk1","rpk2"]'
             RemoteOfficeStorageAccountNames = '["remote-oc01","remote-oc02"]'
             RemoteOfficeStorageAccountKeys = '["rok1","rok2"]'
         }
         $result.Credentials.Count | Should -Be 8
         $result.Credentials.Password | Should -Be @('pk1', 'pk2', 'ok1', 'ok2', 'rpk1', 'rpk2', 'rok1', 'rok2')
+        $result.LocalProfileNames | Should -Be @('pc01', 'pc02')
+        $result.RemoteProfileNames | Should -Be @('remote-pc01', 'remote-pc02')
+        $result.LocalProfileKeys | Should -Be @('pk1', 'pk2')
+        $result.RemoteProfileKeys | Should -Be @('rpk1', 'rpk2')
         $result.Credentials[2].User | Should -Be 'localhost\oc01'
     }
 
     It 'rejects <Case> rather than reusing Profile accounts or ignoring keys' -TestCases @(
         @{ Case = 'missing Office accounts'; Inputs = @{ LocalOfficeStorageAccountNames = '[]' }; Error = '*paired*' }
         @{ Case = 'cross-role overlap'; Inputs = @{ LocalOfficeStorageAccountNames = '["PC01","oc02"]' }; Error = '*different*' }
-        @{ Case = 'missing remote Office accounts'; Inputs = @{ RemoteStorageAccountNames = '["rp1","rp2"]' }; Error = '*paired*' }
-        @{ Case = 'incomplete remote shard coverage'; Inputs = @{ RemoteStorageAccountNames = '["rp1"]'; RemoteOfficeStorageAccountNames = '["ro1"]' }; Error = '*group counts*' }
+        @{ Case = 'missing remote Office accounts'; Inputs = @{ RemoteProfileStorageAccountNames = '["rp1","rp2"]' }; Error = '*paired*' }
+        @{ Case = 'incomplete remote shard coverage'; Inputs = @{ RemoteProfileStorageAccountNames = '["rp1"]'; RemoteOfficeStorageAccountNames = '["ro1"]' }; Error = '*group counts*' }
         @{ Case = 'wrong OSS group count'; Inputs = @{ OSSGroups = '["only-one"]' }; Error = '*group counts*' }
         @{ Case = 'duplicate Office shards'; Inputs = @{ LocalOfficeStorageAccountNames = '["oc01","OC01"]' }; Error = '*distinct*' }
         @{ Case = 'wrong Office key count'; Inputs = @{ LocalOfficeStorageAccountKeys = '["key1"]' }; Error = '*key*collection*' }
-        @{ Case = 'missing paired keys'; Inputs = @{ LocalStorageAccountKeys = '["p1","p2"]' }; Error = '*key for each*' }
+        @{ Case = 'missing paired keys'; Inputs = @{ LocalProfileStorageAccountKeys = '["p1","p2"]' }; Error = '*key for each*' }
     ) {
         param($Case, $Inputs, $Error)
         { Invoke-OfficeRouting -Overrides $Inputs } | Should -Throw $Error

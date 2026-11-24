@@ -2318,18 +2318,18 @@
                 {
                   "name": "profileProvisionedIops",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Profile Provisioned IOPS (0 = recommended)",
+                  "label": "Profile Provisioned IOPS (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))]",
-                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
                 },
                 {
                   "name": "profileProvisionedThroughputMiBps",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Profile Provisioned Throughput MiB/s (0 = recommended)",
+                  "label": "Profile Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))]",
-                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
                 },
                 {
                   "name": "officeStorageBillingModel",
@@ -2349,7 +2349,7 @@
                 {
                   "name": "officeProvisionedIops",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Office Provisioned IOPS (0 = recommended)",
+                  "label": "Office Provisioned IOPS (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))))]",
                   "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
@@ -2357,7 +2357,7 @@
                 {
                   "name": "officeProvisionedThroughputMiBps",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Office Provisioned Throughput MiB/s (0 = recommended)",
+                  "label": "Office Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office'), or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))))]",
                   "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
@@ -2366,7 +2366,7 @@
                   "name": "profileSizeInMBs",
                   "type": "Microsoft.Common.Slider",
                   "label": "FSLogix VHD Size (MB)",
-                  "defaultValue": 30720,
+                  "defaultValue": 30000,
                   "min": 10240,
                   "max": 1048576,
                   "showStepMarkers": true,
@@ -4584,7 +4584,7 @@
         "fslogixOfficeShareSizeInGB": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), int(steps('profiles').storage.officeShareSizeInGB), 0)]",
         "fslogixContainerType": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.containerType, 'ProfileContainer')]",
         "fslogixProfileShareSizeInGB": "[if(steps('profiles').deployStorage, int(steps('profiles').storage.shareSizeInGB), 100)]",
-        "fslogixProfileSizeInMBs": "[if(steps('profiles').configureSessionHosts, steps('profiles').storage.profileSizeInMBs, 30720)]",
+        "fslogixProfileSizeInMBs": "[if(steps('profiles').configureSessionHosts, steps('profiles').storage.profileSizeInMBs, 30000)]",
         "fslogixOUPath": "[if(and(steps('profiles').deployStorage, equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices')), steps('profiles').storage.ouPath, '')]",
         "fslogixAppUpdateUserAssignedIdentityResourceId": "[if(and(contains(steps('profiles').userIdentity, 'EntraKerberos'), steps('profiles').deployStorage, steps('profiles').automateEntraKerberosTasks), steps('profiles').managedIdentity.id, '')]",
         "fslogixStorageIndex": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageIndex, 1)]",

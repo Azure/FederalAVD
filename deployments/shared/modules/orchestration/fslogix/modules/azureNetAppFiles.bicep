@@ -1,6 +1,8 @@
 metadata name = 'FSLogix NetApp storage orchestration'
 metadata description = 'Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials.'
 
+import { fslogixShareNames } from 'configuration.bicep'
+
 @description('Required. Whether to configure an Active Directory connection when creating the NetApp account.')
 param activeDirectoryConnection bool
 @description('Optional. Whether to create the NetApp account; when false, the named account must already exist.')
@@ -31,8 +33,8 @@ param netAppVolumesSubnetResourceId string
 param ouPath string
 @description('Required. Name of the existing resource group containing the deployment helper VM.')
 param resourceGroupDeployment string
-@description('Required. Array of NetApp volume/share name strings in profile-then-Office order.')
-param shares array
+@description('Required. FSLogix container selection; determines fixed Profile and optional Office volumes.')
+param containerType string
 @description('Required. Array of administrator group objects with id and name for Azure Files RBAC or NetApp/domain permissions.')
 param shareAdminGroups array
 @description('Required. Array of user group objects with id and name; the selected identity mode determines which field is forwarded.')
@@ -50,6 +52,7 @@ param tagsNetAppVolume object
 #disable-next-line BCP329
 var ouRelativePath = contains(ouPath, 'DC') ? substring(split(ouPath, 'DC')[0], 0, length(split(ouPath, 'DC')[0]) - 1) : ouPath
 var shareSizeInBytes = shareSizeInGB * 1024 * 1024 * 1024
+var shares = fslogixShareNames(containerType)
 
 resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' existing = {
   scope: resourceGroup(split(netAppVolumesSubnetResourceId, '/')[2], split(netAppVolumesSubnetResourceId, '/')[4])
@@ -120,7 +123,7 @@ module setNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
     parameters: [
       { name: 'AdminGroupNames', value: string(map(shareAdminGroups, group => group.name)) }
       { name: 'NetAppServers', value: string(netappServerFqdns) }
-      { name: 'Shares', value: string(shares) }
+      { name: 'ContainerType', value: containerType }
       { name: 'UserGroupNames', value: string(map(shareUserGroups, group => group.name)) }
     ]
     protectedParameters: [

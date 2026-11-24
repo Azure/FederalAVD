@@ -6,7 +6,9 @@ param
 
     [String]$DomainName,
 
-    [String]$Shares,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('profile-containers', 'office-containers')]
+    [String]$ShareName,
 
     [string]$ShardAzureFilesStorage,    
 
@@ -263,7 +265,6 @@ try {
     }
    
     # Parse and clean configuration parameters
-    [array]$Shares = $Shares.Replace('\"', '"') | ConvertFrom-Json  
     [int]$StCount = $StorageCount.replace('\"', '"')  # Number of storage accounts to process
     [int]$StIndex = $StorageIndex.replace('\"', '"')  # Starting index for storage account naming
     $StorageAccountPrefix = $StorageAccountPrefix.ToLower().replace('\"', '"')  # Storage account name prefix     
@@ -282,35 +283,22 @@ try {
         if ($UserGroupSids.Count -eq 0) {
             Write-Output "No User Groups provided, Setting default permissions for $StorageAccountName"
             $SDDLString = ($SDDLStartString + $SDDLAuthenticatedUsersString) -replace ' ', ''
-            foreach ($Share in $Shares) {
-                Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
-                Write-Output "Successfully set default NTFS permissions on file share '$Share' in storage account '$StorageAccountName'"
-            }            
         }
         Elseif ($ShardAzureFilesStorage -eq 'true') {
             # Check if storage is sharded (different user groups per storage account)
             # SHARDED MODE: Each storage account gets a specific user group
-            foreach ($Share in $Shares) {
-                Write-Output "Building SDDL with group for this share."
-                # Build SDDL with only the specific user group for this storage account index
-                $SDDLString = ($SDDLStartString + $SDDLUserGroupsString[$i]) -replace ' ', ''
-                Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
-                Write-Output "Successfully set NTFS permissions on file share '$Share' in storage account '$StorageAccountName'"                
-            }
+            Write-Output "Building SDDL with group for this share."
+            $SDDLString = ($SDDLStartString + $SDDLUserGroupsString[$i]) -replace ' ', ''
         }
         Else {
             # NON-SHARDED MODE: All storage accounts get the same user groups
-            foreach ($Share in $Shares) {
-                $FileShare = $FileServer + '\' + $Share
-                Write-Output "Processing File Share: $FileShare"
-                Write-Output "Building SDDL with user groups."
-                # Build SDDL with only user groups
-                $SDDLString = ($SDDLStartString + $SDDLUserGroupsString) -replace ' ', ''                
-                # Apply permissions to the file share using Azure Files REST API
-                Set-AzureFileSharePermissions -FileShareName $Share -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
-                Write-Output "Successfully set NTFS permissions on file share '$Share' in storage account '$StorageAccountName'"                
-            }
+            $FileShare = $FileServer + '\' + $ShareName
+            Write-Output "Processing File Share: $FileShare"
+            Write-Output "Building SDDL with user groups."
+            $SDDLString = ($SDDLStartString + $SDDLUserGroupsString) -replace ' ', ''
         }
+        Set-AzureFileSharePermissions -FileShareName $ShareName -StorageAccountName $StorageAccountName -StorageSuffix $StorageSuffix -SDDLString $SDDLString -ClientId $UserAssignedIdentityClientId
+        Write-Output "Successfully set NTFS permissions on file share '$ShareName' in storage account '$StorageAccountName'"
     }
     Write-Output "Completed setting NTFS permissions on all specified Azure File Shares."
     Stop-Transcript

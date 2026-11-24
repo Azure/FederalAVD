@@ -6,6 +6,11 @@ targetScope = 'subscription'
 import { entraGroupType } from '../../resourceModules/types/identityTypes.bicep'
 import { publicNetworkAccessMode } from '../networking/functions.bicep'
 
+// Validate caller-supplied account arrays without sorting or deduplicating their shard positions.
+// Office counts must match Profile counts in each region; a remote set and selected groups must
+// also match the local shard count. Office account names must be unique across both regions and
+// disjoint from Profile names. Compare the final resource-ID segment case-insensitively.
+// Office-disabled configurations reject leftover Office inputs instead of silently ignoring them.
 @export()
 func validateOfficeStorageAccounts(localProfile string[], remoteProfile string[], localOffice string[], remoteOffice string[], officeEnabled bool, groups string[]) { local: string[], remote: string[] } => officeEnabled
   ? (!empty(localProfile) && length(localOffice) == length(localProfile) && length(remoteOffice) == length(remoteProfile) && (empty(remoteProfile) || length(remoteProfile) == length(localProfile)) && (empty(groups) || length(groups) == length(localProfile)) && length(union(
@@ -51,8 +56,8 @@ param fslogixAdminGroups entraGroupType[]
 param appUpdateUserAssignedIdentityResourceId string
 @description('Required. Key name pattern containing ## for the two-digit storage account index; used with customer-managed encryption.')
 param fslogixEncryptionKeyNameConv string
-@description('Required. Share names in Profile-then-Office order; Azure Files uses separate accounts per role, NetApp uses separate volumes.')
-param fslogixFileShares array
+@description('Required. FSLogix container selection; determines fixed Profile and optional Office share names.')
+param fslogixContainerType string
 @description('Required. Sharding selection forwarded to Azure Files permission configuration; None disables sharding.')
 param fslogixShardOptions string
 @description('Required. Array of user group objects with id and name for identity-dependent share permission configuration.')
@@ -157,7 +162,7 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
-    shares: fslogixFileShares
+    containerType: fslogixContainerType
     shareSizeInGB: shareSizeInGB
     shareAdminGroups: fslogixAdminGroups
     shareUserGroups: fslogixUserGroups
@@ -196,7 +201,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
-    fileShares: fslogixFileShares
+    containerType: fslogixContainerType
     officeStorageAccountNamePrefix: officeStorageAccountNamePrefix
     officeEncryptionKeyNameConv: officeEncryptionKeyNameConv
     officeStorageSku: officeStorageSku
@@ -241,14 +246,14 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
   }
 }
 
-// Register Azure Files storage accounts and non-Office shares for snapshot backup.
+// Register only Profile Azure Files accounts and their fixed Profile share for snapshot backup.
 // Scoped to the vault's resource group so ARM child resource declarations resolve correctly.
 module backupRegistration 'modules/fslogixBackupItems.bicep' = if (storageSolution == 'AzureFiles' && !empty(recoveryServicesVaultResourceId)) {
   scope: resourceGroup(split(recoveryServicesVaultResourceId, '/')[2], split(recoveryServicesVaultResourceId, '/')[4])
   params: {
     vaultName: last(split(recoveryServicesVaultResourceId, '/'))!
     location: location
-    fileShares: take(fslogixFileShares, 1)
+    fileShares: ['profile-containers']
     storageAccountResourceIds: azureFiles!.outputs.storageAccountResourceIds
     fileSharePolicyName: fileSharePolicyName
     tags: tags

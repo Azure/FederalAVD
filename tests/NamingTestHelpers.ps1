@@ -37,15 +37,17 @@ function Invoke-TestNamingFormExpression {
         startsWith = { param($value, $prefix) $null -ne $value -and $value.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }
         int = { param($value) [int]$value }
         concat = { [string]::Concat([string[]]$args) }
+        coalesce = { foreach ($value in $args) { if ($null -ne $value) { return $value } } }
         parse = { param($value) $value | ConvertFrom-Json -ErrorAction Stop }
         'not' = { param($value) -not $value }
         'or' = { $true -in $args }
         'and' = { $false -notin $args }
     }
     $body = $Expression.Substring(1, $Expression.Length - 2)
-    $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|empty|equals|contains|startsWith|int|concat|parse|not|or|and)\(", {
+    $body = [regex]::Replace($body, "'(?:[^']|'')*'|\b(?:steps|if|empty|equals|contains|startsWith|int|concat|coalesce|parse|not|or|and)\(|(?<!\$)\b(?:true|false)\b", {
         param($match)
         if ($match.Value.StartsWith("'")) { $match.Value }
+        elseif ($match.Value -in @('true', 'false')) { '$' + $match.Value }
         else { '$functions.' + $match.Value.TrimEnd('(') + '.InvokeReturnAsIs(' }
     })
     & ([scriptblock]::Create($body))

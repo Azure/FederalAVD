@@ -79,6 +79,18 @@ Get-AzRoleAssignment -Scope $scope -RoleDefinitionName $roleDefinition -ObjectId
 
 After removing the conflicting assignment(s), redeploy — ARM will recreate the assignment at its deterministic GUID.
 
+## FSLogix Initialization Fails With a Null-Valued Expression for Separate Office Accounts
+
+If the initializer log points to `ToLowerInvariant()` in the Office account uniqueness check,
+older standard session-host templates may have converted empty remote-account arrays into null
+entries. This affects local-only Profile and Office configurations, including Entra Kerberos
+shards; it does not mean that remote storage or storage-account keys are required.
+
+The corrected initializer normalizes empty JSON arrays to empty PowerShell collections. Rebuild
+and republish the affected host-pool, PoC, additional-session-host, or Session Host Replacer
+template, then retry the failed host deployment through the approved operator process. Updating
+the repository script does not change a Run Command already submitted to Azure.
+
 ## FSLogix Initialization Hangs When a Storage Key Starts With a Slash
 
 Older templates passed Azure Files keys to `cmdkey.exe` without quoting the password value.

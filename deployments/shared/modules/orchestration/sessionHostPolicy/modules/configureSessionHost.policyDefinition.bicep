@@ -103,7 +103,8 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
           'profile-containers'
         ]
         metadata: {
-          displayName: 'FSLogix file share names'
+          displayName: 'FSLogix file share names (legacy compatibility)'
+          description: 'Fixed share names are derived from fslogixContainerType; retained for existing assignments.'
         }
       }
       fslogixLocalStorageAccountResourceIds: {
@@ -198,10 +199,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                 fslogixContainerType: {
                   value: '[parameters(\'fslogixContainerType\')]'
                 }
-                fslogixFileShareNames: {
-                  value: '[parameters(\'fslogixFileShareNames\')]'
-                }
-                fslogixLocalStorageAccountResourceIds: {
+                fslogixLocalProfileStorageAccountResourceIds: {
                   value: '[parameters(\'fslogixLocalStorageAccountResourceIds\')]'
                 }
                 fslogixLocalOfficeStorageAccountResourceIds: {
@@ -213,7 +211,7 @@ resource policyDefinition 'Microsoft.Authorization/policyDefinitions@2024-05-01'
                 fslogixOSSGroups: {
                   value: '[parameters(\'fslogixOSSGroups\')]'
                 }
-                fslogixRemoteStorageAccountResourceIds: {
+                fslogixRemoteProfileStorageAccountResourceIds: {
                   value: '[parameters(\'fslogixRemoteStorageAccountResourceIds\')]'
                 }
                 fslogixRemoteOfficeStorageAccountResourceIds: {

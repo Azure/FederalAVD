@@ -342,6 +342,12 @@ Example PowerShell invocation:
 | `virtualMachineNames` | Array of deployed session host VM names |
 | `fslogixLocalStorageAccountResourceIds` | Storage account(s) for FSLogix profiles |
 
+When configuring SHR or the additional-host template, map the producer's local/remote storage
+account outputs to `fslogixLocalProfileStorageAccountResourceIds` and
+`fslogixRemoteProfileStorageAccountResourceIds`. Consumer generic input aliases are no longer
+accepted. Republish the session-host Template Spec and update SHR together; see the
+[consumer contract migration](design.md#consumer-contract-migration-and-consistency).
+
 ### Notes
 
 - If `customImageResourceId` is empty, the host pool uses the marketplace image defined by `imagePublisher` / `imageOffer` / `imageSku`.

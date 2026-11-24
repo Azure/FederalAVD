@@ -40,7 +40,8 @@ param (
     [string]$ConfigureFSLogix = 'false',
 
     [Parameter(Mandatory = $false)]
-    [string]$CloudCache = 'false',
+    [ValidateSet('ProfileContainer', 'CloudCacheProfileContainer', 'ProfileOfficeContainer', 'CloudCacheProfileOfficeContainer')]
+    [string]$ContainerType = 'ProfileContainer',
 
     [Parameter(Mandatory = $false)]
     [string]$IdentitySolution = '',
@@ -49,10 +50,10 @@ param (
     [string]$LocalNetAppServers = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalStorageAccountNames = '[]',
+    [string]$LocalProfileStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalStorageAccountKeys = '[]',
+    [string]$LocalProfileStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$LocalOfficeStorageAccountNames = '[]',
@@ -67,19 +68,16 @@ param (
     [string]$RemoteNetAppServers = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$RemoteStorageAccountNames = '[]',
+    [string]$RemoteProfileStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$RemoteStorageAccountKeys = '[]',
+    [string]$RemoteProfileStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteOfficeStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteOfficeStorageAccountKeys = '[]',
-
-    [Parameter(Mandatory = $false)]
-    [string]$Shares = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$SizeInMBs = '30000',
@@ -374,11 +372,11 @@ Function ConvertFrom-JsonString {
             Return $Array
         }
         Else {
-            Return $null
+            Return
         }            
     }
     Else {
-        Return $null
+        Return
     }    
 }
 
@@ -721,18 +719,11 @@ try {
         Write-Log -Message 'Configuring FSLogix'
         Write-Log -Message "IdentitySolution: $IdentitySolution"
         
-        # Convert parameters
-        $CloudCacheBool = [System.Convert]::ToBoolean($CloudCache)
+        $CloudCacheBool = $ContainerType -like '*CloudCache*'
+        $ProfileShareName = 'profile-containers'
+        $OfficeShareName = if ($ContainerType -like '*Office*') { 'office-containers' } else { $null }
+        Write-Log -Message "ContainerType: $ContainerType"
         Write-Log -Message "CloudCache: $CloudCacheBool"
-        
-        [array]$SharesArray = ConvertFrom-JsonString -JsonString $Shares -Name 'Shares'
-        $ProfileShareName = $SharesArray[0]
-        if ($SharesArray.Count -gt 1) {
-            $OfficeShareName = $SharesArray[1]
-        }
-        Else {
-            $OfficeShareName = $null
-        }
         
         Write-Log -message "ProfileShareName: $ProfileShareName"
         Write-Log -message "OfficeShareName: $OfficeShareName"
@@ -764,27 +755,27 @@ try {
         switch ($StorageService) {
             'AzureFiles' {
                 Write-Log -message "Gathering Azure Files Storage Account Parameters"
-                [array]$OSSGroupsArray = ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups'
-                [array]$LocalStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames'
-                [array]$LocalStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues
-                [array]$RemoteStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames'
-                [array]$RemoteStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues
-                [array]$LocalOfficeStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountNames -Name 'LocalOfficeStorageAccountNames'
-                [array]$LocalOfficeStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountKeys -Name 'LocalOfficeStorageAccountKeys' -SensitiveValues
-                [array]$RemoteOfficeStorageAccountNamesArray = ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountNames -Name 'RemoteOfficeStorageAccountNames'
-                [array]$RemoteOfficeStorageAccountKeysArray = ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountKeys -Name 'RemoteOfficeStorageAccountKeys' -SensitiveValues
+                [array]$OSSGroupsArray = @(ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups')
+                [array]$LocalProfileStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalProfileStorageAccountNames -Name 'LocalProfileStorageAccountNames')
+                [array]$LocalProfileStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalProfileStorageAccountKeys -Name 'LocalProfileStorageAccountKeys' -SensitiveValues)
+                [array]$RemoteProfileStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteProfileStorageAccountNames -Name 'RemoteProfileStorageAccountNames')
+                [array]$RemoteProfileStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteProfileStorageAccountKeys -Name 'RemoteProfileStorageAccountKeys' -SensitiveValues)
+                [array]$LocalOfficeStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountNames -Name 'LocalOfficeStorageAccountNames')
+                [array]$LocalOfficeStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountKeys -Name 'LocalOfficeStorageAccountKeys' -SensitiveValues)
+                [array]$RemoteOfficeStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountNames -Name 'RemoteOfficeStorageAccountNames')
+                [array]$RemoteOfficeStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountKeys -Name 'RemoteOfficeStorageAccountKeys' -SensitiveValues)
 
                 if ($OfficeShareName) {
-                    if ($LocalOfficeStorageAccountNamesArray.Count -ne $LocalStorageAccountNamesArray.Count -or
+                    if ($LocalOfficeStorageAccountNamesArray.Count -ne $LocalProfileStorageAccountNamesArray.Count -or
                         $LocalOfficeStorageAccountNamesArray.Count -eq 0 -or
-                        $RemoteOfficeStorageAccountNamesArray.Count -ne $RemoteStorageAccountNamesArray.Count) {
+                        $RemoteOfficeStorageAccountNamesArray.Count -ne $RemoteProfileStorageAccountNamesArray.Count) {
                         throw 'Office containers require separate local and remote Azure Files accounts paired with the Profile accounts in shard order.'
                     }
-                    $profileNames = @($LocalStorageAccountNamesArray) + @($RemoteStorageAccountNamesArray)
+                    $profileNames = @($LocalProfileStorageAccountNamesArray) + @($RemoteProfileStorageAccountNamesArray)
                     $officeNames = @($LocalOfficeStorageAccountNamesArray) + @($RemoteOfficeStorageAccountNamesArray)
-                    if (($RemoteStorageAccountNamesArray.Count -gt 0 -and
-                            $RemoteStorageAccountNamesArray.Count -ne $LocalStorageAccountNamesArray.Count) -or
-                        ($OSSGroupsArray.Count -gt 0 -and $OSSGroupsArray.Count -ne $LocalStorageAccountNamesArray.Count)) {
+                    if (($RemoteProfileStorageAccountNamesArray.Count -gt 0 -and
+                            $RemoteProfileStorageAccountNamesArray.Count -ne $LocalProfileStorageAccountNamesArray.Count) -or
+                        ($OSSGroupsArray.Count -gt 0 -and $OSSGroupsArray.Count -ne $LocalProfileStorageAccountNamesArray.Count)) {
                         throw 'Office shards require matching local, remote and Object Specific Settings group counts.'
                     }
                     if (@($officeNames | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique).Count -ne $officeNames.Count) {
@@ -798,8 +789,8 @@ try {
                     throw 'Office storage accounts were supplied but Office containers are disabled.'
                 }
                 foreach ($accountSet in @(
-                    @{ Names = $LocalStorageAccountNamesArray; Keys = $LocalStorageAccountKeysArray }
-                    @{ Names = $RemoteStorageAccountNamesArray; Keys = $RemoteStorageAccountKeysArray }
+                    @{ Names = $LocalProfileStorageAccountNamesArray; Keys = $LocalProfileStorageAccountKeysArray }
+                    @{ Names = $RemoteProfileStorageAccountNamesArray; Keys = $RemoteProfileStorageAccountKeysArray }
                     @{ Names = $LocalOfficeStorageAccountNamesArray; Keys = $LocalOfficeStorageAccountKeysArray }
                     @{ Names = $RemoteOfficeStorageAccountNamesArray; Keys = $RemoteOfficeStorageAccountKeysArray }
                 )) {
@@ -808,15 +799,15 @@ try {
                     }
                 }
                 if ($OfficeShareName -and (
-                    ($LocalStorageAccountKeysArray.Count -gt 0) -ne ($LocalOfficeStorageAccountKeysArray.Count -gt 0) -or
-                    ($RemoteStorageAccountKeysArray.Count -gt 0) -ne ($RemoteOfficeStorageAccountKeysArray.Count -gt 0))) {
+                    ($LocalProfileStorageAccountKeysArray.Count -gt 0) -ne ($LocalOfficeStorageAccountKeysArray.Count -gt 0) -or
+                    ($RemoteProfileStorageAccountKeysArray.Count -gt 0) -ne ($RemoteOfficeStorageAccountKeysArray.Count -gt 0))) {
                     throw 'Storage-key authentication requires a key for each paired Profile and Office account.'
                 }
                 
                 # Process Local Storage Accounts
                 Write-Log -message "Processing Local Storage Accounts"
-                For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
-                    $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                For ($i = 0; $i -lt $LocalProfileStorageAccountNamesArray.Count; $i++) {
+                    $SAFQDN = "$($LocalProfileStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "Local storage [$i]: $SAFQDN"
 
                     $LocalProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
@@ -824,10 +815,10 @@ try {
                 }
                 
                 # Process Remote Storage Accounts
-                If ($RemoteStorageAccountNamesArray.Count -gt 0) {
+                If ($RemoteProfileStorageAccountNamesArray.Count -gt 0) {
                     Write-Log -message "Processing Remote Storage Accounts"
-                    For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
-                        $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                    For ($i = 0; $i -lt $RemoteProfileStorageAccountNamesArray.Count; $i++) {
+                        $SAFQDN = "$($RemoteProfileStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
 
                         $RemoteProfileContainerPaths.Add("\\$($SAFQDN)\$($ProfileShareName)") | Out-Null
@@ -849,8 +840,8 @@ try {
             }
             'AzureNetAppFiles' {
                 Write-Log -message "Gathering Azure NetApp Files Storage Account Parameters"
-                [array]$LocalNetAppServersArray = ConvertFrom-JsonString -JsonString $LocalNetAppServers -Name 'LocalNetAppServers'
-                [array]$RemoteNetAppServersArray = ConvertFrom-JsonString -JsonString $RemoteNetAppServers -Name 'RemoteNetAppServers'
+                [array]$LocalNetAppServersArray = @(ConvertFrom-JsonString -JsonString $LocalNetAppServers -Name 'LocalNetAppServers')
+                [array]$RemoteNetAppServersArray = @(ConvertFrom-JsonString -JsonString $RemoteNetAppServers -Name 'RemoteNetAppServers')
                 
                 Write-Log -message "Local NetApp: $($LocalNetAppServersArray[0])"
                 $LocalProfileContainerPaths.Add("\\$($LocalNetAppServersArray[0])\$($ProfileShareName)") | Out-Null
@@ -886,7 +877,7 @@ try {
         $RegSettings.Add([PSCustomObject]@{ Name = 'SizeInMBs'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = $SizeInMBsInt })
         $RegSettings.Add([PSCustomObject]@{ Name = 'VolumeType'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'String'; Value = 'VHDX' })
 
-        If ($LocalStorageAccountKeysArray.Count -gt 0) {
+        If ($LocalProfileStorageAccountKeysArray.Count -gt 0) {
             $RegSettings.Add([PSCustomObject]@{Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         }
         
@@ -1072,27 +1063,27 @@ try {
         }
 
         if ($StorageService -eq 'AzureFiles') {
-            $LocalStorageAccountNamesArray = @($LocalStorageAccountNamesArray) + @($LocalOfficeStorageAccountNamesArray)
-            $LocalStorageAccountKeysArray = @($LocalStorageAccountKeysArray) + @($LocalOfficeStorageAccountKeysArray)
-            $RemoteStorageAccountNamesArray = @($RemoteStorageAccountNamesArray) + @($RemoteOfficeStorageAccountNamesArray)
-            $RemoteStorageAccountKeysArray = @($RemoteStorageAccountKeysArray) + @($RemoteOfficeStorageAccountKeysArray)
+            $LocalCredentialStorageAccountNamesArray = @($LocalProfileStorageAccountNamesArray) + @($LocalOfficeStorageAccountNamesArray)
+            $LocalCredentialStorageAccountKeysArray = @($LocalProfileStorageAccountKeysArray) + @($LocalOfficeStorageAccountKeysArray)
+            $RemoteCredentialStorageAccountNamesArray = @($RemoteProfileStorageAccountNamesArray) + @($RemoteOfficeStorageAccountNamesArray)
+            $RemoteCredentialStorageAccountKeysArray = @($RemoteProfileStorageAccountKeysArray) + @($RemoteOfficeStorageAccountKeysArray)
         }
         If ($StorageService -eq 'AzureFiles' -and
-            ($LocalStorageAccountKeysArray.Count -gt 0 -or $RemoteStorageAccountKeysArray.Count -gt 0)) {
-            For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
-                If ($LocalStorageAccountKeysArray.Count -gt 0 -and $LocalStorageAccountKeysArray[$i]) {
-                    $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
+            ($LocalCredentialStorageAccountKeysArray.Count -gt 0 -or $RemoteCredentialStorageAccountKeysArray.Count -gt 0)) {
+            For ($i = 0; $i -lt $LocalCredentialStorageAccountNamesArray.Count; $i++) {
+                If ($LocalCredentialStorageAccountKeysArray.Count -gt 0 -and $LocalCredentialStorageAccountKeysArray[$i]) {
+                    $SAFQDN = "$($LocalCredentialStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -Message "Adding storage key for '$SAFQDN' to Credential Manager"
                     Set-StorageAccountCredential -TargetName $SAFQDN `
-                        -UserName "localhost\$($LocalStorageAccountNamesArray[$i])" -Password $LocalStorageAccountKeysArray[$i]
+                        -UserName "localhost\$($LocalCredentialStorageAccountNamesArray[$i])" -Password $LocalCredentialStorageAccountKeysArray[$i]
                 }
             }
-            For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
-                If ($RemoteStorageAccountKeysArray.Count -gt 0 -and $RemoteStorageAccountKeysArray[$i]) {
-                    $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
+            For ($i = 0; $i -lt $RemoteCredentialStorageAccountNamesArray.Count; $i++) {
+                If ($RemoteCredentialStorageAccountKeysArray.Count -gt 0 -and $RemoteCredentialStorageAccountKeysArray[$i]) {
+                    $SAFQDN = "$($RemoteCredentialStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -Message "Adding storage key for '$SAFQDN' to Credential Manager"
                     Set-StorageAccountCredential -TargetName $SAFQDN `
-                        -UserName "localhost\$($RemoteStorageAccountNamesArray[$i])" -Password $RemoteStorageAccountKeysArray[$i]
+                        -UserName "localhost\$($RemoteCredentialStorageAccountNamesArray[$i])" -Password $RemoteCredentialStorageAccountKeysArray[$i]
                 }
             }
         }

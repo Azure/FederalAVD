@@ -455,6 +455,16 @@ param encryptionAtHost bool = true
 param confidentialVMOSDiskEncryption bool = false
 
 @description('Optional. OS disk size in GB. 0 uses image default.')
+@allowed([
+  0
+  32
+  64
+  128
+  256
+  512
+  1024
+  2048
+])
 param diskSizeGB int = 0
 
 @description('Optional. OS disk SKU.')
@@ -489,16 +499,14 @@ param fslogixConfigureSessionHosts bool = false
 @description('Optional. FSLogix container type.')
 @allowed([
   'ProfileContainer'
-  'OfficeContainer'
-  'ProfileContainer OfficeContainer'
-  'ProfileContainer CloudCache'
-  'OfficeContainer CloudCache'
-  'ProfileContainer OfficeContainer CloudCache'
+  'ProfileOfficeContainer'
+  'CloudCacheProfileContainer'
+  'CloudCacheProfileOfficeContainer'
 ])
 param fslogixContainerType string = 'ProfileContainer'
 
 @description('Optional. FSLogix container size in MBs.')
-param fslogixSizeInMBs int = 30720
+param fslogixSizeInMBs int = 30000
 
 @description('Optional. FSLogix storage service.')
 @allowed([
@@ -507,17 +515,13 @@ param fslogixSizeInMBs int = 30720
 ])
 param fslogixStorageService string = 'AzureFiles'
 
-@description('Optional. FSLogix local storage account resource IDs.')
-param fslogixLocalStorageAccountResourceIds string[] = []
-@description('Optional. Preferred local Profile account IDs; when supplied, overrides the legacy fslogixLocalStorageAccountResourceIds.')
-param fslogixLocalProfileStorageAccountResourceIds string[]?
+@description('Optional. Local Profile Azure Files account IDs in shard order.')
+param fslogixLocalProfileStorageAccountResourceIds string[] = []
 @description('Optional. Separate Office account IDs paired by shard index with local Profile accounts.')
 param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 
-@description('Optional. FSLogix remote storage account resource IDs.')
-param fslogixRemoteStorageAccountResourceIds string[] = []
-@description('Optional. Preferred remote Profile account IDs; when supplied, overrides the legacy fslogixRemoteStorageAccountResourceIds.')
-param fslogixRemoteProfileStorageAccountResourceIds string[]?
+@description('Optional. Remote Profile Azure Files account IDs in shard order for Cloud Cache.')
+param fslogixRemoteProfileStorageAccountResourceIds string[] = []
 @description('Optional. Separate Office account IDs paired by shard index with remote Profile accounts.')
 param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 
@@ -527,7 +531,7 @@ param fslogixLocalNetAppVolumeResourceIds string[] = []
 @description('Optional. FSLogix remote NetApp volume resource IDs. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixRemoteNetAppVolumeResourceIds string[] = []
 
-@description('Optional. FSLogix OSS groups for sharding.')
+@description('Optional. Ordered group names for per-group FSLogix ObjectSpecific settings; paired with shard positions.')
 param fslogixOSSGroups string[] = []
 
 @description('Optional. Custom URL for AVD Agent Boot Loader MSI installer. When empty, defaults to publicly documented sources (go.microsoft.com links for public clouds, aka.ms perma-links for air-gapped clouds).')
@@ -686,7 +690,6 @@ var paramDiskEncryptionSetResourceId = !empty(diskEncryptionSetResourceId)
   : {}
 var paramDomainName = !empty(domainName) ? { domainName: domainName } : {}
 var paramEnableMonitoring = enableMonitoring ? { enableMonitoring: enableMonitoring } : {}
-var paramIntegrityMonitoring = integrityMonitoring ? { integrityMonitoring: integrityMonitoring } : {}
 var paramIntuneEnrollment = intuneEnrollment ? { intuneEnrollment: intuneEnrollment } : {}
 var paramOuPath = !empty(ouPath) ? { ouPath: ouPath } : {}
 var paramSessionHostCustomizations = !empty(sessionHostCustomizations)
@@ -694,46 +697,32 @@ var paramSessionHostCustomizations = !empty(sessionHostCustomizations)
   : {}
 
 // FSLogix conditional parameters
-var effectiveLocalProfileStorageAccountResourceIds = fslogixLocalProfileStorageAccountResourceIds ?? fslogixLocalStorageAccountResourceIds
-var effectiveRemoteProfileStorageAccountResourceIds = fslogixRemoteProfileStorageAccountResourceIds ?? fslogixRemoteStorageAccountResourceIds
 var validatedOfficeStorageAccounts = fslogixConfigureSessionHosts && fslogixStorageService == 'AzureFiles'
   ? validateOfficeStorageAccounts(
-      effectiveLocalProfileStorageAccountResourceIds,
-      effectiveRemoteProfileStorageAccountResourceIds,
+      fslogixLocalProfileStorageAccountResourceIds,
+      fslogixRemoteProfileStorageAccountResourceIds,
       fslogixLocalOfficeStorageAccountResourceIds,
       fslogixRemoteOfficeStorageAccountResourceIds,
       contains(fslogixContainerType, 'Office'),
       fslogixOSSGroups
     )
   : { local: [], remote: [] }
-var paramFslogixConfigureSessionHosts = fslogixConfigureSessionHosts
-  ? { fslogixConfigureSessionHosts: fslogixConfigureSessionHosts }
+// Use the same consumer contract as the session-host template; disabled FSLogix adds no inputs.
+var fslogixParameters = fslogixConfigureSessionHosts
+  ? {
+      fslogixConfigureSessionHosts: true
+      fslogixContainerType: fslogixContainerType
+      fslogixLocalProfileStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds
+      fslogixLocalOfficeStorageAccountResourceIds: validatedOfficeStorageAccounts.local
+      fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
+      fslogixRemoteProfileStorageAccountResourceIds: fslogixRemoteProfileStorageAccountResourceIds
+      fslogixRemoteOfficeStorageAccountResourceIds: validatedOfficeStorageAccounts.remote
+      fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
+      fslogixOSSGroups: fslogixOSSGroups
+      fslogixSizeInMBs: fslogixSizeInMBs
+      fslogixStorageService: fslogixStorageService
+    }
   : {}
-var paramFslogixContainerType = fslogixConfigureSessionHosts ? { fslogixContainerType: fslogixContainerType } : {}
-var paramFslogixLocalNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds)
-  ? { fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds }
-  : {}
-// Keep serialized legacy keys compatible with previously published session-host Template Specs.
-var paramFslogixLocalStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(effectiveLocalProfileStorageAccountResourceIds)
-  ? { fslogixLocalStorageAccountResourceIds: effectiveLocalProfileStorageAccountResourceIds }
-  : {}
-var paramFslogixLocalOfficeStorageAccountResourceIds = fslogixConfigureSessionHosts && fslogixStorageService == 'AzureFiles'
-  ? { fslogixLocalOfficeStorageAccountResourceIds: validatedOfficeStorageAccounts.local }
-  : {}
-var paramFslogixOSSGroups = fslogixConfigureSessionHosts && !empty(fslogixOSSGroups)
-  ? { fslogixOSSGroups: fslogixOSSGroups }
-  : {}
-var paramFslogixRemoteNetAppVolumeResourceIds = fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds)
-  ? { fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds }
-  : {}
-var paramFslogixRemoteStorageAccountResourceIds = fslogixConfigureSessionHosts && !empty(effectiveRemoteProfileStorageAccountResourceIds)
-  ? { fslogixRemoteStorageAccountResourceIds: effectiveRemoteProfileStorageAccountResourceIds }
-  : {}
-var paramFslogixRemoteOfficeStorageAccountResourceIds = fslogixConfigureSessionHosts && fslogixStorageService == 'AzureFiles'
-  ? { fslogixRemoteOfficeStorageAccountResourceIds: validatedOfficeStorageAccounts.remote }
-  : {}
-var paramFslogixSizeInMBs = fslogixConfigureSessionHosts ? { fslogixSizeInMBs: fslogixSizeInMBs } : {}
-var paramFslogixStorageService = fslogixConfigureSessionHosts ? { fslogixStorageService: fslogixStorageService } : {}
 
 // Session Host Parameters - Passed to Template Spec Deployment
 // These parameters are passed to the function app which will use them when deploying new session hosts
@@ -750,6 +739,7 @@ var sessionHostParameters = union(
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
     imageReference: imageReference
+    integrityMonitoring: integrityMonitoring
     location: virtualMachineResourceGroupLocation
     virtualMachineNicNameConv: virtualMachineNicNameConv
     virtualMachineDiskNameConv: virtualMachineDiskNameConv
@@ -774,21 +764,10 @@ var sessionHostParameters = union(
   paramDiskEncryptionSetResourceId,
   paramDomainName,
   paramEnableMonitoring,
-  paramIntegrityMonitoring,
   paramIntuneEnrollment,
   paramOuPath,
   paramSessionHostCustomizations,
-  paramFslogixConfigureSessionHosts,
-  paramFslogixContainerType,
-  paramFslogixLocalNetAppVolumeResourceIds,
-  paramFslogixLocalStorageAccountResourceIds,
-  paramFslogixLocalOfficeStorageAccountResourceIds,
-  paramFslogixOSSGroups,
-  paramFslogixRemoteNetAppVolumeResourceIds,
-  paramFslogixRemoteStorageAccountResourceIds,
-  paramFslogixRemoteOfficeStorageAccountResourceIds,
-  paramFslogixSizeInMBs,
-  paramFslogixStorageService
+  fslogixParameters
 )
 
 // Conditional Template Spec for Session Host Deployment

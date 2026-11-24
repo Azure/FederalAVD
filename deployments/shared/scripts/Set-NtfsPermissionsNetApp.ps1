@@ -4,7 +4,8 @@ param
     [string]$AdminGroupNames,
 
     [Parameter(Mandatory = $true)]
-    [String]$Shares,
+    [ValidateSet('ProfileContainer', 'CloudCacheProfileContainer', 'ProfileOfficeContainer', 'CloudCacheProfileOfficeContainer')]
+    [String]$ContainerType,
 
     [Parameter(Mandatory = $true)]
     [String]$DomainJoinUserPwd,
@@ -97,14 +98,13 @@ try {
         $UserGroups = $UserGroupNames.replace('\"', '"') | ConvertFrom-Json
     }
     [array]$NetAppServers = $NetAppServers.replace('\"', '"') | ConvertFrom-Json
-    [array]$Shares = $Shares.replace('\"', '"') | ConvertFrom-JsonString
 
     # Create Domain credential
     $DomainJoinUserName = $DomainJoinUserPrincipalName.Split('@')[0]
     $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force
     [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserName, $DomainPassword)
   
-    $ProfileShare = "\\$($NetAppServers[0])\$($Shares[0])"
+    $ProfileShare = "\\$($NetAppServers[0])\profile-containers"
     Write-Output "Processing Profile Share: $ProfileShare"
     if ($AdminGroups.Count -gt 0) {
         Write-Output "Admin Groups and UserGroups provided, executing Update-ACL with Admin Groups and UserGroups"
@@ -115,8 +115,8 @@ try {
         Update-ACL -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroups
     }
             
-    If ($NetAppServers.Count -gt 1 -and $Shares.Count -gt 1) {
-        $OfficeShare = "\\" + $NetAppServers[1] + "\" + $Shares[1]
+    If ($NetAppServers.Count -gt 1 -and $ContainerType -like '*Office*') {
+        $OfficeShare = "\\$($NetAppServers[1])\office-containers"
         Write-Output "Processing Office Share: $OfficeShare"
         If ($AdminGroups.Count -gt 0) {
             Write-Output "Admin Groups and UserGroups provided, executing Update-ACL with Admin Groups and UserGroups"

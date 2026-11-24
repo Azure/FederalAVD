@@ -189,14 +189,14 @@ New-AzResourceGroupDeployment `
 | `confidentialVMOSDiskEncryption` | bool | `false` | Enable OS disk encryption with VMGuestState (Confidential VMs only) |
 | `diskEncryptionSetResourceId` | string | `''` | Resource ID of the disk encryption set for customer-managed key encryption |
 | `diskAccessId` | string | `''` | Resource ID of a disk access resource to restrict managed disk network access |
-| `integrityMonitoring` | bool | `false` | Enable Guest Attestation extension for boot integrity monitoring |
+| `integrityMonitoring` | bool | `true` | Enable Guest Attestation extension for boot integrity monitoring |
 
 ### Disk
 
 | Parameter | Type | Default | Description |
 | --------- | :--: | :-----: | ----------- |
 | `diskSku` | string | `Premium_LRS` | OS disk storage SKU: `Standard_LRS`, `StandardSSD_LRS`, `Premium_LRS` |
-| `diskSizeGB` | int | `0` | OS disk size in GB; `0` inherits the image default |
+| `diskSizeGB` | int | `0` | OS disk size: `0`, `32`, `64`, `128`, `256`, `512`, `1024`, or `2048`; `0` inherits the image default and explicit sizes must accommodate the image |
 
 ### Network
 
@@ -212,16 +212,14 @@ New-AzResourceGroupDeployment `
 | `fslogixConfigureSessionHosts` | bool | `false` | Configure FSLogix profile container settings on session hosts |
 | `fslogixContainerType` | string | `ProfileContainer` | FSLogix container type: `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, `CloudCacheProfileOfficeContainer` |
 | `fslogixStorageService` | string | `AzureFiles` | Storage backend: `AzureFiles`, `AzureNetAppFiles` |
-| `fslogixLocalStorageAccountResourceIds` | array | `[]` | Local Azure Files storage account resource IDs |
-| `fslogixLocalProfileStorageAccountResourceIds` | array/null | `null` | Preferred local Profile IDs; supplied values override the legacy local array, including an explicit empty array |
+| `fslogixLocalProfileStorageAccountResourceIds` | array | `[]` | Local Profile Azure Files account IDs in shard order |
 | `fslogixLocalOfficeStorageAccountResourceIds` | array | `[]` | Separate local Office accounts, paired with Profile accounts in the same shard order; required for Office containers on Azure Files |
 | `fslogixLocalNetAppVolumeResourceIds` | array | `[]` | Local Azure NetApp Files volume resource IDs. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
-| `fslogixRemoteStorageAccountResourceIds` | array | `[]` | Remote Azure Files storage account resource IDs (cloud cache failover) |
-| `fslogixRemoteProfileStorageAccountResourceIds` | array/null | `null` | Preferred remote Profile IDs; supplied values override the legacy remote array |
+| `fslogixRemoteProfileStorageAccountResourceIds` | array | `[]` | Remote Profile Azure Files account IDs in shard order for Cloud Cache |
 | `fslogixRemoteOfficeStorageAccountResourceIds` | array | `[]` | Separate remote Office accounts, paired with remote Profile accounts in the same shard order |
 | `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs for cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
-| `fslogixOSSGroups` | array | `[]` | Entra ID group object IDs for Office container separation |
-| `fslogixSizeInMBs` | int | `30720` | Maximum FSLogix VHD/VHDX size in megabytes |
+| `fslogixOSSGroups` | array | `[]` | Ordered group names for per-group FSLogix ObjectSpecific settings |
+| `fslogixSizeInMBs` | int | `30000` | Maximum FSLogix VHD/VHDX size in megabytes; the documented FSLogix default |
 
 For Azure Files with Office containers, select separate local Office accounts and, when
 remote Profile accounts are used, separate remote Office accounts. Pair arrays in the same
@@ -230,7 +228,9 @@ deploying multiple shards; the Portal picker is not a data migration or automati
 tool. Old host-group tags without Office mappings require explicit selections.
 See the [upgrade and data-transition precautions](../../../docs/design.md#separate-profile-and-office-azure-files-accounts).
 
-Portal exports use the explicit Profile input names; old parameter files remain accepted.
+Portal exports and SHR use the explicit Profile input names. Generic local/remote account aliases
+are no longer accepted; rename those keys in old parameter files. Republish this Template Spec and
+update SHR together before replacements use the new consumer contract.
 These inputs consume existing SMB storage regardless of legacy/v2 billing and never convert
 or resize the selected accounts. Storage provisioning and performance tuning belong in the
 host-pool producer or the standalone FSLogix Storage add-on.

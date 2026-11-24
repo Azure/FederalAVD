@@ -32,15 +32,14 @@ param enableAcceleratedNetworking bool
 param enableIPv6 bool
 param encryptionAtHost bool
 param diskEncryptionSetResourceId string = ''
-param fslogixFileShareNames string[]
 param fslogixConfigureSessionHosts bool
 param fslogixContainerType string
 param fslogixLocalNetAppVolumeResourceIds string[]
-param fslogixLocalStorageAccountResourceIds string[]
+param fslogixLocalProfileStorageAccountResourceIds string[]
 param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 param fslogixOSSGroups string[]
 param fslogixRemoteNetAppVolumeResourceIds string[]
-param fslogixRemoteStorageAccountResourceIds string[]
+param fslogixRemoteProfileStorageAccountResourceIds string[]
 param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 param fslogixSizeInMBs int
 param fslogixStorageService string
@@ -187,13 +186,12 @@ module sessionHosts '../../../shared/modules/orchestration/sessionHosts/sessionH
     diskEncryptionSetResourceId: diskEncryptionSetResourceId
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
-    fslogixFileShareNames: fslogixFileShareNames
-    fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+    fslogixLocalProfileStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds
     fslogixLocalOfficeStorageAccountResourceIds: fslogixLocalOfficeStorageAccountResourceIds
     fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
     fslogixOSSGroups: fslogixOSSGroups
     fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
-    fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteProfileStorageAccountResourceIds: fslogixRemoteProfileStorageAccountResourceIds
     fslogixRemoteOfficeStorageAccountResourceIds: fslogixRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService

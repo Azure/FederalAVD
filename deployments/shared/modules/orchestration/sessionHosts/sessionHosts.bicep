@@ -65,14 +65,12 @@ param encryptionAtHost bool
 param diskEncryptionSetResourceId string = ''
 @description('Required. Whether to forward enabled FSLogix configuration and required storage inputs to session-host initialization.')
 param fslogixConfigureSessionHosts bool
-@description('Required. FSLogix container selection forwarded to initialization; names containing CloudCache select its CloudCache argument.')
+@description('Required. FSLogix container selection used to derive share names and Cloud Cache behavior.')
 param fslogixContainerType string
-@description('Required. Ordered share name strings for initialization, with profile before Office when both are present.')
-param fslogixFileShareNames string[]
 @description('Required. Array of existing local NetApp volume IDs, empty or one per share in profile-then-Office order.')
 param fslogixLocalNetAppVolumeResourceIds string[]
 @description('Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization.')
-param fslogixLocalStorageAccountResourceIds string[]
+param fslogixLocalProfileStorageAccountResourceIds string[]
 @description('Optional. Local Office Azure Files account IDs paired with local Profile IDs.')
 param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 @description('Required. Array of group name strings forwarded as the initialization script OSSGroups argument.')
@@ -80,7 +78,7 @@ param fslogixOSSGroups string[]
 @description('Required. Array of existing remote NetApp volume IDs, empty or one per share in profile-then-Office order.')
 param fslogixRemoteNetAppVolumeResourceIds string[]
 @description('Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization.')
-param fslogixRemoteStorageAccountResourceIds string[]
+param fslogixRemoteProfileStorageAccountResourceIds string[]
 @description('Optional. Remote Office Azure Files account IDs paired with remote Profile IDs.')
 param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 @description('Required. Profile container size in MB forwarded to session-host initialization.')
@@ -218,7 +216,7 @@ module netAppVolumeFqdns '../fslogix/modules/getNetAppVolumeSmbServerFqdns.bicep
   params: {
     localNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
     remoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
-    shareNames: fslogixFileShareNames
+    fslogixContainerType: fslogixContainerType
   }
 }
 
@@ -252,13 +250,12 @@ module virtualMachines 'virtualMachines.bicep' = [for i in range(1, sessionHostB
     encryptionAtHost: encryptionAtHost
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
-    fslogixFileShareNames: fslogixFileShareNames
     fslogixOSSGroups: fslogixOSSGroups
     fslogixLocalNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixLocalNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.localNetAppVolumeSmbServerFqdns : []
-    fslogixLocalStorageAccountResourceIds: fslogixLocalStorageAccountResourceIds
+    fslogixLocalProfileStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds
     fslogixLocalOfficeStorageAccountResourceIds: fslogixLocalOfficeStorageAccountResourceIds
     fslogixRemoteNetAppServerFqdns: fslogixConfigureSessionHosts && !empty(fslogixRemoteNetAppVolumeResourceIds) ? netAppVolumeFqdns!.outputs.remoteNetAppVolumeSmbServerFqdns : []
-    fslogixRemoteStorageAccountResourceIds: fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteProfileStorageAccountResourceIds: fslogixRemoteProfileStorageAccountResourceIds
     fslogixRemoteOfficeStorageAccountResourceIds: fslogixRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService

@@ -6,12 +6,13 @@ metadata description = 'Deploys automated session-host initialization as a named
 
 @description('Required. Whether to forward enabled FSLogix configuration to the embedded initialization script.')
 param configureFSLogix bool
-@description('Required. FSLogix container selection forwarded to initialization; names containing CloudCache select its CloudCache argument.')
+@description('Required. FSLogix container selection used to derive share names and Cloud Cache behavior.')
 param fslogixContainerType string
-@description('Required. Ordered share name strings for initialization, with profile before Office when both are present.')
-param fslogixFileShareNames array
+@description('Legacy compatibility input; fixed share names are derived from fslogixContainerType.')
+#disable-next-line no-unused-params
+param fslogixFileShareNames array = []
 @description('Required. Array of existing local Azure Files storage account IDs forwarded to FSLogix initialization.')
-param fslogixLocalStorageAccountResourceIds array
+param fslogixLocalProfileStorageAccountResourceIds array
 @description('Optional. Existing local Office Azure Files account IDs paired with local Profile accounts in shard order.')
 param fslogixLocalOfficeStorageAccountResourceIds array = []
 @description('Required. Array of local NetApp SMB server FQDN strings aligned with the ordered share names.')
@@ -19,7 +20,7 @@ param fslogixLocalNetAppServerFqdns array
 @description('Required. Array of group name strings forwarded as the initialization script OSSGroups argument.')
 param fslogixOSSGroups array
 @description('Required. Array of existing remote Azure Files storage account IDs for FSLogix Cloud Cache initialization.')
-param fslogixRemoteStorageAccountResourceIds array
+param fslogixRemoteProfileStorageAccountResourceIds array
 @description('Optional. Existing remote Office Azure Files account IDs paired with remote Profile accounts in shard order.')
 param fslogixRemoteOfficeStorageAccountResourceIds array = []
 @description('Required. Array of remote NetApp SMB server FQDN strings aligned with the ordered share names.')
@@ -39,8 +40,8 @@ param profileSizeInMBs int
 @description('Required. Name of the existing VM in the deployment resource group.')
 param virtualMachineName string
 
-var fslogixLocalStorageAccountNames = [for id in fslogixLocalStorageAccountResourceIds: last(split(id, '/'))]
-var fslogixRemoteStorageAccountNames = [for id in fslogixRemoteStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixLocalProfileStorageAccountNames = [for id in fslogixLocalProfileStorageAccountResourceIds: last(split(id, '/'))]
+var fslogixRemoteProfileStorageAccountNames = [for id in fslogixRemoteProfileStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixLocalOfficeStorageAccountNames = [for id in fslogixLocalOfficeStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteOfficeStorageAccountNames = [for id in fslogixRemoteOfficeStorageAccountResourceIds: last(split(id, '/'))]
 var useStorageKeys = configureFSLogix && identitySolution == 'EntraId' && fslogixStorageService == 'AzureFiles'
@@ -60,8 +61,8 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: configureFSLogix ? 'true' : 'false'
       }
       {
-        name: 'CloudCache'
-        value: contains(fslogixContainerType, 'CloudCache') ? 'true' : 'false'
+        name: 'ContainerType'
+        value: fslogixContainerType
       }
       {
         name: 'IdentitySolution'
@@ -72,8 +73,8 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: string(fslogixLocalNetAppServerFqdns)
       }
       {
-        name: 'LocalStorageAccountNames'
-        value: string(fslogixLocalStorageAccountNames)
+        name: 'LocalProfileStorageAccountNames'
+        value: string(fslogixLocalProfileStorageAccountNames)
       }
       {
         name: 'LocalOfficeStorageAccountNames'
@@ -88,16 +89,12 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
         value: string(fslogixRemoteNetAppServerFqdns)
       }
       {
-        name: 'RemoteStorageAccountNames'
-        value: string(fslogixRemoteStorageAccountNames)
+        name: 'RemoteProfileStorageAccountNames'
+        value: string(fslogixRemoteProfileStorageAccountNames)
       }
       {
         name: 'RemoteOfficeStorageAccountNames'
         value: string(fslogixRemoteOfficeStorageAccountNames)
-      }
-      {
-        name: 'Shares'
-        value: string(fslogixFileShareNames)
       }
       {
         name: 'SizeInMBs'
@@ -118,12 +115,12 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
     ]
     protectedParameters: [
       {
-        name: 'LocalStorageAccountKeys'
-        value: useStorageKeys && length(fslogixLocalStorageAccountResourceIds) == 1 ? string([listKeys(fslogixLocalStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
+        name: 'LocalProfileStorageAccountKeys'
+        value: useStorageKeys && length(fslogixLocalProfileStorageAccountResourceIds) == 1 ? string([listKeys(fslogixLocalProfileStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
       }
       {
-        name: 'RemoteStorageAccountKeys'
-        value: useStorageKeys && length(fslogixRemoteStorageAccountResourceIds) == 1 ? string([listKeys(fslogixRemoteStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
+        name: 'RemoteProfileStorageAccountKeys'
+        value: useStorageKeys && length(fslogixRemoteProfileStorageAccountResourceIds) == 1 ? string([listKeys(fslogixRemoteProfileStorageAccountResourceIds[0], '2023-05-01').keys[0].value]) : '[]'
       }
       {
         name: 'LocalOfficeStorageAccountKeys'

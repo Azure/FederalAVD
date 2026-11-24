@@ -117,28 +117,24 @@ param fslogixContainerType string = 'ProfileContainer'
 @description('Optional. Resource IDs of local Azure NetApp Files volumes for FSLogix. Provide one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixLocalNetAppVolumeResourceIds string[] = []
 
-@description('Optional. Resource IDs of local storage accounts for FSLogix.')
-param fslogixLocalStorageAccountResourceIds string[] = []
-@description('Optional. Preferred local Profile account IDs; when supplied, overrides the legacy fslogixLocalStorageAccountResourceIds.')
-param fslogixLocalProfileStorageAccountResourceIds string[]?
+@description('Optional. Local Profile Azure Files account IDs in shard order.')
+param fslogixLocalProfileStorageAccountResourceIds string[] = []
 @description('Optional. Separate Office account IDs paired by shard index with local Profile accounts; required when Office containers use Azure Files.')
 param fslogixLocalOfficeStorageAccountResourceIds string[] = []
 
-@description('Optional. Entra ID group object IDs for FSLogix Office container separation.')
+@description('Optional. Ordered group names for per-group FSLogix ObjectSpecific settings; paired with shard positions.')
 param fslogixOSSGroups string[] = []
 
 @description('Optional. Resource IDs of remote Azure NetApp Files volumes for FSLogix cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order.')
 param fslogixRemoteNetAppVolumeResourceIds string[] = []
 
-@description('Optional. Resource IDs of remote storage accounts for FSLogix cloud cache failover.')
-param fslogixRemoteStorageAccountResourceIds string[] = []
-@description('Optional. Preferred remote Profile account IDs; when supplied, overrides the legacy fslogixRemoteStorageAccountResourceIds.')
-param fslogixRemoteProfileStorageAccountResourceIds string[]?
+@description('Optional. Remote Profile Azure Files account IDs in shard order for Cloud Cache.')
+param fslogixRemoteProfileStorageAccountResourceIds string[] = []
 @description('Optional. Separate Office account IDs paired by shard index with remote Profile accounts.')
 param fslogixRemoteOfficeStorageAccountResourceIds string[] = []
 
 @description('Optional. Maximum size of FSLogix VHD/VHDX in megabytes.')
-param fslogixSizeInMBs int = 30720
+param fslogixSizeInMBs int = 30000
 
 @allowed([
   'AzureFiles'
@@ -171,7 +167,7 @@ param imageReference object
 param customImageLicenseType string = 'Windows_Client'
 
 @description('Optional. Enable Guest Attestation extension for boot integrity monitoring.')
-param integrityMonitoring bool = false
+param integrityMonitoring bool = true
 
 @description('Optional. Enroll session hosts in Microsoft Intune.')
 param intuneEnrollment bool = false
@@ -245,11 +241,6 @@ param recoveryServicesVaultResourceId string = ''
 @description('Optional. Name of the backup policy within the Recovery Services Vault to apply to session host VMs. Defaults to the standard AVD VM policy name when empty.')
 param vmBackupPolicyName string = ''
 
-// ── FSLogix file share names ──────────────────────────────────────────────────
-var fslogixFileShareNames = contains(fslogixContainerType, 'Office')
-  ? ['profile-containers', 'office-containers']
-  : ['profile-containers']
-
 // ── Effective session host names (for availability set index calculation) ─────
 var generatedSessionHostNames = [
   for i in range(sessionHostIndex, sessionHostCount): '${sessionHostNamePrefix}${padLeft(i, sessionHostNameIndexLength, '0')}'
@@ -316,13 +307,12 @@ module sessionHosts '../../shared/modules/orchestration/sessionHosts/sessionHost
     encryptionAtHost: encryptionAtHost
     fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
-    fslogixFileShareNames: fslogixFileShareNames
     fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
-    fslogixLocalStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds ?? fslogixLocalStorageAccountResourceIds
+    fslogixLocalProfileStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds
     fslogixLocalOfficeStorageAccountResourceIds: fslogixLocalOfficeStorageAccountResourceIds
     fslogixOSSGroups: fslogixOSSGroups
     fslogixRemoteNetAppVolumeResourceIds: fslogixRemoteNetAppVolumeResourceIds
-    fslogixRemoteStorageAccountResourceIds: fslogixRemoteProfileStorageAccountResourceIds ?? fslogixRemoteStorageAccountResourceIds
+    fslogixRemoteProfileStorageAccountResourceIds: fslogixRemoteProfileStorageAccountResourceIds
     fslogixRemoteOfficeStorageAccountResourceIds: fslogixRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
     fslogixStorageService: fslogixStorageService

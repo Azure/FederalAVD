@@ -3,16 +3,18 @@ metadata description = 'Reads the first mount-target SMB FQDN for existing local
 
 targetScope = 'subscription'
 
-@description('Required. Array of existing local NetApp volume IDs, empty or aligned one-to-one with shareNames in profile-then-Office order.')
+@description('Required. Existing local NetApp volume IDs; empty or one per enabled container in Profile-then-Office order.')
 param localNetAppVolumeResourceIds array
-@description('Required. Array of existing remote NetApp volume IDs, empty or aligned one-to-one with shareNames in profile-then-Office order.')
+@description('Required. Existing remote NetApp volume IDs; empty or one per enabled container in Profile-then-Office order.')
 param remoteNetAppVolumeResourceIds array
-@description('Required. Ordered share name strings used to validate both NetApp volume arrays; profile precedes Office.')
-param shareNames array
+@description('Required. FSLogix container selection used to validate Profile-then-Office volume counts.')
+param fslogixContainerType string
 
-// Contract: each provided NetApp volume array must align 1:1 with shareNames by index.
+// Each provided NetApp volume array must align with the enabled container roles by index.
 // For Profile+Office scenarios, index 0 is profile and index 1 is office.
-var volumeCountsAreValid = (empty(localNetAppVolumeResourceIds) || length(localNetAppVolumeResourceIds) == length(shareNames)) && (empty(remoteNetAppVolumeResourceIds) || length(remoteNetAppVolumeResourceIds) == length(shareNames))
+// Calculate the count directly to avoid importing a share-name function just to measure its array.
+var shareCount = contains(fslogixContainerType, 'Office') ? 2 : 1
+var volumeCountsAreValid = (empty(localNetAppVolumeResourceIds) || length(localNetAppVolumeResourceIds) == shareCount) && (empty(remoteNetAppVolumeResourceIds) || length(remoteNetAppVolumeResourceIds) == shareCount)
   ? true
   : fail('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.')
 

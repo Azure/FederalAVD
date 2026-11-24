@@ -15,7 +15,8 @@ param (
     [string]$ConfigureFSLogix = 'false',
 
     [Parameter(Mandatory = $false)]
-    [string]$CloudCache = 'false',
+    [ValidateSet('ProfileContainer', 'CloudCacheProfileContainer', 'ProfileOfficeContainer', 'CloudCacheProfileOfficeContainer')]
+    [string]$ContainerType = 'ProfileContainer',
 
     [Parameter(Mandatory = $false)]
     [string]$IdentitySolution = '',
@@ -24,10 +25,10 @@ param (
     [string]$LocalNetAppServers = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalStorageAccountNames = '[]',
+    [string]$LocalProfileStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$LocalStorageAccountKeys = '[]',
+    [string]$LocalProfileStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$LocalOfficeStorageAccountNames = '[]',
@@ -42,19 +43,16 @@ param (
     [string]$RemoteNetAppServers = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$RemoteStorageAccountNames = '[]',
+    [string]$RemoteProfileStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
-    [string]$RemoteStorageAccountKeys = '[]',
+    [string]$RemoteProfileStorageAccountKeys = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteOfficeStorageAccountNames = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$RemoteOfficeStorageAccountKeys = '[]',
-
-    [Parameter(Mandatory = $false)]
-    [string]$Shares = '[]',
 
     [Parameter(Mandatory = $false)]
     [string]$SizeInMBs = '30000',
@@ -507,18 +505,11 @@ try {
         Write-Log -Message 'Configuring FSLogix'
         Write-Log -Message "IdentitySolution: $IdentitySolution"
         
-        # Convert parameters
-        $CloudCacheBool = [System.Convert]::ToBoolean($CloudCache)
+        $CloudCacheBool = $ContainerType -like '*CloudCache*'
+        $ProfileShareName = 'profile-containers'
+        $OfficeShareName = if ($ContainerType -like '*Office*') { 'office-containers' } else { $null }
+        Write-Log -Message "ContainerType: $ContainerType"
         Write-Log -Message "CloudCache: $CloudCacheBool"
-        
-        [array]$SharesArray = ConvertFrom-JsonString -JsonString $Shares -Name 'Shares'
-        $ProfileShareName = $SharesArray[0]
-        if ($SharesArray.Count -gt 1) {
-            $OfficeShareName = $SharesArray[1]
-        }
-        Else {
-            $OfficeShareName = $null
-        }
         
         Write-Log -message "ProfileShareName: $ProfileShareName"
         Write-Log -message "OfficeShareName: $OfficeShareName"
@@ -551,36 +542,36 @@ try {
             'AzureFiles' {
                 Write-Log -message "Gathering Azure Files Storage Account Parameters"
                 [array]$OSSGroupsArray = @(ConvertFrom-JsonString -JsonString $OSSGroups -Name 'OSSGroups')
-                [array]$LocalStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalStorageAccountNames -Name 'LocalStorageAccountNames')
-                [array]$RemoteStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteStorageAccountNames -Name 'RemoteStorageAccountNames')
+                [array]$LocalProfileStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalProfileStorageAccountNames -Name 'LocalProfileStorageAccountNames')
+                [array]$RemoteProfileStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteProfileStorageAccountNames -Name 'RemoteProfileStorageAccountNames')
                 [array]$LocalOfficeStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountNames -Name 'LocalOfficeStorageAccountNames')
                 [array]$RemoteOfficeStorageAccountNamesArray = @(ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountNames -Name 'RemoteOfficeStorageAccountNames')
-                [array]$LocalStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalStorageAccountKeys -Name 'LocalStorageAccountKeys' -SensitiveValues)
-                [array]$RemoteStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteStorageAccountKeys -Name 'RemoteStorageAccountKeys' -SensitiveValues)
+                [array]$LocalProfileStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalProfileStorageAccountKeys -Name 'LocalProfileStorageAccountKeys' -SensitiveValues)
+                [array]$RemoteProfileStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteProfileStorageAccountKeys -Name 'RemoteProfileStorageAccountKeys' -SensitiveValues)
                 [array]$LocalOfficeStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $LocalOfficeStorageAccountKeys -Name 'LocalOfficeStorageAccountKeys' -SensitiveValues)
                 [array]$RemoteOfficeStorageAccountKeysArray = @(ConvertFrom-JsonString -JsonString $RemoteOfficeStorageAccountKeys -Name 'RemoteOfficeStorageAccountKeys' -SensitiveValues)
                 $AccountValidation = @{
-                    LocalProfileNames = $LocalStorageAccountNamesArray
-                    RemoteProfileNames = $RemoteStorageAccountNamesArray
+                    LocalProfileNames = $LocalProfileStorageAccountNamesArray
+                    RemoteProfileNames = $RemoteProfileStorageAccountNamesArray
                     LocalOfficeNames = $LocalOfficeStorageAccountNamesArray
                     RemoteOfficeNames = $RemoteOfficeStorageAccountNamesArray
                     Groups = $OSSGroupsArray
                     OfficeEnabled = [bool]$OfficeShareName
                     UseStorageKeys = $IdentitySolution -eq 'EntraId'
-                    LocalProfileKeys = $LocalStorageAccountKeysArray
-                    RemoteProfileKeys = $RemoteStorageAccountKeysArray
+                    LocalProfileKeys = $LocalProfileStorageAccountKeysArray
+                    RemoteProfileKeys = $RemoteProfileStorageAccountKeysArray
                     LocalOfficeKeys = $LocalOfficeStorageAccountKeysArray
                     RemoteOfficeKeys = $RemoteOfficeStorageAccountKeysArray
                 }
                 Assert-FSLogixAzureFilesAccounts @AccountValidation
                 if ($IdentitySolution -eq 'EntraId') {
                     # Managed Run Command executes as SYSTEM, the account used for storage-key SMB credentials.
-                    Set-FSLogixStorageCredential -AccountName $LocalStorageAccountNamesArray[0] -AccountKey $LocalStorageAccountKeysArray[0] -Suffix $StorageSuffix
+                    Set-FSLogixStorageCredential -AccountName $LocalProfileStorageAccountNamesArray[0] -AccountKey $LocalProfileStorageAccountKeysArray[0] -Suffix $StorageSuffix
                     if ($OfficeShareName) {
                         Set-FSLogixStorageCredential -AccountName $LocalOfficeStorageAccountNamesArray[0] -AccountKey $LocalOfficeStorageAccountKeysArray[0] -Suffix $StorageSuffix
                     }
-                    if ($RemoteStorageAccountNamesArray.Count -gt 0) {
-                        Set-FSLogixStorageCredential -AccountName $RemoteStorageAccountNamesArray[0] -AccountKey $RemoteStorageAccountKeysArray[0] -Suffix $StorageSuffix
+                    if ($RemoteProfileStorageAccountNamesArray.Count -gt 0) {
+                        Set-FSLogixStorageCredential -AccountName $RemoteProfileStorageAccountNamesArray[0] -AccountKey $RemoteProfileStorageAccountKeysArray[0] -Suffix $StorageSuffix
                         if ($OfficeShareName) {
                             Set-FSLogixStorageCredential -AccountName $RemoteOfficeStorageAccountNamesArray[0] -AccountKey $RemoteOfficeStorageAccountKeysArray[0] -Suffix $StorageSuffix
                         }
@@ -589,8 +580,8 @@ try {
                 
                 # Process Local Storage Accounts
                 Write-Log -message "Processing Local Storage Accounts"
-                For ($i = 0; $i -lt $LocalStorageAccountNamesArray.Count; $i++) {
-                    $SAFQDN = "$($LocalStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                For ($i = 0; $i -lt $LocalProfileStorageAccountNamesArray.Count; $i++) {
+                    $SAFQDN = "$($LocalProfileStorageAccountNamesArray[$i]).file.$StorageSuffix"
                     Write-Log -message "Local storage [$i]: $SAFQDN"
                     
                     If ($OfficeShareName) {
@@ -603,10 +594,10 @@ try {
                 }
                 
                 # Process Remote Storage Accounts
-                If ($RemoteStorageAccountNamesArray.Count -gt 0) {
+                If ($RemoteProfileStorageAccountNamesArray.Count -gt 0) {
                     Write-Log -message "Processing Remote Storage Accounts"
-                    For ($i = 0; $i -lt $RemoteStorageAccountNamesArray.Count; $i++) {
-                        $SAFQDN = "$($RemoteStorageAccountNamesArray[$i]).file.$StorageSuffix"
+                    For ($i = 0; $i -lt $RemoteProfileStorageAccountNamesArray.Count; $i++) {
+                        $SAFQDN = "$($RemoteProfileStorageAccountNamesArray[$i]).file.$StorageSuffix"
                         Write-Log -message "Remote storage [$i]: $SAFQDN"
                         
                         If ($OfficeShareName) {
@@ -650,7 +641,7 @@ try {
         # ADMX Machine policy "Access Network as Computer Object" (v2105): DWORD 1 attaches as computer.
         # Storage-key access exposes all containers to the host; identity-based configurations remain unchanged.
         # https://learn.microsoft.com/fslogix/reference-configuration-settings#accessnetworkascomputerobject
-        if ($IdentitySolution -eq 'EntraId' -and $LocalStorageAccountKeysArray.Count -gt 0) {
+        if ($IdentitySolution -eq 'EntraId' -and $LocalProfileStorageAccountKeysArray.Count -gt 0) {
             $RegSettings.Add([PSCustomObject]@{ Name = 'AccessNetworkAsComputerObject'; Path = 'HKLM:\SOFTWARE\FSLogix\Profiles'; PropertyType = 'DWord'; Value = 1 })
         }
         if ($IdentitySolution -eq 'EntraId' -and $LocalOfficeStorageAccountKeysArray.Count -gt 0) {

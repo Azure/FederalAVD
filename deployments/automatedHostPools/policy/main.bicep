@@ -7,7 +7,7 @@ type fslogixConfigurationType = {
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid' | 'EntraId'
   storageService: 'AzureFiles' | 'AzureNetAppFiles'
   containerType: 'CloudCacheProfileContainer' | 'CloudCacheProfileOfficeContainer' | 'ProfileContainer' | 'ProfileOfficeContainer'
-  fileShareNames: string[]
+  fileShareNames: string[]?
   localStorageAccountResourceIds: string[]
   remoteStorageAccountResourceIds: string[]
   localOfficeStorageAccountResourceIds: string[]
@@ -87,7 +87,6 @@ param fslogixConfiguration fslogixConfigurationType = {
   identitySolution: 'EntraKerberos-CloudOnly'
   storageService: 'AzureFiles'
   containerType: 'ProfileContainer'
-  fileShareNames: ['profile-containers']
   localStorageAccountResourceIds: []
   remoteStorageAccountResourceIds: []
   localOfficeStorageAccountResourceIds: []
@@ -503,9 +502,6 @@ module sessionHostConfigurationPolicyAssignment '../../shared/modules/orchestrat
       }
       fslogixContainerType: {
         value: fslogixConfiguration.containerType
-      }
-      fslogixFileShareNames: {
-        value: fslogixConfiguration.fileShareNames
       }
       fslogixLocalStorageAccountResourceIds: {
         value: fslogixConfiguration.localStorageAccountResourceIds

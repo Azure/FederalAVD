@@ -435,18 +435,18 @@
             {
               "name": "profileProvisionedIops",
               "type": "Microsoft.Common.TextBox",
-              "label": "Profile Provisioned IOPS (0 = recommended)",
+              "label": "Profile Provisioned IOPS (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))]",
-              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
             },
             {
               "name": "profileProvisionedThroughputMiBps",
               "type": "Microsoft.Common.TextBox",
-              "label": "Profile Provisioned Throughput MiB/s (0 = recommended)",
+              "label": "Profile Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))]",
-              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+              "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
             },
             {
               "name": "storageRedundancy",
@@ -549,7 +549,7 @@
             {
               "name": "officeProvisionedIops",
               "type": "Microsoft.Common.TextBox",
-              "label": "Office Provisioned IOPS (0 = recommended)",
+              "label": "Office Provisioned IOPS (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))))]",
               "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
@@ -557,7 +557,7 @@
             {
               "name": "officeProvisionedThroughputMiBps",
               "type": "Microsoft.Common.TextBox",
-              "label": "Office Provisioned Throughput MiB/s (0 = recommended)",
+              "label": "Office Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
               "defaultValue": "0",
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer'), or(equals(steps('storage').officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('storage').officeStorageBillingModel, 'Inherit'), equals(steps('storage').profileStorageBillingModel, 'ProvisionedV2'))))]",
               "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }

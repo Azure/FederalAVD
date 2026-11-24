@@ -291,8 +291,8 @@ Describe 'FSLogix producer v2 inputs' {
 
             if ($Kind -eq 'Standard') {
                 $hosts = Get-ProducerSourceBlock $source 'module' 'sessionHosts'
-                $hosts | Should -Match 'fslogixLocalStorageAccountResourceIds: deployFSLogixStorage\s+\? fslogix!\.outputs\.storageAccountResourceIds\s+: effectiveFslogixExistingLocalStorageAccountResourceIds'
-                $hosts | Should -Match '(?m)^\s+fslogixRemoteStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds$'
+                $hosts | Should -Match 'fslogixLocalProfileStorageAccountResourceIds: deployFSLogixStorage\s+\? fslogix!\.outputs\.storageAccountResourceIds\s+: effectiveFslogixExistingLocalStorageAccountResourceIds'
+                $hosts | Should -Match '(?m)^\s+fslogixRemoteProfileStorageAccountResourceIds: effectiveFslogixExistingRemoteStorageAccountResourceIds$'
                 $source | Should -Match '(?m)^output fslogixRemoteStorageAccountResourceIds array = effectiveFslogixExistingRemoteStorageAccountResourceIds$'
                 $source | Should -Match '(?m)^output fslogixLocalStorageAccountResourceIds array = deployFSLogixStorage\s+\? fslogix!\.outputs\.storageAccountResourceIds\s+: effectiveFslogixExistingLocalStorageAccountResourceIds'
                 $source | Should -Match '(?m)^var effectiveNamingConvention = union\(\s+namingConvention,'
@@ -329,7 +329,7 @@ Describe 'FSLogix producer v2 inputs' {
             $bindings.namingConvention | Should -Not -Match 'fslogixStoragePrefix'
         }
 
-        It 'defaults the UI to v2 and uses zero recommendations with safe hidden outputs' {
+        It 'defaults the UI to v2 and explains capacity-based automatic performance with safe hidden outputs' {
             $profileBilling = $elements | Where-Object name -EQ 'profileStorageBillingModel'
             $profileBilling.defaultValue | Should -Be 'Provisioned v2'
             $profileBilling.constraints.allowedValues.value | Should -Be @('Legacy', 'ProvisionedV2')
@@ -337,7 +337,12 @@ Describe 'FSLogix producer v2 inputs' {
             foreach ($name in @('profileProvisionedIops', 'profileProvisionedThroughputMiBps', 'officeProvisionedIops', 'officeProvisionedThroughputMiBps')) {
                 $element = $elements | Where-Object name -EQ $name
                 $element.defaultValue | Should -Be '0'
+                $element.label | Should -Match '0 = Automatic \(capacity-based\)'
+                $element.label | Should -Not -Match 'recommended'
                 $element.visible | Should -Match 'ProvisionedV2'
+                if ($name.StartsWith('profile')) {
+                    $element.constraints.validationMessage | Should -Match 'automatically calculates performance from the Profile share capacity'
+                }
                 $binding = $bindings.('fslogix' + $name.Substring(0, 1).ToUpperInvariant() + $name.Substring(1))
                 $binding | Should -Match 'ProvisionedV2'
                 $binding | Should -Match ', 0\)\]$'
@@ -517,6 +522,27 @@ Describe 'FSLogix producer v2 inputs' {
         $files.elements.name | Should -Contain 'officeShareSizeInGB'
         $netApp.elements.name | Should -Not -Contain 'officeStorageTier'
         ($files.elements | Where-Object name -EQ 'storageSku').defaultValue | Should -Be 'Premium'
+    }
+
+    It 'hides the standard-host shard count without removing its internal validation references' {
+        $form = Get-Content (Join-Path $repoRoot 'deployments\hostpools\uiFormDefinition.json') -Raw | ConvertFrom-Json
+        $step = $form.view.properties.steps | Where-Object name -EQ 'userProfiles'
+        $files = $step.elements | Where-Object name -EQ 'azureFiles'
+        $count = $files.elements | Where-Object name -EQ 'storageCount'
+        $count.type | Should -Be 'Microsoft.Common.Slider'
+        $count.visible | Should -BeFalse
+        $count.min | Should -Be $count.max
+        $count.min | Should -Match 'userGroupPickerBlade\.transformed\.groups'
+        ($files.elements | Where-Object name -EQ 'storageIndex').max | Should -Match '\.storageCount'
+        $text = $files.elements | ConvertTo-Json -Depth 100
+        $text | Should -Match 'existingLocalStorageAccounts.*?storageCount'
+        $text | Should -Match 'existingRemoteStorageAccounts.*?storageCount'
+        ($form.view.outputs.parameters | ConvertTo-Json -Depth 100) | Should -Not -Match '\.storageCount'
+        foreach ($name in @('entraIdTexBlock', 'noShardingTexBlock')) {
+            $guidance = ($files.elements | Where-Object name -EQ $name).options.text
+            $guidance | Should -Match 'one Profile'
+            $guidance | Should -Match 'separate Office account: two accounts in total'
+        }
     }
 
     It 'discovers all v2 LRS/ZRS SKUs without using legacy inventory as v2 fallback' {

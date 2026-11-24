@@ -2,7 +2,7 @@ metadata name = 'FSLogix Azure Files orchestration'
 metadata description = 'Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM.'
 
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../../networking/functions.bicep'
-import { resolveFilesConfiguration } from 'configuration.bicep'
+import { resolveFilesConfiguration, fslogixShareNames } from 'configuration.bicep'
 
 @description('Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands.')
 param appUpdateUserAssignedIdentityResourceId string
@@ -27,8 +27,8 @@ param fslogixEncryptionKeyNameConv string
 param encryptionKeyVaultUri string
 @description('Required. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption.')
 param encryptionUserAssignedIdentityResourceId string
-@description('Required. Array of share name strings to create or register on every supplied storage account.')
-param fileShares array
+@description('Required. FSLogix container selection; determines separate Profile and optional Office accounts.')
+param containerType string
 @description('Optional. Resource ID of the associated AVD host pool, used for resource ownership tags.')
 param hostPoolResourceId string = ''
 @description('Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths.')
@@ -135,6 +135,9 @@ var smbSettingsValues = {
 }
 
 // One template contains both roles so scripts are not duplicated in generated ARM.
+// Each role owns one share and its own capacity/performance settings. storageCount is per role:
+// two shards with Office enabled create two Profile accounts and two separate Office accounts.
+var fileShares = fslogixShareNames(containerType)
 var storageRoles = concat(
   [
     {
@@ -166,6 +169,9 @@ var storageRoles = concat(
     : []
 )
 
+// Flatten in role-major order: all Profile shards, then all Office shards.
+// Both roles reuse the same index + storageIndex suffix, pairing accounts without sharing them.
+// The flattened ARM loop index is not the account suffix; outputs below rely on this ordering.
 var accountConfigurations = flatten(map(
   storageRoles,
   role =>
@@ -313,6 +319,8 @@ module roleAssignmentsAdmins '../../../resourceModules/authorization/roleAssignm
 ]
 
 // ─── ADDS Domain Join ──────────────────────────────────────────────────────────
+// Configuration commands batch by role, not by account. The scripts process that role's prefix
+// and shard range; Office- distinguishes the command names rather than identifying a shard.
 module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution == 'ActiveDirectoryDomainServices') {
     scope: resourceGroup(deploymentResourceGroupName)
@@ -419,13 +427,15 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
       script: loadTextContent('../../../../scripts/Set-NtfsPermissionsAzureFiles.ps1')
       parameters: [
         { name: 'DomainName', value: domainName }
-        { name: 'Shares', value: string(role.shares) }
+        { name: 'ShareName', value: first(role.shares) }
         { name: 'ShardAzureFilesStorage', value: shardingOptions == 'None' ? 'false' : 'true' }
         { name: 'StorageAccountPrefix', value: role.prefix }
         { name: 'StorageCount', value: string(storageCount) }
         { name: 'StorageIndex', value: string(storageIndex) }
         { name: 'StorageSuffix', value: environment().suffixes.storage }
         { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
+        // Cloud-only permissions need Entra object IDs; credential-backed domain paths use names.
+        // Preserve group order: the permission script pairs group position with shard position.
         {
           name: 'UserGroups'
           value: string(identitySolution == 'EntraKerberos-CloudOnly'
@@ -474,6 +484,8 @@ module grantStorageApplicationsConsent '../../../resourceModules/compute/virtual
   }
 ]
 
+// Profile accounts occupy the first storageCount entries; Office accounts start at that offset.
+// Return separate arrays with identical shard ordering for downstream routing and Profile-only backup.
 @description('Created storage account resource IDs in ascending index order starting at storageIndex.')
 output storageAccountResourceIds array = [for i in range(0, storageCount): storageAccounts[i].outputs.resourceId]
 @description('Created Office account IDs paired by shard index with Profile accounts; empty when Office containers are disabled.')

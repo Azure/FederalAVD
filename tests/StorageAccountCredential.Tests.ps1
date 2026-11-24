@@ -212,8 +212,8 @@ Describe 'FSLogix native storage credentials' {
     It 'routes local and remote initialization through the writer after policy setup' {
         if ($initializer -match 'cmdkey' -or
             $initializer.IndexOf('$secedit = Start-Process') -gt $initializer.IndexOf('Set-StorageAccountCredential -TargetName') -or
-            -not $initializer.Contains('-Password $LocalStorageAccountKeysArray[$i]') -or
-            -not $initializer.Contains('-Password $RemoteStorageAccountKeysArray[$i]') -or
+            -not $initializer.Contains('-Password $LocalCredentialStorageAccountKeysArray[$i]') -or
+            -not $initializer.Contains('-Password $RemoteCredentialStorageAccountKeysArray[$i]') -or
             -not $initializer.Contains('-SensitiveValues')) {
             throw 'Initialization must use the native writer after policy setup and keep keys out of logs.'
         }

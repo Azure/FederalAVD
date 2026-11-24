@@ -83,6 +83,68 @@ The host-pool deduplicated-package regression ceiling is 1,650,000 bytes includi
 This intentionally accommodates v2 and compatibility aliases without weakening the separate
 2,000,000-byte publication limit or the publisher's 200,000-byte remaining-headroom warning.
 
+### Container type is the FSLogix configuration source of truth
+
+`fslogixContainerType` determines the fixed `profile-containers` share and optional
+`office-containers` share, including NetApp volumes, and whether Cloud Cache is enabled.
+Shared storage orchestration derives the names centrally. Both session-host initializers receive
+the container type rather than separate share-name JSON and Cloud Cache arguments. Account and key
+arrays remain separate inputs and must be normalized even when empty.
+
+Azure Files NTFS commands receive one scalar `ShareName` for their Profile or Office batch.
+The NetApp permission command derives its two possible share targets from the container type.
+Generic storage-resource modules still accept explicit resource names.
+
+SHR, additional-host templates, and initialization scripts use the same four canonical container
+values: `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, and
+`CloudCacheProfileOfficeContainer`. Legacy space-separated and Office-only values are not accepted.
+Consumers use `fslogixLocalProfileStorageAccountResourceIds` and
+`fslogixRemoteProfileStorageAccountResourceIds`, alongside their separate Office arrays.
+Generic local/remote account input aliases have been removed from SHR and additional-host templates.
+SHR forwards one conditional FSLogix parameter object without alias resolution or normalization.
+Existing Profile and Office shard ordering is unchanged; public entry points validate selections.
+Profile-only PoC metadata and backup targets use literal names; NetApp volume counts are calculated
+directly instead of constructing a share array solely to count it.
+The storage add-on's `fileShareNames` output and existing lifecycle tags remain available as
+derived compatibility data. Published policy/remediation share-name inputs remain accepted for
+assignment compatibility but no longer select names; container type is authoritative. They are
+not custom-share-name configuration points. This changes neither the named Run Command compliance
+check nor the remediation lifecycle for already-compliant automated hosts.
+Published policy account parameter names remain stable; the policy boundary maps them to explicit
+Profile inputs in the nested remediation template.
+
+Both initialization scripts and their Run Command callers use
+`LocalProfileStorageAccountNames`, `RemoteProfileStorageAccountNames`,
+`LocalProfileStorageAccountKeys`, and `RemoteProfileStorageAccountKeys`, alongside the separate
+Office arguments. Keys remain protected Run Command parameters. Custom script invocations must
+use these explicit Profile names; the generic script argument names are not aliases.
+Shared initialization builds separate credential-only collections instead of appending Office
+accounts to the Profile collections. Existing lifecycle tags and public policy names are unchanged.
+
+#### Consumer contract migration and consistency
+
+Before updating SHR, stop new initiations and follow its active-cycle configuration precautions.
+Republish the additional-host Template Spec and update SHR together, including any externally supplied
+`sessionHostTemplateSpecResourceId`. Rename generic local/remote storage account inputs to their
+explicit Profile names in saved consumer parameter files and choose a canonical container value.
+Regenerate the Portal export and review all account arrays before resuming replacements.
+This changes deployment/configuration contracts, not storage resources or existing profile data.
+
+Host-pool producer inputs retain `Existing` because that entry point can create or adopt storage;
+consumers omit it because storage must already exist. Existing producer output names remain stable:
+map `fslogixLocalStorageAccountResourceIds` to the consumer's local Profile input and do the same
+for remote Profile accounts. Storage creation, billing, quota and backup controls remain producer-owned.
+
+Consumer default and validation decisions:
+
+| Item | Current distinction | Consideration |
+| --- | --- | --- |
+| Default container size | All host-pool and consumer parameter/Portal defaults: 30,000 MB | Matches the [documented FSLogix default](https://learn.microsoft.com/en-us/fslogix/how-to-configure-profile-containers); saved tags and explicit settings are preserved. |
+| Integrity monitoring | Host pool, SHR and additional hosts default on | Explicit opt-outs remain supported; Portal outputs disable attestation for Standard security type. |
+| OS disk size validation | Standard host pool, SHR and additional hosts use `0`, `32`, `64`, `128`, `256`, `512`, `1024`, `2048` | Zero inherits the image size; explicit sizes must accommodate the selected image. Portal choices remain a supported subset; automated host pools retain their API-specific disk contract. |
+| Group input shape | Producers accept group objects; consumers receive ordered group names for ObjectSpecific settings | Keep conversion at the producer boundary; these are not interchangeable with account-sharding group IDs used for NTFS setup. |
+| Availability defaults | Host pool defaults to zones; standalone consumers default to None | Different entry-point responsibilities; preserve explicit settings during replacement rather than changing defaults here. |
+
 ### Credential storage and rotation
 
 Standard and automated storage-key configurations using Azure Files store their FSLogix credentials

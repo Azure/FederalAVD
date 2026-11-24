@@ -6,6 +6,7 @@ import { vmApplicationAssignmentType } from '../shared/modules/orchestration/ses
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
+import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 type scalingTimeType = {
   hour: int
@@ -885,13 +886,7 @@ var avdPrivateLinkConfigurationIsValid = workspaceConfigurationIsValid && hostPo
   : fail('AVD Private Link requires a host-pool endpoint subnet, a workspace feed endpoint subnet for FeedAndHostPool or All, and an existing global feed or global endpoint subnet for All.')
 var fslogixStorageSolution 'AzureFiles' | 'AzureNetAppFiles' = startsWith(fslogixStorageService, 'AzureFiles') ? 'AzureFiles' : 'AzureNetAppFiles'
 var fslogixDomainCredentialsRequired = contains(identitySolution, 'DomainServices') || fslogixStorageSolution == 'AzureNetAppFiles' || (identitySolution == 'EntraKerberos-Hybrid' && !empty(fslogixUserGroups))
-var fslogixShareNamesLookup = {
-  CloudCacheProfileContainer: ['profile-containers']
-  CloudCacheProfileOfficeContainer: ['profile-containers', 'office-containers']
-  ProfileContainer: ['profile-containers']
-  ProfileOfficeContainer: ['profile-containers', 'office-containers']
-}
-var fslogixFileShareNames = fslogixShareNamesLookup[fslogixContainerType]
+var fslogixFileShareNames = fslogixShareNames(fslogixContainerType)
 var fslogixAzureFilesTuningIsValid = fslogixStorageSolution != 'AzureNetAppFiles' || (fslogixProfileStorageTier == null && (fslogixProfileStorageRedundancy == null || fslogixProfileStorageRedundancy == 'LocallyRedundant') && fslogixProfileStorageBillingModel == 'Legacy' && fslogixOfficeStorageBillingModel == 'Inherit' && fslogixProfileProvisionedIops == 0 && fslogixProfileProvisionedThroughputMiBps == 0 && fslogixOfficeProvisionedIops == 0 && fslogixOfficeProvisionedThroughputMiBps == 0 && fslogixOfficeStorageTier == 'Inherit' && fslogixOfficeStorageRedundancy == 'Inherit' && fslogixOfficeShareSizeInGB == 0)
   ? true
   : fail('Azure Files tier, billing, redundancy and performance tuning cannot be used with Azure NetApp Files.')
@@ -1280,7 +1275,7 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
     fslogixAdminGroups: fslogixAdminGroups
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
-    fslogixFileShares: fslogixFileShareNames
+    fslogixContainerType: fslogixContainerType
     fslogixShardOptions: fslogixShardingConfigurationIsValid ? fslogixShardOptions : fslogixShardOptions
     fslogixSoftDeleteRetentionDays: fslogixSoftDeleteRetentionDays
     fslogixStorageRedundancy: effectiveFslogixProfileStorageRedundancy
@@ -1331,7 +1326,7 @@ module existingNetAppVolumeFqdns '../shared/modules/orchestration/fslogix/module
   params: {
     localNetAppVolumeResourceIds: fslogixExistingLocalNetAppVolumeResourceIds
     remoteNetAppVolumeResourceIds: fslogixExistingRemoteNetAppVolumeResourceIds
-    shareNames: fslogixFileShareNames
+    fslogixContainerType: fslogixContainerType
   }
 }
 
@@ -1339,7 +1334,6 @@ var existingFslogixConfiguration = {
   identitySolution: identitySolution
   storageService: fslogixStorageSolution
   containerType: fslogixContainerType
-  fileShareNames: fslogixFileShareNames
   localStorageAccountResourceIds: effectiveFslogixExistingLocalProfileStorageAccountResourceIds
   remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteProfileStorageAccountResourceIds
   localOfficeStorageAccountResourceIds: fslogixExistingLocalOfficeStorageAccountResourceIds
@@ -1354,7 +1348,6 @@ var deployedFslogixConfiguration = {
   identitySolution: identitySolution
   storageService: fslogixStorageSolution
   containerType: fslogixContainerType
-  fileShareNames: fslogixFileShareNames
   localStorageAccountResourceIds: fslogixStorage!.outputs.storageAccountResourceIds
   remoteStorageAccountResourceIds: effectiveFslogixExistingRemoteProfileStorageAccountResourceIds
   localOfficeStorageAccountResourceIds: fslogixStorage!.outputs.officeStorageAccountResourceIds

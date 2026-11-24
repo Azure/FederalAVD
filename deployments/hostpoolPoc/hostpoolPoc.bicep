@@ -56,9 +56,7 @@ param tags object = {}
 var location = deployment().location
 var hpBaseName = toLower(identifier)
 var sessionHostCount = deployFSLogixStorage ? 2 : 1
-var fslogixFileShareNames = [
-  'profile-containers'
-]
+var fslogixFileShareNames = ['profile-containers']
 
 var naming = hostPoolNames(namingPolicy.defaults, hpBaseName, {
   subscriptionId: subscription().subscriptionId
@@ -336,7 +334,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     fslogixAdminGroups: []
     fslogixEncryptionKeyNameConv: naming.encryptionKeyNameFSLogix
     officeEncryptionKeyNameConv: naming.encryptionKeyNameFSLogixOffice
-    fslogixFileShares: fslogixFileShareNames
+    fslogixContainerType: 'ProfileContainer'
     fslogixShardOptions: 'None'
     fslogixUserGroups: []
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
@@ -409,15 +407,14 @@ module sessionHosts '../hostpools/modules/hosts/hosts.bicep' = {
     diskEncryptionSetResourceId: ''
     fslogixConfigureSessionHosts: deployFSLogixStorage
     fslogixContainerType: 'ProfileContainer'
-    fslogixFileShareNames: fslogixFileShareNames
-    fslogixLocalStorageAccountResourceIds: deployFSLogixStorage
+    fslogixLocalProfileStorageAccountResourceIds: deployFSLogixStorage
       ? fslogix!.outputs.storageAccountResourceIds
       : []
     fslogixLocalNetAppVolumeResourceIds: []
     fslogixLocalOfficeStorageAccountResourceIds: []
     fslogixOSSGroups: []
     fslogixRemoteNetAppVolumeResourceIds: []
-    fslogixRemoteStorageAccountResourceIds: []
+    fslogixRemoteProfileStorageAccountResourceIds: []
     fslogixRemoteOfficeStorageAccountResourceIds: []
     fslogixSizeInMBs: 30000
     fslogixStorageService: 'AzureFiles'

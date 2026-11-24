@@ -61,7 +61,7 @@ Describe 'Automated FSLogix Office contract' {
     It 'keeps role keys protected and account RBAC scoped to storage-key configurations' {
         $protectedSource = $remediationSource.Substring($remediationSource.IndexOf('protectedParameters:'))
         foreach ($role in @('Local', 'Remote')) {
-            foreach ($kind in @('', 'Office')) {
+            foreach ($kind in @('Profile', 'Office')) {
                 $protectedSource | Should -Match "name: '${role}${kind}StorageAccountKeys'"
             }
         }
@@ -182,11 +182,11 @@ Describe 'Automated FSLogix role path construction' {
         $ProfileShareName = 'profile-containers'
         $OfficeShareName = 'office-containers'
         $OSSGroups = '["group01","group02"]'
-        $LocalStorageAccountNames = '["profile01","profile02"]'
-        $RemoteStorageAccountNames = '["remoteprofile01","remoteprofile02"]'
+        $LocalProfileStorageAccountNames = '["profile01","profile02"]'
+        $RemoteProfileStorageAccountNames = '["remoteprofile01","remoteprofile02"]'
         $LocalOfficeStorageAccountNames = '["office01","office02"]'
         $RemoteOfficeStorageAccountNames = '["remoteoffice01","remoteoffice02"]'
-        $LocalStorageAccountKeys = $RemoteStorageAccountKeys = $LocalOfficeStorageAccountKeys = $RemoteOfficeStorageAccountKeys = '[]'
+        $LocalProfileStorageAccountKeys = $RemoteProfileStorageAccountKeys = $LocalOfficeStorageAccountKeys = $RemoteOfficeStorageAccountKeys = '[]'
         foreach ($name in @('LocalProfileContainerPaths', 'LocalCloudCacheProfileContainerPaths', 'LocalOfficeContainerPaths', 'LocalCloudCacheOfficeContainerPaths', 'RemoteProfileContainerPaths', 'RemoteCloudCacheProfileContainerPaths', 'RemoteOfficeContainerPaths', 'RemoteCloudCacheOfficeContainerPaths')) {
             Set-Variable -Name $name -Value ([System.Collections.ArrayList]::new())
         }
@@ -204,7 +204,7 @@ Describe 'Automated FSLogix role path construction' {
         $ProfileShareName = 'profile-containers'
         $OfficeShareName = 'office-containers'
         $OSSGroupsArray = @()
-        $RemoteStorageAccountNamesArray = @()
+        $RemoteProfileStorageAccountNamesArray = @()
         $CloudCacheBool = $true
         $RegSettings = [System.Collections.ArrayList]::new()
         foreach ($name in @('LocalProfileContainerPaths', 'LocalCloudCacheProfileContainerPaths', 'LocalOfficeContainerPaths', 'LocalCloudCacheOfficeContainerPaths', 'RemoteProfileContainerPaths', 'RemoteCloudCacheProfileContainerPaths', 'RemoteOfficeContainerPaths', 'RemoteCloudCacheOfficeContainerPaths')) {
@@ -218,13 +218,13 @@ Describe 'Automated FSLogix role path construction' {
         $officeSetting.Value.Count | Should -Be 2
         $profileSetting.Value[1] | Should -Be 'type=smb,connectionString=\\remote-profile.example\profile-containers'
         $officeSetting.Value[1] | Should -Be 'type=smb,connectionString=\\remote-office.example\office-containers'
-        $pathRouting | Should -Not -Match '\$RemoteStorageAccountNamesArray'
+        $pathRouting | Should -Not -Match '\$RemoteProfileStorageAccountNamesArray'
     }
 
     It 'installs Profile and Office credentials independently in storage-key mode' {
         $scriptSource | Should -Match 'Set-FSLogixStorageCredential -AccountName \$LocalOfficeStorageAccountNamesArray\[0\] -AccountKey \$LocalOfficeStorageAccountKeysArray\[0\]'
         $scriptSource | Should -Match 'Set-FSLogixStorageCredential -AccountName \$RemoteOfficeStorageAccountNamesArray\[0\] -AccountKey \$RemoteOfficeStorageAccountKeysArray\[0\]'
-        $scriptSource | Should -Match 'Set-FSLogixStorageCredential -AccountName \$LocalStorageAccountNamesArray\[0\] -AccountKey \$LocalStorageAccountKeysArray\[0\]'
+        $scriptSource | Should -Match 'Set-FSLogixStorageCredential -AccountName \$LocalProfileStorageAccountNamesArray\[0\] -AccountKey \$LocalProfileStorageAccountKeysArray\[0\]'
         $scriptSource | Should -Not -Match 'cmdkey'
         $scriptSource | Should -Match 'Set-StorageAccountCredential -TargetName .* -UserName .* -Password \$AccountKey'
         $scriptSource | Should -Match 'throw new Win32Exception'

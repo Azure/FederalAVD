@@ -2791,7 +2791,7 @@
               "name": "sizeInMBs",
               "type": "Microsoft.Common.Slider",
               "label": "FSLogix VHD Size (MB)",
-              "defaultValue": 30720,
+              "defaultValue": 30000,
               "toolTip": "Input the max size of the users fslogix containers.",
               "min": 10240,
               "max": 1048576,
@@ -3283,18 +3283,18 @@
                 {
                   "name": "profileProvisionedIops",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Profile Provisioned IOPS (0 = recommended)",
+                  "label": "Profile Provisioned IOPS (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureFiles.profileStorageBillingModel, 'ProvisionedV2'))]",
-                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
                 },
                 {
                   "name": "profileProvisionedThroughputMiBps",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Profile Provisioned Throughput MiB/s (0 = recommended)",
+                  "label": "Profile Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureFiles.profileStorageBillingModel, 'ProvisionedV2'))]",
-                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates recommended Profile sizing." }
+                  "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 automatically calculates performance from the Profile share capacity." }
                 },
                 {
                   "name": "officeStorageGuidance",
@@ -3370,7 +3370,7 @@
                 {
                   "name": "officeProvisionedIops",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Office Provisioned IOPS (0 = recommended)",
+                  "label": "Office Provisioned IOPS (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(equals(steps('userProfiles').deployStorage, true), contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), or(equals(steps('userProfiles').azureFiles.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('userProfiles').azureFiles.officeStorageBillingModel, 'Inherit'), equals(steps('userProfiles').azureFiles.profileStorageBillingModel, 'ProvisionedV2'))))]",
                   "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
@@ -3378,7 +3378,7 @@
                 {
                   "name": "officeProvisionedThroughputMiBps",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Office Provisioned Throughput MiB/s (0 = recommended)",
+                  "label": "Office Provisioned Throughput MiB/s (0 = Automatic (capacity-based))",
                   "defaultValue": "0",
                   "visible": "[and(equals(steps('userProfiles').deployStorage, true), contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'), or(equals(steps('userProfiles').azureFiles.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('userProfiles').azureFiles.officeStorageBillingModel, 'Inherit'), equals(steps('userProfiles').azureFiles.profileStorageBillingModel, 'ProvisionedV2'))))]",
                   "constraints": { "required": true, "regex": "^(0|[1-9][0-9]*)$", "validationMessage": "Enter a nonnegative whole number; 0 calculates sizing from the Office quota, not Profile performance." }
@@ -3516,7 +3516,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[and(equals(steps('userProfiles').deployStorage, true), not(equals(steps('userProfiles').userIdentity, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
                   "options": {
-                    "text": "The number of groups selected or provided above determines the number of storage accounts deployed by this solution. The storage account names are automatically determined by combining a suffix with a 0-padded two digit suffix starting at the 'Storage Index' value."
+                    "text": "Sharding creates one Profile storage account per selected user group. Enabling Office containers creates one separate Office account per Profile account, using the same group order and index. Account names use the role-specific prefix and a zero-padded two-digit suffix starting at the 'Storage Index' value."
                   }
                 },
                 {
@@ -3524,7 +3524,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[and(not(equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').configureSessionHosts, not(equals(steps('userProfiles').userIdentity, 'EntraId')), not(equals(steps('userProfiles').azureFiles.shardingOption, 'None')))]",
                   "options": {
-                    "text": "The number of groups selected or provided above determines the number of storage accounts that are required when selecting existing accounts."
+                    "text": "Select one existing Profile storage account per selected user group. When Office containers are enabled, also select one distinct Office account per Profile account in the same group order."
                   }
                 },
                 {
@@ -3532,7 +3532,7 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').userIdentity, 'EntraId'))]",
                   "options": {
-                    "text": "A total of 1 storage account will be deployed/required because you chose the 'Entra Id' identity provider on the 'Session Host' screen. Currently, Entra Id does not support sharding storage with multiple storage accounts."
+                    "text": "The Entra ID identity option uses one Profile storage account without sharding. Enabling Office containers also requires one separate Office account: two accounts in total."
                   }
                 },
                 {
@@ -3540,18 +3540,18 @@
                   "type": "Microsoft.Common.TextBlock",
                   "visible": "[and(or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true)), equals(steps('userProfiles').azureFiles.shardingOption, 'None'))]",
                   "options": {
-                    "text": "A total of 1 storage account will be deployed/required because you have chosen not to Shard your storage."
+                    "text": "Without sharding, one Profile storage account is deployed or required. Enabling Office containers adds one separate Office account: two accounts in total."
                   }
                 },
                 {
                   "name": "storageCount",
                   "type": "Microsoft.Common.Slider",
-                  "label": "Number of Storage Accounts to Deploy (Read Only)",
+                  "label": "Profile Accounts / Shards (Read Only)",
                   "defaultValue": 1,
                   "min": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
                   "max": "[if(or(equals(steps('userProfiles').userIdentity, 'EntraId'), equals(steps('userProfiles').azureFiles.shardingOption, 'None')), 1, length(steps('userProfiles').azureFiles.userGroupPickerBlade.transformed.groups))]",
                   "showStepMarkers": false,
-                  "visible": "[or(steps('userProfiles').configureSessionHosts, equals(steps('userProfiles').deployStorage, true))]"
+                  "visible": false
                 },
                 {
                   "name": "domainName",
@@ -6140,7 +6140,7 @@
         "agentDownloadUrl": "[if(and(steps('hosts').customizations.customizeAgentDownload, not(empty(steps('hosts').customizations.agentUrl))), if(and(not(empty(steps('hosts').customizations.storageAccount)), not(empty(steps('hosts').customizations.container)), not(startsWith(steps('hosts').customizations.agentUrl, 'http'))), concat(steps('hosts').customizations.storageAccount.blobEndpoint, steps('hosts').customizations.container, '/', steps('hosts').customizations.agentUrl), steps('hosts').customizations.agentUrl), '')]",
         "sessionHostCustomizations": "[if(steps('hosts').customizations.addCustomScripts, steps('hosts').customizations.customScripts, parse('[]'))]",
         "fslogixContainerType": "[if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').fslogixContainerType, 'ProfileContainer')]",
-        "fslogixSizeInMBs": "[if(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts), steps('userProfiles').sizeInMBs, 30720)]",
+        "fslogixSizeInMBs": "[if(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts), steps('userProfiles').sizeInMBs, 30000)]",
         "deployFSLogixStorage": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, false))]",
         "fslogixConfigureSessionHosts": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false))]",
         "fslogixOUPath": "[if(and(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').ouPath, '')]",
