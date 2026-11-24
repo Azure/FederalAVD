@@ -5,7 +5,7 @@ Configuration management approach (`managementType: Automated`). It is intended 
 the service-managed VM configuration cannot express or cannot deliver through a private,
 managed-identity-based path.
 
-See [Session Host Policy Authoring](../../shared/modules/orchestration/sessionHostPolicy/AUTHORING.md)
+See [Session Host Policy Authoring](../../shared/modules/orchestration/sessionHostPolicy/docs/AUTHORING.md)
 for the contributor workflow, directory layout, source-of-truth rules, and validation commands.
 
 > This feature is under active development on the `feature/automated-hostpool-policy` branch.

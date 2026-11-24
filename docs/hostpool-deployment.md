@@ -382,9 +382,9 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 ```json
 {
-  "fslogixStorage": "AzureFiles",
-  "storageService": "AzureFiles Premium",
-  "storageRedundancy": "ZoneRedundant"
+  "fslogixStorageService": "AzureFiles",
+  "fslogixProfileStorageTier": "Premium",
+  "fslogixProfileStorageRedundancy": "ZoneRedundant"
 }
 ```
 
@@ -392,9 +392,8 @@ Run post-deployment scripts on session hosts using the `sessionHostCustomization
 
 ```json
 {
-  "fslogixStorage": "AzureNetAppFiles",
-  "storageService": "Premium",
-  "activeDirectorySolution": "ActiveDirectoryDomainServices"
+  "fslogixStorageService": "AzureNetAppFiles",
+  "fslogixNetAppServiceLevel": "Premium"
 }
 ```
 

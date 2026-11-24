@@ -6,7 +6,7 @@
     "identifier": { "value": "fslogix" },
     "createStorageResourceGroup": { "value": true },
     "identitySolution": { "value": "EntraId" },
-    "fslogixStorageService": { "value": "AzureFiles Premium" },
+    "fslogixStorageService": { "value": "AzureFiles" },
     "fslogixProfileStorageTier": { "value": "Premium" },
     "fslogixProfileStorageRedundancy": { "value": "LocallyRedundant" },
     "fslogixProfileStorageBillingModel": { "value": "ProvisionedV2" },

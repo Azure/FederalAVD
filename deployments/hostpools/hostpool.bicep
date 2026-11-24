@@ -460,12 +460,9 @@ param agentDownloadUrl string = ''
 @description('Optional. Determines whether resources to support FSLogix profile storage are deployed.')
 param deployFSLogixStorage bool = false
 
-@description('Optional. The file share size(s) in GB for the fslogix storage solution.')
-param fslogixShareSizeInGB int = 100
-
 @minValue(1)
-@description('Optional. Preferred Profile share or volume quota in GiB. When supplied, overrides fslogixShareSizeInGB.')
-param fslogixProfileShareSizeInGB int?
+@description('Optional. Profile share or NetApp volume quota in GiB. Office inherits this quota unless overridden for Azure Files.')
+param fslogixProfileShareSizeInGB int = 100
 
 @description('Optional. The type of FSLogix containers to use for FSLogix.')
 @allowed([
@@ -521,35 +518,30 @@ to enable cloud group SID support.
 param fslogixAppUpdateUserAssignedIdentityResourceId string = ''
 
 @allowed([
-  'AzureNetAppFiles Premium' // ANF with the Premium SKU, 450,000 IOPS
-  'AzureNetAppFiles Standard' // ANF with the Standard SKU, 320,000 IOPS
-  'AzureFiles Premium' // Azure files Premium with a Service Endpoint, 100,000 IOPs
-  'AzureFiles Standard' // Azure files Standard with the Large File Share option and the default public endpoint, 20,000 IOPS
+  'AzureNetAppFiles'
+  'AzureFiles'
 ])
-// Optional. The storage service to use for storing FSLogix containers. The service & SKU should
-// provide sufficient IOPS for all of your users.
-// https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements
-@description('Optional. Storage service for FSLogix containers. Select a service and SKU with sufficient IOPS for the expected users.')
-param fslogixStorageService string = 'AzureFiles Standard'
+@description('Optional. FSLogix storage backend. Azure Files media and NetApp service level are selected separately.')
+param fslogixStorageService string = 'AzureFiles'
 
 @allowed([
   'LocallyRedundant'
   'ZoneRedundant'
 ])
-@description('Optional. Storage redundancy for newly created Azure Files accounts used by FSLogix. Independent from session host availability settings.')
-param fslogixStorageRedundancy string = 'LocallyRedundant'
-
-@allowed(['LocallyRedundant', 'ZoneRedundant'])
-@description('Optional. Preferred Profile Azure Files redundancy. When supplied, overrides fslogixStorageRedundancy.')
-param fslogixProfileStorageRedundancy string?
+@description('Optional. Profile Azure Files redundancy, independent from session host availability settings.')
+param fslogixProfileStorageRedundancy string = 'LocallyRedundant'
 
 @allowed(['Standard', 'Premium'])
-@description('Optional. Profile Azure Files tier. Null derives the tier from fslogixStorageService; does not change Azure NetApp Files.')
-param fslogixProfileStorageTier string?
+@description('Optional. Profile Azure Files media: Standard (HDD) or Premium (SSD). Unused with NetApp.')
+param fslogixProfileStorageTier string = 'Standard'
+
+@allowed(['Standard', 'Premium'])
+@description('Optional. NetApp capacity-pool and volume service level. Unused with Azure Files.')
+param fslogixNetAppServiceLevel string = 'Premium'
 
 @maxLength(13)
-@description('Optional. Preferred Profile Azure Files account prefix. Overrides namingConvention.fslogixProfileStoragePrefix when supplied; null retains legacy naming.')
-param fslogixProfileStorageAccountNamePrefix string?
+@description('Optional. Profile Azure Files account prefix. Blank uses the naming convention; unused with NetApp.')
+param fslogixProfileStorageAccountNamePrefix string = ''
 
 @allowed(['Legacy', 'ProvisionedV2'])
 @description('Optional. Profile Azure Files billing model. Existing accounts are not converted.')
@@ -596,7 +588,7 @@ param fslogixSoftDeleteRetentionDays int = 14
 @description('Optional. The OU Path where the FSLogix Storage Accounts or NetApp Accounts will be joined in the ADDS.')
 param fslogixOUPath string = ''
 
-@description('Optional. The resource Id of the subnet delegated to Microsoft.Netapp/volumes to which the NetApp volume will be attached when the "fslogixStorageService" is "AzureNetAppFiles Premium" or "AzureNetAppFiles Standard".')
+@description('Optional. Subnet resource ID delegated to Microsoft.NetApp/volumes, required when fslogixStorageService is AzureNetAppFiles.')
 param netAppVolumesSubnetResourceId string = ''
 
 @description('Optional. Indicates whether or not there is an existing Active Directory Connection with Azure NetApp Volume.')
@@ -994,7 +986,7 @@ var hybridDomainCredentialsRequired = deployFSLogixStorage && identitySolution =
 // Top-level CMK: run keys + DES/UAI + role assignments early so RBAC propagation
 // completes during the monitoring/controlPlane phases — well before VMs or storage deploy.
 var deployDiskCmk = contains(keyManagementDisks, 'CustomerManaged') && !confidentialVMOSDiskEncryption
-var deployStorageCmk = deployFSLogixStorage && split(fslogixStorageService, ' ')[0] == 'AzureFiles' && keyManagementStorage != 'PlatformManaged'
+var deployStorageCmk = deployFSLogixStorage && fslogixStorageService == 'AzureFiles' && keyManagementStorage != 'PlatformManaged'
 var deployRecoveryServicesAzureFiles = recoveryServices && !contains(hostPoolType, 'Personal') && deployFSLogixStorage && startsWith(fslogixStorageService, 'AzureFiles')
 // CVM CMK: CVM keys must be created via Key Vault data plane (Run Command) because ARM key PUT
 // does not support key release policies. The DES is then created by the shared CMK module with skipKeyCreation=true.
@@ -1251,23 +1243,18 @@ var storageResourceGroupIdTag = deployFSLogixStorage
 // Disk encryption set name — selects the right DES convention based on key management settings
 
 // FSLogix storage configuration
-var fslogixAzureFilesTuningIsValid = !startsWith(fslogixStorageService, 'AzureNetAppFiles') || (fslogixProfileStorageTier == null && (fslogixProfileStorageRedundancy == null || fslogixProfileStorageRedundancy == 'LocallyRedundant') && fslogixProfileStorageBillingModel == 'Legacy' && fslogixOfficeStorageBillingModel == 'Inherit' && fslogixProfileProvisionedIops == 0 && fslogixProfileProvisionedThroughputMiBps == 0 && fslogixOfficeProvisionedIops == 0 && fslogixOfficeProvisionedThroughputMiBps == 0 && fslogixOfficeStorageTier == 'Inherit' && fslogixOfficeStorageRedundancy == 'Inherit' && fslogixOfficeShareSizeInGB == 0)
-  ? true
-  : fail('Azure Files tier, billing, redundancy and performance tuning cannot be used with Azure NetApp Files.')
-var effectiveFslogixProfileStorageTier = fslogixAzureFilesTuningIsValid && startsWith(fslogixStorageService, 'AzureFiles')
-  ? fslogixProfileStorageTier ?? split(fslogixStorageService, ' ')[1]
-  : split(fslogixStorageService, ' ')[1]
-var effectiveFslogixProfileStorageRedundancy = fslogixProfileStorageRedundancy ?? fslogixStorageRedundancy
+var effectiveFslogixProfileStorageTier = fslogixStorageService != 'AzureNetAppFiles' || (fslogixProfileStorageRedundancy == 'LocallyRedundant' && fslogixProfileStorageBillingModel == 'Legacy' && fslogixOfficeStorageBillingModel == 'Inherit' && fslogixProfileProvisionedIops == 0 && fslogixProfileProvisionedThroughputMiBps == 0 && fslogixOfficeProvisionedIops == 0 && fslogixOfficeProvisionedThroughputMiBps == 0 && fslogixOfficeStorageTier == 'Inherit' && fslogixOfficeStorageRedundancy == 'Inherit' && fslogixOfficeShareSizeInGB == 0)
+  ? fslogixProfileStorageTier
+  : fail('Azure Files billing, redundancy and performance tuning cannot be used with Azure NetApp Files.')
 var effectiveFslogixProfileStorageAccountNamePrefix = startsWith(fslogixStorageService, 'AzureNetAppFiles') && !empty(fslogixProfileStorageAccountNamePrefix)
   ? fail('Profile storage account prefix overrides apply only to Azure Files.')
-  : fslogixProfileStorageAccountNamePrefix ?? naming.fslogixProfileStorageAccountNamePrefix
-var effectiveFslogixProfileShareSizeInGB = fslogixProfileShareSizeInGB ?? fslogixShareSizeInGB
+  : !empty(fslogixProfileStorageAccountNamePrefix) ? fslogixProfileStorageAccountNamePrefix : naming.fslogixProfileStorageAccountNamePrefix
 var effectiveFslogixOfficeStorageBillingModel = fslogixOfficeStorageBillingModel == 'Inherit' ? fslogixProfileStorageBillingModel : fslogixOfficeStorageBillingModel == 'ProvisionedV2' ? 'ProvisionedV2' : 'Legacy'
 var fslogixFileShareNames = fslogixShareNames(fslogixContainerType)
 var fslogixOfficeEnabled = contains(fslogixContainerType, 'OfficeContainer')
 var effectiveFslogixOfficeStorageTier = fslogixOfficeStorageTier == 'Inherit' ? effectiveFslogixProfileStorageTier : fslogixOfficeStorageTier
-var effectiveFslogixOfficeStorageRedundancy = fslogixOfficeStorageRedundancy == 'Inherit' ? effectiveFslogixProfileStorageRedundancy : fslogixOfficeStorageRedundancy
-var effectiveFslogixOfficeShareSizeInGB = fslogixOfficeShareSizeInGB == 0 ? effectiveFslogixProfileShareSizeInGB : fslogixOfficeShareSizeInGB
+var effectiveFslogixOfficeStorageRedundancy = fslogixOfficeStorageRedundancy == 'Inherit' ? fslogixProfileStorageRedundancy : fslogixOfficeStorageRedundancy
+var effectiveFslogixOfficeShareSizeInGB = fslogixOfficeShareSizeInGB == 0 ? fslogixProfileShareSizeInGB : fslogixOfficeShareSizeInGB
 var fslogixStorageCount = identitySolution == 'EntraId' || fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 var effectiveFslogixExistingLocalProfileStorageAccountResourceIds = identitySolution == 'EntraId'
   ? take(fslogixExistingLocalProfileStorageAccountResourceIds, 1)
@@ -1362,7 +1349,7 @@ var fslogixConfigurationTags = hasAssociatedFslStorage
   ? union(
       { fslContainerType: fslogixContainerType },
       { fslContainerSizeInMBs: fslogixSizeInMBs },
-      { fslStorageService: split(fslogixStorageService, ' ')[0] },
+      { fslStorageService: fslogixStorageService },
       { fslFileShareNames: string(fslogixFileShareNames) },
       { fslSharding: fslogixShardOptions },
       fslLocalProfileStorageAccountNames,
@@ -1530,7 +1517,7 @@ module deploymentHelper '../shared/modules/orchestration/deploymentHelper/deploy
           : !empty(existingCredentialsKeyVaultResourceId) ? kvCredentials!.getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
-    domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || split(fslogixStorageService, ' ')[0] == 'AzureNetAppFiles'
+    domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || fslogixStorageService == 'AzureNetAppFiles'
     encryptionAtHost: encryptionAtHost
     fslogix: deployFSLogixStorage
     fslogixAppUpdateUserAssignedIdentityResourceId: fslogixAppUpdateUserAssignedIdentityResourceId
@@ -1759,7 +1746,7 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     privateEndpointSubnetResourceId: hostPoolResourcesPrivateEndpointSubnetResourceId
     resourceGroupDeployment: naming.resourceGroupDeployment
     resourceGroupStorage: effectiveStorageResourceGroup
-    shareSizeInGB: effectiveFslogixProfileShareSizeInGB
+    profileShareSizeInGB: fslogixProfileShareSizeInGB
     profileStorageBillingModel: fslogixProfileStorageBillingModel
     officeStorageBillingModel: effectiveFslogixOfficeStorageBillingModel
     profileProvisionedIops: fslogixProfileProvisionedIops
@@ -1769,14 +1756,15 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     smbServerLocation: naming.vmsLocAbbr
     profileStorageAccountNamePrefix: effectiveFslogixProfileStorageAccountNamePrefix
     officeStorageAccountNamePrefix: naming.fslogixOfficeStorageAccountNamePrefix
-    officeStorageSku: effectiveFslogixOfficeStorageTier
+    officeStorageTier: effectiveFslogixOfficeStorageTier
     officeStorageRedundancy: effectiveFslogixOfficeStorageRedundancy
     officeShareSizeInGB: effectiveFslogixOfficeShareSizeInGB
     storageCount: fslogixShardingConfigurationIsValid ? fslogixStorageCount : fslogixStorageCount
     storageIndex: fslogixStorageIndex
-    storageSku: effectiveFslogixProfileStorageTier
-    fslogixStorageRedundancy: effectiveFslogixProfileStorageRedundancy
-    storageSolution: split(fslogixStorageService, ' ')[0]
+    profileStorageTier: effectiveFslogixProfileStorageTier
+    profileStorageRedundancy: fslogixProfileStorageRedundancy
+    netAppServiceLevel: fslogixNetAppServiceLevel
+    storageSolution: fslogixStorageService
     permittedIPs: permittedIPs
     paasPublicNetworkAccess: paasPublicNetworkAccess
     tags: tags
@@ -1864,7 +1852,7 @@ module sessionHosts 'modules/hosts/hosts.bicep' = {
     fslogixRemoteProfileStorageAccountResourceIds: effectiveFslogixExistingRemoteProfileStorageAccountResourceIds
     fslogixRemoteOfficeStorageAccountResourceIds: effectiveFslogixExistingRemoteOfficeStorageAccountResourceIds
     fslogixSizeInMBs: fslogixSizeInMBs
-    fslogixStorageService: split(fslogixStorageService, ' ')[0]
+    fslogixStorageService: fslogixStorageService
     hibernationEnabled: hibernationEnabled
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution

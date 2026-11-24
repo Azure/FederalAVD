@@ -2194,11 +2194,39 @@
                 {
                   "name": "service",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Storage Service and SKU",
-                  "defaultValue": "Azure Files Premium",
+                  "label": "Storage Service",
+                  "defaultValue": "Azure Files",
                   "constraints": {
                     "required": true,
-                    "allowedValues": "[if(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), parse('[{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"},{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"},{\"label\":\"Azure NetApp Files Standard\",\"value\":\"AzureNetAppFiles Standard\"},{\"label\":\"Azure NetApp Files Premium\",\"value\":\"AzureNetAppFiles Premium\"}]'), parse('[{\"label\":\"Azure Files Standard\",\"value\":\"AzureFiles Standard\"},{\"label\":\"Azure Files Premium\",\"value\":\"AzureFiles Premium\"}]'))]"
+                    "allowedValues": "[if(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"},{\"label\":\"Azure NetApp Files\",\"value\":\"AzureNetAppFiles\"}]'), parse('[{\"label\":\"Azure Files\",\"value\":\"AzureFiles\"}]'))]"
+                  }
+                },
+                {
+                  "name": "profileStorageTier",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Profile Azure Files Tier",
+                  "defaultValue": "Premium SSD",
+                  "visible": "[equals(steps('profiles').storage.service, 'AzureFiles')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Standard HDD", "value": "Standard" },
+                      { "label": "Premium SSD", "value": "Premium" }
+                    ]
+                  }
+                },
+                {
+                  "name": "netAppServiceLevel",
+                  "type": "Microsoft.Common.DropDown",
+                  "label": "Azure NetApp Files Service Level",
+                  "defaultValue": "Premium",
+                  "visible": "[equals(steps('profiles').storage.service, 'AzureNetAppFiles')]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "Standard", "value": "Standard" },
+                      { "label": "Premium", "value": "Premium" }
+                    ]
                   }
                 },
                 {
@@ -2231,7 +2259,7 @@
                 {
                   "name": "shareSizeInGB",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Storage Share Size (GB)",
+                  "label": "Profile Share or NetApp Volume Size (GB)",
                   "defaultValue": "100",
                   "visible": "[steps('profiles').deployStorage]",
                   "constraints": {
@@ -2239,7 +2267,7 @@
                     "validations": [
                       { "regex": "^[1-9][0-9]*$", "message": "Enter a positive whole number." },
                       {
-                        "isValid": "[if(contains(steps('profiles').storage.service, 'AzureFiles'), and(greaterOrEquals(int(steps('profiles').storage.shareSizeInGB), if(equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'), 32, if(equals(steps('profiles').storage.service, 'AzureFiles Premium'), 100, 1))), lessOrEquals(int(steps('profiles').storage.shareSizeInGB), if(equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'), 262144, 102400))), and(greaterOrEquals(int(steps('profiles').storage.shareSizeInGB), 100), lessOrEquals(int(steps('profiles').storage.shareSizeInGB), 100000)))]",
+                        "isValid": "[if(contains(steps('profiles').storage.service, 'AzureFiles'), and(greaterOrEquals(int(steps('profiles').storage.shareSizeInGB), if(equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'), 32, if(equals(steps('profiles').storage.profileStorageTier, 'Premium'), 100, 1))), lessOrEquals(int(steps('profiles').storage.shareSizeInGB), if(equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'), 262144, 102400))), and(greaterOrEquals(int(steps('profiles').storage.shareSizeInGB), 100), lessOrEquals(int(steps('profiles').storage.shareSizeInGB), 100000)))]",
                         "message": "Azure Files v2 requires 32-262144 GiB; legacy up to 102400 GiB (Premium minimum 100 GiB). ANF retains the 100-100000 GiB form range."
                       }
                     ]
@@ -2294,7 +2322,7 @@
                     "validations": [
                       { "regex": "^(0|[1-9][0-9]*)$", "message": "Use 0 to inherit Profile quota, or a positive whole number." },
                       {
-                        "isValid": "[and(greaterOrEquals(if(equals(int(steps('profiles').storage.officeShareSizeInGB), 0), int(steps('profiles').storage.shareSizeInGB), int(steps('profiles').storage.officeShareSizeInGB)), if(or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))), 32, if(or(equals(steps('profiles').storage.officeStorageTier, 'Premium'), and(equals(steps('profiles').storage.officeStorageTier, 'Inherit'), equals(steps('profiles').storage.service, 'AzureFiles Premium'))), 100, 1))), lessOrEquals(if(equals(int(steps('profiles').storage.officeShareSizeInGB), 0), int(steps('profiles').storage.shareSizeInGB), int(steps('profiles').storage.officeShareSizeInGB)), if(or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))), 262144, 102400)))]",
+                        "isValid": "[and(greaterOrEquals(if(equals(int(steps('profiles').storage.officeShareSizeInGB), 0), int(steps('profiles').storage.shareSizeInGB), int(steps('profiles').storage.officeShareSizeInGB)), if(or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))), 32, if(or(equals(steps('profiles').storage.officeStorageTier, 'Premium'), and(equals(steps('profiles').storage.officeStorageTier, 'Inherit'), equals(steps('profiles').storage.profileStorageTier, 'Premium'))), 100, 1))), lessOrEquals(if(equals(int(steps('profiles').storage.officeShareSizeInGB), 0), int(steps('profiles').storage.shareSizeInGB), int(steps('profiles').storage.officeShareSizeInGB)), if(or(equals(steps('profiles').storage.officeStorageBillingModel, 'ProvisionedV2'), and(equals(steps('profiles').storage.officeStorageBillingModel, 'Inherit'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2'))), 262144, 102400)))]",
                         "message": "The effective Office quota (including inherited quota) must be valid for Office billing: v2 32-262144 GiB; legacy up to 102400 GiB (Premium minimum 100 GiB)."
                       }
                     ]
@@ -2402,7 +2430,7 @@
                 {
                   "name": "storageRedundancy",
                   "type": "Microsoft.Common.DropDown",
-                  "label": "Azure Files Redundancy",
+                  "label": "Profile Azure Files Redundancy",
                   "defaultValue": "[if(equals(steps('hosts').availability.option, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]",
                   "toolTip": "Defaults to Zone Redundant when session hosts use Availability Zones. You can override the default when the target region or deployment requirements call for Locally Redundant storage.",
                   "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'))]",
@@ -4569,10 +4597,11 @@
         "availabilityZones": "[if(equals(steps('hosts').availability.option, 'AvailabilityZones'), steps('hosts').availability.availabilityZones, parse('[]'))]",
         "deployFSLogixStorage": "[and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').deployStorage)]",
         "fslogixConfigureSessionHosts": "[and(equals(steps('profiles').profileSolution, 'FSLogix'), steps('profiles').configureSessionHosts)]",
-        "fslogixStorageService": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.service, 'AzureFiles Premium')]",
+        "fslogixStorageService": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.service, 'AzureFiles')]",
         "fslogixProfileStorageRedundancy": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageRedundancy, 'LocallyRedundant')]",
-        "fslogixProfileStorageAccountNamePrefix": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, parse('null'))]",
-        "fslogixProfileStorageTier": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), last(split(steps('profiles').storage.service, ' ')), parse('null'))]",
+        "fslogixProfileStorageAccountNamePrefix": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, '')]",
+        "fslogixProfileStorageTier": "[if(and(steps('profiles').deployStorage, equals(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.profileStorageTier, 'Premium')]",
+        "fslogixNetAppServiceLevel": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), equals(steps('profiles').storage.service, 'AzureNetAppFiles'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.netAppServiceLevel, 'Premium')]",
         "fslogixProfileStorageBillingModel": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.profileStorageBillingModel, 'Legacy')]",
         "fslogixOfficeStorageBillingModel": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').storage.officeStorageBillingModel, 'Inherit')]",
         "fslogixProfileProvisionedIops": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('profiles').storage.profileStorageBillingModel, 'ProvisionedV2')), int(steps('profiles').storage.profileProvisionedIops), 0)]",

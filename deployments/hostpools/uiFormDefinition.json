@@ -2848,7 +2848,7 @@
                   "name": "storageSku",
                   "type": "Microsoft.Common.DropDown",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]",
-                  "label": "NetApp Files SKU",
+                  "label": "Azure NetApp Files Service Level",
                   "toolTip": "Select the Azure NetApp Sku.",
                   "constraints": {
                     "allowedValues": [
@@ -2927,7 +2927,7 @@
                 {
                   "name": "storageShareSize",
                   "type": "Microsoft.Common.Slider",
-                  "label": "Storage Share Size (GB)",
+                  "label": "NetApp Volume Size (GB)",
                   "defaultValue": 100,
                   "toolTip": "Input the quota size for the SMB file share to support the use of FSLogix.",
                   "min": 100,
@@ -3187,7 +3187,7 @@
                   "name": "storageSku",
                   "type": "Microsoft.Common.DropDown",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]",
-                  "label": "Azure Files SKU",
+                  "label": "Profile Azure Files Tier",
                   "defaultValue": "Premium",
                   "toolTip": "Select the Azure Files Sku.",
                   "constraints": {
@@ -3207,7 +3207,7 @@
                   "name": "storageRedundancy",
                   "type": "Microsoft.Common.DropDown",
                   "visible": "[equals(steps('userProfiles').deployStorage, true)]",
-                  "label": "Azure Files Redundancy",
+                  "label": "Profile Azure Files Redundancy",
                   "defaultValue": "[if(equals(steps('hosts').availability.availability, 'AvailabilityZones'), 'Zone Redundant', 'Locally Redundant')]",
                   "toolTip": "Defaults to Zone Redundant when session hosts use Availability Zones. You can override the default when the target region or deployment requirements call for Locally Redundant storage.",
                   "constraints": {
@@ -3250,7 +3250,7 @@
                 {
                   "name": "storageShareSize",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Storage Share Size (GB)",
+                  "label": "Profile Share Size (GB)",
                   "defaultValue": "100",
                   "toolTip": "Input the quota size for the SMB file share to support the use of FSLogix.",
                   "constraints": {
@@ -6144,10 +6144,11 @@
         "deployFSLogixStorage": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, false))]",
         "fslogixConfigureSessionHosts": "[if(equals(steps('controlPlane').hostPool.type, 'Personal'), false, if(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').configureSessionHosts, false))]",
         "fslogixOUPath": "[if(and(equals(steps('hosts').identity.machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').ouPath, '')]",
-        "fslogixStorageService": "[if(equals(steps('userProfiles').deployStorage, true), if(equals(steps('userProfiles').storageService, 'AzureFiles'), concat('AzureFiles ', steps('userProfiles').azureFiles.storageSku), concat('AzureNetAppFiles ', steps('userProfiles').azureNetAppFiles.storageSku)), if(steps('userProfiles').configureSessionHosts, if(equals(steps('userProfiles').storageService, 'AzureFiles'), 'AzureFiles Standard', 'AzureNetAppFiles Standard'), 'AzureFiles Standard'))]",
+        "fslogixStorageService": "[if(or(steps('userProfiles').deployStorage, steps('userProfiles').configureSessionHosts), steps('userProfiles').storageService, 'AzureFiles')]",
         "fslogixProfileStorageRedundancy": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.storageRedundancy, 'LocallyRedundant')]",
-        "fslogixProfileStorageAccountNamePrefix": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, parse('null'))]",
-        "fslogixProfileStorageTier": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.storageSku, parse('null'))]",
+        "fslogixProfileStorageAccountNamePrefix": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, '')]",
+        "fslogixProfileStorageTier": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.storageSku, 'Standard')]",
+        "fslogixNetAppServiceLevel": "[if(and(equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), steps('userProfiles').deployStorage), steps('userProfiles').azureNetAppFiles.storageSku, 'Premium')]",
         "fslogixProfileStorageBillingModel": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.profileStorageBillingModel, 'Legacy')]",
         "fslogixOfficeStorageBillingModel": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true), contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')), steps('userProfiles').azureFiles.officeStorageBillingModel, 'Inherit')]",
         "fslogixProfileProvisionedIops": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').azureFiles.profileStorageBillingModel, 'ProvisionedV2')), int(steps('userProfiles').azureFiles.profileProvisionedIops), 0)]",

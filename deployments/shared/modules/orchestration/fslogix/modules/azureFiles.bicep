@@ -59,8 +59,8 @@ param resourceGroupStorage string
 param shardingOptions string
 @description('Required. Array of administrator group objects with id and name for Azure Files RBAC or NetApp/domain permissions.')
 param shareAdminGroups array
-@description('Required. Quota per file share or NetApp volume in GiB.')
-param shareSizeInGB int
+@description('Required. Profile share quota in GiB.')
+param profileShareSizeInGB int
 @description('Required. Array of user group objects with id and name; the selected identity mode determines which field is forwarded.')
 param shareUserGroups array
 @description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
@@ -75,16 +75,16 @@ param officeEncryptionKeyNameConv string
 param storageCount int
 @description('Required. Starting numeric index for storage account and encryption-key names.')
 param storageIndex int
-@description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
-param storageSku string
+@description('Required. Profile Azure Files media: Standard (HDD) or Premium (SSD).')
+param profileStorageTier string
 @description('Optional. Office Azure Files tier; defaults to the Profile tier.')
-param officeStorageSku string = storageSku
+param officeStorageTier string = profileStorageTier
 @description('Optional. Office share quota in GiB; defaults to the Profile quota.')
-param officeShareSizeInGB int = shareSizeInGB
+param officeShareSizeInGB int = profileShareSizeInGB
 @description('Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS.')
-param storageRedundancy string
+param profileStorageRedundancy string
 @description('Optional. Office Azure Files redundancy; defaults to the Profile redundancy.')
-param officeStorageRedundancy string = storageRedundancy
+param officeStorageRedundancy string = profileStorageRedundancy
 @allowed(['Legacy', 'ProvisionedV2'])
 @description('Optional. Profile billing model; Legacy preserves existing deployments.')
 param profileStorageBillingModel string = 'Legacy'
@@ -143,10 +143,10 @@ var storageRoles = concat(
     {
       prefix: profileStorageAccountNamePrefix
       keyPattern: fslogixProfileEncryptionKeyNameConv
-      sku: storageSku
-      configuration: resolveFilesConfiguration(storageSku, storageRedundancy, profileStorageBillingModel, shareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
+      sku: profileStorageTier
+      configuration: resolveFilesConfiguration(profileStorageTier, profileStorageRedundancy, profileStorageBillingModel, profileShareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
       shares: take(fileShares, 1)
-      shareSizeInGB: shareSizeInGB
+      shareSizeInGB: profileShareSizeInGB
       commandPrefix: ''
     }
   ],
@@ -159,8 +159,8 @@ var storageRoles = concat(
           keyPattern: keyManagementStorageAccounts == 'PlatformManaged' || toLower(officeEncryptionKeyNameConv) != toLower(fslogixProfileEncryptionKeyNameConv)
             ? officeEncryptionKeyNameConv
             : fail('Profile and Office customer-managed encryption keys must use different name patterns.')
-          sku: officeStorageSku
-          configuration: resolveFilesConfiguration(officeStorageSku, officeStorageRedundancy, officeStorageBillingModel, officeShareSizeInGB, officeProvisionedIops, officeProvisionedThroughputMiBps)
+          sku: officeStorageTier
+          configuration: resolveFilesConfiguration(officeStorageTier, officeStorageRedundancy, officeStorageBillingModel, officeShareSizeInGB, officeProvisionedIops, officeProvisionedThroughputMiBps)
           shares: take(skip(fileShares, 1), 1)
           shareSizeInGB: officeShareSizeInGB
           commandPrefix: 'Office-'

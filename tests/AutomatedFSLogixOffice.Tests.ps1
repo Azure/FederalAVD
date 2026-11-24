@@ -36,7 +36,7 @@ Describe 'Automated FSLogix Office contract' {
         $entrySource | Should -Match "param fslogixOfficeStorageTier string = 'Inherit'"
         $entrySource | Should -Match "param fslogixOfficeStorageRedundancy string = 'Inherit'"
         $entrySource | Should -Match 'param fslogixOfficeShareSizeInGB int = 0'
-        foreach ($parameter in @('officeStorageAccountNamePrefix', 'officeEncryptionKeyNameConv', 'officeStorageSku', 'officeStorageRedundancy', 'officeShareSizeInGB')) {
+        foreach ($parameter in @('officeStorageAccountNamePrefix', 'officeEncryptionKeyNameConv', 'officeStorageTier', 'officeStorageRedundancy', 'officeShareSizeInGB')) {
             $entrySource | Should -Match "$parameter`: "
         }
         $entrySource | Should -Match 'output fslogixLocalOfficeStorageAccountResourceIds array'

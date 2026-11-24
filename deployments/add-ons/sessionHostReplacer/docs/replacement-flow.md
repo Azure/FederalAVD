@@ -1,4 +1,4 @@
-[**Home**](../../../README.md) | [**Session Host Replacer**](README.md) | [**Add-Ons**](../../../docs/add-ons.md)
+[**Home**](../../../../README.md) | [**Session Host Replacer**](../README.md) | [**Add-Ons**](../../../../docs/add-ons.md)
 
 # Canonical Session Host Replacer Flow
 
@@ -9,7 +9,7 @@ A SideBySide operation can contain multiple scheduled
 deployment batches while previously selected old hosts continue draining.
 
 > **Canonical lifecycle reference:** This document owns the detailed replacement, readiness,
-> scaling-phase, and recovery behavior. The [add-on README](README.md) owns deployment,
+> scaling-phase, and recovery behavior. The [add-on README](../README.md) owns deployment,
 > configuration, monitoring, and troubleshooting guidance.
 
 ## Two-Timer Execution
@@ -195,8 +195,8 @@ count, including retries. No new app setting or additional role assignment is re
   ETag-conditional transition to `Superseded`. A fresh timer-authorized operation selects its own
   image/deadline and records the superseded ID. `Superseded` is terminal for reconciliation;
   archive conflicts, timer races and crashes do not bypass ownership. See
-  [automatic recovery](README.md#automatic-recovery-of-a-rejected-template-submission).
-  See the [preview-first recovery command](README.md#recover-a-stopped-operation).
+  [automatic recovery](../README.md#automatic-recovery-of-a-rejected-template-submission).
+  See the [preview-first recovery command](../README.md#recover-a-stopped-operation).
   Explicit recovery preserves the operation and its pins. Its only supported configuration rebase is an
   explicit template-reference repair for a rejected first SideBySide submission, with no deployment
   record or target VM/registration and a fingerprint proving no other protected setting changed.
@@ -385,7 +385,7 @@ DeleteFirst-specific behavior:
 ## One-Time Maintenance Override
 
 The override is a one-time, administrator-armed maintenance operation on an existing DeleteFirst
-replacer. `Start-SessionHostMaintenanceReplacement.ps1` writes a request containing a unique
+replacer. [`Start-SessionHostMaintenanceReplacement.ps1`](../tools/Start-SessionHostMaintenanceReplacement.ps1) writes a request containing a unique
 request ID, exact approved image version, UTC start time, window duration, batch limit, notification
 delay, forced-sign-out authorization, and optional full-pool-outage authorization. Continuous
 DeleteFirst work is suspended while the request is scheduled or active and resumes after the

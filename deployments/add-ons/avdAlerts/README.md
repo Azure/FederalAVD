@@ -1,4 +1,4 @@
-﻿# AVD Alerts Add-On
+# AVD Alerts Add-On
 
 ## Overview
 
@@ -279,7 +279,7 @@ All default to `true`. Set to `false` to skip that category.
 
 ## Alert Reference
 
-See [ALERT-RESPONSE.md](./ALERT-RESPONSE.md) for the full alert inventory with severity levels,
+See [ALERT-RESPONSE.md](docs/ALERT-RESPONSE.md) for the full alert inventory with severity levels,
 trigger conditions, and recommended response actions.
 
 ---

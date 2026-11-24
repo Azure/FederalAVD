@@ -1,4 +1,4 @@
-﻿↩ **Back to:** [Quick Start](quick-start.md)
+↩ **Back to:** [Quick Start](quick-start.md)
 
 [**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
@@ -559,7 +559,7 @@ Do not infer Secret or Top Secret availability from a successful Commercial depl
 These are platform/code-transfer prerequisites, separate from image-management `downloads.json`.
 The current SHR PowerShell requirements file is empty; future managed dependencies require their
 own approved offline sourcing. Do not deploy until unresolved target-cloud checks are completed.
-See [upgrade and live validation](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment).
+See [upgrade and live validation](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md#upgrading-an-existing-deployment).
 
 ### Private Endpoint DNS
 

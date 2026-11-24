@@ -94,12 +94,15 @@
             "value": true
         },
         "fslogixStorageService": {
-            "value": "AzureFiles Standard"
+            "value": "AzureFiles"
+        },
+        "fslogixProfileStorageTier": {
+            "value": "Standard"
         },
         "fslogixContainerType": {
             "value": "ProfileContainer"
         },
-        "fslogixShareSizeInGB": {
+        "fslogixProfileShareSizeInGB": {
             "value": 100
         },
         "fslogixSizeInMBs": {

@@ -1,4 +1,4 @@
-﻿# AVD Session Host Replacer
+# AVD Session Host Replacer
 
 > **Part of the [Federal AVD Solution](../../../README.md)** | See also: [Features Overview](../../../docs/features.md) | [Quick Start Guide](../../../docs/quick-start.md)
 
@@ -162,13 +162,17 @@ eligible. Disable any scaling plan assigned to the host pool, confirm that no re
 deployment, pending recovery, replacer-owned drain, or shutdown-retention VM exists, and then
 schedule the request:
 
-For a portal experience, publish and deploy the separate
-[Schedule Session Host Maintenance](../sessionHostMaintenance/README.md) operation Template Spec.
-It selects an existing replacer and writes the same guarded request without redeploying the
-replacer. Use the PowerShell command below for automation and air-gapped workflows:
+Use the existing [guarded PowerShell command](tools/Start-SessionHostMaintenanceReplacement.ps1)
+below for connected and air-gapped workflows. The separate maintenance add-on and scheduling
+form have been removed; no additional Template Spec is needed.
+
+For manual drain/restore instead of SHR-driven replacement, use
+[`Set-SessionHostMaintenanceMode.ps1`](../../Set-SessionHostMaintenanceMode.ps1).
+That script changes session acceptance and scaling-plan exclusion tags only; it does not schedule
+replacement or sign out users.
 
 ```powershell
-.\Start-SessionHostMaintenanceReplacement.ps1 `
+.\tools\Start-SessionHostMaintenanceReplacement.ps1 `
   -FunctionAppName func-shr-prod-use2 `
   -ResourceGroupName rg-avd-operations-use2 `
   -ApprovedImageVersion 2.0.0 `
@@ -330,7 +334,7 @@ responsible for subsequent cleanup and its identity.
 > cleanup; Intune cleanup remains recommended when enrolled.
 >
 > Required cleanup failure blocks the entire deployment batch and stops further deletion in that
-> invocation. Saved pending names retry on later runs. See the [safe-name-reuse contract](replacement-flow.md#safe-name-reuse-in-every-mode)
+> invocation. Saved pending names retry on later runs. See the [safe-name-reuse contract](docs/replacement-flow.md#safe-name-reuse-in-every-mode)
 > for exact checks, ambiguous device records, live-VM collisions, explicit-target requirements,
 > and manual cleanup of failed VMs without ownership tags.
 >
@@ -438,13 +442,13 @@ responsible for subsequent cleanup and its identity.
 
    ```powershell
    # Entra ID device cleanup only
-   .\Set-GraphPermissions.ps1 `
+   .\tools\Set-GraphPermissions.ps1 `
        -ManagedIdentityObjectId $objectId `
        -DeviceCleanupTarget Entra
 
    # Entra ID and Intune device cleanup
    # Use only where Intune is available and both cleanup options are enabled.
-   # .\Set-GraphPermissions.ps1 `
+   # .\tools\Set-GraphPermissions.ps1 `
    #     -ManagedIdentityObjectId $objectId `
    #     -DeviceCleanupTarget Entra, Intune
    ```
@@ -613,7 +617,7 @@ Click the button for your target cloud to open the deployment UI in Azure Portal
 [![Deploy to Azure](../../../docs/images/deploytoazurebutton.png)](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2FuiFormDefinition.json) [![Deploy to Azure Gov](../../../docs/images/deploytoazuregovbutton.png)](https://portal.azure.us/#blade/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2Fmain.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FFederalAVD%2Fmain%2Fdeployments%2Fadd-ons%2FSessionHostReplacer%2FuiFormDefinition.json)
 
 **⚠️ Note:** Blue Button is unavailable in air-gapped clouds. Use the Template Spec form above.
-See [deployment-guide.md](deployment-guide.md) for update procedures after the initial deployment.
+See [deployment-guide.md](docs/deployment-guide.md) for update procedures after the initial deployment.
 
 ### Brownfield Deployments
 
@@ -814,7 +818,7 @@ The form automatically validates inputs and provides helpful descriptions for ea
 For an isolated per-pool rebuild boundary, select an existing **Session Host Replacer Resource
 Group** on **Infrastructure**. Shared resource selections remain independent. This does not move
 an existing deployment, and deleting the RG also deletes SHR operation/recovery state; do not
-delete it during outstanding work. See [placement and safe rebuild prerequisites](deployment-guide.md#dedicated-replacer-resource-group).
+delete it during outstanding work. See [placement and safe rebuild prerequisites](docs/deployment-guide.md#dedicated-replacer-resource-group).
 
 ##### Brownfield Deployments with Custom Naming
 
@@ -1038,7 +1042,7 @@ Use the same image definition in pilot and production:
 For an existing, already upgraded pilot Function App, preview the operational setting change:
 
 ```powershell
-.\Set-SessionHostReplacerConfiguration.ps1 `
+.\tools\Set-SessionHostReplacerConfiguration.ps1 `
     -FunctionAppName '<pilot-shr-name>' `
     -ResourceGroupName '<operations-resource-group>' `
     -IncludeExcludedImageVersions $true `
@@ -1123,7 +1127,7 @@ Session hosts use these tags for automation:
 
 ## Canonical Replacement Flow
 
-The [canonical Session Host Replacer flow](replacement-flow.md) is the authoritative
+The [canonical Session Host Replacer flow](docs/replacement-flow.md) is the authoritative
 reference for:
 
 - Shared inventory, image, scaling-plan, and readiness evaluation.
@@ -1144,7 +1148,7 @@ configuration, monitoring, maintenance, and troubleshooting guidance.
 PowerShell 7.4+ session:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1 `
+.\deployments\add-ons\sessionHostReplacer\tools\Invoke-SessionHostRollback.ps1 `
   -FunctionAppName <function-app-name> `
   -FunctionAppResourceGroupName <function-app-resource-group>
 ```
@@ -1180,7 +1184,7 @@ registered, with no pending cleanup/recovery work.
 or excluding the bad version:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1 `
+.\deployments\add-ons\sessionHostReplacer\tools\Invoke-SessionHostRollback.ps1 `
   -FunctionAppName <function-app-name> `
   -FunctionAppResourceGroupName <function-app-resource-group> `
   -ResumeLatest
@@ -1230,16 +1234,16 @@ The worker continues retiring all previously authorized old hosts safely. A targ
 ceiling of 10 can therefore deploy two batches while old hosts remain occupied, temporarily reaching
 40 VMs. Batch-size and temporary-capacity ceilings still apply; quota and subnet capacity must allow
 the surge. **DeleteFirst** still completes the current retirement/redeployment batch first.
-See the [canonical deployment and retirement gates](replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
+See the [canonical deployment and retirement gates](docs/replacement-flow.md#sidebyside-deployment-and-retirement-are-separate-gates).
 
 Gallery-backed deployments also have an automatic **20 VMs per regional image replica** ceiling.
 SHR queries the selected exact version live before planning, including continuation passes, and
 uses the smaller of this ceiling and existing batch allowances. Missing replica data, incomplete
 replication or failed queries block new planning and are logged. Marketplace behavior is unchanged.
-See the [live replica safeguard](replacement-flow.md#live-gallery-replica-safeguard) for recovery,
+See the [live replica safeguard](docs/replacement-flow.md#live-gallery-replica-safeguard) for recovery,
 shallow-replication restrictions and the `IMAGE_REPLICA_CAP` / batch/submission logs.
 
-See [timer sequencing and coordination](replacement-flow.md#two-timer-execution) for operation scope,
+See [timer sequencing and coordination](docs/replacement-flow.md#two-timer-execution) for operation scope,
 duplicate/crash handling, deadlines and lease behavior.
 
 ### Two-Timer Operations
@@ -1249,14 +1253,14 @@ bundle, prebuilt queue-extension package, queue endpoint or queue data-plane rol
 Blob host storage and Table state access remain required, including managed identity and private
 connectivity. Target-cloud runtime support still requires a live pilot.
 
-Use the [upgrade procedure](deployment-guide.md#upgrading-an-existing-deployment) for existing apps.
+Use the [upgrade procedure](docs/deployment-guide.md#upgrading-an-existing-deployment) for existing apps.
 It preserves active durable operations rather than clearing them. The existing worker function name
 is retained and its binding is changed to a timer, so an old queue listener is not left alongside it.
 
 To hold **new batches** while allowing an active batch to finish, use the configuration helper:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1 `
+.\deployments\add-ons\sessionHostReplacer\tools\Set-SessionHostReplacerConfiguration.ps1 `
     -FunctionAppName '<shr-name>' `
     -ResourceGroupName '<shr-resource-group>' `
     -InitiationEnabled $false
@@ -1320,7 +1324,7 @@ the fresh worker still applies the normal readiness, capacity and cleanup gates.
 ### Recover a stopped operation
 
 For cases outside the automatic path, use
-[Repair-SessionHostReplacerOperation.ps1](Repair-SessionHostReplacerOperation.ps1) instead of
+[Repair-SessionHostReplacerOperation.ps1](tools/Repair-SessionHostReplacerOperation.ps1) instead of
 editing Table entities by hand. Run it from the repository root in PowerShell **7.4 or later**,
 signed in through `Connect-AzAccount` to the Function App subscription. The operator needs Function
 App read/config-list/stop/start, deployment/VM/AVD/Template Spec read permissions, **Storage Table
@@ -1335,13 +1339,13 @@ $recovery = @{
     FunctionAppName = '<shr-name>'
     ResourceGroupName = '<shr-resource-group>'
 }
-.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery
+.\deployments\add-ons\sessionHostReplacer\tools\Repair-SessionHostReplacerOperation.ps1 @recovery
 ```
 
 **2. Apply after reviewing the preview.** The command prompts before changing Azure:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -Apply
+.\deployments\add-ons\sessionHostReplacer\tools\Repair-SessionHostReplacerOperation.ps1 @recovery -Apply
 ```
 
 Apply stops the app, rechecks the settings/operation/lease/deployments, backs up both state records
@@ -1371,8 +1375,8 @@ a restart alone does not clear the failed operation.
 Add **`-RepairTemplateReference` to both commands**:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference
-.\deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference -Apply
+.\deployments\add-ons\sessionHostReplacer\tools\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference
+.\deployments\add-ons\sessionHostReplacer\tools\Repair-SessionHostReplacerOperation.ps1 @recovery -RepairTemplateReference -Apply
 ```
 
 This narrow repair requires the first SideBySide deployment, a saved validation/HTTP 400 failure,
@@ -1449,9 +1453,9 @@ default while existing apps continue running their configured version until a pl
 
 ### Maintenance Override Request Fields
 
-These fields are supplied by `Start-SessionHostMaintenanceReplacement.ps1` or the separate
-[Schedule Session Host Maintenance](../sessionHostMaintenance/README.md) operation Template Spec,
-not by a Session Host Replacer redeployment:
+These fields are supplied by
+[`Start-SessionHostMaintenanceReplacement.ps1`](tools/Start-SessionHostMaintenanceReplacement.ps1),
+not by a Session Host Replacer redeployment or a separate maintenance Template Spec:
 
 | Field | Constraint | Description |
 | --- | --- | --- |
@@ -1700,7 +1704,7 @@ traces
 
 ```powershell
 # Connect to the correct Microsoft Graph environment as described in the prerequisites, then verify.
-.\Set-GraphPermissions.ps1 `
+.\tools\Set-GraphPermissions.ps1 `
     -ManagedIdentityObjectId <object-id> `
     -DeviceCleanupTarget Entra
 
@@ -1790,7 +1794,7 @@ traces
 | order by timestamp desc
 
 # After connecting to the correct Microsoft Graph environment, verify Graph permissions.
-.\Set-GraphPermissions.ps1 `
+.\tools\Set-GraphPermissions.ps1 `
     -ManagedIdentityObjectId <object-id> `
     -DeviceCleanupTarget Entra
 ```
@@ -2091,10 +2095,10 @@ Review timer outcomes, cycle status/wait reason and inventory age separately. In
 and does not replay the original error. Check deployment and registration recovery, cleanup
 blockers, progressive batch growth and retained-host expiry during a rollout.
 
-Use the [logging guide](logging-guide.md#query-both-timers) for scoped queries and the
-[suggested alerts](alerts/alerts-guide.md) for conditions, example queries and operator responses.
+Use the [logging guide](docs/logging-guide.md#query-both-timers) for scoped queries and the
+[suggested alerts](docs/alerts-guide.md) for conditions, example queries and operator responses.
 These recommendations are not deployed by SHR; the legacy standalone pack does not implement
-them. See its [coverage limitations](alerts/alerts-guide.md#current-coverage-limitations).
+them. See its [coverage limitations](docs/alerts-guide.md#current-coverage-limitations).
 
 Before each image release, review quota/subnet headroom, batch limits, grace periods, image
 eligibility and the [pilot acceptance checklist](../../../docs/monthly-image-operations.md).
@@ -2102,7 +2106,7 @@ eligibility and the [pilot acceptance checklist](../../../docs/monthly-image-ope
 ### Debug Logging
 
 A query cannot enable verbose logging. Follow
-[Temporarily collect Trace diagnostics](logging-guide.md#temporarily-collect-trace-diagnostics)
+[Temporarily collect Trace diagnostics](docs/logging-guide.md#temporarily-collect-trace-diagnostics)
 to permit both PowerShell emission and Functions host collection. Include both timer functions
 and their `.User` log categories; use native exceptions as well as traces when investigating a
 failed invocation. Restore normal logging after diagnosis.
@@ -2234,7 +2238,7 @@ fresh host inventories. Missing data, an old inventory, or an `UpToDate` action 
 not be read as proof that the current pool is healthy or that a cycle is complete. Sampling and
 ingestion delays can leave gaps; expand the time range and consult correlated logs before
 recovery. New cycle views require the updated function code and workbook; historical untyped
-logs are not backfilled. See [logging and correlation](logging-guide.md#cycle-correlation).
+logs are not backfilled. See [logging and correlation](docs/logging-guide.md#cycle-correlation).
 
 **Dashboard Features:**
 
@@ -2390,16 +2394,21 @@ currently permitted, whether destructive work is frozen, the active scaling phas
 the applicable mode-specific limits. The Function App link opens the deployed resource for further
 inspection.
 
-Use `Set-SessionHostReplacerConfiguration.ps1` to review or change supported operational settings:
+Operator-run helpers live in [`tools/`](tools/); the Function App runtime remains in
+[`functions/`](functions/). Update saved automation paths to include `tools`; script filenames
+and parameters are unchanged.
+
+Use [`Set-SessionHostReplacerConfiguration.ps1`](tools/Set-SessionHostReplacerConfiguration.ps1)
+to review or change supported operational settings:
 
 ```powershell
 # Review the current configuration without changing it.
-.\Set-SessionHostReplacerConfiguration.ps1 `
+.\tools\Set-SessionHostReplacerConfiguration.ps1 `
   -FunctionAppName <function-app-name> `
   -ResourceGroupName <function-app-resource-group>
 
 # Preview a safer, smaller DeleteFirst batch.
-.\Set-SessionHostReplacerConfiguration.ps1 `
+.\tools\Set-SessionHostReplacerConfiguration.ps1 `
   -FunctionAppName <function-app-name> `
   -ResourceGroupName <function-app-resource-group> `
   -MinimumCapacityPercentage 90 `
@@ -2423,7 +2432,7 @@ Supported by the helper does not mean mutable during an active operation:
 | Image publication-age delay | Does not replace the image already pinned to an active operation |
 
 See [target-count changes](#target-session-host-count) and the
-[coordination and recovery boundaries](replacement-flow.md#coordination-and-recovery-boundaries)
+[coordination and recovery boundaries](docs/replacement-flow.md#coordination-and-recovery-boundaries)
 before changing settings while work is in progress.
 
 The script intentionally does not change replacement mode, timer schedule, identities, networking,
@@ -2443,7 +2452,7 @@ Required permissions:
 
 ### Updating the Function
 
-Use the [complete-template upgrade procedure](deployment-guide.md#upgrading-an-existing-deployment).
+Use the [complete-template upgrade procedure](docs/deployment-guide.md#upgrading-an-existing-deployment).
 It covers holding initiation, stopping the app, preserving active state and installing both
 bindings plus shared code before restart.
 

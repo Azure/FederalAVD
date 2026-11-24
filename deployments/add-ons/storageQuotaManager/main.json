@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "2220376619108337881"
+      "templateHash": "5183967863453105401"
     }
   },
   "functions": [
@@ -1516,7 +1516,6 @@
         "fslogixStorage": "fslogix-storage",
         "storageQuotaManager": "storage-quota-manager",
         "sessionHostReplacer": "session-host-replacer",
-        "sessionHostMaintenance": "session-host-maintenance",
         "sessionHosts": "session-hosts",
         "sessionHostPolicy": "session-host-policy"
       }

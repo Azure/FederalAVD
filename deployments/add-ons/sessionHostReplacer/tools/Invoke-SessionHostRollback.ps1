@@ -20,11 +20,11 @@
 .PARAMETER PassThru
     Returns one operation summary with RestoredHosts, DrainedHosts, Image, and FunctionAppState.
 .EXAMPLE
-    .\Invoke-SessionHostRollback.ps1 -FunctionAppName func-shr -FunctionAppResourceGroupName rg-operations
+    .\tools\Invoke-SessionHostRollback.ps1 -FunctionAppName func-shr -FunctionAppResourceGroupName rg-operations
 .EXAMPLE
-    .\Invoke-SessionHostRollback.ps1 -FunctionAppName func-shr -FunctionAppResourceGroupName rg-operations -WhatIf
+    .\tools\Invoke-SessionHostRollback.ps1 -FunctionAppName func-shr -FunctionAppResourceGroupName rg-operations -WhatIf
 .EXAMPLE
-    .\Invoke-SessionHostRollback.ps1 -FunctionAppName func-shr -FunctionAppResourceGroupName rg-operations -ResumeLatest
+    .\tools\Invoke-SessionHostRollback.ps1 -FunctionAppName func-shr -FunctionAppResourceGroupName rg-operations -ResumeLatest
 .NOTES
     Requires Az.Accounts sign-in, Function App config/stop/start, VM start/tag and AVD update
     permissions. Guided rollback and ResumeLatest also require Storage Table Data Contributor
@@ -51,6 +51,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$replacerRoot = Split-Path -Parent $PSScriptRoot
 $webApiVersion = '2024-11-01'
 $computeApiVersion = '2024-07-01'
 $desktopVirtualizationApiVersion = '2024-04-03'
@@ -319,9 +320,9 @@ if (-not $RestoreOnly) {
         throw 'A registered host has no VM in the configured hosts resource group. Resolve missing-VM recovery, or use -RestoreOnly for emergency restoration.'
     }
     if (Get-SettingValue MaintenanceRequest -Default '') { throw 'Clear the maintenance request before guided rollback or ResumeLatest.' }
-    Import-Module (Join-Path $PSScriptRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1') -Scope Local
+    Import-Module (Join-Path $replacerRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1') -Scope Local
     $coordinator = Get-Module SessionHostReplacer.Continuation -All | Where-Object {
-        $_.Path -eq (Join-Path $PSScriptRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.Continuation.psm1')
+        $_.Path -eq (Join-Path $replacerRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.Continuation.psm1')
     } | Select-Object -First 1
     if (-not $coordinator) { throw 'Cannot load the SHR continuation module.' }
     $endpoint = [uri](Get-SettingValue AzureWebJobsStorage__tableServiceUri)

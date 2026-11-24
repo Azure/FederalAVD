@@ -91,6 +91,14 @@ Setting this to false publishes version 1.0.0, overwriting that version if prese
 Optional suffix appended to Template Spec names for isolated testing. It does not
 change the publishing resource-group name.
 
+.PARAMETER AddOns
+
+Optional array of add-on catalog purposes to publish, such as session-host-replacer,
+fslogix-storage, or alerts. Omit this parameter to publish all registered add-ons.
+An explicitly empty array excludes all add-ons. Duplicate names are published once
+in catalog order; names are case-insensitive. Unknown or blank names are rejected.
+Do not combine this selector with -CreateAddOns $false.
+
 .EXAMPLE
 
 .\tools\New-TemplateSpecs.ps1 -Location eastus -WhatIf
@@ -118,6 +126,14 @@ run without -WhatIf. No ResourceGroupName or creation flag is needed.
 Preview using an explicit publishing group while retaining default Template Spec
 names. The group is reused or created automatically when run without -WhatIf.
 
+.EXAMPLE
+
+.\tools\New-TemplateSpecs.ps1 -Location usgovvirginia -createCustomImage $false -createHostPool $false -AddOns 'session-host-replacer' -WhatIf
+
+Preview only the Session Host Replacer Template Spec. Its deployment can create
+the required Session Hosts Template Spec; separate publication is not required.
+Use -AddOns 'session-host-replacer','alerts' to select multiple add-ons.
+
 .NOTES
 
 Sign in and select the intended cloud and subscription before running the script.
@@ -126,6 +142,7 @@ Template Specs are selected. The other create parameters select additional entri
 they publish templates, not workloads. These parameters are booleans, so use
 -createCustomImage $false, -createHostPool $false, or -CreateAddOns $false to
 exclude the corresponding default selections.
+Use -AddOns to narrow add-on publication without changing the core create flags.
 
 Use Get-Help .\tools\New-TemplateSpecs.ps1 -Full to read this help.
 
@@ -144,6 +161,8 @@ param (
     [bool]$createAutomatedHostPool = $false,
     [bool]$CreateAddOns = $true,
     [ValidateNotNull()]
+    [string[]]$AddOns = @(),
+    [ValidateNotNull()]
     [object]$NamingConvention = @{
         components = @('resourceType', 'workload', 'purpose', 'location')
         delimiter = '-'
@@ -156,6 +175,10 @@ param (
 
 $ErrorActionPreference = 'Stop'
 $namingConventionSupplied = $PSBoundParameters.ContainsKey('NamingConvention')
+$addOnsSupplied = $PSBoundParameters.ContainsKey('AddOns')
+if ($addOnsSupplied -and -not $CreateAddOns) {
+    throw 'Do not combine -AddOns with -CreateAddOns $false. Omit -AddOns when disabling all add-ons.'
+}
 
 function Get-ObjectPropertyValue {
     param (
@@ -744,20 +767,28 @@ if ($createAutomatedHostPool) {
 }
 
 if ($CreateAddOns) {
-    $addOns = @(
+    $addOnCatalog = @(
         @{ Purpose = 'run-commands-on-vms'; PreserveLegacyWithoutWorkload = $true; DisplayName = 'Run Commands on VMs'; Description = 'Run scripts on Virtual Machines'; FolderName = 'runCommandsOnVms' },
         @{ Purpose = 'update-storage-account-key-on-session-hosts'; PreserveLegacyWithoutWorkload = $true; DisplayName = 'AVD Update Storage Account Key on Session Hosts'; Description = 'Update FSLogix Storage Account Key on Session Hosts'; FolderName = 'updateStorageAccountKeyOnSessionHosts' },
         @{ Purpose = 'fslogix-storage'; DisplayName = 'AVD FSLogix Storage'; Description = 'Deploys standalone Azure Files or Azure NetApp Files storage for FSLogix profile containers'; FolderName = 'fslogixStorage' },
         @{ Purpose = 'image-validation'; DisplayName = 'AVD Image Validation'; Description = 'Deploys image-validation Function App infrastructure, CMK-protected runtime storage, and a validation VM Template Spec'; FolderName = 'imageValidation' },
         @{ Purpose = 'storage-quota-manager'; DisplayName = 'Azure Files Premium Quota Manager'; Description = 'Automatically monitors and increases Azure Files Premium file share quotas for FSLogix profile storage'; FolderName = 'storageQuotaManager' },
         @{ Purpose = 'session-host-replacer'; DisplayName = 'AVD Session Host Replacer'; Description = 'Automatically replaces aging or outdated session hosts based on configurable lifecycle policies'; FolderName = 'sessionHostReplacer' }
-        @{ Purpose = 'session-host-maintenance'; DisplayName = 'Schedule AVD Session Host Maintenance'; Description = 'Schedules a guarded one-time maintenance replacement on an existing DeleteFirst Session Host Replacer'; FolderName = 'sessionHostMaintenance' }
         @{ Purpose = 'session-hosts'; DisplayName = 'AVD Session Hosts'; Description = 'Deploys AVD session hosts into an existing host pool resource group. Can be used standalone via the portal or as the Session Host Replacer deployment template'; FolderName = 'sessionHosts' }
         @{ Purpose = 'session-host-policy'; DisplayName = 'AVD Session Host Policy'; Description = 'Assigns reusable Azure Policy capabilities, including VM Applications, to a dedicated session-host resource group'; FolderName = 'sessionHostPolicy' }
         @{ Purpose = 'alerts'; DisplayName = 'AVD Alerts'; Description = 'Deploys Azure Monitor alerts for Azure Virtual Desktop'; FolderName = 'avdAlerts' }
     )
 
-    foreach ($addOn in $addOns) {
+    if ($addOnsSupplied) {
+        $unsupported = @($AddOns | Where-Object { [string]::IsNullOrWhiteSpace($_) -or $_ -notin $addOnCatalog.Purpose })
+        if ($unsupported.Count -gt 0) {
+            $invalidNames = ($unsupported | ForEach-Object { if ([string]::IsNullOrWhiteSpace($_)) { '<empty>' } else { $_ } }) -join ', '
+            throw "Unsupported -AddOns names: $invalidNames. Supported names: $($addOnCatalog.Purpose -join ', '). Nothing has been published."
+        }
+        $addOnCatalog = @($addOnCatalog | Where-Object { $_.Purpose -in $AddOns })
+    }
+
+    foreach ($addOn in $addOnCatalog) {
         $templateSpecs += @{
             Purpose = $addOn.Purpose
             PreserveLegacyWithoutWorkload = $addOn.PreserveLegacyWithoutWorkload
@@ -808,7 +839,7 @@ foreach ($templateSpec in $templateSpecs) {
 }
 
 if ($templateSpecs.Count -eq 0) {
-    throw 'No Template Specs selected. Enable at least one create switch.'
+    throw 'No Template Specs selected. Enable a create flag or select at least one add-on.'
 }
 $resourceGroupExists = $null -ne (Get-AzResourceGroup -ErrorAction Stop | Where-Object { $_.ResourceGroupName -eq $ResourceGroupName })
 if (-not $resourceGroupExists) {

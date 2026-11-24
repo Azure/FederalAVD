@@ -1,6 +1,6 @@
 BeforeAll {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $recoveryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Repair-SessionHostReplacerOperation.ps1'
+    $recoveryPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Repair-SessionHostReplacerOperation.ps1'
     $modulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1'
     function New-RecoveryResponse {
         param([object] $Content, [int] $StatusCode = 200, [string] $ETag = 'version-1')
@@ -13,6 +13,18 @@ BeforeAll {
 }
 
 Describe 'SHR checked operator recovery' {
+    It 'keeps the default recovery backups in the repository customer directory after relocation' {
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile($recoveryPath, [ref]$tokens, [ref]$errors)
+        $errors.Count | Should -Be 0
+        $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'BackupDirectory' }
+        $rootLiteral = "'" + (Split-Path -Parent $recoveryPath).Replace("'", "''") + "'"
+        $expression = $parameter.DefaultValue.Extent.Text.Replace('$PSScriptRoot', $rootLiteral)
+        $actual = [IO.Path]::GetFullPath((Invoke-Expression $expression))
+        $actual | Should -Be (Join-Path $repoRoot 'customer\shr-recovery')
+    }
+
     BeforeAll {
         Import-Module Az.Accounts
         Import-Module $modulePath -Force

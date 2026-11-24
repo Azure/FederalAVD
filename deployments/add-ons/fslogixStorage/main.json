@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "15245536876720817382"
+      "templateHash": "16305254324073458208"
     }
   },
   "definitions": {
@@ -1865,18 +1865,16 @@
     },
     "fslogixStorageService": {
       "type": "string",
-      "defaultValue": "AzureFiles Standard",
+      "defaultValue": "AzureFiles",
       "allowedValues": [
-        "AzureFiles Premium",
-        "AzureFiles Standard",
-        "AzureNetAppFiles Premium",
-        "AzureNetAppFiles Standard"
+        "AzureFiles",
+        "AzureNetAppFiles"
       ],
       "metadata": {
-        "description": "Required. FSLogix storage service and SKU."
+        "description": "Optional. FSLogix storage backend. Azure Files media and NetApp service level are selected separately."
       }
     },
-    "fslogixStorageRedundancy": {
+    "fslogixProfileStorageRedundancy": {
       "type": "string",
       "defaultValue": "LocallyRedundant",
       "allowedValues": [
@@ -1884,29 +1882,29 @@
         "ZoneRedundant"
       ],
       "metadata": {
-        "description": "Optional. Storage redundancy for Azure Files."
-      }
-    },
-    "fslogixProfileStorageRedundancy": {
-      "type": "string",
-      "nullable": true,
-      "allowedValues": [
-        "LocallyRedundant",
-        "ZoneRedundant"
-      ],
-      "metadata": {
-        "description": "Optional. Preferred Profile Azure Files redundancy. Overrides fslogixStorageRedundancy when supplied."
+        "description": "Optional. Profile Azure Files redundancy."
       }
     },
     "fslogixProfileStorageTier": {
       "type": "string",
-      "nullable": true,
+      "defaultValue": "Standard",
       "allowedValues": [
         "Standard",
         "Premium"
       ],
       "metadata": {
-        "description": "Optional. Profile Azure Files tier. Null derives the tier from fslogixStorageService; does not change Azure NetApp Files."
+        "description": "Optional. Profile Azure Files media: Standard (HDD) or Premium (SSD). Unused with NetApp."
+      }
+    },
+    "fslogixNetAppServiceLevel": {
+      "type": "string",
+      "defaultValue": "Premium",
+      "allowedValues": [
+        "Standard",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "Optional. NetApp capacity-pool and volume service level. Unused with Azure Files."
       }
     },
     "fslogixProfileStorageBillingModel": {
@@ -2018,20 +2016,12 @@
         "description": "Optional. Profile container size configured on session hosts, in MB."
       }
     },
-    "shareSizeInGB": {
+    "fslogixProfileShareSizeInGB": {
       "type": "int",
       "defaultValue": 100,
       "minValue": 1,
       "metadata": {
-        "description": "Optional. File share or Azure NetApp Files volume size, in GB."
-      }
-    },
-    "fslogixProfileShareSizeInGB": {
-      "type": "int",
-      "nullable": true,
-      "minValue": 1,
-      "metadata": {
-        "description": "Optional. Preferred Profile share or volume quota in GiB. Overrides shareSizeInGB when supplied."
+        "description": "Optional. Profile share or NetApp volume quota in GiB. Office inherits this quota unless overridden for Azure Files."
       }
     },
     "fslogixShardOptions": {
@@ -2348,16 +2338,13 @@
     }
   },
   "variables": {
-    "storageSolution": "[split(parameters('fslogixStorageService'), ' ')[0]]",
-    "azureFilesTuningIsValid": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), and(and(and(and(and(and(and(and(and(and(and(equals(parameters('fslogixProfileStorageTier'), null()), or(equals(parameters('fslogixProfileStorageRedundancy'), null()), equals(parameters('fslogixProfileStorageRedundancy'), 'LocallyRedundant'))), empty(parameters('fslogixProfileStorageAccountNamePrefix'))), equals(parameters('fslogixProfileStorageBillingModel'), 'Legacy')), equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit')), equals(parameters('fslogixProfileProvisionedIops'), 0)), equals(parameters('fslogixProfileProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeProvisionedIops'), 0)), equals(parameters('fslogixOfficeProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeStorageTier'), 'Inherit')), equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit')), equals(parameters('fslogixOfficeShareSizeInGB'), 0))), true(), fail('Azure Files tier, billing, redundancy and performance tuning cannot be used with Azure NetApp Files.'))]",
-    "storageSku": "[if(and(variables('azureFilesTuningIsValid'), equals(variables('storageSolution'), 'AzureFiles')), coalesce(parameters('fslogixProfileStorageTier'), split(parameters('fslogixStorageService'), ' ')[1]), split(parameters('fslogixStorageService'), ' ')[1])]",
-    "effectiveProfileStorageRedundancy": "[coalesce(parameters('fslogixProfileStorageRedundancy'), parameters('fslogixStorageRedundancy'))]",
-    "effectiveProfileShareSizeInGB": "[coalesce(parameters('fslogixProfileShareSizeInGB'), parameters('shareSizeInGB'))]",
+    "storageSolution": "[parameters('fslogixStorageService')]",
+    "effectiveProfileStorageTier": "[if(or(not(equals(variables('storageSolution'), 'AzureNetAppFiles')), and(and(and(and(and(and(and(and(and(and(equals(parameters('fslogixProfileStorageRedundancy'), 'LocallyRedundant'), empty(parameters('fslogixProfileStorageAccountNamePrefix'))), equals(parameters('fslogixProfileStorageBillingModel'), 'Legacy')), equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit')), equals(parameters('fslogixProfileProvisionedIops'), 0)), equals(parameters('fslogixProfileProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeProvisionedIops'), 0)), equals(parameters('fslogixOfficeProvisionedThroughputMiBps'), 0)), equals(parameters('fslogixOfficeStorageTier'), 'Inherit')), equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit')), equals(parameters('fslogixOfficeShareSizeInGB'), 0))), parameters('fslogixProfileStorageTier'), fail('Azure Files billing, redundancy and performance tuning cannot be used with Azure NetApp Files.'))]",
     "effectiveOfficeStorageBillingModel": "[if(equals(parameters('fslogixOfficeStorageBillingModel'), 'Inherit'), parameters('fslogixProfileStorageBillingModel'), if(equals(parameters('fslogixOfficeStorageBillingModel'), 'ProvisionedV2'), 'ProvisionedV2', 'Legacy'))]",
     "officeEnabled": "[contains(parameters('fslogixContainerType'), 'OfficeContainer')]",
-    "effectiveOfficeStorageSku": "[if(equals(parameters('fslogixOfficeStorageTier'), 'Inherit'), variables('storageSku'), parameters('fslogixOfficeStorageTier'))]",
-    "effectiveOfficeStorageRedundancy": "[if(equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit'), variables('effectiveProfileStorageRedundancy'), parameters('fslogixOfficeStorageRedundancy'))]",
-    "effectiveOfficeShareSizeInGB": "[if(equals(parameters('fslogixOfficeShareSizeInGB'), 0), variables('effectiveProfileShareSizeInGB'), parameters('fslogixOfficeShareSizeInGB'))]",
+    "effectiveOfficeStorageTier": "[if(equals(parameters('fslogixOfficeStorageTier'), 'Inherit'), variables('effectiveProfileStorageTier'), parameters('fslogixOfficeStorageTier'))]",
+    "effectiveOfficeStorageRedundancy": "[if(equals(parameters('fslogixOfficeStorageRedundancy'), 'Inherit'), parameters('fslogixProfileStorageRedundancy'), parameters('fslogixOfficeStorageRedundancy'))]",
+    "effectiveOfficeShareSizeInGB": "[if(equals(parameters('fslogixOfficeShareSizeInGB'), 0), parameters('fslogixProfileShareSizeInGB'), parameters('fslogixOfficeShareSizeInGB'))]",
     "createFSLogixBackupVault": "[and(and(equals(variables('storageSolution'), 'AzureFiles'), parameters('deployFSLogixBackupVault')), empty(parameters('recoveryServicesVaultResourceId')))]",
     "effectiveBackupResourceGroupName": "[if(equals(parameters('backupVaultScope'), 'Dedicated'), variables('effectiveStorageResourceGroupName'), if(not(empty(parameters('backupResourceGroupName'))), parameters('backupResourceGroupName'), variables('backupNaming').operationsResourceGroupName))]",
     "effectiveBackupVaultName": "[if(not(empty(parameters('backupVaultName'))), parameters('backupVaultName'), if(equals(parameters('backupVaultScope'), 'Shared'), variables('backupNaming').fslogixBackupVaultName, __bicep.resourceNameForType(parameters('namingConvention'), 'Microsoft.RecoveryServices/vaults', format('{0}-backup', parameters('identifier')), createObject('subscriptionId', subscription().subscriptionId, 'resourceGroupName', variables('effectiveStorageResourceGroupName'), 'cloud', environment().name, 'location', parameters('location')))))]",
@@ -3248,7 +3235,6 @@
         "fslogixStorage": "fslogix-storage",
         "storageQuotaManager": "storage-quota-manager",
         "sessionHostReplacer": "session-host-replacer",
-        "sessionHostMaintenance": "session-host-maintenance",
         "sessionHosts": "session-hosts",
         "sessionHostPolicy": "session-host-policy"
       }
@@ -6182,8 +6168,8 @@
           "fslogixSoftDeleteRetentionDays": {
             "value": "[parameters('softDeleteRetentionDays')]"
           },
-          "fslogixStorageRedundancy": {
-            "value": "[variables('effectiveProfileStorageRedundancy')]"
+          "profileStorageRedundancy": {
+            "value": "[parameters('fslogixProfileStorageRedundancy')]"
           },
           "fslogixUserGroups": {
             "value": "[parameters('fslogixUserGroups')]"
@@ -6240,8 +6226,8 @@
           "resourceGroupStorage": {
             "value": "[variables('effectiveStorageResourceGroupName')]"
           },
-          "shareSizeInGB": {
-            "value": "[variables('effectiveProfileShareSizeInGB')]"
+          "profileShareSizeInGB": {
+            "value": "[parameters('fslogixProfileShareSizeInGB')]"
           },
           "profileStorageBillingModel": {
             "value": "[parameters('fslogixProfileStorageBillingModel')]"
@@ -6268,8 +6254,8 @@
             "value": "[variables('effectiveProfileStorageAccountNamePrefix')]"
           },
           "officeStorageAccountNamePrefix": "[if(and(variables('officeStorageAccountPrefixIsValid'), variables('officeStorageAccountPrefixesAreDistinct')), createObject('value', variables('effectiveOfficeStorageAccountNamePrefix')), createObject('value', variables('effectiveOfficeStorageAccountNamePrefix')))]",
-          "officeStorageSku": {
-            "value": "[variables('effectiveOfficeStorageSku')]"
+          "officeStorageTier": {
+            "value": "[variables('effectiveOfficeStorageTier')]"
           },
           "officeStorageRedundancy": {
             "value": "[variables('effectiveOfficeStorageRedundancy')]"
@@ -6281,8 +6267,11 @@
           "storageIndex": {
             "value": "[parameters('storageIndex')]"
           },
-          "storageSku": {
-            "value": "[variables('storageSku')]"
+          "profileStorageTier": {
+            "value": "[variables('effectiveProfileStorageTier')]"
+          },
+          "netAppServiceLevel": {
+            "value": "[parameters('fslogixNetAppServiceLevel')]"
           },
           "storageSolution": {
             "value": "[variables('storageSolution')]"
@@ -6299,7 +6288,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8379195390063645170"
+              "templateHash": "11672452565458059392"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -6618,7 +6607,7 @@
                 "description": "Required. Name of the existing storage resource group in this subscription."
               }
             },
-            "shareSizeInGB": {
+            "profileShareSizeInGB": {
               "type": "int",
               "metadata": {
                 "description": "Required. Quota per file share or NetApp volume in GiB."
@@ -6660,27 +6649,38 @@
                 "description": "Required. Starting numeric index for storage account and encryption-key names."
               }
             },
-            "storageSku": {
+            "profileStorageTier": {
               "type": "string",
               "metadata": {
-                "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
+                "description": "Required. Profile Azure Files media: Standard (HDD) or Premium (SSD)."
               }
             },
-            "officeStorageSku": {
+            "netAppServiceLevel": {
               "type": "string",
-              "defaultValue": "[parameters('storageSku')]",
+              "defaultValue": "Premium",
+              "allowedValues": [
+                "Standard",
+                "Premium"
+              ],
+              "metadata": {
+                "description": "Optional. NetApp capacity-pool and volume service level; unused with Azure Files."
+              }
+            },
+            "officeStorageTier": {
+              "type": "string",
+              "defaultValue": "[parameters('profileStorageTier')]",
               "metadata": {
                 "description": "Optional. Office Azure Files tier; defaults to the Profile tier."
               }
             },
             "officeShareSizeInGB": {
               "type": "int",
-              "defaultValue": "[parameters('shareSizeInGB')]",
+              "defaultValue": "[parameters('profileShareSizeInGB')]",
               "metadata": {
                 "description": "Optional. Office share quota in GiB; defaults to the Profile quota."
               }
             },
-            "fslogixStorageRedundancy": {
+            "profileStorageRedundancy": {
               "type": "string",
               "metadata": {
                 "description": "Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS."
@@ -6688,7 +6688,7 @@
             },
             "officeStorageRedundancy": {
               "type": "string",
-              "defaultValue": "[parameters('fslogixStorageRedundancy')]",
+              "defaultValue": "[parameters('profileStorageRedundancy')]",
               "metadata": {
                 "description": "Optional. Office Azure Files redundancy; defaults to the Profile redundancy."
               }
@@ -6839,7 +6839,7 @@
                     "value": "[parameters('fslogixContainerType')]"
                   },
                   "shareSizeInGB": {
-                    "value": "[parameters('shareSizeInGB')]"
+                    "value": "[parameters('profileShareSizeInGB')]"
                   },
                   "shareAdminGroups": {
                     "value": "[parameters('fslogixAdminGroups')]"
@@ -6868,8 +6868,8 @@
                   "smbServerLocation": {
                     "value": "[parameters('smbServerLocation')]"
                   },
-                  "storageSku": {
-                    "value": "[parameters('storageSku')]"
+                  "serviceLevel": {
+                    "value": "[parameters('netAppServiceLevel')]"
                   },
                   "tagsNetAppAccount": {
                     "value": "[union(if(not(empty(parameters('hostPoolResourceId'))), createObject('cm-resource-parent', parameters('hostPoolResourceId')), createObject()), coalesce(tryGet(parameters('tags'), 'Microsoft.NetApp/netAppAccounts'), createObject()))]"
@@ -6889,7 +6889,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "2519465969302165709"
+                      "templateHash": "864203970324311210"
                     },
                     "name": "FSLogix NetApp storage orchestration",
                     "description": "Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials."
@@ -7032,10 +7032,10 @@
                         "description": "Required. Location token appended to anf- for the NetApp Active Directory SMB server name."
                       }
                     },
-                    "storageSku": {
+                    "serviceLevel": {
                       "type": "string",
                       "metadata": {
-                        "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
+                        "description": "Required. NetApp capacity-pool and volume service level."
                       }
                     },
                     "tagsNetAppAccount": {
@@ -7190,7 +7190,7 @@
                             "value": "[parameters('location')]"
                           },
                           "serviceLevel": {
-                            "value": "[parameters('storageSku')]"
+                            "value": "[parameters('serviceLevel')]"
                           },
                           "tags": {
                             "value": "[parameters('tagsNetAppCapacityPool')]"
@@ -7323,7 +7323,7 @@
                             "value": "[variables('shareSizeInBytes')]"
                           },
                           "serviceLevel": {
-                            "value": "[parameters('storageSku')]"
+                            "value": "[parameters('serviceLevel')]"
                           },
                           "tags": {
                             "value": "[parameters('tagsNetAppVolume')]"
@@ -7787,8 +7787,8 @@
                   "officeEncryptionKeyNameConv": {
                     "value": "[parameters('officeEncryptionKeyNameConv')]"
                   },
-                  "officeStorageSku": {
-                    "value": "[parameters('officeStorageSku')]"
+                  "officeStorageTier": {
+                    "value": "[parameters('officeStorageTier')]"
                   },
                   "officeStorageRedundancy": {
                     "value": "[parameters('officeStorageRedundancy')]"
@@ -7863,8 +7863,8 @@
                   "shareAdminGroups": {
                     "value": "[parameters('fslogixAdminGroups')]"
                   },
-                  "shareSizeInGB": {
-                    "value": "[parameters('shareSizeInGB')]"
+                  "profileShareSizeInGB": {
+                    "value": "[parameters('profileShareSizeInGB')]"
                   },
                   "shareUserGroups": {
                     "value": "[parameters('fslogixUserGroups')]"
@@ -7878,11 +7878,11 @@
                   "storageIndex": {
                     "value": "[parameters('storageIndex')]"
                   },
-                  "storageSku": {
-                    "value": "[parameters('storageSku')]"
+                  "profileStorageTier": {
+                    "value": "[parameters('profileStorageTier')]"
                   },
-                  "storageRedundancy": {
-                    "value": "[parameters('fslogixStorageRedundancy')]"
+                  "profileStorageRedundancy": {
+                    "value": "[parameters('profileStorageRedundancy')]"
                   },
                   "tags": {
                     "value": "[parameters('tags')]"
@@ -7905,7 +7905,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "5582233066231511368"
+                      "templateHash": "12030812602651200501"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -8259,10 +8259,10 @@
                         "description": "Required. Array of administrator group objects with id and name for Azure Files RBAC or NetApp/domain permissions."
                       }
                     },
-                    "shareSizeInGB": {
+                    "profileShareSizeInGB": {
                       "type": "int",
                       "metadata": {
-                        "description": "Required. Quota per file share or NetApp volume in GiB."
+                        "description": "Required. Profile share quota in GiB."
                       }
                     },
                     "shareUserGroups": {
@@ -8303,27 +8303,27 @@
                         "description": "Required. Starting numeric index for storage account and encryption-key names."
                       }
                     },
-                    "storageSku": {
+                    "profileStorageTier": {
                       "type": "string",
                       "metadata": {
-                        "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
+                        "description": "Required. Profile Azure Files media: Standard (HDD) or Premium (SSD)."
                       }
                     },
-                    "officeStorageSku": {
+                    "officeStorageTier": {
                       "type": "string",
-                      "defaultValue": "[parameters('storageSku')]",
+                      "defaultValue": "[parameters('profileStorageTier')]",
                       "metadata": {
                         "description": "Optional. Office Azure Files tier; defaults to the Profile tier."
                       }
                     },
                     "officeShareSizeInGB": {
                       "type": "int",
-                      "defaultValue": "[parameters('shareSizeInGB')]",
+                      "defaultValue": "[parameters('profileShareSizeInGB')]",
                       "metadata": {
                         "description": "Optional. Office share quota in GiB; defaults to the Profile quota."
                       }
                     },
-                    "storageRedundancy": {
+                    "profileStorageRedundancy": {
                       "type": "string",
                       "metadata": {
                         "description": "Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS."
@@ -8331,7 +8331,7 @@
                     },
                     "officeStorageRedundancy": {
                       "type": "string",
-                      "defaultValue": "[parameters('storageRedundancy')]",
+                      "defaultValue": "[parameters('profileStorageRedundancy')]",
                       "metadata": {
                         "description": "Optional. Office Azure Files redundancy; defaults to the Profile redundancy."
                       }
@@ -8442,7 +8442,7 @@
                       "channelEncryption": "AES-128-CCM;AES-128-GCM;AES-256-GCM;"
                     },
                     "fileShares": "[__bicep.fslogixShareNames(parameters('containerType'))]",
-                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('storageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('storageSku'), parameters('storageRedundancy'), parameters('profileStorageBillingModel'), parameters('shareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('shareSizeInGB'), 'commandPrefix', '')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageSku'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageSku'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
+                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('profileStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('profileStorageTier'), parameters('profileStorageRedundancy'), parameters('profileStorageBillingModel'), parameters('profileShareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('profileShareSizeInGB'), 'commandPrefix', '')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageTier'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
                     "accountConfigurations": "[flatten(map(variables('storageRoles'), lambda('role', map(range(0, parameters('storageCount')), lambda('index', union(lambdaVariables('role'), createObject('name', format('{0}{1}', lambdaVariables('role').prefix, padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')), 'keyName', replace(lambdaVariables('role').keyPattern, '##', padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')))))))))]",
                     "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
                     "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",

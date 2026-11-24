@@ -7,7 +7,7 @@ argument-hint: "[policy capability or file]"
 # FederalAVD Policy Authoring
 
 Use this workflow for policy resources under
-`deployments/shared/modules/orchestration/sessionHostPolicy/`. Read its `AUTHORING.md` before
+`deployments/shared/modules/orchestration/sessionHostPolicy/`. Read its `docs/AUTHORING.md` before
 changing policy structure. Consumer entry points such as `deployments/automatedHostPools/policy/`
 adapt and sequence these canonical modules but do not own policy implementations.
 
@@ -111,7 +111,7 @@ adapt and sequence these canonical modules but do not own policy implementations
     - Every `roleDefinitionIds` entry is matched by deployed RBAC.
     - Conditional definitions, initiatives, assignments, and RBAC use the same feature condition.
     - Generated JSON changes are expected and `git diff --check` passes.
-    - The shared `AUTHORING.md` and affected consumer documentation remain accurate.
+    - The shared `docs/AUTHORING.md` and affected consumer documentation remain accurate.
 
 Do not deploy policy resources as a separate repository-level stack. They are an internal stage of
 the automated host-pool dependency graph.

@@ -355,7 +355,7 @@ Describe 'Session Host Replacer pilot setting deployment contract' {
     }
 
     It 'exposes a nullable runtime configuration update and safe review default' {
-        $path = Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1'
+        $path = Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1'
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
         $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'IncludeExcludedImageVersions' }
         $parameter.StaticType | Should -Be ([Nullable[bool]])
@@ -411,13 +411,13 @@ Describe 'Session Host Replacer pilot configuration updates' {
     }
 
     It 'reviews a missing setting as disabled without writing' {
-        $result = & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments
+        $result = & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments
         $result.IncludeExcludedImageVersions | Should -Be 'false'
         Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
     }
 
     It 'enables pilot selection while preserving unrelated settings' {
-        $result = & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+        $result = & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
             -IncludeExcludedImageVersions $true -Confirm:$false
         $global:shrPilotUpdatedSettings.IncludeExcludedImageVersions | Should -Be 'true'
         $global:shrPilotUpdatedSettings.UnrelatedSetting | Should -Be 'preserve-this-value'
@@ -427,19 +427,19 @@ Describe 'Session Host Replacer pilot configuration updates' {
 
     It 'allows explicitly disabling pilot selection' {
         $global:shrPilotConfigurationSettings | Add-Member -NotePropertyName IncludeExcludedImageVersions -NotePropertyValue 'true'
-        & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+        & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
             -IncludeExcludedImageVersions $false -Confirm:$false | Out-Null
         $global:shrPilotUpdatedSettings.IncludeExcludedImageVersions | Should -Be 'false'
     }
 
     It 'does not write or enable pilot selection during WhatIf' {
-        & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+        & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
             -IncludeExcludedImageVersions $true -WhatIf | Out-Null
         Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
     }
 
     It 'holds new initiation without disabling reconciliation or overwriting unrelated settings' {
-        $result = & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+        $result = & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
             -InitiationEnabled $false -ContinuationTimeoutHours 96 -Confirm:$false
         $global:shrPilotUpdatedSettings.InitiationEnabled | Should -Be 'false'
         $global:shrPilotUpdatedSettings.UnrelatedSetting | Should -Be 'preserve-this-value'
@@ -447,7 +447,7 @@ Describe 'Session Host Replacer pilot configuration updates' {
     }
 
     It 'supports operation controls without an execution-model selector' {
-        & (Join-Path $shrRoot 'Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
+        & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
             -ContinuationTimeoutHours 120 -Confirm:$false
         $global:shrPilotUpdatedSettings.ContinuationTimeoutHours | Should -Be '120'
     }

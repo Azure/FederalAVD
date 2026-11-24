@@ -22,11 +22,11 @@ Describe 'Evaluated Azure Files role configuration' {
                 fslogixProfileEncryptionKeyNameConv = 'pc-key-##'
                 officeEncryptionKeyNameConv = 'oc-key-##'
                 keyManagementStorageAccounts = 'CustomerManaged'
-                storageSku = 'Premium'
-                officeStorageSku = 'Premium'
-                storageRedundancy = 'LocallyRedundant'
+                profileStorageTier = 'Premium'
+                officeStorageTier = 'Premium'
+                profileStorageRedundancy = 'LocallyRedundant'
                 officeStorageRedundancy = 'LocallyRedundant'
-                shareSizeInGB = 1024
+                profileShareSizeInGB = 1024
                 officeShareSizeInGB = 1024
                 storageCount = 2
                 storageIndex = 3
@@ -80,7 +80,7 @@ Describe 'Evaluated Azure Files role configuration' {
 
     It 'uses independent Office redundancy, legacy tier and quota' {
         $accounts = @(Invoke-OfficeAccountConfiguration @{
-            officeStorageSku = 'Standard'
+            officeStorageTier = 'Standard'
             officeStorageRedundancy = 'ZoneRedundant'
             officeShareSizeInGB = 4096
         })
@@ -98,8 +98,8 @@ Describe 'Evaluated Azure Files role configuration' {
     ) {
         param($Tier, $Redundancy, $Sku, $Iops, $Throughput)
         $accounts = @(Invoke-OfficeAccountConfiguration @{
-            storageSku = $Tier
-            storageRedundancy = $Redundancy
+            profileStorageTier = $Tier
+            profileStorageRedundancy = $Redundancy
             profileStorageBillingModel = 'ProvisionedV2'
             officeStorageBillingModel = 'ProvisionedV2'
             officeShareSizeInGB = 2048
@@ -120,7 +120,7 @@ Describe 'Evaluated Azure Files role configuration' {
             profileStorageBillingModel = 'ProvisionedV2'
             profileProvisionedIops = 10000
             profileProvisionedThroughputMiBps = 500
-            officeStorageSku = 'Standard'
+            officeStorageTier = 'Standard'
         })
         $accounts[0].configuration.provisionedIops | Should -Be 10000
         $accounts[0].configuration.provisionedThroughputMiBps | Should -Be 500
@@ -129,14 +129,14 @@ Describe 'Evaluated Azure Files role configuration' {
     }
 
     It 'rejects invalid v2 <Case>' -TestCases @(
-        @{ Case = 'capacity below minimum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; shareSizeInGB = 31 } }
-        @{ Case = 'capacity above maximum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; shareSizeInGB = 262145 } }
+        @{ Case = 'capacity below minimum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; profileShareSizeInGB = 31 } }
+        @{ Case = 'capacity above maximum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; profileShareSizeInGB = 262145 } }
         @{ Case = 'SSD IOPS below minimum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; profileProvisionedIops = 2999 } }
         @{ Case = 'SSD IOPS above maximum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; profileProvisionedIops = 102401 } }
         @{ Case = 'SSD throughput below minimum'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; profileProvisionedThroughputMiBps = 99 } }
-        @{ Case = 'HDD IOPS below minimum'; Overrides = @{ officeStorageBillingModel = 'ProvisionedV2'; officeStorageSku = 'Standard'; officeProvisionedIops = 499 } }
-        @{ Case = 'HDD IOPS above maximum'; Overrides = @{ officeStorageBillingModel = 'ProvisionedV2'; officeStorageSku = 'Standard'; officeProvisionedIops = 50001 } }
-        @{ Case = 'HDD throughput above maximum'; Overrides = @{ officeStorageBillingModel = 'ProvisionedV2'; officeStorageSku = 'Standard'; officeProvisionedThroughputMiBps = 5121 } }
+        @{ Case = 'HDD IOPS below minimum'; Overrides = @{ officeStorageBillingModel = 'ProvisionedV2'; officeStorageTier = 'Standard'; officeProvisionedIops = 499 } }
+        @{ Case = 'HDD IOPS above maximum'; Overrides = @{ officeStorageBillingModel = 'ProvisionedV2'; officeStorageTier = 'Standard'; officeProvisionedIops = 50001 } }
+        @{ Case = 'HDD throughput above maximum'; Overrides = @{ officeStorageBillingModel = 'ProvisionedV2'; officeStorageTier = 'Standard'; officeProvisionedThroughputMiBps = 5121 } }
         @{ Case = 'negative performance'; Overrides = @{ profileStorageBillingModel = 'ProvisionedV2'; profileProvisionedIops = -1 } }
     ) {
         param($Case, $Overrides)
@@ -148,10 +148,10 @@ Describe 'Evaluated Azure Files role configuration' {
     }
 
     It 'accepts v2 capacity boundaries and clamps automatic recommendations' {
-        $small = @(Invoke-OfficeAccountConfiguration @{ profileStorageBillingModel = 'ProvisionedV2'; shareSizeInGB = 32 })
+        $small = @(Invoke-OfficeAccountConfiguration @{ profileStorageBillingModel = 'ProvisionedV2'; profileShareSizeInGB = 32 })
         $small[0].configuration.provisionedIops | Should -Be 3032
         $small[0].configuration.provisionedThroughputMiBps | Should -Be 104
-        $large = @(Invoke-OfficeAccountConfiguration @{ profileStorageBillingModel = 'ProvisionedV2'; shareSizeInGB = 262144 })
+        $large = @(Invoke-OfficeAccountConfiguration @{ profileStorageBillingModel = 'ProvisionedV2'; profileShareSizeInGB = 262144 })
         $large[0].configuration.provisionedIops | Should -Be 102400
         $large[0].configuration.provisionedThroughputMiBps | Should -Be 10340
     }
@@ -185,7 +185,7 @@ Describe 'Evaluated Azure Files role configuration' {
 
     It 'rejects unsupported billing combinations and oversized legacy shares' {
         { Invoke-OfficeAccountConfiguration @{ profileStorageBillingModel = 'Unknown' } } | Should -Throw '*Unsupported Azure Files*'
-        { Invoke-OfficeAccountConfiguration @{ shareSizeInGB = 102401 } } | Should -Throw '*Legacy Azure Files*'
+        { Invoke-OfficeAccountConfiguration @{ profileShareSizeInGB = 102401 } } | Should -Throw '*Legacy Azure Files*'
     }
 
     It 'rejects equal role <Setting> including case differences' -TestCases @(

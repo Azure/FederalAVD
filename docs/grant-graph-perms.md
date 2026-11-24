@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Grant Graph API Permissions to Managed Identity
 
@@ -24,7 +24,7 @@ Get-MgContext |
 Then use the provided script:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Set-GraphPermissions.ps1 `
+.\deployments\add-ons\sessionHostReplacer\tools\Set-GraphPermissions.ps1 `
     -ManagedIdentityObjectId <object-id> `
     -DeviceCleanupTarget Entra
 ```

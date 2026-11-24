@@ -646,10 +646,14 @@ Describe 'Common host-pool UI form behavior' {
         $automatedEnableMonitoring.defaultValue | Should -Be $true
     }
 
-    It 'defaults automated FSLogix storage to Azure Files Premium' {
-        $automatedStorageService.defaultValue | Should -Be 'Azure Files Premium'
-        $automatedForm.view.outputs.parameters.fslogixStorageService | Should -Match "'AzureFiles Premium'"
-        $automatedBicep | Should -Match "param fslogixStorageService string = 'AzureFiles Premium'"
+    It 'defaults automated FSLogix storage to Azure Files with Premium media' {
+        $automatedStorageService.defaultValue | Should -Be 'Azure Files'
+        $media = $automatedStorage.elements | Where-Object name -EQ 'profileStorageTier'
+        $media.defaultValue | Should -Be 'Premium SSD'
+        $media.defaultValue | Should -BeIn $media.constraints.allowedValues.label
+        $automatedForm.view.outputs.parameters.fslogixStorageService | Should -Match "'AzureFiles'"
+        $automatedBicep | Should -Match "param fslogixStorageService string = 'AzureFiles'"
+        $automatedBicep | Should -Match "param fslogixProfileStorageTier string = 'Premium'"
     }
 
     It 'links automated Entra Kerberos guidance to the selected identity model' {
@@ -722,7 +726,7 @@ Describe 'FSLogix Storage add-on redundancy behavior' {
 
     It 'defaults to ZRS and offers it only when the selected tier supports it in the region' {
         $storageRedundancy.defaultValue | Should -Match "'Zone Redundant', 'Locally Redundant'"
-        $storageRedundancy.defaultValue | Should -Match "storageService, 'AzureFiles Premium'"
+        $storageRedundancy.defaultValue | Should -Match "profileStorageTier, 'Premium'"
         $storageRedundancy.defaultValue | Should -Match 'storageSkusApi\.transformed\.(premiumZrs|standardZrs)'
         $storageRedundancy.defaultValue | Should -Match 'sku\.locations'
         $storageRedundancy.defaultValue | Should -Not -Match 'tryGet|coalesce'

@@ -1,6 +1,6 @@
 # Deploying Session Host Replacer Updates
 
-For first-deployment prerequisites, permissions and parameters, see [README.md](README.md).
+For first-deployment prerequisites, permissions and parameters, see [README.md](../README.md).
 The [canonical replacement flow](replacement-flow.md) owns lifecycle behavior.
 
 ## Scope
@@ -84,7 +84,7 @@ This is a breaking contract change: remove `enableQueueContinuation` and the SHR
 `azureQueuePrivateDnsZoneResourceId` from existing SHR parameter files. Do not remove similarly named
 parameters from other solutions. There is no supported switch back to direct timer execution.
 
-Before restarting an upgraded app, verify the [scaling plan exclusion contract](README.md#scaling-plan-exclusion-contract).
+Before restarting an upgraded app, verify the [scaling plan exclusion contract](../README.md#scaling-plan-exclusion-contract).
 An enabled plan's Exclusion tag must match SHR's configured tag name (default
 `ScalingPlanExclusion`). The worker repairs blank/mismatched names on verified unshared
 plans; shared mismatches still block work. Deploy the new scaling-plan custom role and
@@ -209,16 +209,16 @@ pilot, including each intended target cloud:
 
 ## Review or Update Existing Operational Settings
 
-Use [Set-SessionHostReplacerConfiguration.ps1](Set-SessionHostReplacerConfiguration.ps1) to preview
+Use [Set-SessionHostReplacerConfiguration.ps1](../tools/Set-SessionHostReplacerConfiguration.ps1) to preview
 changes and hold or resume initiation. App-setting changes restart the app; retain the corresponding
 deployment parameters so a later redeployment does not undo the hold.
 
 Stopping the app stops both timers, not external ARM work or autoscale.
-See [operations and recovery](README.md#two-timer-operations) and the
-[preview-first recovery command](README.md#recover-a-stopped-operation).
+See [operations and recovery](../README.md#two-timer-operations) and the
+[preview-first recovery command](../README.md#recover-a-stopped-operation).
 
 ## For Complete Documentation
 
-- [Configuration and troubleshooting](README.md)
+- [Configuration and troubleshooting](../README.md)
 - [Lifecycle and coordination](replacement-flow.md)
-- [Air-gapped platform prerequisites](../../../docs/air-gapped-clouds.md#shr-two-timer-prerequisites)
+- [Air-gapped platform prerequisites](../../../../docs/air-gapped-clouds.md#shr-two-timer-prerequisites)

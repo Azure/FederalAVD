@@ -93,7 +93,7 @@ param resourceGroupDeployment string
 @description('Required. Name of the existing storage resource group in this subscription.')
 param resourceGroupStorage string
 @description('Required. Quota per file share or NetApp volume in GiB.')
-param shareSizeInGB int
+param profileShareSizeInGB int
 @description('Required. Location token appended to anf- for the NetApp Active Directory SMB server name.')
 param smbServerLocation string
 @description('Required. Prefix for storage account names, followed by a two-digit index starting at storageIndex.')
@@ -106,16 +106,19 @@ param officeEncryptionKeyNameConv string
 param storageCount int
 @description('Required. Starting numeric index for storage account and encryption-key names.')
 param storageIndex int
-@description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
-param storageSku string
+@description('Required. Profile Azure Files media: Standard (HDD) or Premium (SSD).')
+param profileStorageTier string
+@allowed(['Standard', 'Premium'])
+@description('Optional. NetApp capacity-pool and volume service level; unused with Azure Files.')
+param netAppServiceLevel string = 'Premium'
 @description('Optional. Office Azure Files tier; defaults to the Profile tier.')
-param officeStorageSku string = storageSku
+param officeStorageTier string = profileStorageTier
 @description('Optional. Office share quota in GiB; defaults to the Profile quota.')
-param officeShareSizeInGB int = shareSizeInGB
+param officeShareSizeInGB int = profileShareSizeInGB
 @description('Required. Azure Files redundancy selection; ZoneRedundant selects ZRS and other values select LRS.')
-param fslogixStorageRedundancy string
+param profileStorageRedundancy string
 @description('Optional. Office Azure Files redundancy; defaults to the Profile redundancy.')
-param officeStorageRedundancy string = fslogixStorageRedundancy
+param officeStorageRedundancy string = profileStorageRedundancy
 @allowed(['Legacy', 'ProvisionedV2'])
 @description('Optional. Profile Azure Files billing model; Legacy preserves existing parameters.')
 param profileStorageBillingModel string = 'Legacy'
@@ -163,7 +166,7 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
     containerType: fslogixContainerType
-    shareSizeInGB: shareSizeInGB
+    shareSizeInGB: profileShareSizeInGB
     shareAdminGroups: fslogixAdminGroups
     shareUserGroups: fslogixUserGroups
     location: location
@@ -173,7 +176,7 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     ouPath: ouPath
     resourceGroupDeployment: resourceGroupDeployment
     smbServerLocation: smbServerLocation
-    storageSku: storageSku
+    serviceLevel: netAppServiceLevel
     tagsNetAppAccount: union(
       !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {},
       tags[?'Microsoft.NetApp/netAppAccounts'] ?? {}
@@ -204,7 +207,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     containerType: fslogixContainerType
     officeStorageAccountNamePrefix: officeStorageAccountNamePrefix
     officeEncryptionKeyNameConv: officeEncryptionKeyNameConv
-    officeStorageSku: officeStorageSku
+    officeStorageTier: officeStorageTier
     officeStorageRedundancy: officeStorageRedundancy
     officeShareSizeInGB: officeShareSizeInGB
     profileStorageBillingModel: profileStorageBillingModel
@@ -232,13 +235,13 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     resourceGroupStorage: resourceGroupStorage
     shardingOptions: fslogixShardOptions
     shareAdminGroups: fslogixAdminGroups
-    shareSizeInGB: shareSizeInGB
+    profileShareSizeInGB: profileShareSizeInGB
     shareUserGroups: fslogixUserGroups
     profileStorageAccountNamePrefix: profileStorageAccountNamePrefix
     storageCount: storageCount
     storageIndex: storageIndex
-    storageSku: storageSku
-    storageRedundancy: fslogixStorageRedundancy
+    profileStorageTier: profileStorageTier
+    profileStorageRedundancy: profileStorageRedundancy
     tags: tags
     permittedIPs: permittedIPs
     paasPublicNetworkAccess: paasPublicNetworkAccess

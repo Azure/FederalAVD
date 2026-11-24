@@ -518,6 +518,8 @@ Describe 'Shared naming and module metadata contracts' {
             ForEach-Object { $_.Groups[1].Value })
         $expected = @($policy.templateSpecs.PSObject.Properties.Value) +
             @($policy.identifiers.imageManagement, ($policy.resources.alertsAutomation.purpose -join '-'), 'image-validation')
+        $policy.templateSpecs.PSObject.Properties.Name | Should -Not -Contain 'sessionHostMaintenance'
+        $purposes | Should -Not -Contain 'session-host-maintenance'
         ($purposes | Sort-Object) -join ',' | Should -Be (($expected | Sort-Object) -join ',')
         $source | Should -Match ([regex]::Escape("-Purpose '$($policy.resources.operationsResourceGroup.purpose -join '-')'"))
     }

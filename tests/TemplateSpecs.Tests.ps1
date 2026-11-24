@@ -589,6 +589,57 @@ Describe 'Image Build, Image Validation and Session Host Replacer Template Spec 
 }
 
 Describe 'Template Spec naming conventions' {
+    It 'selects add-on catalog entries for <Case>' -TestCases @(
+        @{ Case = 'default all'; Enabled = $true; Supplied = $false; Selection = @(); Expected = $null }
+        @{ Case = 'disabled'; Enabled = $false; Supplied = $false; Selection = @(); Expected = @() }
+        @{ Case = 'SHR only'; Enabled = $true; Supplied = $true; Selection = @('session-host-replacer'); Expected = @('session-host-replacer') }
+        @{ Case = 'multiple in catalog order'; Enabled = $true; Supplied = $true; Selection = @('alerts', 'session-host-replacer'); Expected = @('session-host-replacer', 'alerts') }
+        @{ Case = 'case-insensitive'; Enabled = $true; Supplied = $true; Selection = @('SESSION-HOST-REPLACER'); Expected = @('session-host-replacer') }
+        @{ Case = 'duplicate names'; Enabled = $true; Supplied = $true; Selection = @('alerts', 'ALERTS'); Expected = @('alerts') }
+        @{ Case = 'empty selection'; Enabled = $true; Supplied = $true; Selection = @(); Expected = @() }
+    ) {
+        param($Enabled, $Supplied, $Selection, $Expected)
+        $catalogBlock = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text.StartsWith('if ($CreateAddOns)')
+        }, $true)
+        $CreateAddOns = $Enabled
+        $addOnsSupplied = $Supplied
+        $AddOns = $Selection
+        $templateSpecs = @()
+        $publisherRoot = Split-Path -Parent $scriptPath
+        Invoke-Expression ($catalogBlock.Extent.Text.Replace('$PSScriptRoot', '$publisherRoot'))
+        if ($Enabled -and -not $Supplied) {
+            $templateSpecs.Count | Should -BeGreaterThan 1
+            $Expected = $addOnCatalog.Purpose
+        }
+        (@($templateSpecs.Purpose) -join ',') | Should -Be (@($Expected) -join ',')
+        foreach ($spec in $templateSpecs) {
+            Test-Path -LiteralPath $spec.TemplateFile -PathType Leaf | Should -BeTrue
+            Test-Path -LiteralPath $spec.UiFormDefinition -PathType Leaf | Should -BeTrue
+        }
+    }
+
+    It 'rejects unsupported selection <Case> without adding any catalog entries' -TestCases @(
+        @{ Case = 'unknown'; Selection = @('unknown') }
+        @{ Case = 'valid plus unknown'; Selection = @('session-host-replacer', 'unknown') }
+        @{ Case = 'blank'; Selection = @('') }
+    ) {
+        param($Selection)
+        $catalogBlock = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and $node.Extent.Text.StartsWith('if ($CreateAddOns)')
+        }, $true)
+        $CreateAddOns = $true
+        $addOnsSupplied = $true
+        $AddOns = $Selection
+        $templateSpecs = @()
+        $publisherRoot = Split-Path -Parent $scriptPath
+        { Invoke-Expression ($catalogBlock.Extent.Text.Replace('$PSScriptRoot', '$publisherRoot')) } |
+            Should -Throw '*Unsupported -AddOns names:*'
+        $templateSpecs.Count | Should -Be 0
+    }
+
     It 'includes Image Validation only when add-on publication is enabled: <Enabled>' -TestCases @(
         @{ Enabled = $true }
         @{ Enabled = $false }
@@ -600,26 +651,27 @@ Describe 'Template Spec naming conventions' {
             $node -is [Management.Automation.Language.IfStatementAst] -and
                 $node.Extent.Text.StartsWith('if ($CreateAddOns)')
         }, $true)
-        $catalogBlock | Should Not BeNullOrEmpty
+        $catalogBlock | Should -Not -BeNullOrEmpty
         $CreateAddOns = $Enabled
+        $addOnsSupplied = $false
         $templateSpecs = @()
         $publisherRoot = Split-Path -Parent $scriptPath
         Invoke-Expression ($catalogBlock.Extent.Text.Replace('$PSScriptRoot', '$publisherRoot'))
         $imageValidation = @($templateSpecs | Where-Object Purpose -eq 'image-validation')
-        $imageValidation.Count | Should Be ([int]$Enabled)
+        $imageValidation.Count | Should -Be ([int]$Enabled)
         if ($Enabled) {
             $spec = $imageValidation[0]
-            $spec.DisplayName | Should Be 'AVD Image Validation'
+            $spec.DisplayName | Should -Be 'AVD Image Validation'
             [IO.Path]::GetFullPath($spec.TemplateFile) |
-                Should Be (Join-Path $repoRoot 'deployments\add-ons\imageValidation\main.json')
+                Should -Be (Join-Path $repoRoot 'deployments\add-ons\imageValidation\main.json')
             [IO.Path]::GetFullPath($spec.UiFormDefinition) |
-                Should Be (Join-Path $repoRoot 'deployments\add-ons\imageValidation\uiFormDefinition.json')
-            (Test-Path -LiteralPath $spec.TemplateFile -PathType Leaf) | Should Be $true
-            (Test-Path -LiteralPath $spec.UiFormDefinition -PathType Leaf) | Should Be $true
+                Should -Be (Join-Path $repoRoot 'deployments\add-ons\imageValidation\uiFormDefinition.json')
+            (Test-Path -LiteralPath $spec.TemplateFile -PathType Leaf) | Should -Be $true
+            (Test-Path -LiteralPath $spec.UiFormDefinition -PathType Leaf) | Should -Be $true
             New-ConventionName -Components @('resourceType', 'workload', 'purpose', 'location') `
                 -Delimiter '-' -ResourceTypeCode 'ts' -Purpose $spec.Purpose `
                 -LocationAbbreviation 'use' -Workload 'avd' |
-                Should Be 'ts-avd-image-validation-use'
+                Should -Be 'ts-avd-image-validation-use'
         }
     }
 
@@ -631,7 +683,7 @@ Describe 'Template Spec naming conventions' {
 
         $catalog = $scriptAst.Find({
             param($node)
-            $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$addOns'
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$addOnCatalog'
         }, $true)
         $catalog | Should -Not -BeNullOrEmpty
         $addOns = @(Invoke-Expression $catalog.Right.Extent.Text)

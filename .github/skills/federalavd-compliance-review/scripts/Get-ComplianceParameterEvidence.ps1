@@ -32,7 +32,7 @@ $relevantNames = @(
     'dedicatedHostGroupResourceId',
     'recoveryServices',
     'recoveryServicesVaultStorageRedundancy',
-    'fslogixStorageRedundancy',
+    'fslogixProfileStorageRedundancy',
     'logAnalyticsWorkspaceResourceId',
     'existingLogAnalyticsWorkspaceResourceId'
 )

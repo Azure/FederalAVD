@@ -22,10 +22,10 @@
 .PARAMETER Apply
     Performs recovery after confirmation. Without this switch, all Azure access is read-only.
 .EXAMPLE
-    .\Repair-SessionHostReplacerOperation.ps1 -FunctionAppName func-shr `
+    .\tools\Repair-SessionHostReplacerOperation.ps1 -FunctionAppName func-shr `
         -ResourceGroupName rg-operations -RepairTemplateReference
 .EXAMPLE
-    .\Repair-SessionHostReplacerOperation.ps1 -FunctionAppName func-shr `
+    .\tools\Repair-SessionHostReplacerOperation.ps1 -FunctionAppName func-shr `
         -ResourceGroupName rg-operations -RepairTemplateReference -Apply
 .NOTES
     Requires PowerShell 7.4+, Az.Accounts sign-in, Function App read/config-list/stop/start,
@@ -44,12 +44,13 @@ param(
     [string] $SubscriptionId,
     [switch] $RepairTemplateReference,
     [ValidateRange(1, 720)][int] $ExtendDeadlineHours,
-    [string] $BackupDirectory = (Join-Path $PSScriptRoot '..\..\..\customer\shr-recovery'),
+    [string] $BackupDirectory = (Join-Path $PSScriptRoot '..\..\..\..\customer\shr-recovery'),
     [switch] $Apply,
     [switch] $PassThru
 )
 
 $ErrorActionPreference = 'Stop'
+$replacerRoot = Split-Path -Parent $PSScriptRoot
 $context = Get-AzContext
 if (-not $context) { throw 'Sign in using Connect-AzAccount before running recovery.' }
 if (-not $SubscriptionId) { $SubscriptionId = $context.Subscription.Id }
@@ -60,9 +61,9 @@ $environment = Get-AzEnvironment -Name $context.Environment.Name
 $armRoot = $environment.ResourceManagerUrl.TrimEnd('/')
 $appId = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.Web/sites/$FunctionAppName"
 $webApi = '2024-11-01'
-Import-Module (Join-Path $PSScriptRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1') -Scope Local
+Import-Module (Join-Path $replacerRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.psd1') -Scope Local
 $coordinator = Get-Module SessionHostReplacer.Continuation -All | Where-Object {
-    $_.Path -eq (Join-Path $PSScriptRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.Continuation.psm1')
+    $_.Path -eq (Join-Path $replacerRoot 'functions\Modules\SessionHostReplacer\SessionHostReplacer.Continuation.psm1')
 } | Select-Object -First 1
 if (-not $coordinator) { throw 'Cannot load the repository SHR continuation module.' }
 

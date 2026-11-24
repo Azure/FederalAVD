@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Design
 
@@ -80,7 +80,7 @@ material, move advanced storage provisioning/tuning to the standalone add-on rat
 duplicating orchestration or merely hiding form controls; no such feature removal is made here.
 The host-pool deduplicated-package regression ceiling is 1,650,000 bytes including the
 16 KiB reserve, leaving at least 350,000 bytes against the conservative publication budget.
-This intentionally accommodates v2 and compatibility aliases without weakening the separate
+This intentionally accommodates v2 and canonical Profile controls without weakening the separate
 2,000,000-byte publication limit or the publisher's 200,000-byte remaining-headroom warning.
 
 ### Container type is the FSLogix configuration source of truth
@@ -141,7 +141,7 @@ configuration output uses `localProfileStorageAccountResourceIds` and
 `remoteProfileStorageAccountResourceIds`. Storage creation, billing, quota and backup controls
 remain producer-owned.
 
-This is a breaking account/discovery contract. Update saved customer files and output-consuming
+This is a breaking account/discovery and storage-tuning contract. Update saved customer files and output-consuming
 automation before redeployment:
 
 | Old contract | Canonical replacement |
@@ -151,10 +151,22 @@ automation before redeployment:
 | Automated `fslogixStorageAccountResourceIds` / `fslogixOfficeStorageAccountResourceIds` outputs | `fslogixLocalProfileStorageAccountResourceIds` / `fslogixLocalOfficeStorageAccountResourceIds` |
 | Storage add-on `storageAccountResourceIds` / `remoteStorageAccountResourceIds` | `profileStorageAccountResourceIds` / `remoteProfileStorageAccountResourceIds` |
 | Storage add-on `storageAccountNamePrefix` | `fslogixProfileStorageAccountNamePrefix` |
+| `fslogixStorageRedundancy` | `fslogixProfileStorageRedundancy` |
+| Host-pool `fslogixShareSizeInGB` / storage add-on `shareSizeInGB` | `fslogixProfileShareSizeInGB` |
+| `fslogixStorageService: 'AzureFiles Standard'` / `'AzureFiles Premium'` | `fslogixStorageService: 'AzureFiles'` plus `fslogixProfileStorageTier: 'Standard'` / `'Premium'` |
+| `fslogixStorageService: 'AzureNetAppFiles Standard'` / `'AzureNetAppFiles Premium'` | `fslogixStorageService: 'AzureNetAppFiles'` plus `fslogixNetAppServiceLevel: 'Standard'` / `'Premium'` |
+| Explicit null Profile tier/redundancy/quota/prefix | Omit for defaults, or supply a concrete value; blank prefix selects generated naming |
 | `namingConvention.fslogixStoragePrefix` | `namingConvention.fslogixProfileStoragePrefix` |
 | `fslLocalStorageAccountNames` / `fslRemoteStorageAccountNames` tags | `fslLocalProfileStorageAccountNames` / `fslRemoteProfileStorageAccountNames` |
 
 Preserve each value and array order when renaming; default generated resource names are unchanged.
+If both an old alias and a canonical Profile value were saved, retain the effective canonical value
+and remove the alias. The backend/media/service-level split has identical names and semantics across
+standard host pools, automated host pools and the storage add-on. Standard/add-on direct deployments
+retain Standard Azure Files media defaults; automated retains Premium. All three Portal forms retain
+Premium SSD/provisioned-v2 defaults. Profile media is ignored with NetApp; NetApp service level is
+ignored with Azure Files. Nondefault Azure Files billing, performance, redundancy and Office tuning
+is rejected with NetApp; the Profile quota still sizes both NetApp volumes.
 Redeploy the owning host-pool producer to refresh canonical resource-group tags before using the
 updated additional-host or SHR form. Until then, select accounts explicitly rather than expecting
 old tags to populate the form. Customer files are not rewritten automatically.
@@ -302,7 +314,7 @@ for deployment and live Azure Government checks.
 
 Session Host Replacer uses one mandatory two-timer design in the same Function App: the configurable
 initiation schedule authorizes batches, and a fixed one-minute timer reconciles authorized work.
-The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/replacement-flow.md#two-timer-execution)
+The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md#two-timer-execution)
 defines initiation authorization, immutable image selection, timer-authorized batch scope, conditional state ownership,
 idempotent deployment intent, deadlines and operator recovery. This is separate from application
 or image acceptance testing. SideBySide separates deployment readiness from old-host retirement:
@@ -328,13 +340,13 @@ trigger context inserted between them. The workbook joins native invocation tele
 drill-down and separates timer health, cycle state and inventory freshness. Telemetry is
 last-reported evidence, not an authoritative live Table read; idle reconciliation must not
 reassociate completed cycles or make stale inventory look fresh. See the
-[correlation contract](../deployments/add-ons/sessionHostReplacer/logging-guide.md#cycle-correlation)
+[correlation contract](../deployments/add-ons/sessionHostReplacer/docs/logging-guide.md#cycle-correlation)
 and [operator tracing flow](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle).
 Normal logging keeps timer health, meaningful actions and one final active-pass cycle snapshot;
 internal checkpoints/progress, repeated setup and unchanged per-host observations are Trace.
 Existing dashboard snapshot records stay at Information. This avoids persistent deduplication
 state or blanket sampling, while stopped-state polling does not replay a saved failure as a new
-error. The logging guide owns the [severity and volume contract](../deployments/add-ons/sessionHostReplacer/logging-guide.md#normal-output-versus-diagnostics).
+error. The logging guide owns the [severity and volume contract](../deployments/add-ons/sessionHostReplacer/docs/logging-guide.md#normal-output-versus-diagnostics).
 For a pool without an active operation, a read-only timer preflight reuses the planner and readiness
 checks to avoid new operation writes when idle. The reconciler returns after an operation lookup
 when no work is active. Recovery, housekeeping
@@ -353,7 +365,7 @@ checked migration of its saved link and fingerprint, not permission to rebase im
 cleanup or identity configuration during an operation.
 Timer triggers are native to Functions; SHR needs no queue binding, extension bundle or prebuilt
 extension package. Blob host storage, Table state, managed identity and private connectivity remain
-required. The [upgrade procedure](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment)
+required. The [upgrade procedure](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md#upgrading-an-existing-deployment)
 reuses the existing worker function name and durable state without resetting active operations.
 Incremental deployments can leave historical queue resources; cleanup is explicit and separate.
 Enclave runtime support must still be verified.
@@ -386,7 +398,7 @@ For capability-level composition, start with the orchestration entry points:
 | Credentials and encryption vaults | [Key Vaults](../deployments/shared/modules/orchestration/keyVaults/keyVaults.bicep) |
 | Host monitoring resources | [Monitoring](../deployments/shared/modules/orchestration/monitoring/monitoring.bicep) |
 | Session host deployment | [Session hosts](../deployments/shared/modules/orchestration/sessionHosts/sessionHosts.bicep) |
-| Session host policy internals | [Policy authoring contract](../deployments/shared/modules/orchestration/sessionHostPolicy/AUTHORING.md) |
+| Session host policy internals | [Policy authoring contract](../deployments/shared/modules/orchestration/sessionHostPolicy/docs/AUTHORING.md) |
 
 Use the [shared naming contract](../deployments/shared/modules/orchestration/naming/README.md)
 for generated names and the

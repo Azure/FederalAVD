@@ -1,9 +1,9 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Add-Ons**](add-ons.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # AVD Alerts Add-On
 
 > **For complete deployment instructions, parameter reference, architecture details, and troubleshooting, see the [AVD Alerts Add-On Documentation](../deployments/add-ons/avdAlerts/README.md).**
-> **For per-alert response guidance, see the [Alert Response Playbook](../deployments/add-ons/avdAlerts/ALERT-RESPONSE.md).**
+> **For per-alert response guidance, see the [Alert Response Playbook](../deployments/add-ons/avdAlerts/docs/ALERT-RESPONSE.md).**
 
 ## Overview
 

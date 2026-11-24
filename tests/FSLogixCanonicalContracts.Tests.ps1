@@ -3,6 +3,64 @@ BeforeAll {
 }
 
 Describe 'Canonical FSLogix producer account contracts' {
+    It 'uses the same backend and explicit tuning contract in <Directory>' -TestCases @(
+        @{ Directory = 'hostpools'; Template = 'hostpool.json'; Tier = 'Standard' }
+        @{ Directory = 'automatedHostPools'; Template = 'automatedHostPool.json'; Tier = 'Premium' }
+        @{ Directory = 'add-ons\fslogixStorage'; Template = 'main.json'; Tier = 'Standard' }
+    ) {
+        param($Directory, $Template, $Tier)
+        $arm = Get-Content (Join-Path $repoRoot "deployments\$Directory\$Template") -Raw | ConvertFrom-Json -Depth 100
+        $parameters = $arm.parameters
+        foreach ($obsolete in @('fslogixStorageRedundancy', 'fslogixShareSizeInGB', 'shareSizeInGB')) {
+            $parameters.PSObject.Properties.Name | Should -Not -Contain $obsolete
+        }
+        @($parameters.fslogixStorageService.allowedValues | Sort-Object) | Should -Be @('AzureFiles', 'AzureNetAppFiles')
+        $parameters.fslogixStorageService.defaultValue | Should -BeExactly 'AzureFiles'
+        $parameters.fslogixNetAppServiceLevel.allowedValues | Should -Be @('Standard', 'Premium')
+        $parameters.fslogixNetAppServiceLevel.defaultValue | Should -BeExactly 'Premium'
+        $parameters.fslogixProfileStorageTier.allowedValues | Should -Be @('Standard', 'Premium')
+        $parameters.fslogixProfileStorageTier.defaultValue | Should -BeExactly $Tier
+        $parameters.fslogixProfileStorageRedundancy.defaultValue | Should -BeExactly 'LocallyRedundant'
+        $parameters.fslogixProfileShareSizeInGB.defaultValue | Should -Be 100
+        $parameters.fslogixProfileShareSizeInGB.type | Should -BeExactly 'int'
+        $parameters.fslogixProfileShareSizeInGB.minValue | Should -Be 1
+        $parameters.fslogixProfileStorageAccountNamePrefix.defaultValue | Should -BeExactly ''
+        foreach ($name in @('fslogixStorageService', 'fslogixNetAppServiceLevel', 'fslogixProfileStorageTier',
+            'fslogixProfileStorageRedundancy', 'fslogixProfileShareSizeInGB', 'fslogixProfileStorageAccountNamePrefix')) {
+            $parameters.$name.nullable | Should -Not -BeTrue
+        }
+        $form = Get-Content (Join-Path $repoRoot "deployments\$Directory\uiFormDefinition.json") -Raw | ConvertFrom-Json -Depth 100
+        foreach ($binding in $form.view.outputs.parameters.PSObject.Properties) {
+            $parameters.PSObject.Properties.Name | Should -Contain $binding.Name
+        }
+        $form.view.outputs.parameters.fslogixStorageService | Should -Not -Match 'AzureFiles |AzureNetAppFiles |concat|split'
+        foreach ($name in @('fslogixProfileStorageTier', 'fslogixNetAppServiceLevel', 'fslogixProfileStorageAccountNamePrefix')) {
+            $form.view.outputs.parameters.$name | Should -Not -Match "parse\('null'\)"
+        }
+    }
+
+    It 'keeps existing NetApp pool selection filtered by the independent service level' {
+        $form = Get-Content (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json') -Raw
+        $form | Should -Match "pool.properties.serviceLevel, steps\('storage'\).netAppServiceLevel"
+        $form | Should -Not -Match "last\(split\(steps\('storage'\).storageService"
+        $root = Get-Content (Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\fslogix.bicep') -Raw
+        $root | Should -Match 'serviceLevel: netAppServiceLevel'
+        $root | Should -Match 'shareSizeInGB: profileShareSizeInGB'
+    }
+
+    It 'collects canonical Profile redundancy for compliance evidence' {
+        $path = Join-Path $TestDrive 'profile-parameters.json'
+        @{ parameters = @{ fslogixProfileStorageRedundancy = @{ value = 'ZoneRedundant' } } } |
+            ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $path
+        $csv = Join-Path $TestDrive 'profile-evidence.csv'
+        & (Join-Path $repoRoot '.github\skills\federalavd-compliance-review\scripts\Get-ComplianceParameterEvidence.ps1') `
+            -ParameterPath $path -CsvPath $csv | Out-Null
+        $evidence = @(Import-Csv -LiteralPath $csv)
+        $evidence.Count | Should -Be 1
+        $evidence[0].Parameter | Should -BeExactly 'fslogixProfileStorageRedundancy'
+        $evidence[0].Value | Should -BeExactly 'ZoneRedundant'
+    }
+
     It 'uses only explicit existing Profile inputs and local/remote outputs in <Directory>' -TestCases @(
         @{ Directory = 'hostpools'; Template = 'hostpool.json' }
         @{ Directory = 'automatedHostPools'; Template = 'automatedHostPool.json' }

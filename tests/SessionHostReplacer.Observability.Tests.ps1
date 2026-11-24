@@ -690,7 +690,7 @@ Describe 'SHR workbook cycle tracing contract' {
     }
 
     It 'uses native invocation outcomes for idle-aware timer alert examples' {
-        $guide = Get-Content (Join-Path $shrRoot 'alerts\alerts-guide.md') -Raw
+        $guide = Get-Content (Join-Path $shrRoot 'docs\alerts-guide.md') -Raw
         $timerSections = [regex]::Match($guide, '(?s)## 2\. Timer Failures(.*?)## Avoid Alerting').Groups[1].Value
         $timerSections | Should -Match 'requests'
         $timerSections | Should -Match 'session-host-replacer-worker'

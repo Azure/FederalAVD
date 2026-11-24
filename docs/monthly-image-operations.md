@@ -309,7 +309,7 @@ configuration-review helper below does not change image/template references.
 For a safe review of interpreted operational settings:
 
 ```powershell
-.\deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1 `
+.\deployments\add-ons\sessionHostReplacer\tools\Set-SessionHostReplacerConfiguration.ps1 `
     -FunctionAppName '<pilot-shr-name>' `
     -ResourceGroupName '<pilot-shr-resource-group>'
 ```
@@ -317,7 +317,7 @@ For a safe review of interpreted operational settings:
 Select the pilot's subscription context first if different from the build subscription.
 Do not shorten drain times, lower capacity protection, or use the maintenance override simply to
 make the monthly cycle finish sooner. A one-host DeleteFirst pilot cannot perform normal exact-name
-replacement; see [mode constraints and recovery](../deployments/add-ons/sessionHostReplacer/replacement-flow.md).
+replacement; see [mode constraints and recovery](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md).
 
 **Gate:** Intended pilot replacement completes, the target version is confirmed, required capacity
 is healthy, and there are no unresolved deployments or errors. Normal scaling may leave validated
@@ -438,7 +438,7 @@ For **SideBySide with unexpired shutdown retention**, use the guarded
 [shutdown-retention rollback runbook](../deployments/add-ons/sessionHostReplacer/README.md#roll-back-to-shutdown-retention-hosts).
 The rollback script leaves SHR stopped and restored hosts opted out; follow its reconciliation
 steps before resuming. DeleteFirst or expired/deleted hosts need the approved redeployment/recovery
-path, not that retained-host restore. See [canonical recovery behavior](../deployments/add-ons/sessionHostReplacer/replacement-flow.md)
+path, not that retained-host restore. See [canonical recovery behavior](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md)
 and [detailed troubleshooting](../deployments/add-ons/sessionHostReplacer/README.md#troubleshooting).
 
 Keep `AllowImageVersionRollback` disabled for normal monthly operations. It allows selection of

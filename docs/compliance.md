@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Compliance Control Mapping
 
@@ -119,7 +119,7 @@ recommendation is implementation guidance, not an authorization or certification
 | CP-6 | Alternate Storage Site | Recovery Services Vault storage redundancy can be set to GeoRedundant to replicate backup data to a paired region. | Configurable | `recoveryServicesVaultStorageRedundancy: GeoRedundant` |
 | CP-7 | Alternate Processing Site | When vault storage is GeoRedundant, Cross-Region Restore (CRR) is automatically enabled, allowing personal VMs to be restored to the paired region. This satisfies CP-7 when the Contingency Plan (CP-2) documents an acceptable RPO of hours. **Azure Site Recovery (ASR) replication is not implemented** — if sub-hour RPO is required, ASR would need to be added. The built-in Azure Policy "Audit virtual machines without disaster recovery configured" (ID `0015ea4d`) will flag personal VMs as non-compliant because it checks for ASR-specific resource links, not Azure Backup. A policy exemption with documented CP-2 justification is required when using Azure Backup + CRR as the CP-7 control. See [bcdr.md](bcdr.md#azure-site-recovery-asr-is-not-implemented) for the full comparison. | Configurable | `recoveryServicesVaultStorageRedundancy: GeoRedundant` |
 | CP-9 | Information System Backup — FSLogix profiles | Azure Backup snapshot policy protects FSLogix Azure Files shares (pooled) or VM disks (personal). | Configurable | `recoveryServices: true` |
-| CP-9 | Information System Backup — zone resilience | Azure Files storage can be deployed with Zone Redundant Storage to survive an availability zone failure without restore. | Configurable | `fslogixStorageRedundancy: ZoneRedundant` |
+| CP-9 | Information System Backup — zone resilience | Azure Files storage can be deployed with Zone Redundant Storage to survive an availability zone failure without restore. | Configurable | `fslogixProfileStorageRedundancy: ZoneRedundant` |
 
 ---
 
@@ -171,7 +171,7 @@ Apply these in addition to the IL4 values above:
   "keyManagementRecoveryServicesVault": { "value": "CustomerManagedHSM" },
   "deployPrivateEndpoints": { "value": true },
   "recoveryServicesVaultStorageRedundancy": { "value": "GeoRedundant" },
-  "fslogixStorageRedundancy": { "value": "ZoneRedundant" },
+  "fslogixProfileStorageRedundancy": { "value": "ZoneRedundant" },
   "recoveryServices": { "value": true }
 }
 ```
@@ -207,7 +207,7 @@ For workloads requiring hardware-level memory encryption and attestation (beyond
 | `keyManagementStorage` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
 | `keyManagementRecoveryServicesVault` | `CustomerManaged` | `CustomerManaged` | `CustomerManagedHSM` |
 | `deployPrivateEndpoints` | `true` | `true` | `true` |
-| `fslogixStorageRedundancy` | `ZoneRedundant` | `ZoneRedundant` | `ZoneRedundant` |
+| `fslogixProfileStorageRedundancy` | `ZoneRedundant` | `ZoneRedundant` | `ZoneRedundant` |
 | `recoveryServicesVaultStorageRedundancy` | `GeoRedundant` | `GeoRedundant` | `GeoRedundant` |
 | `recoveryServices` | `true` | `true` | `true` |
 | `deployToDedicatedHosts` | *(optional)* | *(optional)* | `true` *(US Gov AZ/TX/VA)* |

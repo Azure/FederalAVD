@@ -57,7 +57,7 @@
     Returns the scheduled request after it is submitted.
 
 .EXAMPLE
-    .\Start-SessionHostMaintenanceReplacement.ps1 `
+    .\tools\Start-SessionHostMaintenanceReplacement.ps1 `
         -FunctionAppName func-shr-prod-use2 `
         -ResourceGroupName rg-avd-operations-use2 `
         -ApprovedImageVersion 1.2.3 `

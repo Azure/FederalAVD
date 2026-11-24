@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Features
 
@@ -464,17 +464,20 @@ fslogixAdminGroups = [
 
 | Service Tier | Parameter Value | Performance | Features |
 | --- | --- | --- | --- |
-| Premium | `AzureFiles Premium` | Up to 100,000 IOPS per share, sub-millisecond latency | SMB Multichannel automatically enabled, Zone-Redundant Storage (ZRS) support |
-| Standard | `AzureFiles Standard` | Standard performance tier | Large file share option enabled |
+| Premium | `Premium` | Up to 100,000 IOPS per share, sub-millisecond latency | SMB Multichannel automatically enabled, Zone-Redundant Storage (ZRS) support |
+| Standard | `Standard` | Standard performance tier | Large file share option enabled |
+
+Select backend `fslogixStorageService = 'AzureFiles'` and media with `fslogixProfileStorageTier`.
 
 **Azure NetApp Files:**
 
 | Service Tier | Parameter Value | Performance | Compatibility |
 | --- | --- | --- | --- |
-| Premium | `AzureNetAppFiles Premium` | Up to 450,000 IOPS | ADDS only |
-| Standard | `AzureNetAppFiles Standard` | Up to 320,000 IOPS | ADDS only |
+| Premium | `Premium` | Up to 450,000 IOPS | ADDS only |
+| Standard | `Standard` | Up to 320,000 IOPS | ADDS only |
 
-**Parameter:** `fslogixStorageService`
+Select backend `fslogixStorageService = 'AzureNetAppFiles'` and service level with
+`fslogixNetAppServiceLevel`. Backend values no longer contain media/service level.
 
 **Azure NetApp Files Requirements:**
 
@@ -509,7 +512,7 @@ This supports active/active disaster recovery configurations as documented in th
 
 ### Azure NetApp Files Integration
 
-When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles Standard'` or `'AzureNetAppFiles Premium'`):
+When using Azure NetApp Files (`fslogixStorageService = 'AzureNetAppFiles'`):
 
 **Requirements:**
 
@@ -765,9 +768,9 @@ availability = 'None'                      // No infrastructure redundancy
 
 ### Zone Redundant Storage
 
-Azure Files storage accounts for FSLogix can be configured with Zone-Redundant Storage (ZRS) using the `fslogixStorageRedundancy` parameter. ZRS replicates data synchronously across three availability zones within a region, protecting user profile data against a datacenter-level failure without any operator action or failover.
+Azure Files storage accounts for FSLogix can be configured with Zone-Redundant Storage (ZRS) using the `fslogixProfileStorageRedundancy` parameter. ZRS replicates data synchronously across three availability zones within a region, protecting user profile data against a datacenter-level failure without any operator action or failover.
 
-**`fslogixStorageRedundancy` remains an independently configurable parameter.** In the standard and
+**`fslogixProfileStorageRedundancy` remains an independently configurable parameter.** In the standard and
 automated host-pool Portal forms, it defaults to `ZoneRedundant` when session hosts use Availability
 Zones and warns if `LocallyRedundant` is selected instead. Direct Bicep and parameter-file
 deployments retain the `LocallyRedundant` parameter default; set it to `ZoneRedundant` to align
@@ -781,18 +784,19 @@ storage resilience with zonal compute resilience.
 
 **Storage Service Options:**
 
-- **'AzureFiles Premium'**: Recommended for production. ZRS or LRS. Does not support GRS.
-- **'AzureFiles Standard'**: Supports LRS and ZRS. GRS available but IOPS typically insufficient for production AVD scale.
-- **'AzureNetAppFiles Premium'**: Highest IOPS tier (450,000 IOPS). Redundancy managed through ANF capacity pool SKU and Cross-Region Replication.
-- **'AzureNetAppFiles Standard'**: Standard IOPS tier (320,000 IOPS).
+- **Azure Files / Premium media**: Recommended for production. ZRS or LRS. Does not support GRS.
+- **Azure Files / Standard media**: This solution offers LRS and ZRS.
+- **Azure NetApp Files / Premium service level**: Highest IOPS tier (450,000 IOPS). Redundancy managed through ANF capacity pool SKU and Cross-Region Replication.
+- **Azure NetApp Files / Standard service level**: Standard IOPS tier (320,000 IOPS).
 
 **Reference:** [Azure Storage redundancy](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy)
 
 **Parameter Configuration:**
 
 ```bicep
-fslogixStorageRedundancy = 'ZoneRedundant'      // Recommended for zone-deployed hosts
-fslogixStorageService = 'AzureFiles Premium'    // Production-grade storage
+fslogixProfileStorageRedundancy = 'ZoneRedundant'      // Recommended for zone-deployed hosts
+fslogixStorageService = 'AzureFiles'
+fslogixProfileStorageTier = 'Premium'          // Production-grade storage
 ```
 
 **Benefits:**
@@ -875,7 +879,8 @@ identifier = 'finance'
 availability = 'availabilityZones'
 availabilityZones = ['1', '2', '3']
 fslogixContainerType = 'CloudCacheProfileContainer'
-fslogixStorageService = 'AzureFiles Premium'
+fslogixStorageService = 'AzureFiles'
+fslogixProfileStorageTier = 'Premium'
 fslogixExistingRemoteProfileStorageAccountResourceIds = [           // Reference primary region storage
   '/subscriptions/.../resourceGroups/rg-finance-01-storage-usgovaz/providers/Microsoft.Storage/storageAccounts/stfinance01usgovaz'
 ]
@@ -890,7 +895,8 @@ identifier = 'finance'
 availability = 'availabilityZones'
 availabilityZones = ['1', '2', '3']
 fslogixContainerType = 'CloudCacheProfileContainer'
-fslogixStorageService = 'AzureFiles Premium'
+fslogixStorageService = 'AzureFiles'
+fslogixProfileStorageTier = 'Premium'
 deployFSLogixStorage = true                                   // Deploy storage in secondary region
 fslogixExistingRemoteProfileStorageAccountResourceIds = [           // Reference primary region storage
   '/subscriptions/.../resourceGroups/rg-finance-01-storage-use/providers/Microsoft.Storage/storageAccounts/stfinance01use'
@@ -1014,7 +1020,7 @@ This feature is automatically enabled when Azure Files Premium is selected for F
 
 **Automatic Enablement:**
 
-- Only supported with Azure Files Premium (`fslogixStorageService = 'AzureFiles Premium'`)
+- Only supported with Azure Files Premium (`fslogixStorageService = 'AzureFiles'`, `fslogixProfileStorageTier = 'Premium'`)
 - No additional configuration required
 - Multiple connections established automatically between session hosts and storage
 

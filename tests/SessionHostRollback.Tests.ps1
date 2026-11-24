@@ -1,6 +1,6 @@
 BeforeAll {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $rollbackScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1'
+    $rollbackScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Invoke-SessionHostRollback.ps1'
     function New-RollbackResponse {
         param([object]$Content, [int]$StatusCode = 200, [string]$ETag = 'record-1')
         [PSCustomObject]@{

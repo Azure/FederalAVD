@@ -129,14 +129,14 @@ Describe 'FSLogix Storage backup Portal choices' {
     }
 
     It 'emits and clears backup parameters for <Service> and <Mode>' -TestCases @(
-        @{ Service = 'AzureFiles Standard'; Mode = 'None' }
-        @{ Service = 'AzureFiles Standard'; Mode = 'Existing' }
-        @{ Service = 'AzureFiles Standard'; Mode = 'Shared' }
-        @{ Service = 'AzureFiles Standard'; Mode = 'Dedicated' }
-        @{ Service = 'AzureNetAppFiles Standard'; Mode = 'None' }
-        @{ Service = 'AzureNetAppFiles Standard'; Mode = 'Existing' }
-        @{ Service = 'AzureNetAppFiles Standard'; Mode = 'Shared' }
-        @{ Service = 'AzureNetAppFiles Standard'; Mode = 'Dedicated' }
+        @{ Service = 'AzureFiles'; Mode = 'None' }
+        @{ Service = 'AzureFiles'; Mode = 'Existing' }
+        @{ Service = 'AzureFiles'; Mode = 'Shared' }
+        @{ Service = 'AzureFiles'; Mode = 'Dedicated' }
+        @{ Service = 'AzureNetAppFiles'; Mode = 'None' }
+        @{ Service = 'AzureNetAppFiles'; Mode = 'Existing' }
+        @{ Service = 'AzureNetAppFiles'; Mode = 'Shared' }
+        @{ Service = 'AzureNetAppFiles'; Mode = 'Dedicated' }
     ) {
         param($Service, $Mode)
         $steps = @{

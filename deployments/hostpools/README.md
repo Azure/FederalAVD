@@ -393,11 +393,12 @@ Subscription
 #### `fslogixStorageService`
 
 - **Type:** String
-- **Allowed:** `AzureFiles Standard`, `AzureFiles Premium`, `AzureNetAppFiles Standard`, `AzureNetAppFiles Premium`
-- **Default:** `AzureFiles Standard`
-- **Description:** Storage solution and performance tier for FSLogix profiles.
+- **Allowed:** `AzureFiles`, `AzureNetAppFiles`
+- **Default:** `AzureFiles`
+- **Description:** Storage backend only. Select Azure Files media with `fslogixProfileStorageTier`
+  (`Standard`/`Premium`) or NetApp service level with `fslogixNetAppServiceLevel` (`Standard`/`Premium`).
 
-#### `fslogixStorageRedundancy`
+#### `fslogixProfileStorageRedundancy`
 
 - **Type:** String (Azure Files only)
 - **Allowed:** `LocallyRedundant`, `ZoneRedundant`
@@ -424,20 +425,23 @@ both roles. Office shares are never enrolled in Azure Backup.
 These settings apply only to Azure Files. Azure NetApp Files keeps separate Profile and Office
 volumes with the existing volume quota/service-level behavior.
 
-#### Azure Files billing and preferred Profile inputs
+#### Azure Files billing and canonical Profile inputs
 
 The Portal defaults new Azure Files deployments to **Premium (SSD) + Provisioned v2**.
-Bicep omission retains the previous `AzureFiles Standard`, `LocallyRedundant`, 100 GiB and
-`Legacy` billing defaults. `fslogixStorageService` remains the backend/service compatibility input.
-The nullable aliases below take precedence when supplied; null retains the legacy input.
-Forms export the preferred names, not both spellings.
+Bicep omission retains Standard media, `LocallyRedundant`, 100 GiB and `Legacy` billing defaults.
+Backend, media and NetApp service level are independent settings. The canonical inputs are
+nonnullable and match the automated host-pool and storage add-on interfaces.
 
-| Preferred Profile input | Legacy fallback |
+| Profile input | Meaning |
 | --- | --- |
-| `fslogixProfileShareSizeInGB` | `fslogixShareSizeInGB` |
-| `fslogixProfileStorageRedundancy` | `fslogixStorageRedundancy` |
-| `fslogixProfileStorageTier` | Tier from `fslogixStorageService` (Azure Files only) |
-| `fslogixProfileStorageAccountNamePrefix` | Generated naming, including `namingConvention.fslogixProfileStoragePrefix` |
+| `fslogixProfileShareSizeInGB` | Sole Profile quota input; NetApp uses this for both volumes |
+| `fslogixProfileStorageRedundancy` | Sole Profile Azure Files redundancy input |
+| `fslogixProfileStorageTier` | Azure Files media only; ignored with NetApp |
+| `fslogixProfileStorageAccountNamePrefix` | Blank uses generated naming, including `namingConvention.fslogixProfileStoragePrefix` |
+
+NetApp defaults to Premium service level and rejects nondefault Azure Files billing, redundancy,
+performance and Office tuning. NetApp service level is ignored with Azure Files. Old generic tuning
+names and composite backend/tier values must be migrated; see the contract migration link below.
 
 Existing Profile account inputs use only `fslogixExistingLocalProfileStorageAccountResourceIds`
 and `fslogixExistingRemoteProfileStorageAccountResourceIds`, defaulting to empty arrays; generic
@@ -505,7 +509,7 @@ co-located Office share cannot be reused by passing its Profile account ID.
 - **Default:** `PlatformManaged`
 - **Description:** Key management mode for Recovery Services Vault encryption.
 
-#### `fslogixShareSizeInGB`
+#### `fslogixProfileShareSizeInGB`
 
 - **Type:** Integer
 - **Default:** `100`

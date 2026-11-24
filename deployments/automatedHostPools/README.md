@@ -118,7 +118,7 @@ existing accounts. Backup enrollment is **Profile-only**; Office accounts and sh
 registered by this deployment.
 
 The Portal defaults new Azure Files storage to **Premium (SSD) + Provisioned v2**. Bicep omission
-retains `AzureFiles Premium`, `LocallyRedundant`, 100 GiB and `Legacy` billing defaults.
+retains backend `AzureFiles`, Profile media `Premium`, `LocallyRedundant`, 100 GiB and `Legacy` billing defaults.
 `fslogixProfileStorageBillingModel` accepts `Legacy` or `ProvisionedV2` (default `Legacy`);
 `fslogixOfficeStorageBillingModel` accepts those plus `Inherit` (default), which uses Profile billing.
 Legacy Standard is HDD pay-as-you-go `StorageV2`; legacy Premium is SSD provisioned-v1 `FileStorage`.
@@ -126,17 +126,20 @@ V2 uses `FileStorage` with `StandardV2_LRS/ZRS` (HDD) or `PremiumV2_LRS/ZRS` (SS
 Only LRS/ZRS are offered; verify target subscription/region SKU availability. There is no separate
 Commercial-only gate for storage billing (the automated host-pool service itself still requires Commercial).
 
-Preferred nullable Profile aliases override the old inputs when supplied:
-`fslogixProfileShareSizeInGB` over `fslogixShareSizeInGB`,
-`fslogixProfileStorageRedundancy` over `fslogixStorageRedundancy`,
-`fslogixProfileStorageTier` over the Azure Files tier in `fslogixStorageService`,
-`fslogixProfileStorageAccountNamePrefix` over generated naming, including
-`namingConvention.fslogixProfileStoragePrefix`. Existing account inputs use only the explicit
+The same nonnullable interface is used by standard host pools and the storage add-on:
+`fslogixStorageService` selects only `AzureFiles` or `AzureNetAppFiles`;
+`fslogixProfileStorageTier` selects Azure Files media, and `fslogixNetAppServiceLevel` independently
+selects NetApp `Standard`/`Premium` service level (default Premium). The sole Profile quota and
+redundancy inputs are `fslogixProfileShareSizeInGB` and `fslogixProfileStorageRedundancy`.
+`fslogixProfileStorageAccountNamePrefix` accepts blank for generated naming, including
+`namingConvention.fslogixProfileStoragePrefix`. Old tuning aliases and composite backend/tier values
+are removed. Existing account inputs use only the explicit
 `fslogixExistingLocalProfileStorageAccountResourceIds` and
 `fslogixExistingRemoteProfileStorageAccountResourceIds` arrays; generic account-ID aliases are removed.
-The Portal exports preferred spellings only. Shared authentication, groups, count and index are unchanged.
-Profile tier overrides do not change Azure NetApp Files service levels, and nondefault Azure Files-only
-tuning is rejected during storage creation.
+The Portal exports canonical spellings only. Shared authentication, groups, count and index are unchanged.
+Profile media is ignored with NetApp, NetApp service level is ignored with Azure Files, and nondefault
+Azure Files billing, performance, redundancy and Office tuning is rejected with NetApp. NetApp uses
+the Profile quota for both volumes. Explicit null tuning values are not accepted.
 
 The canonical account policy uses definition
 `avdSessionHostConfiguration-ProfileAccounts-DeployIfNotExists` and assignment

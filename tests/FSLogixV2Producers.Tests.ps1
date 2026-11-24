@@ -26,18 +26,14 @@ BeforeAll {
 
         $isAddon = $Kind -eq 'Addon'
         $prefix = if ($isAddon) { 'effective' } else { 'effectiveFslogix' }
-        $tierVariable = if ($isAddon) { 'storageSku' } else { 'effectiveFslogixProfileStorageTier' }
+        $tierVariable = if ($isAddon) { 'effectiveProfileStorageTier' } else { 'effectiveFslogixProfileStorageTier' }
         $officeTierVariable = switch ($Kind) {
-            'Addon' { 'effectiveOfficeStorageSku' }
-            'Automated' { 'effectiveFslogixOfficeStorageSku' }
+            'Addon' { 'effectiveOfficeStorageTier' }
             default { 'effectiveFslogixOfficeStorageTier' }
         }
         $variables = @(
             $(if ($isAddon) { 'storageSolution' } elseif ($Kind -eq 'Automated') { 'fslogixStorageSolution' })
-            $(if ($isAddon) { 'azureFilesTuningIsValid' } else { 'fslogixAzureFilesTuningIsValid' })
             $tierVariable
-            "${prefix}ProfileStorageRedundancy"
-            "${prefix}ProfileShareSizeInGB"
             "${prefix}OfficeStorageBillingModel"
             $officeTierVariable
             "${prefix}OfficeStorageRedundancy"
@@ -45,8 +41,10 @@ BeforeAll {
         ) | Where-Object { $_ }
         $outputs = [ordered]@{
             tier = $tierVariable
-            redundancy = "${prefix}ProfileStorageRedundancy"
-            quota = "${prefix}ProfileShareSizeInGB"
+            redundancy = 'fslogixProfileStorageRedundancy'
+            quota = 'fslogixProfileShareSizeInGB'
+            backend = 'fslogixStorageService'
+            netAppLevel = 'fslogixNetAppServiceLevel'
             officeTier = $officeTierVariable
             officeRedundancy = "${prefix}OfficeStorageRedundancy"
             officeQuota = "${prefix}OfficeShareSizeInGB"
@@ -116,16 +114,15 @@ BeforeAll {
             $lines += $namingExpression.Value.Replace('subscription().subscriptionId', "'00000000-0000-0000-0000-000000000001'").Replace('environment().name', "'AzureCloud'")
         }
         $inputNames = @(
-            'fslogixStorageService', 'fslogixStorageRedundancy', 'fslogixProfileStorageTier',
+            'fslogixStorageService', 'fslogixNetAppServiceLevel', 'fslogixProfileStorageTier',
             'fslogixProfileStorageRedundancy', 'fslogixProfileShareSizeInGB', 'fslogixProfileStorageAccountNamePrefix',
             'fslogixOfficeStorageTier', 'fslogixOfficeStorageRedundancy', 'fslogixOfficeShareSizeInGB',
             'fslogixProfileStorageBillingModel', 'fslogixOfficeStorageBillingModel',
             'fslogixProfileProvisionedIops', 'fslogixProfileProvisionedThroughputMiBps',
             'fslogixOfficeProvisionedIops', 'fslogixOfficeProvisionedThroughputMiBps'
         )
-        if ($isAddon) { $inputNames += 'shareSizeInGB' }
-        else {
-            $inputNames += 'fslogixShareSizeInGB', 'fslogixExistingLocalProfileStorageAccountResourceIds',
+        if (-not $isAddon) {
+            $inputNames += 'fslogixExistingLocalProfileStorageAccountResourceIds',
                 'fslogixExistingRemoteProfileStorageAccountResourceIds'
             if ($Kind -eq 'Standard') {
                 $identity = if ($Overrides.ContainsKey('identitySolution')) { $Overrides.identitySolution } else { 'ActiveDirectoryDomainServices' }
@@ -179,12 +176,12 @@ Describe 'FSLogix producer v2 inputs' {
             $result.prefix.value | Should -Be 'legacyprefix'
         }
 
-        It 'evaluates preferred aliases before conflicting legacy values and keeps performance independent' {
+        It 'evaluates canonical Profile inputs and keeps performance independent' {
             $overrides = @{
                 fslogixProfileShareSizeInGB = 8192
                 fslogixProfileStorageTier = 'Premium'
-                fslogixStorageService = 'AzureFiles Standard'
-                fslogixStorageRedundancy = 'LocallyRedundant'
+                fslogixStorageService = 'AzureFiles'
+                fslogixNetAppServiceLevel = 'Standard'
                 fslogixProfileStorageRedundancy = 'ZoneRedundant'
                 fslogixProfileStorageAccountNamePrefix = 'newprefix'
                 fslogixProfileStorageBillingModel = 'ProvisionedV2'
@@ -194,6 +191,7 @@ Describe 'FSLogix producer v2 inputs' {
             }
             $result = Invoke-ProducerExpressions $source $Kind $overrides
             $result.tier.value | Should -Be 'Premium'
+            $result.backend.value | Should -Be 'AzureFiles'
             $result.quota.value | Should -Be 8192
             $result.redundancy.value | Should -Be 'ZoneRedundant'
             $result.prefix.value | Should -Be 'newprefix'
@@ -235,16 +233,19 @@ Describe 'FSLogix producer v2 inputs' {
             if ($Kind -ne 'Addon') { $preferred.namingPrefix.value | Should -Be 'oldprefix' }
         }
 
-        It 'retains ANF tier and quota behavior and rejects Azure Files-only tuning' {
+        It 'selects ANF service level independently of Azure Files media and rejects incompatible tuning' {
             $result = Invoke-ProducerExpressions $source $Kind @{
-                fslogixStorageService = 'AzureNetAppFiles Standard'
+                fslogixStorageService = 'AzureNetAppFiles'
+                fslogixNetAppServiceLevel = 'Standard'
+                fslogixProfileStorageTier = 'Premium'
                 fslogixProfileShareSizeInGB = 2048
             }
-            $result.tier.value | Should -Be 'Standard'
+            $result.backend.value | Should -Be 'AzureNetAppFiles'
+            $result.netAppLevel.value | Should -Be 'Standard'
             $result.quota.value | Should -Be 2048
             { Invoke-ProducerExpressions $source $Kind @{
-                fslogixStorageService = 'AzureNetAppFiles Standard'
-                fslogixProfileStorageTier = 'Premium'
+                fslogixStorageService = 'AzureNetAppFiles'
+                fslogixProfileStorageBillingModel = 'ProvisionedV2'
             } } | Should -Throw '*cannot be used*'
         }
 
@@ -256,8 +257,8 @@ Describe 'FSLogix producer v2 inputs' {
             }
             $source | Should -Match '(?m)^\s+profileStorageBillingModel: fslogixProfileStorageBillingModel$'
             $source | Should -Match '(?m)^\s+officeStorageBillingModel: effective(?:Fslogix)?OfficeStorageBillingModel$'
-            $source | Should -Match '(?m)^\s+shareSizeInGB: effective(?:Fslogix)?ProfileShareSizeInGB$'
-            $source | Should -Match '(?m)^\s+fslogixStorageRedundancy: effective(?:Fslogix)?ProfileStorageRedundancy$'
+            $source | Should -Match '(?m)^\s+profileShareSizeInGB: fslogixProfileShareSizeInGB$'
+            $source | Should -Match '(?m)^\s+profileStorageRedundancy: fslogixProfileStorageRedundancy$'
             $source | Should -Not -Match '(?m)^param fslogixProfile\w+ (?:string|int)\? = null'
         }
 
@@ -267,9 +268,11 @@ Describe 'FSLogix producer v2 inputs' {
             $producer = $producerCalls[0].Value
             $effectivePrefix = if ($Kind -eq 'Addon') { 'effective' } else { 'effectiveFslogix' }
             $expected = @{
-                shareSizeInGB = "${effectivePrefix}ProfileShareSizeInGB"
-                fslogixStorageRedundancy = "${effectivePrefix}ProfileStorageRedundancy"
-                storageSku = $(if ($Kind -eq 'Addon') { 'storageSku' } else { 'effectiveFslogixProfileStorageTier' })
+                profileShareSizeInGB = 'fslogixProfileShareSizeInGB'
+                profileStorageRedundancy = 'fslogixProfileStorageRedundancy'
+                profileStorageTier = $(if ($Kind -eq 'Addon') { 'effectiveProfileStorageTier' } else { 'effectiveFslogixProfileStorageTier' })
+                netAppServiceLevel = 'fslogixNetAppServiceLevel'
+                officeStorageTier = "${effectivePrefix}OfficeStorageTier"
                 profileStorageAccountNamePrefix = $(if ($Kind -eq 'Addon') { 'effectiveProfileStorageAccountNamePrefix' } else { 'effectiveFslogixProfileStorageAccountNamePrefix' })
                 profileStorageBillingModel = 'fslogixProfileStorageBillingModel'
                 officeStorageBillingModel = "${effectivePrefix}OfficeStorageBillingModel"
@@ -363,8 +366,11 @@ Describe 'FSLogix producer v2 inputs' {
                 storageRedundancy = 'ZoneRedundant'
                 storageShareSize = 4096
                 shareSizeInGB = '4096'
-                service = 'AzureFiles Premium'
-                storageService = 'AzureFiles Premium'
+                service = 'AzureFiles'
+                storageService = 'AzureFiles'
+                storageSku = 'Premium'
+                profileStorageTier = 'Premium'
+                netAppServiceLevel = 'Standard'
                 containerType = 'ProfileOfficeContainer'
             }
             $steps = switch ($Kind) {
@@ -374,7 +380,7 @@ Describe 'FSLogix producer v2 inputs' {
                         deployStorage = $true
                         fslogixContainerType = 'ProfileOfficeContainer'
                         azureFiles = $controls
-                        azureNetAppFiles = @{ storageShareSize = 2048 }
+                        azureNetAppFiles = @{ storageShareSize = 2048; storageSku = 'Standard' }
                     }
                 } }
                 'Automated' { @{
@@ -392,6 +398,9 @@ Describe 'FSLogix producer v2 inputs' {
             (Invoke-TestNamingFormExpression $bindings.fslogixOfficeProvisionedIops $steps) | Should -Be 0
             (Invoke-TestNamingFormExpression $bindings.fslogixOfficeStorageBillingModel $steps) | Should -Be 'Inherit'
             (Invoke-TestNamingFormExpression $bindings.fslogixProfileShareSizeInGB $steps) | Should -Be 4096
+            (Invoke-TestNamingFormExpression $bindings.fslogixStorageService $steps) | Should -Be 'AzureFiles'
+            (Invoke-TestNamingFormExpression $bindings.fslogixProfileStorageTier $steps) | Should -Be 'Premium'
+            (Invoke-TestNamingFormExpression $bindings.fslogixNetAppServiceLevel $steps) | Should -Be 'Premium'
             $controls.profileStorageBillingModel = 'Legacy'
             (Invoke-TestNamingFormExpression $bindings.fslogixProfileProvisionedIops $steps) | Should -Be 0
             $controls.officeProvisionedIops = '3000'
@@ -400,13 +409,16 @@ Describe 'FSLogix producer v2 inputs' {
             $controls.officeStorageBillingModel = 'ProvisionedV2'
             switch ($Kind) {
                 'Standard' { $steps.userProfiles.storageService = 'AzureNetAppFiles' }
-                'Automated' { $controls.service = 'AzureNetAppFiles Premium' }
-                default { $controls.storageService = 'AzureNetAppFiles Premium' }
+                'Automated' { $controls.service = 'AzureNetAppFiles' }
+                default { $controls.storageService = 'AzureNetAppFiles' }
             }
             (Invoke-TestNamingFormExpression $bindings.fslogixProfileProvisionedIops $steps) | Should -Be 0
             (Invoke-TestNamingFormExpression $bindings.fslogixOfficeProvisionedIops $steps) | Should -Be 0
             (Invoke-TestNamingFormExpression $bindings.fslogixProfileStorageBillingModel $steps) | Should -Be 'Legacy'
             (Invoke-TestNamingFormExpression $bindings.fslogixOfficeStorageBillingModel $steps) | Should -Be 'Inherit'
+            (Invoke-TestNamingFormExpression $bindings.fslogixStorageService $steps) | Should -Be 'AzureNetAppFiles'
+            (Invoke-TestNamingFormExpression $bindings.fslogixNetAppServiceLevel $steps) | Should -Be 'Standard'
+            (Invoke-TestNamingFormExpression $bindings.fslogixProfileStorageTier $steps) | Should -Be $LegacyTier
         }
 
         It 'keeps dropdown labels, expression delimiters and internal control references valid' {
@@ -562,6 +574,12 @@ Describe 'FSLogix producer v2 inputs' {
             $rule.isValid | Should -Match 'V2Zrs'
             $rule.isValid | Should -Not -Match 'transformed\.(premium|standard)Zrs'
         }
-        ($storage.elements | Where-Object name -EQ 'storageService').defaultValue | Should -Be 'Azure Files Premium'
+        ($storage.elements | Where-Object name -EQ 'storageService').defaultValue | Should -Be 'Azure Files'
+        $media = $storage.elements | Where-Object name -EQ 'profileStorageTier'
+        $media.defaultValue | Should -Be 'Premium SSD'
+        $media.defaultValue | Should -BeIn $media.constraints.allowedValues.label
+        $level = $storage.elements | Where-Object name -EQ 'netAppServiceLevel'
+        $level.defaultValue | Should -Be 'Premium'
+        $level.defaultValue | Should -BeIn $level.constraints.allowedValues.label
     }
 }

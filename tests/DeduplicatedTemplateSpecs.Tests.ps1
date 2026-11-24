@@ -640,6 +640,21 @@ try {
         $global:SpecName = "$($abbreviations.templateSpecs)_ops_hostpool_prod-dedup-test"
     }
     if ($Mode -like 'WhatIf*') { $arguments.WhatIf = $true }
+    if ($Mode -like 'Select*') {
+        $arguments.createHostPool = $false
+        $arguments.CreateAddOns = $true
+        $arguments.AddOns = @('session-host-replacer')
+        switch ($Mode) {
+            'SelectMultiple' { $arguments.AddOns = @('alerts', 'session-host-replacer') }
+            'SelectDuplicate' { $arguments.AddOns = @('session-host-replacer', 'SESSION-HOST-REPLACER') }
+            'SelectWhatIf' { $arguments.WhatIf = $true }
+            'SelectNone' { $arguments.AddOns = @() }
+            'SelectUnknown' { $arguments.AddOns = @('session-host-replacer', 'unknown') }
+            'SelectBlank' { $arguments.AddOns = @('') }
+            'SelectConflict' { $arguments.CreateAddOns = $false }
+            'SelectNull' { $arguments.AddOns = $null }
+        }
+    }
     $output = @(& $PublisherPath @arguments)
 }
 catch {
@@ -657,6 +672,45 @@ $result = @{
 Write-Output ('RESULT:' + (ConvertTo-Json -InputObject $result -Depth 100 -Compress))
 '@
         [IO.File]::WriteAllText($harnessPath, $harness)
+    }
+
+    It 'publishes only selected add-ons for <Mode>' -TestCases @(
+        @{ Mode = 'SelectReplacer'; ExpectedPurposes = @('session-host-replacer'); ExpectedFailure = $null }
+        @{ Mode = 'SelectMultiple'; ExpectedPurposes = @('session-host-replacer', 'alerts'); ExpectedFailure = $null }
+        @{ Mode = 'SelectDuplicate'; ExpectedPurposes = @('session-host-replacer'); ExpectedFailure = $null }
+        @{ Mode = 'SelectWhatIf'; ExpectedPurposes = @(); ExpectedFailure = $null }
+        @{ Mode = 'SelectNone'; ExpectedPurposes = @(); ExpectedFailure = 'No Template Specs selected' }
+        @{ Mode = 'SelectUnknown'; ExpectedPurposes = @(); ExpectedFailure = 'Unsupported -AddOns names' }
+        @{ Mode = 'SelectBlank'; ExpectedPurposes = @(); ExpectedFailure = 'Unsupported -AddOns names' }
+        @{ Mode = 'SelectConflict'; ExpectedPurposes = @(); ExpectedFailure = 'Do not combine -AddOns' }
+        @{ Mode = 'SelectNull'; ExpectedPurposes = @(); ExpectedFailure = 'null' }
+    ) {
+        param($Mode, $ExpectedPurposes, $ExpectedFailure)
+        $lines = @(& (Join-Path $PSHOME 'pwsh.exe') -NoProfile -File $harnessPath -PublisherPath $publisherPath -Mode $Mode)
+        $LASTEXITCODE | Should -Be 0
+        $record = @($lines | Where-Object { $_ -like 'RESULT:*' })
+        $record.Count | Should -Be 1
+        $result = $record[0].Substring(7) | ConvertFrom-Json
+        if ($ExpectedFailure) {
+            $result.Failure | Should -Match ([regex]::Escape($ExpectedFailure))
+        }
+        else {
+            $result.Failure | Should -BeNullOrEmpty
+        }
+        @($result.RestCalls).Count | Should -Be ($ExpectedPurposes.Count * 2)
+        $result.ResourceGroupCreates | Should -Be 0
+        for ($i = 0; $i -lt $ExpectedPurposes.Count; $i++) {
+            $result.RestCalls[$i * 2].Path | Should -Match "-$($ExpectedPurposes[$i])-va-dedup-test\?"
+            $result.RestCalls[$i * 2 + 1].Path | Should -Match "-$($ExpectedPurposes[$i])-va-dedup-test/versions/"
+            $payload = $result.RestCalls[$i * 2 + 1].Payload | ConvertFrom-Json -Depth 100
+            $payload.properties.mainTemplate | Should -Not -BeNullOrEmpty
+            $payload.properties.uiFormDefinition | Should -Not -BeNullOrEmpty
+        }
+        if ($Mode -eq 'SelectWhatIf') {
+            ($result.Output -join "`n") | Should -Match 'WhatIf complete. No resources were created or published.'
+            ($result.Output -join "`n") | Should -Match 'AVD Session Host Replacer publication size check'
+            ($result.Output -join "`n") | Should -Not -Match 'AVD Alerts publication size check'
+        }
     }
 
     It 'handles <Mode> with explicit, isolated publication behavior' -TestCases @(

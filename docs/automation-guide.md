@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # End-to-End Automation Guide
 
@@ -480,7 +480,7 @@ production remain operator/change-control responsibilities.
   one-time maintenance override that expedites configured DeleteFirst behavior for notified forced
   sign-out without changing the configured mode
 - Restores selected SideBySide shutdown-retention hosts through the guarded
-  `Invoke-SessionHostRollback.ps1` operator workflow
+  [`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/tools/Invoke-SessionHostRollback.ps1) operator workflow
 - Ringed rollout delay — configurable per-host-pool delay based on image publication time, useful
   for staging adoption but not a substitute for pilot approval or an explicit production hold
 
@@ -489,7 +489,7 @@ production remain operator/change-control responsibilities.
 > See [Session Host Replacer Add-On](session-host-replacer.md) for the documentation map,
 > [full add-on documentation](../deployments/add-ons/sessionHostReplacer/README.md) for deployment
 > and configuration, and the
-> [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) for
+> [canonical replacement flow](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md) for
 > detailed lifecycle and recovery behavior.
 
 ### Manual approach: Set-SessionHostMaintenanceMode.ps1

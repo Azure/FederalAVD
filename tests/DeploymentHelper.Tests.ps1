@@ -47,7 +47,7 @@ Describe 'Deployment helper optional domain join across solutions' {
                 NetAppDeployment = "and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureNetAppFiles'))"
                 RequiredVariable = 'createDeploymentVm'
                 KeyVaultParameter = 'existingCredentialsKeyVaultResourceId'
-                JoinExpression = "[or(parameters('domainJoinDeploymentVirtualMachine'), equals(split(parameters('fslogixStorageService'), ' ')[0], 'AzureNetAppFiles'))]"
+                JoinExpression = "[or(parameters('domainJoinDeploymentVirtualMachine'), equals(parameters('fslogixStorageService'), 'AzureNetAppFiles'))]"
                 JoinOutput = "[and(contains(steps('hosts').identity.machineIdentity, 'DomainServices'), if(and(not(equals(steps('controlPlane').hostPool.type, 'Personal')), equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage, equals(steps('userProfiles').storageService, 'AzureNetAppFiles')), true, and(or(and(equals(steps('userProfiles').profileSolution, 'FSLogix'), steps('userProfiles').deployStorage), steps('hosts').diskEncryption.confidentialVMOSDiskEncryption, not(empty(steps('controlPlane').naming.desktopFriendlyName))), steps('operationsAndMonitoring').deploymentVm.domainJoin)))]"
             }
             @{

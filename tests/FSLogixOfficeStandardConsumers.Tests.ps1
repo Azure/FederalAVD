@@ -29,7 +29,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
         }
 
         It 'retains public Profile names and adds inheritable Office settings' {
-            $sourceText | Should -Match "param fslogixStorageRedundancy string = 'LocallyRedundant'"
+            $sourceText | Should -Match "param fslogixProfileStorageRedundancy string = 'LocallyRedundant'"
             $sourceText | Should -Match "param fslogixOfficeStorageTier string = 'Inherit'"
             $sourceText | Should -Match "param fslogixOfficeStorageRedundancy string = 'Inherit'"
             $sourceText | Should -Match '@minValue\(0\)\s+@maxValue\(262144\)[\s\S]*?param fslogixOfficeShareSizeInGB int = 0'
@@ -39,7 +39,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
         }
 
         It 'passes separate naming, CMK, tier, redundancy and quota contracts' {
-            foreach ($contract in @('officeStorageAccountNamePrefix', 'officeEncryptionKeyNameConv', 'officeStorageSku', 'officeStorageRedundancy', 'officeShareSizeInGB')) {
+            foreach ($contract in @('officeStorageAccountNamePrefix', 'officeEncryptionKeyNameConv', 'officeStorageTier', 'officeStorageRedundancy', 'officeShareSizeInGB')) {
                 $sourceText | Should -Match ('(?m)^\s+' + $contract + ':')
             }
             $sourceText | Should -Match 'naming\.fslogixOfficeStorageAccountNamePrefix'

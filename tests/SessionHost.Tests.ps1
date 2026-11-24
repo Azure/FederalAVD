@@ -5,7 +5,7 @@ BeforeAll {
     $sharedMonitoringPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\monitoring.bicep'
     $sharedGuestAttestationPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\guestAttestation.bicep'
     $sharedManagedDiskPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\managedDiskNetworkAccess.bicep'
-    $sharedAuthoringPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\AUTHORING.md'
+    $sharedAuthoringPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\docs\AUTHORING.md'
     $automatedPolicyPath = Join-Path $repoRoot 'deployments\automatedHostPools\policy\main.bicep'
     $addOnPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostPolicy\main.bicep'
     $formPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostPolicy\uiFormDefinition.json'

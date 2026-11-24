@@ -156,7 +156,6 @@ var namingPolicy object = {
     fslogixStorage: 'fslogix-storage'
     storageQuotaManager: 'storage-quota-manager'
     sessionHostReplacer: 'session-host-replacer'
-    sessionHostMaintenance: 'session-host-maintenance'
     sessionHosts: 'session-hosts'
     sessionHostPolicy: 'session-host-policy'
   }

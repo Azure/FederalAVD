@@ -11,8 +11,8 @@ BeforeAll {
     $namingPath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\naming\internal.bicep'
     $workbookModulePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbook.bicep'
     $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
-    $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Set-SessionHostReplacerConfiguration.ps1'
-    $rollbackScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Invoke-SessionHostRollback.ps1'
+    $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Set-SessionHostReplacerConfiguration.ps1'
+    $rollbackScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Invoke-SessionHostRollback.ps1'
     $functionAppModulePath = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
 }
 
@@ -366,7 +366,7 @@ Describe 'Session Host Replacer maintenance request contract' {
     }
 
     It 'provides a guarded scheduling command that preserves unrelated app settings' {
-        $scriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\Start-SessionHostMaintenanceReplacement.ps1'
+        $scriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Start-SessionHostMaintenanceReplacement.ps1'
         $tokens = $null
         $errors = $null
         [System.Management.Automation.Language.Parser]::ParseFile(
@@ -421,157 +421,64 @@ Describe 'Session Host Replacer shutdown retention form behavior' {
     }
 }
 
-Describe 'Session Host Maintenance portal operation' {
+Describe 'Session Host Maintenance script-only operation' {
     BeforeAll {
-        $operationRoot = Join-Path $repoRoot 'deployments\add-ons\sessionHostMaintenance'
-        $operationBicep = Get-Content -LiteralPath (Join-Path $operationRoot 'main.bicep') -Raw
-        $operationModule = Get-Content -LiteralPath (Join-Path $operationRoot 'modules\updateMaintenanceRequest.bicep') -Raw
-        $operationForm = Get-Content -LiteralPath (Join-Path $operationRoot 'uiFormDefinition.json') -Raw | ConvertFrom-Json
         $publisher = Get-Content -LiteralPath (Join-Path $repoRoot 'tools\New-TemplateSpecs.ps1') -Raw
         $workbook = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json') -Raw | ConvertFrom-Json
     }
 
-    It 'targets an existing Function App without redeploying the replacer' {
-        $operationBicep | Should -Not -Match "targetScope = 'subscription'"
-        $operationBicep | Should -Match "toLower\(functionAppResourceGroupId\) == toLower\(resourceGroup\(\)\.id\)"
-        $operationBicep | Should -Match 'functionAppResourceId must identify a Function App in the deployment resource group'
-        $operationModule | Should -Match "resource functionApp 'Microsoft.Web/sites@.*' existing"
-        $operationModule | Should -Match "resource appSettings 'Microsoft.Web/sites/config@.*'"
-        $operationModule | Should -Not -Match "resource functionApp 'Microsoft.Web/sites@.*' ="
-    }
-
-    It 'preserves unrelated app settings and changes only the maintenance request' {
-        $operationModule | Should -Match "list\('\$\{functionApp.id\}/config/appsettings'"
-        $operationModule | Should -Match 'properties: union\(existingAppSettings, \{'
-        $operationModule | Should -Match 'MaintenanceRequest: validationPassed \? string\(maintenanceRequest\)'
-    }
-
-    It 'fails closed for unsafe configuration and replacement attempts' {
-        $operationModule | Should -Match "replacementMode != 'DeleteFirst'"
-        $operationModule | Should -Match '!empty\(existingMaintenanceRequest\) && !replaceExistingRequest'
-        $operationModule | Should -Match '!forceSignOut'
-        $operationModule | Should -Match '!allowFullPoolOutage'
-        $operationModule | Should -Match '!confirmNoShutdownRetention'
-        $operationModule | Should -Match 'isEntraJoined && !removeEntraDevice'
-        $operationModule | Should -Match 'configuredImageDefinitionResourceId'
-        $operationModule | Should -Match 'approvedImageDefinitionResourceId'
-        $operationModule | Should -Match 'does not match the replacer configuration'
-    }
-
-    It 'emits the runtime maintenance request contract' {
-        $requestBlock = [regex]::Match(
-            $operationModule,
-            '(?s)var maintenanceRequest = \{(?<Body>.*?)\r?\n\}'
-        ).Groups['Body'].Value
-        @(
-            [regex]::Matches($requestBlock, '(?m)^\s{2}([A-Za-z][A-Za-z0-9]+):') |
-                ForEach-Object { $_.Groups[1].Value }
-        ) | Should -Be @(
-            'requestId'
-            'approvedImageVersion'
-            'scheduledDateTimeUtc'
-            'windowDurationMinutes'
-            'maxVmsRemoved'
-            'logOffDelayMinutes'
-            'logOffMessage'
-            'forceSignOut'
-            'allowFullPoolOutage'
-        )
-    }
-
-    It 'keeps Form View outputs aligned with operation parameters' {
-        $formParameterNames = @($operationForm.view.outputs.parameters.PSObject.Properties.Name)
-        $templateParameterNames = @(
-            [regex]::Matches($operationBicep, '(?m)^param\s+([A-Za-z0-9_]+)\s+') |
-                ForEach-Object { $_.Groups[1].Value }
-        )
-
-        foreach ($parameterName in $formParameterNames) {
-            @($templateParameterNames -contains $parameterName) | Should -Be $true
+    It 'keeps all operator scripts under tools and out of the runtime folder' {
+        $root = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer'
+        $names = @('Invoke-SessionHostRollback.ps1', 'Repair-SessionHostReplacerOperation.ps1',
+            'Set-GraphPermissions.ps1', 'Set-SessionHostReplacerConfiguration.ps1',
+            'Start-SessionHostMaintenanceReplacement.ps1')
+        foreach ($name in $names) {
+            Test-Path -LiteralPath (Join-Path $root "tools\$name") | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $root $name) | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $root "functions\$name") | Should -BeFalse
         }
-        foreach ($requiredParameterName in @(
-            'functionAppResourceId'
-            'approvedImageDefinitionResourceId'
-            'approvedImageVersion'
-            'scheduledDateTimeUtc'
-            'forceSignOut'
-            'allowFullPoolOutage'
-            'confirmNoShutdownRetention'
-        )) {
-            @($formParameterNames -contains $requiredParameterName) | Should -Be $true
+        $guidance = ($workbook.items | Where-Object name -EQ 'configuration-page').content.items |
+            Where-Object name -EQ 'config-management-guidance'
+        $guidance.content.json | Should -Match 'tools/Set-SessionHostReplacerConfiguration\.ps1'
+        $guidance.content.json | Should -Match 'tools/Start-SessionHostMaintenanceReplacement\.ps1'
+    }
+
+    It 'does not publish the retired maintenance add-on' {
+        foreach ($file in @('main.bicep', 'main.json', 'uiFormDefinition.json')) {
+            Test-Path -LiteralPath (Join-Path $repoRoot "deployments\add-ons\sessionHostMaintenance\$file") | Should -BeFalse
         }
-        $operationForm.view.outputs.kind | Should -Be 'ResourceGroup'
+        $publisher | Should -Not -Match "Purpose = 'session-host-maintenance'"
+        $publisher | Should -Not -Match "FolderName = 'sessionHostMaintenance'"
     }
 
-    It 'queries tagged replacer Function Apps and derives resource-group deployment scope' {
-        $targetStep = $operationForm.view.properties.steps |
-            Where-Object { $_.name -eq 'target' }
-        $subscriptionsApi = $targetStep.elements |
-            Where-Object { $_.name -eq 'subscriptionsApi' }
-        $functionAppsApi = $targetStep.elements |
-            Where-Object { $_.name -eq 'functionAppsApi' }
-        $functionApp = $targetStep.elements |
-            Where-Object { $_.name -eq 'functionApp' }
-
-        $subscriptionsApi.request.path | Should -Match '^/subscriptions\?api-version='
-        $functionAppsApi.request.path | Should -Match '/providers/Microsoft.Web/sites\?api-version='
-        $functionApp.type | Should -Be 'Microsoft.Common.DropDown'
-        $functionApp.constraints.allowedValues | Should -Match 'cm-resource-parent'
-        $functionApp.constraints.allowedValues | Should -Match 'microsoft\.desktopvirtualization/hostpools'
-        $functionApp.constraints.allowedValues | Should -Match 'resourceGroupId'
-        $operationForm.view.outputs.resourceGroupId |
-            Should -Be "[steps('target').functionApp.resourceGroupId]"
-        $operationForm.view.outputs.location |
-            Should -Be "[steps('target').functionApp.location]"
+    It 'retains the existing manual drain and restore script' {
+        $scriptPath = Join-Path $repoRoot 'deployments\Set-SessionHostMaintenanceMode.ps1'
+        $tokens = $null
+        $errors = $null
+        [Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$errors) | Out-Null
+        $errors.Count | Should -Be 0
+        $script = Get-Content -LiteralPath $scriptPath -Raw
+        $script | Should -Match "ValidateSet\('Drain', 'Restore'\)"
+        $script | Should -Match 'Update-AzWvdSessionHost'
+        $script | Should -Match 'Update-AzTag'
+        $script | Should -Not -Match 'MaintenanceRequest|Remove-AzVM|Remove-AzWvdSessionHost'
     }
 
-    It 'reads the configured image definition and lists approved gallery versions' {
-        $targetStep = $operationForm.view.properties.steps | Where-Object { $_.name -eq 'target' }
-        $scheduleStep = $operationForm.view.properties.steps | Where-Object { $_.name -eq 'schedule' }
-        $settingsApi = $targetStep.elements | Where-Object { $_.name -eq 'functionAppSettingsApi' }
-        $versionsApi = $scheduleStep.elements | Where-Object { $_.name -eq 'imageVersionsApi' }
-        $galleryVersion = $scheduleStep.elements | Where-Object { $_.name -eq 'approvedGalleryImageVersion' }
-
-        $settingsApi.request.method | Should -Be 'POST'
-        $settingsApi.request.path | Should -Match '/config/appsettings/list\?api-version='
-        $versionsApi.request.method | Should -Be 'GET'
-        $versionsApi.request.path | Should -Match '/versions\?api-version=2024-03-03'
-        $versionsApi.request.path | Should -Match 'SessionHostParameters'
-        $versionsApi.request.transforms.list | Should -Match 'excludeFromLatest'
-        $galleryVersion.type | Should -Be 'Microsoft.Common.DropDown'
-        $galleryVersion.constraints.allowedValues | Should -Be "[steps('schedule').imageVersionsApi.transformed.list]"
-        $operationForm.view.outputs.parameters.approvedImageDefinitionResourceId |
-            Should -Match 'SessionHostParameters'
-    }
-
-    It 'requires destructive authorizations in the form and template' {
-        $allElements = @($operationForm.view.properties.steps.elements)
-        foreach ($controlName in @('forceSignOut', 'allowFullPoolOutage', 'confirmNoShutdownRetention')) {
-            $control = $allElements | Where-Object { $_.name -eq $controlName }
-            $control.type | Should -Be 'Microsoft.Common.CheckBox'
-            $control.constraints.required | Should -Be $true
+    It 'documents script scheduling without a retired Template Spec link' {
+        $configurationPage = $workbook.items | Where-Object name -EQ 'configuration-page'
+        $configurationPage.content.items.name | Should -Not -Contain 'maintenance-scheduler-parameters'
+        $configurationPage.content.items.name | Should -Not -Contain 'maintenance-scheduler-link'
+        $guidance = ($configurationPage.content.items | Where-Object name -EQ 'config-management-guidance').content.json
+        $guidance | Should -Match 'Start-SessionHostMaintenanceReplacement\.ps1'
+        $guidance | Should -Match 'Set-SessionHostMaintenanceMode\.ps1'
+        $guidance | Should -Match 'No separate maintenance Template Spec is required'
+        foreach ($path in @('docs\session-host-replacer.md', 'deployments\add-ons\sessionHostReplacer\README.md')) {
+            $documentation = Get-Content -LiteralPath (Join-Path $repoRoot $path) -Raw
+            $documentation | Should -Not -Match '[/\\]sessionHostMaintenance[/\\]'
+            foreach ($scriptName in @('Start-SessionHostMaintenanceReplacement.ps1', 'Set-SessionHostMaintenanceMode.ps1')) {
+                $documentation | Should -Match ([regex]::Escape($scriptName))
+            }
         }
-    }
-
-    It 'publishes and links the separate maintenance operation' {
-        $publisher | Should -Match "Purpose = 'session-host-maintenance'"
-        $publisher | Should -Match "FolderName = 'sessionHostMaintenance'"
-
-        $configurationPage = $workbook.items | Where-Object { $_.name -eq 'configuration-page' }
-        $parameters = $configurationPage.content.items |
-            Where-Object { $_.name -eq 'maintenance-scheduler-parameters' } |
-            Select-Object -ExpandProperty content |
-            Select-Object -ExpandProperty parameters
-        ($parameters | Where-Object { $_.name -eq 'MaintenanceTemplateSpec' }).query |
-            Should -Match 'Schedule AVD Session Host Maintenance'
-
-        $link = $configurationPage.content.items |
-            Where-Object { $_.name -eq 'maintenance-scheduler-link' }
-        $link.content.version | Should -Be 'LinkItem/1.0'
-        $link.content.style | Should -Be 'toolbar'
-        $link.content.links[0].cellValue | Should -Be '{MaintenanceTemplateSpec}'
-        $link.content.links[0].linkTarget | Should -Be 'ResourceOverview'
-        $link.content.links[0].style | Should -Be 'primary'
     }
 }
 
@@ -2118,8 +2025,8 @@ Describe 'Session Host Replacer configuration management experience' {
         $configurationPage.conditionalVisibility.value | Should -Be 'configuration'
         $operationsPage.conditionalVisibility.value | Should -Be 'operations'
         (@($configurationPage.content.items.name) -contains 'config-table') | Should -Be $true
-        (@($configurationPage.content.items.name) -contains 'maintenance-scheduler-parameters') |
-            Should -Be $true
+        $configurationPage.content.items.name | Should -Not -Contain 'maintenance-scheduler-parameters'
+        $configurationPage.content.items.name | Should -Contain 'config-management-guidance'
         (@($operationsPage.content.items.name) -contains 'kpi-tiles') | Should -Be $true
 
         ($configurationPage.content.items |

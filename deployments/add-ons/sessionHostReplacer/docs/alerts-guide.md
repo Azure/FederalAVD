@@ -34,7 +34,7 @@ hours away. Reconciliation retries every minute, so its example tolerates isolat
 - Cycle state uses SHR's `SHR_EVENT` trace messages with `SchemaVersion: 1`; timer health
   uses native Functions invocation records in `requests`, including successful idle ticks.
   These are not Microsoft AVD Insights host/session tables. See the
-  [telemetry contract](../logging-guide.md#cycle-correlation).
+  [telemetry contract](logging-guide.md#cycle-correlation).
 - Keep Information-level Function logs and `Host.Results` telemetry enabled. Idle reconciliation
   deliberately emits no `SHR_TIMER` messages; do not use their absence as an outage signal.
   Cycle `NeedsAttention` events are Information records, not native custom events.
@@ -237,8 +237,8 @@ collection, alert evaluation or notification delivery.
 
 ## Current Coverage Limitations
 
-The legacy [Bicep alert pack](alertRules.bicep) and
-[standalone deployment script](Deploy-SessionHostReplacerAlerts.ps1) remain unchanged. They
+The legacy [Bicep alert pack](../alerts/alertRules.bicep) and
+[standalone deployment script](../alerts/Deploy-SessionHostReplacerAlerts.ps1) remain unchanged. They
 contain duplicated, historical message-based queries rather than the suggested rules above.
 Known issues include:
 
@@ -254,6 +254,6 @@ parameter, runtime telemetry change or notification configuration is introduced 
 ## References
 
 - [SHR design and monitoring overview](../../../../docs/session-host-replacer.md#what-operators-see)
-- [Logging and correlation](../logging-guide.md)
+- [Logging and correlation](logging-guide.md)
 - [Trace one replacement cycle](../README.md#trace-one-replacement-cycle)
 - [Create Azure Monitor log search alert rules](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-create-log-alert-rule)

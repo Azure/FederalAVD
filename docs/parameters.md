@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Parameters Reference
 
@@ -62,18 +62,26 @@ legacy behavior. V2 uses `FileStorage` with `StandardV2_LRS/ZRS` or `PremiumV2_L
 Microsoft recommends SSD. See the
 [tier/billing and Cloud Cache guidance](../deployments/add-ons/fslogixStorage/README.md#profile-and-office-storage-accounts).
 
-| Preferred Profile input | Compatibility input retained |
+| Setting | Canonical input |
 | --- | --- |
-| `fslogixProfileStorageTier` | Media portion of `fslogixStorageService` |
-| `fslogixProfileStorageRedundancy` | `fslogixStorageRedundancy` |
-| `fslogixProfileShareSizeInGB` | `fslogixShareSizeInGB` (host pools), `shareSizeInGB` (storage add-on) |
-| `fslogixProfileStorageAccountNamePrefix` | `namingConvention.fslogixProfileStoragePrefix` or generated naming; blank in the storage add-on uses generated naming |
+| Backend | `fslogixStorageService`: `AzureFiles` or `AzureNetAppFiles` |
+| Profile Azure Files media | `fslogixProfileStorageTier`: `Standard` (HDD) or `Premium` (SSD) |
+| Azure NetApp Files service level | `fslogixNetAppServiceLevel`: `Standard` or `Premium` |
+| Profile Azure Files redundancy | `fslogixProfileStorageRedundancy`: `LocallyRedundant` or `ZoneRedundant` |
+| Profile share / NetApp volume quota | `fslogixProfileShareSizeInGB`: positive integer, default 100 GiB |
+| Profile account prefix | `fslogixProfileStorageAccountNamePrefix`: blank uses generated naming, including `namingConvention.fslogixProfileStoragePrefix` |
 
-Tier, redundancy and quota overrides retain the fallbacks listed above. Account-ID aliases and the
-storage add-on's generic prefix alias have been removed. Use the canonical Profile account inputs
+These names, types and meanings are identical across standard host pools, automated host pools and
+the storage add-on. Direct Bicep defaults preserve Standard media for standard/add-on deployments
+and Premium media for automated host pools; all Portal forms retain Premium SSD/provisioned-v2 defaults.
+Generic tuning aliases and composite backend/tier values have been removed, as have account-ID aliases
+and the storage add-on's generic prefix alias. Use the canonical Profile account inputs
 and tags; see [migration requirements](design.md#consumer-contract-migration-and-consistency).
 Shared authentication, shard count/index and group inputs remain neutral. Backend selection remains in
-`fslogixStorageService`; the Profile tier override applies only to Azure Files.
+`fslogixStorageService`. Profile media is ignored with NetApp; NetApp service level is ignored with
+Azure Files. NetApp rejects nondefault Azure Files billing, performance, redundancy and Office
+overrides. Its Profile quota remains the quota for both NetApp volumes. Explicit null values are
+not accepted for these tuning inputs; use blank for generated Profile account naming.
 
 For each role, `fslogixProfileProvisionedIops` / `fslogixOfficeProvisionedIops` and
 `fslogixProfileProvisionedThroughputMiBps` / `fslogixOfficeProvisionedThroughputMiBps` default
@@ -224,7 +232,7 @@ The Portal exposes it as **Infrastructure > Session Host Replacer Resource Group
 existing RG in the deployment subscription. It scopes pool-specific replacer resources, not the
 session-host VMs or shared dependencies. App Service Plan placement remains independently
 configurable; in direct deployments an omitted plan RG defaults to the replacer RG.
-See [resource placement and rebuild cautions](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#dedicated-replacer-resource-group).
+See [resource placement and rebuild cautions](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md#dedicated-replacer-resource-group).
 
 For Session Host Replacer gallery-image pilots, `includeExcludedImageVersions` defaults to `false`.
 Enable it only on pilot pools to test excluded candidates before promotion. See
@@ -240,7 +248,7 @@ SHR's existing `timerSchedule` parameter populates the `TimerSchedule` app setti
 the initiation binding. The reconciler uses the fixed `0 * * * * *` schedule. Schedule changes do not
 require changing code;
 keep deployment parameters synchronized with direct app-setting changes. See
-[deployment updates](../deployments/add-ons/sessionHostReplacer/deployment-guide.md).
+[deployment updates](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md).
 
 | Add-On | Parameters |
 | --- | --- |
@@ -319,7 +327,7 @@ The tables below are a quick developer reference for which parameters to set. Al
 | **SC-28** Protection of Information at Rest — gallery image versions | `imageManagement.bicep` | `keyManagementGalleryImageVersions` | `PlatformManaged` | `CustomerManaged` or `CustomerManagedHSM` |
 | **SC-28(1)** Encryption At Host *(supplemental)* | `hostpool.bicep` | `encryptionAtHost` | `true` | `true` ✅ *(already default — encrypts temp disk and host cache; not the primary IL5 disk encryption mechanism — see note below)* |
 | **SC-7 / SC-5** Boundary Protection / DoS Protection | `hostpool.bicep` | `deployPrivateEndpoints` | `false` | `true` |
-| **CP-9** Information System Backup — FSLogix zone resilience | `hostpool.bicep` | `fslogixStorageRedundancy` | `LocallyRedundant` | `ZoneRedundant` *(zone-enabled regions)* |
+| **CP-9** Information System Backup — FSLogix zone resilience | `hostpool.bicep` | `fslogixProfileStorageRedundancy` | `LocallyRedundant` | `ZoneRedundant` *(zone-enabled regions)* |
 | **CP-6** Alternate Storage Site — personal VM backup | `hostpool.bicep` | `recoveryServicesVaultStorageRedundancy` | `LocallyRedundant` | `GeoRedundant` |
 | **SI-3 / IA-3** Trusted Launch / integrity | `hostpool.bicep` | `securityType` | `TrustedLaunch` | `TrustedLaunch` ✅ *(already default)* |
 

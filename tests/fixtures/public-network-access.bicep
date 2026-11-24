@@ -45,7 +45,7 @@ module files '../../deployments/shared/modules/orchestration/fslogix/modules/azu
     officeEncryptionKeyNameConv: ''
     encryptionKeyVaultUri: ''
     encryptionUserAssignedIdentityResourceId: ''
-    fileShares: []
+    containerType: 'ProfileContainer'
     identitySolution: 'EntraId'
     kerberosEncryptionType: 'AES256'
     keyManagementStorageAccounts: 'PlatformManaged'
@@ -61,14 +61,14 @@ module files '../../deployments/shared/modules/orchestration/fslogix/modules/azu
     resourceGroupStorage: 'network-tests'
     shardingOptions: 'None'
     shareAdminGroups: []
-    shareSizeInGB: 100
+    profileShareSizeInGB: 100
     shareUserGroups: []
     profileStorageAccountNamePrefix: 'files${i}'
     officeStorageAccountNamePrefix: 'office'
     storageCount: 1
     storageIndex: 1
-    storageSku: 'Standard'
-    storageRedundancy: 'LocallyRedundant'
+    profileStorageTier: 'Standard'
+    profileStorageRedundancy: 'LocallyRedundant'
     tags: {
       'Microsoft.Storage/storageAccounts': { networkCase: 'files${i}' }
     }

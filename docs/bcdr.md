@@ -1,4 +1,4 @@
-﻿[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
+[**Home**](../README.md) | [**Quick Start**](quick-start.md) | [**Host Pool Deployment**](hostpool-deployment.md) | [**Image Build**](image-build.md) | [**Artifacts**](artifacts-guide.md) | [**Features**](features.md) | [**Parameters**](parameters.md) | [**Compliance**](compliance.md) | [**BCDR**](bcdr.md)
 
 # Business Continuity & Disaster Recovery
 
@@ -63,7 +63,7 @@ This is preferred for most deployments because:
 
 Deploy the secondary host pool with its own FSLogix storage. Accept that users who fail over will start from an empty or per-region profile. Use OneDrive Known Folder Move (KFM) to roam Desktop/Documents/Pictures natively, reducing the practical impact of per-region profiles.
 
-> **FSLogix storage redundancy:** Independent of cross-region DR strategy, match FSLogix storage account redundancy to compute resilience. When session hosts are deployed across availability zones, set `fslogixStorageRedundancy = 'ZoneRedundant'`. The standard and automated host-pool Portal forms select this default automatically for zonal session hosts; direct Bicep and parameter-file deployments default to `LocallyRedundant`. **Azure Files Premium does not support Geo-Redundant Storage (GRS) — ZRS is the highest redundancy tier available for production-grade FSLogix storage.** LRS is appropriate only for single-zone or availability set deployments. Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS in zone-enabled regions as the expected baseline for primary profile storage.
+> **FSLogix storage redundancy:** Independent of cross-region DR strategy, match FSLogix storage account redundancy to compute resilience. When session hosts are deployed across availability zones, set `fslogixProfileStorageRedundancy = 'ZoneRedundant'`. The standard and automated host-pool Portal forms select this default automatically for zonal session hosts; direct Bicep and parameter-file deployments default to `LocallyRedundant`. **Azure Files Premium does not support Geo-Redundant Storage (GRS) — ZRS is the highest redundancy tier available for production-grade FSLogix storage.** LRS is appropriate only for single-zone or availability set deployments. Environments aligning to [NIST SP 800-53 Rev 5](https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final) CP-9 (Information System Backup) should use ZRS in zone-enabled regions as the expected baseline for primary profile storage.
 
 ### When Cloud Cache Is the Right Answer
 
@@ -112,7 +112,8 @@ The template configures FSLogix `CCDLocations` registry keys on every session ho
 ```json
 {
   "fslogixContainerType": { "value": "CloudCacheProfileContainer" },
-  "fslogixStorageService": { "value": "AzureFiles Premium" },
+  "fslogixStorageService": { "value": "AzureFiles" },
+  "fslogixProfileStorageTier": { "value": "Premium" },
   "fslogixExistingRemoteProfileStorageAccountResourceIds": {
     "value": [
       "/subscriptions/<sub>/resourceGroups/rg-finance-01-storage-tx/providers/Microsoft.Storage/storageAccounts/safslogixfinance01tx"
@@ -399,7 +400,7 @@ Customer-managed key (CMK) encryption is supported for the vault via `keyManagem
 When Session Host Replacer uses `SideBySide` mode with shutdown retention enabled, replaced
 (old-image) session hosts are powered off but retained for a configurable period (1-7 days) rather
 than deleted. If a new image is discovered to have issues, initiate rollback with the guarded
-[`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
+[`Invoke-SessionHostRollback.ps1`](../deployments/add-ons/sessionHostReplacer/tools/Invoke-SessionHostRollback.ps1)
 operator script. With one confirmation it stops SHR, starts the selected retained generation
 concurrently, waits for AVD health, restores service, drains/excludes bad-image hosts, pins this
 pool to the restored image, and restarts SHR. It does not delete VMs or sign out existing sessions.

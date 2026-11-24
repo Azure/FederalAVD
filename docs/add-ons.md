@@ -56,6 +56,40 @@ This publishes all add-on templates as Template Specs in the specified resource 
 does not deploy the add-ons. In the Azure portal, open **Template Specs**, select the required
 add-on, and choose **Deploy**.
 
+### Template Spec — Selected Add-Ons
+
+```powershell
+.\tools\New-TemplateSpecs.ps1 `
+  -Location 'usgovvirginia' `
+  -createCustomImage $false `
+  -createHostPool $false `
+  -AddOns 'session-host-replacer' `
+  -WhatIf
+```
+
+Remove `-WhatIf` to publish. This selects only the Session Host Replacer catalog entry,
+not every add-on. Its deployment creates the required Session Hosts Template Spec
+unless an existing one is supplied; standalone Session Hosts publication is unnecessary.
+
+Use `-AddOns 'session-host-replacer','alerts'` for multiple selections. Names are the
+catalog purposes shown below, are case-insensitive, and are published once in catalog
+order. Omit `-AddOns` to preserve the default selection of all registered add-ons;
+`-AddOns @()` excludes all add-ons while retaining any enabled core templates.
+Unknown or blank names fail before publication. The script also fails if no templates
+are selected. Do not combine `-AddOns` with `-CreateAddOns $false`.
+
+| Add-On | Selector |
+| --- | --- |
+| Run Commands on VMs | `run-commands-on-vms` |
+| Update FSLogix Storage Key | `update-storage-account-key-on-session-hosts` |
+| FSLogix Storage | `fslogix-storage` |
+| Image Validation | `image-validation` |
+| Storage Quota Manager | `storage-quota-manager` |
+| Session Host Replacer | `session-host-replacer` |
+| Additional Session Hosts | `session-hosts` |
+| Session Host Policy | `session-host-policy` |
+| AVD Alerts | `alerts` |
+
 ---
 
 ## Add-On Selection Guide

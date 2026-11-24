@@ -75,9 +75,15 @@ replaces the batch with the same names. No new destructive batch starts after th
 recovery of already draining or deleted hosts continues. Normal replacement resumes after the
 request completes or expires.
 
-Use the [maintenance scheduling form](../deployments/add-ons/sessionHostMaintenance/README.md)
-or the [guarded PowerShell command](../deployments/add-ons/sessionHostReplacer/Start-SessionHostMaintenanceReplacement.ps1).
+Use the [guarded PowerShell command](../deployments/add-ons/sessionHostReplacer/tools/Start-SessionHostMaintenanceReplacement.ps1);
+the separate maintenance add-on and its scheduling form have been removed. No additional Template Spec
+is needed to schedule a request.
 Do not redeploy SHR while a request is active.
+
+For manual drain/restore without SHR-driven replacement, use
+[`Set-SessionHostMaintenanceMode.ps1`](../deployments/Set-SessionHostMaintenanceMode.ps1).
+That script changes session acceptance and scaling-plan exclusion tags; it does not schedule
+replacement or sign out users. See the [manual workflow](automation-guide.md#manual-approach-set-sessionhostmaintenancemodeps1).
 
 ## Why the Rollout Is Guarded
 
@@ -129,9 +135,9 @@ to investigate a particular failure. Information-level logs contain initiation/n
 and final active-pass cycle snapshots. Internal checkpoints and repeated diagnostics use Trace,
 which needs temporary PowerShell and host-log configuration to be collected.
 
-See the [logging guide](../deployments/add-ons/sessionHostReplacer/logging-guide.md) for collection,
+See the [logging guide](../deployments/add-ons/sessionHostReplacer/docs/logging-guide.md) for collection,
 query scope and diagnostics, and [Trace one replacement cycle](../deployments/add-ons/sessionHostReplacer/README.md#trace-one-replacement-cycle)
-for the workbook procedure. The [suggested alerts](../deployments/add-ons/sessionHostReplacer/alerts/alerts-guide.md)
+for the workbook procedure. The [suggested alerts](../deployments/add-ons/sessionHostReplacer/docs/alerts-guide.md)
 describe stopped replacements, timer failures and missing reconciliation outcomes, with example
 queries and response guidance. They are not deployed by SHR; the legacy standalone alert pack
 does not implement these recommendations.
@@ -156,18 +162,18 @@ invocations and restarts. It is not an Azure Durable Functions orchestration or 
 - **Hold new work:** set `initiationEnabled=false`. Existing authorized work continues.
 - **Stop everything:** stopping the Function App stops both timers; it does not cancel submitted
   ARM deployments. Use this deliberately, not as the normal rollout hold.
-- **Change settings:** use the [configuration command](../deployments/add-ons/sessionHostReplacer/Set-SessionHostReplacerConfiguration.ps1)
+- **Change settings:** use the [configuration command](../deployments/add-ons/sessionHostReplacer/tools/Set-SessionHostReplacerConfiguration.ps1)
   for supported operational settings. Keep authoritative deployment parameters aligned; a later
   redeployment can overwrite direct changes.
 - **Recover a stopped operation:** inspect correlated logs and deployment state, fix the cause,
   then use [checked recovery](../deployments/add-ons/sessionHostReplacer/README.md#recover-a-stopped-operation).
   Do not delete state or clear leases to force a fresh start.
 - **Roll back retained hosts:** rollback is operator initiated, not automatic. The
-  [rollback command](../deployments/add-ons/sessionHostReplacer/Invoke-SessionHostRollback.ps1)
+  [rollback command](../deployments/add-ons/sessionHostReplacer/tools/Invoke-SessionHostRollback.ps1)
   restores retained capacity and pins the pool to the restored image; unsafe unfinished work can
   require restore-only operation with SHR left stopped.
 - **Upgrade:** deploy the complete supported template/code release using the
-  [upgrade procedure](../deployments/add-ons/sessionHostReplacer/deployment-guide.md#upgrading-an-existing-deployment).
+  [upgrade procedure](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md#upgrading-an-existing-deployment).
   Do not upload one module or ZIP the source folder as a substitute for the deployed app layout.
 
 ## Deployment and Detailed References
@@ -180,9 +186,9 @@ offline source checks do not prove a successful rollout.
 | Need | Reference |
 | --- | --- |
 | Prerequisites, deployment and parameter reference | [Add-on README](../deployments/add-ons/sessionHostReplacer/README.md#prerequisites) |
-| Detailed sequencing, readiness and safety invariants | [Canonical replacement flow](../deployments/add-ons/sessionHostReplacer/replacement-flow.md) |
-| Upgrades and historical resource cleanup | [Deployment update guide](../deployments/add-ons/sessionHostReplacer/deployment-guide.md) |
-| Telemetry collection and diagnostic queries | [Logging guide](../deployments/add-ons/sessionHostReplacer/logging-guide.md) |
+| Detailed sequencing, readiness and safety invariants | [Canonical replacement flow](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md) |
+| Upgrades and historical resource cleanup | [Deployment update guide](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md) |
+| Telemetry collection and diagnostic queries | [Logging guide](../deployments/add-ons/sessionHostReplacer/docs/logging-guide.md) |
 | Pilot approval and production image promotion | [Monthly Image Operations](monthly-image-operations.md) |
 
 The canonical flow owns detailed lifecycle behavior; this page is the design overview.

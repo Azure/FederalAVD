@@ -353,15 +353,15 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     privateEndpointSubnetResourceId: ''
     resourceGroupDeployment: ''
     resourceGroupStorage: resourceGroupName
-    shareSizeInGB: 100
+    profileShareSizeInGB: 100
     smbServerLocation: naming.vmsLocAbbr
     profileStorageAccountNamePrefix: naming.fslogixProfileStorageAccountNamePrefix
     officeStorageAccountNamePrefix: naming.fslogixOfficeStorageAccountNamePrefix
     storageCount: 1
     storageIndex: 1
-    storageSku: fslogixProfileStorageTier
+    profileStorageTier: fslogixProfileStorageTier
     profileStorageBillingModel: fslogixProfileStorageBillingModel
-    fslogixStorageRedundancy: 'LocallyRedundant'
+    profileStorageRedundancy: 'LocallyRedundant'
     storageSolution: 'AzureFiles'
     permittedIPs: []
     tags: tags

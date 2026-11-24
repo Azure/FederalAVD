@@ -2,7 +2,7 @@
 
 This guide defines the source-of-truth and validation workflow for FederalAVD session-host Azure
 Policy. All policy definitions, initiatives, assignment helpers, remediation helpers, and nested
-policy deployment templates live in this directory, even when a capability currently has only one
+policy deployment templates live in the parent `sessionHostPolicy` directory, even when a capability currently has only one
 consumer.
 
 Deployment entry points remain responsible for adapting their public inputs and sequencing shared
@@ -12,7 +12,7 @@ policy capabilities. The Automated Host Pool adapter is
 
 ## Deployment Model
 
-Policy definitions and initiatives are authored as Bicep resources under `modules/` and deployed
+Policy definitions and initiatives are authored as Bicep resources under `sessionHostPolicy/modules/` and deployed
 directly by a consuming orchestration. They are not compiled to standalone ARM files and then
 loaded by another Bicep deployment.
 
@@ -42,7 +42,8 @@ automatedHostPool.bicep
 
 ```text
 sessionHostPolicy/
-  AUTHORING.md
+  docs/
+    AUTHORING.md
   vmApplications.bicep
   monitoring.bicep
   guestAttestation.bicep
@@ -167,7 +168,7 @@ resource-group assignment `avd-sh-config-profile`. Do not reuse the old definiti
 identity: Azure Policy does not support removing definition parameters in place. Existing
 deployments must retire the old `avd-sh-config` assignment through the approved operator process,
 then redeploy the automated host pool. Delete the old subscription definition only after all its
-assignments have migrated. See [contract migration](../../../../../docs/design.md#consumer-contract-migration-and-consistency).
+assignments have migrated. See [contract migration](../../../../../../docs/design.md#consumer-contract-migration-and-consistency).
 The named `ConfigureSessionHost` Run Command and successful-provisioning compliance condition
 remain unchanged; this contract migration does not force already-compliant hosts to rerun.
 

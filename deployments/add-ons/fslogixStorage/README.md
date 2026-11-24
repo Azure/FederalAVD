@@ -373,20 +373,20 @@ Entra Domain Services also support FSLogix Object Specific Settings.
 With `ProfileOfficeContainer` or `CloudCacheProfileOfficeContainer`, Azure Files always creates
 separate Profile and Office accounts. There is one account per role without sharding, or one
 paired account per role for each shard group. Both arrays use the same group ordering and
-`storageIndex`. `fslogixProfileStorageAccountNamePrefix` is the preferred nullable Profile override,
-falling back to the legacy `profileStorageAccountNamePrefix` when null;
+`storageIndex`. `fslogixProfileStorageAccountNamePrefix` is the sole Profile prefix input;
+blank requests generated naming.
 `officeStorageAccountNamePrefix` independently overrides Office names and must differ from Profile.
 CMK creates distinct indexed keys for both roles using the same encryption identity.
 Office shares are never enrolled in backup.
 
 | Parameter | Default | Allowed values |
 | --- | --- | --- |
-| `fslogixOfficeStorageTier` | `Inherit` (`fslogixStorageService` tier) | `Inherit`, `Standard`, `Premium` |
-| `fslogixOfficeStorageRedundancy` | `Inherit` (`fslogixStorageRedundancy`) | `Inherit`, `LocallyRedundant`, `ZoneRedundant` |
+| `fslogixOfficeStorageTier` | `Inherit` (Profile media) | `Inherit`, `Standard`, `Premium` |
+| `fslogixOfficeStorageRedundancy` | `Inherit` (Profile redundancy) | `Inherit`, `LocallyRedundant`, `ZoneRedundant` |
 | `fslogixOfficeShareSizeInGB` | `0` (effective Profile quota) | `0` or a quota valid for the Office billing model |
 
 The Portal defaults new Azure Files deployments to **Premium (SSD) + Provisioned v2**.
-Bicep omission preserves `AzureFiles Standard`, `LocallyRedundant`, 100 GiB and `Legacy` billing.
+Bicep omission preserves backend `AzureFiles`, Standard Profile media, `LocallyRedundant`, 100 GiB and `Legacy` billing.
 `fslogixProfileStorageBillingModel` accepts `Legacy` or `ProvisionedV2` (default `Legacy`).
 `fslogixOfficeStorageBillingModel` accepts those plus `Inherit` (default), which uses Profile billing.
 `Inherit` tier uses the effective Profile tier. These account/billing combinations are supported:
@@ -399,12 +399,17 @@ Bicep omission preserves `AzureFiles Standard`, `LocallyRedundant`, 100 GiB and 
 | `Premium` | SSD / provisioned v2 | `FileStorage` | `PremiumV2_LRS`, `PremiumV2_ZRS` |
 
 `StorageV2` is an account kind, **not** the provisioned v2 billing model. Only LRS/ZRS are offered.
-The nullable overrides `fslogixProfileShareSizeInGB` and `fslogixProfileStorageRedundancy` override
-`shareSizeInGB` and `fslogixStorageRedundancy` when supplied.
+The nonnullable `fslogixProfileShareSizeInGB` and `fslogixProfileStorageRedundancy` are the sole
+Profile quota and redundancy inputs, matching standard and automated host pools.
 `fslogixProfileStorageAccountNamePrefix` is the sole Profile prefix input; blank requests generated
-naming. The generic prefix alias is removed. `fslogixProfileStorageTier` overrides the Azure Files tier
-from `fslogixStorageService`; null derives it from that unchanged backend compatibility parameter.
-Forms export preferred names only. Shared authentication, sharding, count, groups and index are unchanged.
+naming. The generic prefix alias is removed. `fslogixStorageService` accepts only `AzureFiles` or
+`AzureNetAppFiles`. `fslogixProfileStorageTier` selects Azure Files media; `fslogixNetAppServiceLevel`
+independently selects NetApp Standard/Premium service level (default Premium), including the filter
+for an existing capacity pool. Profile media is ignored with NetApp and NetApp service level is ignored
+with Azure Files. NetApp rejects nondefault Azure Files billing, performance, redundancy and Office
+overrides, and uses the Profile quota for both volumes. Old tuning aliases, composite backend/tier
+values and explicit null tuning values are no longer accepted. Forms export canonical names only.
+Shared authentication, sharding, count, groups and index are unchanged.
 
 Profile account outputs are `profileStorageAccountResourceIds` and the configuration object's
 `localProfileStorageAccountResourceIds` / `remoteProfileStorageAccountResourceIds`. The remote input

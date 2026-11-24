@@ -11,7 +11,7 @@ Use this workflow for log-based alerts under `deployments/add-ons/avdAlerts/`.
 ## Procedure
 
 1. Read `deployments/add-ons/avdAlerts/README.md`, especially **Query Design and Validation**, and
-   locate the corresponding operator response in `ALERT-RESPONSE.md`.
+   locate the corresponding operator response in `deployments/add-ons/avdAlerts/docs/ALERT-RESPONSE.md`.
 2. Identify the authoritative AVD Insights workbook for the condition. Use the official Microsoft
    workbook sources listed in [workbook sources](./references/workbook-sources.md).
 3. Extract and structurally validate the repository queries:
@@ -33,5 +33,5 @@ Use this workflow for log-based alerts under `deployments/add-ons/avdAlerts/`.
    without confirming support in every target cloud.
 9. Document every intentional deviation in the add-on README. The reason must describe alert
    semantics, noise suppression, cloud compatibility, or source-data behavior.
-10. Build the affected Bicep entry template and update `ALERT-RESPONSE.md` when operator action,
+10. Build the affected Bicep entry template and update `docs/ALERT-RESPONSE.md` under the add-on when operator action,
     thresholds, or dimensions change.

@@ -41,8 +41,8 @@ param shareAdminGroups array
 param shareUserGroups array
 @description('Required. Location token appended to anf- for the NetApp Active Directory SMB server name.')
 param smbServerLocation string
-@description('Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes.')
-param storageSku string
+@description('Required. NetApp capacity-pool and volume service level.')
+param serviceLevel string
 @description('Required. Tag name/value object applied to the NetApp account when created.')
 param tagsNetAppAccount object
 @description('Required. Tag name/value object applied to the capacity pool when created.')
@@ -85,7 +85,7 @@ module capacityPool '../../../resourceModules/netApp/netAppAccounts/capacityPool
     netAppAccountName: netAppAccountName
     name: netAppCapacityPoolName
     location: location
-    serviceLevel: storageSku
+    serviceLevel: serviceLevel
     tags: tagsNetAppCapacityPool
   }
   dependsOn: [netAppAccount]
@@ -101,7 +101,7 @@ module netAppVolumes '../../../resourceModules/netApp/netAppAccounts/capacityPoo
       location: location
       subnetResourceId: netAppVolumesSubnetResourceId
       usageThreshold: shareSizeInBytes
-      serviceLevel: storageSku
+      serviceLevel: serviceLevel
       tags: tagsNetAppVolume
     }
     dependsOn: [capacityPool]

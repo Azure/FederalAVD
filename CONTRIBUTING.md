@@ -86,6 +86,10 @@ parameter, target context, optional name overrides and complete resource-module 
 3. Keep public contracts stable unless a breaking change is intentional and
    documented. Update affected Portal forms, reference parameters, tests, and
    deployment documentation together.
+   Keep each deployment solution's overview and entry links in its `README.md`;
+   place detailed guides in its local `docs/` folder. Module and script-folder
+   READMEs remain beside their code. Cross-solution guidance stays in the repository
+   `docs/` folder. Rebase inbound and outbound links whenever a guide moves.
 4. Keep PowerShell scripts ASCII-only. Follow the authoritative-source and live
    behavior verification requirements in the relevant Windows policy or KQL skill;
    an existing registry value or query is not proof of correctness.

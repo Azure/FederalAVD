@@ -1,7 +1,7 @@
 # Session Host Replacer - Logging Guide
 
-Use the [design overview](../../../docs/session-host-replacer.md#what-operators-see) for the monitoring
-model and [Trace one replacement cycle](README.md#trace-one-replacement-cycle) for workbook navigation.
+Use the [design overview](../../../../docs/session-host-replacer.md#what-operators-see) for the monitoring
+model and [Trace one replacement cycle](../README.md#trace-one-replacement-cycle) for workbook navigation.
 
 ## Where Logs Go
 
@@ -12,7 +12,7 @@ The optional workbook queries only the selected workload workspace's `AppTraces`
 It does not query the components' resource-scoped views, which can include additional
 copies exported to other workspaces by policy. Application Insights integration and central
 diagnostic exports remain unchanged. Workspace read access is required; access to a component
-alone is not a substitute. See the [workbook test procedure](README.md#test-the-workspace-scoped-workbook).
+alone is not a substitute. See the [workbook test procedure](../README.md#test-the-workspace-scoped-workbook).
 
 ```text
 Both timers + shared lifecycle engine
@@ -22,7 +22,7 @@ Both timers + shared lifecycle engine
 
 SHR disables its separate Function App diagnostic setting for `FunctionAppLogs`. That table is
 not the source for the current workbook. Existing diagnostic settings are not deleted by an
-incremental redeployment; see [collection-path cleanup](README.md#function-app-log-collection).
+incremental redeployment; see [collection-path cleanup](../README.md#function-app-log-collection).
 Without a supplied workspace, the template does not enable this Application Insights/workbook
 path. Local or streamed output is not a substitute for retained telemetry.
 
@@ -156,9 +156,9 @@ traces
 
 These queries report ingested evidence, not live state. Bound and select the time range to include
 the operation's start and latest observation. No rows do not prove health. See
-[suggested alerts](alerts/alerts-guide.md) for structured cycle/timer queries and response guidance.
+[suggested alerts](alerts-guide.md) for structured cycle/timer queries and response guidance.
 They are documentation examples, not deployed rules; the
-[legacy pack](alerts/alerts-guide.md#current-coverage-limitations) does not implement them.
+[legacy pack](alerts-guide.md#current-coverage-limitations) does not implement them.
 
 Graph failure diagnostics support both PowerShell 7 HTTP response bodies and legacy response
 streams. If those details cannot be read or emitted, a Trace diagnostic records that limitation;

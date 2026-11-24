@@ -78,12 +78,12 @@
     Returns the interpreted configuration object after review or update.
 
 .EXAMPLE
-    .\Set-SessionHostReplacerConfiguration.ps1 `
+    .\tools\Set-SessionHostReplacerConfiguration.ps1 `
         -FunctionAppName func-shr-prod-use2 `
         -ResourceGroupName rg-avd-operations-use2
 
 .EXAMPLE
-    .\Set-SessionHostReplacerConfiguration.ps1 `
+    .\tools\Set-SessionHostReplacerConfiguration.ps1 `
         -FunctionAppName func-shr-prod-use2 `
         -ResourceGroupName rg-avd-operations-use2 `
         -MinimumCapacityPercentage 90 `
