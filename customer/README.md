@@ -52,7 +52,6 @@ Ready-to-use example artifact packages and an optional downloads file are provid
 customer-examples/
   artifacts/                                ← copy folders into customer/artifacts/
     Adobe-Acrobat-Reader-DC/
-    Amazon-Workspaces-Client/
     BuiltIn-UWP-Apps/
     Configure-DesktopBackground/
     Configure-EdgePolicy/

@@ -2,7 +2,6 @@ BeforeDiscovery {
     $msiArtifactScripts = @(
         'customer-examples\artifacts\7-Zip\Deploy-7-Zip.ps1'
         'customer-examples\artifacts\Adobe-Acrobat-Reader-DC\Deploy-AdobeReaderDC.ps1'
-        'customer-examples\artifacts\Amazon-Workspaces-Client\Deploy-AmazonWorkspacesClient.ps1'
         'customer-examples\artifacts\DoD-InstallRoot\Deploy-InstallRoot.ps1'
         'customer-examples\artifacts\Google-Chrome-Enterprise\Deploy-GoogleChromeEnterprise.ps1'
         'customer-examples\artifacts\Microsoft-AVD-Multimedia-Redirection\Install-MicrosoftAVDMultimediaRedirection.ps1'
@@ -17,7 +16,6 @@ BeforeAll {
     $msiArtifactScripts = @(
         'customer-examples\artifacts\7-Zip\Deploy-7-Zip.ps1'
         'customer-examples\artifacts\Adobe-Acrobat-Reader-DC\Deploy-AdobeReaderDC.ps1'
-        'customer-examples\artifacts\Amazon-Workspaces-Client\Deploy-AmazonWorkspacesClient.ps1'
         'customer-examples\artifacts\DoD-InstallRoot\Deploy-InstallRoot.ps1'
         'customer-examples\artifacts\Google-Chrome-Enterprise\Deploy-GoogleChromeEnterprise.ps1'
         'customer-examples\artifacts\Microsoft-AVD-Multimedia-Redirection\Install-MicrosoftAVDMultimediaRedirection.ps1'
@@ -756,11 +754,6 @@ Describe 'ArtifactDeployment script regression checks' {
                 -DisplayName 'PuTTY release 0.83 (64-bit)' `
                 -Publisher 'Simon Tatham' `
                 -ProductCode '{00000000-0000-0000-0000-000000000004}'
-            Test-MsiApplicationRemoval `
-                -ScriptPath (Join-Path $repoRoot 'customer-examples\artifacts\Amazon-Workspaces-Client\Deploy-AmazonWorkspacesClient.ps1') `
-                -DisplayName 'Amazon WorkSpaces' `
-                -Publisher 'Amazon Web Services, Inc' `
-                -ProductCode '{00000000-0000-0000-0000-000000000006}'
             Test-MsiApplicationRemoval `
                 -ScriptPath (Join-Path $repoRoot 'customer-examples\artifacts\Microsoft-Edge-Enterprise\Deploy-MicrosoftEdgeEnterprise.ps1') `
                 -DisplayName 'Microsoft Edge' `

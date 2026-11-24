@@ -92,11 +92,11 @@ product configuration, READMEs, and staged installers.
 | --- | --- | --- |
 | [7-Zip](7-Zip/) | 7-Zip archiver | `7Zip` |
 | [Adobe-Acrobat-Reader-DC](Adobe-Acrobat-Reader-DC/) | Adobe Acrobat Reader DC | `AdobeAcrobatReaderDC` |
-| [Amazon-Workspaces-Client](Amazon-Workspaces-Client/) | Amazon WorkSpaces client | `AmazonWorkSpacesClient` |
 | [BuiltIn-UWP-Apps](BuiltIn-UWP-Apps/) | Provision built-in Windows UWP apps for all users | `WindowsCalculator`, `MicrosoftPaint`, `SnippingTool`, `Notepad`, `MicrosoftClipchamp`, `MicrosoftPhotos` |
 | [Configure-AVDSessionHostPolicy](Configure-AVDSessionHostPolicy/) | Configure AVD security, graphics, Shortpath, and directional clipboard policies | `AVDAdministrativeTemplates` |
 | [Configure-ChromePolicy](Configure-ChromePolicy/) | Apply Google Chrome Group Policy settings, including search provider enforcement | `ChromeEnterpriseAdministrativeTemplates` |
 | [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper | — |
+| [Configure-EdgeFavoritesBackup](Configure-EdgeFavoritesBackup/) | Schedule per-user Edge favorites HTML backups with retained recovery copies and manual import | None |
 | [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO, including search provider enforcement | `EdgeEnterpriseAdministrativeTemplates` |
 | [Configure-LocalServiceAccount](Configure-LocalServiceAccount/) | Create or update a local service account using a Key Vault password | — |
 | [Configure-Office365Policy](Configure-Office365Policy/) | Apply Microsoft 365 Group Policy settings via LGPO | `Office365AdministrativeTemplates` |
