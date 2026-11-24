@@ -27,14 +27,14 @@
                           configured threshold.
 
     When -EnableRemoteApp is specified, also sets:
-      EnableEnhancedShellExperienceForRemoteApp - Required for OneDrive to launch and
-                                 remain active alongside RemoteApp (published app) sessions.
+      UseShellAppRuntimeRemoteApp - Enables the enhanced shell for RemoteApp sessions.
+                                    OneDrive must also have a machine Run startup entry.
 
     The script first copies the OneDrive ADMX/ADML templates from the installed OneDrive
     build into %WINDIR%\PolicyDefinitions so that policy keys are written under the correct
-    ADMX-backed paths. If ADMX import fails, the existing core machine settings retain
-    their direct-registry fallback. Notification, wizard, tenant allowlist, and personal
-    sync policies use Registry.pol in either case; the writer does not require ADMX.
+    ADMX-backed paths. Both Program Files locations are checked for a matching ADMX
+    and English ADML pair. Missing templates or copy failures stop configuration.
+    All policies are written through Registry.pol; there are no direct-registry writes.
 
 .PARAMETER TenantId
     Microsoft Entra tenant ID (GUID) for the organization. Used as the value for
@@ -129,6 +129,59 @@ function New-Log {
     $script:Log = Join-Path $path $logfile
 
     Add-Content $script:Log "Date`t`t`tCategory`t`tDetails"
+}
+
+function Copy-OneDrivePolicyTemplates {
+    # Microsoft ships per-machine templates in <install>\<version>\adm.
+    # https://learn.microsoft.com/en-us/sharepoint/use-group-policy#manage-onedrive-using-group-policy
+    $programFilesRoots = @(
+        $env:ProgramW6432
+        $env:ProgramFiles
+        ${env:ProgramFiles(x86)}
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    $versionFolders = @(
+        foreach ($root in $programFilesRoots) {
+            $installDir = Join-Path $root 'Microsoft OneDrive'
+            if (-not (Test-Path -LiteralPath $installDir -PathType Container)) { continue }
+            Get-ChildItem -LiteralPath $installDir -Directory -ErrorAction Stop |
+                Where-Object {
+                    [version]$parsedVersion = $null
+                    $_.Name -match '^\d+\.\d+\.\d+\.\d+$' -and
+                        [version]::TryParse($_.Name, [ref]$parsedVersion)
+                }
+        }
+    ) | Sort-Object { [version]$_.Name } -Descending
+
+    foreach ($versionFolder in $versionFolders) {
+        $admDir = Join-Path $versionFolder.FullName 'adm'
+        $admx = Join-Path $admDir 'OneDrive.admx'
+        if (-not (Test-Path -LiteralPath $admx -PathType Leaf)) {
+            Write-Log -Category Warning -Message "Missing '$admx'. Checking the next version folder."
+            continue
+        }
+        # The unlocalized adm root contains the English ADML in current OneDrive builds.
+        $adml = @(
+            foreach ($relativePath in @('OneDrive.adml', 'en-us\OneDrive.adml', 'en\OneDrive.adml')) {
+                $candidate = Join-Path $admDir $relativePath
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) { $candidate }
+            }
+        ) | Select-Object -First 1
+        if (-not $adml) {
+            Write-Log -Category Warning -Message "Missing English OneDrive.adml in '$admDir'. Checking the next version folder."
+            continue
+        }
+
+        $policyDefinitions = Join-Path $env:WINDIR 'PolicyDefinitions'
+        $languageDir = Join-Path $policyDefinitions 'en-us'
+        $null = New-Item -Path $languageDir -ItemType Directory -Force -ErrorAction Stop
+        Copy-Item -LiteralPath $admx -Destination (Join-Path $policyDefinitions 'OneDrive.admx') -Force -ErrorAction Stop
+        Copy-Item -LiteralPath $adml -Destination (Join-Path $languageDir 'OneDrive.adml') -Force -ErrorAction Stop
+        Write-Log -Message "Copied '$admx' and '$adml' to '$policyDefinitions'."
+        return
+    }
+
+    throw "OneDrive.admx and matching English OneDrive.adml were not found for an installed per-machine OneDrive build under Program Files or Program Files (x86). Install or repair OneDrive before configuring policy."
 }
 
 #endregion Functions
@@ -651,62 +704,24 @@ $TenantId = ([guid]$TenantId).ToString('D')
 $ref = "https://learn.microsoft.com/en-us/sharepoint/redirect-known-folders"
 Write-Log -Message "Starting OneDrive configuration in accordance with '$ref'."
 
-# Resolve install dir - enterprise per-machine installer uses Program Files (not x86)
-$InstallDir = if (Test-Path "$env:ProgramFiles\Microsoft OneDrive\OneDrive.exe") {
-    "$env:ProgramFiles\Microsoft OneDrive"
-}
-else {
-    "${env:ProgramFiles(x86)}\Microsoft OneDrive"
-}
-$OnedriveVersion = (Get-ItemProperty -Path "$InstallDir\OneDrive.exe").VersionInfo.ProductVersion
-
-If (Test-Path -Path "$InstallDir\$OnedriveVersion") {
-    Write-Log -Message "Found OneDrive version folder '$OnedriveVersion' in '$InstallDir'. Copying ADMX templates to PolicyDefinitions."
-    $null = Get-ChildItem -Path "$InstallDir\$OnedriveVersion" -File -Recurse -Filter '*.admx' | ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\" -Force }
-    $null = Get-ChildItem -Path "$InstallDir\$OnedriveVersion" -File -Recurse -Filter '*.adml' |
-    Where-Object { $_.Directory.Name -eq 'en-us' -or $_.Directory.Name -eq 'en' -or (Get-ChildItem -Path $_.DirectoryName -Filter '*.admx' -ErrorAction SilentlyContinue) } |
-    ForEach-Object { Copy-Item -Path $_.FullName -Destination "$env:WINDIR\PolicyDefinitions\en-us\" -Force }
-}
-$Script:AdmxImported = Test-Path "$env:WINDIR\PolicyDefinitions\OneDrive.admx"
+Copy-OneDrivePolicyTemplates
 
 Write-Log -Message "Now Configuring OneDrive Group Policy."
 If ($TenantID -and $TenantID -ne '') {
-    If ($Script:AdmxImported) {
-        Write-Log -Message "Configuring OneDrive via Group Policy (ADMX imported)."
-        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'SilentAccountConfig' -RegistryType DWORD -RegistryData 1
-        Write-Log -Message "Enabling Files on Demand."
-        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'FilesOnDemandEnabled' -RegistryType DWORD -RegistryData 1
-        Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
-        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData $TenantID
-        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1
-        if ($null -ne $WarningMinDiskSpaceLimitInMB) {
-            Write-Log -Message "Warning users before a OneDrive download reduces available space below $WarningMinDiskSpaceLimitInMB MB."
-            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $WarningMinDiskSpaceLimitInMB
-        }
-        if ($null -ne $MinDiskSpaceLimitInMB) {
-            Write-Log -Message "Blocking OneDrive downloads when available space is below $MinDiskSpaceLimitInMB MB."
-            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $MinDiskSpaceLimitInMB
-        }
+    Write-Log -Message "Configuring OneDrive via Group Policy (ADMX and ADML copied)."
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'SilentAccountConfig' -RegistryType DWORD -RegistryData 1
+    Write-Log -Message "Enabling Files on Demand."
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'FilesOnDemandEnabled' -RegistryType DWORD -RegistryData 1
+    Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMSilentOptIn' -RegistryType String -RegistryData $TenantID
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'KFMBlockOptOut' -RegistryType DWORD -RegistryData 1
+    if ($null -ne $WarningMinDiskSpaceLimitInMB) {
+        Write-Log -Message "Warning users before a OneDrive download reduces available space below $WarningMinDiskSpaceLimitInMB MB."
+        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'WarningMinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $WarningMinDiskSpaceLimitInMB
     }
-    Else {
-        Write-Log -Category Warning -Message "OneDrive ADMX templates were not imported. Writing core machine settings directly to registry; additional policies still use Registry.pol."
-        $oneDriveKey = 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive'
-        If (-not (Test-Path $oneDriveKey)) { New-Item -Path $oneDriveKey -Force | Out-Null }
-        Write-Log -Message "Configuring OneDrive to automatically sign-in with logged on user credentials."
-        Set-ItemProperty -Path $oneDriveKey -Name 'SilentAccountConfig' -Value 1 -Type DWord -Force
-        Write-Log -Message "Enabling Files on Demand."
-        Set-ItemProperty -Path $oneDriveKey -Name 'FilesOnDemandEnabled' -Value 1 -Type DWord -Force
-        Write-Log -Message "Applying OneDrive Known Folder Move Silent Configuration Settings."
-        Set-ItemProperty -Path $oneDriveKey -Name 'KFMSilentOptIn' -Value $TenantID -Type String -Force
-        Set-ItemProperty -Path $oneDriveKey -Name 'KFMBlockOptOut' -Value 1 -Type DWord -Force
-        if ($null -ne $WarningMinDiskSpaceLimitInMB) {
-            Write-Log -Message "Warning users before a OneDrive download reduces available space below $WarningMinDiskSpaceLimitInMB MB."
-            Set-ItemProperty -Path $oneDriveKey -Name 'WarningMinDiskSpaceLimitInMB' -Value $WarningMinDiskSpaceLimitInMB -Type DWord -Force
-        }
-        if ($null -ne $MinDiskSpaceLimitInMB) {
-            Write-Log -Message "Blocking OneDrive downloads when available space is below $MinDiskSpaceLimitInMB MB."
-            Set-ItemProperty -Path $oneDriveKey -Name 'MinDiskSpaceLimitInMB' -Value $MinDiskSpaceLimitInMB -Type DWord -Force
-        }
+    if ($null -ne $MinDiskSpaceLimitInMB) {
+        Write-Log -Message "Blocking OneDrive downloads when available space is below $MinDiskSpaceLimitInMB MB."
+        Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\OneDrive' -RegistryValue 'MinDiskSpaceLimitInMB' -RegistryType DWORD -RegistryData $MinDiskSpaceLimitInMB
     }
 
     # OneDrive.admx KFMOptInNoWizard: "No" is DWORD 0 for the successful-move notification.
@@ -731,7 +746,10 @@ If ($TenantID -and $TenantID -ne '') {
 }
 If ($EnableRemoteApp) {
     Write-Log -Message "Enabling enhanced shell experience for RemoteApp (required for OneDrive to launch alongside RemoteApp sessions)."
-    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -RegistryValue 'EnableEnhancedShellExperienceForRemoteApp' -RegistryType DWORD -RegistryData 1
+    # TerminalServer.admx TS_SERVER_REMOTEAPP_USE_SHELLAPPRUNTIME: Machine DWORD 1 enables
+    # the enhanced RemoteApp shell; full desktop sessions are unaffected.
+    # https://learn.microsoft.com/en-us/azure/virtual-desktop/onedrive-remoteapp
+    Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -RegistryValue 'UseShellAppRuntimeRemoteApp' -RegistryType DWORD -RegistryData 1
     Invoke-PolicyUpdate
 }
 Write-Log -Message "OneDrive Group Policy Configuration Complete."

@@ -48,7 +48,7 @@ redirection of Desktop, Documents, and Pictures to OneDrive for Business.
 
 - **Type:** Switch
 - **Required:** No
-- **Description:** Enables `EnableEnhancedShellExperienceForRemoteApp` when OneDrive must launch
+- **Description:** Enables `UseShellAppRuntimeRemoteApp` when OneDrive must launch
     and remain active with published RemoteApp sessions. Omit for full desktop deployments.
 
 ### `WarningMinDiskSpaceLimitInMB`
@@ -117,9 +117,21 @@ Connect-AzAccount
 
 ### 1. OneDrive ADMX Templates
 
-- Locates the OneDrive version folder under the install directory (supports both per-machine `%ProgramFiles%\Microsoft OneDrive` and per-user `%ProgramFiles(x86)%\Microsoft OneDrive`)
-- Copies `OneDrive.admx` to `C:\Windows\PolicyDefinitions\`
-- Copies matching `.adml` files to `C:\Windows\PolicyDefinitions\en-us\`
+- Checks both per-machine install locations: `%ProgramFiles%\Microsoft OneDrive` and
+  `%ProgramFiles(x86)%\Microsoft OneDrive`. `%ProgramW6432%` also covers native Program Files
+  when the script runs in 32-bit PowerShell.
+- Finds immediate version folders matching `^\d+\.\d+\.\d+\.\d+$` in both locations,
+  validates their names as versions, and sorts numerically newest first. Discovery does not
+  depend on `OneDrive.exe` or its product-version metadata.
+- Selects the newest folder containing both `<version>\adm\OneDrive.admx` and matching
+  English `<version>\adm\OneDrive.adml`. English has no source language subfolder in current
+  builds; `en-us` and `en` are checked only as alternate layouts.
+- Skips incomplete version folders and tries the next candidate, without mixing files
+  from different versions or install locations.
+- Creates the destination directories and copies `OneDrive.admx` to
+  `%WINDIR%\PolicyDefinitions\` and the matching ADML to its `en-us` subfolder.
+- Stops before configuring policies if no installed build contains both files or copying fails.
+  Existing destination templates do not bypass this prerequisite.
 
 ### 2. OneDrive and KFM Configuration
 
@@ -136,7 +148,6 @@ The script configures these computer policies under `SOFTWARE\Policies\Microsoft
 | `AllowTenantList` subkey | Tenant GUID names and REG_SZ tenant GUID data | Allows business-account sync for `TenantId` and optional additional tenant IDs. |
 | `WarningMinDiskSpaceLimitInMB` | Supplied parameter value | Warns before a download would reduce available space below the configured MB threshold; omitted when the parameter is not supplied. |
 | `MinDiskSpaceLimitInMB` | Supplied parameter value | Blocks OneDrive downloads below the configured available-space threshold; omitted when the parameter is not supplied. |
-| `EnableEnhancedShellExperienceForRemoteApp` | `1` when selected | Enables the enhanced shell behavior used by OneDrive in RemoteApp scenarios. |
 
 It also configures **User Configuration > Administrative Templates > OneDrive > Prevent users
 from syncing personal OneDrive accounts**: `DisablePersonalSync`, DWORD `1`, under
@@ -144,14 +155,27 @@ from syncing personal OneDrive accounts**: `DisablePersonalSync`, DWORD `1`, und
 the image-build account's live HKCU hive. Existing personal accounts stop syncing, but files
 already downloaded to the computer are not removed.
 
-The notification, wizard, allowlist, and personal-account policies use Registry.pol even when
-the ADMX import is unavailable. The existing core machine settings retain their direct-registry
-fallback in that case.
+All policies use Registry.pol after the installed ADMX/ADML pair is copied successfully.
+There is no direct-registry fallback. OneDrive policy scopes and values are unchanged.
+
+When `-EnableRemoteApp` is selected, the script also enables **Enable enhanced shell experience
+for RemoteApp** from `TerminalServer.admx`: Computer policy,
+`HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services`,
+`UseShellAppRuntimeRemoteApp`, DWORD `1` (disabled is `0`). This affects RemoteApp sessions,
+not full desktop sessions. The previous `EnableEnhancedShellExperienceForRemoteApp` value
+was not the ADMX policy value; this corrects that mapping.
+
+The mapping was verified against Windows 11 `TerminalServer.admx` and its matching English
+ADML, together with [Microsoft's OneDrive RemoteApp guidance](https://learn.microsoft.com/en-us/azure/virtual-desktop/onedrive-remoteapp).
+That guidance requires Windows 11 Enterprise 24H2, or 22H2/23H2 with KB5040442 or later,
+a supported Windows client, and a suitable AVD side-by-side stack. Restart session hosts after
+configuration. OneDrive also needs a machine `Run` startup entry pointing to its installed
+executable with `/background`; this artifact does not create that separate non-policy entry.
 
 ### Policy Sources and Validation
 
 Mappings were checked against the matching `OneDrive.admx` and English `OneDrive.adml` from
-OneDrive **26.195.1006.0004**, together with Microsoft's
+OneDrive **26.218.1108.0004**, together with Microsoft's
 [OneDrive policy reference](https://learn.microsoft.com/en-us/sharepoint/use-group-policy).
 The artifact copies templates from the installed OneDrive build; revalidate policy compatibility
 if your approved installer uses different templates.
@@ -355,7 +379,7 @@ Log entries include:
 | `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
 | `Remove-PolicyRegistryValue` | Queues a registry value deletion in Registry.pol |
 | `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
-| `Set-RegistryValue` | Creates or updates registry values outside Group Policy |
+| `Copy-OneDrivePolicyTemplates` | Copies the installed build's matching ADMX and English ADML, or fails configuration |
 | `Write-Log` | Writes formatted log entries |
 
 ## Offline Image Build and Runtime Connectivity
