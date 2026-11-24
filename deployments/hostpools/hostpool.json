@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4269101033876978721"
+      "templateHash": "5064028844874278627"
     }
   },
   "definitions": {
@@ -2048,23 +2048,6 @@
             "description": "Names host-pool compute, control-plane and shared FSLogix resources using explicit target locations and subscriptions.",
             "__bicep_imported_from!": {
               "sourceTemplate": "../shared/modules/orchestration/naming/naming.bicep"
-            }
-          }
-        },
-        "removeLegacyFslogixAccountTags": {
-          "parameters": [
-            {
-              "type": "object",
-              "name": "tags"
-            }
-          ],
-          "output": {
-            "type": "object",
-            "value": "[toObject(filter(items(parameters('tags')), lambda('tag', not(contains(createArray('fsllocalstorageaccountnames', 'fslremotestorageaccountnames'), toLower(lambdaVariables('tag').key))))), lambda('tag', lambdaVariables('tag').key), lambda('tag', lambdaVariables('tag').value))]"
-          },
-          "metadata": {
-            "__bicep_imported_from!": {
-              "sourceTemplate": "../shared/modules/orchestration/fslogix/modules/configuration.bicep"
             }
           }
         }
@@ -9437,7 +9420,7 @@
             "value": "[variables('effectiveHostsResourceGroup')]"
           },
           "tags": {
-            "value": "[__bicep.removeLegacyFslogixAccountTags(union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), variables('vmConfigurationTags'), variables('fslogixConfigurationTags'), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, variables('effectiveControlPlaneResourceGroup'), variables('naming').hostPoolName))))]"
+            "value": "[union(coalesce(tryGet(parameters('tags'), 'Microsoft.Resources/resourceGroups'), createObject()), variables('vmConfigurationTags'), variables('fslogixConfigurationTags'), createObject('cm-resource-parent', format('{0}/resourceGroups/{1}/providers/Microsoft.DesktopVirtualization/hostpools/{2}', subscription().id, variables('effectiveControlPlaneResourceGroup'), variables('naming').hostPoolName)))]"
           }
         },
         "template": {

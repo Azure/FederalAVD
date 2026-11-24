@@ -492,7 +492,7 @@ Describe 'FSLogix producer v2 inputs' {
         $text | Should -Match '(?m)^var hasAssociatedFslStorage = deployFSLogixStorage \|\| !empty\(effectiveFslogixExistingLocalProfileStorageAccountResourceIds\)'
         $text | Should -Match '(?ms)^var fslogixConfigurationTags = hasAssociatedFslStorage\s+\? union\(.*?\bfslLocalProfileStorageAccountNames,\s+fslRemoteProfileStorageAccountNames,'
         $resourceGroup = Get-ProducerSourceBlock $text 'module' 'hostsResourceGroup'
-        $resourceGroup | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\([^\r\n]*\bfslogixConfigurationTags\b'
+        $resourceGroup | Should -Match 'tags: union\([^\r\n]*\bfslogixConfigurationTags\b'
     }
 
     It 'persists both resolved automated-policy Profile arrays as lifecycle tags and policy parameters' {
@@ -504,7 +504,7 @@ Describe 'FSLogix producer v2 inputs' {
         }
         $text | Should -Match '(?ms)^var resourceGroupTags = union\(.*?\}, fslogixStorageAccountTags\)'
         $tags = Get-ProducerSourceBlock $text 'module' 'sessionHostResourceGroupTags'
-        $tags | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\(existingSessionHostResourceGroup\.tags \?\? \{\}, resourceGroupTags\)\)'
+        $tags | Should -Match 'tags: union\(existingSessionHostResourceGroup\.tags \?\? \{\}, resourceGroupTags\)'
     }
 
     It 'places standard-host Office controls in the Azure Files section they are exported from' {

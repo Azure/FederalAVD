@@ -1,6 +1,5 @@
 BeforeAll {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
 }
 
 Describe 'Canonical FSLogix producer account contracts' {
@@ -38,39 +37,6 @@ Describe 'Canonical FSLogix producer account contracts' {
 }
 
 Describe 'Canonical FSLogix lifecycle tags' {
-    It 'removes obsolete tags case-insensitively while preserving canonical shard order and unrelated metadata' {
-        $directory = Join-Path $TestDrive 'tag-contract'
-        New-Item -ItemType Directory -Path $directory | Out-Null
-        $module = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\configuration.bicep'
-        $relative = [Uri]::UnescapeDataString(([Uri]("$directory\")).MakeRelativeUri([Uri]$module).ToString())
-        $fixture = Join-Path $directory 'tags.bicep'
-        [IO.File]::WriteAllLines($fixture, @(
-            "targetScope = 'local'"
-            "import { removeLegacyFslogixAccountTags } from '$relative'"
-            "var tags = {"
-            "  fslLocalStorageAccountNames: 'obsolete'"
-            "  FSLREMOTESTORAGEACCOUNTNAMES: 'obsolete'"
-            '  fslLocalProfileStorageAccountNames: ''["profile02","profile01"]'''
-            '  fslRemoteProfileStorageAccountNames: ''["remote02","remote01"]'''
-            '  fslLocalOfficeStorageAccountNames: ''["office02","office01"]'''
-            '  fslRemoteOfficeStorageAccountNames: ''["remoteoffice02","remoteoffice01"]'''
-            "  environment: 'preserved'"
-            "}"
-            "output encodedResults string = base64(string({ tags: removeLegacyFslogixAccountTags(tags), emptyTags: removeLegacyFslogixAccountTags({}) }))"
-        ))
-        $result = Invoke-TestNamingVectors -TemplateFile $fixture
-        $tags = $result.tags.value
-        @($result.emptyTags.value.PSObject.Properties).Count | Should -Be 0
-        $tags.PSObject.Properties.Name.Count | Should -Be 5
-        $tags.PSObject.Properties.Name | Should -Not -Contain 'fslLocalStorageAccountNames'
-        $tags.PSObject.Properties.Name | Should -Not -Contain 'fslRemoteStorageAccountNames'
-        $tags.fslLocalProfileStorageAccountNames | Should -BeExactly '["profile02","profile01"]'
-        $tags.fslRemoteProfileStorageAccountNames | Should -BeExactly '["remote02","remote01"]'
-        $tags.fslLocalOfficeStorageAccountNames | Should -BeExactly '["office02","office01"]'
-        $tags.fslRemoteOfficeStorageAccountNames | Should -BeExactly '["remoteoffice02","remoteoffice01"]'
-        $tags.environment | Should -BeExactly 'preserved'
-    }
-
     It 'has no obsolete Profile tag references in any deployment form' {
         $forms = Get-ChildItem (Join-Path $repoRoot 'deployments') -Filter 'uiFormDefinition.json' -File -Recurse
         $forms.Count | Should -BeGreaterThan 0
@@ -81,13 +47,13 @@ Describe 'Canonical FSLogix lifecycle tags' {
         }
     }
 
-    It 'wires obsolete-tag removal into <Source>' -TestCases @(
+    It 'merges lifecycle metadata directly in <Source>' -TestCases @(
         @{ Source = 'deployments\hostpools\hostpool.bicep' }
         @{ Source = 'deployments\hostpoolPoc\hostpoolPoc.bicep' }
         @{ Source = 'deployments\automatedHostPools\policy\main.bicep' }
     ) {
         param($Source)
-        Get-Content (Join-Path $repoRoot $Source) -Raw | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\('
+        Get-Content (Join-Path $repoRoot $Source) -Raw | Should -Match 'tags: union\('
     }
 
     It 'discovers only canonical Profile tags in <Consumer>' -TestCases @(

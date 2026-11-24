@@ -2,7 +2,6 @@ targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { vmApplicationAssignmentType } from '../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
-import { removeLegacyFslogixAccountTags } from '../../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 type fslogixConfigurationType = {
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid' | 'EntraId'
@@ -182,7 +181,7 @@ module sessionHostResourceGroupTags '../../shared/modules/resourceModules/resour
   params: {
     name: sessionHostResourceGroupName
     location: existingSessionHostResourceGroup.location
-    tags: removeLegacyFslogixAccountTags(union(existingSessionHostResourceGroup.tags ?? {}, resourceGroupTags))
+    tags: union(existingSessionHostResourceGroup.tags ?? {}, resourceGroupTags)
   }
 }
 

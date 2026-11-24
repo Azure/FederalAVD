@@ -3,7 +3,6 @@ targetScope = 'subscription'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { hostPoolNames } from '../shared/modules/orchestration/naming/naming.bicep'
 import { namingPolicy, resourceName } from '../shared/modules/orchestration/naming/internal.bicep'
-import { removeLegacyFslogixAccountTags } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 @maxLength(16)
 @description('Required. Short name identifying the disposable PoC deployment.')
@@ -137,12 +136,12 @@ module resourceGroup '../shared/modules/resourceModules/resources/resourceGroups
   params: {
     location: location
     name: resourceGroupName
-    tags: removeLegacyFslogixAccountTags(union(
+    tags: union(
       tags[?'Microsoft.Resources/resourceGroups'] ?? {},
       vmConfigurationTags,
       fslogixConfigurationTags,
       parentTag
-    ))
+    )
   }
 }
 

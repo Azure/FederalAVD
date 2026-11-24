@@ -140,7 +140,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
         foreach ($tagName in $tagBlocks.Keys) {
             $configurationTags | Should -Match ('(?m)^\s+' + $tagName + ',')
         }
-        $sourceText | Should -Match "(?s)module hostsResourceGroup .*?tags: removeLegacyFslogixAccountTags\(union\(tags\[\?'Microsoft.Resources/resourceGroups'\] \?\? \{\}, vmConfigurationTags, fslogixConfigurationTags,"
+        $sourceText | Should -Match "(?s)module hostsResourceGroup .*?tags: union\(tags\[\?'Microsoft.Resources/resourceGroups'\] \?\? \{\}, vmConfigurationTags, fslogixConfigurationTags,"
     }
 
     It 'keeps the disposable PoC Profile-only while accepting the shared naming contract' {

@@ -81,7 +81,7 @@ Describe 'Automated FSLogix Office contract' {
         }
         $policySource | Should -Match "var fslogixStorageAccountTags = fslogixConfiguration.storageService == 'AzureFiles'"
         $policySource | Should -Match '\}, fslogixStorageAccountTags\)'
-        $policySource | Should -Match 'tags: removeLegacyFslogixAccountTags\(union\(existingSessionHostResourceGroup.tags \?\? \{\}, resourceGroupTags\)\)'
+        $policySource | Should -Match 'tags: union\(existingSessionHostResourceGroup.tags \?\? \{\}, resourceGroupTags\)'
         $entrySource | Should -Match 'fslogixConfiguration: deployFSLogixStorage \? deployedFslogixConfiguration : existingFslogixConfiguration'
     }
 

@@ -118,8 +118,8 @@ use these explicit Profile names; the generic script argument names are not alia
 Shared initialization builds separate credential-only collections instead of appending Office
 accounts to the Profile collections. Profile lifecycle tags are
 `fslLocalProfileStorageAccountNames` and `fslRemoteProfileStorageAccountNames`; separate Office
-tags retain their names. Writers remove the obsolete generic Profile tags while preserving
-unrelated metadata. Portal discovery reads only the canonical tags.
+tags retain their names. Writers merge metadata without a legacy-tag cleanup pass.
+Portal discovery reads only the canonical tags; obsolete keys that remain are ignored.
 
 #### Consumer contract migration and consistency
 

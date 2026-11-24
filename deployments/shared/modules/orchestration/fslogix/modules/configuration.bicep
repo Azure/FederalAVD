@@ -8,14 +8,6 @@ func fslogixShareNames(containerType string) string[] => contains(containerType,
   ? ['profile-containers', 'office-containers']
   : ['profile-containers']
 
-// Drop obsolete discovery keys after callers supply canonical Profile and Office tags.
-@export()
-func removeLegacyFslogixAccountTags(tags object) object => toObject(
-  filter(items(tags), tag => !contains(['fsllocalstorageaccountnames', 'fslremotestorageaccountnames'], toLower(tag.key))),
-  tag => tag.key,
-  tag => tag.value
-)
-
 type filesConfiguration = {
   kind: string
   skuName: string

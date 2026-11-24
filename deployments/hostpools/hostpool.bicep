@@ -5,7 +5,7 @@ import { artifactCustomizationType } from '../shared/modules/resourceModules/typ
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
-import { fslogixShareNames, removeLegacyFslogixAccountTags } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
+import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -1471,9 +1471,9 @@ module hostsResourceGroup '../shared/modules/resourceModules/resources/resourceG
   params: {
     location: deploymentVmDomainJoinIsValid ? virtualMachinesLocation : virtualMachinesLocation
     name: effectiveHostsResourceGroup
-    tags: removeLegacyFslogixAccountTags(union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, vmConfigurationTags, fslogixConfigurationTags, {
+    tags: union(tags[?'Microsoft.Resources/resourceGroups'] ?? {}, vmConfigurationTags, fslogixConfigurationTags, {
       'cm-resource-parent': '${subscription().id}/resourceGroups/${effectiveControlPlaneResourceGroup}/providers/Microsoft.DesktopVirtualization/hostpools/${naming.hostPoolName}'
-    }))
+    })
   }
 }
 
