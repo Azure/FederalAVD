@@ -44,7 +44,7 @@ param (
     [string]$DisconnectOnLockMsIdentity,
 
     # When specified, enables the enhanced shell experience for RemoteApp sessions.
-    # Writes EnableEnhancedShellExperienceForRemoteApp = 1 to the Terminal Services policy key.
+    # Writes UseShellAppRuntimeRemoteApp = 1 to the Terminal Services policy key.
     # Has no effect on standard Remote Desktop sessions; only set this for RemoteApp host pools.
     [switch]$EnableRemoteApp
 )
@@ -734,7 +734,10 @@ If ($PSBoundParameters.ContainsKey('DisconnectOnLockMsIdentity')) {
 Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'fEnableTimeZoneRedirection' -RegistryType 'DWORD' -RegistryData 1
 If ($EnableRemoteApp) {
     Write-Log -Category Info -Message "Enabling enhanced shell experience for RemoteApp."
-    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'EnableEnhancedShellExperienceForRemoteApp' -RegistryType 'DWORD' -RegistryData 1
+    # TerminalServer.admx TS_SERVER_REMOTEAPP_USE_SHELLAPPRUNTIME: Machine DWORD 1 enables
+    # the enhanced RemoteApp shell; full desktop sessions are unaffected.
+    # https://learn.microsoft.com/en-us/azure/virtual-desktop/onedrive-remoteapp
+    Set-PolicyRegistryValue -Scope 'Computer' -RegistryKeyPath $rdKey -RegistryValue 'UseShellAppRuntimeRemoteApp' -RegistryType 'DWORD' -RegistryData 1
 }
 Invoke-PolicyUpdate
 Write-Log -Category Info -Message "Remote Desktop Services Timeout Settings Configured."

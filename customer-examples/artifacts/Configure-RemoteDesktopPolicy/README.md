@@ -50,7 +50,15 @@ This PowerShell script configures Remote Desktop Services session timeout polici
 
 - **Type:** Switch
 - **Default:** Not set (disabled)
-- **Description:** When specified, enables the enhanced shell experience for RemoteApp sessions (registry value `EnableEnhancedShellExperienceForRemoteApp`). This supports default file associations, Run/RunOnce registry keys, and other shell features in published RemoteApp programs. Has no effect on standard Remote Desktop sessions.
+- **Description:** When specified, enables the enhanced shell experience for RemoteApp sessions (registry value `UseShellAppRuntimeRemoteApp`, Computer DWORD `1`; disabled is `0`). This supports default file associations, Run/RunOnce registry keys, and other shell features in published RemoteApp programs. Has no effect on standard Remote Desktop sessions.
+
+The mapping is from `TerminalServer.admx` policy `TS_SERVER_REMOTEAPP_USE_SHELLAPPRUNTIME`
+and its matching English ADML, corroborated by
+[Microsoft's RemoteApp guidance](https://learn.microsoft.com/en-us/azure/virtual-desktop/onedrive-remoteapp).
+For OneDrive integration, that guidance requires Windows 11 Enterprise 24H2, or 22H2/23H2
+with KB5040442 or later, a supported Windows client and AVD side-by-side stack, and a
+separate OneDrive machine `Run` startup entry. Restart the session host after configuration.
+The former `EnableEnhancedShellExperienceForRemoteApp` value was not the ADMX policy value.
 
 ## Common Timeout Values
 
@@ -164,7 +172,7 @@ HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
   fResetBroken:                      0 or 1                   -- written only if EndSessionOnLimit is passed
   fDisconnectOnLockMicrosoftIdentity: 0 or 1                  -- written only if DisconnectOnLockMsIdentity is passed
   fEnableTimeZoneRedirection:        1                        -- always written
-  EnableEnhancedShellExperienceForRemoteApp: 1               -- written only if -EnableRemoteApp is passed
+  UseShellAppRuntimeRemoteApp:       1                        -- written only if -EnableRemoteApp is passed
 ```
 
 ## Session State Diagram

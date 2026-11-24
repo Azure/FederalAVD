@@ -112,6 +112,26 @@ This PowerShell script configures Windows Update policies for Azure Virtual Desk
 - Updates `gpt.ini` so the Group Policy client on deployed session hosts knows to process the Registry CSE
 - `gpupdate` is intentionally not called during image build; the GP client processes `Registry.pol` automatically at startup/logon on deployed machines
 
+### Deadline and Notification Policies
+
+The script enables the separate feature and quality deadline policies used by Windows 11
+22H2 and later: `SetComplianceDeadlineForFU=1` and `SetComplianceDeadlineForQU=1`.
+The legacy combined `SetComplianceDeadline` policy is not configured. Durations remain
+seven days for feature updates, three days for quality updates, and a two-day grace period.
+
+`NoUpdateNotificationsDuringActiveHours=1` is the exact `WindowsUpdate.admx` value for
+the **Apply only during active hours** option in **Display options for update notifications**.
+The previous singular `NoUpdateNotificationDuringActiveHours` was not that policy value.
+All these settings are Computer-scope DWORD values under
+`SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate`.
+
+Mappings were checked against `WindowsUpdate.admx` and its matching English ADML.
+See [Microsoft's compliance deadline guidance](https://learn.microsoft.com/en-us/windows/deployment/update/wufb-compliancedeadlines)
+for the Windows-version differences: deadlines can force restarts regardless of active
+hours and can override the configured installation schedule. Test effective policy and
+restart/notification behavior on the target Windows build; domain or MDM policy can override
+local configuration.
+
 ## Policy Settings Applied
 
 ```text
@@ -276,7 +296,7 @@ Log entries include:
 
 ## Requirements
 
-- **OS:** Windows 10 or Windows 11
+- **OS:** A supported Windows 11 release, version 22H2 or later
 - **Permissions:** Administrator / SYSTEM
 - **PowerShell:** 5.1 or higher
 - **Network Access:** Not required — policies are written directly to Registry.pol

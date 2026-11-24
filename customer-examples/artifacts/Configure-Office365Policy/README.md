@@ -219,7 +219,7 @@ HKCU:\Software\Policies\Microsoft\Office\16.0\Common
 HKCU:\Software\Policies\Microsoft\Office\16.0\Outlook\Cached Mode
   Enable:                1  (when any cache setting is configured)
   SyncWindowSetting:     [Value based on -EmailCacheTime]
-  SyncWindowSettingDays: [Set only for sub-month values: 3, 7, or 14 days]
+  SyncWindowSettingDays: [3, 7, or 14 for sub-month windows; otherwise 0]
 ```
 
 ### Outlook calendar sync (NOT policy path — written to Default User hive)
@@ -237,19 +237,30 @@ HKCU:\Software\Microsoft\Office\16.0\Outlook\Cached Mode
 
 ## Email Cache Time Values
 
-| Setting | Registry Value | Description |
-| --- | :---: | --- |
-| 3 days | 3 | Cache last 3 days |
-| 1 week | 7 | Cache last week |
-| 2 weeks | 14 | Cache last 2 weeks |
-| 1 month | 1 | Cache last month |
-| 3 months | 3 | Cache last 3 months |
-| 6 months | 6 | Cache last 6 months |
-| 12 months | 12 | Cache last year |
-| 24 months | 24 | Cache last 2 years |
-| 36 months | 36 | Cache last 3 years |
-| 60 months | 60 | Cache last 5 years |
-| All | 0 | Cache all email |
+| Setting | SyncWindowSetting | SyncWindowSettingDays | Description |
+| --- | :---: | :---: | --- |
+| 3 days | 0 | 3 | Cache last 3 days |
+| 1 week | 0 | 7 | Cache last week |
+| 2 weeks | 0 | 14 | Cache last 2 weeks |
+| 1 month | 1 | 0 | Cache last month |
+| 3 months | 3 | 0 | Cache last 3 months |
+| 6 months | 6 | 0 | Cache last 6 months |
+| 12 months | 12 | 0 | Cache last year |
+| 24 months | 24 | 0 | Cache last 2 years |
+| 36 months | 36 | 0 | Cache last 3 years |
+| 60 months | 60 | 0 | Cache last 5 years |
+| All | 0 | 0 | Cache all email |
+
+Both DWORD values are written for every configured email window, including zeros. Changing
+from a day-based window to months or **All** resets the day override to zero. **Not Configured**
+leaves both existing values untouched. This applies to User Registry.pol and to the direct
+Default User policy-hive fallback; the fallback remains limited to new profiles.
+
+The pairs match `outlk16.admx` policy `L_CachedExchangeModeSyncSlider` and the matching
+English ADML, corroborated by [Microsoft KB3115009](https://support.microsoft.com/help/3115009).
+This is the classic Outlook 16.0 Cached Exchange Mode policy, not a new Outlook setting.
+Validate the effective window after restarting classic Outlook; changing to **All** can
+substantially increase OST and FSLogix profile-container size.
 
 ## Performance Recommendations
 
