@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "10362997509256987497"
+      "templateHash": "17568858117429171107"
     }
   },
   "definitions": {
@@ -8864,7 +8864,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "11672452565458059392"
+              "templateHash": "3388756212020389882"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -10481,7 +10481,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12030812602651200501"
+                      "templateHash": "3151267389392344058"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -11018,7 +11018,7 @@
                       "channelEncryption": "AES-128-CCM;AES-128-GCM;AES-256-GCM;"
                     },
                     "fileShares": "[__bicep.fslogixShareNames(parameters('containerType'))]",
-                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('profileStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('profileStorageTier'), parameters('profileStorageRedundancy'), parameters('profileStorageBillingModel'), parameters('profileShareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('profileShareSizeInGB'), 'commandPrefix', '')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageTier'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
+                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('profileStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('profileStorageTier'), parameters('profileStorageRedundancy'), parameters('profileStorageBillingModel'), parameters('profileShareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('profileShareSizeInGB'), 'commandPrefix', 'Profile-')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageTier'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'commandPrefix', 'Office-')), createArray()))]",
                     "accountConfigurations": "[flatten(map(variables('storageRoles'), lambda('role', map(range(0, parameters('storageCount')), lambda('index', union(lambdaVariables('role'), createObject('name', format('{0}{1}', lambdaVariables('role').prefix, padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')), 'keyName', replace(lambdaVariables('role').keyPattern, '##', padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')))))))))]",
                     "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
                     "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
@@ -12326,7 +12326,9 @@
                     "configureADDSAuth": {
                       "copy": {
                         "name": "configureADDSAuth",
-                        "count": "[length(variables('storageRoles'))]"
+                        "count": "[length(variables('storageRoles'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "condition": "[equals(parameters('identitySolution'), 'ActiveDirectoryDomainServices')]",
                       "type": "Microsoft.Resources/deployments",
@@ -12618,7 +12620,9 @@
                     "configureEntraKerberosWithDomainInfo": {
                       "copy": {
                         "name": "configureEntraKerberosWithDomainInfo",
-                        "count": "[length(variables('storageRoles'))]"
+                        "count": "[length(variables('storageRoles'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "condition": "[and(and(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName'))))]",
                       "type": "Microsoft.Resources/deployments",
@@ -12902,7 +12906,9 @@
                     "updateStorageApplicationsManifest": {
                       "copy": {
                         "name": "updateStorageApplicationsManifest",
-                        "count": "[length(variables('storageRoles'))]"
+                        "count": "[length(variables('storageRoles'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",
@@ -13156,7 +13162,9 @@
                     "SetNTFSPermissions": {
                       "copy": {
                         "name": "SetNTFSPermissions",
-                        "count": "[length(variables('storageRoles'))]"
+                        "count": "[length(variables('storageRoles'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "condition": "[not(equals(parameters('identitySolution'), 'EntraId'))]",
                       "type": "Microsoft.Resources/deployments",
@@ -13439,7 +13447,9 @@
                     "grantStorageApplicationsConsent": {
                       "copy": {
                         "name": "grantStorageApplicationsConsent",
-                        "count": "[length(variables('storageRoles'))]"
+                        "count": "[length(variables('storageRoles'))]",
+                        "mode": "serial",
+                        "batchSize": 1
                       },
                       "condition": "[and(or(and(equals(parameters('identitySolution'), 'EntraKerberos-Hybrid'), parameters('privateEndpoint')), equals(parameters('identitySolution'), 'EntraKerberos-CloudOnly')), not(empty(parameters('appUpdateUserAssignedIdentityResourceId'))))]",
                       "type": "Microsoft.Resources/deployments",

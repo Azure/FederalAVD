@@ -578,6 +578,16 @@ Confirm the managed Run Commands executed in this order:
 2. NTFS permission configuration
 3. Storage application consent grant
 
+Within each Azure Files configuration phase, Profile and Office Run Commands execute serially
+on the shared helper VM (Profile first, then Office), with explicit `Profile-` and `Office-`
+command-name prefixes. Existing unprefixed Profile Run Command resources from older deployments
+are not automatically renamed or removed; remove them only through the approved operator process.
+Storage account and private endpoint loops
+retain their existing concurrency. This avoids overlapping role commands on that VM, but does
+not guarantee recovery from a stalled guest-agent or Azure provisioning-status update. Updating
+the template does not change Run Commands already submitted to Azure; validate the ordering in
+a fresh deployment.
+
 Review these logs on the temporary deployment VM:
 
 ```text

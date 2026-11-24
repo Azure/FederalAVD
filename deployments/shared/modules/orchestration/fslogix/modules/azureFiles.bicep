@@ -147,7 +147,7 @@ var storageRoles = concat(
       configuration: resolveFilesConfiguration(profileStorageTier, profileStorageRedundancy, profileStorageBillingModel, profileShareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
       shares: take(fileShares, 1)
       shareSizeInGB: profileShareSizeInGB
-      commandPrefix: ''
+      commandPrefix: 'Profile-'
     }
   ],
   length(fileShares) > 1
@@ -320,7 +320,9 @@ module roleAssignmentsAdmins '../../../resourceModules/authorization/roleAssignm
 
 // ─── ADDS Domain Join ──────────────────────────────────────────────────────────
 // Configuration commands batch by role, not by account. The scripts process that role's prefix
-// and shard range; Office- distinguishes the command names rather than identifying a shard.
+// and shard range; Profile-/Office- distinguish roles rather than identifying a shard.
+// Serialize roles on the shared helper VM; phase dependencies below preserve command ordering.
+@batchSize(1)
 module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution == 'ActiveDirectoryDomainServices') {
     scope: resourceGroup(deploymentResourceGroupName)
@@ -359,6 +361,7 @@ module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCo
 // ─── EntraKerberos Hybrid (with domain info) ───────────────────────────────────
 // Configure Entra Kerberos Hybrid with Domain Info if domainName, domainJoinUserPrincipalName and domainJoinUserPassword are provided.
 // The workgroup deployment helper VM uses these credentials for explicit ADWS operations; it is not domain joined.
+@batchSize(1)
 module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
     scope: resourceGroup(deploymentResourceGroupName)
@@ -391,6 +394,7 @@ module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/vi
 
 // PHASE 1: Update application manifest with privatelink FQDNs and tags
 // This must happen BEFORE NTFS permissions are set so authentication works through private endpoints
+@batchSize(1)
 module updateStorageApplicationsManifest '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
     scope: resourceGroup(deploymentResourceGroupName)
@@ -417,6 +421,7 @@ module updateStorageApplicationsManifest '../../../resourceModules/compute/virtu
 ]
 
 // ─── Set NTFS Permissions ──────────────────────────────────────────────────────
+@batchSize(1)
 module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution != 'EntraId') {
     scope: resourceGroup(deploymentResourceGroupName)
@@ -463,6 +468,7 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
 
 // PHASE 2: Grant admin consent to storage account applications
 // This must happen AFTER NTFS permissions are set
+@batchSize(1)
 module grantStorageApplicationsConsent '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
     scope: resourceGroup(deploymentResourceGroupName)

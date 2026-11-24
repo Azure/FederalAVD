@@ -67,7 +67,7 @@ Describe 'Evaluated Azure Files role configuration' {
         $accounts.Count | Should -Be 4
         $accounts.name | Should -Be @('pcfixture03', 'pcfixture04', 'ocfixture03', 'ocfixture04')
         $accounts.keyName | Should -Be @('pc-key-03', 'pc-key-04', 'oc-key-03', 'oc-key-04')
-        $accounts.commandPrefix | Should -Be @('', '', 'Office-', 'Office-')
+        $accounts.commandPrefix | Should -Be @('Profile-', 'Profile-', 'Office-', 'Office-')
         foreach ($account in $accounts[0..1]) { $account.shares | Should -Be @('profile-containers') }
         foreach ($account in $accounts[2..3]) { $account.shares | Should -Be @('office-containers') }
     }
