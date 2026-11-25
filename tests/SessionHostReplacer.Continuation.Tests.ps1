@@ -26,6 +26,7 @@ if ($global:shrContinuationTest.Action) {
             Conflict = $false
             Action = $null
             Authorization = $null
+            ImageChange = $null
             AuthorizationSaves = @()
             FailCheckpointOnce = $false
             Settings = @{
@@ -68,8 +69,9 @@ if ($global:shrContinuationTest.Action) {
             $global:shrContinuationTest.Logs += $Message
         }
         Mock Get-ShrOperation -ModuleName SessionHostReplacer.Continuation {
-            param([switch] $BatchAuthorization)
+            param([switch] $BatchAuthorization, [switch] $ImageChange)
             if ($BatchAuthorization) { return $global:shrContinuationTest.Authorization }
+            if ($ImageChange) { return $global:shrContinuationTest.ImageChange }
             if ($global:shrContinuationTest.Operation) {
                 $global:shrContinuationTest.Operation | ConvertTo-Json -Depth 40 |
                     ConvertFrom-Json -AsHashtable
@@ -357,10 +359,264 @@ if ($global:shrContinuationTest.Action) {
     }
 
     It 'treats a bounded invocation timeout as continuation rather than operation failure' {
-        $global:shrContinuationTest.Action = { throw [TimeoutException]::new('bounded wait') }
+        $global:shrContinuationTest.Action = { Request-ShrWorkerYield -Message 'bounded wait' }
         Invoke-ShrContinuation -CyclePath $cyclePath
         $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
 
+    }
+
+    It 'surfaces an unexpected request timeout but retains resumable running state' {
+        $global:shrContinuationTest.Action = { throw [TimeoutException]::new('request timed out') }
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*request timed out*'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+        $global:shrContinuationTest.Operation.State.LockOwner | Should -Be ''
+        $global:shrContinuationTest.Action = $null
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should -Be 2
+    }
+
+    It 'does not latch a transport failure during a lease check as needs attention' {
+        $global:shrContinuationTest.Action = { throw [System.Net.Http.HttpRequestException]::new('connection reset') }
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*connection reset*'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+    }
+
+    It 'does not overwrite state after losing ownership during execution' {
+        $global:shrContinuationTest.Action = {
+            $error = [InvalidOperationException]::new('another owner won')
+            $error.Data['ShrOwnershipConflict'] = $true
+            throw $error
+        }
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*another owner won*'
+        $global:shrContinuationTest.Saves.Count | Should -Be 1
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+    }
+
+    It 'blocks expansion after seven days without preventing checkpointed recovery' {
+        $state = $global:shrContinuationTest.Operation.State
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.DeadlineUtc = [DateTimeOffset]::UtcNow.AddSeconds(-1).ToString('o')
+        $state.BatchHostNames = @('old-host')
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Cycles | Should -Be 1
+        $global:shrContinuationTest.Operation.State.ExpansionBlocked | Should -BeTrue
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+    }
+
+    It 'does not expire while waiting solely for scheduled authorization' {
+        $state = $global:shrContinuationTest.Operation.State
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.DeadlineUtc = [DateTimeOffset]::UtcNow.AddDays(-10).ToString('o')
+        $state.ScheduleWaitStartedUtc = [DateTimeOffset]::UtcNow.AddDays(-20).ToString('o')
+        $state.BatchHostNames = @()
+        $state.AwaitingImageBatch = $true
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Operation.State.ExpansionBlocked | Should -Not -BeTrue
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+    }
+
+    It 'does not count repeated worker passes as progress' {
+        $state = $global:shrContinuationTest.Operation.State
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $deadline = $state.DeadlineUtc
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        ([DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc).UtcTicks |
+            Should -Be ([DateTimeOffset]$deadline).UtcTicks
+    }
+
+    It 'refreshes the no-progress deadline only for a new observed milestone' {
+        $state = $global:shrContinuationTest.Operation.State
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.DeadlineUtc = [DateTimeOffset]::UtcNow.AddHours(1).ToString('o')
+        $global:shrContinuationTest.Action = { param($State, $Result) $Result.Progress = @{ Registered = 2; Ready = 1 } }
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $deadline = $global:shrContinuationTest.Operation.State.DeadlineUtc
+        ([DateTimeOffset]$deadline) | Should -BeGreaterThan ([DateTimeOffset]::UtcNow.AddHours(167))
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Operation.State.DeadlineUtc | Should -Be $deadline
+    }
+
+    It 'does not add scheduled wait time again after actual progress resets the window' {
+        $state = $global:shrContinuationTest.Operation.State
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.ScheduleWaitStartedUtc = [DateTimeOffset]::UtcNow.AddDays(-30).ToString('o')
+        $state.DeadlineUtc = [DateTimeOffset]::UtcNow.AddDays(-1).ToString('o')
+        $global:shrContinuationTest.Action = { param($State) $State.BatchNumber = 1 }
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $deadline = [DateTimeOffset]$global:shrContinuationTest.Operation.State.DeadlineUtc
+        $deadline | Should -BeGreaterThan ([DateTimeOffset]::UtcNow.AddHours(167))
+        $deadline | Should -BeLessThan ([DateTimeOffset]::UtcNow.AddHours(169))
+    }
+
+    It 'persists a progress milestone even if a later request in the same pass fails transiently' {
+        $state = $global:shrContinuationTest.Operation.State
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.DeadlineUtc = [DateTimeOffset]::UtcNow.AddHours(1).ToString('o')
+        $global:shrContinuationTest.Action = {
+            param($State)
+            $State.DeploymentIntent = @{ Name = 'checkpointed-deployment' }
+            Save-ShrContinuationCheckpoint
+            throw [System.Net.Http.HttpRequestException]::new('submission response lost')
+        }
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*submission response lost*'
+        $after = $global:shrContinuationTest.Operation.State
+        $after.Status | Should -Be 'Running'
+        ([DateTimeOffset]$after.DeadlineUtc) | Should -BeGreaterThan ([DateTimeOffset]::UtcNow.AddHours(167))
+    }
+
+    Context 'requested image transitions' {
+        BeforeEach {
+            $definition = '/subscriptions/test/resourceGroups/images/providers/Microsoft.Compute/galleries/gallery/images/desktop'
+            $state = $global:shrContinuationTest.Operation.State
+            $global:shrContinuationTest.Settings.ReplacementMode = 'SideBySide'
+            $global:shrContinuationTest.Settings.SessionHostParameters = @{ Location = 'eastus' }
+            $state.Image = @{ Definition = $definition; Version = '1.0.0'; Date = '2026-01-01T00:00:00Z' }
+            $state.BatchHostNames = @('old-host')
+            $state.DeploymentBatchReady = $true
+            $state.MoreDeploymentsAllowed = $true
+            $state.DeploymentIntent = @{ Name = 'old-deployment'; Body = '{"original":"request"}'; HostNames = @('new-host') }
+            $global:shrContinuationTest.ImageChange = @{
+                State = @{
+                    SchemaVersion = 1
+                    Id = ('b' * 32)
+                    OperationId = $state.Id
+                    ExpectedImage = @{ Definition = $definition; Version = '1.0.0' }
+                    Image = @{ Definition = $definition; Version = '2.0.0' }
+                }
+            }
+            Mock Test-ShrImageChangeBoundary -ModuleName SessionHostReplacer.Continuation { $true }
+            Mock Get-SessionHosts -ModuleName SessionHostReplacer.Continuation {
+                @([PSCustomObject]@{
+                    SessionHostName = 'old-host'
+                    ImageDefinition = $global:shrContinuationTest.ImageChange.State.Image.Definition
+                    ImageVersion = '0.5.0'
+                })
+            }
+            Mock Get-ImageReplicaDeploymentLimit -ModuleName SessionHostReplacer.Continuation { 20 }
+            Mock Invoke-AzureRestMethod -ModuleName SessionHostReplacer.Continuation {
+                @{
+                    id = "$($global:shrContinuationTest.ImageChange.State.Image.Definition)/versions/$($global:shrContinuationTest.ImageChange.State.Image.Version)"
+                    properties = @{ publishingProfile = @{ publishedDate = '2026-01-01T00:00:00Z'; excludeFromLatest = $false } }
+                }
+            }
+        }
+
+        It 'changes future image selection without rewriting the existing deployment request or authorizing a batch' {
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $state = $global:shrContinuationTest.Operation.State
+            $state.Image.Version | Should -Be '2.0.0' -Because $state.ImageChangeError
+            $state.DeploymentImage.Version | Should -Be '1.0.0'
+            $state.DeploymentIntent.Body | Should -Be '{"original":"request"}'
+            $state.RetirementImages[0].Version | Should -Be '1.0.0'
+            $state.AwaitingImageBatch | Should -BeTrue
+            $state.NextBatchAuthorization | Should -BeNullOrEmpty
+        }
+
+        It 'waits without changing image when current deployment health or handoff is not established' {
+            Mock Test-ShrImageChangeBoundary -ModuleName SessionHostReplacer.Continuation { $false }
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.Operation.State.Image.Version | Should -Be '1.0.0'
+            $global:shrContinuationTest.Operation.State.LastImageChangeRequestId | Should -BeNullOrEmpty
+        }
+
+        It 'preserves the original deployment image when another target request arrives before a new batch' {
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.ImageChange.State.Id = ('c' * 32)
+            $global:shrContinuationTest.ImageChange.State.ExpectedImage.Version = '2.0.0'
+            $global:shrContinuationTest.ImageChange.State.Image.Version = '3.0.0'
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $state = $global:shrContinuationTest.Operation.State
+            $state.Image.Version | Should -Be '3.0.0'
+            $state.DeploymentImage.Version | Should -Be '1.0.0'
+            $state.DeploymentIntent.Body | Should -Be '{"original":"request"}'
+        }
+
+        It 'does not carry a reused name for a completed replacement into old-host retirement authority' {
+            $global:shrContinuationTest.Operation.State.BatchHostNames += 'reused-name'
+            Mock Get-SessionHosts -ModuleName SessionHostReplacer.Continuation {
+                @(
+                    [PSCustomObject]@{
+                        SessionHostName = 'old-host'
+                        ImageDefinition = $global:shrContinuationTest.ImageChange.State.Image.Definition
+                        ImageVersion = '0.5.0'
+                    }
+                    [PSCustomObject]@{
+                        SessionHostName = 'reused-name'
+                        ImageDefinition = $global:shrContinuationTest.ImageChange.State.Image.Definition
+                        ImageVersion = '1.0.0'
+                    }
+                )
+            }
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.Operation.State.BatchHostNames | Should -Contain 'old-host'
+            $global:shrContinuationTest.Operation.State.BatchHostNames | Should -Not -Contain 'reused-name'
+        }
+
+        It 'rejects a conflicting image request without stopping the original operation' {
+            $global:shrContinuationTest.ImageChange.State.ExpectedImage.Version = '0.5.0'
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $state = $global:shrContinuationTest.Operation.State
+            $state.Image.Version | Should -Be '1.0.0'
+            $state.LastImageChangeRejectedId | Should -Be ('b' * 32)
+            $state.Status | Should -Be 'Running'
+        }
+
+        It 'retains a pending request and original image after a transient validation failure' {
+            Mock Get-ImageReplicaDeploymentLimit -ModuleName SessionHostReplacer.Continuation {
+                throw [System.Net.Http.HttpRequestException]::new('replica query unavailable')
+            }
+            { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*replica query unavailable*'
+            $state = $global:shrContinuationTest.Operation.State
+            $state.Image.Version | Should -Be '1.0.0'
+            $state.LastImageChangeRejectedId | Should -BeNullOrEmpty
+            $state.Status | Should -Be 'Running'
+        }
+
+        It 'does not consume an old-image authorization after switching targets' {
+            $global:shrContinuationTest.Authorization = @{
+                State = @{
+                    Id = 'old-authorization'
+                    OperationId = ('a' * 32)
+                    AfterBatchNumber = 0
+                    ImageVersion = '1.0.0'
+                    ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(10).ToString('o')
+                }
+            }
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.Operation.State.NextBatchAuthorization | Should -BeNullOrEmpty
+        }
+
+        It 'requires authorization for this request even when an older authorization names the same version' {
+            $global:shrContinuationTest.Authorization = @{
+                State = @{
+                    Id = 'stale-same-image'
+                    OperationId = ('a' * 32)
+                    AfterBatchNumber = 0
+                    ImageVersion = '2.0.0'
+                    ImageChangeRequestId = ('c' * 32)
+                    ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(10).ToString('o')
+                }
+            }
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.Operation.State.NextBatchAuthorization | Should -BeNullOrEmpty
+            $global:shrContinuationTest.Authorization.State.ImageChangeRequestId = ('b' * 32)
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.Operation.State.NextBatchAuthorization.Id | Should -Be 'stale-same-image'
+        }
+
+        It 'does not complete a switched operation merely because old retirement finished before the next schedule' {
+            $global:shrContinuationTest.Action = { param($State, $Result) $Result.Completed = $true }
+            Invoke-ShrContinuation -CyclePath $cyclePath
+            $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+            $global:shrContinuationTest.Operation.State.AwaitingImageBatch | Should -BeTrue
+        }
     }
 
     It 'persists and surfaces unexpected lifecycle failures' {

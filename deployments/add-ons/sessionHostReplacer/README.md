@@ -1326,6 +1326,14 @@ The archive contains deployment parameters and must receive the same restricted 
 the active operation. The automatic supersession check never changes VM/AVD resources or clears recovery mappings;
 the fresh worker still applies the normal readiness, capacity and cleanup gates.
 
+### Change the active rollout target
+
+Use [Request-SessionHostReplacerImageChange.ps1](tools/Request-SessionHostReplacerImageChange.ps1)
+to preview and request an exact same-definition gallery version for future batches. This is a
+durable operator request, not an app-setting edit or restart. SideBySide can switch after deployment
+health and scaling handoff while old hosts continue draining; fresh scheduled authorization is
+still required. See the [command and safety contract](docs/replacement-flow.md#change-the-rollout-image).
+
 ### Recover a stopped operation
 
 For cases outside the automatic path, use
@@ -1570,7 +1578,7 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 | --- | --- | --- |
 | `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB for new batch initiation, stored in `TimerSchedule`. Default authorizes at :00 and :30. Deployment derives `ContinuationTimerSchedule`: five-minute SideBySide reconciliation staggered by one minute, or every-minute DeleteFirst reconciliation. Redeploy to update both schedules together |
 | `initiationEnabled` | `true` | Allow new timer-authorized batches. False still permits active-operation recovery and completion |
-| `continuationTimeoutHours` | `72` | Fixed deadline for each newly initiated operation (1-720 hours). Set longer than the approved drain and provisioning horizon; does not extend an existing operation |
+| `continuationTimeoutHours` | `168` | No-progress window for new operations (1-720 hours), excluding schedule-only waits. Blocks expansion while checkpointed recovery remains guarded; legacy operations retain their fixed deadline |
 
 **Timer Schedule Examples**:
 

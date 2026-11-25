@@ -126,7 +126,7 @@ function Get-DeploymentState {
     }
     catch {
         Write-LogEntry -Message "Failed to retrieve deployment state: $_" -Level Error
-        if ($ReadOnly) { throw }
+        if ($ReadOnly -or (Get-ShrWorkerState)) { throw }
         # Return default state on error
         return [PSCustomObject]@{
             LastDeploymentName       = ''
@@ -517,12 +517,16 @@ function Deploy-SessionHosts {
         }
         catch {
             Write-LogEntry -Message "Failed to generate registration token: $($_.Exception.Message)" -Level Error
-            throw "Failed to generate registration token for host pool $HostPoolName. Error: $($_.Exception.Message)"
+            throw [InvalidOperationException]::new("Failed to generate registration token for host pool $HostPoolName. Error: $($_.Exception.Message)", $_.Exception)
         }
     }
     
     $continuation = if (Get-Command Get-ShrWorkerState -ErrorAction SilentlyContinue) { Get-ShrWorkerState }
     if ($continuation -and $continuation.DeploymentIntent) {
+        if ($continuation.DeploymentImage -and $continuation.DeploymentImage.Version -ne $continuation.Image.Version) {
+            $ImageReplicaDeploymentLimit = Get-ImageReplicaDeploymentLimit -ARMToken $ARMToken `
+                -Image ([PSCustomObject]$continuation.DeploymentImage) -Location $SessionHostParameters.Location
+        }
         return Invoke-ShrDeploymentIntent -ARMToken $ARMToken -RegisteredSessionHostNames $ExistingSessionHostNames `
             -ImageReplicaDeploymentLimit $ImageReplicaDeploymentLimit
     }
@@ -712,6 +716,7 @@ function Deploy-SessionHosts {
         -HostPoolSubscriptionId $HostPoolSubscriptionId -HostPoolResourceGroupName $HostPoolResourceGroupName -HostPoolName $HostPoolName
     if ($continuation) {
         $continuation.DeploymentHostNames = @($sessionHostNames)
+        $continuation.DeploymentImage = $continuation.Image
         $continuation.DeploymentIntent = @{
             Name = $deploymentName
             Uri = $Uri

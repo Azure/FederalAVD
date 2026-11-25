@@ -240,8 +240,11 @@ Enable it only on pilot pools to test excluded candidates before promotion. See
 for numeric version ordering, safeguards, and the upgrade requirement.
 
 SHR always uses an initiation timer and a mode-specific reconciliation timer. `initiationEnabled`
-(default `true`) gates new batches and `continuationTimeoutHours` (default `72`, range `1-720`)
-sets the fixed operation deadline. There is no execution-mode selector or SHR queue DNS parameter.
+(default `true`) gates new batches and `continuationTimeoutHours` (default `168`, range `1-720`)
+sets the no-progress window for new operations, excluding schedule-only waits. A timeout blocks
+expansion but permits guarded completion of checkpointed recovery. Legacy operations retain their
+fixed deadline until completion or checked deadline recovery. There is no execution-mode selector
+or SHR queue DNS parameter.
 See [two-timer execution](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-execution).
 
 SHR's existing `timerSchedule` parameter populates the `TimerSchedule` app setting referenced by

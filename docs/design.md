@@ -328,12 +328,19 @@ neither changes the 30-minute worker ownership lease. See
 [timer schedule guidance](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md#timer-schedule-guidance)
 for offset derivation, custom-schedule limits and upgrade behavior.
 The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md#two-timer-execution)
-defines initiation authorization, immutable image selection, timer-authorized batch scope, conditional state ownership,
+defines initiation authorization, immutable deployment requests, timer-authorized batch scope, conditional state ownership,
 idempotent deployment intent, deadlines and operator recovery. This is separate from application
 or image acceptance testing. SideBySide separates deployment readiness from old-host retirement:
 later scheduled batches can extend the same operation without waiting for prior drains, while
 retirement scope remains explicitly checkpointed and capacity-bounded. DeleteFirst keeps its
 retirement-before-redeployment gates. The canonical design owns the detailed coordination contract.
+Transient transport failures defer reconciliation without latching an otherwise valid operation.
+New operations use a seven-day no-progress window, excluding schedule-only waits; expiry blocks
+expansion while permitting guarded checkpointed recovery. A preview-first operator script can
+request an exact same-definition gallery image for future batches. The leased worker revalidates
+current deployment health/handoff before switching, retains per-image retirement readiness, and
+requires fresh scheduled authority without waiting for older SideBySide hosts to finish draining.
+See [image transitions](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md#change-the-rollout-image).
 Autoscale coordination is a fail-closed configuration contract: enabled scaling plans must honor
 SHR's configured exclusion tag before replacement begins. Only the leased worker repairs an
 unshared plan's exclusion name, preserving existing VM exclusions first; shared mismatches fail.

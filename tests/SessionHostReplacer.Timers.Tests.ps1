@@ -18,11 +18,11 @@ Describe 'SHR mandatory two-timer deployment contract' {
         }
     }
 
-    It 'has one mandatory execution model with initiation and fixed deadline controls' {
+    It 'has one mandatory execution model with initiation and progress timeout controls' {
         $arm.parameters.PSObject.Properties.Name | Should -Not -Contain 'enableQueueContinuation'
         $arm.parameters.PSObject.Properties.Name | Should -Not -Contain 'azureQueuePrivateDnsZoneResourceId'
         $arm.parameters.initiationEnabled.defaultValue | Should -Be $true
-        $arm.parameters.continuationTimeoutHours.defaultValue | Should -Be 72
+        $arm.parameters.continuationTimeoutHours.defaultValue | Should -Be 168
         $arm.parameters.continuationTimeoutHours.minValue | Should -Be 1
         $arm.parameters.continuationTimeoutHours.maxValue | Should -Be 720
         $form.view.outputs.parameters.initiationEnabled | Should -Be "[bool(steps('replacerConfig').initiationEnabled)]"

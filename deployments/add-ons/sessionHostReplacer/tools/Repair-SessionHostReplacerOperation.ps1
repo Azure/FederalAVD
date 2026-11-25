@@ -158,13 +158,19 @@ function Get-RecoveryPlan {
     param([hashtable] $Operation, [System.Collections.IDictionary] $Settings)
 
     $state = $Operation.State
-    if ($state.Status -ne 'NeedsAttention') { throw "Operation status is '$($state.Status)', not NeedsAttention." }
+    if ($state.Status -ne 'NeedsAttention' -and
+        -not ($state.Status -eq 'Running' -and $state.ExpansionBlocked -and $ExtendDeadlineHours)) {
+        throw "Operation status is '$($state.Status)', not NeedsAttention. A running expansion-blocked operation requires -ExtendDeadlineHours."
+    }
     if ($state.Id -notmatch '^[a-f0-9]{32}$') { throw 'Operation ID is invalid.' }
     if ([DateTimeOffset]$state.LockExpiresUtc -gt [DateTimeOffset]::UtcNow) {
         throw "Worker lease has not expired. Retry after $($state.LockExpiresUtc)."
     }
     if ($state.CleanupIntent) { throw 'Pending cleanup requires manual recovery; this command will not change cleanup state.' }
-    if ($null -eq $state.BatchHostNames) { throw 'No batch was checkpointed. Review the expired initiation authorization manually.' }
+    if ($null -eq $state.BatchHostNames -and
+        -not ($state.ExpansionBlocked -and $ExtendDeadlineHours -and -not $state.DeploymentIntent)) {
+        throw 'No batch was checkpointed. Review the expired initiation authorization manually.'
+    }
     $deadline = [DateTimeOffset]$state.DeadlineUtc
     if ($ExtendDeadlineHours) { $deadline = [DateTimeOffset]::UtcNow.AddHours($ExtendDeadlineHours) }
     if ($deadline -le [DateTimeOffset]::UtcNow) { throw 'The deadline expired. Explicitly approve -ExtendDeadlineHours before recovery.' }
@@ -331,12 +337,20 @@ try {
         $fresh.State.DeploymentIntent.Body = $body | ConvertTo-Json -Depth 40 -Compress
         $fresh.State.ConfigurationHash = $checkedPlan.ConfigurationHash
         $fresh.State.ConfigurationTargetCount = $freshSettings.TargetSessionHostCount
+        [void]$fresh.State.Remove('ConfigurationFieldHashes')
     }
     $fresh.State.Status = 'Running'
     $fresh.State.LastError = ''
     $fresh.State.LockOwner = ''
     $fresh.State.LockExpiresUtc = [DateTimeOffset]::UtcNow.ToString('o')
-    if ($ExtendDeadlineHours) { $fresh.State.DeadlineUtc = $checkedPlan.DeadlineUtc }
+    if ($ExtendDeadlineHours) {
+        $fresh.State.DeadlineUtc = $checkedPlan.DeadlineUtc
+        $fresh.State.RecoveryPolicyVersion = 1
+        $fresh.State.ProgressTimeoutHours = $ExtendDeadlineHours
+        $fresh.State.LastProgressUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        $fresh.State.ExpansionBlocked = $false
+        $fresh.State.ScheduleWaitStartedUtc = ''
+    }
     $entity = @{
         PartitionKey = 'SHR'; RowKey = $key
         State = ($fresh.State | ConvertTo-Json -Depth 40 -Compress)

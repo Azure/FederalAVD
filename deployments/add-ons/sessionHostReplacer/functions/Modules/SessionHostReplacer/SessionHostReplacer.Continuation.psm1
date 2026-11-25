@@ -36,7 +36,9 @@ function Invoke-ShrStorageRequest {
     $response = Invoke-WebRequest @parameters
     $status = [int]$response.StatusCode
     if (($status -lt 200 -or $status -ge 300) -and $status -notin $ExpectedStatus) {
-        throw "SHR $Service $Method request to '$Path' failed with HTTP $status. $($response.Content)"
+        $exception = [InvalidOperationException]::new("SHR $Service $Method request to '$Path' failed with HTTP $status.")
+        $exception.Data['StatusCode'] = $status
+        throw $exception
     }
     return $response
 }
@@ -55,6 +57,21 @@ function Get-ShrOperationKey {
     return [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
         [Text.Encoding]::UTF8.GetBytes($identity.ToLowerInvariant())
     )).ToLowerInvariant()
+}
+
+function ConvertTo-ShrCanonicalValue {
+    param($Value)
+    if ($Value -is [System.Collections.IDictionary]) {
+        $result = [ordered]@{}
+        foreach ($name in @($Value.Keys | Sort-Object -CaseSensitive)) {
+            $result[$name] = ConvertTo-ShrCanonicalValue -Value $Value[$name]
+        }
+        return $result
+    }
+    if ($Value -is [array]) {
+        return ,@($Value | ForEach-Object { ConvertTo-ShrCanonicalValue -Value $_ })
+    }
+    return $Value
 }
 
 function Get-ShrConfigurationHash {
@@ -92,10 +109,30 @@ function Get-ShrConfigurationHash {
     }
     if ($OperationState -and $OperationState.ContainsKey('ConfigurationTargetCount')) {
         $values.TargetSessionHostCount = $OperationState.ConfigurationTargetCount
-        return & $calculateHash
     }
     $currentHash = & $calculateHash
     if (-not $OperationState) { return $currentHash }
+    if ($CaptureTarget -or $OperationState.ConfigurationFieldHashes) {
+        $fieldHashes = @{}
+        foreach ($key in $values.Keys) {
+            $value = $values[$key]
+            if ($key -in @('SessionHostParameters', 'MaintenanceRequest') -and $value) {
+                $value = ConvertTo-ShrCanonicalValue -Value ($value | ConvertFrom-Json -AsHashtable -ErrorAction Stop)
+            }
+            $json = ConvertTo-Json -InputObject $value -Depth 40 -Compress
+            $fieldHashes[$key] = [Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData(
+                [Text.Encoding]::UTF8.GetBytes($json))).ToLowerInvariant()
+        }
+        if ($OperationState.ConfigurationFieldHashes) {
+            $changed = @($fieldHashes.Keys | Where-Object {
+                $fieldHashes[$_] -ne $OperationState.ConfigurationFieldHashes[$_]
+            })
+            if ($changed.Count -eq 0) { return $OperationState.ConfigurationHash }
+            Write-LogEntry -Message "CONTINUATION | Protected configuration changed: $($changed -join ', ')." -Level Warning
+        } elseif ($currentHash -eq $OperationState.ConfigurationHash -and $CaptureTarget) {
+            $OperationState.ConfigurationFieldHashes = $fieldHashes
+        }
+    }
     if ($currentHash -eq $OperationState.ConfigurationHash) {
         if ($CaptureTarget) { $OperationState.ConfigurationTargetCount = $values.TargetSessionHostCount }
         return $currentHash
@@ -117,7 +154,7 @@ function Get-ShrConfigurationHash {
 }
 
 function Get-ShrOperation {
-    param([switch] $EnsureTable, [switch] $BatchAuthorization,
+    param([switch] $EnsureTable, [switch] $BatchAuthorization, [switch] $ImageChange,
         [ValidatePattern('^[a-f0-9]{32}$')][string] $SupersededOperationId)
 
     if ($EnsureTable) {
@@ -126,6 +163,7 @@ function Get-ShrOperation {
     }
     $key = Get-ShrOperationKey
     if ($BatchAuthorization) { $key += '-initiation' }
+    if ($ImageChange) { $key += '-image-change' }
     if ($SupersededOperationId) { $key += "-superseded-$SupersededOperationId" }
     $response = Invoke-ShrStorageRequest -Service Table `
         -Path "shrContinuation(PartitionKey='SHR',RowKey='$key')" -ExpectedStatus 404
@@ -170,7 +208,9 @@ function Save-ShrOperation {
     $response = Invoke-ShrStorageRequest @parameters
     if ([int]$response.StatusCode -in @(409, 412)) {
         if ($AllowConflict) { return $false }
-        throw 'SHR operation ownership changed; refusing to overwrite newer state.'
+        $exception = [InvalidOperationException]::new('SHR operation ownership changed; refusing to overwrite newer state.')
+        $exception.Data['ShrOwnershipConflict'] = $true
+        throw $exception
     }
     $Operation.ETag = [string](@($response.Headers['ETag'])[0])
     if (-not $Operation.ETag) { throw 'SHR operation save returned no ETag.' }
@@ -501,6 +541,181 @@ function Get-ShrAuthorizationMinutes {
     return 5
 }
 
+function Get-ShrProgressFingerprint {
+    param([hashtable] $State)
+
+    $values = @{
+        BatchNumber = [int]$State.BatchNumber
+        Deployment = $State.DeploymentIntent.Name
+        Cleanup = $State.CleanupIntent
+        Image = $State.Image
+    }
+    return ($values | ConvertTo-Json -Depth 30 -Compress)
+}
+
+function Update-ShrProgress {
+    param([hashtable] $State, [hashtable] $Result, [string] $Before)
+
+    if ($State.RecoveryPolicyVersion -ne 1) { return }
+    $now = [DateTimeOffset]::UtcNow
+    $progress = $Before -ne (Get-ShrProgressFingerprint -State $State)
+    if (-not $State.ProgressHighWater) { $State.ProgressHighWater = @{} }
+    foreach ($key in @('Registered', 'Ready', 'Retired')) {
+        if ($Result.Progress -and [int]$Result.Progress[$key] -gt [int]$State.ProgressHighWater[$key]) {
+            $State.ProgressHighWater[$key] = [int]$Result.Progress[$key]
+            $progress = $true
+        }
+    }
+    if ($progress) {
+        $State.LastProgressUtc = $now.ToString('o')
+        $State.DeadlineUtc = $now.AddHours([int]$State.ProgressTimeoutHours).ToString('o')
+    }
+    if ($Result.WaitingForAuthorization) {
+        if (-not $State.ScheduleWaitStartedUtc) { $State.ScheduleWaitStartedUtc = $now.ToString('o') }
+    } elseif ($State.ScheduleWaitStartedUtc) {
+        $wait = $now - [DateTimeOffset]$State.ScheduleWaitStartedUtc
+        if (-not $progress) { $State.DeadlineUtc = ([DateTimeOffset]$State.DeadlineUtc).Add($wait).ToString('o') }
+        $State.ScheduleWaitStartedUtc = ''
+    }
+    if (-not $State.AgeWarningUtc -and $State.CreatedUtc -and $now -ge ([DateTimeOffset]$State.CreatedUtc).AddHours([int]$State.ProgressTimeoutHours)) {
+        $State.AgeWarningUtc = $now.ToString('o')
+        Write-LogEntry -Message "CONTINUATION | Operation $($State.Id) exceeds its total-age warning threshold; progress and scheduled waits determine expansion eligibility." -Level Warning
+    }
+}
+
+function Test-ShrImageChangeBoundary {
+    param([hashtable] $State, [switch] $BatchCompleted)
+
+    if ($State.CleanupIntent -or $null -eq $State.BatchHostNames) { return $false }
+    if ((Read-FunctionAppSetting ReplacementMode) -ne 'SideBySide' -and -not $BatchCompleted) { return $false }
+    if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -and -not $State.DeploymentBatchReady) { return $false }
+    $token = Get-AccessToken -ResourceUri (Get-ResourceManagerUri)
+    $deploymentState = Get-DeploymentState -ReadOnly
+    $mappings = $deploymentState.PendingHostMappings | ConvertFrom-Json -AsHashtable -ErrorAction Stop
+    if ($mappings -isnot [System.Collections.IDictionary]) { throw 'Image change requires valid deployment recovery mappings.' }
+    if ($mappings.Count -gt 0) { return $false }
+    $deployments = Get-Deployments -ARMToken $token
+    if ($deployments.RunningDeployments -or $deployments.FailedDeployments) { return $false }
+    $hosts = @(Get-SessionHosts -ARMToken $token -FixSessionHostTags:$false)
+    $image = if ($State.DeploymentImage) { $State.DeploymentImage } else { $State.Image }
+    $names = @($State.DeploymentHostNames | Where-Object { $_ })
+    if ($names.Count -eq 0) { $names = @($State.DeploymentIntent.HostNames | Where-Object { $_ }) }
+    if ($names.Count -eq 0) { return $false }
+    $tag = Read-FunctionAppSetting Tag_ScalingPlanExclusionTag
+    foreach ($name in $names) {
+        $matches = @($hosts | Where-Object {
+            $_.SessionHostName -eq $name -and -not $_.IsUnavailable -and
+            $_.ImageDefinition -eq $image.Definition -and $_.ImageVersion -eq $image.Version -and
+            (-not $tag -or $_.Tags[$tag] -ne 'SessionHostReplacer')
+        })
+        if ($matches.Count -ne 1) { return $false }
+    }
+    $poolId = "/subscriptions/$(Read-FunctionAppSetting HostPoolSubscriptionId)/resourceGroups/$(Read-FunctionAppSetting HostPoolResourceGroupName)/providers/Microsoft.DesktopVirtualization/hostPools/$(Read-FunctionAppSetting HostPoolName)"
+    $scaling = Get-ScalingPlanCurrentTarget -ARMToken $token -HostPoolResourceId $poolId
+    $readiness = Test-NewSessionHostsAvailable -ARMToken $token -SessionHosts $hosts `
+        -LatestImageVersion ([PSCustomObject]$image) -ScalingPlanTarget $scaling -ReadOnly
+    return $readiness.SafeToProceed -and -not $readiness.ValidationUpdatesRequired
+}
+
+function Set-ShrRequestedImage {
+    param([hashtable] $State, [switch] $BatchCompleted)
+
+    $request = Get-ShrOperation -ImageChange
+    if (-not $request -or $request.State.OperationId -ne $State.Id -or
+        $request.State.Id -eq $State.LastImageChangeRequestId -or
+        $request.State.Id -eq $State.LastImageChangeRejectedId) { return $false }
+    $State.PendingImageChangeRequestId = $request.State.Id
+    if ($request.State.SchemaVersion -ne 1 -or $request.State.Id -notmatch '^[a-f0-9]{32}$' -or
+        $request.State.ExpectedImage.Definition -ine $State.Image.Definition -or
+        $request.State.ExpectedImage.Version -ne $State.Image.Version -or
+        $request.State.Image.Definition -ine $State.Image.Definition -or
+        $request.State.Image.Version -notmatch '^\d+\.\d+\.\d+$' -or
+        $State.Image.Definition -notmatch '^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft.Compute/galleries/[^/]+/images/[^/]+$' -or
+        (Read-FunctionAppSetting MaintenanceRequest)) {
+        throw 'Image-change request conflicts with the active operation or approved maintenance configuration.'
+    }
+    if ($State.ExpansionBlocked) { return $false }
+    if (-not (Test-ShrImageChangeBoundary -State $State -BatchCompleted:$BatchCompleted)) { return $false }
+    $token = Get-AccessToken -ResourceUri (Get-ResourceManagerUri)
+    $parameters = Read-FunctionAppSetting SessionHostParameters | ConvertTo-CaseInsensitiveHashtable
+    $image = [PSCustomObject]$request.State.Image
+    $limit = Get-ImageReplicaDeploymentLimit -ARMToken $token -Image $image -Location $parameters.Location
+    if (-not $limit -or $limit -le 0) { throw 'Requested image has no verified deployment capacity.' }
+    $uri = "$(Get-ResourceManagerUri)$($image.Definition)/versions/$($image.Version)?api-version=2024-03-03"
+    $details = Invoke-AzureRestMethod -ARMToken $token -Method Get -Uri $uri
+    if ($details.id -ine "$($image.Definition)/versions/$($image.Version)" -or
+        -not $details.properties.publishingProfile.publishedDate) {
+        throw 'Requested image lookup did not return the exact version and publication date.'
+    }
+    if ($details.properties.publishingProfile.excludeFromLatest -and
+        -not (Read-FunctionAppSetting IncludeExcludedImageVersions -AsBoolean)) {
+        throw 'Requested image is excluded from selection by the current policy.'
+    }
+    if ((Compare-ImageVersion -Version1 $image.Version -Version2 $State.Image.Version) -le 0 -and
+        -not (Read-FunctionAppSetting AllowImageVersionRollback -AsBoolean)) {
+        throw 'Requested image does not advance the current version; rollback is not enabled.'
+    }
+    $date = [DateTimeOffset]$details.properties.publishingProfile.publishedDate
+    $minimumAge = Read-FunctionAppSetting ReplaceSessionHostOnNewImageVersionDelayDays
+    if (([DateTimeOffset]::UtcNow - $date).TotalDays -lt [double]$minimumAge) { return $false }
+    $previous = $State.Image
+    $retirementNames = @($State.BatchHostNames)
+    if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide') {
+        $inventory = @(Get-SessionHosts -ARMToken $token -FixSessionHostTags:$false)
+        $retirementNames = @(
+            foreach ($name in $State.BatchHostNames) {
+                $hosts = @($inventory | Where-Object { $_.SessionHostName -eq $name })
+                if ($hosts.Count -gt 1) { throw 'Image change found ambiguous retirement host names.' }
+                if ($hosts.Count -eq 1 -and ($hosts[0].ImageDefinition -ine $previous.Definition -or
+                    $hosts[0].ImageVersion -ne $previous.Version)) { $name }
+            }
+        )
+    }
+    $updates = @{
+        RetirementImages = @(@($State.RetirementImages) + @($previous) |
+            Where-Object { $_ } | Sort-Object -Property Definition, Version -Unique)
+        DeploymentImage = if ($State.DeploymentImage) { $State.DeploymentImage } else { $previous }
+        Image = @{ Definition = $image.Definition; Version = $image.Version; Date = $date.ToString('o') }
+        LastImageChangeRequestId = $request.State.Id
+        LastImageChangeUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        AwaitingImageBatch = $true
+        DeploymentBatchReady = $true
+        MoreDeploymentsAllowed = $true
+        NextBatchAuthorization = $null
+        NextBatchAuthorized = $false
+        BatchHostNames = $retirementNames
+        ProgressHighWater = @{}
+    }
+    $candidate = $State.Clone()
+    foreach ($key in $updates.Keys) { $candidate[$key] = $updates[$key] }
+    if ([Text.Encoding]::Unicode.GetByteCount(($candidate | ConvertTo-Json -Depth 40 -Compress)) -gt 59000) {
+        throw 'Image change would exceed the safe operation-state size budget.'
+    }
+    foreach ($key in $updates.Keys) { $State[$key] = $updates[$key] }
+    Save-ShrContinuationCheckpoint
+    Write-LogEntry -Message "CONTINUATION | Image target changed from $($previous.Version) to $($image.Version); existing deployment intent is preserved and a fresh scheduled authorization is required."
+    Write-ShrEvent -Event ImageTargetChanged -State $State
+    return $true
+}
+
+function Invoke-ShrImageChange {
+    param([hashtable] $State, [switch] $BatchCompleted)
+
+    $previousRequest = $State.LastImageChangeRequestId
+    try {
+        return Set-ShrRequestedImage -State $State -BatchCompleted:$BatchCompleted
+    } catch {
+        $cause = $_.Exception
+        while ($cause -and -not $cause.Data['ShrOwnershipConflict']) { $cause = $cause.InnerException }
+        if ($State.LastImageChangeRequestId -ne $previousRequest -or
+            $cause -or (Test-ShrTransientFailure -ErrorRecord $_)) { throw }
+        $State.LastImageChangeRejectedId = $State.PendingImageChangeRequestId
+        $State.ImageChangeError = $_.Exception.Message
+        Write-LogEntry -Message "CONTINUATION | Image-change request rejected; the original rollout is unchanged: $($_.Exception.Message)" -Level Error
+        return $false
+    }
+}
+
 function Start-ShrContinuation {
     param($Timer)
 
@@ -514,8 +729,9 @@ function Start-ShrContinuation {
         if (-not (Set-ShrRejectedBatchSuperseded -Operation $operation)) { return }
     }
     if ($operation -and $operation.State.Status -notin @('Completed', 'Superseded')) {
-        if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -and
+        if (((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -or $operation.State.AwaitingImageBatch) -and
             (Read-FunctionAppSetting InitiationEnabled -AsBoolean) -and
+            -not $operation.State.ExpansionBlocked -and
             $operation.State.DeploymentBatchReady -and $operation.State.MoreDeploymentsAllowed) {
             # A separate entity lets a timer authorize work without invalidating the worker's ETag.
             $authorization = Get-ShrOperation -BatchAuthorization
@@ -523,6 +739,8 @@ function Start-ShrContinuation {
                 Id = [guid]::NewGuid().ToString('N')
                 OperationId = $operation.State.Id
                 AfterBatchNumber = [int]$operation.State.BatchNumber
+                ImageVersion = $operation.State.Image.Version
+                ImageChangeRequestId = $operation.State.LastImageChangeRequestId
                 ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes((Get-ShrAuthorizationMinutes)).ToString('o')
             }
             if ($authorization) {
@@ -548,7 +766,7 @@ function Start-ShrContinuation {
         return
     }
     $hoursSetting = Read-FunctionAppSetting ContinuationTimeoutHours
-    $hours = if ([string]::IsNullOrEmpty($hoursSetting)) { 72 } else { [int]$hoursSetting }
+    $hours = if ([string]::IsNullOrEmpty($hoursSetting)) { 168 } else { [int]$hoursSetting }
     if ($hours -lt 1 -or $hours -gt 720) { throw 'ContinuationTimeoutHours must be between 1 and 720.' }
     $image = Get-ShrInitiationImage
     if (-not $image) { return }
@@ -569,6 +787,9 @@ function Start-ShrContinuation {
         Status = 'Running'
         CreatedUtc = $now.ToString('o')
         DeadlineUtc = $now.AddHours($hours).ToString('o')
+        RecoveryPolicyVersion = 1
+        ProgressTimeoutHours = $hours
+        LastProgressUtc = $now.ToString('o')
         InitiationExpiresUtc = $now.AddMinutes((Get-ShrAuthorizationMinutes)).ToString('o')
         LockOwner = ''
         LockExpiresUtc = $now.ToString('o')
@@ -584,6 +805,7 @@ function Start-ShrContinuation {
         ConfigurationHash = (Get-ShrConfigurationHash)
         ConfigurationTargetCount = [Environment]::GetEnvironmentVariable('TargetSessionHostCount')
     }
+    Get-ShrConfigurationHash -OperationState $state -CaptureTarget | Out-Null
     if ($operation -and $operation.State.Status -eq 'Superseded') {
         $state.SupersedesOperationId = $operation.State.Id
     }
@@ -610,7 +832,12 @@ function Assert-ShrWorkerDeadlines {
     param([DateTimeOffset] $Now)
 
     $state = $script:WorkerContext.Operation.State
-    if ($Now -ge [DateTimeOffset]$state.DeadlineUtc) {
+    if ($state.RecoveryPolicyVersion -eq 1) {
+        if (-not $state.ScheduleWaitStartedUtc -and $Now -ge [DateTimeOffset]$state.DeadlineUtc) {
+            $state.ExpansionBlocked = $true
+            $state.LastError = 'No-progress threshold reached; expansion is blocked while checkpointed recovery continues.'
+        }
+    } elseif ($Now -ge [DateTimeOffset]$state.DeadlineUtc) {
         throw 'SHR operation deadline expired; no further mutations are permitted.'
     }
     if ($Now -ge $script:WorkerContext.InvocationDeadline) {
@@ -629,13 +856,20 @@ function Assert-ShrWorkerLease {
     if (-not $current -or $current.State.Id -ne $state.Id -or
         $current.State.LockOwner -ne $state.LockOwner -or
         [DateTimeOffset]$current.State.LockExpiresUtc -le $now) {
-        throw 'SHR operation lease is no longer owned by this invocation.'
+        $exception = [InvalidOperationException]::new('SHR operation lease is no longer owned by this invocation.')
+        $exception.Data['ShrOwnershipConflict'] = $true
+        throw $exception
     }
 }
 
 function Save-ShrContinuationCheckpoint {
     if (-not $script:WorkerContext) { throw 'SHR checkpoint requires an active worker.' }
     Assert-ShrWorkerLease
+    if ($script:WorkerContext.Operation.State.RecoveryPolicyVersion -eq 1) {
+        Update-ShrProgress -State $script:WorkerContext.Operation.State -Result @{} `
+            -Before $script:WorkerContext.ProgressFingerprint
+        $script:WorkerContext.ProgressFingerprint = Get-ShrProgressFingerprint -State $script:WorkerContext.Operation.State
+    }
     Save-ShrOperation -Operation $script:WorkerContext.Operation | Out-Null
     Set-ShrLogContext -Operation $script:WorkerContext.Operation.State
     Write-ShrEvent -Event Checkpoint -State $script:WorkerContext.Operation.State
@@ -766,35 +1000,49 @@ function Invoke-ShrContinuation {
         YieldRequested = $false
     }
     $authorizationExpired = $false
+    $ownershipLost = $false
+    $before = Get-ShrProgressFingerprint -State $operation.State
+    $script:WorkerContext.ProgressFingerprint = $before
+    $result = @{ Completed = $false }
     try {
         Write-ShrEvent -Event Reconciling -State $operation.State
-        if ([DateTimeOffset]$operation.State.DeadlineUtc -le $now) {
+        if ($operation.State.RecoveryPolicyVersion -ne 1 -and [DateTimeOffset]$operation.State.DeadlineUtc -le $now) {
             throw 'SHR operation deadline expired. Inspect deployment, host health, sessions and capacity before recovery.'
         }
         if ($operation.State.ConfigurationHash -ne (Get-ShrConfigurationHash -OperationState $operation.State -CaptureTarget)) {
             throw 'SHR operation configuration changed. Restore the initiating configuration or perform operator recovery.'
         }
+        Assert-ShrWorkerDeadlines -Now $now
+        if ($operation.State.ExpansionBlocked) {
+            Write-LogEntry -Message "CONTINUATION | $($operation.State.LastError)" -Level Warning
+            Write-ShrEvent -Event ProgressStalled -State $operation.State
+            if ($null -eq $operation.State.BatchHostNames -and -not $operation.State.CleanupIntent) { return }
+        }
+        Invoke-ShrImageChange -State $operation.State | Out-Null
         $operation.State.NextBatchAuthorization = $null
         $operation.State.NextBatchAuthorized = $false
-        if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -and
+        if (((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide' -or $operation.State.AwaitingImageBatch) -and
+            -not $operation.State.ExpansionBlocked -and
             (Read-FunctionAppSetting InitiationEnabled -AsBoolean) -and
             $operation.State.DeploymentBatchReady -and $operation.State.MoreDeploymentsAllowed) {
             $authorization = Get-ShrOperation -BatchAuthorization
             if ($authorization -and $authorization.State.OperationId -eq $operation.State.Id -and
                 [int]$authorization.State.AfterBatchNumber -eq [int]$operation.State.BatchNumber -and
                 $authorization.State.Id -ne $operation.State.LastBatchAuthorizationId -and
+                (-not $operation.State.LastImageChangeRequestId -or
+                    ($authorization.State.ImageVersion -eq $operation.State.Image.Version -and
+                        $authorization.State.ImageChangeRequestId -eq $operation.State.LastImageChangeRequestId)) -and
                 [DateTimeOffset]$authorization.State.ExpiresUtc -gt [DateTimeOffset]::UtcNow) {
                 $operation.State.NextBatchAuthorization = $authorization.State
             }
         }
         if ($null -eq $operation.State.BatchHostNames -and -not $operation.State.CleanupIntent -and
             [DateTimeOffset]$operation.State.InitiationExpiresUtc -le $now) {
-            $operation.State.Status = 'Completed'
+            $operation.State.Status = if ($operation.State.ExpansionBlocked) { 'NeedsAttention' } else { 'Completed' }
             $authorizationExpired = $true
             Write-LogEntry -Message "CONTINUATION | Initial authorization for $($operation.State.Id) expired before a batch started; waiting for the next initiation schedule." -Level Warning
             return
         }
-        $result = @{ Completed = $false }
         try {
             if ($operation.State.CleanupIntent) {
                 $cleanup = $operation.State.CleanupIntent
@@ -842,28 +1090,57 @@ function Invoke-ShrContinuation {
                 & $invokeCycle $CyclePath $operation.State $result
             }
         } catch {
-            if (-not $script:WorkerContext.YieldRequested -and $_.Exception -isnot [TimeoutException]) { throw }
+            if (-not $script:WorkerContext.YieldRequested) { throw }
             Write-LogEntry -Message $_.Exception.Message -Level Trace
         }
         if ($result.Failure) { throw $result.Failure }
+        if ($result.Completed -and (Invoke-ShrImageChange -State $operation.State -BatchCompleted)) {
+            $result.Completed = $false
+        }
+        if ($operation.State.AwaitingImageBatch -and -not $operation.State.NextBatchAuthorized -and
+            -not $operation.State.ExpansionBlocked) {
+            $result.WaitingForAuthorization = $result.Completed
+            $result.Completed = $false
+        }
+        Update-ShrProgress -State $operation.State -Result $result -Before $script:WorkerContext.ProgressFingerprint
         if ($result.Completed) {
             if ($operation.State.CleanupIntent) { throw 'SHR cannot complete with pending cleanup.' }
-            $operation.State.Status = 'Completed'
-            Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) finished; another batch requires timer authorization." -Level Trace
+            $operation.State.Status = if ($operation.State.ExpansionBlocked) { 'NeedsAttention' } else { 'Completed' }
+            if ($operation.State.ExpansionBlocked) {
+                Write-LogEntry -Message 'CONTINUATION | Checkpointed recovery finished; expansion remains blocked pending checked operator recovery.' -Level Warning
+            } else {
+                Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) finished; another batch requires timer authorization." -Level Trace
+            }
         } else {
             Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) awaits the next reconciliation tick for deployment, readiness or safe cleanup." -Level Trace
         }
     } catch {
-        $operation.State.Status = 'NeedsAttention'
-        $operation.State.LastError = $_.Exception.Message
-        Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) stopped: $($_.Exception.Message)" -Level Error
+        $failure = $_
+        $cause = $_.Exception
+        while ($cause -and -not $cause.Data['ShrOwnershipConflict']) { $cause = $cause.InnerException }
+        $ownershipLost = $null -ne $cause
+        $transient = Test-ShrTransientFailure -ErrorRecord $failure
+        if ($ownershipLost) {
+            Write-LogEntry -Message 'CONTINUATION | Ownership changed; this worker will not overwrite saved state. A later owner will reconcile.' -Level Warning
+        } elseif ($transient) {
+            $operation.State.Status = 'Running'
+            Write-LogEntry -Message "CONTINUATION | Temporary request failure; saved intent will be reconciled on the next timer: $($failure.Exception.Message)" -Level Warning
+        } else {
+            $operation.State.Status = 'NeedsAttention'
+        }
+        $operation.State.LastError = $failure.Exception.Message
+        if (-not $ownershipLost -and -not $transient) {
+            Write-LogEntry -Message "CONTINUATION | Operation $($operation.State.Id) stopped: $($failure.Exception.Message)" -Level Error
+        }
         throw
     } finally {
         try {
-            $operation.State.LockOwner = ''
-            $operation.State.LockExpiresUtc = [DateTimeOffset]::UtcNow.ToString('o')
-            Save-ShrOperation -Operation $operation | Out-Null
-            Write-ShrEvent -Event $(if ($operation.State.Status -eq 'Running') { 'Waiting' } elseif ($operation.State.Status -eq 'Completed' -and $authorizationExpired) { 'AuthorizationExpired' } else { $operation.State.Status }) -State $operation.State
+            if (-not $ownershipLost) {
+                $operation.State.LockOwner = ''
+                $operation.State.LockExpiresUtc = [DateTimeOffset]::UtcNow.ToString('o')
+                Save-ShrOperation -Operation $operation | Out-Null
+                Write-ShrEvent -Event $(if ($operation.State.Status -eq 'Running') { 'Waiting' } elseif ($operation.State.Status -eq 'Completed' -and $authorizationExpired) { 'AuthorizationExpired' } else { $operation.State.Status }) -State $operation.State
+            }
         } finally {
             $script:WorkerContext = $null
         }

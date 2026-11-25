@@ -219,10 +219,10 @@ param timerSchedule string = '0 0,30 * * * *'
 @description('Optional. Allow new replacement cycles to begin. False holds initiation while an active continuation cycle can still drain or repair. Default true.')
 param initiationEnabled bool = true
 
-@description('Optional. Maximum continuation cycle age in hours before intervention is required. Default 72 hours.')
+@description('Optional. No-progress limit for new operations, excluding scheduled authorization waits. Blocks expansion but permits checkpointed recovery. Default 168 hours.')
 @minValue(1)
 @maxValue(720)
-param continuationTimeoutHours int = 72
+param continuationTimeoutHours int = 168
 
 @description('Optional. Whether to deploy the Azure Monitor Workbook dashboard into the selected Log Analytics workspace resource group. Deployments that use the same workspace converge on the same workbook. Default is true.')
 param deployWorkbook bool = true

@@ -319,6 +319,39 @@ Describe 'SHR checked operator recovery' {
         { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*lease has not expired*'
     }
 
+    It 'explicitly renews a stalled running operation without changing its image or deployment request' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.Status = 'Running'
+            $value.ExpansionBlocked = $true
+            $value.RecoveryPolicyVersion = 1
+            $value.ProgressTimeoutHours = 168
+        }
+        $before = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        & $recoveryPath @recoveryArguments -ExtendDeadlineHours 168 -Apply -Confirm:$false
+        $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        $after.ExpansionBlocked | Should -BeFalse
+        $after.ProgressTimeoutHours | Should -Be 168
+        $after.DeploymentIntent.Body | Should -Be $before.DeploymentIntent.Body
+        $after.Image.Version | Should -Be $before.Image.Version
+    }
+
+    It 'can release a stalled unstarted operation without extending its initiation authorization' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.Status = 'Running'
+            $value.ExpansionBlocked = $true
+            $value.BatchHostNames = $null
+            $value.DeploymentIntent = $null
+        }
+        $before = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        & $recoveryPath @recoveryArguments -ExtendDeadlineHours 168 -Apply -Confirm:$false
+        $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        $after.BatchHostNames | Should -BeNullOrEmpty
+        $after.DeploymentIntent | Should -BeNullOrEmpty
+        ([DateTimeOffset]$after.InitiationExpiresUtc).UtcTicks | Should -Be ([DateTimeOffset]$before.InitiationExpiresUtc).UtcTicks
+    }
+
     It 'blocks cleanup recovery rather than clearing cleanup state' {
         Set-TestRecoveryState { param($value) $value.CleanupIntent = @{ Hosts = @('old') } }
         { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*Pending cleanup*'

@@ -396,6 +396,10 @@ function Write-ShrEvent {
         $phase = 'AuthorizationExpired'
     } elseif ($State -and $State['Status'] -in @('Completed', 'NeedsAttention', 'Superseded')) {
         $phase = [string]$State['Status']
+    } elseif ($State -and $State['ExpansionBlocked']) {
+        $phase = 'ExpansionBlockedRecovery'
+    } elseif ($State -and $State['AwaitingImageBatch']) {
+        $phase = 'WaitingForImageBatchAuthorization'
     } elseif ($EventName -in @('Progress', 'Waiting')) {
         $phase = if ($State['CleanupIntent']) { 'WaitingForCleanup' }
         elseif ($counts['RunningDeployments'] -gt 0) { 'WaitingForDeployment' }
@@ -428,6 +432,8 @@ function Write-ShrEvent {
         'WaitingForDeployment' { 'An ARM deployment is still running.' }
         'WaitingForHealth' { 'Replacement hosts have not met the configured availability gate.' }
         'WaitingForScheduledAuthorization' { 'Another batch needs initiation authority; authorized retirement can continue.' }
+        'ExpansionBlockedRecovery' { 'New expansion is blocked after the no-progress threshold; checkpointed recovery continues.' }
+        'WaitingForImageBatchAuthorization' { 'The approved image target requires fresh scheduled initiation authority before its next batch can start.' }
         'Draining' { 'Authorized old hosts are still draining.' }
         'WaitingForProgress' { 'Awaiting capacity, readiness, scaling handoff or retirement checks; inspect cycle logs.' }
         'AuthorizationExpired' { 'Initial authority expired before a batch started; a new initiation tick is required.' }
@@ -453,6 +459,13 @@ function Write-ShrEvent {
         $data.DeploymentName = if ($State['DeploymentIntent']) { [string]$State['DeploymentIntent']['Name'] } else { $null }
         $data.DeploymentResourceId = $deploymentResourceId
         $data.SupersedesCycleId = [string]$State['SupersedesOperationId']
+        $data.ExpansionBlocked = [bool]$State['ExpansionBlocked']
+        $data.LastProgressUtc = [string]$State['LastProgressUtc']
+        $data.ProgressTimeoutHours = if ($null -ne $State['ProgressTimeoutHours']) { [int]$State['ProgressTimeoutHours'] } else { $null }
+        $data.ScheduleWaitStartedUtc = [string]$State['ScheduleWaitStartedUtc']
+        $data.AwaitingImageBatch = [bool]$State['AwaitingImageBatch']
+        $data.LastImageChangeRequestId = [string]$State['LastImageChangeRequestId']
+        $data.LastImageChangeRejectedId = [string]$State['LastImageChangeRejectedId']
         $data.InDrain = $counts['InDrain']
         $data.RunningDeployments = $counts['RunningDeployments']
     }
@@ -517,7 +530,7 @@ function Write-LogEntry {
             Write-Debug $output
         }
         'Error' {
-            Write-Error $output
+            Write-Error $output -ErrorAction Continue
         }
         'Warning' {
             Write-Warning $output
@@ -532,6 +545,179 @@ function Write-LogEntry {
 #EndRegion Logging and Error Handling
 
 #Region REST API Helper Functions
+
+function Get-ShrExceptionChain {
+    param($Failure)
+
+    if ($Failure -is [System.Management.Automation.ErrorRecord]) { $Failure = $Failure.Exception }
+    if ($Failure -isnot [Exception]) { return }
+    $pending = [System.Collections.Generic.Queue[Exception]]::new()
+    $seen = [System.Collections.Generic.HashSet[Exception]]::new()
+    $pending.Enqueue($Failure)
+    while ($pending.Count -gt 0 -and $seen.Count -lt 32) {
+        $exception = $pending.Dequeue()
+        if (-not $seen.Add($exception)) { continue }
+        $exception
+        if ($exception -is [AggregateException]) {
+            foreach ($inner in $exception.InnerExceptions) { $pending.Enqueue($inner) }
+        } elseif ($exception.InnerException) {
+            $pending.Enqueue($exception.InnerException)
+        }
+    }
+}
+
+function Get-ShrHttpStatusCode {
+    <#
+    .SYNOPSIS
+        Extracts typed HTTP status evidence without parsing exception messages.
+    .OUTPUTS
+        An integer status code, or no output when no HTTP status is available.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [Alias('InputObject', 'Exception', 'Failure')]
+        $ErrorRecord
+    )
+
+    process {
+        foreach ($exception in (Get-ShrExceptionChain $ErrorRecord)) {
+            foreach ($candidate in @($exception.Response.StatusCode, $exception.StatusCode, $exception.Data['StatusCode'])) {
+                $status = 0
+                if ($null -ne $candidate -and [int]::TryParse([string]$candidate, [ref]$status) -and
+                    $status -ge 100 -and $status -le 599) {
+                    return $status
+                }
+                if ($candidate -is [System.Net.HttpStatusCode]) { return [int]$candidate }
+            }
+        }
+    }
+}
+
+function Test-ShrTransientFailure {
+    <#
+    .SYNOPSIS
+        Identifies retryable HTTP or typed transport failures; messages are never evidence.
+    .DESCRIPTION
+        HTTP evidence, including storage exception Data['StatusCode'], takes precedence
+        over transport wrappers. Marked ownership conflicts are never transient. This
+        classifies a failure, not permission to replay a mutation; mutations must be
+        reconciled by their caller.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [Alias('InputObject', 'Exception', 'Failure')]
+        $ErrorRecord
+    )
+
+    process {
+        $exceptions = @(Get-ShrExceptionChain $ErrorRecord)
+        if (@($exceptions | Where-Object { $_.Data['ShrOwnershipConflict'] -eq $true }).Count -gt 0) {
+            return $false
+        }
+        $statuses = @($exceptions | ForEach-Object { Get-ShrHttpStatusCode $_ })
+        if ($statuses.Count -gt 0) {
+            return @($statuses | Where-Object { $_ -notin @(408, 429, 500, 502, 503, 504) }).Count -eq 0
+        }
+        foreach ($exception in $exceptions) {
+            if ($exception -is [System.Net.Http.HttpRequestException] -or
+                $exception -is [System.Threading.Tasks.TaskCanceledException] -or
+                $exception -is [TimeoutException]) { return $true }
+            if ($exception -is [System.Net.WebException] -and $exception.Status -in @(
+                [System.Net.WebExceptionStatus]::Timeout,
+                [System.Net.WebExceptionStatus]::ConnectFailure,
+                [System.Net.WebExceptionStatus]::ConnectionClosed,
+                [System.Net.WebExceptionStatus]::KeepAliveFailure,
+                [System.Net.WebExceptionStatus]::NameResolutionFailure,
+                [System.Net.WebExceptionStatus]::ProxyNameResolutionFailure,
+                [System.Net.WebExceptionStatus]::PipelineFailure,
+                [System.Net.WebExceptionStatus]::ReceiveFailure,
+                [System.Net.WebExceptionStatus]::SendFailure
+            )) { return $true }
+        }
+        return $false
+    }
+}
+
+function Get-ShrRetryAfterSeconds {
+    param($Failure)
+
+    foreach ($exception in (Get-ShrExceptionChain $Failure)) {
+        $headers = $exception.Response.Headers
+        if (-not $headers) { continue }
+        if ($headers -is [System.Net.Http.Headers.HttpResponseHeaders]) {
+            $retryAfter = $headers.RetryAfter
+            if ($null -ne $retryAfter.Delta) { return [Math]::Max(0, $retryAfter.Delta.TotalSeconds) }
+            if ($null -ne $retryAfter.Date) {
+                return [Math]::Max(0, ($retryAfter.Date - [DateTimeOffset]::UtcNow).TotalSeconds)
+            }
+        } else {
+            $value = @($headers['Retry-After'])[0]
+            $seconds = 0
+            if ([int]::TryParse([string]$value, [ref]$seconds) -and $seconds -ge 0) { return $seconds }
+            $date = [DateTimeOffset]::MinValue
+            if ([DateTimeOffset]::TryParse([string]$value, [ref]$date)) {
+                return [Math]::Max(0, ($date - [DateTimeOffset]::UtcNow).TotalSeconds)
+            }
+        }
+    }
+}
+
+function Invoke-ShrRestRequest {
+    <#
+    .SYNOPSIS
+        Sends one request, with at most three GET attempts in a 15-second local budget.
+    .DESCRIPTION
+        All normal ARM and Graph helpers use this path, including individual collection
+        pages. Never replays mutations. Retry-After beyond the five-second delay cap or
+        remaining budget causes immediate deferral, rather than retrying before the server
+        permits it. Worker deadline/ownership checks run outside the transport catch.
+    #>
+    param(
+        [Parameter(Mandatory)][hashtable] $Parameters,
+        [int] $MaxAttempts = 3,
+        [int] $RetryDelaySeconds = 1
+    )
+
+    $isGet = $Parameters.Method -eq 'Get'
+    $limit = if ($isGet) { [Math]::Clamp($MaxAttempts, 1, 3) } else { 1 }
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $request = $Parameters.Clone()
+    $request.ErrorAction = 'Stop'
+    $hasOperationTimeout = (Get-Command Invoke-RestMethod).Parameters.ContainsKey('OperationTimeoutSeconds')
+    $lastFailure = $null
+    for ($attempt = 1; $attempt -le $limit; $attempt++) {
+        if ($attempt -gt 1 -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
+            Assert-ShrWorkerLease
+        }
+        if ($attempt -gt 1 -and $clock.Elapsed.TotalSeconds + 1 -ge 15) {
+            Write-LogEntry -Message "GET transient retries exhausted: local retry budget expired; preserving the original request failure." -Level Error
+            throw $lastFailure
+        }
+        if ($isGet) {
+            $request.TimeoutSec = [Math]::Max(1, [Math]::Min(10, [Math]::Floor(15 - $clock.Elapsed.TotalSeconds)))
+            if ($hasOperationTimeout) { $request.OperationTimeoutSeconds = $request.TimeoutSec }
+        }
+        try {
+            return Invoke-RestMethod @request
+        } catch {
+            if (-not $isGet -or -not (Test-ShrTransientFailure $_)) { throw }
+            $lastFailure = $_
+            $delay = [Math]::Min(5, [Math]::Max(0, $RetryDelaySeconds) * [Math]::Pow(2, $attempt - 1))
+            $retryAfter = Get-ShrRetryAfterSeconds $_
+            if ($null -ne $retryAfter) { $delay = [Math]::Max($delay, $retryAfter) }
+            if ($attempt -ge $limit -or $delay -gt 5 -or
+                $clock.Elapsed.TotalSeconds + $delay + 1 -ge 15) {
+                Write-LogEntry -Message "GET transient retries exhausted or retry budget unavailable after $attempt attempt(s); preserving the original request failure." -Level Error
+                throw
+            }
+            if (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue) { Assert-ShrWorkerLease }
+            Write-LogEntry -Message "Transient GET failure; retrying in $delay second(s), attempt $($attempt + 1) of $limit." -Level Warning
+            Start-Sleep -Seconds $delay
+        }
+    }
+}
 
 function Invoke-AzureRestMethod {
     <#
@@ -549,6 +735,11 @@ function Invoke-AzureRestMethod {
             Optional additional headers to include in the request.
         .PARAMETER RequireCollection
             Reject missing or malformed collection envelopes, including subsequent pages.
+        .PARAMETER MaxRetries
+            Maximum total attempts per GET page (default: 3, capped at 3); mutations are sent once.
+        .PARAMETER RetryDelaySeconds
+            Initial GET retry delay (default: 1 second); delays are capped at 5 seconds and
+            each page has a 15-second local retry budget. Longer Retry-After values defer.
         .EXAMPLE
             Invoke-AzureRestMethod -ARMToken $ARMToken -Method 'GET' -Uri 'https://management.azure.com/...'
     #>
@@ -569,7 +760,11 @@ function Invoke-AzureRestMethod {
         [string]$Body = '',
 
         [parameter(Mandatory = $false)]
-        [hashtable]$AdditionalHeaders
+        [hashtable]$AdditionalHeaders,
+
+        [int]$MaxRetries = 3,
+
+        [int]$RetryDelaySeconds = 1
     )
 
     if ($Method -ne 'GET' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
@@ -600,10 +795,10 @@ function Invoke-AzureRestMethod {
 
         # Run the first query.
         if ($Method -eq 'GET') {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Verbose:$false
+            $QueryRequest = Invoke-ShrRestRequest -Parameters @{ Headers = $HeaderParams; Uri = $Uri; Method = $Method; Verbose = $false } -MaxAttempts $MaxRetries -RetryDelaySeconds $RetryDelaySeconds
         }
         else {
-            $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
+            $QueryRequest = Invoke-ShrRestRequest -Parameters @{ Headers = $HeaderParams; Uri = $Uri; Method = $Method; Body = $Body; Verbose = $false } -MaxAttempts $MaxRetries -RetryDelaySeconds $RetryDelaySeconds
         }
         
         & $validateCollection $QueryRequest
@@ -624,12 +819,12 @@ function Invoke-AzureRestMethod {
         # Invoke REST methods and fetch data until there are no pages left.
         if ($Uri -notlike "*`$top*") {
             while ($QueryRequest.'@odata.nextLink' -and $QueryRequest.'@odata.nextLink' -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.'@odata.nextLink' -Method $Method -Verbose:$false
+                $QueryRequest = Invoke-ShrRestRequest -Parameters @{ Headers = $HeaderParams; Uri = $QueryRequest.'@odata.nextLink'; Method = $Method; Verbose = $false } -MaxAttempts $MaxRetries -RetryDelaySeconds $RetryDelaySeconds
                 & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
             While ($QueryRequest.nextLink -and $QueryRequest.nextLink -is [string]) {
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $QueryRequest.nextLink -Method $Method -Verbose:$false
+                $QueryRequest = Invoke-ShrRestRequest -Parameters @{ Headers = $HeaderParams; Uri = $QueryRequest.nextLink; Method = $Method; Verbose = $false } -MaxAttempts $MaxRetries -RetryDelaySeconds $RetryDelaySeconds
                 & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
@@ -637,7 +832,7 @@ function Invoke-AzureRestMethod {
                 $JsonBody = $Body | ConvertFrom-Json
                 $JsonBody | Add-Member -Type NoteProperty -Name '$skipToken' -Value $QueryRequest.'$skipToken' -Force
                 $Body = $JsonBody | ConvertTo-Json -Depth 10
-                $QueryRequest = Invoke-RestMethod -Headers $HeaderParams -Uri $Uri -Method $Method -Body $Body -Verbose:$false
+                $QueryRequest = Invoke-ShrRestRequest -Parameters @{ Headers = $HeaderParams; Uri = $Uri; Method = $Method; Body = $Body; Verbose = $false } -MaxAttempts $MaxRetries -RetryDelaySeconds $RetryDelaySeconds
                 & $validateCollection $QueryRequest
                 $dataToUpload += $QueryRequest.value
             }
@@ -654,7 +849,8 @@ function Invoke-AzureRestMethodWithRetry {
     .SYNOPSIS
         Invokes Azure REST API with automatic retry logic for transient failures.
     .DESCRIPTION
-        Wraps Invoke-AzureRestMethod with exponential backoff retry for 429 and 5xx errors.
+        Uses the same bounded GET-only retry path as Invoke-AzureRestMethod. Mutations
+        are sent once; their caller must reconcile ambiguous outcomes.
     .PARAMETER ARMToken
         Azure access token for authentication.
     .PARAMETER Method
@@ -664,9 +860,9 @@ function Invoke-AzureRestMethodWithRetry {
     .PARAMETER Body
         Optional request body.
     .PARAMETER MaxRetries
-        Maximum number of retry attempts (default: 3).
+        Maximum total GET attempts (default: 3, capped at 3).
     .PARAMETER RetryDelaySeconds
-        Initial retry delay in seconds (default: 5).
+        Initial retry delay in seconds (default: 1, capped at 5).
     .EXAMPLE
         Invoke-AzureRestMethodWithRetry -ARMToken $token -Method Get -Uri $uri -MaxRetries 5
     #>
@@ -689,36 +885,11 @@ function Invoke-AzureRestMethodWithRetry {
         [int] $MaxRetries = 3,
         
         [Parameter()]
-        [int] $RetryDelaySeconds = 5
+        [int] $RetryDelaySeconds = 1
     )
     
-    $attempt = 0
-    $success = $false
-    $result = $null
-    
-    while (-not $success -and $attempt -lt $MaxRetries) {
-        $attempt++
-        try {
-            $result = Invoke-AzureRestMethod -ARMToken $ARMToken -Method $Method -Uri $Uri -Body $Body
-            $success = $true
-        }
-        catch {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-            $retryable = $statusCode -in @(429, 500, 502, 503, 504)
-            
-            if ($retryable -and $attempt -lt $MaxRetries) {
-                $delay = $RetryDelaySeconds * [Math]::Pow(2, $attempt - 1)
-                Write-LogEntry -Message "Request failed with status $statusCode. Retrying in $delay seconds (attempt $attempt of $MaxRetries)" -Level Warning
-                Start-Sleep -Seconds $delay
-            }
-            else {
-                Write-LogEntry -Message "Request failed: $_" -Level Error
-                throw $_
-            }
-        }
-    }
-    
-    return $result
+    Invoke-AzureRestMethod -ARMToken $ARMToken -Method $Method -Uri $Uri -Body $Body `
+        -MaxRetries $MaxRetries -RetryDelaySeconds $RetryDelaySeconds
 }
 
 function Invoke-GraphRestMethod {
@@ -775,11 +946,11 @@ function Invoke-GraphRestMethod {
     }
     
     try {
-        $result = Invoke-RestMethod @params -ErrorAction Stop
+        $result = Invoke-ShrRestRequest -Parameters $params
         return $result
     }
     catch {
-        $statusCode = $_.Exception.Response.StatusCode.value__
+        $statusCode = Get-ShrHttpStatusCode $_
         
         # If using GCCH endpoint and got auth error, try DoD endpoint
         if ($Uri -like "*graph.microsoft.us*" -and $statusCode -in @(401, 403)) {
@@ -798,17 +969,17 @@ function Invoke-GraphRestMethod {
                 if ($Method -ne 'Get' -and (Get-Command Assert-ShrWorkerLease -ErrorAction SilentlyContinue)) {
                     Assert-ShrWorkerLease
                 }
-                $result = Invoke-RestMethod @params -ErrorAction Stop
+                $result = Invoke-ShrRestRequest -Parameters $params
                 return $result
             }
             catch {
                 Write-LogEntry -Message "Graph API call to DoD endpoint also failed: $_" -Level Warning
-                throw $_
+                throw
             }
         }
         else {
             Write-LogEntry -Message "Graph API call failed: $_" -Level Warning
-            throw $_
+            throw
         }
     }
 }
@@ -932,12 +1103,12 @@ function Invoke-GraphApiWithRetry {
                 $params['Body'] = $Body
             }
             
-            $result = Invoke-RestMethod @params -ErrorAction Stop
+            $result = Invoke-ShrRestRequest -Parameters $params
             return $result
         }
         catch {
             $lastError = $_
-            $statusCode = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { $null }
+            $statusCode = Get-ShrHttpStatusCode $_
 
             if ($SuppressNotFoundError -and $Method -eq 'Delete' -and $statusCode -eq 404) {
                 throw
@@ -971,7 +1142,7 @@ function Invoke-GraphApiWithRetry {
             }
             else {
                 Write-LogEntry -Message "Graph API call failed: $($_.Exception.Message)" -Level Error
-                throw $_
+                throw
             }
         }
     }
@@ -1046,4 +1217,4 @@ function Get-VMPowerStates {
 #EndRegion VM Helper Functions
 
 # Export functions
-Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Assert-DeviceCleanupConfiguration, Write-LogEntry, Set-ShrLogContext, Clear-ShrLogContext, Write-ShrEvent, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates
+Export-ModuleMember -Function ConvertTo-CaseInsensitiveHashtable, Get-ResourceManagerUri, Get-GraphEndpoint, Get-AccessToken, Read-FunctionAppSetting, Assert-DeviceCleanupConfiguration, Write-LogEntry, Set-ShrLogContext, Clear-ShrLogContext, Write-ShrEvent, Test-ShrTransientFailure, Get-ShrHttpStatusCode, Invoke-AzureRestMethod, Invoke-AzureRestMethodWithRetry, Invoke-GraphRestMethod, Invoke-GraphApiWithRetry, Get-VMPowerStates

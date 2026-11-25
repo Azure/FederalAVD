@@ -514,6 +514,7 @@ function Get-ScalingPlanCurrentTarget {
     catch {
         Write-LogEntry -Message "Error querying scaling plan: $($_.Exception.Message)" -Level Warning
         Write-LogEntry -Message "Stack trace: $($_.ScriptStackTrace)" -Level Trace
+        if ((Get-ShrWorkerState) -and (Test-ShrTransientFailure -ErrorRecord $_)) { throw }
         return [PSCustomObject]@{
             CapacityPercentage = $null
             ScalingPlanName = $null
@@ -731,7 +732,7 @@ function Get-SessionHostReplacementPlan {
     [array] $sessionHostsToReplace = $sessionHostsOldVersion | Select-Object -Property * -Unique
     $totalFleetHostsToReplace = $sessionHostsToReplace.Count
     if ($continuation -and $null -ne $continuation.BatchHostNames) {
-        if (-not ($ReplacementMode -eq 'SideBySide' -and $continuation.NextBatchAuthorized)) {
+        if (-not (($ReplacementMode -eq 'SideBySide' -or $continuation.AwaitingImageBatch) -and $continuation.NextBatchAuthorized)) {
             $sessionHostsToReplace = @($sessionHostsToReplace | Where-Object {
                 $_.SessionHostName -in $continuation.BatchHostNames
             })

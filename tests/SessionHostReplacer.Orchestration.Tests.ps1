@@ -702,6 +702,96 @@ Describe 'Session Host Replacer deterministic orchestration failures' {
         }
     }
 
+    It 'deploys the requested image on the next authorized batch while original hosts still have users' {
+        $definition = $global:shrSimulation.LatestImage.Definition
+        $replacement = New-OrchestrationTestHost -Name 'replacement-01' -ImageVersion '2.0.0'
+        $global:shrSimulation.Hosts += $replacement
+        $global:shrSimulation.Context = @{
+            Id = 'image-transition'
+            Image = @{ Definition = $definition; Version = '3.0.0'; Date = '2026-09-01T00:00:00Z' }
+            DeploymentImage = @{ Definition = $definition; Version = '2.0.0' }
+            RetirementImages = @(@{ Definition = $definition; Version = '2.0.0' })
+            BatchHostNames = @('avd-01')
+            BatchNumber = 1
+            BatchDeploymentLimit = 1
+            TargetCount = 2
+            DeploymentIntent = @{ Name = 'old-deployment'; HostNames = @('replacement-01') }
+            DeploymentHostNames = @('replacement-01')
+            DeploymentBatchReady = $true
+            MoreDeploymentsAllowed = $true
+            AwaitingImageBatch = $true
+        }
+        $global:shrSimulation.Readiness.SafeToProceed = $true
+        $global:shrSimulation.Readiness.TotalNewHosts = 1
+        $global:shrSimulation.Plan.TotalSessionHostsToReplace = 1
+        $global:shrSimulation.Plan.TotalFleetSessionHostsToReplace = 3
+        $global:shrSimulation.Plan.PossibleDeploymentsCount = 1
+        $global:shrSimulation.Plan.PossibleSessionHostDeleteCount = 1
+        $global:shrSimulation.Plan.SessionHostsPendingDelete = @($global:shrSimulation.Hosts[0])
+        $global:shrSimulation.Plan.ReplacementCandidates = @($global:shrSimulation.Hosts[1])
+        $global:shrSimulation.AllocatedNames = @('replacement-02')
+        Mock Test-ShrRetirementImagesAvailable { $global:shrSimulation.Readiness }
+        Mock Remove-SessionHosts {
+            param($SessionHostsPendingDelete)
+            foreach ($hostEntry in $SessionHostsPendingDelete) {
+                $hostEntry.AllowNewSession = $false
+                $hostEntry.Sessions = 2
+            }
+            [PSCustomObject]@{ SuccessfulDeletions = @(); SuccessfulShutdowns = @(); FailedDeletions = @() }
+        }
+        $context = $global:shrSimulation.Context
+        Invoke-OrchestrationCycle -RunNumber 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $context.DeploymentIntent.Name | Should -Be 'old-deployment'
+        $context.DeploymentBatchReady | Should -BeTrue
+        $global:shrSimulation.Plan.PossibleDeploymentsCount = 1
+        $context.NextBatchAuthorization = @{
+            Id = 'new-image-authorization'
+            ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(10).ToString('o')
+        }
+        Invoke-OrchestrationCycle -RunNumber 2
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 1
+        $global:shrSimulation.DeploymentCalls[0].ImageReference.id | Should -Be "$definition/versions/3.0.0"
+        $context.DeploymentImage.Version | Should -Be '3.0.0'
+        $context.RetirementImages[0].Version | Should -Be '2.0.0'
+        $original = $global:shrSimulation.Hosts | Where-Object SessionHostName -EQ 'avd-01'
+        $original.Sessions | Should -Be 2
+        $original.AllowNewSession | Should -BeFalse
+    }
+
+    It 'does not delete another DeleteFirst host after changing targets until fresh scheduled authorization' {
+        $global:shrSettings.ReplacementMode = 'DeleteFirst'
+        foreach ($hostEntry in $global:shrSimulation.Hosts) { $hostEntry.ImageVersion = '2.0.0' }
+        $definition = $global:shrSimulation.LatestImage.Definition
+        $global:shrSimulation.Context = @{
+            Id = 'delete-first-image-transition'
+            Image = @{ Definition = $definition; Version = '3.0.0'; Date = '2026-09-01T00:00:00Z' }
+            DeploymentImage = @{ Definition = $definition; Version = '2.0.0' }
+            BatchHostNames = @('avd-01', 'avd-02')
+            BatchNumber = 1
+            BatchDeploymentLimit = 2
+            TargetCount = 2
+            DeploymentIntent = @{ Name = 'old-deployment'; HostNames = @('avd-01', 'avd-02') }
+            DeploymentHostNames = @('avd-01', 'avd-02')
+            DeploymentBatchReady = $true
+            MoreDeploymentsAllowed = $true
+            AwaitingImageBatch = $true
+        }
+        $global:shrSimulation.Readiness.SafeToProceed = $true
+        $global:shrSimulation.Readiness.TotalNewHosts = 2
+        $global:shrSimulation.Plan.TotalSessionHostsToReplace = 2
+        $global:shrSimulation.Plan.TotalFleetSessionHostsToReplace = 2
+        $global:shrSimulation.Plan.PossibleDeploymentsCount = 2
+        $global:shrSimulation.Plan.PossibleSessionHostDeleteCount = 2
+        $global:shrSimulation.Plan.SessionHostsPendingDelete = @($global:shrSimulation.Hosts)
+        Invoke-OrchestrationCycle -RunNumber 1
+        $global:shrSimulation.DeploymentCalls.Count | Should -Be 0
+        $global:shrSimulation.DeletionCalls.Count | Should -Be 0
+        $global:shrSimulation.Context.DeploymentIntent.Name | Should -Be 'old-deployment'
+        $global:shrSimulation.DeploymentState.LastImageVersion | Should -Be '1.0.0'
+        $global:shrSimulation.CycleResult.Completed | Should -BeTrue
+    }
+
     It 'does not release unhealthy up-to-date hosts or mark their continuation complete' {
         $global:shrSimulation.Readiness.TotalNewHosts = 2
         $global:shrSimulation.Hosts | ForEach-Object {

@@ -89,7 +89,7 @@ replacement or sign out users. See the [manual workflow](automation-guide.md#man
 
 | Design concern | Safeguard |
 | --- | --- |
-| A published image is not necessarily ready | Image eligibility includes replication, exclusion, rollout-age and rollback rules. The selected version stays pinned. |
+| A published image is not necessarily ready | Image eligibility includes replication, exclusion, rollout-age and rollback rules. Deployment requests stay pinned; an explicit [rollout-target request](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md#change-the-rollout-image) can change future batches. |
 | A successful ARM deployment is not a usable desktop | Registration and exact-image readiness checks gate progress; availability, health, power state and session acceptance are evaluated as applicable to scaling state. |
 | Replacing too much at once increases risk | Mode-specific batch ceilings, optional progressive scale-up, capacity floors and a live regional gallery-replica ceiling constrain planning. The replica ceiling is per pool, not a shared reservation. |
 | Autoscale and replacement can compete | SHR protects work with its own scaling exclusions, preserves administrator-owned exclusions and hands validated hosts back to autoscale. |

@@ -47,7 +47,8 @@ flowchart TD
 ```
 
 The timer selects the image using the existing replication, exclusion, rollback and publication-age
-policies; age is enforced again by planning. The worker does not switch to a newer publication.
+policies; age is enforced again by planning. The worker does not automatically chase newer publications.
+An explicit [image-change request](#change-the-rollout-image) can change future batches.
 Initial authorization expires after 15 minutes for SideBySide or five minutes for DeleteFirst
 if no batch checkpoint has been established.
 This prevents a delayed initiation from starting a replacement hours later. Once a batch has
@@ -87,7 +88,8 @@ extending the scope. It cannot authorize itself or roll into another batch merel
 The same leased operation retains the cumulative old-host names and continues their safe retirement
 between ticks. Each additional deployment gets a distinct checkpointed intent. A pending cleanup
 checkpoint or failed/unhealthy deployment blocks advancement; a long drain/session wait alone does
-not. The image, pool target and operation deadline remain fixed across those batches. DeleteFirst
+not. Image selection normally remains pinned across those batches; explicit image requests and
+safe-boundary target-count changes are the exceptions. DeleteFirst
 still requires the current delete/redeploy/health/handoff batch to finish before another starts.
 
 For example, with a target of 20 and `maxDeploymentBatchSize=10`, the first 10 replacements can become
@@ -186,9 +188,28 @@ count, including retries. No new app setting or additional role assignment is re
   A request for `0` retains the active target and enables fresh auto-detection for the next operation.
   Legacy fingerprints are accepted only when the original target can be verified; other protected
   settings, leases, deadlines and mutation guards are not bypassed.
-- The deadline is established once (`continuationTimeoutHours`, default 72, range 1-720); new
-  reconciliation ticks and additional SideBySide batches do not reset it. Unexpected failures, changed protected configuration and expired
-  deadlines stop in `NeedsAttention`, retaining the batch, pins and recovery information.
+- New operations use a progress-based timeout (`continuationTimeoutHours`, default 168 hours/seven
+  days, range 1-720). Durable changes to batch/deployment/cleanup/image intent and increasing
+  registered, healthy or retired-host milestones refresh the deadline; repeated timer ticks,
+  retries and status oscillations alone do not. Waiting solely for scheduled authorization is
+  excluded. Simultaneous pending retirement is not a schedule-only wait. Exceeding total age
+  emits a warning, not a hard mutation stop.
+- A no-progress timeout blocks expansion but allows the already checkpointed batch, deployment
+  recovery and cleanup to finish under all existing ownership, identity, health and capacity checks.
+  Once that work finishes the operation requires attention instead of granting a new operation.
+  A checked recovery with `-ExtendDeadlineHours 168` explicitly resets the progress window and
+  permits expansion again. Existing operations without `RecoveryPolicyVersion=1` retain their
+  original fixed deadline; they are not silently extended during upgrade. Checked deadline
+  recovery opts them into the new policy. Existing `NeedsAttention` rows remain stopped.
+- Transport failures and HTTP 408/429/500/502/503/504 defer an owned operation in `Running`;
+  failures remain visible in invocation telemetry. Read requests use bounded retries; mutations
+  are not blindly replayed. A timed-out PUT/DELETE or Table write can have succeeded, so the next
+  owner rereads saved intent and actual resource state. Lease/ETag conflicts stop the stale
+  worker without overwriting the winner. Unverifiable reads never establish resource absence.
+- Confirmed invalid state, ambiguous ownership, permanent request errors and protected
+  configuration changes still require attention. Protected JSON configuration is compared
+  semantically after a verified baseline is captured; formatting/property-order changes alone
+  do not stop work. Diagnostics name changed protected settings, never their values.
   At an enabled initiation tick, a rejected first SideBySide submission can be automatically
   superseded after a template-only correction. The timer proves the protected settings otherwise
   match, the lease expired, the unchanged original template could not accept the saved parameters,
@@ -208,6 +229,55 @@ count, including retries. No new app setting or additional role assignment is re
 - Operation state contains deployment parameters. Protect Table data access as carefully as
   Function App configuration; do not copy entity contents into public diagnostics. Oversized
   checkpoints fail explicitly. Reduce batch size rather than discarding state.
+
+### Change the rollout image
+
+Use the preview-first
+[Request-SessionHostReplacerImageChange.ps1](../tools/Request-SessionHostReplacerImageChange.ps1)
+operator command, not an environment-variable edit or direct operation-row change:
+
+```powershell
+$request = @{
+    FunctionAppName = '<shr-name>'
+    ResourceGroupName = '<shr-resource-group>'
+    ImageVersion = '1.0.11'
+}
+.\deployments\add-ons\sessionHostReplacer\tools\Request-SessionHostReplacerImageChange.ps1 @request
+# After reviewing the preview; prompts before writing:
+.\deployments\add-ons\sessionHostReplacer\tools\Request-SessionHostReplacerImageChange.ps1 @request -Apply
+```
+
+Sign in with `Connect-AzAccount` in PowerShell 7.4+. The command needs app/config read access,
+image read access, Storage Table Data Contributor and private Table endpoint connectivity.
+It conditionally writes a separate `<pool-key>-image-change` row in `shrContinuation`; it does not
+restart the app, change settings, edit the leased operation or submit deployments. Requests identify
+the current operation and expected image, and specify an exact version in the same Compute Gallery
+image definition. Marketplace/definition changes and active maintenance overrides are not supported.
+An outstanding request cannot be overwritten; an applied or rejected request can be replaced
+conditionally. A request from a different operation is never consumed by the worker.
+
+The worker revalidates replication, replica capacity, exclusion, rollback and publication-age policy.
+For SideBySide, the current deployment must have settled, its exact-image hosts must be registered
+and healthy/validated, scaling handoff must be complete, and no cleanup checkpoint can be pending.
+Old hosts may still have sessions and continue draining: the switch does not wait for their
+retirement. DeleteFirst requires the current destructive batch to finish first.
+
+The saved deployment body remains unchanged. Its image is retained separately from the new rollout
+target, and retirement checks validate remaining replacement-image groups against their own saved
+image. Already authorized retirement remains name-scoped and still passes the final fresh-capacity
+check; a new publication is never used as evidence that an earlier deployment succeeded.
+An old intent needing recovery uses its original image and live replica ceiling.
+
+Switching requires a **fresh scheduled batch authorization** before deploying the new target.
+An outstanding old-image authorization cannot be reused. Requesting a version does not force an
+immediate batch, bypass initiation pause, reset the operation scope or change future operations'
+configured image selection. Hosts already updated to the preceding version may need replacement
+again, adding cost and user disruption. Existing buffer/quota/capacity limits can still delay rollout.
+
+Invalid or ineligible requests are explicitly rejected in telemetry and recorded on the operation
+without changing its image or stopping the original rollout. Temporary validation failures defer
+the request for a later pass. `LastImageChangeRequestId`, `LastImageChangeRejectedId` and
+`ImageChangeError` distinguish applied/rejected requests; do not share full operation state.
 
 ## Shared Evaluation
 

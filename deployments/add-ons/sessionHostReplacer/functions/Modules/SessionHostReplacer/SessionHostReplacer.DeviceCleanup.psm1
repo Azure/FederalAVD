@@ -673,6 +673,7 @@ function Wait-SessionHostDeletionVerification {
             }
             catch {
                 Write-LogEntry -Message "Unable to verify AVD registration absence: $($_.Exception.Message)" -Level Warning
+                if ($continuation -and (Test-ShrTransientFailure -ErrorRecord $_)) { throw }
             }
         }
         foreach ($sh in $incompleteHosts) {
@@ -707,6 +708,7 @@ function Wait-SessionHostDeletionVerification {
                     }
                     else {
                         Write-LogEntry -Message "Unable to verify VM deletion for {0}: {1}" -StringValues $sh.VMName, $_.Exception.Message -Level Warning
+                        if ($continuation -and (Test-ShrTransientFailure -ErrorRecord $_)) { throw }
                     }
                 }
             }
@@ -723,6 +725,7 @@ function Wait-SessionHostDeletionVerification {
                 }
                 catch {
                     Write-LogEntry -Message "Error verifying Entra ID deletion for {0}: {1}" -StringValues $sh.Name, $_.Exception.Message -Level Warning
+                    if ($continuation -and (Test-ShrTransientFailure -ErrorRecord $_)) { throw }
                 }
             }
             
@@ -739,6 +742,7 @@ function Wait-SessionHostDeletionVerification {
                 }
                 catch {
                     Write-LogEntry -Message "Error verifying Intune deletion for {0}: {1}" -StringValues $sh.Name, $_.Exception.Message -Level Warning
+                    if ($continuation -and (Test-ShrTransientFailure -ErrorRecord $_)) { throw }
                 }
             }
             

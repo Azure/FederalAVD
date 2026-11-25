@@ -13,6 +13,7 @@ does not implement this design; see [Current coverage limitations](#current-cove
 | Alert | What it means | Suggested severity | Initial condition |
 | --- | --- | --- | --- |
 | Replacement needs intervention | SHR has stopped an operation that needs checked recovery | Sev 1 (Error) | Latest observed cycle state is `NeedsAttention` |
+| Expansion stalled | No-progress window expired; guarded recovery may still be running | Sev 2 (Warning) | Latest cycle snapshot has `ExpansionBlocked=true`; resolve only after checked recovery or terminal completion |
 | Timer failures | Replacement coordination is encountering execution failures | Sev 2 (Warning) | Three reconciliation invocations fail within 15 minutes and the latest outcome is failed; for initiation, alert on the latest failed outcome |
 | Reconciliation outcome missing | SHR is no longer reporting completion of its expected reconciliation invocations | Sev 2 (Warning) | No reconciliation success or failure observed for 15 minutes; consider 30 minutes for SideBySide |
 
@@ -26,6 +27,11 @@ The failure example tolerates isolated failures. The 15-minute missing-outcome e
 three nominal SideBySide ticks; consider widening it to 30 minutes to allow for long invocations
 and ingestion delay. Adjust both the query threshold and message together. These examples do not
 automatically discover the deployed cadence.
+
+For progress-policy operations, `Running` does not by itself prove progress. Include the latest
+snapshot's `ExpansionBlocked` field when configuring intervention alerts; the stopped-state query
+below alone does not cover this condition. These recommendations still require operator-created
+alert rules and notification configuration.
 
 ## Query and Rule Configuration
 

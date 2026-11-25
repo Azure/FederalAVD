@@ -38,6 +38,8 @@
         'Invoke-ShrTimer'
         'Invoke-AzureRestMethod'
         'Invoke-AzureRestMethodWithRetry'
+        'Test-ShrTransientFailure'
+        'Get-ShrHttpStatusCode'
         'Invoke-GraphRestMethod'
         'Invoke-GraphApiWithRetry'
         'ConvertTo-CaseInsensitiveHashtable'
@@ -82,6 +84,7 @@
         'Send-DrainNotification'
         'Remove-SessionHostUserSessions'
         'Test-NewSessionHostsAvailable'
+        'Test-ShrRetirementImagesAvailable'
         'Test-SessionHostScalingRelease'
         
         # Device Cleanup functions (from SessionHostReplacer.DeviceCleanup.psm1)

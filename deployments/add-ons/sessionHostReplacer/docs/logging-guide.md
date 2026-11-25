@@ -31,6 +31,13 @@ The examples below run in **Application Insights > Logs**, using `traces`, `exce
 `AppExceptions` and `AppRequests`, with different column names (for example `TimeGenerated`,
 `Message` and `Properties`). Do not paste an Application Insights query unchanged into that schema.
 
+New progress-policy operations can remain `Running` while expansion is blocked and guarded recovery
+continues. Their structured phase is `ExpansionBlockedRecovery`; this is not a healthy-progress
+signal. `WaitingForImageBatchAuthorization` means the target changed but no fresh scheduled batch
+has started. Allowlisted progress/window/request fields accompany these reasons; full state and
+deployment bodies are never emitted. A transient request failure can fail an invocation while the
+operation remains resumable. `ImageTargetChanged` records an applied target, not a VM deployment.
+
 ## Normal Output Versus Diagnostics
 
 `Write-LogEntry` maps Information to `Write-Host`, Warning to `Write-Warning`, Error to

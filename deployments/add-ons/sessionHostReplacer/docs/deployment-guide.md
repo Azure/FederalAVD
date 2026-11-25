@@ -145,6 +145,11 @@ assignment, and allow RBAC propagation before testing repair.
    same ID, pinned image, intent, target and deadline. Existing `shrContinuation` rows, companion
    authorizations and recovery tables remain valid; obsolete generation metadata is ignored.
    A `NeedsAttention` operation remains stopped until checked recovery.
+   Existing operations without `RecoveryPolicyVersion=1` retain their original fixed deadline.
+   New operations use the configured no-progress window (default 168 hours); preserve an explicitly
+   selected value during deployment. Checked `-ExtendDeadlineHours 168` recovery opts an eligible
+   legacy operation into the new policy. Do not edit its deadline or clear state manually.
+   Deploy the updated worker before using image-change requests; an older worker will not consume them.
 7. Complete the live checks below, then resume initiation and persist the matching parameter value.
 
 A former direct-timer app has no durable operation row. The reconciler does not invent an

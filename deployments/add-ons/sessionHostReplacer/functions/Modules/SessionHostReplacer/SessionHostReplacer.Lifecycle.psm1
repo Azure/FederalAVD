@@ -1176,4 +1176,33 @@ function Test-NewSessionHostsAvailable {
 #EndRegion Session Host Lifecycle
 
 # Export functions
-Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable, Test-SessionHostScalingRelease
+function Test-ShrRetirementImagesAvailable {
+    param([string] $ARMToken, [array] $SessionHosts, [hashtable] $State, $ScalingPlanTarget)
+
+    $images = @(@($State.RetirementImages) + @($State.Image) | Where-Object { $_ } |
+        Sort-Object -Property Definition, Version -Unique)
+    $total = 0
+    $available = 0
+    $safe = $true
+    foreach ($image in $images) {
+        $hosts = @($SessionHosts | Where-Object {
+            $_.SessionHostName -notin @($State.BatchHostNames) -and
+            $_.ImageDefinition -eq $image.Definition -and $_.ImageVersion -eq $image.Version
+        })
+        if ($hosts.Count -eq 0) { continue }
+        $readiness = Test-NewSessionHostsAvailable -ARMToken $ARMToken -SessionHosts $hosts `
+            -LatestImageVersion ([PSCustomObject]$image) -ScalingPlanTarget $ScalingPlanTarget
+        $total += $readiness.TotalNewHosts
+        $available += $readiness.AvailableCount
+        $safe = $safe -and $readiness.SafeToProceed
+    }
+    return [PSCustomObject]@{
+        TotalNewHosts = $total
+        AvailableCount = $available
+        AvailablePercentage = if ($total -gt 0) { [Math]::Round(100 * $available / $total, 1) } else { 0 }
+        SafeToProceed = $safe -and $total -gt 0
+        Message = 'Exact-image readiness across saved replacement images; fresh deletion-capacity checks remain mandatory.'
+    }
+}
+
+Export-ModuleMember -Function Remove-SessionHosts, Remove-VirtualMachine, Remove-ExpiredShutdownVMs, Send-DrainNotification, Remove-SessionHostUserSessions, Test-NewSessionHostsAvailable, Test-SessionHostScalingRelease, Test-ShrRetirementImagesAvailable
