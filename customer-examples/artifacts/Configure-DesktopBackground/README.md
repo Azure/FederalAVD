@@ -1,9 +1,9 @@
 # Configure desktop background
 
-This artifact includes three original, AI-generated desktop backgrounds inspired by
-FederalAVD: blue cloud landscapes, quiet space for desktop icons, and no text,
-logos, government seals, or official branding. Review artwork against your
-organization's approval and accessibility requirements before deployment.
+This artifact includes nine FederalAVD MissionReady desktop backgrounds.
+**Federal Generic is the default.** Review the selected artwork against your
+organization's approval, branding, usage-rights, and accessibility requirements
+before deployment.
 
 The script copies **one explicitly selected JPEG** into
 `%SystemRoot%\Web\Wallpaper\Custom\` and retains the existing local User Group
@@ -14,38 +14,31 @@ is used at deployment time.
 
 | File | Artwork | Use |
 | --- | --- | --- |
-| [SunRise.jpg](SunRise.jpg) | **Connected Horizons**: mountains, clouds, sunrise, and subtle connectivity arcs | Default; replaces the previous image while retaining its filename |
-| [QuietSunrise.jpg](QuietSunrise.jpg) | **Quiet Sunrise**: layered blue mountains and a warm sunrise | Natural landscape alternative |
-| [CloudHorizon.jpg](CloudHorizon.jpg) | **Cloud Horizon**: translucent blue ribbons above clouds | Abstract alternative |
+| [FederalAVD_Federal_Generic_MissionReady_4K.jpg](FederalAVD_Federal_Generic_MissionReady_4K.jpg) | Federal Generic | **Default** |
+| [FederalAVD_Air_Force_MissionReady_4K.jpg](FederalAVD_Air_Force_MissionReady_4K.jpg) | Air Force | Alternative |
+| [FederalAVD_Army_MissionReady_4K.jpg](FederalAVD_Army_MissionReady_4K.jpg) | Army | Alternative |
+| [FederalAVD_Civilian_Missions_MissionReady_4K.jpg](FederalAVD_Civilian_Missions_MissionReady_4K.jpg) | Civilian Missions | Alternative |
+| [FederalAVD_Coast_Guard_MissionReady_4K.jpg](FederalAVD_Coast_Guard_MissionReady_4K.jpg) | Coast Guard | Alternative |
+| [FederalAVD_Intelligence_MissionReady_4K.jpg](FederalAVD_Intelligence_MissionReady_4K.jpg) | Intelligence | Alternative |
+| [FederalAVD_Marine_Corps_MissionReady_4K.jpg](FederalAVD_Marine_Corps_MissionReady_4K.jpg) | Marine Corps | Alternative |
+| [FederalAVD_Navy_MissionReady_4K.jpg](FederalAVD_Navy_MissionReady_4K.jpg) | Navy | Alternative |
+| [FederalAVD_Space_Force_MissionReady_4K.jpg](FederalAVD_Space_Force_MissionReady_4K.jpg) | Space Force | Alternative |
 
-All three JPEGs are **3840 x 2160 (16:9)** and less than 1 MB each. They were
-recreated for a landscape desktop composition, then exported with high-quality,
-aspect-preserving resampling and a minimal edge crop:
-
-| Artwork | Generated source | Packaged export |
-| --- | --- | --- |
-| Connected Horizons | 1672 x 940 | 3840 x 2160 JPEG |
-| Quiet Sunrise | 1672 x 941 | 3840 x 2160 JPEG |
-| Cloud Horizon | 1672 x 941 | 3840 x 2160 JPEG |
-
-These are **upscaled UHD-sized exports, not native-detail 4K artwork**. Upscaling
-does not add detail. Use an approved native-resolution replacement if your
-environment requires native 4K imagery.
+All nine JPEGs are **3840 x 2160 (16:9)**, approximately **1.6-2.2 MB** each
+and below 3 MB. These are the dimensions of the supplied files; the `4K` filename
+does not establish the original source resolution or whether artwork was upscaled.
 
 ## Resolution and display guidance
 
 Microsoft's [background configuration guidance][background] recommends designing
 for **16:9**, with critical text kept inside the central **4:3** region for
-cross-display compatibility. These images contain no text and use generous
-negative space to reduce the impact of cropping.
+cross-display compatibility. Check the selected image's text, symbols, and focal
+points for clipping when using a display with a different aspect ratio.
 
 - **3840 x 2160** is a useful UHD / 16:9 deployment canvas, not a mandatory
   Microsoft policy resolution.
-- The previous bundled image and the installed Windows 11 default wallpapers
-  inspected during this update were **3840 x 2400 (16:10)**. Windows does not
-  require custom wallpapers to match those dimensions.
-- **3840 x 2560 is 3:2**, not the previous image's dimensions or a required
-  wallpaper size.
+- Custom wallpapers do not need to match the dimensions of the built-in Windows
+  wallpaper. Choose an aspect ratio suited to your displays.
 - At **1920 x 1080** or **3840 x 2160**, the bundled images match the display
   ratio. At **1920 x 1200** or **3840 x 2400**, Fill crops the sides.
 - Ultrawide, portrait, and mixed-monitor layouts need separate visual checks.
@@ -58,6 +51,11 @@ cover the screen. **Fit** preserves the entire image but can leave borders;
 **Stretch** can distort the image. This script does not add a style parameter
 or change the existing style. If your organization manages presentation through
 central policy, validate that policy's effective settings and precedence.
+
+These files are individual wallpapers, not a Windows theme or theme pack.
+The script does not configure slideshow rotation: it copies one selected image
+and enforces that fixed wallpaper. A rotating theme requires a separate per-user
+configuration without conflicting fixed-wallpaper enforcement.
 
 ## Stage and select an image
 
@@ -73,15 +71,15 @@ For manual configuration on an approved test session host, run as Administrator
 or SYSTEM with Windows PowerShell 5.1 or later:
 
 ```powershell
-# Default: Connected Horizons, retained as SunRise.jpg.
+# Default: Federal Generic.
 .\customer\artifacts\Configure-DesktopBackground\Set-DesktopBackground.ps1
 
 # Select an alternative.
 .\customer\artifacts\Configure-DesktopBackground\Set-DesktopBackground.ps1 `
-    -ImageFile 'CloudHorizon.jpg'
+    -ImageFile 'FederalAVD_Army_MissionReady_4K.jpg'
 
 .\customer\artifacts\Configure-DesktopBackground\Set-DesktopBackground.ps1 `
-    -ImageFile 'QuietSunrise.jpg'
+    -ImageFile 'FederalAVD_Navy_MissionReady_4K.jpg'
 ```
 
 For image-build or session-host customization, select the image through the
@@ -91,19 +89,21 @@ customization's `arguments` property:
 {
   "name": "Configure-DesktopBackground",
   "blobNameOrUri": "Configure-DesktopBackground.zip",
-  "arguments": "-ImageFile CloudHorizon.jpg"
+  "arguments": "-ImageFile FederalAVD_Army_MissionReady_4K.jpg"
 }
 ```
 
-Omit arguments to use `SunRise.jpg`. The script no longer selects the first
-enumerated JPEG: adding another image cannot change the default.
+Omit arguments to use `FederalAVD_Federal_Generic_MissionReady_4K.jpg`.
+The script does not select the first enumerated JPEG: adding another image cannot
+change the default.
 A missing selected file produces an error; it never silently chooses another.
 
-For your own artwork, replace `SunRise.jpg` in your **customer copy**, or add a
-JPEG beside the script and pass its filename with `-ImageFile`. Only `.jpg`
-filenames in that directory are accepted, not paths or wildcards. Existing
-customer packages with a differently named single JPEG must now either pass its
-name or rename it to `SunRise.jpg`.
+For your own artwork, replace `FederalAVD_Federal_Generic_MissionReady_4K.jpg`
+in your **customer copy**, or add a JPEG beside the script and pass its filename
+with `-ImageFile`. Only `.jpg` filenames in that directory are accepted, not paths
+or wildcards. Existing customer packages with a differently named JPEG must
+either pass its name or use the new default filename. Update customization
+arguments that reference images removed from this example.
 
 Package and upload the customer folder using the
 [artifact workflow](../../../docs/artifacts-guide.md) and

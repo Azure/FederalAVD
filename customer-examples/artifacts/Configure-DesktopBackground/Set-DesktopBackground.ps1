@@ -28,12 +28,12 @@
 
 .NOTES
     Copy the complete example to customer\artifacts\Configure-DesktopBackground
-    before customization. The default SunRise.jpg contains Connected Horizons.
-    Use -ImageFile to select QuietSunrise.jpg, CloudHorizon.jpg, or your own JPEG.
+    before customization. FederalAVD_Federal_Generic_MissionReady_4K.jpg is the
+    default. Use -ImageFile to select another bundled mission image or your own JPEG.
 
     Desktop Background Requirements:
     - File format: JPG (JPEG)
-    - Bundled exports: 3840x2160 pixels, 16:9 (upscaled generated artwork)
+    - Bundled images: 3840x2160 pixels, 16:9
     - Match the expected displays; Windows does not require one exact resolution
     - File name: Must be named with the .jpg extension
     - File size: Consider file size for deployment efficiency
@@ -51,16 +51,17 @@
 .EXAMPLE
     PS C:\> .\Set-DesktopBackground.ps1
     
-    Configures the desktop background using Connected Horizons in SunRise.jpg.
+    Configures the desktop background using FederalAVD_Federal_Generic_MissionReady_4K.jpg.
 
 .PARAMETER ImageFile
-    Name of a JPEG file in the script directory. Defaults to SunRise.jpg.
+    Name of a JPEG file in the script directory.
+    Defaults to FederalAVD_Federal_Generic_MissionReady_4K.jpg.
     Paths and wildcard selection are not accepted.
 
 .EXAMPLE
-    PS C:\> .\Set-DesktopBackground.ps1 -ImageFile 'CloudHorizon.jpg'
+    PS C:\> .\Set-DesktopBackground.ps1 -ImageFile 'FederalAVD_Army_MissionReady_4K.jpg'
 
-    Selects Cloud Horizon instead of the default image.
+    Selects the Army image instead of the Federal Generic default.
 
 .LINK
     https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11
@@ -70,7 +71,7 @@
 param(
     [ValidateNotNullOrEmpty()]
     [ValidatePattern('^[^\\/:*?"<>|]+\.jpg$')]
-    [string]$ImageFile = 'SunRise.jpg'
+    [string]$ImageFile = 'FederalAVD_Federal_Generic_MissionReady_4K.jpg'
 )
 
 #region Functions

@@ -1,6 +1,7 @@
 BeforeAll {
     $artifactPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'customer-examples\artifacts\Configure-DesktopBackground'
     $installerPath = Join-Path $artifactPath 'Set-DesktopBackground.ps1'
+    $readme = Get-Content -LiteralPath (Join-Path $artifactPath 'README.md') -Raw
     Add-Type -AssemblyName System.Drawing
 }
 
@@ -8,13 +9,33 @@ Describe 'Bundled desktop background images' {
     It 'contains one root installer and exactly the documented JPEG choices' {
         @(Get-ChildItem -LiteralPath $artifactPath -Filter '*.ps1' -File).Count | Should -Be 1
         $names = @(Get-ChildItem -LiteralPath $artifactPath -Filter '*.jpg' -File).Name | Sort-Object
-        $names -join ',' | Should -Be 'CloudHorizon.jpg,QuietSunrise.jpg,SunRise.jpg'
+        $expectedNames = @(
+            'FederalAVD_Air_Force_MissionReady_4K.jpg'
+            'FederalAVD_Army_MissionReady_4K.jpg'
+            'FederalAVD_Civilian_Missions_MissionReady_4K.jpg'
+            'FederalAVD_Coast_Guard_MissionReady_4K.jpg'
+            'FederalAVD_Federal_Generic_MissionReady_4K.jpg'
+            'FederalAVD_Intelligence_MissionReady_4K.jpg'
+            'FederalAVD_Marine_Corps_MissionReady_4K.jpg'
+            'FederalAVD_Navy_MissionReady_4K.jpg'
+            'FederalAVD_Space_Force_MissionReady_4K.jpg'
+        )
+        $names -join ',' | Should -Be ($expectedNames -join ',')
+        foreach ($name in $expectedNames) {
+            $readme | Should -Match ([regex]::Escape("[$name]($name)"))
+        }
     }
 
-    It 'ships <ImageFile> as a decoded 3840x2160 JPEG under 1 MB' -TestCases @(
-        @{ ImageFile = 'SunRise.jpg' }
-        @{ ImageFile = 'QuietSunrise.jpg' }
-        @{ ImageFile = 'CloudHorizon.jpg' }
+    It 'ships <ImageFile> as a decoded 3840x2160 JPEG under 3 MB' -TestCases @(
+        @{ ImageFile = 'FederalAVD_Federal_Generic_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Air_Force_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Army_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Civilian_Missions_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Coast_Guard_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Intelligence_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Marine_Corps_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Navy_MissionReady_4K.jpg' }
+        @{ ImageFile = 'FederalAVD_Space_Force_MissionReady_4K.jpg' }
     ) {
         param($ImageFile)
         $path = Join-Path $artifactPath $ImageFile
@@ -23,7 +44,7 @@ Describe 'Bundled desktop background images' {
             $image.RawFormat.Guid | Should -Be ([System.Drawing.Imaging.ImageFormat]::Jpeg.Guid)
             $image.Width | Should -Be 3840
             $image.Height | Should -Be 2160
-            (Get-Item -LiteralPath $path).Length | Should -BeLessThan 1MB
+            (Get-Item -LiteralPath $path).Length | Should -BeLessThan 3MB
         } finally {
             $image.Dispose()
         }
@@ -45,10 +66,16 @@ Describe 'Desktop background selection and isolated policy writes' {
     }
 
     It 'selects <Label> and preserves the three User-scope policy values' -TestCases @(
-        @{ Label = 'the deterministic default'; Selection = @{}; Expected = 'SunRise.jpg' }
-        @{ Label = 'Connected Horizons explicitly'; Selection = @{ ImageFile = 'SunRise.jpg' }; Expected = 'SunRise.jpg' }
-        @{ Label = 'Quiet Sunrise'; Selection = @{ ImageFile = 'QuietSunrise.jpg' }; Expected = 'QuietSunrise.jpg' }
-        @{ Label = 'Cloud Horizon'; Selection = @{ ImageFile = 'CloudHorizon.jpg' }; Expected = 'CloudHorizon.jpg' }
+        @{ Label = 'the Federal Generic default'; Selection = @{}; Expected = 'FederalAVD_Federal_Generic_MissionReady_4K.jpg' }
+        @{ Label = 'Federal Generic explicitly'; Selection = @{ ImageFile = 'FederalAVD_Federal_Generic_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Federal_Generic_MissionReady_4K.jpg' }
+        @{ Label = 'Air Force'; Selection = @{ ImageFile = 'FederalAVD_Air_Force_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Air_Force_MissionReady_4K.jpg' }
+        @{ Label = 'Army'; Selection = @{ ImageFile = 'FederalAVD_Army_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Army_MissionReady_4K.jpg' }
+        @{ Label = 'Civilian Missions'; Selection = @{ ImageFile = 'FederalAVD_Civilian_Missions_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Civilian_Missions_MissionReady_4K.jpg' }
+        @{ Label = 'Coast Guard'; Selection = @{ ImageFile = 'FederalAVD_Coast_Guard_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Coast_Guard_MissionReady_4K.jpg' }
+        @{ Label = 'Intelligence'; Selection = @{ ImageFile = 'FederalAVD_Intelligence_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Intelligence_MissionReady_4K.jpg' }
+        @{ Label = 'Marine Corps'; Selection = @{ ImageFile = 'FederalAVD_Marine_Corps_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Marine_Corps_MissionReady_4K.jpg' }
+        @{ Label = 'Navy'; Selection = @{ ImageFile = 'FederalAVD_Navy_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Navy_MissionReady_4K.jpg' }
+        @{ Label = 'Space Force'; Selection = @{ ImageFile = 'FederalAVD_Space_Force_MissionReady_4K.jpg' }; Expected = 'FederalAVD_Space_Force_MissionReady_4K.jpg' }
     ) {
         param($Label, $Selection, $Expected)
         . $installerPath @Selection
@@ -92,10 +119,10 @@ Describe 'Desktop background selection and isolated policy writes' {
     }
 
     It 'rejects invalid selection <ImageFile> before writing policy' -TestCases @(
-        @{ ImageFile = '..\SunRise.jpg' }
-        @{ ImageFile = 'C:\SunRise.jpg' }
+        @{ ImageFile = '..\FederalAVD_Federal_Generic_MissionReady_4K.jpg' }
+        @{ ImageFile = 'C:\FederalAVD_Federal_Generic_MissionReady_4K.jpg' }
         @{ ImageFile = '*.jpg' }
-        @{ ImageFile = 'CloudHorizon.png' }
+        @{ ImageFile = 'FederalAVD_Federal_Generic_MissionReady_4K.png' }
         @{ ImageFile = '' }
     ) {
         param($ImageFile)
