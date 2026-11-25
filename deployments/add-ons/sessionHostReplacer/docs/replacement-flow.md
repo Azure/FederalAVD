@@ -3,7 +3,7 @@
 # Canonical Session Host Replacer Flow
 
 These diagrams describe one lifecycle-engine invocation. The initiation timer authorizes deployment
-batches; a separate one-minute reconciliation timer progresses their deployment and retirement.
+batches; a separate mode-specific reconciliation timer progresses their deployment and retirement.
 There is one shared lifecycle engine and no alternate execution mode.
 A SideBySide operation can contain multiple scheduled
 deployment batches while previously selected old hosts continue draining.
@@ -17,7 +17,10 @@ deployment batches while previously selected old hosts continue draining.
 Initiation is always separate from progress. Both functions run in the
 same Function App; there is no additional VM or Function App.
 `session-host-replacer-initiator` authorizes batches on `%TimerSchedule%`;
-`session-host-replacer-worker` reconciles progress every minute.
+`session-host-replacer-worker` reconciles on `%ContinuationTimerSchedule%`: every five minutes
+for SideBySide, staggered one minute after the initiation minute offset, or every minute for
+DeleteFirst. The worker runs throughout every hour, independently of initiation hours and days.
+See [schedule derivation](deployment-guide.md#timer-schedule-guidance) for examples and custom schedules.
 
 ```mermaid
 flowchart TD
@@ -33,7 +36,7 @@ flowchart TD
     N -- Yes --> X
     N -- No --> O[Persist authorization]
     O --> X
-    R[Every-minute reconciliation timer] --> L{Active authorized operation?}
+    R[Mode-specific reconciliation timer] --> L{Active authorized operation?}
     L -- No --> Z[Return after operation lookup]
     L -- Yes --> W[Worker acquires conditional per-pool lease]
     W --> B[Checkpoint approved batch and deployment intent]
@@ -45,7 +48,8 @@ flowchart TD
 
 The timer selects the image using the existing replication, exclusion, rollback and publication-age
 policies; age is enforced again by planning. The worker does not switch to a newer publication.
-Initial authorization expires after five minutes if no batch checkpoint has been established.
+Initial authorization expires after 15 minutes for SideBySide or five minutes for DeleteFirst
+if no batch checkpoint has been established.
 This prevents a delayed initiation from starting a replacement hours later. Once a batch has
 started, its progress is independent of the initiation schedule.
 
@@ -77,7 +81,7 @@ SideBySide does not wait for an earlier batch's old hosts to finish draining bef
 next scheduled deployment batch. Once all checkpointed replacement names are registered on the
 pinned image, latest-image readiness passes, ARM work has finished, and SHR-owned scaling exclusions
 have been released, a later initiation tick may authorize another deployment batch. The worker
-rechecks readiness, registration, handoff, capacity and the authorization's five-minute expiry before
+rechecks readiness, registration, handoff, capacity and the authorization's 15-minute expiry before
 extending the scope. It cannot authorize itself or roll into another batch merely because it woke up.
 
 The same leased operation retains the cumulative old-host names and continues their safe retirement
@@ -152,7 +156,7 @@ count, including retries. No new app setting or additional role assignment is re
   inventory/planning, even when a deleted VM has disappeared from inventory. Names remain
   blocked until VM, registration and required directory absence is verified. Initial batch
   authorization is not extended by completing previously authorized cleanup.
-- The minute timer supplies the next wake-up; no message, generation advancement or watchdog is
+- The reconciliation timer supplies the next wake-up; no message, generation advancement or watchdog is
   required before side effects. The operation lease and intent are persisted before mutations.
   No operation, `Completed` and `Superseded` return without running the engine; `NeedsAttention`
   remains stopped. Transient state-read/acquisition failures are retried on a later tick.

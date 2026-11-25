@@ -1202,7 +1202,12 @@ with `RestoredHosts`, `DrainedHosts`, `Image`, and `FunctionAppState`, rather th
 
 ## Two-Timer Execution
 
-SHR has one execution model: an initiation timer and a one-minute reconciliation timer.
+SHR has one execution model: an initiation timer and a mode-specific reconciliation timer.
+SideBySide reconciles every five minutes, staggered one minute after the initiation minute offset;
+DeleteFirst retains every-minute reconciliation. New batch authorization lasts 15 minutes for
+SideBySide or five minutes for DeleteFirst. The worker ownership lease remains 30 minutes.
+See [timer schedule guidance](docs/deployment-guide.md#timer-schedule-guidance) for exact expressions,
+custom-schedule behavior and upgrade requirements.
 Deploy the complete SHR template; changing only an app setting or uploading one script does not
 install this model. See the [execution overview](../../../docs/session-host-replacer.md#the-design-in-one-minute).
 
@@ -1214,7 +1219,7 @@ batch still requires the initiation schedule. This is not a new image-validation
 
 When no operation is active, the timer first performs a read-only work assessment using the shared
 planner and readiness gates. An idle, healthy pool creates no operation.
-The minute reconciler performs only the operation lookup when no active work exists; it does not
+The reconciler performs only the operation lookup when no active work exists; it does not
 inventory the pool, select images or run the lifecycle engine. Pending capacity, validation,
 handoff, deployment or recovery work still reaches the worker.
 Successful idle reconciliation emits no routine SHR application logs. State-read failures,
@@ -1277,8 +1282,8 @@ Partially executed or ambiguous work still requires explicit recovery. A correct
 can take the checked automatic path below; the timer never silently discards an active batch.
 Timer invocations do not use queue retries or poison handling. A transient failure before state
 ownership is acquired is retried by the next timer tick. An interrupted owner may delay progress
-until its 30-minute lease expires. Polling, restarts and leases mean one minute is a reconciliation
-cadence, not a completion-time guarantee.
+until its 30-minute lease expires. Polling, restarts and leases mean the configured reconciliation
+cadence is not a completion-time guarantee.
 
 ### Automatic recovery of a rejected template submission
 
@@ -1289,7 +1294,7 @@ require Table edits or a recovery script:
    the **session-host VM Template Spec** resource ID, not the SHR infrastructure Template Spec.
    Save the change. App-setting changes restart the app; another restart is not a state reset.
 2. Keep `InitiationEnabled=true` and wait for the next configured initiation invocation.
-   The minute reconciler does not authorize automatic supersession.
+   The reconciler does not authorize automatic supersession.
 3. Check Application Insights for `Superseded rejected operation` followed by a fresh operation
    initiation (or the idle message if nothing remains to do).
 
@@ -1352,7 +1357,7 @@ Apply stops the app, rechecks the settings/operation/lease/deployments, backs up
 to a new restricted-access folder under `customer/shr-recovery/`, conditionally updates the same
 operation using its ETag, verifies the exact saved state, and requests app startup. It does not
 delete state, create a different operation, or directly invoke either function.
-**The next minute reconciliation tick can resume work after startup**, independently of the
+**The next reconciliation tick can resume work after startup**, independently of the
 initiation schedule.
 Normal health, capacity, image and cleanup gates remain in force. Confirm host startup, worker
 progress and scaling handoff in Application Insights; a successful state update is not proof of
@@ -1563,7 +1568,7 @@ Replacement capacity policy: minimum online healthy hosts=1, effective percentag
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB for new batch initiation, stored in `TimerSchedule`. Default authorizes at :00 and :30. The separate reconciliation timer runs every minute; keep deployment parameters synchronized with app-setting changes |
+| `timerSchedule` | `0 0,30 * * * *` | Six-field NCRONTAB for new batch initiation, stored in `TimerSchedule`. Default authorizes at :00 and :30. Deployment derives `ContinuationTimerSchedule`: five-minute SideBySide reconciliation staggered by one minute, or every-minute DeleteFirst reconciliation. Redeploy to update both schedules together |
 | `initiationEnabled` | `true` | Allow new timer-authorized batches. False still permits active-operation recovery and completion |
 | `continuationTimeoutHours` | `72` | Fixed deadline for each newly initiated operation (1-720 hours). Set longer than the approved drain and provisioning horizon; does not extend an existing operation |
 
@@ -2154,7 +2159,9 @@ observations, not successful deployments. Cycle timelines, logs and detailed err
 5. Select an **Invocation** to narrow the detailed trace/exception view. Leave it at **All** to
    follow the cycle across invocations. The timeline retains the whole selected cycle.
    Cycle invocation logs show **Timestamp**, **Level** and **Message**; click a message to read
-   it in full. Use **Show technical cycle-log details** for correlation IDs and exception payloads.
+   it in full. Routine telemetry snapshots are hidden from this normal log view.
+   Use **Show technical cycle-log details** for raw structured records, correlation IDs and
+   exception payloads.
 
 #### Inspect a current SHR invocation
 
@@ -2164,9 +2171,11 @@ host pool, role (Initiator or Worker), outcome and duration. This includes the c
 and reconciliation worker, including idle ticks.
 The retired single-timer function is excluded. Select an entry in
 **Invocation to inspect** for its latest 500 trace/exception records in chronological order,
-showing only **Timestamp**, **Level** and **Message**. Click a message to read it in full.
+showing only **Timestamp**, **Level** and **Message**. Ordinary messages retain a short pool
+label rather than repeated cycle/batch/trigger prefixes. Routine telemetry snapshots are hidden;
+warnings, errors and native exceptions remain visible. Click a message to read it in full.
 **Show technical details** loads the request's Function App, correlation IDs, role instance and
-full exception payloads on demand; these fields remain in the query logic but do not clutter the
+raw telemetry snapshots and full exception payloads on demand; these fields remain in the query logic but do not clutter the
 normal list or selector. Narrow the time range to reach older executions. Cycle and cycle-invocation
 filters do not constrain this page; host-pool and time filters do.
 Use **Investigate > Errors and Recovery** for detailed error logs and failed-deployment activity.
@@ -2214,6 +2223,13 @@ messages and verify filtering by host pool still shows the native executions. Cy
 idle ticks need not have an active cycle. Test with an operator lacking central workspace access.
 Check the full exception detail payload only under approved telemetry permissions.
 
+For the readable-log change, include two SHR apps sending to the same workspace, ideally with
+identically named pools in separate resource groups. Select each pool and a cycle/invocation;
+verify messages, counts, errors and deployment links remain isolated. Ordinary messages should
+show only `[pool] message`, with routine snapshots available under the technical details rather
+than the normal log list. Warnings and exceptions must remain visible. Confirm both an older
+prefixed cycle and a new cycle can be followed without adding separate workbook controls.
+
 Offline workbook tests require exactly one workload-workspace scope for every telemetry query
 and reject `FunctionAppLogs`, `AzureDiagnostics`, and cross-resource `app()`/`workspace()` queries.
 This keeps diagnostic-log copies out of the workbook's Application Insights result sets.
@@ -2233,7 +2249,7 @@ while an interrupted owner may leave it until expiry. An expired lease permits c
 not bypassing safety checks. Holding initiation prevents new batch authority but does not stop
 already authorized deployment monitoring or retirement. See [two-timer operations](#two-timer-operations).
 
-**Last Reported Inventory** has its own freshness panel: idle minute ticks are heartbeats, not
+**Last Reported Inventory** has its own freshness panel: idle reconciliation ticks are heartbeats, not
 fresh host inventories. Missing data, an old inventory, or an `UpToDate` action observation must
 not be read as proof that the current pool is healthy or that a cycle is complete. Sampling and
 ingestion delays can leave gaps; expand the time range and consult correlated logs before

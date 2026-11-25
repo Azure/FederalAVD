@@ -269,7 +269,9 @@ function Get-InterpretedConfiguration {
         NewImageDelayDays = Get-SettingValue -Settings $Settings -Name 'ReplaceSessionHostOnNewImageVersionDelayDays'
         AllowImageVersionRollback = Get-SettingValue -Settings $Settings -Name 'AllowImageVersionRollback' -Default 'false'
         IncludeExcludedImageVersions = Get-SettingValue -Settings $Settings -Name 'IncludeExcludedImageVersions' -Default 'false'
-        ExecutionModel = 'Initiation timer and one-minute reconciliation timer'
+        ExecutionModel = 'Initiation timer and mode-specific reconciliation timer'
+        InitiationSchedule = Get-SettingValue -Settings $Settings -Name 'TimerSchedule'
+        ContinuationSchedule = Get-SettingValue -Settings $Settings -Name 'ContinuationTimerSchedule' -Default 'Not configured; inspect worker binding (legacy: every minute)'
         InitiationEnabled = Get-SettingValue -Settings $Settings -Name 'InitiationEnabled' -Default 'true'
         ContinuationTimeoutHours = Get-SettingValue -Settings $Settings -Name 'ContinuationTimeoutHours' -Default '72'
         MaintenanceRequest = if ([string]::IsNullOrWhiteSpace(

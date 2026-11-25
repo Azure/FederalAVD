@@ -49,7 +49,7 @@ output command, not a separate SHR severity or an always-visible collection tier
 `Reconciling`, `Checkpoint`, `Progress` and repeated `DeploymentObserved` structured events use
 Trace. Their absence from an Information-level timeline is expected. Later read-only polls of
 a stopped operation report `NeedsAttention` without replaying its saved exception as a new Error
-every minute. Inspect the original failed invocation; counting only recent Error rows misses
+on each reconciliation tick. Inspect the original failed invocation; counting only recent Error rows misses
 persistently stopped work.
 
 Successful idle reconciliation ticks (no operation, or an already completed/superseded operation)
@@ -83,15 +83,44 @@ dashboard records and successful invocation telemetry.
 [pool] [Cycle:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] [Batch:2] [Trigger:Reconciliation] ACTION | Deployed:2
 ```
 
-The pool remains the first bracket and the original message remains the suffix for existing
-dashboard parsers. Correlation is invocation-local and cleared in `finally`. Idle reconciliation
-does not attach a completed cycle to a new invocation.
+Ordinary messages now use only the pool label, for example:
+
+```text
+[pool] Deploying 2 session host(s) to resource group rg-avd-hosts
+[pool] Enabling drain mode for session host avd-001
+```
+
+The longer prefix above is the historical format; the workbook still reads it. Current cycle,
+batch and trigger values live in the structured records below rather than being repeated on
+every line. The pool remains the first bracket, preserving dashboard suffix parsers.
+Correlation is invocation-local and cleared in `finally`. Idle reconciliation does not attach
+a completed cycle to a new invocation.
+
+The normal **Invocation Logs** and **Cycle Invocation Logs** views hide Information/Trace
+telemetry snapshots (`SHR_TIMER`, `SHR_EVENT`, `SETTINGS`, `IMAGE_INFO`, `METRICS`, `ACTION`
+and `IMAGE_REPLICA_*`) and strip historical correlation prefixes for display. They preserve
+warnings, errors and native exceptions. The explicit technical log views retain raw messages,
+structured records, correlation IDs and exception details. The latest 500 records are selected
+after presentation filtering, so snapshots do not crowd ordinary messages out of the list.
+
+Each SHR app keeps its existing Application Insights component. Workbook queries restrict the
+selected components within the workload workspace and correlate on component identity plus native
+invocation identity (or a nonempty native operation ID fallback), not the pool label alone.
+Identically named pools in different apps remain separate sources. Full resource IDs need not
+be repeated in ordinary messages; component-to-pool discovery still uses the existing resource
+tags. Missing or sampled structured records can leave a cycle's invocation mapping incomplete;
+use the native invocation view to investigate rather than inferring that no work occurred.
 
 ### Structured events
 
 Structured records are **JSON in trace message text**, not native `customEvents` or automatically
 populated custom dimensions. Parse the suffix `SHR_TIMER | {json}` or `SHR_EVENT | {json}`.
 The current contract is `SchemaVersion: 1`.
+
+The PowerShell worker forwards stream messages as text; PowerShell object properties or
+Information tags do not automatically become Application Insights custom dimensions.
+This design deliberately retains the native collection path and existing structured contract,
+without introducing a second telemetry client, ingestion endpoint or sampling policy.
 
 The PowerShell helper accepts `Write-ShrEvent -EventName ...`; `-Event` remains a compatibility
 alias. The parameter avoids PowerShell's automatic `$Event` variable. The JSON field remains

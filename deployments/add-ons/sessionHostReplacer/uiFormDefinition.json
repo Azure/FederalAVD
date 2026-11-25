@@ -194,7 +194,7 @@
               "name": "scheduleInfoBox",
               "type": "Microsoft.Common.InfoBox",
               "options": {
-                "text": "This schedule authorizes new replacement batches every 30 minutes during the selected hours and days. A separate reconciliation timer runs every minute to monitor and finish authorized work, including outside these hours.\n\nFor example, selecting 8 AM to 5 PM with Monday-Friday authorizes batches at :00 and :30 of each hour from 8 AM to 5 PM on weekdays only.\n\nUse the Start Minute to offset initiation (e.g., :15 and :45). The schedule uses the timezone selected in the 'Session Hosts' blade.",
+                "text": "This schedule authorizes new replacement batches every 30 minutes during the selected hours and days. A separate reconciliation timer monitors and finishes authorized work, including outside these hours: every five minutes for SideBySide, staggered one minute after the Start Minute, or every minute for DeleteFirst.\n\nFor example, a Start Minute of 3 authorizes batches at :03 and :33. SideBySide reconciliation runs at :04, :09, :14 and every five minutes thereafter throughout every hour. New SideBySide authorizations expire after 15 minutes; DeleteFirst authorizations expire after five minutes. These are authorization windows, not the worker ownership lease.\n\nThe schedule uses the timezone selected in the 'Session Hosts' blade.",
                 "style": "Info"
               }
             },

@@ -309,11 +309,24 @@ workload workspace, not the central workspace. Native-schema adapters preserve e
 dashboard parsers, including millisecond request duration and component resource identity.
 The standalone invocation page correlates by component and native invocation identity with
 guarded operation-ID fallback; it does not depend on newer cycle events.
+Ordinary SHR messages use a short `[pool] message` format. Cycle/batch/trigger metadata
+remains in the existing structured stream records, not repeated text prefixes or a second
+telemetry pipeline. Normal workbook log views hide routine snapshots and show readable messages;
+explicit technical views retain the raw records. Cycle views resolve native invocation identity
+from structured records with a small fallback for historical prefixes, always scoped by component.
+See the [logging contract](../deployments/add-ons/sessionHostReplacer/docs/logging-guide.md#cycle-correlation)
+for collection limits and correlation behavior.
 See the [workbook-only test procedure](../deployments/add-ons/sessionHostReplacer/README.md#test-the-workspace-scoped-workbook)
 for deployment and live Azure Government checks.
 
 Session Host Replacer uses one mandatory two-timer design in the same Function App: the configurable
-initiation schedule authorizes batches, and a fixed one-minute timer reconciles authorized work.
+initiation schedule authorizes batches, and a mode-specific timer reconciles authorized work.
+SideBySide uses a derived five-minute schedule staggered one minute after the initiation minute
+offset, with 15-minute batch authorization. DeleteFirst retains one-minute reconciliation and
+five-minute authorization to minimize gaps after deletion. Both run outside initiation hours;
+neither changes the 30-minute worker ownership lease. See
+[timer schedule guidance](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md#timer-schedule-guidance)
+for offset derivation, custom-schedule limits and upgrade behavior.
 The [canonical coordination design](../deployments/add-ons/sessionHostReplacer/docs/replacement-flow.md#two-timer-execution)
 defines initiation authorization, immutable image selection, timer-authorized batch scope, conditional state ownership,
 idempotent deployment intent, deadlines and operator recovery. This is separate from application

@@ -10,7 +10,7 @@ SHR has one execution model, regardless of SideBySide or DeleteFirst replacement
 | Function | Trigger | Responsibility |
 | --- | --- | --- |
 | `session-host-replacer-initiator` | Configurable `%TimerSchedule%` | Assess work and authorize new batches |
-| `session-host-replacer-worker` | `0 * * * * *` | Reconcile the current authorized operation every minute |
+| `session-host-replacer-worker` | Derived `%ContinuationTimerSchedule%` | Reconcile every five minutes for SideBySide or every minute for DeleteFirst |
 
 Both use the same lifecycle engine, managed identity, Blob host storage and Table state.
 The reconciler never independently selects a newer image or authorizes another batch.
@@ -29,8 +29,33 @@ timerSchedule: '0 0,30 * * * *'   // Default: :00 and :30 each hour
 // '0 15,45 * * * *'            // Stagger initiation across pools
 ```
 
-The existing time-zone setting applies. The reconciliation interval is fixed at one minute;
-long invocations, a stopped host or a live operation lease can delay progress.
+The existing time-zone setting applies. Deployment derives `ContinuationTimerSchedule`:
+
+| Mode | Continuation | New batch authorization |
+| --- | --- | --- |
+| SideBySide | Every five minutes, staggered one minute after the initiation minute offset | 15 minutes, for initial and later batches |
+| DeleteFirst | Every minute (`0 * * * * *`) | Five minutes |
+
+For `timerSchedule: '0 3,33 * * * *'`, SideBySide uses
+`0 4,9,14,19,24,29,34,39,44,49,54,59 * * * *`. For the default `:00/:30` initiation,
+it uses `:01, :06, :11, ... :56`. Offset `:59` wraps to `:00, :05, ... :55`.
+All continuation schedules run every hour and day, even when initiation is restricted.
+
+Portal schedules have one Start Minute and its half-hour counterpart. Custom NCRONTAB
+schedules use the start of the first minute term (list, range or step); `*` starts at zero.
+This determines one fixed five-minute phase, not a separate timer for every initiation time.
+Arbitrary custom schedules may therefore coincide with continuation; the conditional lease
+still protects ownership. An offset is not a guarantee of invocation ordering or start time.
+
+The 30-minute worker ownership lease and eight-minute execution budget are unchanged.
+Authorization permits a new batch to start; the lease controls which invocation may mutate
+the operation. Longer authorization does not bypass initiation holds, maintenance expiry,
+readiness or capacity checks. Long invocations, a stopped host or a live lease can delay progress.
+
+Upgrade with the complete template so bindings, derived app settings and code agree. Redeploy
+after changing `timerSchedule` or replacement mode; manually editing `TimerSchedule` alone does
+not recalculate continuation. Existing saved authorizations retain their original expiry;
+upgrading does not extend an in-flight authorization or reset an operation.
 
 ## Quick Deployment Steps
 
@@ -116,7 +141,7 @@ assignment, and allow RBAC propagation before testing repair.
 5. Before starting the app, verify both bindings, the shared engine/modules and the new native-timer
    host configuration are installed. Check that the app remained stopped throughout the update.
    Start it only after the code deployment is complete.
-6. With initiation still held, verify the minute timer resumes any authorized operation with the
+6. With initiation still held, verify the reconciliation timer resumes any authorized operation with the
    same ID, pinned image, intent, target and deadline. Existing `shrContinuation` rows, companion
    authorizations and recovery tables remain valid; obsolete generation metadata is ignored.
    A `NeedsAttention` operation remains stopped until checked recovery.
@@ -181,16 +206,22 @@ pilot, including each intended target cloud:
   in the isolated pilot and confirm retirement reconciliation restores it. Confirm existing
   administrator-owned exclusion values survive retirement and shutdown retention.
 - Confirm the initiator and worker are the only enabled timer functions, with the intended initiation
-  schedule and fixed minute reconciliation schedule. A retained legacy function must remain disabled.
+  schedule and mode-specific derived reconciliation schedule. Test SideBySide `:03/:33` initiation
+  with `:04, :09, ... :59` reconciliation, and DeleteFirst with every-minute reconciliation.
+  A retained legacy function must remain disabled.
   Confirm there is no queue listener or bundle
   download requirement after a cold restart.
 - Verify managed identity, private DNS/routing, Blob host locks and Table reads/conditional writes.
 - Use a sparse initiation schedule. Verify an accepted deployment progresses through health,
   autoscale handoff and safe cleanup between initiation ticks, without an extra deployment batch.
-- Verify an idle pool creates no operation and the minute timer performs only the operation lookup.
+- Verify an idle pool creates no operation and the reconciliation timer performs only the operation lookup.
 - Verify a held initiation schedule still permits authorized progress and rejects new batch authority.
 - Interrupt an active invocation, retain its state and confirm safe lease-expiry recovery without a
   duplicate accepted deployment. Test concurrent initiation/reconciliation and expired authorization.
+  For SideBySide, miss the first continuation opportunity and confirm a later pass can consume the
+  authorization within 15 minutes; verify later batch authorizations use the same window and
+  expired/unstarted authorizations do not start work. Existing saved five-minute authorizations
+  must not be extended by upgrade. Verify the lease remains 30 minutes in both modes.
 - Confirm deadline/configuration failures stay stopped, checked rejected-template recovery works,
   and the Portal configuration/networking steps render successfully with correct output types.
 - Update both the runtime and workbook. Render the Operations page, select a host pool and cycle,
@@ -203,7 +234,7 @@ pilot, including each intended target cloud:
   deployment links open the existing resource in the target cloud without a deployment action.
 - At normal Information logging, confirm actual actions, timer health and final cycle snapshots
   remain visible without repeated setup/per-host narration. Verify a stopped cycle stays visible
-  without replaying its saved exception as a fresh Error on every minute tick. Temporarily enable
+  without replaying its saved exception as a fresh Error on every reconciliation tick. Temporarily enable
   PowerShell verbose emission and host Trace ingestion to check detailed diagnostics, then restore
   normal logging. Confirm all existing workbook configuration/inventory/action panels still populate.
 

@@ -9,6 +9,16 @@ import { functionAppNames, resourceNameForType, namingConventionConfig } from '.
 import { namingPolicy, namePattern, scopeIdUnique } from '../../shared/modules/orchestration/naming/internal.bicep'
 import { validateOfficeStorageAccounts } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 
+func initiationMinuteField(schedule string) string => filter(split(replace(trim(schedule), '\t', ' '), ' '), field => !empty(field))[1]
+
+// Lists, ranges and steps use the first term's start; a wildcard starts at minute zero.
+func initiationMinuteAnchor(minuteField string) int => int(replace(first(split(first(split(first(split(minuteField, ',')), '/')), '-')), '*', '0'))
+
+@export()
+func continuationTimerSchedule(mode string, schedule string) string => mode == 'DeleteFirst'
+  ? '0 * * * * *'
+  : '0 ${join(map(range(0, 12), tick => string((initiationMinuteAnchor(initiationMinuteField(schedule)) + 1) % 5 + tick * 5)), ',')} * * * *'
+
 // ========== //
 // Parameters //
 // ========== //
@@ -955,6 +965,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
           value: !empty(trim(timerSchedule)) ? timerSchedule : fail('A timerTrigger requires a nonempty schedule.')
         }
         {
+          name: 'ContinuationTimerSchedule'
+          value: continuationTimerSchedule(replacementMode, timerSchedule)
+        }
+        {
           name: 'InitiationEnabled'
           value: string(initiationEnabled)
         }
@@ -1233,7 +1247,7 @@ module workerCode '../../shared/modules/resourceModules/functionApp/function.bic
     }
     functionAppName: functionApp.outputs.functionAppName
     functionName: 'session-host-replacer-worker'
-    schedule: '0 * * * * *'
+    schedule: '%ContinuationTimerSchedule%'
   }
   dependsOn: [functionCode]
 }

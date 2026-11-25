@@ -505,14 +505,8 @@ function Write-LogEntry {
         $formattedMessage = $Message
     }
     
-    # Build output message (Azure Functions already adds timestamp and level)
-    $correlation = if ($script:ShrLogContext) {
-        $cycle = if ($script:ShrLogContext.CycleId) {
-            "[Cycle:$($script:ShrLogContext.CycleId)] [Batch:$($script:ShrLogContext.Batch)] "
-        } else { '' }
-        "$cycle[Trigger:$($script:ShrLogContext.Trigger)] "
-    } else { '' }
-    $output = if ($hostPoolName) { "[$hostPoolName] $correlation$formattedMessage".Trim() } else { "$correlation$formattedMessage".Trim() }
+    # Native app/invocation identity links these messages to the structured cycle records.
+    $output = if ($hostPoolName) { "[$hostPoolName] $formattedMessage".Trim() } else { $formattedMessage.Trim() }
     
     # Output based on level
     switch ($Level) {

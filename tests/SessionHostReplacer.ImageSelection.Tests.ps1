@@ -416,6 +416,21 @@ Describe 'Session Host Replacer pilot configuration updates' {
         Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
     }
 
+    It 'shows the deployed continuation schedule without modifying it' {
+        $schedule = '0 4,9,14,19,24,29,34,39,44,49,54,59 * * * *'
+        $global:shrPilotConfigurationSettings | Add-Member -NotePropertyName TimerSchedule -NotePropertyValue '0 3,33 * * * *'
+        $global:shrPilotConfigurationSettings | Add-Member -NotePropertyName ContinuationTimerSchedule -NotePropertyValue $schedule
+        $result = & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments
+        $result.InitiationSchedule | Should -Be '0 3,33 * * * *'
+        $result.ContinuationSchedule | Should -Be $schedule
+        Assert-MockCalled Invoke-AzRestMethod -Times 0 -Exactly -Scope It -ParameterFilter { $Method -eq 'PUT' }
+    }
+
+    It 'reports a missing schedule setting without assuming the deployed binding' {
+        $result = & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments
+        $result.ContinuationSchedule | Should -Be 'Not configured; inspect worker binding (legacy: every minute)'
+    }
+
     It 'enables pilot selection while preserving unrelated settings' {
         $result = & (Join-Path $shrRoot 'tools\Set-SessionHostReplacerConfiguration.ps1') @configurationArguments `
             -IncludeExcludedImageVersions $true -Confirm:$false

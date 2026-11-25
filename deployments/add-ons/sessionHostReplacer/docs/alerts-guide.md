@@ -14,14 +14,18 @@ does not implement this design; see [Current coverage limitations](#current-cove
 | --- | --- | --- | --- |
 | Replacement needs intervention | SHR has stopped an operation that needs checked recovery | Sev 1 (Error) | Latest observed cycle state is `NeedsAttention` |
 | Timer failures | Replacement coordination is encountering execution failures | Sev 2 (Warning) | Three reconciliation invocations fail within 15 minutes and the latest outcome is failed; for initiation, alert on the latest failed outcome |
-| Reconciliation outcome missing | SHR is no longer reporting completion of its expected minute-timer invocations | Sev 2 (Warning) | No reconciliation success or failure observed for 15 minutes |
+| Reconciliation outcome missing | SHR is no longer reporting completion of its expected reconciliation invocations | Sev 2 (Warning) | No reconciliation success or failure observed for 15 minutes; consider 30 minutes for SideBySide |
 
 These are starting points, not service-level guarantees. A stopped replacement does not
 necessarily mean desktops are unavailable. Confirm actual user impact before treating it as
 a critical outage.
 
 An initiation failure is worth reporting on its own because its next scheduled attempt may be
-hours away. Reconciliation retries every minute, so its example tolerates isolated failures.
+hours away. Reconciliation runs every five minutes for SideBySide or every minute for DeleteFirst.
+The failure example tolerates isolated failures. The 15-minute missing-outcome example covers only
+three nominal SideBySide ticks; consider widening it to 30 minutes to allow for long invocations
+and ingestion delay. Adjust both the query threshold and message together. These examples do not
+automatically discover the deployed cadence.
 
 ## Query and Rule Configuration
 

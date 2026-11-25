@@ -496,6 +496,11 @@ function Invoke-ShrTimer {
     }
 }
 
+function Get-ShrAuthorizationMinutes {
+    if ((Read-FunctionAppSetting ReplacementMode) -eq 'SideBySide') { return 15 }
+    return 5
+}
+
 function Start-ShrContinuation {
     param($Timer)
 
@@ -518,7 +523,7 @@ function Start-ShrContinuation {
                 Id = [guid]::NewGuid().ToString('N')
                 OperationId = $operation.State.Id
                 AfterBatchNumber = [int]$operation.State.BatchNumber
-                ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(5).ToString('o')
+                ExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes((Get-ShrAuthorizationMinutes)).ToString('o')
             }
             if ($authorization) {
                 $authorization.State = $request
@@ -564,7 +569,7 @@ function Start-ShrContinuation {
         Status = 'Running'
         CreatedUtc = $now.ToString('o')
         DeadlineUtc = $now.AddHours($hours).ToString('o')
-        InitiationExpiresUtc = $now.AddMinutes(5).ToString('o')
+        InitiationExpiresUtc = $now.AddMinutes((Get-ShrAuthorizationMinutes)).ToString('o')
         LockOwner = ''
         LockExpiresUtc = $now.ToString('o')
         Image = $image

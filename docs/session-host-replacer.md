@@ -145,12 +145,15 @@ does not implement these recommendations.
 ## How Execution Is Coordinated
 
 The configurable initiation timer controls when SHR can start another replacement batch. A second
-timer checks approved replacements every minute, so deployment monitoring, readiness checks and
+timer checks approved replacements every five minutes for SideBySide or every minute for DeleteFirst,
+so deployment monitoring, readiness checks and
 old-host retirement do not have to wait for the next initiation time. Both run in one Function App.
 
 The initiation schedule is **not a hard maintenance window**: replacement and recovery already
-started can continue outside it. One-minute reconciliation is a polling cadence, not a guarantee
-that a deployment, drain or recovery step finishes within a minute.
+started can continue outside it. SideBySide reconciliation is staggered one minute after the
+initiation minute offset. These are polling cadences, not guarantees of completion time.
+New batch authorization lasts 15 minutes for SideBySide or five minutes for DeleteFirst;
+the separate worker ownership lease remains 30 minutes.
 
 Each operation records its exact image, target host count and deadline. Table-backed checkpoints
 record deployment intent and recovery names; a conditional per-pool lease prevents overlapping

@@ -39,13 +39,33 @@ Describe 'SHR correlated cycle telemetry' {
         Remove-Module SessionHostReplacer -Force
     }
 
-    It 'adds correlation before the original message without breaking legacy suffix parsers' {
+    It 'keeps ordinary messages readable without repeating structured correlation' {
+        Set-ShrLogContext -Trigger Reconciliation -Operation $global:shrTelemetryState
+        Write-LogEntry -Message 'Deploying {0} replacement hosts.' -StringValues 2
+        $text = $global:shrTelemetryMessages[-1]
+        $text | Should -Be '[pool] Deploying 2 replacement hosts.'
+        $text | Should -Not -Match 'Cycle:|Batch:|Trigger:'
+        Write-ShrEvent -Event Waiting -State $global:shrTelemetryState
+        $global:shrTelemetryMessages[-1] | Should -Match '^\[pool\] SHR_EVENT \|'
+        $data = [regex]::Match($global:shrTelemetryMessages[-1], 'SHR_EVENT \| (\{.*\})$').Groups[1].Value | ConvertFrom-Json
+        $data.CycleId | Should -Be ('a' * 32)
+        $data.Batch | Should -Be 2
+        $data.Trigger | Should -Be 'Reconciliation'
+    }
+
+    It 'preserves existing dashboard suffixes without adding correlation prefixes' {
         Set-ShrLogContext -Trigger Reconciliation -Operation $global:shrTelemetryState
         Write-LogEntry -Message 'ACTION | Deployed:2'
         $text = $global:shrTelemetryMessages[-1]
-        $text | Should -Match '^\[pool\] \[Cycle:a{32}\] \[Batch:2\] \[Trigger:Reconciliation\]'
+        $text | Should -Be '[pool] ACTION | Deployed:2'
         [regex]::Match($text, 'ACTION \| (.+)$').Groups[1].Value | Should -Be 'Deployed:2'
         [regex]::Match($text, '\[([^\]]+)\]').Groups[1].Value | Should -Be 'pool'
+    }
+
+    It 'does not leave an empty prefix when no pool label is available' {
+        Set-ShrLogContext -Trigger Reconciliation -Operation $global:shrTelemetryState
+        Write-LogEntry -HostPoolName '' -Message 'Deployment probe'
+        $global:shrTelemetryMessages[-1] | Should -Be 'Deployment probe'
     }
 
     It 'emits only safe scalar metadata and strips queries from deployment links' {
@@ -176,10 +196,13 @@ Describe 'SHR correlated cycle telemetry' {
         $global:shrTelemetryMessages[-1] | Should -Match '"Phase":"WaitingForProgress"'
     }
 
-    It 'shares correlation with logging invoked from another nested module' {
+    It 'shares structured correlation without expanding messages from another nested module' {
         Set-ShrLogContext -Trigger Reconciliation -Operation $global:shrTelemetryState
         & (Get-Module SessionHostReplacer.Deployment -All) { Write-LogEntry -Message 'Deployment probe' }
-        $global:shrTelemetryMessages[-1] | Should -Match '\[Cycle:a{32}\].*Deployment probe$'
+        $global:shrTelemetryMessages[-1] | Should -Be '[pool] Deployment probe'
+        & (Get-Module SessionHostReplacer.Deployment -All) { Write-ShrEvent -Event DeploymentSubmitted }
+        $global:shrTelemetryMessages[-1] | Should -Match '"CycleId":"a{32}"'
+        $global:shrTelemetryMessages[-1] | Should -Match '"Trigger":"Reconciliation"'
     }
 
     It 'emits timer outcomes and clears context after a successful invocation' {
@@ -593,7 +616,7 @@ Describe 'SHR workbook cycle tracing contract' {
             $projection | Should -Match 'Level = case\(severityLevel == 0'
             $projection | Should -Match "severityLevel == 2, 'Warning', severityLevel == 3, 'Error'"
             $projection | Should -Match "severityLevel == 4, 'Critical', 'Unknown'"
-            $projection | Should -Match 'Message = coalesce\(message, outerMessage, innermostMessage\)'
+            $projection | Should -Match '\bMessage\s*\| order'
             $projection | Should -Not -Match 'InvocationId|operation_Id|CycleId|HostPoolName|RecordType|Details|RoleInstance'
             $item.content.query | Should -Match 'take 500'
             $item.content.query | Should -Match 'order by Timestamp asc'
@@ -618,12 +641,72 @@ Describe 'SHR workbook cycle tracing contract' {
             @{ Normal = (Get-WorkbookItem 'cycle-logs').content.query; Technical = ($cycleTechnical.content.items | Where-Object name -eq 'cycle-log-details').content.query }
         )
         foreach ($pair in $queries) {
-            $normalInput = [regex]::Split($pair.Normal, '\| project Timestamp = timestamp,')[0]
+            $normalInput = [regex]::Split($pair.Normal, '\| extend Message = replace_regex')[0]
             $technicalInput = [regex]::Split($pair.Technical, '\| project Timestamp = timestamp,')[0]
             $normalInput | Should -Be $technicalInput
             $pair.Technical | Should -Match 'Details = details'
             $pair.Technical | Should -Match 'take 500'
         }
+    }
+
+    It 'reads cycle identity from structured records while retaining historical prefix support' {
+        $queries = @(
+            ($parameters | Where-Object name -eq 'Invocation').query
+            (Get-WorkbookItem 'cycle-logs').content.query
+            (Get-WorkbookItem 'cycle-log-details').content.query
+        )
+        foreach ($query in $queries) {
+            $query | Should -Match 'CycleId = coalesce\(tostring\(parse_json\(extract\(@"SHR_'
+            $query | Should -Match ([regex]::Escape('extract(@"\[Cycle:([a-f0-9]{32})\]", 1, message)'))
+        }
+    }
+
+    It 'keeps technical snapshots out of normal logs without hiding warnings or exceptions' {
+        foreach ($name in @('cycle-logs', 'invocation-logs')) {
+            $query = (Get-WorkbookItem $name).content.query
+            $query | Should -Match 'where isnotempty\(outerMessage\) or severityLevel !in \(0, 1\)'
+            $filter = [regex]::Match($query, 'or not\(Message matches regex @"([^"]+)"\)').Groups[1].Value
+            $filter | Should -Not -BeNullOrEmpty
+            foreach ($kind in @('SHR_EVENT', 'SHR_TIMER', 'SETTINGS', 'IMAGE_INFO', 'METRICS', 'ACTION',
+                'IMAGE_REPLICA_CAP', 'IMAGE_REPLICA_BATCH', 'IMAGE_REPLICA_SUBMISSION')) {
+                "[pool] $kind | sample" | Should -Match $filter
+            }
+            '[pool] Deploying 2 replacement hosts.' | Should -Not -Match $filter
+            '[pool] Request failed while reading SETTINGS | sample' | Should -Not -Match $filter
+            $technicalName = if ($name -eq 'cycle-logs') { 'cycle-log-details' } else { 'invocation-log-details' }
+            (Get-WorkbookItem $technicalName).content.query | Should -Not -Match 'not\(Message matches regex'
+        }
+    }
+
+    It 'removes historical correlation prefixes only from the displayed message' {
+        $query = (Get-WorkbookItem 'invocation-logs').content.query
+        $prefix = [regex]::Match($query, 'replace_regex\(Message, @"([^"]+)", @"\\1"\)').Groups[1].Value
+        $prefix | Should -Not -BeNullOrEmpty
+        $legacy = '[pool] [Cycle:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] [Batch:2] [Trigger:Reconciliation] Deploying 2 hosts.'
+        [regex]::Replace($legacy, $prefix, '$1') | Should -Be '[pool] Deploying 2 hosts.'
+        [regex]::Replace('[pool] Deploying 2 hosts.', $prefix, '$1') | Should -Be '[pool] Deploying 2 hosts.'
+        [regex]::Replace('[pool] Request failed: [Batch:2] not found', $prefix, '$1') |
+            Should -Be '[pool] Request failed: [Batch:2] not found'
+    }
+
+    It 'keeps cycle log joins scoped to native source even when pool and invocation names collide' {
+        foreach ($name in @('cycle-logs', 'cycle-log-details')) {
+            $query = (Get-WorkbookItem $name).content.query
+            $query | Should -Match 'summarize by Source, NativeKey, CycleId, HostPoolName'
+            $query | Should -Match 'join kind=inner cycleInvocations on Source, NativeKey'
+            $query | Should -Match "NativeKey !in \('inv:', 'op:'\)"
+        }
+        foreach ($name in @('invocation-logs', 'invocation-log-details')) {
+            (Get-WorkbookItem $name).content.query | Should -Match 'join kind=inner selectedRun on Source'
+        }
+        $sources = @(
+            @{ Source = '/subscriptions/sub/resourcegroups/rg-a/providers/microsoft.insights/components/app-a'; Pool = 'same-pool'; Invocation = 'same-invocation'; Cycle = ('a' * 32) }
+            @{ Source = '/subscriptions/sub/resourcegroups/rg-b/providers/microsoft.insights/components/app-b'; Pool = 'same-pool'; Invocation = 'same-invocation'; Cycle = ('b' * 32) }
+        )
+        $keys = @($sources | ForEach-Object { "$($_.Source)|inv:$($_.Invocation)" })
+        @($keys | Select-Object -Unique).Count | Should -Be 2
+        @($sources | Where-Object { "$($_.Source)|inv:$($_.Invocation)" -eq $keys[0] }).Cycle |
+            Should -Be ('a' * 32)
     }
 
     It 'shows lease, deadline, observation age and cross-cycle recovery without reading saved state' {

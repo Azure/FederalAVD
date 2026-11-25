@@ -417,6 +417,38 @@ if ($global:shrContinuationTest.Action) {
 
     }
 
+    It 'gives new <Mode> operations a <Minutes>-minute authorization window' -TestCases @(
+        @{ Mode = 'SideBySide'; Minutes = 15 }
+        @{ Mode = 'DeleteFirst'; Minutes = 5 }
+    ) {
+        param($Mode, $Minutes)
+        $global:shrContinuationTest.Settings.ReplacementMode = $Mode
+        $global:shrContinuationTest.Operation.State.Status = 'Completed'
+        Start-ShrContinuation
+        $state = $global:shrContinuationTest.Operation.State
+        ([DateTimeOffset]$state.InitiationExpiresUtc - [DateTimeOffset]$state.CreatedUtc).TotalMinutes |
+            Should -Be $Minutes
+    }
+
+    It 'handles an unstarted <Mode> authorization after <Elapsed> minutes without extending it' -TestCases @(
+        @{ Mode = 'SideBySide'; Elapsed = 6; Minutes = 15; Expected = 'Running'; Cycles = 1 }
+        @{ Mode = 'SideBySide'; Elapsed = 16; Minutes = 15; Expected = 'Completed'; Cycles = 0 }
+        @{ Mode = 'SideBySide'; Elapsed = 6; Minutes = 5; Expected = 'Completed'; Cycles = 0 }
+        @{ Mode = 'DeleteFirst'; Elapsed = 6; Minutes = 5; Expected = 'Completed'; Cycles = 0 }
+    ) {
+        param($Mode, $Elapsed, $Minutes, $Expected, $Cycles)
+        $global:shrContinuationTest.Settings.ReplacementMode = $Mode
+        $state = $global:shrContinuationTest.Operation.State
+        $state.CreatedUtc = [DateTimeOffset]::UtcNow.AddMinutes(-$Elapsed).ToString('o')
+        $expiry = ([DateTimeOffset]$state.CreatedUtc).AddMinutes($Minutes).ToString('o')
+        $state.InitiationExpiresUtc = $expiry
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $global:shrContinuationTest.Operation.State.Status | Should -Be $Expected
+        ([DateTimeOffset]$global:shrContinuationTest.Operation.State.InitiationExpiresUtc) |
+            Should -Be ([DateTimeOffset]$expiry)
+        $global:shrContinuationTest.Cycles | Should -Be $Cycles
+    }
+
     It 'does not overwrite an operation created by another timer during the idle check' {
         $global:shrContinuationTest.Operation = $null
         Mock Test-ShrPoolIdle -ModuleName SessionHostReplacer.Continuation {
@@ -466,8 +498,10 @@ if ($global:shrContinuationTest.Action) {
         Start-ShrContinuation
         $global:shrContinuationTest.Authorization.State.OperationId | Should -Be $state.Id
         $global:shrContinuationTest.Authorization.State.AfterBatchNumber | Should -Be 1
-        ([DateTimeOffset]$global:shrContinuationTest.Authorization.State.ExpiresUtc) |
-            Should -BeGreaterThan ([DateTimeOffset]::UtcNow)
+        $minutesRemaining = ([DateTimeOffset]$global:shrContinuationTest.Authorization.State.ExpiresUtc -
+            [DateTimeOffset]::UtcNow).TotalMinutes
+        $minutesRemaining | Should -BeGreaterThan 14.9
+        $minutesRemaining | Should -BeLessOrEqual 15
         $global:shrContinuationTest.Saves.Count | Should -Be 0
         $state.LockOwner | Should -Be 'active-worker'
 

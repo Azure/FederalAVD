@@ -30,11 +30,11 @@ Describe 'SHR mandatory two-timer deployment contract' {
         $form.view.outputs.parameters.PSObject.Properties.Name | Should -Not -Contain 'azureQueuePrivateDnsZoneResourceId'
     }
 
-    It 'replaces the existing worker binding with an unconditional minute timer after the code upload' {
+    It 'replaces the existing worker binding with the derived schedule setting after the code upload' {
         $reconciler.condition | Should -BeNullOrEmpty
         $reconciler.dependsOn | Should -Contain 'functionCode'
         $reconciler.properties.parameters.functionName.value | Should -Be 'session-host-replacer-worker'
-        $reconciler.properties.parameters.schedule.value | Should -Be '0 * * * * *'
+        $reconciler.properties.parameters.schedule.value | Should -Be '%ContinuationTimerSchedule%'
         $reconciler.properties.template.variables.triggerBinding.type | Should -Be 'timerTrigger'
         $reconciler.properties.template.parameters.PSObject.Properties.Name | Should -Not -Contain 'triggerType'
         $reconciler.properties.parameters.PSObject.Properties.Name | Should -Not -Contain 'queueName'
@@ -57,7 +57,9 @@ Describe 'SHR mandatory two-timer deployment contract' {
         $schedule = $step.elements | Where-Object name -eq 'scheduleInfoBox'
         $infrastructure = $form.view.properties.steps | Where-Object name -eq 'infrastructure'
         $network = $infrastructure.elements | Where-Object name -eq 'zeroTrustNetworkingInfoBox'
-        $schedule.options.text | Should -Match 'reconciliation timer runs every minute'
+        $schedule.options.text | Should -Match 'every five minutes for SideBySide'
+        $schedule.options.text | Should -Match 'every minute for DeleteFirst'
+        $schedule.options.text | Should -Match ':04, :09, :14'
         $schedule.options.text | Should -Not -Match '^\['
         $network.options.text | Should -Not -Match '^\['
         ($infrastructure.elements | Where-Object name -eq 'azureQueuePrivateDnsZone') | Should -BeNullOrEmpty
@@ -70,6 +72,7 @@ Describe 'SHR mandatory two-timer deployment contract' {
         $settings = $appParameters.functionAppAppSettings.value
         $settings | Should -Match "'InitiationEnabled', 'value', string\(parameters\('initiationEnabled'\)\)"
         $settings | Should -Match "'ContinuationTimeoutHours', 'value', string\(parameters\('continuationTimeoutHours'\)\)"
+        $settings | Should -Match "'ContinuationTimerSchedule', 'value', .*continuationTimerSchedule"
         $settings | Should -Match "'AzureWebJobs\.session-host-replacer-worker\.Disabled', 'value', 'false'"
         $settings | Should -Match "'AzureWebJobs\.session-host-replacer-initiator\.Disabled', 'value', 'false'"
         $settings | Should -Match "'AzureWebJobs\.session-host-replacer\.Disabled', 'value', 'true'"
@@ -145,6 +148,7 @@ Describe 'SHR mandatory two-timer deployment contract' {
 
     It 'does not fingerprint a changed timer runtime setting <Setting>' -ForEach @(
         @{ Setting = 'TimerSchedule'; Initial = '0 0,30 * * * *'; Updated = '0 0 1 * * 1' }
+        @{ Setting = 'ContinuationTimerSchedule'; Initial = '0 * * * * *'; Updated = '0 4,9,14,19,24,29,34,39,44,49,54,59 * * * *' }
         @{ Setting = 'AzureWebJobs.session-host-replacer-worker.Disabled'; Initial = 'true'; Updated = 'false' }
         @{ Setting = 'AzureWebJobs.session-host-replacer-initiator.Disabled'; Initial = 'true'; Updated = 'false' }
         @{ Setting = 'AzureWebJobs.session-host-replacer.Disabled'; Initial = 'false'; Updated = 'true' }
@@ -165,6 +169,66 @@ Describe 'SHR mandatory two-timer deployment contract' {
                     Get-ShrConfigurationHash | Should -Be $hash
                 } finally { [Environment]::SetEnvironmentVariable($Setting, $previous) }
             }
+
         } finally { Remove-Module SessionHostReplacer -Force }
+    }
+}
+
+Describe 'SHR mode-specific continuation schedules' {
+    BeforeAll {
+        $fixture = Join-Path $TestDrive 'shr-schedules.bicepparam'
+        $entryPath = [IO.Path]::GetRelativePath($TestDrive, (Join-Path $shrRoot 'main.bicep')).Replace('\', '/')
+        $vectors = @(foreach ($offset in 0..59) {
+            "  offset$offset`: continuationTimerSchedule('SideBySide', '0 $offset,$(($offset + 30) % 60) 8-17 * * 1-5')"
+        })
+        $content = @(
+            'using none'
+            "import { continuationTimerSchedule } from '$entryPath'"
+            'param schedules = {'
+            $vectors
+            "  deleteFirst: continuationTimerSchedule('DeleteFirst', '0 3,33 8-17 * * 1-5')"
+            "  wildcard: continuationTimerSchedule('SideBySide', '0 * * * * *')"
+            "  stepped: continuationTimerSchedule('SideBySide', '0 */15 * * * *')"
+            "  range: continuationTimerSchedule('SideBySide', '0 3-58/5 * * * *')"
+            "  numericStep: continuationTimerSchedule('SideBySide', '0 3/5 * * * *')"
+            "  unordered: continuationTimerSchedule('SideBySide', '0 33,3 * * * *')"
+            "  whitespace: continuationTimerSchedule('SideBySide', '  0   3,33   * * * *  ')"
+            '}'
+        )
+        Set-Content -LiteralPath $fixture -Value $content -Encoding ascii
+        $raw = & az bicep build-params --file $fixture --stdout
+        if ($LASTEXITCODE -ne 0) { throw 'SHR continuation schedule vectors did not compile.' }
+        $schedules = (($raw | ConvertFrom-Json).parametersJson | ConvertFrom-Json).parameters.schedules.value
+    }
+
+    It 'keeps DeleteFirst on the existing minute timer' {
+        $schedules.deleteFirst | Should -Be '0 * * * * *'
+    }
+
+    It 'builds explicit SideBySide minute lists for all 60 initiation offsets' {
+        foreach ($offset in 0..59) {
+            $fields = $schedules."offset$offset" -split ' '
+            $fields.Count | Should -Be 6
+            $fields[0] | Should -Be '0'
+            ($fields[2..5] -join ' ') | Should -Be '* * * *'
+            $minutes = @($fields[1] -split ',' | ForEach-Object { [int]$_ })
+            $minutes.Count | Should -Be 12
+            $minutes | Should -Contain (($offset + 1) % 60)
+            $minutes | Should -Not -Contain $offset
+            foreach ($index in 0..11) {
+                (($minutes[($index + 1) % 12] - $minutes[$index] + 60) % 60) | Should -Be 5
+            }
+        }
+        $schedules.offset3 | Should -Be '0 4,9,14,19,24,29,34,39,44,49,54,59 * * * *'
+        $schedules.offset59 | Should -Be '0 0,5,10,15,20,25,30,35,40,45,50,55 * * * *'
+    }
+
+    It 'anchors custom schedules on the first minute term without inheriting initiation hours or days' {
+        $schedules.wildcard | Should -Be $schedules.offset0
+        $schedules.stepped | Should -Be $schedules.offset0
+        $schedules.range | Should -Be $schedules.offset3
+        $schedules.numericStep | Should -Be $schedules.offset3
+        $schedules.unordered | Should -Be $schedules.offset3
+        $schedules.whitespace | Should -Be $schedules.offset3
     }
 }

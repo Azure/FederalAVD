@@ -239,15 +239,17 @@ Enable it only on pilot pools to test excluded candidates before promotion. See
 [pilot selection and promotion](../deployments/add-ons/sessionHostReplacer/README.md#pilot-image-selection-and-promotion)
 for numeric version ordering, safeguards, and the upgrade requirement.
 
-SHR always uses an initiation timer and a one-minute reconciliation timer. `initiationEnabled`
+SHR always uses an initiation timer and a mode-specific reconciliation timer. `initiationEnabled`
 (default `true`) gates new batches and `continuationTimeoutHours` (default `72`, range `1-720`)
 sets the fixed operation deadline. There is no execution-mode selector or SHR queue DNS parameter.
 See [two-timer execution](../deployments/add-ons/sessionHostReplacer/README.md#two-timer-execution).
 
 SHR's existing `timerSchedule` parameter populates the `TimerSchedule` app setting referenced by
-the initiation binding. The reconciler uses the fixed `0 * * * * *` schedule. Schedule changes do not
-require changing code;
-keep deployment parameters synchronized with direct app-setting changes. See
+the initiation binding. Deployment derives `ContinuationTimerSchedule`: five-minute SideBySide
+reconciliation staggered one minute after the initiation minute offset, or every-minute DeleteFirst
+reconciliation. New authorization lasts 15 minutes for SideBySide or five minutes for DeleteFirst;
+the separate 30-minute ownership lease is unchanged. Redeploy after schedule or mode changes so
+both bindings and app settings stay consistent. See
 [deployment updates](../deployments/add-ons/sessionHostReplacer/docs/deployment-guide.md).
 
 | Add-On | Parameters |
