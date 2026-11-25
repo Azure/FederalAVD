@@ -230,6 +230,97 @@ count, including retries. No new app setting or additional role assignment is re
   Function App configuration; do not copy entity contents into public diagnostics. Oversized
   checkpoints fail explicitly. Reduce batch size rather than discarding state.
 
+### Connectivity outages and resumption
+
+Recovery is layered, not a single request that waits for connectivity all day:
+
+1. **Classify the failure.** Typed transport failures (including supported DNS/connect/send/receive
+   failures and request timeouts) and HTTP 408/429/500/502/503/504 are transient. HTTP evidence
+   takes precedence over transport wrappers; 401/403 and other permanent responses do not become
+   transient just because their text mentions a connection. Ownership conflicts follow the
+   separate lease/ETag path. Exception text alone is not classification evidence.
+2. **Retry reads briefly.** Normal ARM/Graph GET helpers, including collection pages, allow at
+   most three attempts in a 15-second local retry budget. Delays back off with a five-second cap.
+   A `Retry-After` longer than that local allowance defers instead of retrying early. These bounds
+   are not an end-to-end rollout SLA; platform request timing and worker guards also apply.
+   Table continuation requests use their own 60-second request timeout and rely on later timer
+   ticks rather than this GET loop.
+3. **Resume across invocations.** After exhausted retries, an owned worker keeps a recognized
+   transient failure in `Running`, preserves its saved intent and fails the invocation visibly.
+   It releases the lease if state can be saved. If Table access fails too, it cannot persist a new
+   checkpoint/release; a later worker rereads the last durable state after connectivity returns
+   and any saved lease expires. State lookup/acquisition failures before ownership do not mark
+   the operation stopped. There is no operation-wide count that gives up after N transient ticks.
+4. **Reconcile before mutation.** PUT/PATCH/DELETE/POST requests are not blindly retried by the
+   shared transport helper. A response can be lost after Azure accepted a mutation. Subsequent
+   work checks saved intent, exact deployment/resource identity and live status before deciding
+   what still needs doing. Unreadable state never proves a VM/device is absent or capacity is safe.
+5. **Keep the progress policy.** Connectivity failures do not reset the progress clock. A four-minute
+   or 24-hour outage can recover automatically while the operation's remaining window is valid.
+   Default new-operation no-progress timeout is 168 hours; a day-long outage therefore fits a
+   fresh window, but not necessarily a window already nearly exhausted. Expiry blocks expansion;
+   checked renewal is an explicit operator decision, not an automatic response to every timeout.
+
+Default worker cadence is five minutes for SideBySide or one minute for DeleteFirst, independent
+of initiation hours. A crash or failed lease release can delay an owner until its 30-minute lease
+expires; runtime/host-storage failures can also prevent ticks. An authorization that expired
+before its batch was checkpointed is not replayed after an outage: new work needs fresh initiation.
+Legacy fixed-deadline operations and already stopped operations retain their existing restrictions.
+
+These rules apply in connected and air-gapped clouds, with the configured cloud's endpoints and
+network access model. They do not prove every Azure/identity/proxy failure is classified, or that
+a guest extension interrupted during a day-long outage will recover without intervention.
+Verify host startup, actual deployment/registration/cleanup progress and the original inner error
+after recovery; do not equate timer success with completed replacement.
+See the [operator outage decision table](operator-guide.md#connectivity-outage-when-should-i-intervene)
+and [deadline-renewal decision](operator-guide.md#when-to-use-the-deadline-extension).
+
+### Failed deployment diagnosis before cleanup
+
+Supplemental extension instance view uses at most one additional scoped GET per diagnosis,
+one request attempt and the existing ten-second GET timeout. Up to eight statuses and 2,048
+characters of supplemental evidence remain private in operation state. Read failures warn;
+they do not block guarded retry or change an ARM-derived credential classification. Status
+may describe an earlier extension attempt, so it is evidence for investigation, not authority
+to introduce another permanent stop condition. The optional
+[operator guest-log collector](operator-guide.md#collect-guest-logs-when-deployment-errors-are-generic)
+is separate from every worker path, never a recovery prerequisite, and does not enable logging.
+
+Before failed-deployment cleanup, the owned worker reads the parent and failed nested deployment
+operations (including paginated collections) with bounded traversal. It records an attempt ID
+derived from the deployment resource and its ARM timestamp, a category, provider/recognized
+Win32 code, failing resource, and detection time. Up to 2,048 characters of selected provider
+evidence remain in restricted operation state; this is bounded diagnostic evidence, not a full
+deployment export. New structured `DeploymentFailed` records and ordinary `DEPLOYMENT_FAILURE`
+warnings exclude that raw evidence. An unreadable/ambiguous diagnosis preserves history and
+surfaces the error rather than declaring cleanup safe.
+
+Recognized domain-join credential errors (incorrect credentials, expired password, disabled or
+locked account, password change required) stop in `NeedsAttention` before VM/history cleanup.
+Other domain failures are not mislabeled as password expiry and retain guarded recovery.
+Initialization Run Command failures can be classified as registration or general initialization;
+an ARM-successful VM that is merely slow/unhealthy still follows readiness gates.
+
+After correction, `Repair-SessionHostReplacerOperation.ps1 -AcknowledgeCredentialFix` explicitly
+acknowledges only the captured attempt. The first resumed pass can then perform normal guarded
+cleanup/retry. A subsequent failed ARM attempt has a new timestamp/identity and requires fresh
+acknowledgement if credentials fail again. This changes neither image/configuration pins nor
+capacity/cleanup safeguards. Rotate credentials in their approved source, not by editing state.
+The provided session-host template resolves the current credentials Key Vault secret on deployment.
+Compact per-deployment attempt records preserve deduplication and acknowledgements when multiple
+deployments fail. Successful inventory reads retire records no longer in failed deployment
+inventory; more than 128 unresolved records fail closed. Only the latest selected failure retains
+bounded raw evidence. A pre-batch legacy failure can also be acknowledged without renewing the
+cycle's initiation authorization.
+
+See the [operator procedure](operator-guide.md#domain-join-credential-failure) and
+[separately deployable notification](alerts-guide.md#deploy-the-first-failure-notification).
+Notifications require an existing approved Action Group and a live acceptance test.
+Win32 classifications follow Microsoft's
+[1300-1699 error codes](https://learn.microsoft.com/windows/win32/debug/system-error-codes--1300-1699-)
+and [1700-3999 error codes](https://learn.microsoft.com/windows/win32/debug/system-error-codes--1700-3999-);
+a generic logon failure is not proof of password expiration.
+
 ### Change the rollout image
 
 Use the preview-first
@@ -248,7 +339,10 @@ $request = @{
 ```
 
 Sign in with `Connect-AzAccount` in PowerShell 7.4+. The command needs app/config read access,
-image read access, Storage Table Data Contributor and private Table endpoint connectivity.
+image read access, Storage Table Data Contributor and connectivity to the configured Table
+endpoint. Private endpoints are recommended, not required; public endpoints must permit the
+operator through the configured public-access/firewall rules, while private endpoints require
+private DNS/routing.
 It conditionally writes a separate `<pool-key>-image-change` row in `shrContinuation`; it does not
 restart the app, change settings, edit the leased operation or submit deployments. Requests identify
 the current operation and expected image, and specify an exact version in the same Compute Gallery

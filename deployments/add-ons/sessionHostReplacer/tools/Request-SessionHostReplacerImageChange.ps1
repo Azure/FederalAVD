@@ -28,7 +28,9 @@
 .NOTES
     Requires PowerShell 7.4+, Az.Accounts sign-in, Function App configuration-list
     and gallery version read permissions, Storage Table Data Reader for preview
-    (Data Contributor for Apply), and network access to the private Table endpoint.
+    (Data Contributor for Apply), and network access to the configured Table endpoint.
+    Public endpoints must permit operator access through public-access/firewall rules;
+    private endpoints require private DNS/routing. Private endpoints are not required.
     No process environment variables are changed. Confirmation may allow the worker
     to consume the request immediately. Re-preview after any concurrency conflict.
 #>

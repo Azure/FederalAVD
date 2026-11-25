@@ -16,6 +16,89 @@ Both use the same lifecycle engine, managed identity, Blob host storage and Tabl
 The reconciler never independently selects a newer image or authorizes another batch.
 Native timer triggers need no queue extension bundle or prebuilt extension package.
 
+## Operator RBAC and Access Setup
+
+Provision access for the **human/operator group** separately from the Function App's managed
+identity. The runtime identity's deployment and Graph permissions do not authorize a signed-in
+operator, and operator permissions do not repair the runtime identity.
+The [Operator Quick Guide](operator-guide.md#operator-access-at-a-glance) maps tasks to named roles.
+
+### Built-in role profiles
+
+Use the following sufficient built-in combinations, scoped to this deployment. They are not a
+requirement to grant broad subscription access; approved custom roles can be narrower.
+
+| Profile | Named roles and assignment scopes |
+| --- | --- |
+| Troubleshooter (no resource/state changes) | **Reader** on the SHR resource group, session-host VM resource group and host-pool resource group; **Reader** on any gallery, session-host Template Spec and workbook outside those scopes; **Log Analytics Reader** on the workload workspace; **Storage Table Data Reader** on the SHR storage account or specific state tables. |
+| Image-change operator | Troubleshooter access, plus **Website Contributor** on the SHR Function App to read its configuration. Preview uses **Storage Table Data Reader** on `shrContinuation`; Apply requires **Storage Table Data Contributor** on that table. |
+| Recovery/configuration operator | Troubleshooter access, plus **Website Contributor** on the SHR Function App for configuration reads/writes and stop/start. Checked recovery preview uses **Storage Table Data Reader** on `shrContinuation`; Apply requires **Storage Table Data Contributor** on both `shrContinuation` and `sessionHostDeploymentState`. |
+| Optional guest-log collector | **Reader** on the selected session-host VM for preview, plus `Microsoft.Compute/virtualMachines/runCommand/action` for Apply. **Virtual Machine Contributor** on that VM is a sufficient privileged option; prefer an approved narrower role when practical. No Table/app-settings access is needed for this collector. |
+
+Table Data Contributor includes read access; it does not need a duplicate Table Data Reader
+assignment at the same scope. Storage-account-level assignments cover both tables and simplify
+Storage Explorer discovery; table-scoped assignments limit data access, but still pair them with
+**Reader** on the storage account for resource discovery. Table roles cannot be scoped to one
+SHR row: a table can contain other pools' sensitive saved requests. Use the approved storage
+isolation and access-review model.
+
+Reader on the VM and host-pool **resource groups** is intentional: recovery enumerates ARM
+deployments, VMs and AVD registrations. Include separately selected scopes/subscriptions and the
+gallery/Template Spec resources; access to the Function App's RG alone is not sufficient.
+The workbook queries the selected **Log Analytics workspace**, so component-only monitoring
+access is not a substitute. Its Application Insights components and host pools must also be
+visible for discovery, and the workbook resource may live in a different RG.
+
+**Website Contributor is privileged:** it includes `Microsoft.Web/sites/*`, allowing app
+modification/deletion and access to sensitive configuration. For read-only configuration previews,
+an approved custom role can instead grant `Microsoft.Web/sites/read` and
+`Microsoft.Web/sites/config/list/action`. Checked recovery additionally needs
+`Microsoft.Web/sites/stop/action` and `Microsoft.Web/sites/start/action`; the configuration
+helper additionally needs `Microsoft.Web/sites/config/write`. Grant only the tasks approved for
+the operator; do not treat preview access as harmless.
+
+Routine troubleshooting and checked recovery do **not** require **Owner**, **User Access
+Administrator**, **Virtual Machine Contributor**, or **Desktop Virtualization Contributor** on
+the operator. The optional [guest-log collector](operator-guide.md#collect-guest-logs-when-deployment-errors-are-generic)
+is an explicit exception: it executes a read-only payload as SYSTEM through Run Command and needs
+the separate VM permission above. Resource provisioning/redeployment, assigning roles, manually changing hosts,
+and Graph/Intune administration are separate tasks with separate approvals/permissions.
+Azure RBAC roles do not grant Microsoft Graph application permissions or Intune access.
+See [runtime identity prerequisites](../README.md#1-managed-identity-for-function-app) and
+[Graph permissions](../README.md#2-grant-graph-api-permissions-to-managed-identity).
+
+### Access acceptance check
+
+Before handing the deployment to operators:
+
+1. Assign/activate approved group roles (including PIM activation where applicable); allow RBAC
+   propagation and refresh the sign-in if needed. Do not test solely as a subscription Owner.
+2. With the operator identity, open the workbook and query the workload workspace; inspect a
+   known ARM deployment and its operation details, plus the gallery and session-host Template Spec.
+3. Use Entra authentication to read `shrContinuation` and, when needed,
+   `sessionHostDeploymentState`. **Reader**, **Contributor** and **Storage Account Contributor**
+   alone are not Entra Table data roles; do not switch to account keys to make the check pass.
+4. Run the relevant tool's read-only preview against an eligible operation. A safety refusal
+   (for example, an active lease) is not evidence that every later permission check passed.
+   Verify recovery Apply separately in an isolated pilot; it stops/restarts the app and writes state.
+5. Test connectivity from the Function App and operator workstation independently.
+   Private endpoints are recommended, not required. Public deployments need permitted public
+   access/firewall/IP rules; private deployments need private DNS and routing. RBAC grants
+   neither network path. Validate cloud-specific role/service availability in the target environment.
+6. If guest collection is approved, test it on an isolated SHR Windows VM with the intended
+   operator identity, ready agent and approved agent endpoint access. Confirm restricted local
+   report ACLs, source outcomes and actual Run Command delivery in each target cloud. The runtime
+   identity uses `Microsoft.Compute/virtualMachines/extensions/read` for supplemental instance
+   view (included in the existing VM Contributor grant); custom runtime roles need that read
+   permission or diagnostics report `Unavailable`. No runtime Run Command permission is added.
+
+Microsoft references: [Reader](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/general#reader),
+[Website Contributor](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/web-and-mobile#website-contributor),
+[Log Analytics Reader](https://learn.microsoft.com/azure/role-based-access-control/built-in-roles/monitor#log-analytics-reader),
+[Table data authorization](https://learn.microsoft.com/azure/storage/tables/authorize-access-azure-active-directory),
+[Table role scopes](https://learn.microsoft.com/azure/storage/tables/assign-azure-role-data-access)
+and [workspace access](https://learn.microsoft.com/azure/azure-monitor/logs/manage-access).
+
 ## Timer Schedule Guidance
 
 `timerSchedule` controls **new batch authorization**, not deployment, health or cleanup checks.
@@ -64,6 +147,11 @@ cannot safely upgrade the function bindings, shared code and settings together.
 
 Preserve deployment-specific parameters, including `initiationEnabled` and `continuationTimeoutHours`.
 Follow [verification](#verify-deployment) before enabling production initiation.
+
+For first-observed deployment/domain-join failure notifications, separately deploy the
+[first-failure alert](alerts-guide.md#deploy-the-first-failure-notification) using an approved
+existing Action Group. Upgrading SHR adds diagnostic/credential retry guards, not recipients.
+Test the alert route and the new `-AcknowledgeCredentialFix` recovery path in the isolated pilot.
 
 ## Dedicated Replacer Resource Group
 
@@ -216,7 +304,8 @@ pilot, including each intended target cloud:
   A retained legacy function must remain disabled.
   Confirm there is no queue listener or bundle
   download requirement after a cold restart.
-- Verify managed identity, private DNS/routing, Blob host locks and Table reads/conditional writes.
+- Verify managed identity, the configured public-access/firewall rules or private DNS/routing
+  as applicable, Blob host locks and Table reads/conditional writes.
 - Use a sparse initiation schedule. Verify an accepted deployment progresses through health,
   autoscale handoff and safe cleanup between initiation ticks, without an extra deployment batch.
 - Verify an idle pool creates no operation and the reconciliation timer performs only the operation lookup.
@@ -227,8 +316,14 @@ pilot, including each intended target cloud:
   authorization within 15 minutes; verify later batch authorizations use the same window and
   expired/unstarted authorizations do not start work. Existing saved five-minute authorizations
   must not be extended by upgrade. Verify the lease remains 30 minutes in both modes.
-- Confirm deadline/configuration failures stay stopped, checked rejected-template recovery works,
-  and the Portal configuration/networking steps render successfully with correct output types.
+- Verify recognized transient failures leave owned work resumable, exhausted GET retries fail
+  visibly, and a lost response after ARM acceptance does not create duplicate deployment authority.
+  Exercise recovery with Table access unavailable and a stale lease. Include short outages and
+  a simulated day-long gap in progress-window tests; these do not replace a target-cloud outage pilot.
+- Confirm progress-policy expiry blocks expansion but permits guarded checkpointed recovery,
+  legacy fixed deadlines and protected configuration failures remain guarded, and checked renewal
+  does not bypass cleanup/lease/deployment checks. Verify rejected-template recovery and Portal
+  configuration/networking steps separately.
 - Update both the runtime and workbook. Render the Operations page, select a host pool and cycle,
   and verify the summary/timeline retain that cycle across both timer roles and multiple batches.
   Run the workbook KQL against the target Application Insights resources; offline contracts and

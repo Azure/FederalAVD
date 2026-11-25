@@ -1,0 +1,123 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.49.2.45890",
+      "templateHash": "13332002089569338861"
+    }
+  },
+  "parameters": {
+    "functionAppName": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 60,
+      "metadata": {
+        "description": "Required. Exact SHR Function App name as reported in cloud_RoleName."
+      }
+    },
+    "applicationInsightsResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Resource ID of the SHR workspace-based Application Insights component."
+      }
+    },
+    "actionGroupResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Required. Existing approved Action Group resource ID for operator notifications."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Optional. Alert rule location. Use a region supporting log search alerts in the target cloud."
+      }
+    },
+    "enabled": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Optional. Enable the rule after verifying telemetry and Action Group routing."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Optional. Resource tags."
+      }
+    }
+  },
+  "variables": {
+    "query": "traces\r\n| where timestamp > ago(2h)\r\n| where cloud_RoleName == base64_decode_tostring('${base64(functionAppName)}')\r\n| where message contains \"SHR_EVENT |\"\r\n| extend Data = parse_json(extract(@\"SHR_EVENT \\| (\\{.*\\})$\", 1, message))\r\n| where toint(Data.SchemaVersion) == 1 and tostring(Data.Event) == \"DeploymentFailed\"\r\n| extend FunctionApp = cloud_RoleName, FailureCategory = tostring(Data.FailureCategory),\r\n         CycleId = tostring(Data.CycleId), FailureId = tostring(Data.FailureId),\r\n         FailureCode = tostring(Data.FailureCode), FailureResourceId = tostring(Data.FailureResourceId),\r\n         DeploymentName = tostring(Data.FailureDeploymentName)\r\n| where isnotempty(FailureId)\r\n| summarize arg_max(timestamp, *) by FunctionApp, FailureCategory\r\n| project FunctionApp, FailureCategory, LastDetectedUtc = timestamp, CycleId, FailureId,\r\n          FailureCode, FailureResourceId, DeploymentName\r\n"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-12-01",
+      "name": "[format('shr-{0}-deployment-failed', parameters('functionAppName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "displayName": "SHR - Session-host deployment failed",
+        "description": "First observed deployment/initialization failure. For DomainJoinCredentials, correct the account/secret and use checked recovery with -AcknowledgeCredentialFix. Event expiry is not proof of recovery.",
+        "enabled": "[parameters('enabled')]",
+        "severity": 1,
+        "scopes": [
+          "[parameters('applicationInsightsResourceId')]"
+        ],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT2H",
+        "overrideQueryTimeRange": "PT2H",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "[variables('query')]",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "failingPeriods": {
+                "numberOfEvaluationPeriods": 1,
+                "minFailingPeriodsToAlert": 1
+              },
+              "dimensions": [
+                {
+                  "name": "FunctionApp",
+                  "operator": "Include",
+                  "values": [
+                    "*"
+                  ]
+                },
+                {
+                  "name": "FailureCategory",
+                  "operator": "Include",
+                  "values": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "actions": {
+          "actionGroups": [
+            "[parameters('actionGroupResourceId')]"
+          ],
+          "customProperties": {
+            "Runbook": "SHR Operator Quick Guide - deployment and credential failures"
+          }
+        },
+        "autoMitigate": true
+      }
+    }
+  ],
+  "outputs": {
+    "alertRuleResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Insights/scheduledQueryRules', format('shr-{0}-deployment-failed', parameters('functionAppName')))]"
+    }
+  }
+}

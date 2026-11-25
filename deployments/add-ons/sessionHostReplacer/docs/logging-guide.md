@@ -79,6 +79,20 @@ dashboard records and successful invocation telemetry.
 
 ## Cycle Correlation
 
+`DeploymentFailed` is an Information-level structured event emitted before failed-deployment
+cleanup, with `FailureId`, `FailureCategory`, `FailureCode`, `FailureResourceId`,
+`FailureDeploymentName`, `FailureDetectedUtc`, `FailureAcknowledgedUtc` and
+`FailureRequiresAttention` and `FailureInstanceViewOutcome` when supplemental diagnostics exist.
+These fields also accompany subsequent cycle snapshots.
+Raw provider evidence is not emitted. The ordinary `DEPLOYMENT_FAILURE` warning remains visible
+in normal workbook logs; raw structured records are in technical/native invocation views.
+See [credential handling](operator-guide.md#domain-join-credential-failure) and the
+[deployable first-failure alert](alerts-guide.md#deploy-the-first-failure-notification).
+Supplemental extension status text remains bounded/private in
+`State.DeploymentFailure.InstanceViewDiagnostics`; it is not raw guest log ingestion.
+The [explicit guest collector](operator-guide.md#collect-guest-logs-when-deployment-errors-are-generic)
+saves bounded, partially redacted excerpts to restricted local files, not Application Insights.
+
 - **Cycle ID:** the persisted SHR operation ID, spanning timers, invocations and authorized batches.
 - **Batch:** the operation's deployment-batch number, not an invocation count.
 - **Trigger:** `Initiation` or `Reconciliation`.
@@ -148,7 +162,9 @@ Structured payloads allowlist metadata and exclude saved deployment bodies, cred
 host-name arrays, configuration hashes and raw `LastError`. Deployment links contain validated ARM
 resource paths, not query strings or a fixed cloud Portal hostname. This is not a claim that every
 native error or ordinary diagnostic message is sanitized; restrict telemetry access and protect
-exported logs. Telemetry adds no separate ARM/Table requests or durable-state writes.
+exported logs. Ordinary cycle snapshots add no separate ARM/Table requests or writes.
+Failed-deployment diagnosis additionally reads bounded ARM operation history and checkpoints its
+captured failure before cleanup; unavailable diagnostics fail visibly without deleting evidence.
 
 Native timer views accept `requests.name` with or without the `Functions.` prefix. Completion
 time is `timestamp + (duration * 1ms)` because `requests.duration` is in milliseconds; these records

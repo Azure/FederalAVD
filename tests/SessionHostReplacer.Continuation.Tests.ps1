@@ -381,6 +381,70 @@ if ($global:shrContinuationTest.Action) {
         $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
     }
 
+    It 'resumes checkpointed work after a simulated <OutageMinutes>-minute progress gap and transport failure' -TestCases @(
+        @{ OutageMinutes = 4 },
+        @{ OutageMinutes = 1440 }
+    ) {
+        param($OutageMinutes)
+
+        $state = $global:shrContinuationTest.Operation.State
+        $lastProgress = [DateTimeOffset]::UtcNow.AddMinutes(-$OutageMinutes)
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.LastProgressUtc = $lastProgress.ToString('o')
+        $state.DeadlineUtc = $lastProgress.AddHours(168).ToString('o')
+        $state.InitiationExpiresUtc = $lastProgress.AddMinutes(-1).ToString('o')
+        $state.BatchHostNames = @('old-host')
+        $state.DeploymentIntent = @{
+            Name = "shr_$($state.Id)"
+            Body = '{"properties":{"mode":"Incremental"}}'
+        }
+        $deadline = [DateTimeOffset]$state.DeadlineUtc
+        $intentBody = $state.DeploymentIntent.Body
+        $operationId = $state.Id
+        $global:shrContinuationTest.Action = { throw [System.Net.Http.HttpRequestException]::new('endpoint unavailable') }
+
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*endpoint unavailable*'
+        $afterFailure = $global:shrContinuationTest.Operation.State
+        $afterFailure.Status | Should -Be 'Running'
+        $afterFailure.ExpansionBlocked | Should -Not -BeTrue
+        $afterFailure.LockOwner | Should -Be ''
+        ([DateTimeOffset]$afterFailure.DeadlineUtc).UtcTicks | Should -Be $deadline.UtcTicks
+
+        $global:shrContinuationTest.Action = $null
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $afterRecovery = $global:shrContinuationTest.Operation.State
+        $afterRecovery.Status | Should -Be 'Running'
+        $afterRecovery.ExpansionBlocked | Should -Not -BeTrue
+        $afterRecovery.Id | Should -Be $operationId
+        $afterRecovery.DeploymentIntent.Body | Should -Be $intentBody
+        ([DateTimeOffset]$afterRecovery.DeadlineUtc).UtcTicks | Should -Be $deadline.UtcTicks
+        $global:shrContinuationTest.Cycles | Should -Be 2
+    }
+
+    It 'does not renew an exhausted progress window after a simulated day-long outage' {
+        $state = $global:shrContinuationTest.Operation.State
+        $outageStart = [DateTimeOffset]::UtcNow.AddDays(-1)
+        $state.RecoveryPolicyVersion = 1
+        $state.ProgressTimeoutHours = 168
+        $state.LastProgressUtc = $outageStart.AddHours(-156).ToString('o')
+        $state.DeadlineUtc = ([DateTimeOffset]$state.LastProgressUtc).AddHours(168).ToString('o')
+        $state.BatchHostNames = @('old-host')
+        $deadline = [DateTimeOffset]$state.DeadlineUtc
+        $global:shrContinuationTest.Action = { throw [System.Net.Http.HttpRequestException]::new('endpoint unavailable') }
+
+        { Invoke-ShrContinuation -CyclePath $cyclePath } | Should -Throw '*endpoint unavailable*'
+        $global:shrContinuationTest.Operation.State.Status | Should -Be 'Running'
+        $global:shrContinuationTest.Operation.State.ExpansionBlocked | Should -BeTrue
+        $global:shrContinuationTest.Action = { param($State, $Result) $Result.Completed = $true }
+        Invoke-ShrContinuation -CyclePath $cyclePath
+        $after = $global:shrContinuationTest.Operation.State
+        $after.Status | Should -Be 'NeedsAttention'
+        $after.ExpansionBlocked | Should -BeTrue
+        ([DateTimeOffset]$after.DeadlineUtc).UtcTicks | Should -Be $deadline.UtcTicks
+        $global:shrContinuationTest.Cycles | Should -Be 2
+    }
+
     It 'does not overwrite state after losing ownership during execution' {
         $global:shrContinuationTest.Action = {
             $error = [InvalidOperationException]::new('another owner won')

@@ -220,6 +220,7 @@ Describe 'Session Host Replacer real predeployment safety gate' {
                 return $global:shrPreflight.Registrations
             }
             if ($path -match '/deployments/?$') { return $global:shrPreflight.Deployments }
+            if ($path -match '/deployments/[^/]+/operations$') { return @() }
             if ($path -match '/deployments/') {
                 $global:shrPreflight.Events += "$Method deployment $path"
                 if ($Method -eq 'Put') { $global:shrPreflight.SubmittedBody = $Body | ConvertFrom-Json }
@@ -869,7 +870,7 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         $uri = "https://management.azure.com/subscriptions/test/resourceGroups/hosts/providers/Microsoft.Resources/deployments/$name`?api-version=2021-04-01"
         $global:shrPreflight.WorkerState = @{ DeploymentIntent = @{ Name = $name; Uri = $uri } }
         $global:shrPreflight.CurrentDeployment = [PSCustomObject]@{
-            name = $name; properties = @{ provisioningState = $Status }
+            name = $name; properties = @{ provisioningState = $Status; timestamp = '2026-11-25T10:00:00Z' }
         }
         $global:shrPreflight.Deployments = @(
             [PSCustomObject]@{ name = 'shr-pool-legacy'; properties = @{ provisioningState = 'Running' } }
@@ -992,6 +993,9 @@ Describe 'Session Host Replacer real predeployment safety gate' {
         $global:shrPreflight.DeferVMDeletion = $true
         $global:shrPreflight.WorkerState = @{ Id = 'cleanup-test'; CleanupIntent = $null }
         $failed = @([PSCustomObject]@{ DeploymentName = 'shr-pool-failed'; SessionHostNames = @('avd-01') })
+        $global:shrPreflight.CurrentDeployment = [PSCustomObject]@{
+            properties = @{ provisioningState = 'Failed'; timestamp = '2026-11-25T10:00:00Z' }
+        }
         $caught = $null
         try { Remove-FailedDeploymentArtifacts -ARMToken token -FailedDeployments $failed -RegisteredSessionHostNames @() }
         catch { $caught = $_ }

@@ -58,6 +58,7 @@
         'Save-DeploymentState'
         'Deploy-SessionHosts'
         'Get-Deployments'
+        'Get-ShrDeploymentFailure'
         'Get-TemplateSpecVersionResourceId'
         'Remove-FailedDeploymentArtifacts'
 

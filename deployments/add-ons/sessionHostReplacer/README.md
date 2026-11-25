@@ -1343,13 +1343,34 @@ still required. See the [command and safety contract](docs/replacement-flow.md#c
 
 ### Recover a stopped operation
 
+Recovery is a **guarded resume of the same operation**, not an automatic fix for its root cause.
+Recognized transient failures in `Running` normally use later worker ticks without this command.
+Start with the [outage decision table](docs/operator-guide.md#connectivity-outage-when-should-i-intervene)
+and [when to extend the progress window](docs/operator-guide.md#when-to-use-the-deadline-extension).
+
+Recognized domain-join credential failures now stop **before failed-resource/history cleanup**.
+Bounded extension instance-view evidence is captured opportunistically; unavailable diagnostics
+do not block retry. For generic errors, use the
+[explicit guest-log collector](docs/operator-guide.md#collect-guest-logs-when-deployment-errors-are-generic).
+It requires separate privileged VM access and never runs automatically.
+Correct the account/credentials source, then explicitly preview/apply
+`-AcknowledgeCredentialFix` using the
+[credential recovery procedure](docs/operator-guide.md#domain-join-credential-failure).
+Other failed deployments retain guarded cleanup/retry; successful ARM deployment with missing
+registration still waits for readiness. To notify operators on first observed failure, separately
+deploy the [Action Group alert](docs/alerts-guide.md#deploy-the-first-failure-notification);
+notifications are not configured by the main template.
+
 For cases outside the automatic path, use
 [Repair-SessionHostReplacerOperation.ps1](tools/Repair-SessionHostReplacerOperation.ps1) instead of
 editing Table entities by hand. Run it from the repository root in PowerShell **7.4 or later**,
 signed in through `Connect-AzAccount` to the Function App subscription. The operator needs Function
 App read/config-list/stop/start, deployment/VM/AVD/Template Spec read permissions, **Storage Table
-Data Contributor**, and network/DNS access to the private Table endpoint. A storage firewall or
-403 is a prerequisite failure, not a reason to enable public access or use account keys.
+Data Contributor**, and network/DNS access to the configured Table endpoint. Private endpoints are recommended,
+not required: public-endpoint deployments must allow the operator's access through their
+configured public-access/firewall rules; private-endpoint deployments need private DNS/routing.
+A storage firewall or 403 is a prerequisite failure, not a reason to bypass the approved network
+restrictions or use account keys.
 
 **1. Preview.** Fix the original connectivity/permission problem or restore the initiating settings,
 then run:

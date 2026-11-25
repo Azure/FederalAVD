@@ -15,10 +15,18 @@
     Approves rebasing the configuration fingerprint and saved template link onto the
     corrected SessionHostTemplate app setting. All other hashed settings must match.
 .PARAMETER ExtendDeadlineHours
-    Explicitly approves a new deadline this many hours from the recovery check.
+    Explicitly renews an expired progress window or clears an expansion block after
+    the original cause is fixed. Sets the deadline this many hours from the recovery
+    check and uses this duration for subsequent progress windows of this operation.
+    It does not extend an HTTP request timeout, invocation budget or worker lease,
+    change future operations' settings, or bypass other recovery safety checks.
 .PARAMETER BackupDirectory
     Parent of a new restricted-access backup folder. Defaults to customer\shr-recovery.
     Backups contain secrets from the deployment request; do not share or commit them.
+.PARAMETER AcknowledgeCredentialFix
+    Explicitly confirms that the domain-join account and credentials source have been
+    corrected. Required to resume a captured credential failure. Authorizes guarded
+    cleanup/retry of that exact failed attempt, not future credential failures.
 .PARAMETER Apply
     Performs recovery after confirmation. Without this switch, all Azure access is read-only.
 .EXAMPLE
@@ -30,7 +38,9 @@
 .NOTES
     Requires PowerShell 7.4+, Az.Accounts sign-in, Function App read/config-list/stop/start,
     ARM deployment/VM/AVD/Template Spec read permissions, Storage Table Data Contributor,
-    and private-network access to the configured Table endpoint.
+    and network access to the configured Table endpoint. Public endpoints must permit
+    operator access through public-access/firewall rules; private endpoints require
+    private DNS/routing. Private endpoints are not required.
     On failure, verify the app is stopped. Recovery does not automatically restart the
     app after an error or roll back a successful state update.
 #>
@@ -43,6 +53,7 @@ param(
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $ResourceGroupName,
     [string] $SubscriptionId,
     [switch] $RepairTemplateReference,
+    [switch] $AcknowledgeCredentialFix,
     [ValidateRange(1, 720)][int] $ExtendDeadlineHours,
     [string] $BackupDirectory = (Join-Path $PSScriptRoot '..\..\..\..\customer\shr-recovery'),
     [switch] $Apply,
@@ -167,8 +178,24 @@ function Get-RecoveryPlan {
         throw "Worker lease has not expired. Retry after $($state.LockExpiresUtc)."
     }
     if ($state.CleanupIntent) { throw 'Pending cleanup requires manual recovery; this command will not change cleanup state.' }
+    $credentialFailure = $state.DeploymentFailure -and
+        $state.DeploymentFailure.Category -eq 'DomainJoinCredentials' -and
+        -not $state.DeploymentFailure.AcknowledgedUtc
+    if ($credentialFailure -and -not $AcknowledgeCredentialFix) {
+        throw 'Correct the domain-join account and credentials source, then specify -AcknowledgeCredentialFix on preview and Apply. This command does not reset passwords or update Key Vault secrets.'
+    }
+    if ($AcknowledgeCredentialFix -and -not $credentialFailure) {
+        throw '-AcknowledgeCredentialFix requires a captured, unacknowledged domain-join credential failure.'
+    }
+    if ($credentialFailure -and $state.DeploymentFailureAttempts) {
+        $attempt = $state.DeploymentFailureAttempts[$state.DeploymentFailure.DeploymentName]
+        if (-not $attempt -or $attempt.Id -ne $state.DeploymentFailure.Id) {
+            throw 'Captured credential failure does not match the saved attempt history. Review the state conflict before recovery.'
+        }
+    }
     if ($null -eq $state.BatchHostNames -and
-        -not ($state.ExpansionBlocked -and $ExtendDeadlineHours -and -not $state.DeploymentIntent)) {
+        -not ($state.ExpansionBlocked -and $ExtendDeadlineHours -and -not $state.DeploymentIntent) -and
+        -not ($credentialFailure -and -not $state.DeploymentIntent)) {
         throw 'No batch was checkpointed. Review the expired initiation authorization manually.'
     }
     $deadline = [DateTimeOffset]$state.DeadlineUtc
@@ -258,6 +285,8 @@ function Get-RecoveryPlan {
         CorrectedTemplateVersion = $newTemplate
         DeadlineUtc = $deadline.ToUniversalTime().ToString('o')
         ConfigurationHash = $hash
+        CredentialFailureCode = if ($credentialFailure) { $state.DeploymentFailure.Code } else { $null }
+        AcknowledgesCredentialFix = [bool]$credentialFailure
     }
 }
 
@@ -343,6 +372,17 @@ try {
     $fresh.State.LastError = ''
     $fresh.State.LockOwner = ''
     $fresh.State.LockExpiresUtc = [DateTimeOffset]::UtcNow.ToString('o')
+    if ($AcknowledgeCredentialFix) {
+        $fresh.State.DeploymentFailure.AcknowledgedUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        $failure = $fresh.State.DeploymentFailure
+        if ($fresh.State.DeploymentFailureAttempts) {
+            $attempt = $fresh.State.DeploymentFailureAttempts[$failure.DeploymentName]
+            if (-not $attempt -or $attempt.Id -ne $failure.Id) {
+                throw 'Captured credential failure does not match the saved attempt history. State is unchanged; review the conflict.'
+            }
+            $attempt.AcknowledgedUtc = $failure.AcknowledgedUtc
+        }
+    }
     if ($ExtendDeadlineHours) {
         $fresh.State.DeadlineUtc = $checkedPlan.DeadlineUtc
         $fresh.State.RecoveryPolicyVersion = 1

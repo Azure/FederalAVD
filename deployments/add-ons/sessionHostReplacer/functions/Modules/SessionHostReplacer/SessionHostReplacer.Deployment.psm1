@@ -752,6 +752,211 @@ function Deploy-SessionHosts {
     }
 }
 
+function Get-ShrDeploymentFailure {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $ARMToken,
+        [Parameter(Mandatory)][string] $DeploymentName,
+        [string] $ResourceManagerUri = (Get-ResourceManagerUri),
+        [string] $SubscriptionId = (Read-FunctionAppSetting VirtualMachinesSubscriptionId),
+        [string] $ResourceGroupName = (Read-FunctionAppSetting VirtualMachinesResourceGroupName)
+    )
+
+    $scope = "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupName"
+    $rootId = "$scope/providers/Microsoft.Resources/deployments/$DeploymentName"
+    $pending = [Collections.Generic.Queue[object]]::new()
+    $pending.Enqueue(@{ Id = $rootId; Depth = 0 })
+    $visited = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $evidence = [Collections.Generic.List[object]]::new()
+    $timestamp = $null
+    while ($pending.Count) {
+        Assert-ShrWorkerLease
+        $item = $pending.Dequeue()
+        if (-not $visited.Add($item.Id)) { continue }
+        if ($visited.Count -gt 32 -or $item.Depth -gt 8) {
+            throw 'Failed deployment diagnostics exceeded the safe traversal budget; history is retained.'
+        }
+        $deployment = Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET `
+            -Uri "$ResourceManagerUri$($item.Id)?api-version=2021-04-01"
+        if ($deployment.properties.provisioningState -notin @('Failed', 'Canceled')) {
+            throw 'Failed deployment changed state during diagnosis; history is retained.'
+        }
+        if ($item.Depth -eq 0) { $timestamp = $deployment.properties.timestamp }
+        $evidence.Add(@{ ResourceId = $item.Id; Error = $deployment.properties.error })
+        $operations = @(Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET -RequireCollection `
+            -Uri "$ResourceManagerUri$($item.Id)/operations?api-version=2021-04-01")
+        foreach ($operation in $operations) {
+            if ($operation.properties.provisioningState -notin @('Failed', 'Canceled')) { continue }
+            $target = $operation.properties.targetResource
+            $id = [string]$target.id
+            if ([string]::IsNullOrWhiteSpace($id)) { $id = $item.Id }
+            if ($id -notmatch '^/subscriptions/[^/?#]+/resourceGroups/[^/?#]+/providers/[^?#]+$') {
+                throw 'Failed deployment operation has an invalid resource ID; history is retained.'
+            }
+            $evidence.Add(@{ ResourceId = $id; Error = $operation.properties.statusMessage })
+            if ($target.resourceType -ieq 'Microsoft.Resources/deployments') {
+                if (-not $id.StartsWith("$scope/providers/Microsoft.Resources/deployments/", [StringComparison]::OrdinalIgnoreCase)) {
+                    throw 'Nested failed deployment is outside the configured VM scope; history is retained.'
+                }
+                $pending.Enqueue(@{ Id = $id; Depth = $item.Depth + 1 })
+            }
+        }
+    }
+
+    $observedTimestamp = [DateTimeOffset]::MinValue
+    if (-not [DateTimeOffset]::TryParse([string]$timestamp, [ref]$observedTimestamp)) {
+        throw 'Failed deployment has no valid attempt timestamp; history is retained.'
+    }
+    $best = $null
+    foreach ($entry in $evidence) {
+        $nodes = [Collections.Generic.Queue[object]]::new()
+        if ($null -ne $entry.Error) { $nodes.Enqueue($entry.Error) }
+        $messages = [Collections.Generic.List[string]]::new()
+        $codes = [Collections.Generic.List[string]]::new()
+        $count = 0
+        while ($nodes.Count) {
+            if (++$count -gt 128) { throw 'Failed deployment error nesting exceeded its safe budget; history is retained.' }
+            $node = $nodes.Dequeue()
+            if ($node -is [string]) {
+                if ($node.TrimStart().StartsWith('{') -or $node.TrimStart().StartsWith('[')) {
+                    $nodes.Enqueue(($node | ConvertFrom-Json -AsHashtable -ErrorAction Stop))
+                } else { $messages.Add($node) }
+                continue
+            }
+            if ($node -is [array]) {
+                foreach ($child in $node) { if ($null -ne $child) { $nodes.Enqueue($child) } }
+                continue
+            }
+            if ($node.code) {
+                $code = [string]$node.code
+                $messages.Add("Code: $code")
+                if ($code -match '^[a-zA-Z0-9_.-]{1,128}$') { $codes.Add($code) }
+            }
+            if ($node.message) { $messages.Add([string]$node.message) }
+            foreach ($key in @('error', 'details', 'innererror')) {
+                if ($null -ne $node.$key) { $nodes.Enqueue($node.$key) }
+            }
+        }
+        $text = $messages -join ' '
+        $category = 'Deployment'
+        $priority = 0
+        $code = if ($codes.Count) { $codes[$codes.Count - 1] } else { 'DeploymentFailed' }
+        $domain = $entry.ResourceId -match '/extensions/(JsonADDomainExtension|joindomain)$' -or
+            $text -match '\bJsonADDomainExtension\b|(?:joining|join|failed to join)\s+(?:the\s+)?domain'
+        if ($domain) {
+            $category = 'DomainJoin'
+            $priority = 2
+            if ($text -match '\bERROR_PASSWORD_EXPIRED\b|password(?: for this account)? (?:has )?expired|(?:error(?:\s+code)?|code)\s*[:=#]?\s*(?:1330|0x532)\b') {
+                $code = 'ERROR_PASSWORD_EXPIRED'
+                $category = 'DomainJoinCredentials'
+            } elseif ($text -match '\bERROR_LOGON_FAILURE\b|(?:error(?:\s+code)?|code)\s*[:=#]?\s*(?:1326|0x52e)\b|user name or password is incorrect') {
+                $code = 'ERROR_LOGON_FAILURE'
+                $category = 'DomainJoinCredentials'
+            } elseif ($text -match '\bERROR_ACCOUNT_DISABLED\b|(?:error(?:\s+code)?|code)\s*[:=#]?\s*(?:1331|0x533)\b') {
+                $code = 'ERROR_ACCOUNT_DISABLED'
+                $category = 'DomainJoinCredentials'
+            } elseif ($text -match '\bERROR_PASSWORD_MUST_CHANGE\b|(?:error(?:\s+code)?|code)\s*[:=#]?\s*(?:1907|0x773)\b') {
+                $code = 'ERROR_PASSWORD_MUST_CHANGE'
+                $category = 'DomainJoinCredentials'
+            } elseif ($text -match '\bERROR_ACCOUNT_LOCKED_OUT\b|(?:error(?:\s+code)?|code)\s*[:=#]?\s*(?:1909|0x775)\b') {
+                $code = 'ERROR_ACCOUNT_LOCKED_OUT'
+                $category = 'DomainJoinCredentials'
+            }
+            if ($category -eq 'DomainJoinCredentials') { $priority = 3 }
+        } elseif ($entry.ResourceId -match '/runCommands/initializeSessionHost$') {
+            $category = if ($text -match '\b(registration|register|RD Agent|RDAgent)\b') { 'HostRegistration' } else { 'HostInitialization' }
+            $priority = 1
+        }
+        if (-not $best -or $priority -gt $best.Priority -or
+            ($priority -eq $best.Priority -and $best.ResourceId -match '/Microsoft.Resources/deployments/' -and
+                $entry.ResourceId -notmatch '/Microsoft.Resources/deployments/')) {
+            $best = @{
+                Category = $category; Code = $code; ResourceId = $entry.ResourceId
+                Priority = $priority; Text = $text
+            }
+        }
+    }
+    $identity = "$rootId|$($observedTimestamp.ToUniversalTime().ToString('o'))"
+    $instanceView = @{ Outcome = 'NotApplicable'; ResourceId = ''; Evidence = '' }
+    $extensionPattern = "^$([regex]::Escape($scope))/providers/Microsoft.Compute/virtualMachines/[^/?#]+/extensions/[^/?#]+$"
+    $extensionId = if ($best.ResourceId -match $extensionPattern) { $best.ResourceId } else {
+        $evidence.ResourceId | Where-Object { $_ -match $extensionPattern } | Select-Object -First 1
+    }
+    if ($extensionId) {
+        Assert-ShrWorkerLease
+        $instanceView.ResourceId = $extensionId
+        try {
+            # Supplemental evidence must not turn a recoverable join failure into a hard stop.
+            $extension = Invoke-AzureRestMethod -ARMToken $ARMToken -Method GET -MaxRetries 1 `
+                -Uri "$ResourceManagerUri${extensionId}?api-version=2024-07-01&`$expand=instanceView"
+            if (-not $extension.properties.instanceView) {
+                throw [IO.InvalidDataException]::new('Extension instance view is missing.')
+            }
+            $statuses = @($extension.properties.instanceView.statuses) + @($extension.properties.instanceView.substatuses)
+            $text = (@($statuses | Where-Object { $null -ne $_ } | Select-Object -First 8 |
+                ForEach-Object { "$($_.code): $($_.message)" }) -join "`n")
+            $instanceView.Outcome = if ($text.Length) { 'Captured' } else { 'NoStatus' }
+            $instanceView.CapturedUtc = [DateTimeOffset]::UtcNow.ToString('o')
+            $instanceView.Evidence = $text.Substring(0, [Math]::Min(2048, $text.Length))
+            if (-not $text.Length) {
+                Write-LogEntry -Message 'Supplemental extension instance view returned no status details. Continuing with ARM deployment evidence.' -Level Warning
+            }
+        } catch {
+            $instanceView.Outcome = 'Unavailable'
+            Write-LogEntry -Message 'Supplemental extension instance-view diagnostics unavailable. Continuing with ARM deployment evidence; no guest logs were collected.' -Level Warning
+        }
+        Assert-ShrWorkerLease
+    }
+    return @{
+        Id = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($identity))).ToLowerInvariant()
+        DeploymentName = $DeploymentName
+        Category = $best.Category
+        Code = $best.Code
+        ResourceId = $best.ResourceId
+        DetectedUtc = [DateTimeOffset]::UtcNow.ToString('o')
+        RequiresAttention = $best.Category -eq 'DomainJoinCredentials'
+        AcknowledgedUtc = ''
+        # Provider messages can contain secrets. Persist only bounded evidence; never emit it.
+        Evidence = $best.Text.Substring(0, [Math]::Min(2048, $best.Text.Length))
+        InstanceViewDiagnostics = $instanceView
+    }
+}
+
+function Publish-ShrDeploymentFailure {
+    param([string] $ARMToken, [string] $DeploymentName, [string] $ResourceManagerUri,
+        [string] $SubscriptionId, [string] $ResourceGroupName)
+
+    $state = Get-ShrWorkerState
+    if (-not $state) { return }
+    $failure = Get-ShrDeploymentFailure @PSBoundParameters
+    if (-not $state.DeploymentFailureAttempts) { $state.DeploymentFailureAttempts = @{} }
+    $attempt = $state.DeploymentFailureAttempts[$DeploymentName]
+    $newFailure = -not $attempt -or $attempt.Id -ne $failure.Id
+    if ($newFailure) {
+        if (-not $attempt -and $state.DeploymentFailureAttempts.Count -ge 128) {
+            throw 'Unresolved deployment failures exceeded the diagnostic history budget; history is retained.'
+        }
+        $attempt = @{
+            Id = $failure.Id; DetectedUtc = $failure.DetectedUtc; AcknowledgedUtc = ''
+        }
+        $state.DeploymentFailureAttempts[$DeploymentName] = $attempt
+    }
+    if ($state.DeploymentFailure.Id -eq $failure.Id -and $state.DeploymentFailure.AcknowledgedUtc) {
+        $attempt.AcknowledgedUtc = $state.DeploymentFailure.AcknowledgedUtc
+    }
+    $failure.DetectedUtc = $attempt.DetectedUtc
+    $failure.AcknowledgedUtc = $attempt.AcknowledgedUtc
+    $state.DeploymentFailure = $failure
+    if ($newFailure) {
+        Write-ShrEvent -Event DeploymentFailed -State $state
+        Write-LogEntry -Message "DEPLOYMENT_FAILURE | Category: $($failure.Category) | Code: $($failure.Code) | Resource: $($failure.ResourceId) | Deployment: $DeploymentName. Inspect the failed deployment; provider evidence is retained in restricted operation state." -Level Warning
+        Save-ShrContinuationCheckpoint
+    }
+    if ($state.DeploymentFailure.RequiresAttention -and -not $state.DeploymentFailure.AcknowledgedUtc) {
+        throw 'SHR domain-join credential failure. Correct the account and DomainJoinUserPassword secret, then use checked recovery with -AcknowledgeCredentialFix. Deployment history and failed resources are retained.'
+    }
+}
+
 function Get-Deployments {
     [CmdletBinding()]
     param (
@@ -811,11 +1016,20 @@ function Get-Deployments {
         Write-LogEntry -Message "Deployment names: $($deployments.name -join ', ')" -Level Trace
     }
     
-    # Handle failed deployments - don't block automation, but return info for cleanup
+    # Credential failures require acknowledgement; other failures retain guarded cleanup.
     $failedDeployments = $deployments | Where-Object { $_.properties.provisioningState -in @('Failed', 'Canceled') }
+    if ($continuation.DeploymentFailureAttempts) {
+        foreach ($name in @($continuation.DeploymentFailureAttempts.Keys)) {
+            if ($name -notin @($failedDeployments.name)) {
+                [void]$continuation.DeploymentFailureAttempts.Remove($name)
+            }
+        }
+    }
     if ($failedDeployments) {
         Write-LogEntry -Message "Found $($failedDeployments.Count) failed deployments. VMs from these deployments will be marked for cleanup." -Level Warning
         foreach ($failedDeploy in $failedDeployments) {
+            Publish-ShrDeploymentFailure -ARMToken $ARMToken -DeploymentName $failedDeploy.name `
+                -ResourceManagerUri $ResourceManagerUri -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName
             if ($failedDeploy.properties.parameters) {
                 $parameters = $failedDeploy.properties.parameters | ConvertTo-CaseInsensitiveHashtable
                 $failedVMs = if ($parameters.ContainsKey('sessionHostNames')) { $parameters['sessionHostNames'].Value } else { @() }
@@ -1023,6 +1237,10 @@ function Remove-FailedDeploymentArtifacts {
     }
     
     Write-LogEntry -Message "Processing $($FailedDeployments.Count) failed deployments for cleanup"
+    foreach ($deployment in $FailedDeployments) {
+        Publish-ShrDeploymentFailure -ARMToken $ARMToken -DeploymentName $deployment.DeploymentName `
+            -ResourceManagerUri $ResourceManagerUri -SubscriptionId $VirtualMachinesSubscriptionId -ResourceGroupName $VirtualMachinesResourceGroupName
+    }
     
     # Use cached VMs if provided, otherwise fetch
     if ($CachedVMs -and $CachedVMs.Count -gt 0) {
@@ -1220,4 +1438,4 @@ function Remove-FailedDeploymentArtifacts {
 #EndRegion Deployment Operations
 
 # Export functions
-Export-ModuleMember -Function Get-DeploymentState, Get-LastDeploymentStatus, Save-DeploymentState, Deploy-SessionHosts, Get-Deployments, Get-TemplateSpecVersionResourceId, Remove-FailedDeploymentArtifacts
+Export-ModuleMember -Function Get-DeploymentState, Get-LastDeploymentStatus, Save-DeploymentState, Deploy-SessionHosts, Get-Deployments, Get-ShrDeploymentFailure, Get-TemplateSpecVersionResourceId, Remove-FailedDeploymentArtifacts

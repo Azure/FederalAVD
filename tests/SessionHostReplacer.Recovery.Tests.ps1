@@ -314,6 +314,96 @@ Describe 'SHR checked operator recovery' {
         { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*not NeedsAttention*'
     }
 
+    It 'requires explicit acknowledgement before resuming a captured domain credential failure' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.DeploymentFailure = @{
+                Id = 'attempt'; Category = 'DomainJoinCredentials'; Code = 'ERROR_PASSWORD_EXPIRED'
+                RequiresAttention = $true; AcknowledgedUtc = ''
+            }
+        }
+        { & $recoveryPath @recoveryArguments } |
+            Should -Throw '*AcknowledgeCredentialFix*'
+        @($global:shrRecoveryTest.Calls | Where-Object Method -eq MERGE).Count | Should -Be 0
+        @($global:shrRecoveryTest.Calls | Where-Object Path -Like '*/stop?*').Count | Should -Be 0
+    }
+
+    It 'previews credential acknowledgement without changing the app or stored evidence' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.DeploymentFailure = @{
+                Id = 'attempt'; Category = 'DomainJoinCredentials'; Code = 'ERROR_PASSWORD_EXPIRED'
+                RequiresAttention = $true; AcknowledgedUtc = ''
+            }
+        }
+        $before = $global:shrRecoveryTest.Entity.State
+        $preview = & $recoveryPath @recoveryArguments -AcknowledgeCredentialFix
+        $preview.AcknowledgesCredentialFix | Should -BeTrue
+        $global:shrRecoveryTest.Entity.State | Should -Be $before
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' -or $_.Path -like '*/stop?*' }).Count | Should -Be 0
+    }
+
+    It 'acknowledges only the reviewed credential failure while preserving its saved deployment' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.DeploymentFailure = @{
+                Id = 'attempt'; Category = 'DomainJoinCredentials'; Code = 'ERROR_PASSWORD_EXPIRED'
+                RequiresAttention = $true; AcknowledgedUtc = ''
+            }
+        }
+        $before = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        Set-TestRecoveryState {
+            param($value)
+            $value.DeploymentFailure.DeploymentName = 'shr_test'
+            $value.DeploymentFailureAttempts = @{ shr_test = @{ Id = 'attempt'; AcknowledgedUtc = '' } }
+        }
+        & $recoveryPath @recoveryArguments -AcknowledgeCredentialFix -Apply -Confirm:$false
+        $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        $after.Status | Should -Be 'Running'
+        $after.DeploymentFailure.Id | Should -Be 'attempt'
+        $after.DeploymentFailure.AcknowledgedUtc | Should -Not -BeNullOrEmpty
+        $after.DeploymentFailureAttempts.shr_test.AcknowledgedUtc | Should -Be $after.DeploymentFailure.AcknowledgedUtc
+        $after.DeploymentIntent.Body | Should -Be $before.DeploymentIntent.Body
+        $after.ConfigurationHash | Should -Be $before.ConfigurationHash
+    }
+
+    It 'rejects credential acknowledgement when no captured credential failure exists' {
+        { & $recoveryPath @recoveryArguments -AcknowledgeCredentialFix } |
+            Should -Throw '*captured, unacknowledged*'
+    }
+
+    It 'can acknowledge a legacy failure discovered before a batch without renewing authorization' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.BatchHostNames = $null
+            $value.DeploymentIntent = $null
+            $value.DeploymentFailure = @{
+                Id = 'attempt'; Category = 'DomainJoinCredentials'; Code = 'ERROR_PASSWORD_EXPIRED'
+                RequiresAttention = $true; AcknowledgedUtc = ''
+            }
+        }
+        $before = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        & $recoveryPath @recoveryArguments -AcknowledgeCredentialFix -Apply -Confirm:$false
+        $after = $global:shrRecoveryTest.Entity.State | ConvertFrom-Json -AsHashtable
+        $after.Status | Should -Be 'Running'
+        $after.InitiationExpiresUtc | Should -Be $before.InitiationExpiresUtc
+        $after.BatchHostNames | Should -BeNullOrEmpty
+    }
+
+    It 'refuses a credential acknowledgement history conflict before stopping the app' {
+        Set-TestRecoveryState {
+            param($value)
+            $value.DeploymentFailure = @{
+                Id = 'attempt'; DeploymentName = 'shr_test'; Category = 'DomainJoinCredentials'
+                RequiresAttention = $true; AcknowledgedUtc = ''
+            }
+            $value.DeploymentFailureAttempts = @{ shr_test = @{ Id = 'different-attempt' } }
+        }
+        { & $recoveryPath @recoveryArguments -AcknowledgeCredentialFix -Apply -Confirm:$false } |
+            Should -Throw '*state conflict*'
+        @($global:shrRecoveryTest.Calls | Where-Object { $_.Method -eq 'MERGE' -or $_.Path -like '*/stop?*' }).Count | Should -Be 0
+    }
+
     It 'blocks a worker lease that has not expired' {
         Set-TestRecoveryState { param($value) $value.LockExpiresUtc = [DateTimeOffset]::UtcNow.AddMinutes(10).ToString('o') }
         { & $recoveryPath @recoveryArguments } | Should -Throw -ExpectedMessage '*lease has not expired*'

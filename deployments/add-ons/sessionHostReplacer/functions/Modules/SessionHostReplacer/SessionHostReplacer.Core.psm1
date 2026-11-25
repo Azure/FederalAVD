@@ -437,8 +437,10 @@ function Write-ShrEvent {
         'Draining' { 'Authorized old hosts are still draining.' }
         'WaitingForProgress' { 'Awaiting capacity, readiness, scaling handoff or retirement checks; inspect cycle logs.' }
         'AuthorizationExpired' { 'Initial authority expired before a batch started; a new initiation tick is required.' }
+        'DeploymentFailed' { 'A session-host deployment failed; inspect the failure category, resource and error code.' }
         'NeedsAttention' {
             switch -Regex ([string]$State['LastError']) {
+                '^SHR domain-join credential failure' { 'Domain-join credentials need correction and explicit checked recovery; failed resources are retained.'; break }
                 '^SHR operation deadline expired' { 'Operation deadline expired; checked recovery is required.'; break }
                 '^SHR operation configuration changed' { 'Protected configuration changed; restore it or use checked recovery.'; break }
                 '^SHR operation lease is no longer' { 'Invocation lost ownership; inspect cycle and invocation logs.'; break }
@@ -466,6 +468,16 @@ function Write-ShrEvent {
         $data.AwaitingImageBatch = [bool]$State['AwaitingImageBatch']
         $data.LastImageChangeRequestId = [string]$State['LastImageChangeRequestId']
         $data.LastImageChangeRejectedId = [string]$State['LastImageChangeRejectedId']
+        if ($State['DeploymentFailure']) {
+            foreach ($field in @('Id', 'Category', 'Code', 'ResourceId', 'DeploymentName', 'DetectedUtc', 'AcknowledgedUtc')) {
+                $data["Failure$field"] = [string]$State['DeploymentFailure'][$field]
+            }
+            $data.FailureRequiresAttention = [bool]$State['DeploymentFailure']['RequiresAttention'] -and
+                -not $State['DeploymentFailure']['AcknowledgedUtc']
+            if ($State['DeploymentFailure']['InstanceViewDiagnostics']) {
+                $data.FailureInstanceViewOutcome = [string]$State['DeploymentFailure']['InstanceViewDiagnostics']['Outcome']
+            }
+        }
         $data.InDrain = $counts['InDrain']
         $data.RunningDeployments = $counts['RunningDeployments']
     }

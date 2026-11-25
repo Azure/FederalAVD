@@ -4,9 +4,64 @@ The workbook helps an operator investigate replacement activity. Alerts should t
 operator when attention is needed: replacement has stopped, a timer is failing, or expected
 reconciliation telemetry has disappeared.
 
-**These are recommendations and example queries, not deployed functionality.** SHR does not
-deploy these alerts or configure notification recipients. The existing standalone alert pack
-does not implement this design; see [Current coverage limitations](#current-coverage-limitations).
+**The main SHR deployment does not create alerts or configure recipients.** A separate
+[first-failure notification template](../alerts/deploymentFailures.bicep) now supports deployment,
+domain-join and initialization failure events using an existing Action Group. Deploy it explicitly
+as described below. The remaining rules in this guide are recommendations/example queries.
+The legacy standalone alert pack does not implement this design; see
+[Current coverage limitations](#current-coverage-limitations).
+
+## Deploy the First-Failure Notification
+
+Deploy [deploymentFailures.bicep](../alerts/deploymentFailures.bicep) separately after updating
+SHR code. It reads `SHR_EVENT` records with `Event=DeploymentFailed` from the exact selected
+Application Insights component/app. It does **not** depend on a failed worker invocation:
+guarded cleanup/retry can otherwise succeed and conceal the failure from timer-only alerts.
+
+From the repository root, signed into the target cloud/subscription:
+
+```powershell
+New-AzResourceGroupDeployment -Name 'shr-deployment-failure-alert' `
+    -ResourceGroupName '<monitoring-resource-group>' `
+    -TemplateFile '.\deployments\add-ons\sessionHostReplacer\alerts\deploymentFailures.bicep' `
+    -functionAppName '<shr-name>' `
+    -applicationInsightsResourceId '<shr-application-insights-resource-id>' `
+    -actionGroupResourceId '<approved-action-group-resource-id>'
+```
+
+Requires approved alert-deployment permissions (for example **Monitoring Contributor** on the
+alert RG), access to the monitored component/workspace and the existing Action Group.
+It does not create recipients or grant permissions. Verify the target cloud/region supports
+the template's stable `2023-12-01` scheduled-query-rule API and log search alerts before deployment.
+No AVD Insights workbook has an equivalent query: this intentionally queries SHR application
+telemetry, not AVD connection/session tables.
+
+- Severity **1**, evaluation every **five minutes**, **one** failing evaluation, row count **>0**.
+  Detection starts when ARM reports a failed deployment and a worker observes it. Add worker
+  cadence, service processing, telemetry ingestion, alert evaluation and Action Group delivery;
+  this is not an immediate-delivery or five-minute end-to-end guarantee.
+- Two-hour query/lookback, with stateful automatic mitigation and dimensions **FunctionApp**
+  and **FailureCategory**. Repeated failures in an already active category do not generate a
+  fresh notification for every VM/retry. IDs and failing resource/code remain investigation context.
+  Automatic resolution as events age out is **not proof that recovery succeeded**.
+- Categories: `DomainJoinCredentials`, `DomainJoin`, `HostRegistration`, `HostInitialization`,
+  or general `Deployment`. Only recognized credential evidence stops automatic cleanup/retry.
+  The alert does not detect every unhealthy guest, or a successful ARM deployment with hosts
+  that never register; continue monitoring readiness and the recommended missing/stalled-work rules.
+- Structured telemetry contains safe classification/code/resource metadata, never raw provider
+  error messages. Bounded raw evidence is retained only in restricted operation state.
+
+**Response:** For credentials, follow the
+[credential correction and acknowledgement](operator-guide.md#domain-join-credential-failure).
+For other categories, inspect the failing operation and current capacity before intervening.
+Do not delete state or disable readiness safeguards to silence the alert.
+
+**Acceptance:** In an isolated pool, induce a known domain-join credential failure, verify the
+event appears before any cleanup, confirm `NeedsAttention` with retained resources, and verify
+the intended operator receives an Action Group notification. Correct the secret, preview/apply
+acknowledged recovery, verify actual healthy registration, then induce a new failed attempt to
+confirm the old acknowledgement cannot suppress it. Offline tests do not establish ingestion,
+live KQL execution, API availability or delivery.
 
 ## Recommended Starting Set
 
@@ -258,8 +313,9 @@ Known issues include:
 - Progressive-scale-up regex escaping in Bicep does not match representative messages.
 
 Do not assume running those deployment tools creates the recommendations in this guide.
-Repairing or integrating them is a separate implementation task. No alert deployment, UI
-parameter, runtime telemetry change or notification configuration is introduced here.
+Repairing or integrating those legacy tools is separate from the new
+[first-failure template](../alerts/deploymentFailures.bicep). Only that separate template consumes
+the new runtime deployment-failure events; the main deployment/UI still does not configure alerts.
 
 ## References
 
