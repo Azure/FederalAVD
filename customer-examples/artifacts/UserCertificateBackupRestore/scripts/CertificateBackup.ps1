@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [string]$InputPath,
-    [string]$DefaultInputPath = '%USERPROFILE%\Documents\CertificateBackups',
+    [string]$DefaultInputPath = '{Documents}\CertificateBackups',
     [ValidateRange(1, 365)][int]$ExpiryWarningDays = 30,
     [switch]$CheckRenewals,
     $Owner
@@ -20,7 +20,7 @@ Import-Module $backupModule -ErrorAction Stop
 $backupState = @{ Busy = $false; Worker = $null; Operation = $null; Secret = $null; FolderSource = 'Default' }
 $backupForm = $null
 $backupTimer = $null
-$backupMutex = [Threading.Mutex]::new($false, ('Local\CertificateBackup-' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
+$backupMutex = [Threading.Mutex]::new($false, ('Local\UserCertificateBackupRestore-Backup-' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
 $backupAcquired = $false
 $backupFont = $null
 $backupArtwork = $null
@@ -28,7 +28,7 @@ $backupWindowIcon = $null
 $backupHeadingFont = $null
 try {
     $folderPolicy = Get-CertificatePolicy
-    $backupManaged = $null -ne $folderPolicy.BackupFolder
+    $backupManaged = $null -ne $folderPolicy.CertificateFolder
     if ($null -ne $folderPolicy.ExpiryWarningDays) { $ExpiryWarningDays = $folderPolicy.ExpiryWarningDays }
     $savedFolder = ''
     $backupState.FolderSource = if ($backupManaged) { 'Managed' } elseif ($PSBoundParameters.ContainsKey('InputPath')) { 'Explicit' } else { 'Default' }
@@ -37,7 +37,7 @@ try {
         $savedFolder = $settings.InputPath
         $backupState.FolderSource = $settings.Source
     }
-    $initialFolder = Resolve-CertificateInputPath -InputPath $InputPath -SavedInputPath $savedFolder -DefaultInputPath $DefaultInputPath -ManagedInputPath $folderPolicy.BackupFolder -PreserveEnvironmentReferences
+    $initialFolder = Resolve-CertificateInputPath -InputPath $InputPath -SavedInputPath $savedFolder -DefaultInputPath $DefaultInputPath -ManagedInputPath $folderPolicy.CertificateFolder -PreserveEnvironmentReferences
     if ($CheckRenewals) {
         $initialHealth = Get-CertificateBackupStatus -Folder $initialFolder -ExpiryWarningDays $ExpiryWarningDays
         if (-not $initialHealth.NeedsAttention) { Write-Verbose 'Managed backup is current and no expiry/renewal warnings were detected.'; return }
@@ -242,7 +242,13 @@ try {
         $health = $null
         $healthError = $null
         try { $health = Get-CertificateBackupStatus -Folder $backupFolder.Text -Certificates $catalog -ExpiryWarningDays $ExpiryWarningDays }
-        catch { $healthError = $_.Exception.Message }
+        catch {
+            if ($_.Exception.Data['CertificateKfmPending'] -eq $true) {
+                Set-BackupStatus "$($_.Exception.Message)`r`nSelect Check renewals after work OneDrive is ready." $true
+                return
+            }
+            $healthError = $_.Exception.Message
+        }
         if ($null -ne $health -and $null -ne $health.Manifest) {
             $catalog += @($health.Manifest.Certificates | Where-Object { $_.Thumbprint -notin @($catalog | ForEach-Object { $_.Thumbprint }) })
         }
@@ -297,8 +303,16 @@ try {
             $results = @($backupState.Worker.EndInvoke($backupState.Operation))
             if ($backupState.Worker.HadErrors) { throw $backupState.Worker.Streams.Error[0] }
             if ($results.Count -ne 1) { throw 'Backup did not return one validated bundle result.' }
-            Refresh-BackupCatalog
-            Set-BackupStatus ("Success: $($results[0].Count) identities backed up and verified.`r`n$($results[0].Path)`r`n`r`n" + $backupStatus.Text)
+            $warning = $results[0].OfflinePinStatus -eq 'Failed'
+            try {
+                Refresh-BackupCatalog
+                $catalogText = $backupStatus.Text
+            } catch {
+                $warning = $true
+                $catalogText = "Backup succeeded; refreshing backup details failed: $($_.Exception.Message)"
+            }
+            Set-BackupStatus ("Success: $($results[0].Count) identities backed up and verified.`r`n$($results[0].Path)`r`n`r`n" +
+                $results[0].OfflinePinMessage + "`r`n`r`n" + $catalogText) $warning
         } catch { Set-BackupStatus "Backup failed: $($_.Exception.Message)" $true }
         finally {
             $backupState.Worker.Dispose()
