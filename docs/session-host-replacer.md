@@ -15,6 +15,10 @@ notifications, checks replacement readiness, and tracks deployment and cleanup t
 Host Update instead. Deploy one replacer per host pool; never run two against the same pool.
 See [Choose a Host Pool Management Approach](host-pool-management.md).
 
+**Troubleshooting a rollout?** Use the
+[SHR Operator Quick Guide](../deployments/add-ons/sessionHostReplacer/docs/operator-guide.md)
+for common blockers, safe recovery commands and verification steps.
+
 ## The Design in One Minute
 
 Replacing a desktop VM affects both the people using it and the capacity available to everyone

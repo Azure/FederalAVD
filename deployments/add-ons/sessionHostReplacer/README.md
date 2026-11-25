@@ -5,6 +5,10 @@
 Replace Azure Virtual Desktop session-host VMs with new VMs built from a newer desktop image,
 using limited batches, readiness checks and controlled retirement of old hosts.
 
+**Operating or troubleshooting an existing deployment? Start with the
+[Operator Quick Guide](docs/operator-guide.md)** for common blockers, evidence collection,
+checked recovery and image-change commands.
+
 > **Supported host pools:** Use this add-on only with Azure Virtual Desktop **standard management**
 > host pools. It creates, registers, drains, and deletes VMs directly. Don't use it with an
 > automated host pool that has Session Host Configuration; Azure Virtual Desktop exclusively owns
@@ -14,6 +18,7 @@ using limited batches, readiness checks and controlled retirement of old hosts.
 ## Table of Contents
 
 - [Overview](#overview)
+- [Operator Quick Guide](docs/operator-guide.md)
 - [Features](#features)
 - [Replacement Modes](#replacement-modes)
 - [Prerequisites](#prerequisites)
@@ -1276,8 +1281,10 @@ wait for its lease to expire before continuing. Persist the matching `initiation
 for later redeployments. **Stopping the Function App stops both functions**; it does not cancel ARM
 deployments, undo drain/deletion or disable autoscale.
 
-Monitor `CONTINUATION |` logs and the operation's status/deadline. An expired deadline or unexpected
-failure leaves `NeedsAttention`.
+Monitor `CONTINUATION |` logs and the operation's status/deadline. Transient failures preserve
+resumable work; new-policy no-progress expiry blocks expansion while guarded recovery continues.
+Confirmed unsafe states still require attention. Start with the
+[operator triage and recovery steps](docs/operator-guide.md).
 Partially executed or ambiguous work still requires explicit recovery. A corrected template reference
 can take the checked automatic path below; the timer never silently discards an active batch.
 Timer invocations do not use queue retries or poison handling. A transient failure before state
@@ -1677,6 +1684,9 @@ replaceSessionHostOnNewImageVersionDelayDays: 0  // Immediate replacement
 ```
 
 ## Troubleshooting
+
+Start with the [Operator Quick Guide](docs/operator-guide.md) to distinguish expected waits,
+retryable failures and stopped work before applying the detailed fixes below.
 
 ### Common Issues
 
