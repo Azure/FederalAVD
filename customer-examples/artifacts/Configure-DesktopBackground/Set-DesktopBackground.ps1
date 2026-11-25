@@ -13,29 +13,28 @@
 
       Software\Microsoft\Windows\CurrentVersion\Policies\System
         Wallpaper      = <path>  (path to the background image)
-        WallpaperStyle = 4       (stretch / fill style; 4 = Stretch)
+        WallpaperStyle = 4       (Fill, preserving aspect ratio and cropping as needed)
 
     The Registry.pol writer conforms to MS-GPREG (Group Policy: Registry Extension
     Encoding). gpt.ini is updated so the Group Policy client on deployed session hosts
     applies the entries at logon.
 
     WallpaperStyle values:
-      0 = Center   1 = Tile    2 = Stretch   3 = No change
-      4 = Stretch  6 = Fit     10 = Fill     22 = Span
+      0 = Center   1 = Tile    2 = Stretch   3 = Fit   4 = Fill   5 = Span
+    These are Desktop.admx policy values, not Control Panel\Desktop values.
 
     The script is designed to be used during Azure Virtual Desktop image customization or
     session host deployment.
 
 .NOTES
-    IMPORTANT: Custom Desktop Background Configuration
-
-    Before using this artifact, replace the default 'sunrise.jpg' file in this directory
-    with your custom desktop background image.
+    Copy the complete example to customer\artifacts\Configure-DesktopBackground
+    before customization. FederalAVD_Federal_Generic_MissionReady_4K.jpg is the
+    default. Use -ImageFile to select another bundled mission image or your own JPEG.
 
     Desktop Background Requirements:
     - File format: JPG (JPEG)
-    - Resolution: High resolution (4K recommended - 3840x2560 pixels)
-    - Aspect ratio: 3:2 (width:height)
+    - Bundled images: 3840x2160 pixels, 16:9
+    - Match the expected displays; Windows does not require one exact resolution
     - File name: Must be named with the .jpg extension
     - File size: Consider file size for deployment efficiency
     
@@ -52,11 +51,28 @@
 .EXAMPLE
     PS C:\> .\Set-DesktopBackground.ps1
     
-    Configures the desktop background using the 'sunrise.jpg' file in the script directory.
+    Configures the desktop background using FederalAVD_Federal_Generic_MissionReady_4K.jpg.
+
+.PARAMETER ImageFile
+    Name of a JPEG file in the script directory.
+    Defaults to FederalAVD_Federal_Generic_MissionReady_4K.jpg.
+    Paths and wildcard selection are not accepted.
+
+.EXAMPLE
+    PS C:\> .\Set-DesktopBackground.ps1 -ImageFile 'FederalAVD_Army_MissionReady_4K.jpg'
+
+    Selects the Army image instead of the Federal Generic default.
 
 .LINK
     https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11
 #>
+
+[CmdletBinding()]
+param(
+    [ValidateNotNullOrEmpty()]
+    [ValidatePattern('^[^\\/:*?"<>|]+\.jpg$')]
+    [string]$ImageFile = 'FederalAVD_Federal_Generic_MissionReady_4K.jpg'
+)
 
 #region Functions
 
@@ -300,12 +316,14 @@ $ErrorActionPreference = 'Stop'
 
 Write-Log -Category Info -Message "Starting '$PSCommandPath'."
 
-# Locate the background image bundled with this artifact
-$BackgroundSourceImage = Get-ChildItem -Path $PSScriptRoot -Filter '*.jpg' | Select-Object -First 1
-if (-not $BackgroundSourceImage) {
-    Write-Log -Category Error -Message "No .jpg background image found in '$PSScriptRoot'. Add your image file and re-run."
-    Exit 1
+# Select exactly one bundled image; never fall back to another JPEG.
+$BackgroundSourcePath = Join-Path -Path $PSScriptRoot -ChildPath $ImageFile
+if (-not (Test-Path -LiteralPath $BackgroundSourcePath -PathType Leaf)) {
+    $message = "Background image '$ImageFile' was not found in '$PSScriptRoot'. Include the selected JPEG in the artifact package."
+    Write-Log -Category Error -Message $message
+    throw $message
 }
+$BackgroundSourceImage = Get-Item -LiteralPath $BackgroundSourcePath
 Write-Log -Category Info -Message "Found background image: '$($BackgroundSourceImage.Name)'."
 
 # Copy to the permanent destination inside the Windows directory
@@ -316,7 +334,7 @@ if (-not (Test-Path -Path $CustomWallpaperDirectory)) {
 }
 $BackgroundImagePath = Join-Path -Path $CustomWallpaperDirectory -ChildPath $BackgroundSourceImage.Name
 Write-Log -Category Info -Message "Copying image to '$BackgroundImagePath'."
-Copy-Item -Path $BackgroundSourceImage.FullName -Destination $CustomWallpaperDirectory -Force
+Copy-Item -LiteralPath $BackgroundSourceImage.FullName -Destination $CustomWallpaperDirectory -Force
 
 # Queue the three User-scope policy values and flush to Registry.pol
 Write-Log -Category Info -Message 'Queuing desktop background Group Policy values.'
@@ -331,7 +349,8 @@ Set-PolicyRegistryValue -Scope User `
     -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' `
     -RegistryValue 'Wallpaper' -RegistryType String -RegistryData $BackgroundImagePath
 
-# WallpaperStyle: 4 = Stretch
+# Desktop.admx Wallpaper: REG_SZ '4' = Fill; keep the existing policy behavior.
+# https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-desktop#wallpaper
 Set-PolicyRegistryValue -Scope User `
     -RegistryKeyPath 'Software\Microsoft\Windows\CurrentVersion\Policies\System' `
     -RegistryValue 'WallpaperStyle' -RegistryType String -RegistryData '4'

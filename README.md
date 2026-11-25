@@ -1,5 +1,7 @@
 ﻿# 🖥️ Federal Azure Virtual Desktop Automation
 
+![FederalAVD: AI-ready. Secure. Mission-ready desktops. AI networking, a virtual workspace, and a security shield.](docs/images/federalavd-banner.jpg)
+
 > **Enterprise-grade Azure Virtual Desktop deployment automation for Azure Commercial, Government, Secret, and Top Secret clouds**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)

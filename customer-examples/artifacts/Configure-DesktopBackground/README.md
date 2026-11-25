@@ -1,205 +1,188 @@
-﻿# Set-DesktopBackground.ps1
+# Configure desktop background
 
-## Overview
+This artifact includes nine FederalAVD MissionReady desktop backgrounds.
+**Federal Generic is the default.** Review the selected artwork against your
+organization's approval, branding, usage-rights, and accessibility requirements
+before deployment.
 
-This PowerShell script configures a custom desktop background image for Azure Virtual Desktop (AVD) session hosts using a built-in Registry.pol (PReg format) direct writer — no LGPO.exe and no internet access required.
+The script copies **one explicitly selected JPEG** into
+`%SystemRoot%\Web\Wallpaper\Custom\` and retains the existing local User Group
+Policy configuration. No LGPO.exe, image-generation service, or internet access
+is used at deployment time.
 
-## Purpose
+## Included backgrounds
 
-- Set custom desktop background/wallpaper for AVD session hosts
-- Apply desktop background settings via Local Group Policy
-- Support image customization during deployment
-- Enhance branding and user experience
+| File | Artwork | Use |
+| --- | --- | --- |
+| [FederalAVD_Federal_Generic_MissionReady_4K.jpg](FederalAVD_Federal_Generic_MissionReady_4K.jpg) | Federal Generic | **Default** |
+| [FederalAVD_Air_Force_MissionReady_4K.jpg](FederalAVD_Air_Force_MissionReady_4K.jpg) | Air Force | Alternative |
+| [FederalAVD_Army_MissionReady_4K.jpg](FederalAVD_Army_MissionReady_4K.jpg) | Army | Alternative |
+| [FederalAVD_Civilian_Missions_MissionReady_4K.jpg](FederalAVD_Civilian_Missions_MissionReady_4K.jpg) | Civilian Missions | Alternative |
+| [FederalAVD_Coast_Guard_MissionReady_4K.jpg](FederalAVD_Coast_Guard_MissionReady_4K.jpg) | Coast Guard | Alternative |
+| [FederalAVD_Intelligence_MissionReady_4K.jpg](FederalAVD_Intelligence_MissionReady_4K.jpg) | Intelligence | Alternative |
+| [FederalAVD_Marine_Corps_MissionReady_4K.jpg](FederalAVD_Marine_Corps_MissionReady_4K.jpg) | Marine Corps | Alternative |
+| [FederalAVD_Navy_MissionReady_4K.jpg](FederalAVD_Navy_MissionReady_4K.jpg) | Navy | Alternative |
+| [FederalAVD_Space_Force_MissionReady_4K.jpg](FederalAVD_Space_Force_MissionReady_4K.jpg) | Space Force | Alternative |
 
-## Prerequisites
+All nine JPEGs are **3840 x 2160 (16:9)**, approximately **1.6-2.2 MB** each
+and below 3 MB. These are the dimensions of the supplied files; the `4K` filename
+does not establish the original source resolution or whether artwork was upscaled.
 
-### Required Files
+## Resolution and display guidance
 
-**Desktop Background Image:**
+Microsoft's [background configuration guidance][background] recommends designing
+for **16:9**, with critical text kept inside the central **4:3** region for
+cross-display compatibility. Check the selected image's text, symbols, and focal
+points for clipping when using a display with a different aspect ratio.
 
-- **File name:** Must have `.jpg` extension (default: `sunrise.jpg`)
-- **Format:** JPEG
-- **Resolution:** High resolution recommended (4K: 3840x2560 pixels)
-- **Aspect ratio:** 3:2 (width:height)
-- **Location:** Same directory as this script
+- **3840 x 2160** is a useful UHD / 16:9 deployment canvas, not a mandatory
+  Microsoft policy resolution.
+- Custom wallpapers do not need to match the dimensions of the built-in Windows
+  wallpaper. Choose an aspect ratio suited to your displays.
+- At **1920 x 1080** or **3840 x 2160**, the bundled images match the display
+  ratio. At **1920 x 1200** or **3840 x 2400**, Fill crops the sides.
+- Ultrawide, portrait, and mixed-monitor layouts need separate visual checks.
+  Keep any added organizational text or required notices away from the edges.
+  Do not rely on wallpaper alone to deliver a mandatory notice.
+- Prefer sRGB JPEGs and keep custom files below 5 MB when practical.
 
-**IMPORTANT:** You must replace the default `sunrise.jpg` file with your organization's custom desktop background image before deployment.
+The existing policy uses **Fill**, which preserves proportions and crops to
+cover the screen. **Fit** preserves the entire image but can leave borders;
+**Stretch** can distort the image. This script does not add a style parameter
+or change the existing style. If your organization manages presentation through
+central policy, validate that policy's effective settings and precedence.
 
-## Usage
+These files are individual wallpapers, not a Windows theme or theme pack.
+The script does not configure slideshow rotation: it copies one selected image
+and enforces that fixed wallpaper. A rotating theme requires a separate per-user
+configuration without conflicting fixed-wallpaper enforcement.
 
-### Basic Usage
+## Stage and select an image
 
-```powershell
-.\Set-DesktopBackground.ps1
-```
-
-### Deployment Scenarios
-
-**Image Customization:**
-Used during custom image build via VM Run Commands
-
-**Session Host Deployment:**
-Applied via VM Run Commands during session host deployment
-
-**Manual Configuration:**
-Run directly on session hosts with Administrator privileges
-
-## How It Works
-
-### 1. Background Image Configuration
-
-- Locates the first `.jpg` file in the script directory
-- Creates `C:\Windows\Web\Wallpaper\Custom\` if it does not exist
-- Copies the image to `C:\Windows\Web\Wallpaper\Custom\<filename>.jpg`
-
-### 2. Policy Application
-
-- Writes three **User-scope** policy values directly to `Registry.pol` in MS-GPREG (PReg) binary format — no LGPO.exe or internet access required:
-  - `Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop` → `NoChangingWallPaper = 1` (prevents users from changing the wallpaper)
-  - `Software\Microsoft\Windows\CurrentVersion\Policies\System` → `Wallpaper = <path>` (path to the image)
-  - `Software\Microsoft\Windows\CurrentVersion\Policies\System` → `WallpaperStyle = 4` (Stretch)
-- Updates `gpt.ini` so the Group Policy client on deployed session hosts applies the entries at logon
-- `gpupdate` is not called; on deployed machines the GP client processes `Registry.pol` automatically at logon
-
-## Desktop Background Requirements
-
-### Image Specifications
-
-| Requirement | Recommendation |
-| --- | --- |
-| **Format** | JPG (JPEG) |
-| **Resolution** | 4K (3840x2560 pixels) or higher |
-| **Aspect Ratio** | 3:2 (width:height) |
-| **File Size** | Optimized for deployment (< 5MB recommended) |
-| **Color Space** | sRGB |
-
-### Design Considerations
-
-- **Accessibility:** Ensure desktop icons are readable over the background
-- **Branding:** Follow organizational branding guidelines
-- **Professional:** Appropriate for enterprise/government environments
-- **Resolution Testing:** Test across different monitor resolutions
-- **Aspect Ratios:** Consider 16:9, 16:10, and 3:2 monitors
-
-## Configuration Options
-
-### Wallpaper Style
-
-The script sets the wallpaper style via Group Policy. The default style is applied through LGPO settings:
-
-- **Fill:** Scales image to fill screen (crops if needed)
-- **Fit:** Scales image to fit screen (no cropping, may show borders)
-- **Stretch:** Stretches image to fill screen (may distort)
-- **Tile:** Repeats image across screen
-- **Center:** Centers image without scaling
-- **Span:** Spans image across multiple monitors
-
-### Policy Settings Applied
-
-```text
-User Configuration
-└── Administrative Templates
-    └── Desktop
-        ├── Prevent changing desktop background: [Enabled]
-        └── Desktop Wallpaper: [Enabled]
-            ├── Wallpaper Name: C:\Windows\Web\Wallpaper\Custom\<image>.jpg
-            └── Wallpaper Style: 4 (Stretch)
-```
-
-WallpaperStyle values: 0=Center, 1=Tile, 2=Stretch, 4=Stretch (fill), 6=Fit, 10=Fill, 22=Span
-
-## Logging
-
-Logs are created in:
-
-```text
-C:\Windows\Logs\Configuration\Set-DesktopBackground-<timestamp>.log
-```
-
-Log format includes:
-
-- Timestamp
-- Category (Info, Warning, Error)
-- Detailed operation messages
-
-## Functions
-
-| Function | Description |
-| --- | --- |
-| `New-Log` | Initializes logging infrastructure |
-| `Set-PolicyRegistryValue` | Queues a registry value for writing to Registry.pol |
-| `Invoke-PolicyUpdate` | Flushes the queue to Registry.pol and updates gpt.ini |
-| `Write-Log` | Writes formatted log entries |
-
-## Requirements
-
-- **OS:** Windows 10 or Windows 11
-- **Permissions:** Administrator / SYSTEM
-- **PowerShell:** 5.1 or higher
-- **Network Access:** Not required — no LGPO download; policies written directly to Registry.pol
-
-## Files and Directories
-
-### Script Directory
-
-```text
-Configure-DesktopBackground/
-├── Set-DesktopBackground.ps1
-└── sunrise.jpg (Replace with your image)
-```
-
-### System Locations
-
-```text
-C:\Windows\Web\Wallpaper\Custom\<your-image>.jpg
-C:\Windows\System32\GroupPolicy\
-C:\Windows\Logs\Configuration\
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue:** Desktop background not applied
-
-- **Solution:** Verify image file exists in script directory; check log for errors
-
-**Issue:** No `.jpg` file found
-
-- **Solution:** Place your `.jpg` background image in the same directory as the script
-
-**Issue:** Image not displaying correctly
-
-- **Solution:** Verify image format is JPEG; check resolution and aspect ratio
-
-**Issue:** Users can still change wallpaper
-
-- **Solution:** Verify Group Policy was applied; check `gpresult /h report.html`
-
-### Verification
-
-Check if policy was applied:
+Copy the **complete folder** into the git-ignored customer area before changing it:
 
 ```powershell
-# Check User registry.pol was written
-Test-Path "$env:SystemRoot\System32\GroupPolicy\User\Registry.pol"
-
-# Generate Group Policy report
-gpresult /h C:\Temp\gpresult.html
+New-Item -ItemType Directory -Path '.\customer\artifacts' -Force | Out-Null
+Copy-Item -LiteralPath '.\customer-examples\artifacts\Configure-DesktopBackground' `
+    -Destination '.\customer\artifacts' -Recurse
 ```
 
-## Best Practices
+For manual configuration on an approved test session host, run as Administrator
+or SYSTEM with Windows PowerShell 5.1 or later:
 
-1. **Test First:** Test desktop background on multiple monitor configurations
-2. **Image Optimization:** Compress images to reduce deployment size
-3. **Naming Convention:** Use descriptive image names (e.g., `contoso-wallpaper-2025.jpg`)
-4. **Version Control:** Track wallpaper changes with versioned filenames
+```powershell
+# Default: Federal Generic.
+.\customer\artifacts\Configure-DesktopBackground\Set-DesktopBackground.ps1
+
+# Select an alternative.
+.\customer\artifacts\Configure-DesktopBackground\Set-DesktopBackground.ps1 `
+    -ImageFile 'FederalAVD_Army_MissionReady_4K.jpg'
+
+.\customer\artifacts\Configure-DesktopBackground\Set-DesktopBackground.ps1 `
+    -ImageFile 'FederalAVD_Navy_MissionReady_4K.jpg'
+```
+
+For image-build or session-host customization, select the image through the
+customization's `arguments` property:
+
+```json
+{
+  "name": "Configure-DesktopBackground",
+  "blobNameOrUri": "Configure-DesktopBackground.zip",
+  "arguments": "-ImageFile FederalAVD_Army_MissionReady_4K.jpg"
+}
+```
+
+Omit arguments to use `FederalAVD_Federal_Generic_MissionReady_4K.jpg`.
+The script does not select the first enumerated JPEG: adding another image cannot
+change the default.
+A missing selected file produces an error; it never silently chooses another.
+
+For your own artwork, replace `FederalAVD_Federal_Generic_MissionReady_4K.jpg`
+in your **customer copy**, or add a JPEG beside the script and pass its filename
+with `-ImageFile`. Only `.jpg` filenames in that directory are accepted, not paths
+or wildcards. Existing customer packages with a differently named JPEG must
+either pass its name or use the new default filename. Update customization
+arguments that reference images removed from this example.
+
+Package and upload the customer folder using the
+[artifact workflow](../../../docs/artifacts-guide.md) and
+[Update-ImageArtifacts guide](../../../docs/update-image-artifacts.md).
+The images are already bundled: no download command, external source URL, or
+`downloads.json` entry is needed. For disconnected deployments, transfer the
+approved complete package through your normal low-to-high process. Runtime
+configuration uses the pre-staged local image only.
+
+## Policy configuration and limitations
+
+The following existing values are written to
+`%SystemRoot%\System32\GroupPolicy\User\Registry.pol`:
+
+| Policy key, relative to HKCU | Value | Type | Data |
+| --- | --- | --- | --- |
+| `Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop` | `NoChangingWallPaper` | DWORD | `1` |
+| `Software\Microsoft\Windows\CurrentVersion\Policies\System` | `Wallpaper` | REG_SZ | Full path to the copied JPEG |
+| `Software\Microsoft\Windows\CurrentVersion\Policies\System` | `WallpaperStyle` | REG_SZ | `4` (**Fill**) |
+
+`Desktop.admx` / matching `en-US\Desktop.adml` define the Desktop Wallpaper policy
+under **User Configuration > Administrative Templates > Desktop > Desktop**.
+Its style values are `0=Center`, `1=Tile`, `2=Stretch`, `3=Fit`, `4=Fill`,
+`5=Span`. Do not substitute the different `Control Panel\Desktop` registry
+encodings such as `10` or `22`.
+
+`ControlPanelDisplay.admx` / matching ADML define **Prevent changing desktop
+background** under **User Configuration > Administrative Templates > Control
+Panel > Personalization**. These mappings were checked against Windows 11 build
+26100 templates and the official [Desktop Wallpaper][wallpaper] and
+[Prevent changing desktop background][prevent] references. The references list
+User scope and Pro, Enterprise, Education, and IoT Enterprise editions, not Home.
+
+> **AVD / remote-session validation required:** Microsoft's Desktop Wallpaper
+> policy explanation explicitly says it does not apply to remote desktop server
+> sessions. This update preserves the existing policy mechanism; it does not
+> resolve that documented limitation or prove behavior on Windows Enterprise
+> multi-session. Validate on your exact session-host build and connection type.
+> Remote-session background suppression and higher-precedence domain/MDM policy
+> can also affect the result.
+
+The script updates `gpt.ini`; it does not call `gpupdate` or immediately refresh
+an existing desktop. Test policy processing at the next user sign-in, including
+both fresh and existing user profiles.
+
+## Verification and troubleshooting
+
+Logs are written under `%SystemRoot%\Logs\Configuration\` with the prefix
+`Configure-DesktopWallpaper-`.
+
+On a representative test host:
+
+1. Confirm the selected JPEG was copied to
+   `%SystemRoot%\Web\Wallpaper\Custom\<selected-file>.jpg`.
+2. Confirm User `Registry.pol` exists. Generate a report with
+   `gpresult /h "$env:TEMP\wallpaper-gpresult.html"` in the target user's context.
+3. Check effective user values:
+
+   ```powershell
+   Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System' `
+       -Name Wallpaper, WallpaperStyle
+   Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop' `
+       -Name NoChangingWallPaper
+   ```
+
+4. Sign out and back in. Check the actual AVD session, not only the console:
+   selected artwork, icon contrast, crop, taskbar/Start readability, multiple
+   monitors, and whether wallpaper changes are prevented.
+5. If the background is missing, check the selected filename, package contents,
+   log, effective policies, and client/session background settings. Offline file
+   and policy-write checks do not prove that a remote session will render it.
 
 ## References
 
-- [Microsoft Learn: Desktop Wallpaper Configuration](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11)
-- [AVD Customization Best Practices](https://learn.microsoft.com/en-us/azure/virtual-desktop/customize-session-host-configuration)
+- [Microsoft: Configure desktop and lock screen backgrounds][background]
+- [Microsoft: Windows 11 wallpaper composition](https://learn.microsoft.com/en-us/windows-hardware/customize/desktop/wallpaper-and-themes-windows-11)
+- [Microsoft: Desktop Wallpaper policy][wallpaper]
+- [Microsoft: Prevent changing desktop background][prevent]
 
-## Support
-
-For issues or questions related to this script, refer to the main repository documentation or contact your IT support team.
+[background]: https://learn.microsoft.com/en-us/windows/configuration/background/
+[wallpaper]: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-desktop#wallpaper
+[prevent]: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-admx-controlpaneldisplay#cpl-personalization-nodesktopbackgroundui

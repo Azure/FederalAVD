@@ -95,7 +95,7 @@ product configuration, READMEs, and staged installers.
 | [BuiltIn-UWP-Apps](BuiltIn-UWP-Apps/) | Provision built-in Windows UWP apps for all users | `WindowsCalculator`, `MicrosoftPaint`, `SnippingTool`, `Notepad`, `MicrosoftClipchamp`, `MicrosoftPhotos` |
 | [Configure-AVDSessionHostPolicy](Configure-AVDSessionHostPolicy/) | Configure AVD security, graphics, Shortpath, and directional clipboard policies | `AVDAdministrativeTemplates` |
 | [Configure-ChromePolicy](Configure-ChromePolicy/) | Apply Google Chrome Group Policy settings, including search provider enforcement | `ChromeEnterpriseAdministrativeTemplates` |
-| [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper | — |
+| [Configure-DesktopBackground](Configure-DesktopBackground/) | Set a custom desktop wallpaper; nine MissionReady images with Federal Generic as the default | — |
 | [Configure-EdgeFavoritesBackup](Configure-EdgeFavoritesBackup/) | Schedule per-user Edge favorites HTML backups with retained recovery copies and manual import | None |
 | [Configure-EdgePolicy](Configure-EdgePolicy/) | Apply Edge Group Policy settings via LGPO, including search provider enforcement | `EdgeEnterpriseAdministrativeTemplates` |
 | [Configure-LocalServiceAccount](Configure-LocalServiceAccount/) | Create or update a local service account using a Key Vault password | — |
