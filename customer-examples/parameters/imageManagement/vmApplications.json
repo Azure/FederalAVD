@@ -18,6 +18,26 @@
       ],
       "excludeFromLatest": false,
       "scriptBehaviorAfterReboot": "Rerun"
+    },
+    {
+      "name": "UserCertificateBackupRestore",
+      "version": "1.0.0",
+      "packageBlob": "UserCertificateBackupRestore.zip",
+      "packageFileName": "UserCertificateBackupRestore.zip",
+      "supportedOSType": "Windows",
+      "description": "Interactive software certificate restore and backup tools for Entra-joined FSLogix session hosts.",
+      "install": "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"$ErrorActionPreference = 'Stop'; Expand-Archive -LiteralPath '.\\UserCertificateBackupRestore.zip' -DestinationPath '.\\package' -Force; $LASTEXITCODE = 0; & '.\\package\\Deploy-UserCertificateBackupRestore.ps1' -DeploymentType 'Install'; exit $LASTEXITCODE\"",
+      "remove": "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"$ErrorActionPreference = 'Stop'; Expand-Archive -LiteralPath '.\\UserCertificateBackupRestore.zip' -DestinationPath '.\\package' -Force; $LASTEXITCODE = 0; & '.\\package\\Deploy-UserCertificateBackupRestore.ps1' -DeploymentType 'Uninstall'; exit $LASTEXITCODE\"",
+      "update": "powershell.exe -NoLogo -NoProfile -NonInteractive -Command \"$ErrorActionPreference = 'Stop'; Expand-Archive -LiteralPath '.\\UserCertificateBackupRestore.zip' -DestinationPath '.\\package' -Force; $LASTEXITCODE = 0; & '.\\package\\Deploy-UserCertificateBackupRestore.ps1' -DeploymentType 'Install'; exit $LASTEXITCODE\"",
+      "targetRegions": [
+        {
+          "name": "eastus2",
+          "regionalReplicaCount": 1,
+          "storageAccountType": "Standard_LRS"
+        }
+      ],
+      "excludeFromLatest": false,
+      "scriptBehaviorAfterReboot": "None"
     }
   ]
 }
