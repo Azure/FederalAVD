@@ -128,7 +128,8 @@ if ($StatusCode -eq 200) {
         Write-Output 'Virtual machine was using an outdated image and has been deleted.'
     }
     else {
-        Write-Output 'Virtual machine is using the latest image. No deletion necessary.'
+        Write-Output 'Virtual machine is using the latest image. No deletion and redeployment necessary.'
+        return
     }
 }
 

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources revision="1.0" schemaVersion="1.0">
+  <displayName>User Certificate Backup &amp; Restore</displayName>
+  <description>Computer-scoped folder policies for software certificate restore and backup.</description>
+  <resources>
+    <stringTable>
+      <string id="UserCertificateBackupRestoreCategory">User Certificate Backup &amp; Restore</string>
+      <string id="CertificateFolderName">Set the managed certificate backup and restore folder</string>
+      <string id="ExpiryWarningDaysName">Set the certificate expiry warning period</string>
+      <string id="ExpiryWarningDaysExplain">When enabled, writes ExpiryWarningDays under HKLM\Software\Policies\UserCertificateBackupRestore as a DWORD from 1 to 365. Both the restore form and backup helper use this warning window, overriding the helper's command-line warning period. This changes warnings only; it does not renew certificates, prevent expired certificate imports, or change certificate trust. Disabled removes this policy's warning period. Not Configured does not enforce a period through this GPO; other management may still set the registry value. When the registry value is absent, the restore form uses 30 days and the helper uses its command-line/default value of 30 days. Relaunch the application after policy refresh.</string>
+      <string id="CertificateFolderExplain">When enabled, writes CertificateFolder under HKLM\Software\Policies\UserCertificateBackupRestore as REG_EXPAND_SZ for both backup and restore. Both forms read the 64-bit view and resolve the value in the interactive user's context. Use an absolute drive/UNC path, environment-rooted path, or {Documents}\CertificateBackups. {Documents} is an application token using the Windows Documents known folder without creating it during lookup. If effective OneDrive silent KFM policy includes Documents, token resolution requires Documents under the available work OneDrive root identified by OneDriveCommercial; otherwise the operation stops with retry guidance. This checks local redirection, not cloud sync or tenant identity. Apply OneDrive policy before launch and validate multi-business-account environments separately. This value overrides command-line paths, HKCU preferences, and defaults and locks folder controls in both forms. Restore can select a PFX/P12 within this folder; selecting a file without matching manifest metadata requires a warning and confirmation. Explicit backup submission creates missing directories; users need write permission. The policy does not grant storage access, change trust, repair FSLogix/DPAPI, configure OneDrive, or store passwords. Disabled removes this setting. Not Configured does not enforce a value through this GPO; other management may still supply it. With no registry value, precedence is explicit InputPath, HKCU\Software\UserCertificateBackupRestore\InputPath, legacy JSON, then the deployment default {Documents}\CertificateBackups. Remember folder saves the ordinary HKCU preference, not policy. Relaunch after policy refresh.</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="CertificateFolderPresentation">
+        <textBox refId="CertificateFolderValue">
+          <label>Managed backup and restore folder:</label>
+          <defaultValue>{Documents}\CertificateBackups</defaultValue>
+        </textBox>
+      </presentation>
+      <presentation id="ExpiryWarningDaysPresentation">
+        <decimalTextBox refId="ExpiryWarningDaysValue" defaultValue="30">Days before expiry to warn:</decimalTextBox>
+      </presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>
