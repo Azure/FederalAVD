@@ -1,0 +1,708 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+    "view": {
+        "kind": "Form",
+        "properties": {
+            "title": "FSLogix Profile Management Add-On",
+            "steps": [
+                {
+                    "name": "basics",
+                    "label": "Basics",
+                    "elements": [
+                        {
+                            "name": "description",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Description",
+                            "elements": [
+                                {
+                                    "name": "overview",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "The FSLogix Profile Management solution removes expired FSLogix profile containers from Azure Files shares to reduce storage cost."
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "scope",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Deployment Scope",
+                            "elements": [
+                                {
+                                    "name": "subscription",
+                                    "type": "Microsoft.Common.SubscriptionSelector",
+                                    "resourceProviders": [
+                                        "Microsoft.Authorization",
+                                        "Microsoft.Compute",
+                                        "Microsoft.Insights",
+                                        "Microsoft.KeyVault",
+                                        "Microsoft.ManagedIdentity",
+                                        "Microsoft.Network",
+                                        "Microsoft.Resources",
+                                        "Microsoft.Storage",
+                                        "Microsoft.Web"
+                                    ],
+                                    "constraints": {
+                                        "validations": [
+                                            {
+                                                "isValid": "[not(empty(steps('basics').scope.subscription.subscriptionId))]",
+                                                "message": "Select a deployment subscription."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "locationsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/locations?api-version=2020-01-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "location",
+                                    "type": "Microsoft.Common.LocationSelector",
+                                    "label": "Region",
+                                    "toolTip": "Region for the resource group and function app infrastructure. Verify Windows Dedicated plan and PowerShell runtime availability in this cloud and region.",
+                                    "resourceTypes": [
+                                        "Microsoft.Authorization/roleAssignments",
+                                        "Microsoft.Insights/components",
+                                        "Microsoft.Insights/diagnosticSettings",
+                                        "Microsoft.Insights/privateLinkScopes",
+                                        "Microsoft.KeyVault/vaults",
+                                        "Microsoft.ManagedIdentity/userAssignedIdentities",
+                                        "Microsoft.Network/networkInterfaces",
+                                        "Microsoft.Network/privateEndpoints",
+                                        "Microsoft.Resources/resourceGroups",
+                                        "Microsoft.Storage/storageAccounts",
+                                        "Microsoft.Web/serverFarms",
+                                        "Microsoft.Web/sites"
+                                    ],
+                                    "allowedValues": "[map(filter(steps('basics').scope.locationsApi.value, (item) => equals(item.metadata.regionType, 'Physical')), (item) => item.name)]",
+                                    "scope": {
+                                        "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+                                    },
+                                    "visible": true
+                                }
+                            ]
+                        },
+                        {
+                            "name": "subscriptionsApi",
+                            "type": "Microsoft.Solutions.ArmApiControl",
+                            "request": {
+                                "method": "GET",
+                                "path": "subscriptions?api-version=2022-12-01"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "functionApp",
+                    "label": "Function App",
+                    "elements": [
+                        {
+                            "name": "general",
+                            "type": "Microsoft.Common.Section",
+                            "label": "General Settings",
+                            "elements": [
+                                {
+                                    "name": "existingAppServicePlan",
+                                    "type": "Microsoft.Common.CheckBox",
+                                    "label": "Existing app service plan?"
+                                },
+                                {
+                                    "name": "appServicePlan",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "App service plan",
+                                    "resourceType": "Microsoft.Web/serverFarms",
+                                    "scope": {
+                                        "location": "[steps('basics').scope.location.name]",
+                                        "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+                                    },
+                                    "visible": "[steps('functionApp').general.existingAppServicePlan]",
+                                    "constraints": {
+                                        "required": true
+                                    }
+                                },
+                                {
+                                    "name": "appServicePlanSku",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "App service plan SKU",
+                                    "toolTip": "The SKU of the app service plan. These SKUs are pinned to the PremiumV3 tier for dedicated plans.",
+                                    "visible": "[not(steps('functionApp').general.existingAppServicePlan)]",
+                                    "defaultValue": "P0v3",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "P0v3",
+                                                "value": "P0v3"
+                                            },
+                                            {
+                                                "label": "P1v3",
+                                                "value": "P1v3"
+                                            },
+                                            {
+                                                "label": "P2v3",
+                                                "value": "P2v3"
+                                            },
+                                            {
+                                                "label": "P3v3",
+                                                "value": "P3v3"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "schedule",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Cron schedule",
+                                    "toolTip": "Enter six NCRONTAB fields. The default value triggers daily at 9 PM.",
+                                    "defaultValue": "0 0 21 * * *",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^(?:\\S+\\s+){5}\\S+$|^%[^%\\s]+%$",
+                                                "message": "Enter six whitespace-separated NCRONTAB fields or an app-setting reference enclosed in percent signs."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "timeZone",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Time zone",
+                                    "toolTip": "The time zone for the timer schedule in the Function App.",
+                                    "visible": true,
+                                    "defaultValue": "Coordinated Universal Time (UTC)",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Coordinated Universal Time (UTC)",
+                                                "value": "UTC"
+                                            },
+                                            {
+                                                "label": "Eastern Standard Time (EST)",
+                                                "value": "Eastern Standard Time"
+                                            },
+                                            {
+                                                "label": "Central Standard Time (CST)",
+                                                "value": "Central Standard Time"
+                                            },
+                                            {
+                                                "label": "Mountain Standard Time (MST)",
+                                                "value": "Mountain Standard Time"
+                                            },
+                                            {
+                                                "label": "Pacific Standard Time (PST)",
+                                                "value": "Pacific Standard Time"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "networkSettings",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Network Settings",
+                            "elements": [
+                                {
+                                    "name": "overview",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "The network settings defined here are used to configure the service or private endpoint configurations if selected. All endpoints will be deployed to the subnet. The delegated subnet is only for outbound connectivity from the Function App."
+                                    }
+                                },
+                                {
+                                    "name": "networkAccess",
+                                    "type": "Microsoft.Common.OptionsGroup",
+                                    "label": "Network access",
+                                    "defaultValue": "Disable public access and use private access",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Disable public access and use private access",
+                                                "value": "private"
+                                            },
+                                            {
+                                                "label": "Enable public access from selected virtual networks and IP addresses",
+                                                "value": "service"
+                                            },
+                                            {
+                                                "label": "Enable public access from all networks",
+                                                "value": "public"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "virtualNetwork",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Virtual Network",
+                                    "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                                    "resourceType": "Microsoft.Network/virtualNetworks",
+                                    "scope": {
+                                        "location": "[steps('basics').scope.location.name]",
+                                        "subscriptionId": "[steps('basics').scope.subscription.subscriptionId]"
+                                    },
+                                    "constraints": {
+                                        "required": true
+                                    }
+                                },
+                                {
+                                    "name": "subnetsApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat(steps('functionApp').networkSettings.virtualNetwork.id, '/subnets?api-version=2022-05-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "subnet",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                                    "label": "Subnet",
+                                    "defaultValue": "",
+                                    "toolTip": "Select the subnet for the inbound connectivity.",
+                                    "constraints": {
+                                        "allowedValues": "[map(filter(steps('functionApp').networkSettings.subnetsApi.value, (item) => and(empty(item.properties.delegations), not(contains(item.name, 'Bastion')), not(contains(item.name, 'Firewall')))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]",
+                                        "required": true
+                                    }
+                                },
+                                {
+                                    "name": "delegatedSubnet",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "visible": "[not(equals(steps('functionApp').networkSettings.networkAccess, 'public'))]",
+                                    "label": "Delegated Subnet (Function App Outbound)",
+                                    "defaultValue": "",
+                                    "toolTip": "Select an existing delegated subnet for the outbound connectivity on the function app.",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": "[map(filter(steps('functionApp').networkSettings.subnetsApi.value, (item) => not(empty(filter(if(empty(item.properties.delegations), parse('[]'), item.properties.delegations), (delegation) => equals(toLower(delegation.properties.serviceName), 'microsoft.web/serverfarms'))))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.id, '\"}')))]"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "privateDnsZones",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Private DNS Zones",
+                            "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
+                            "elements": [
+                                {
+                                    "name": "subscription",
+                                    "type": "Microsoft.Common.SubscriptionSelector",
+                                    "resourceProviders": [
+                                        "Microsoft.Network"
+                                    ],
+                                    "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                },
+                                {
+                                    "name": "privateDnsZonesApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "condition": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]",
+                                    "request": {
+                                        "method": "GET",
+                                        "path": "[concat('/subscriptions/', steps('functionApp').privateDnsZones.subscription.subscriptionId, '/providers/Microsoft.Network/privateDnsZones?api-version=2018-09-01')]"
+                                    }
+                                },
+                                {
+                                    "name": "azureBlobs",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Azure blobs",
+                                    "toolTip": "Select the private DNS zone for Azure Blobs.",
+                                    "multiLine": true,
+                                    "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => item.name))]",
+                                    "constraints": {
+                                        "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'blob')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
+                                        "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                    },
+                                    "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                },
+                                {
+                                    "name": "azureFunctions",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Azure functions",
+                                    "toolTip": "Select the private DNS zone for Azure Functions.",
+                                    "multiLine": true,
+                                    "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => item.name))]",
+                                    "constraints": {
+                                        "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'azurewebsites')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
+                                        "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                    },
+                                    "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                },
+                                {
+                                    "name": "keyVault",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "label": "Key vault",
+                                    "toolTip": "Select the private DNS zone for the key vault.",
+                                    "multiLine": true,
+                                    "defaultValue": "[first(map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => item.name))]",
+                                    "constraints": {
+                                        "allowedValues": "[map(filter(steps('functionApp').privateDnsZones.privateDnsZonesApi.value, (item) => contains(item.name, 'vault')), (item) => parse(concat('{\"label\":\"', item.name, '\",\"description\":\"', first(skip(split(item.id, '/'), 4)), '\",\"value\":\"', item.id, '\"}')))]",
+                                        "required": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                    },
+                                    "visible": "[equals(steps('functionApp').networkSettings.networkAccess, 'private')]"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "monitoring",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Monitoring",
+                            "elements": [
+                                {
+                                    "name": "enableMonitoring",
+                                    "type": "Microsoft.Common.OptionsGroup",
+                                    "label": "Monitoring",
+                                    "defaultValue": "Enabled",
+                                    "constraints": {
+                                        "required": true,
+                                        "allowedValues": [
+                                            {
+                                                "label": "Enabled",
+                                                "value": "enabled"
+                                            },
+                                            {
+                                                "label": "Disabled",
+                                                "value": "disabled"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "workspace",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Log Analytics Workspace",
+                                    "resourceType": "Microsoft.OperationalInsights/workspaces",
+                                    "visible": "[equals(steps('functionApp').monitoring.enableMonitoring, 'enabled')]",
+                                    "constraints": {
+                                        "required": true
+                                    }
+                                },
+                                {
+                                    "name": "privateLinkScope",
+                                    "type": "Microsoft.Solutions.ResourceSelector",
+                                    "label": "Azure Monitor Private Link Scope",
+                                    "resourceType": "Microsoft.Insights/privateLinkScopes",
+                                    "visible": "[and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private'))]",
+                                    "constraints": {
+                                        "required": true
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "script",
+                    "label": "Script",
+                    "elements": [
+                        {
+                            "name": "settings",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Settings",
+                            "elements": [
+                                {
+                                    "name": "subscriptions",
+                                    "label": "Subscriptions",
+                                    "type": "Microsoft.Common.DropDown",
+                                    "toolTip": "Select the subscriptions that will be managed by this script.",
+                                    "filter": true,
+                                    "multiselect": true,
+                                    "multiLine": true,
+                                    "constraints": {
+                                        "allowedValues": "[map(steps('basics').subscriptionsApi.value, (item) => parse(concat('{\"label\":\"', item.displayName, '\",\"value\":\"', item.subscriptionId, '\",\"description\":\"', 'ID: ', item.subscriptionId, '\"}')))]",
+                                        "required": true
+                                    }
+                                },
+                                {
+                                    "name": "days",
+                                    "type": "Microsoft.Common.Slider",
+                                    "label": "Delete Older Than Days",
+                                    "defaultValue": 60,
+                                    "min": 1,
+                                    "max": 2555,
+                                    "showStepMarkers": false,
+                                    "toolTip": "Select the number of days an FSLogix profile must be inactive before it is deleted.",
+                                    "constraints": {
+                                        "required": true
+                                    },
+                                    "visible": true
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "namingAndTags",
+                    "label": "Naming + Tags",
+                    "elements": [
+                        {
+                            "name": "naming",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Naming",
+                            "elements": [
+                                {
+                                    "name": "namingInfo",
+                                    "type": "Microsoft.Common.TextBlock",
+                                    "options": {
+                                        "text": "Azure resource names should follow the guidance in the Cloud Adoption Framework. The inputs below allow you to input free form text but have validations to ensure the names adhere to the guidance provided by the Cloud Adoption Framework."
+                                    }
+                                },
+                                {
+                                    "name": "appServicePlan",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "App service plan",
+                                    "defaultValue": "asp-<env>-<location>-fpm",
+                                    "visible": "[not(steps('functionApp').general.existingAppServicePlan)]",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^[a-zA-Z0-9-]{1,40}$",
+                                                "message": "The name must be 1 - 40 characters and contain only letters, numbers, or hyphens."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "applicationInsights",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Application insights",
+                                    "defaultValue": "appi-<env>-<location>-fpm",
+                                    "toolTip": "",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^.{1,260}$",
+                                                "message": "The name must be 1 - 260 characters."
+                                            },
+                                            {
+                                                "regex": "^[^%&\\\\?/]*$",
+                                                "message": "The name cannot use %, &, \\, ?, or /."
+                                            },
+                                            {
+                                                "isValid": "[and(not(endsWith(steps('namingAndTags').naming.applicationInsights, '.')), not(endsWith(steps('namingAndTags').naming.applicationInsights, ' ')))]",
+                                                "message": "The name cannot end with periods or spaces."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "functionAppCheckNameAvailabilityApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "request": {
+                                        "method": "POST",
+                                        "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.Web/checkNameAvailability?api-version=2016-08-01')]",
+                                        "body": {
+                                            "name": "[steps('namingAndTags').naming.functionApp]",
+                                            "type": "Microsoft.Web/sites"
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "functionApp",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Function app",
+                                    "defaultValue": "fa-<env>-<location>-fpm",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^[a-zA-Z0-9-]{2,60}$",
+                                                "message": "The value must be 2 - 60 letters, numbers, or hyphens."
+                                            },
+                                            {
+                                                "regex": "^[a-zA-Z0-9].*$",
+                                                "message": "The value must start with a letter or number."
+                                            },
+                                            {
+                                                "regex": "^.*[a-zA-Z0-9]$",
+                                                "message": "The value must end with a letter or number."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "keyVaultCheckNameAvailabilityApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "request": {
+                                        "method": "POST",
+                                        "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.KeyVault/checkNameAvailability?api-version=2024-11-01')]",
+                                        "body": {
+                                            "name": "[steps('namingAndTags').naming.keyVault]",
+                                            "type": "Microsoft.KeyVault/vaults"
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "keyVault",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Key vault",
+                                    "defaultValue": "kv-<env>-<location>-fpm",
+                                    "toolTip": "Input the name of the key vault to store keys.",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^[a-zA-Z0-9-]{3,24}$",
+                                                "message": "The value must use 3-24 letters, numbers, or hyphens."
+                                            },
+                                            {
+                                                "regex": "^[a-zA-Z].*$",
+                                                "message": "The value must start with a letter."
+                                            },
+                                            {
+                                                "regex": "^.*[a-zA-Z0-9]$",
+                                                "message": "The value must end with a letter or number."
+                                            },
+                                            {
+                                                "isValid": "[not(contains(steps('namingAndTags').naming.keyVault, '--'))]",
+                                                "message": "The value cannot contain consecutive hyphens."
+                                            },
+                                            {
+                                                "isValid": "[steps('namingAndTags').naming.keyVaultCheckNameAvailabilityApi.nameAvailable]",
+                                                "message": "The key vault name is not available."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "resourceGroup",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Resource group",
+                                    "defaultValue": "rg-<env>-<location>-fpm",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^[a-zA-Z0-9_()\\-.]{1,90}$",
+                                                "message": "The value must use 1 - 90 letters, numbers, underscores, parentheses, hyphens, or periods."
+                                            },
+                                            {
+                                                "isValid": "[not(endsWith(steps('namingAndTags').naming.resourceGroup, '.'))]",
+                                                "message": "Resource group names cannot end with a period."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "storageCheckNameAvailabilityApi",
+                                    "type": "Microsoft.Solutions.ArmApiControl",
+                                    "request": {
+                                        "method": "POST",
+                                        "path": "[concat('/subscriptions/', steps('basics').scope.subscription.subscriptionId, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2016-01-01')]",
+                                        "body": {
+                                            "name": "[steps('namingAndTags').naming.storage]",
+                                            "type": "Microsoft.Storage/storageAccounts"
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "storage",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "Storage account",
+                                    "defaultValue": "st<env><location>fpm",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^[a-z0-9]{3,24}$",
+                                                "message": "The value must use 3 - 24 lowercase letters or numbers."
+                                            },
+                                            {
+                                                "isValid": "[steps('namingAndTags').naming.storageCheckNameAvailabilityApi.nameAvailable]",
+                                                "message": "[steps('namingAndTags').naming.storageCheckNameAvailabilityApi.message]"
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
+                                    "name": "userAssignedIdentity",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "User-Assigned managed identity",
+                                    "defaultValue": "id-<env>-<location>-fpm",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^[a-zA-Z0-9_-]{3,128}$",
+                                                "message": "The value must use 3 - 128 letters, numbers, hyphens, or underscores."
+                                            },
+                                            {
+                                                "regex": "^[a-zA-Z0-9].*$",
+                                                "message": "The name must begin with a letter or number."
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "tagsSection",
+                            "type": "Microsoft.Common.Section",
+                            "label": "Tags",
+                            "elements": [
+                                {
+                                    "name": "tags",
+                                    "type": "Microsoft.Common.TagsByResource",
+                                    "resources": [
+                                        "Microsoft.Authorization/roleAssignments",
+                                        "Microsoft.Insights/components",
+                                        "Microsoft.Insights/diagnosticSettings",
+                                        "Microsoft.Insights/privateLinkScopes",
+                                        "Microsoft.KeyVault/vaults",
+                                        "Microsoft.ManagedIdentity/userAssignedIdentities",
+                                        "Microsoft.Network/networkInterfaces",
+                                        "Microsoft.Network/privateEndpoints",
+                                        "Microsoft.Resources/resourceGroups",
+                                        "Microsoft.Storage/storageAccounts",
+                                        "Microsoft.Web/serverFarms",
+                                        "Microsoft.Web/sites"
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "outputs": {
+            "parameters": {
+                "applicationInsightsName": "[steps('namingAndTags').naming.applicationInsights]",
+                "appServicePlanName": "[if(steps('functionApp').general.existingAppServicePlan, '', steps('namingAndTags').naming.appServicePlan)]",
+                "appServicePlanResourceId": "[if(steps('functionApp').general.existingAppServicePlan, steps('functionApp').general.appServicePlan.id, '')]",
+                "appServicePlanSku": "[if(steps('functionApp').general.existingAppServicePlan, 'P0v3', steps('functionApp').general.appServicePlanSku)]",
+                "azureBlobPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureBlobs, '')]",
+                "azureFunctionAppPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.azureFunctions, '')]",
+                "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.keyVault, '')]",
+                "deleteOlderThanDays": "[steps('script').settings.days]",
+                "endpointType": "[steps('functionApp').networkSettings.networkAccess]",
+                "functionAppDelegatedSubnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]",
+                "functionAppName": "[steps('namingAndTags').naming.functionApp]",
+                "keyVaultName": "[steps('namingAndTags').naming.keyVault]",
+                "logAnalyticsWorkspaceResourceId": "[if(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), steps('functionApp').monitoring.workspace.id, '')]",
+                "privateLinkScopeResourceId": "[if(and(equals(steps('functionApp').monitoring.enableMonitoring, 'enabled'), equals(steps('functionApp').networkSettings.networkAccess, 'private')), steps('functionApp').monitoring.privateLinkScope.id, '')]",
+                "resourceGroupName": "[steps('namingAndTags').naming.resourceGroup]",
+                "schedule": "[steps('functionApp').general.schedule]",
+                "storageAccountName": "[steps('namingAndTags').naming.storage]",
+                "subnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.subnet, '')]",
+                "subscriptionIds": "[steps('script').settings.subscriptions]",
+                "tags": "[steps('namingAndTags').tagsSection.tags]",
+                "timeZone": "[steps('functionApp').general.timeZone]",
+                "userAssignedIdentityName": "[steps('namingAndTags').naming.userAssignedIdentity]"
+            },
+            "kind": "Subscription",
+            "location": "[steps('basics').scope.location.name]",
+            "subscriptionId": "[concat('/subscriptions/',steps('basics').scope.subscription.subscriptionId)]"
+        }
+    }
+}

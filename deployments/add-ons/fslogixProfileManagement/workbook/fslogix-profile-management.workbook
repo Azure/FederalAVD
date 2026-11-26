@@ -1,0 +1,219 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "name": "overview",
+      "content": {
+        "json": "# FSLogix storage usage and recovery\nMonitor the **fslogix-profile-management** Function App. Select its Application Insights resource and a time range covering at least one cleanup run.\n\n**Definitions:** A profile is a top-level folder containing a qualifying VHD/VHDX, or an individual qualifying disk at the share root. Completed folder removals and root-disk removals are shown separately. Storage values are **logical file lengths**, not allocated blocks, share quota, snapshot usage, or billed capacity. Successful file deletions count toward recovery even when the enclosing profile is later skipped. Folder deletion bytes are never added a second time.\n\nInventory is a scan-time estimate, not a live or atomic measurement. Incomplete inventories are excluded from totals. Older deployments have no size/inventory telemetry: missing bytes are **unknown**, not zero. Keep Information logs and disable sampling for accurate observed counts; these logs are not a guaranteed deletion ledger."
+      }
+    },
+    {
+      "type": 9,
+      "name": "parameters",
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "application",
+            "version": "KqlParameterItem/1.0",
+            "name": "Application",
+            "label": "Cleanup Application Insights",
+            "type": 5,
+            "isRequired": true,
+            "isGlobal": true,
+            "multiSelect": false,
+            "query": "where type =~ 'microsoft.insights/components'\n| order by name asc\n| project value = id, label = id, selected = false, group = resourceGroup",
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "crossComponentResources": ["value::all"],
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.insights/components": true
+              },
+              "additionalResourceOptions": [],
+              "showDefault": false
+            }
+          },
+          {
+            "id": "time-range",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Reporting period",
+            "type": 4,
+            "isRequired": true,
+            "value": { "durationMs": 7776000000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 },
+                { "durationMs": 7776000000 },
+                { "durationMs": 15552000000 }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      }
+    },
+    {
+      "type": 3,
+      "name": "cleanup-kpis",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Cleanup and recovery during the reporting period",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1 and isnotempty(R.RunId)\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), EventTime = tostring(R.TimestampUtc), Path = tostring(R.Path), ShareUri = tostring(R.ShareUri)\n| summarize arg_max(timestamp, *) by RunId, Event, EventTime, ShareUri, Path\n| summarize TelemetryEvents = count(), ProfilesCleaned = countif(Event == 'ProfileDeleted'), RootDisksCleaned = countif(Event == 'DiskDeleted' and isempty(tostring(R.ProfileFolder))), FilesDeleted = countif(Event in ('DiskDeleted', 'FileDeleted')), RecoveredBytes = sumif(tolong(R.SizeBytes), Event in ('DiskDeleted', 'FileDeleted')), DeletionsMissingSize = countif(Event in ('DiskDeleted', 'FileDeleted') and isnull(tolong(R.SizeBytes))), Errors = countif(tostring(R.Level) == 'Error'), Warnings = countif(tostring(R.Level) == 'Warning'), CompletedRuns = countif(Event == 'RunCompleted'), FailedRuns = countif(Event == 'RunFailed'), ScheduleSkips = countif(Event == 'RunSkipped'), AccountsDenied = countif(Event == 'AccountSkipped' and tostring(R.Level) == 'Error'), ProfilesSkipped = countif(Event == 'ProfileSkipped')\n| extend RecoveredGiB = iff(DeletionsMissingSize > 0 or TelemetryEvents == 0, real(null), round(RecoveredBytes / 1073741824.0, 3))\n| extend Metrics = bag_pack('Total profiles cleaned', ProfilesCleaned + RootDisksCleaned, 'Profile folders cleaned', ProfilesCleaned, 'Root disks cleaned', RootDisksCleaned, 'Logical GiB recovered', RecoveredGiB, 'Files deleted', FilesDeleted, 'Errors', Errors, 'Warnings', Warnings, 'Completed runs', CompletedRuns, 'Failed runs', FailedRuns, 'Schedule skips', ScheduleSkips, 'Accounts denied', AccountsDenied, 'Profiles skipped', ProfilesSkipped, 'Deletions missing size', DeletionsMissingSize, 'Telemetry events', TelemetryEvents)\n| mv-expand Key = bag_keys(Metrics)\n| project Metric = tostring(Key), Value = todouble(Metrics[tostring(Key)])",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": { "columnMatch": "Metric", "formatter": 1 },
+          "leftContent": { "columnMatch": "Value", "formatter": 1, "formatOptions": { "aggregation": "Sum" } },
+          "showBorder": true
+        }
+      }
+    },
+    {
+      "type": 1,
+      "name": "inventory-note",
+      "content": {
+        "json": "## Latest storage and profile inventory\nThe summary uses the **latest scan attempt per share** within the reporting period. Failed or incomplete attempts do not fall back to a previous successful scan. Inspect coverage and the per-share table before interpreting totals. Remaining profile counts subtract only complete profile removals; remaining bytes subtract every successful file deletion. `EligibleGiB` is the pre-cleanup reclaim opportunity, including preview runs."
+      }
+    },
+    {
+      "type": 3,
+      "name": "inventory-summary",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Latest inventory totals (complete scans only)",
+        "query": "let E = traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), ShareUri = tostring(R.ShareUri);\nlet Attempts = E | where Event == 'ShareCleanupStarted' | summarize arg_max(timestamp, RunId) by ShareUri | project ShareUri, LatestRun = RunId;\nlet Snapshots = E | where Event == 'ShareInventoryCompleted' | summarize arg_max(timestamp, R) by ShareUri, RunId;\nAttempts\n| join kind=leftouter Snapshots on ShareUri, $left.LatestRun == $right.RunId\n| extend Complete = tobool(R.InventoryComplete) == true\n| summarize SharesAttempted = count(), CompleteShares = countif(Complete), MissingOrIncompleteShares = countif(not(Complete) or isnull(Complete)), ProfilesBefore = sumif(tolong(R.ProfileCountBefore), Complete), ProfilesRemaining = sumif(tolong(R.ProfileCountAfter), Complete), BytesBefore = sumif(tolong(R.TotalBytesBefore), Complete), BytesRemaining = sumif(tolong(R.TotalBytesAfter), Complete), EligibleProfiles = sumif(tolong(R.EligibleProfiles), Complete), EligibleBytes = sumif(tolong(R.EligibleBytes), Complete), PreviewShares = countif(tobool(R.Preview))\n| project SharesAttempted, CompleteShares, MissingOrIncompleteShares, ProfilesBefore = iff(CompleteShares == 0, long(null), ProfilesBefore), ProfilesRemaining = iff(CompleteShares == 0, long(null), ProfilesRemaining), TotalGiBBefore = iff(CompleteShares == 0, real(null), round(BytesBefore / 1073741824.0, 3)), TotalGiBRemaining = iff(CompleteShares == 0, real(null), round(BytesRemaining / 1073741824.0, 3)), EligibleProfiles = iff(CompleteShares == 0, long(null), EligibleProfiles), EligibleGiB = iff(CompleteShares == 0, real(null), round(EligibleBytes / 1073741824.0, 3)), PreviewShares",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "inventory-shares",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Latest scan by share and inventory freshness",
+        "query": "let E = traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), ShareUri = tostring(R.ShareUri);\nlet Attempts = E | where Event == 'ShareCleanupStarted' | summarize arg_max(timestamp, *) by ShareUri | project ShareUri, LatestRun = RunId, AttemptTime = timestamp, SubscriptionId = tostring(R.SubscriptionId), StorageAccount = tostring(R.StorageAccount);\nlet Snapshots = E | where Event == 'ShareInventoryCompleted' | summarize arg_max(timestamp, R) by ShareUri, RunId;\nAttempts\n| join kind=leftouter Snapshots on ShareUri, $left.LatestRun == $right.RunId\n| extend Complete = tobool(R.InventoryComplete) == true\n| project SubscriptionId, StorageAccount, ShareUri, AttemptTime, SnapshotTime = timestamp, AgeHours = round(datetime_diff('minute', now(), AttemptTime) / 60.0, 1), Status = case(isempty(RunId), 'Missing snapshot / failed attempt', not(Complete), 'Incomplete inventory', tobool(R.Preview), 'Complete preview', 'Complete scan'), ProfilesBefore = iff(Complete, tolong(R.ProfileCountBefore), long(null)), ProfilesRemaining = iff(Complete, tolong(R.ProfileCountAfter), long(null)), TotalGiBBefore = iff(Complete, round(tolong(R.TotalBytesBefore) / 1073741824.0, 3), real(null)), TotalGiBRemaining = iff(Complete, round(tolong(R.TotalBytesAfter) / 1073741824.0, 3), real(null)), EligibleProfiles = iff(Complete, tolong(R.EligibleProfiles), long(null)), EligibleGiB = iff(Complete, round(tolong(R.EligibleBytes) / 1073741824.0, 3), real(null)), RunId = LatestRun\n| order by AttemptTime desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "recovery-trend",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Daily logical storage recovery (GiB)",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), EventTime = tostring(R.TimestampUtc), Path = tostring(R.Path), ShareUri = tostring(R.ShareUri)\n| where Event in ('DiskDeleted', 'FileDeleted')\n| summarize arg_max(timestamp, *) by RunId, Event, EventTime, ShareUri, Path\n| summarize Bytes = sum(tolong(R.SizeBytes)), MissingSizes = countif(isnull(tolong(R.SizeBytes))) by bin(timestamp, 1d)\n| project timestamp, RecoveredGiB = iff(MissingSizes > 0, real(null), Bytes / 1073741824.0)\n| order by timestamp asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "cleanup-trend",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Daily cleanup outcomes",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), EventTime = tostring(R.TimestampUtc), Path = tostring(R.Path), ShareUri = tostring(R.ShareUri)\n| summarize arg_max(timestamp, *) by RunId, Event, EventTime, ShareUri, Path\n| summarize ProfilesCleaned = countif(Event == 'ProfileDeleted'), RootDisksCleaned = countif(Event == 'DiskDeleted' and isempty(tostring(R.ProfileFolder))), Errors = countif(tostring(R.Level) == 'Error'), ProfilesSkipped = countif(Event == 'ProfileSkipped') by bin(timestamp, 1d)\n| order by timestamp asc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "name": "run-health",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Run health and duration",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1 and isnotempty(R.RunId)\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), EventTime = tostring(R.TimestampUtc), Path = tostring(R.Path), ShareUri = tostring(R.ShareUri)\n| summarize arg_max(timestamp, *) by RunId, Event, EventTime, ShareUri, Path\n| summarize FirstSeen = min(timestamp), LastSeen = max(timestamp), Completed = countif(Event == 'RunCompleted'), Failed = countif(Event == 'RunFailed'), ScheduleSkipped = countif(Event == 'RunSkipped'), ProfilesCleaned = countif(Event == 'ProfileDeleted'), RootDisksCleaned = countif(Event == 'DiskDeleted' and isempty(tostring(R.ProfileFolder))), Errors = countif(tostring(R.Level) == 'Error'), Warnings = countif(tostring(R.Level) == 'Warning'), SharesScanned = countif(Event == 'ShareInventoryCompleted'), PreviewScans = countif(Event == 'ShareInventoryCompleted' and tobool(R.Preview)) by RunId\n| extend Status = case(Failed > 0, 'Failed', ScheduleSkipped > 0, 'Schedule skipped', Completed > 0 and (Errors > 0 or Warnings > 0), 'Completed with issues', Completed > 0, 'Completed', 'No terminal event in period'), ObservedDurationSeconds = datetime_diff('second', LastSeen, FirstSeen)\n| project FirstSeen, LastSeen, Status, ObservedDurationSeconds, ProfilesCleaned, RootDisksCleaned, Errors, Warnings, SharesScanned, PreviewScans, RunId\n| order by FirstSeen desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "largest-profiles",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Largest inventoried profiles (latest observation per path)",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1 and tostring(R.EventType) == 'ProfileInventoried'\n| extend ShareUri = tostring(R.ShareUri), Path = tostring(R.Path)\n| summarize arg_max(timestamp, *) by ShareUri, Path\n| project ObservedAt = timestamp, SubscriptionId = tostring(R.SubscriptionId), StorageAccount = tostring(R.StorageAccount), ShareUri, Path, Kind = tostring(R.ItemType), SizeGiB = tolong(R.SizeBytes) / 1073741824.0, EligibleAtScan = tobool(R.Eligible), Preview = tobool(R.Preview), RunId = tostring(R.RunId)\n| top 100 by SizeGiB desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "deletion-audit",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Recent successful deletions (latest 500 events)",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), EventTime = tostring(R.TimestampUtc), Path = tostring(R.Path), ShareUri = tostring(R.ShareUri)\n| where Event in ('ProfileDeleted', 'DiskDeleted', 'FileDeleted', 'DirectoryDeleted')\n| summarize arg_max(timestamp, *) by RunId, Event, EventTime, ShareUri, Path\n| project timestamp, Event, SubscriptionId = tostring(R.SubscriptionId), StorageAccount = tostring(R.StorageAccount), ShareUri, ProfileFolder = tostring(R.ProfileFolder), Path, SizeGiB = tolong(R.SizeBytes) / 1073741824.0, DisplayName = tostring(R.UserDisplayName), UserSid = tostring(R.UserSid), LookupStatus = tostring(R.UserLookupStatus), RunId\n| top 500 by timestamp desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "errors-warnings",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Cleanup errors, access denials, locked profiles and user lookup warnings",
+        "query": "traces\n| where timestamp {TimeRange}\n| extend R = parse_json(extract(@'(\\{.*\\})', 1, message))\n| where toint(R.SchemaVersion) == 1 and tostring(R.Level) in ('Error', 'Warning')\n| extend Event = coalesce(tostring(R.EventType), tostring(R.Event)), RunId = tostring(R.RunId), EventTime = tostring(R.TimestampUtc), Path = tostring(R.Path), ShareUri = tostring(R.ShareUri)\n| summarize arg_max(timestamp, *) by RunId, Event, EventTime, ShareUri, Path\n| project timestamp, Level = tostring(R.Level), Event, SubscriptionId = tostring(R.SubscriptionId), StorageAccount = tostring(R.StorageAccount), ShareUri, ProfileFolder = tostring(R.ProfileFolder), Path, Message = tostring(R.Message), RunId\n| top 500 by timestamp desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "name": "host-exceptions",
+      "content": {
+        "version": "KqlItem/1.0",
+        "title": "Function host exceptions (separate from structured cleanup error counts)",
+        "query": "exceptions\n| where timestamp {TimeRange}\n| project timestamp, problemId, type, outerMessage, operation_Name, operation_Id\n| top 100 by timestamp desc",
+        "size": 0,
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": ["{Application}"],
+        "visualization": "table"
+      }
+    }
+  ],
+  "isLocked": false,
+  "fallbackResourceIds": ["Azure Monitor"],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
