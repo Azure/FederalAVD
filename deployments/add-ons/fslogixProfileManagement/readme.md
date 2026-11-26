@@ -4,17 +4,17 @@
 
 This optional add-on runs a timer-triggered PowerShell Function App to remove expired FSLogix profiles from Azure Files. The deployed entry point is [scripts/run.ps1](scripts/run.ps1). It uses managed identity and HTTPS FileREST requests, not SMB mounts or a temporary VM.
 
-The [solution](solution.bicep) accepts a `SubscriptionIds` array and serializes it into a comma-separated Function App setting. The function validates the entire list before making requests, trims whitespace, removes duplicates, and discovers accounts in each subscription. REST request URLs provide the subscription context; no `Set-AzContext` call or Az module is needed.
+The [template](main.bicep) accepts a `subscriptionIds` array and serializes it into the comma-separated `SubscriptionIds` Function App setting. The function validates the entire list before making requests, trims whitespace, removes duplicates, and discovers accounts in each subscription. REST request URLs provide the subscription context; no `Set-AzContext` call or Az module is needed.
 
 ## Configuration and Permissions
 
 | Function App setting | Purpose |
 | --- | --- |
 | `SubscriptionIds` | Required comma-separated subscription GUIDs, for example `11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222`. |
-| `DeleteOlderThanDays` | Required integer from 1 through 365; default `60`. The portal slider permits 60-365; direct Bicep deployments permit 1-365. |
+| `DeleteOlderThanDays` | The current script requires an integer from 1 through 2555; default `60`. The Portal slider and Bicep parameter currently permit 1-2555, but values above 2555 cause the script to fail before discovery or deletion. |
 | `Cloud` | Deployment supplies `environment().name`. The script maps `AzureCloud`, `AzureUSGovernment`, and `USSEC` to Resource Manager and Graph endpoints. Other clouds have no configured script endpoint. |
 | `ResourceManagerUrl` | Supplied by the template, but the current script derives its endpoint from `Cloud` rather than reading this setting. |
-| `CronTimerSchedule` | Matches the timer schedule; default `0 0 0 * 1,3,5,7,9,11 2`. Controls the default schedule's first-week guard. |
+| `WEBSITE_TIME_ZONE` | Supplied by the template's `timeZone` parameter; default `UTC`. Controls the timer's time zone on the Windows Function App. |
 | `IDENTITY_ENDPOINT`, `IDENTITY_HEADER` | Host-provided managed identity settings; do not configure or log these values manually. |
 
 Enable the Function App's **system-assigned managed identity** and grant it **Reader** and **Storage File Data Privileged Contributor** in every target subscription. The solution creates these Azure role assignments. User-assigned identity selection and VM/IMDS authentication are not supported by the script. The separate deployment identity used for storage CMK is not used by the cleanup script.
@@ -25,9 +25,9 @@ The host needs HTTPS connectivity to Resource Manager, Azure Files, and, for dis
 
 For private Function App networking, the portal's outbound subnet dropdown includes only subnets delegated to `Microsoft.Web/serverFarms`. It checks every delegation, ignores service-name casing, and excludes subnets with no delegations.
 
-`AdminSubnetResourceIds` accepts an array of administrative subnet IDs (default `[]`) for Key Vault and backing-storage service-endpoint ACLs. It does not re-enable public access in private mode. Resource naming includes the `fpm` purpose suffix; review generated names before updating an older add-on deployment.
+Private and service modes require `functionAppDelegatedSubnetResourceId` for outbound VNet integration and `subnetResourceId` for private endpoints or service-endpoint configuration. Private mode also requires the blob, Function App, and Key Vault private DNS zone IDs, with the zones linked to the integration VNet. Resource naming placeholders in the Portal form include the `fpm` purpose suffix; replace the placeholders with valid names before deployment.
 
-The portal's Log Analytics selector is scoped to the selected location. The [workbook](workbook/fslogix-profile-management.workbook) remains a separate import, not a deployed resource.
+Monitoring is optional through `logAnalyticsWorkspaceResourceId`. The Portal form also requires an Azure Monitor Private Link Scope when monitoring is enabled in private mode; direct template deployments permit omitting it, which leaves Application Insights ingestion and query endpoints public. The [workbook](workbook/fslogix-profile-management.workbook) remains a separate import, not a deployed resource.
 
 ### Entra Display-Name Enrichment
 
@@ -42,10 +42,10 @@ Grant the Function App's system-assigned identity the Microsoft Graph **`User.Re
 
 ## Discovery, Schedule, and Deletion
 
-- The portal displays the default schedule description but no longer exposes a cron editor. Override `CronTimerSchedule` through a direct Bicep deployment if needed; Azure Functions validates the timer expression.
+- Set the six-field Functions NCRONTAB expression through the Portal's **Cron schedule** field or the template's `schedule` parameter. The schedule is deployed into the timer binding, not a `CronTimerSchedule` app setting. Azure Functions validates the timer expression.
 - Lists all storage accounts in each configured subscription, then each account's shares. Both management-plane listings are paginated.
 - Processes only the share named **`profilecontainers`**, using the account's advertised file endpoint. Accounts without an Azure Files endpoint or the target share are logged and skipped.
-- By default, runs at midnight on Tuesdays in January, March, May, July, September, and November (`0 0 0 * 1,3,5,7,9,11 2`). The script skips dates after the seventh only when `CronTimerSchedule` equals that default expression, leaving the first Tuesday of each selected month. Custom schedules do not apply this first-week guard. Timer times are UTC by default.
+- By default, runs **daily at 21:00 UTC** (`0 0 21 * * *`). Select `timeZone` through the Portal or template to use UTC, Eastern, Central, Mountain, or Pacific Windows time zones. There is no first-week or first-Tuesday guard in the script; a manual invocation runs cleanup regardless of the date.
 - Uses the newer of each disk's `LastAccessTime` and `LastWriteTime`. Expiration must be strictly earlier than execution time minus `DeleteOlderThanDays`. Missing or invalid timestamps stop execution.
 - Treats each top-level directory as one profile. It deletes that directory and **all contents** only when at least one qualifying `.vhd`/`.vhdx` exists recursively and every qualifying disk is expired. Directories without qualifying disks are retained.
 - `Merge.vhdx` and `RW.vhdx` do not determine expiration, but are deleted along with other contents of an expired profile folder. Expired qualifying disks at the share root are deleted individually; the share root is never removed.
@@ -54,7 +54,7 @@ Grant the Function App's system-assigned identity the Microsoft Graph **`User.Re
 - FileREST **HTTP 409** with `x-ms-error-code` equal to **`SharingViolation`** or **`DirectoryNotEmpty`** emits `ProfileSkipped` with `Level = Warning` and continues to the next profile in the same share. Root-level disks are skipped individually. The event includes the failed path/item type and profile context; its message records the error code, operation, request ID when supplied, and original error. Cleanup does not force-close SMB handles, break leases, retry conflicts, or delete newly discovered contents. The skipped profile does not emit `ProfileDeleted`, and its remaining contents are left untouched. This also applies to profile inventory in `-WhatIf`.
 - No storage firewall changes or additional permissions are required for this handling. Resource Manager discovery failures, managed-identity token failures, unrecognized HTTP conflicts, other HTTP statuses, and non-HTTP cleanup failures still emit `RunFailed` and stop execution. A share-root listing failure has no individual profile to skip and still stops execution unless it is a 403. Deletion is not transactional; successful deletions before any failure are not rolled back. `ShareCleanupCompleted` and `RunCompleted` indicate processing finished; inspect both `AccountSkipped` and `ProfileSkipped` for incomplete cleanup.
 
-Preview with `.\scripts\run.ps1 -WhatIf` during the first week of the month when using the default schedule. Preview still authenticates and inventories shares, but does not delete data or emit successful deletion events. It requires the Function App managed-identity environment; a local terminal without that environment cannot authenticate.
+From the add-on directory, preview with `.\scripts\run.ps1 -WhatIf` at any time. Preview still authenticates and inventories shares, but does not delete data, query Graph, or emit successful deletion events. It requires the Function App managed-identity environment; a local terminal without that environment cannot authenticate. `-WhatIf` applies only to that invocation; it does not change or disable the deployed timer.
 
 **Run while users are signed out.** Inventory and deletion are not atomic. Maintain backups, validate timestamp behavior against actual FSLogix usage, and test against disposable shares before enabling scheduled deletion.
 
@@ -113,10 +113,20 @@ Sizes are **logical file lengths**, not physical allocated storage, provisioned 
 
 ## Validation
 
-Run the mocked tests from the repository root using Pester 3/4:
+Run the [mocked regression tests](../../../tests/FSLogixProfileManagement.Tests.ps1) from the repository root using Pester 5.7.1:
 
 ```powershell
-Invoke-Pester .\add-ons\fslogix-profile-management\scripts\tests\run.Tests.ps1
+Import-Module Pester -RequiredVersion 5.7.1
+Invoke-Pester -Path .\tests\FSLogixProfileManagement.Tests.ps1 -Output Detailed
 ```
 
-Tests cover FileREST 403 logging and continuation across accounts/subscriptions, recognized 409 conflicts and continuation across profiles/root-level disks, read-only previews, partial deletion, unrecognized failures, and explicit Graph endpoint and expiration cutoff parameter forwarding. They do not access Azure, Microsoft Graph, or real profiles. Before deployment, validate the subscription template and perform an end-to-end preview against disposable shares. See [PowerShell Scripts](../../docs/07-powershell-scripts.md) and [Prerequisites](../../docs/08-prerequisites.md) for main deployment guidance.
+Tests exercise the real script functions and entry-point orchestration with mocked HTTP requests. They cover expiration boundaries and invalid timestamps, recursive eligibility and deletion ordering, ARM and FileREST pagination, malformed listings, previews, inventory totals, FileREST 403 account/subscription continuation, recognized 409 profile conflicts and partial deletion, fatal failures, input validation, and best-effort Graph enrichment. They do not access Azure, Microsoft Graph, or real profiles.
+
+Before enabling scheduled deletion, maintain verified profile backups and validate against disposable shares:
+
+- Preview recent and expired profiles, mixed-age disks, excluded-only folders, and root-level disks; confirm that no data is deleted.
+- Verify timestamp behavior after representative FSLogix sign-in/sign-out activity, then compare a controlled cleanup with its deletion and inventory records.
+- Exercise locked profiles and access-denied accounts; confirm continuation and distinguish partial cleanup from completed profile removal.
+- Confirm the configured schedule and time zone in the Function host, and verify workbook queries against actual telemetry.
+
+Offline tests do not establish deployment acceptance, timestamp behavior, or recovery of deleted profiles. See the [contribution and validation guide](../../../CONTRIBUTING.md), [add-on deployment guide](../../../docs/add-ons.md), and [quick start](../../../docs/quick-start.md).
