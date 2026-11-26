@@ -3,16 +3,18 @@
 .SYNOPSIS
     Exports the current user's Edge favorites without modifying browser data.
 .DESCRIPTION
-    Intended for the artifact's non-elevated scheduled tasks. Empty or invalid
+    Intended for the artifact's non-elevated logon task or a manual run. Empty or invalid
     favorites never replace existing backups. Recovery is a manual HTML import.
 .PARAMETER EdgeProfileName
     Optional single-profile override for a manual backup run.
+.PARAMETER ConfigurationPath
+    Configuration JSON path. If omitted, resolved beside the script file after
+    logging is initialized. The logon task passes the installed path explicitly.
 #>
 [CmdletBinding()]
 param(
-    [switch]$RegisterUserTask,
     [string]$EdgeProfileName,
-    [string]$ConfigurationPath = (Join-Path $PSScriptRoot 'Configuration.json')
+    [string]$ConfigurationPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -147,25 +149,6 @@ function Write-AtomicBackupFile {
     }
 }
 
-function Register-UserFavoritesTask {
-    param(
-        [string]$UserId, [string]$WorkerPath, [string]$ConfigPath,
-        [ValidateRange(5, 1440)][int]$IntervalMinutes
-    )
-    $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $arguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -ConfigurationPath "{1}"' -f $WorkerPath, $ConfigPath
-    $action = New-ScheduledTaskAction -Execute $powerShell -Argument $arguments -ErrorAction Stop
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes($IntervalMinutes) `
-        -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) -ErrorAction Stop
-    $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited -ErrorAction Stop
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable `
-        -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -RestartCount 3 `
-        -RestartInterval (New-TimeSpan -Minutes 5) -ErrorAction Stop
-    $null = Register-ScheduledTask -TaskName "EdgeFavoritesBackup-$UserId" -TaskPath '\' `
-        -Action $action -Trigger $trigger -Principal $principal -Settings $settings `
-        -Description 'Check daily favorites backup while this user is signed in; never restore browser files.' -Force -ErrorAction Stop
-}
-
 function Invoke-FavoritesBackup {
     param(
         [string]$BackupRoot,
@@ -244,13 +227,17 @@ $logDirectory = Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackup'
 $null = New-Item -Path $logDirectory -ItemType Directory -Force -ErrorAction Stop
 $script:LogPath = Join-Path $logDirectory 'Backup.log'
 try {
+    if (-not $PSBoundParameters.ContainsKey('ConfigurationPath')) {
+        if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+            throw 'Cannot resolve ConfigurationPath without a script directory. Run the installed script file or pass -ConfigurationPath explicitly.'
+        }
+        $ConfigurationPath = Join-Path $PSScriptRoot 'Configuration.json'
+    }
+    elseif ([string]::IsNullOrWhiteSpace($ConfigurationPath)) {
+        throw 'ConfigurationPath must not be empty.'
+    }
     $configuration = Get-Content -LiteralPath $ConfigurationPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     if ($PSBoundParameters.ContainsKey('EdgeProfileName')) { $configuration.EdgeProfileName = $EdgeProfileName }
-    if ($RegisterUserTask) {
-        Register-UserFavoritesTask -UserId $userId -WorkerPath $PSCommandPath -ConfigPath $ConfigurationPath `
-            -IntervalMinutes $configuration.CheckIntervalMinutes
-        Write-BackupLog 'Registered the current user task; checking backup immediately.'
-    }
     Invoke-ConfiguredFavoritesBackup -Configuration $configuration
 }
 catch {
