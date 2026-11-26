@@ -4,7 +4,7 @@ Removes expired FSLogix profiles from Azure Files through HTTPS FileREST request
 
 .DESCRIPTION
 Runs as a timer-triggered Function App using its system-assigned managed identity.
-Required app settings: SubscriptionIds (comma-separated GUIDs) and DeleteOlderThanDays (1-36500).
+Required app settings: SubscriptionIds (comma-separated GUIDs) and DeleteOlderThanDays (1-2555).
 Discovers storage accounts and shares named profilecontainers using Azure Resource Manager.
 ResourceManagerUrl optionally overrides the default public-cloud management endpoint.
 The identity needs Reader and Storage File Data Privileged Contributor in every target subscription.
@@ -497,9 +497,9 @@ try
     
     # App settings arrive as strings; reject missing, nonnumeric, or out-of-range retention values.
     $RetentionDays = 0
-    if (![int]::TryParse($env:DeleteOlderThanDays, [ref]$RetentionDays) -or $RetentionDays -lt 1 -or $RetentionDays -gt 365)
+    if (![int]::TryParse($env:DeleteOlderThanDays, [ref]$RetentionDays) -or $RetentionDays -lt 1 -or $RetentionDays -gt 2555)
     {
-        throw 'DeleteOlderThanDays must be an integer between 1 and 365.'
+        throw 'DeleteOlderThanDays must be an integer between 1 and 2555.'
     }
     $DeleteBefore = [DateTimeOffset]::UtcNow.AddDays(-$RetentionDays)
     
