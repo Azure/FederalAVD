@@ -69,14 +69,24 @@ Describe 'Edge favorites package contract' {
         $worker | Should -Match 'must not run as SYSTEM'
     }
 
-    It 'defaults to hourly checks, business OneDrive discovery and every persistent browser profile' {
+    It 'defaults to business OneDrive discovery and every persistent browser profile without recurring task parameters' {
         $parameters = $asts[$installerPath].ParamBlock.Parameters
         ($parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'BackupRoot' }).DefaultValue.SafeGetValue() |
             Should -Be ''
         ($parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'EdgeProfileName' }).DefaultValue.SafeGetValue() |
             Should -Be '*'
-        ($parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'CheckIntervalMinutes' }).DefaultValue.SafeGetValue() |
-            Should -Be 60
+        $parameters.Name.VariablePath.UserPath | Should -Not -Contain 'CheckIntervalMinutes'
+        $asts[$workerPath].ParamBlock.Parameters.Name.VariablePath.UserPath | Should -Not -Contain 'RegisterUserTask'
+        Get-Content -LiteralPath $workerPath -Raw |
+            Should -Not -Match 'ScheduledTask|Start-Sleep|RegisterUserTask|CheckIntervalMinutes'
+    }
+
+    It 'does not resolve a configuration path during worker parameter binding' {
+        $parameter = $asts[$workerPath].ParamBlock.Parameters |
+            Where-Object { $_.Name.VariablePath.UserPath -eq 'ConfigurationPath' }
+        $parameter.DefaultValue | Should -BeNullOrEmpty
+        $parametersOnly = [scriptblock]::Create($asts[$workerPath].ParamBlock.Extent.Text)
+        { & $parametersOnly } | Should -Not -Throw
     }
 
     It 'rejects invalid namespace <Name> before installation' -TestCases @(
@@ -143,12 +153,13 @@ Describe 'Artifact staging without accessing installer favorites' {
         $EdgeProfileName = 'Profile 1'
         $BackupIntervalHours = 24
         $HistoryCount = 14
-        $CheckIntervalMinutes = 60
         Mock Initialize-BackupDirectory { $null = New-Item -Path $Path -ItemType Directory -Force }
         Mock Assert-ProtectedBackupPath {}
+        Mock Remove-LegacyFavoritesTasks {}
         Mock Register-BackupLogonTask {
             Test-Path -LiteralPath $WorkerPath | Should -BeTrue
-            Test-Path -LiteralPath (Join-Path (Split-Path $WorkerPath) 'Configuration.json') | Should -BeTrue
+            Test-Path -LiteralPath $ConfigPath | Should -BeTrue
+            $ConfigPath | Should -Be (Join-Path (Split-Path $WorkerPath) 'Configuration.json')
         }
         $start = $asts[$installerPath].EndBlock.Statements | Where-Object {
             $_ -is [Management.Automation.Language.AssignmentStatementAst] -and $_.Left.Extent.Text -eq '$directory'
@@ -163,10 +174,13 @@ Describe 'Artifact staging without accessing installer favorites' {
             $configuration = Get-Content -LiteralPath (Join-Path $installed 'Configuration.json') -Raw | ConvertFrom-Json
             $configuration.BackupRoot | Should -BeExactly $BackupRoot
             $configuration.EdgeProfileName | Should -Be 'Profile 1'
-            $configuration.CheckIntervalMinutes | Should -Be 60
+            $configuration.PSObject.Properties.Name | Should -Not -Contain 'CheckIntervalMinutes'
             Get-Content -LiteralPath (Join-Path $installed 'Backup-EdgeFavorites.ps1') -Raw |
                 Should -BeExactly (Get-Content -LiteralPath $workerPath -Raw)
             Should -Invoke Register-BackupLogonTask -Times 1 -Exactly
+            Should -Invoke Remove-LegacyFavoritesTasks -Times 1 -Exactly -ParameterFilter {
+                $WorkerPath -eq (Join-Path $env:ProgramData 'EdgeFavoritesBackup\Backup-EdgeFavorites.ps1')
+            }
             Should -Invoke Assert-ProtectedBackupPath -Times 2 -Exactly
         }
         finally { $env:ProgramData = $savedProgramData }
@@ -441,6 +455,63 @@ Describe 'Daily backup, retention and empty-profile protection' {
         Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackup\Backup.log') -Raw |
             Should -Match 'ERROR:'
     }
+
+    It 'resolves omitted configuration beside the worker under Windows PowerShell 5.1' {
+        $configuration = $options.Clone()
+        $configuration.CheckIntervalMinutes = 60
+        $configPath = Join-Path $caseDirectory 'Configuration.json'
+        [IO.File]::WriteAllText($configPath, ($configuration | ConvertTo-Json))
+        $stagedWorker = Join-Path $caseDirectory 'Backup-EdgeFavorites.ps1'
+        Copy-Item -LiteralPath $workerPath -Destination $stagedWorker
+        $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $arguments = '-NoLogo -NoProfile -NonInteractive -File "{0}"' -f $stagedWorker
+        $stdout = Join-Path $caseDirectory 'default-worker.stdout'
+        $stderr = Join-Path $caseDirectory 'default-worker.stderr'
+        $process = Start-Process -FilePath $powerShell -ArgumentList $arguments -Wait -PassThru `
+            -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        try { $process.ExitCode | Should -Be 0 -Because (Get-Content -LiteralPath $stderr -Raw) }
+        finally { $process.Dispose() }
+        Test-Path -LiteralPath $latest | Should -BeTrue
+
+        Remove-Item -LiteralPath $configPath
+        $process = Start-Process -FilePath $powerShell -ArgumentList $arguments -Wait -PassThru `
+            -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+        try { $process.ExitCode | Should -Be 1 }
+        finally { $process.Dispose() }
+        Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackup\Backup.log') -Raw |
+            Should -Match 'ERROR:.*Configuration.json'
+    }
+
+    It 'logs a missing script directory instead of failing during parameter binding' {
+        $worker = [scriptblock]::Create($asts[$workerPath].Extent.Text)
+        { & $worker } | Should -Throw '*Cannot resolve ConfigurationPath without a script directory*'
+        Should -Invoke Write-BackupLog -Times 1 -Exactly -ParameterFilter {
+            $Message -like 'ERROR:*Cannot resolve ConfigurationPath*'
+        }
+        Test-Path -LiteralPath $destination | Should -BeFalse
+    }
+
+    It 'logs an explicitly empty configuration path without attempting a backup' {
+        $worker = [scriptblock]::Create($asts[$workerPath].Extent.Text)
+        { & $worker -ConfigurationPath '' } | Should -Throw '*ConfigurationPath must not be empty*'
+        Should -Invoke Write-BackupLog -Times 1 -Exactly -ParameterFilter {
+            $Message -like 'ERROR:*ConfigurationPath must not be empty*'
+        }
+        Test-Path -LiteralPath $destination | Should -BeFalse
+    }
+
+    It 'checks once per invocation without registering tasks, including with legacy configuration' {
+        $configuration = $options.Clone()
+        $configuration.CheckIntervalMinutes = 60
+        $configPath = Join-Path $caseDirectory 'Configuration.json'
+        [IO.File]::WriteAllText($configPath, ($configuration | ConvertTo-Json))
+        $worker = [scriptblock]::Create($asts[$workerPath].Extent.Text)
+        Mock Register-ScheduledTask {}
+        Mock Invoke-ConfiguredFavoritesBackup {}
+        foreach ($signIn in 1..3) { & $worker -ConfigurationPath $configPath }
+        Should -Invoke Invoke-ConfiguredFavoritesBackup -Times 3 -Exactly
+        Should -Invoke Register-ScheduledTask -Times 0 -Exactly
+    }
 }
 
 Describe 'Business OneDrive discovery' {
@@ -480,7 +551,7 @@ Describe 'Business OneDrive discovery' {
     }
 }
 
-Describe 'Scheduled task identity, repetition and staging protection' {
+Describe 'Single logon task identity and staging protection' {
     BeforeEach {
         $script:registeredTask = $null
         Mock Register-ScheduledTask {
@@ -492,7 +563,8 @@ Describe 'Scheduled task identity, repetition and staging protection' {
     }
 
     It 'registers an all-user limited logon task with a two-minute delay' {
-        Register-BackupLogonTask -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        Register-BackupLogonTask -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1' `
+            -ConfigPath 'C:\Protected\Configuration.json'
         $task = $script:registeredTask
         $task.Name | Should -Be 'EdgeFavoritesBackup-Logon'
         $task.Trigger.CimClass.CimClassName | Should -Be 'MSFT_TaskLogonTrigger'
@@ -504,28 +576,14 @@ Describe 'Scheduled task identity, repetition and staging protection' {
         [int]$task.Principal.LogonType | Should -Be 4
         [int]$task.Principal.RunLevel | Should -Be 0
         [int]$task.Settings.MultipleInstances | Should -Be 0
-        $task.Action.Arguments | Should -BeLike '*-RegisterUserTask'
-        $task.Force | Should -BeTrue
-        Should -Invoke Register-ScheduledTask -Times 1 -Exactly
-    }
-
-    It 'registers separate limited interactive user checks, never SYSTEM or browser restore' {
-        Register-UserFavoritesTask -UserId 'S-1-5-21-1-2-3-1001' -WorkerPath 'C:\Protected\Backup.ps1' `
-            -ConfigPath 'C:\Protected\Configuration.json' -IntervalMinutes 60
-        $task = $script:registeredTask
-        $task.Name | Should -Be 'EdgeFavoritesBackup-S-1-5-21-1-2-3-1001'
-        $task.Trigger.CimClass.CimClassName | Should -Be 'MSFT_TaskTimeTrigger'
-        $task.Trigger.Repetition.Interval | Should -Be 'PT1H'
-        $task.Trigger.Repetition.Duration | Should -BeNullOrEmpty
-        $task.Principal.UserId | Should -Be 'S-1-5-21-1-2-3-1001'
-        [int]$task.Principal.LogonType | Should -Be 3
-        [int]$task.Principal.RunLevel | Should -Be 0
-        [int]$task.Settings.MultipleInstances | Should -Be 2
+        $task.Action.Arguments | Should -Not -Match 'RegisterUserTask|Restore'
+        $task.Action.Arguments | Should -Match '-ConfigurationPath "C:\\Protected\\Configuration.json"'
+        $task.Trigger.Repetition.Interval | Should -BeNullOrEmpty
         $task.Settings.ExecutionTimeLimit | Should -Be 'PT5M'
         $task.Settings.RestartCount | Should -Be 3
         $task.Settings.RestartInterval | Should -Be 'PT5M'
         $task.Settings.StartWhenAvailable | Should -BeTrue
-        $task.Action.Arguments | Should -Not -Match 'Restore|RegisterUserTask'
+        $task.Force | Should -BeTrue
         Should -Invoke Register-ScheduledTask -Times 1 -Exactly
     }
 
@@ -545,5 +603,120 @@ Describe 'Scheduled task identity, repetition and staging protection' {
         )))
         Mock Get-Acl { $script:unsafeAcl }
         { Assert-ProtectedBackupPath -Path 'C:\Unsafe' } | Should -Throw '*non-administrator modification*'
+    }
+}
+
+Describe 'Legacy user task migration' {
+    BeforeAll {
+        function New-TestLegacyFavoritesTask {
+            param([string]$Name = 'EdgeFavoritesBackup-S-1-5-21-1-2-3-1001')
+            [pscustomobject]@{
+                TaskName = $Name
+                TaskPath = '\'
+                State = 'Ready'
+                Actions = @([pscustomobject]@{
+                    Execute = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+                    Arguments = '-NoProfile -File "C:\Protected\Backup-EdgeFavorites.ps1" -ConfigurationPath "C:\Protected\Configuration.json"'
+                })
+            }
+        }
+    }
+    BeforeEach {
+        $script:legacyTasks = @()
+        Mock Get-ScheduledTask { $script:legacyTasks }
+        Mock Stop-ScheduledTask {}
+        Mock Unregister-ScheduledTask {
+            $script:legacyTasks = @($script:legacyTasks | Where-Object {
+                $_.TaskName -ne $TaskName -or $_.TaskPath -ne $TaskPath
+            })
+        }
+        Mock Write-Warning {}
+    }
+
+    It 'removes 100 matching user tasks while keeping the shared task and unrelated tasks' {
+        $script:legacyTasks = @(
+            New-TestLegacyFavoritesTask -Name 'EdgeFavoritesBackup-Logon'
+            New-TestLegacyFavoritesTask -Name 'OtherTask'
+            foreach ($id in 1001..1100) {
+                New-TestLegacyFavoritesTask -Name "EdgeFavoritesBackup-S-1-5-21-1-2-3-$id"
+            }
+        )
+        Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        $script:legacyTasks.Count | Should -Be 2
+        $script:legacyTasks.TaskName | Should -Contain 'EdgeFavoritesBackup-Logon'
+        $script:legacyTasks.TaskName | Should -Contain 'OtherTask'
+        Should -Invoke Get-ScheduledTask -Times 1 -Exactly -ParameterFilter { $TaskPath -eq '\' }
+        Should -Invoke Unregister-ScheduledTask -Times 100 -Exactly -ParameterFilter {
+            $TaskPath -eq '\' -and $Confirm -eq $false -and $ErrorAction -eq 'Stop'
+        }
+        Should -Invoke Stop-ScheduledTask -Times 0 -Exactly
+    }
+
+    It 'stops a running legacy task before removing it' {
+        $task = New-TestLegacyFavoritesTask
+        $task.State = 'Running'
+        $script:legacyTasks = @($task)
+        Mock Stop-ScheduledTask { $script:legacyTasks[0].State = 'Ready' }
+        Mock Unregister-ScheduledTask { $script:legacyTasks[0].State | Should -Be 'Ready' }
+        Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        Should -Invoke Stop-ScheduledTask -Times 1 -Exactly -ParameterFilter {
+            $TaskName -eq 'EdgeFavoritesBackup-S-1-5-21-1-2-3-1001' -and $TaskPath -eq '\'
+        }
+        Should -Invoke Unregister-ScheduledTask -Times 1 -Exactly
+    }
+
+    It 'does nothing on a fresh host or after migration' {
+        Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        Should -Invoke Unregister-ScheduledTask -Times 0 -Exactly
+        Should -Invoke Stop-ScheduledTask -Times 0 -Exactly
+    }
+
+    It 'leaves other task folders and non-SID names intact' {
+        $task = New-TestLegacyFavoritesTask
+        $task.TaskPath = '\Other\'
+        $script:legacyTasks = @($task, (New-TestLegacyFavoritesTask -Name 'EdgeFavoritesBackup-Custom'))
+        Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        Should -Invoke Unregister-ScheduledTask -Times 0 -Exactly
+    }
+
+    It 'warns and preserves a modified legacy action <Change>' -TestCases @(
+        @{ Change = 'Worker' }, @{ Change = 'Executable' }, @{ Change = 'MultipleActions' }
+    ) {
+        param($Change)
+        $task = New-TestLegacyFavoritesTask
+        switch ($Change) {
+            'Worker' { $task.Actions[0].Arguments = '-File "C:\Other\Backup-EdgeFavorites.ps1"' }
+            'Executable' { $task.Actions[0].Execute = 'C:\Other\powershell.exe' }
+            'MultipleActions' { $task.Actions = @($task.Actions[0], $task.Actions[0]) }
+        }
+        $script:legacyTasks = @($task)
+        Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
+        Should -Invoke Unregister-ScheduledTask -Times 0 -Exactly
+        Should -Invoke Write-Warning -Times 1 -Exactly -ParameterFilter { $Message -like '*Review it manually*' }
+    }
+
+    It 'surfaces task enumeration failures rather than reporting a successful migration' {
+        Mock Get-ScheduledTask { throw 'Cannot enumerate tasks' }
+        { Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1' } |
+            Should -Throw '*Cannot enumerate tasks*'
+        Should -Invoke Unregister-ScheduledTask -Times 0 -Exactly
+    }
+
+    It 'surfaces task removal failures' {
+        $script:legacyTasks = @(New-TestLegacyFavoritesTask)
+        Mock Unregister-ScheduledTask { throw 'Cannot remove legacy task' }
+        { Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1' } |
+            Should -Throw '*Cannot remove legacy task*'
+    }
+
+    It 'does not unregister a running task when stopping it fails' {
+        $task = New-TestLegacyFavoritesTask
+        $task.State = 'Running'
+        $script:legacyTasks = @($task)
+        Mock Stop-ScheduledTask { throw 'Cannot stop legacy task' }
+        { Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1' } |
+            Should -Throw '*Cannot stop legacy task*'
+        Should -Invoke Unregister-ScheduledTask -Times 0 -Exactly
     }
 }

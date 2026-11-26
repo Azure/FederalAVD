@@ -1,10 +1,10 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Installs per-user scheduled Microsoft Edge favorites backups.
+    Installs logon-triggered Microsoft Edge favorites backups.
 .DESCRIPTION
     Run elevated during image creation or session-host customization. A delayed
-    all-user logon task registers a repeating task for the signing-in user.
+    all-user logon task checks backup once in the signing-in user's context.
     No favorites are read in the installer's context. Recovery is a manual HTML
     import; existing Edge data is never replaced by this artifact.
 .PARAMETER BackupRoot
@@ -21,8 +21,6 @@
     Minimum age of the latest successful backup before another export.
 .PARAMETER HistoryCount
     Number of dated HTML recovery copies retained, in addition to Latest.html.
-.PARAMETER CheckIntervalMinutes
-    How often each signed-in user's repeating task checks whether backup is due.
 #>
 [CmdletBinding()]
 param(
@@ -37,9 +35,7 @@ param(
     [ValidateRange(1, 8760)]
     [int]$BackupIntervalHours = 24,
     [ValidateRange(1, 365)]
-    [int]$HistoryCount = 14,
-    [ValidateRange(5, 1440)]
-    [int]$CheckIntervalMinutes = 60
+    [int]$HistoryCount = 14
 )
 
 $ErrorActionPreference = 'Stop'
@@ -88,9 +84,9 @@ function Initialize-BackupDirectory {
 }
 
 function Register-BackupLogonTask {
-    param([string]$WorkerPath)
+    param([string]$WorkerPath, [string]$ConfigPath)
     $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $arguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -RegisterUserTask' -f $WorkerPath
+    $arguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -ConfigurationPath "{1}"' -f $WorkerPath, $ConfigPath
     $action = New-ScheduledTaskAction -Execute $powerShell -Argument $arguments -ErrorAction Stop
     $trigger = New-ScheduledTaskTrigger -AtLogOn -ErrorAction Stop
     $trigger.Delay = 'PT120S'
@@ -100,7 +96,29 @@ function Register-BackupLogonTask {
         -RestartInterval (New-TimeSpan -Minutes 5) -ErrorAction Stop
     $null = Register-ScheduledTask -TaskName 'EdgeFavoritesBackup-Logon' -TaskPath '\' `
         -Action $action -Trigger $trigger -Principal $principal -Settings $settings `
-        -Description 'Register and run favorites backup in each signing-in user context.' -Force -ErrorAction Stop
+        -Description 'Check favorites backup once in each signing-in user context.' -Force -ErrorAction Stop
+}
+
+function Remove-LegacyFavoritesTasks {
+    param([string]$WorkerPath)
+    $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $workerArgument = '(?:^|\s)-File\s+"{0}"(?:\s|$)' -f [regex]::Escape($WorkerPath)
+    $tasks = @(Get-ScheduledTask -TaskPath '\' -ErrorAction Stop | Where-Object {
+        $_.TaskPath -eq '\' -and $_.TaskName -match '^EdgeFavoritesBackup-S-1-(?:\d+-)+\d+$'
+    })
+    foreach ($task in $tasks) {
+        $actions = @($task.Actions)
+        if ($actions.Count -ne 1 -or $actions[0].Execute -ne $powerShell -or
+            $actions[0].Arguments -notmatch $workerArgument) {
+            Write-Warning "Leaving task '$($task.TaskPath)$($task.TaskName)' because its action does not match the installed backup worker. Review it manually."
+            continue
+        }
+        if ($task.State -eq 'Running') {
+            Stop-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction Stop
+        }
+        Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction Stop
+        Write-Output "Removed legacy favorites backup task '$($task.TaskPath)$($task.TaskName)'."
+    }
 }
 
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitProcess) {
@@ -132,10 +150,10 @@ $configuration = [ordered]@{
     EdgeProfileName = $EdgeProfileName
     BackupIntervalHours = $BackupIntervalHours
     HistoryCount = $HistoryCount
-    CheckIntervalMinutes = $CheckIntervalMinutes
 }
 [IO.File]::WriteAllText($configurationPath, ($configuration | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
 Assert-ProtectedBackupPath -Path $workerPath
 Assert-ProtectedBackupPath -Path $configurationPath
-Register-BackupLogonTask -WorkerPath $workerPath
-Write-Output 'Installed Edge favorites backup. Tasks initialize at the next interactive sign-in; no user data was accessed.'
+Register-BackupLogonTask -WorkerPath $workerPath -ConfigPath $configurationPath
+Remove-LegacyFavoritesTasks -WorkerPath $workerPath
+Write-Output 'Installed Edge favorites backup with one logon task. Backups check at the next interactive sign-in; no user data was accessed.'
