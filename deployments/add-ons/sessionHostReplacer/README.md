@@ -798,6 +798,10 @@ Generic local/remote account aliases and legacy container labels are no longer a
 Use `ProfileContainer`, `ProfileOfficeContainer`, `CloudCacheProfileContainer`, or
 `CloudCacheProfileOfficeContainer`. `fslogixOSSGroups` contains ordered group names for per-group
 ObjectSpecific settings, not Entra object IDs used by the storage NTFS provisioning command.
+With session-host FSLogix configuration enabled, nonempty OSS groups require
+`ActiveDirectoryDomainServices` or `EntraDomainServices`. Current `EntraKerberos-Hybrid` creates
+Entra-only joined hosts and rejects OSS even for synchronized AD groups. Use permission-based
+sharding instead; see [the OSS identity boundary](../../../docs/features.md#object-specific-settings-and-session-host-identity).
 
 Before upgrading, stop new initiations and follow the active-cycle configuration precautions.
 Republish the additional-host Template Spec and update SHR together; update an external

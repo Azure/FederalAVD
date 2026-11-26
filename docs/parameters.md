@@ -4,6 +4,11 @@
 
 Parameter documentation lives alongside each deployment template. Find the section for your solution below.
 
+FSLogix `ShardOSS` and nonempty `fslogixOSSGroups` require supported domain-joined session hosts.
+Current `EntraKerberos-Hybrid` means hybrid users on Entra-only joined hosts, so use `ShardPerms`
+instead. Parameter-file and policy-remediation guards reject unsupported OSS requests explicitly.
+See [the OSS identity boundary](features.md#object-specific-settings-and-session-host-identity).
+
 The [Image Validation parameter reference](../deployments/add-ons/imageValidation/README.md#parameters)
 covers explicit resource names, existing image-version and credentials inputs,
 VM network/security settings, artifact customizations, and resource-type tags.

@@ -7,6 +7,7 @@ import { entraGroupType } from '../shared/modules/resourceModules/types/identity
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
+import { validateObjectSpecificSettings } from '../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 type scalingTimeType = {
   hour: int
@@ -888,7 +889,7 @@ var effectiveFslogixOfficeStorageRedundancy = fslogixOfficeStorageRedundancy == 
 var effectiveFslogixOfficeShareSizeInGB = fslogixOfficeShareSizeInGB == 0 ? fslogixProfileShareSizeInGB : fslogixOfficeShareSizeInGB
 var fslogixStorageCount = fslogixShardOptions == 'None' ? 1 : length(fslogixUserGroups)
 var deployFslogixStorageCmk = deployFSLogixStorage && fslogixStorageSolution == 'AzureFiles' && contains(fslogixKeyManagementStorage, 'CustomerManaged')
-var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
+var fslogixShardingConfigurationIsValid = validateObjectSpecificSettings(identitySolution, (deployFSLogixStorage || fslogixConfigureSessionHosts) && fslogixShardOptions == 'ShardOSS') && ((!deployFSLogixStorage && !fslogixConfigureSessionHosts) || fslogixShardOptions == 'None' || !empty(fslogixUserGroups))
   ? true
   : fail('fslogixUserGroups must contain at least one group when sharding is enabled.')
 var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || fslogixStorageSolution != 'AzureFiles' || length(fslogixExistingLocalProfileStorageAccountResourceIds) == fslogixStorageCount

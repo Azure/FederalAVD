@@ -1592,6 +1592,14 @@
                   }
                 },
                 {
+                  "name": "objectSpecificSettingsIdentity",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(steps('userProfiles').configureSessionHosts, not(contains(steps('hosts').identity.machineIdentity, 'DomainServices')))]",
+                  "options": {
+                    "text": "Object Specific Settings require supported AD-domain-joined session hosts. Hybrid synchronized users and their traditional group SIDs do not enable OSS on Entra-only joined hosts. For Entra Kerberos, use permission-based sharding instead; storage-key authentication supports no sharding."
+                  }
+                },
+                {
                   "name": "shardingInfoBox1",
                   "type": "Microsoft.Common.InfoBox",
                   "visible": "[and(steps('userProfiles').configureSessionHosts, contains(steps('hosts').identity.machineIdentity, 'DomainServices'))]",

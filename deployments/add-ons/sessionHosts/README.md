@@ -218,7 +218,7 @@ New-AzResourceGroupDeployment `
 | `fslogixRemoteProfileStorageAccountResourceIds` | array | `[]` | Remote Profile Azure Files account IDs in shard order for Cloud Cache |
 | `fslogixRemoteOfficeStorageAccountResourceIds` | array | `[]` | Separate remote Office accounts, paired with remote Profile accounts in the same shard order |
 | `fslogixRemoteNetAppVolumeResourceIds` | array | `[]` | Remote Azure NetApp Files volume resource IDs for cloud cache failover. Provide none, one ID for Profile Container, or two IDs for Profile and Office Containers in profile-then-office order. |
-| `fslogixOSSGroups` | array | `[]` | Ordered group names for per-group FSLogix ObjectSpecific settings |
+| `fslogixOSSGroups` | array | `[]` | Ordered group names for per-group FSLogix ObjectSpecific settings; requires `ActiveDirectoryDomainServices` or `EntraDomainServices` hosts when FSLogix configuration is enabled |
 | `fslogixSizeInMBs` | int | `30000` | Maximum FSLogix VHD/VHDX size in megabytes; the documented FSLogix default |
 
 For Azure Files with Office containers, select separate local Office accounts and, when

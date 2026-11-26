@@ -8,7 +8,15 @@
 
 This solution supports **Microsoft Entra Kerberos** for Azure Files, allowing you to authenticate hybrid identities for Azure Files access without requiring line-of-sight to on-premises domain controllers for the storage account itself.
 
-Session hosts are Microsoft Entra joined or Microsoft Entra hybrid joined, and user identities are synchronized from on-premises Active Directory to Microsoft Entra ID via Entra Connect Sync or Entra Cloud Sync.
+Microsoft supports Azure Files Entra Kerberos clients that are Microsoft Entra joined or Microsoft
+Entra hybrid joined. FederalAVD's current `EntraKerberos-Hybrid` mode creates **Entra-only joined
+session hosts**, with user identities synchronized from on-premises Active Directory to Microsoft
+Entra ID via Entra Connect Sync or Entra Cloud Sync. "Hybrid" describes the users, not the VM join.
+
+These hosts support **permission-based FSLogix sharding (`ShardPerms`)**, not Object Specific
+Settings (`ShardOSS`). Microsoft requires traditional AD SIDs and hybrid-Entra joined VMs for OSS
+with synchronized identities. Group SID lookup and Kerberos tickets do not remove that requirement.
+See [OSS eligibility and the current FederalAVD identity boundary](features.md#object-specific-settings-and-session-host-identity).
 
 For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Authentication for hybrid and cloud-only identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune).
 
@@ -22,7 +30,8 @@ For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Au
 ## Prerequisites
 
 1. **Identity Solution**: `identitySolution` must be set to `'EntraKerberos-Hybrid'`.
-2. **Session Hosts**: Must be Microsoft Entra joined or Microsoft Entra hybrid joined.
+2. **Session Hosts**: FederalAVD deploys Microsoft Entra-only joined hosts in this mode. A separate
+   hybrid-device-join plus Entra-Kerberos configuration is not exposed by the current entry points.
 3. **Client Devices**: Windows 10/11 Enterprise/Pro single or multi-session, Windows Server 2022, or Windows Server 2025.
 
 ### User Assigned Managed Identity (Optional)

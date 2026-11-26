@@ -29,16 +29,18 @@ Describe 'Lifecycle canonical FSLogix inputs' {
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\main.bicep') -Raw
         $validation = [regex]::Match($source, '(?ms)^var validatedOfficeStorageAccounts = .*?(?=^// Use the same consumer contract)')
         $configuration = [regex]::Match($source, '(?ms)^var fslogixParameters = .*?(?=^// Session Host Parameters)')
-        if (-not $validation.Success -or -not $configuration.Success) { throw 'Production FSLogix forwarding not found' }
+        $eligibility = [regex]::Match($source, '(?m)^var objectSpecificSettingsAreValid = [^\r\n]+')
+        if (-not $validation.Success -or -not $configuration.Success -or -not $eligibility.Success) { throw 'Production FSLogix forwarding not found' }
         $module = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\fslogix.bicep'
         $relativeModule = [Uri]::UnescapeDataString(([Uri]("$directory\")).MakeRelativeUri([Uri]$module).ToString())
         $fixture = Join-Path $directory 'forwarding.bicep'
         $lines = @(
             "targetScope = 'local'"
-            "import { validateOfficeStorageAccounts } from '$relativeModule'"
+            "import { validateOfficeStorageAccounts, validateObjectSpecificSettings } from '$relativeModule'"
         )
         $lines += [regex]::Matches($source, '(?m)^param fslogix\w+ [^\r\n]+') | ForEach-Object Value
-        $lines += $validation.Value, $configuration.Value
+        $lines += [regex]::Match($source, '(?m)^param identitySolution [^\r\n]+').Value
+        $lines += $eligibility.Value, $validation.Value, $configuration.Value
         $lines += 'output encodedResults string = base64(string({ resolved: fslogixParameters }))'
         $cases = @(
             @{ enabled = $false; type = 'ProfileContainer'; local = @(); office = @(); remote = @(); remoteOffice = @(); service = 'AzureFiles' }

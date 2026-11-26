@@ -1,6 +1,8 @@
 metadata name = 'Session host configuration remediation template'
 metadata description = 'Deploys automated session-host initialization as a named Run Command on an existing VM for policy remediation.'
 
+import { validateObjectSpecificSettings } from '../../../../fslogix/fslogix.bicep'
+
 // Time zone and optional FSLogix inputs are forwarded to the embedded initialization script.
 // This remediation does not create storage; supplied accounts, shares, and NetApp endpoints must exist.
 
@@ -42,6 +44,7 @@ var fslogixRemoteProfileStorageAccountNames = [for id in fslogixRemoteProfileSto
 var fslogixLocalOfficeStorageAccountNames = [for id in fslogixLocalOfficeStorageAccountResourceIds: last(split(id, '/'))]
 var fslogixRemoteOfficeStorageAccountNames = [for id in fslogixRemoteOfficeStorageAccountResourceIds: last(split(id, '/'))]
 var useStorageKeys = configureFSLogix && identitySolution == 'EntraId' && fslogixStorageService == 'AzureFiles'
+var objectSpecificSettingsAreValid = validateObjectSpecificSettings(identitySolution, configureFSLogix && !empty(fslogixOSSGroups))
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2024-03-01' existing = {
   name: virtualMachineName
@@ -55,7 +58,7 @@ resource runCommand_ConfigureFSLogix 'Microsoft.Compute/virtualMachines/runComma
     parameters: [
       {
         name: 'ConfigureFSLogix'
-        value: configureFSLogix ? 'true' : 'false'
+        value: objectSpecificSettingsAreValid && configureFSLogix ? 'true' : 'false'
       }
       {
         name: 'ContainerType'

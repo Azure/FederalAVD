@@ -2,6 +2,7 @@ targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { vmApplicationAssignmentType } from '../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
+import { validateObjectSpecificSettings } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 type fslogixConfigurationType = {
   identitySolution: 'ActiveDirectoryDomainServices' | 'EntraDomainServices' | 'EntraKerberos-CloudOnly' | 'EntraKerberos-Hybrid' | 'EntraId'
@@ -126,6 +127,7 @@ var officeAccountsAreValid = fslogixOfficeEnabled ? localOfficeAccountsArePaired
 var accountIdsAreUnique = length(union(profileStorageAccountIds, [])) == length(profileStorageAccountIds) && length(union(officeStorageAccountIds, [])) == length(officeStorageAccountIds)
 var remoteAccountCountIsValid = empty(fslogixConfiguration.remoteProfileStorageAccountResourceIds) || length(fslogixConfiguration.remoteProfileStorageAccountResourceIds) == length(fslogixConfiguration.localProfileStorageAccountResourceIds)
 var objectSpecificGroupCountIsValid = empty(fslogixConfiguration.objectSpecificSettingsGroups) || length(fslogixConfiguration.objectSpecificSettingsGroups) == length(fslogixConfiguration.localProfileStorageAccountResourceIds)
+var objectSpecificSettingsAreValid = validateObjectSpecificSettings(fslogixConfiguration.identitySolution, configureFSLogix && !empty(fslogixConfiguration.objectSpecificSettingsGroups))
 var pairedStorageAccountsAreValid = !configureFSLogix || fslogixConfiguration.storageService != 'AzureFiles' || (!empty(fslogixConfiguration.localProfileStorageAccountResourceIds) && officeAccountsAreValid && accountIdsAreUnique && remoteAccountCountIsValid && objectSpecificGroupCountIsValid)
   ? true
   : fail('FSLogix Azure Files requires ordered, distinct Profile/Office account pairs for each local and remote shard; object-specific groups must match shard counts.')
@@ -485,7 +487,7 @@ module sessionHostConfigurationPolicyAssignment '../../shared/modules/orchestrat
         value: 'DeployIfNotExists'
       }
       configureFSLogix: {
-        value: pairedStorageAccountsAreValid && storageKeyConfigurationIsValid ? configureFSLogix : configureFSLogix
+        value: objectSpecificSettingsAreValid && pairedStorageAccountsAreValid && storageKeyConfigurationIsValid && configureFSLogix
       }
       timeZone: {
         value: virtualMachinesTimeZone

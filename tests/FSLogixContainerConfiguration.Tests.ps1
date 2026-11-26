@@ -172,7 +172,9 @@ Describe 'FSLogix container type source of truth' {
     It 'removes obsolete policy compatibility fields without forwarding redundant runtime inputs' {
         $remediation = Get-Content (Join-Path $repoRoot 'deployments\shared\modules\orchestration\sessionHostPolicy\modules\templates\RunCommand\ConfigureSessionHost.json') -Raw | ConvertFrom-Json -Depth 100
         $remediation.parameters.PSObject.Properties.Name | Should -Not -Contain 'fslogixFileShareNames'
-        $command = $remediation.resources | Where-Object type -eq 'Microsoft.Compute/virtualMachines/runCommands'
+        $resources = if ($remediation.resources -is [array]) { $remediation.resources } else { $remediation.resources.PSObject.Properties.Value }
+        $command = $resources | Where-Object type -eq 'Microsoft.Compute/virtualMachines/runCommands'
+        $command | Should -Not -BeNullOrEmpty
         $command.properties.parameters.name | Should -Contain 'ContainerType'
         $command.properties.parameters.name | Should -Not -Contain 'Shares'
         $command.properties.parameters.name | Should -Not -Contain 'CloudCache'

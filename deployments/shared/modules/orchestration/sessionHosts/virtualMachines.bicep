@@ -3,7 +3,7 @@ metadata description = 'Deploys session-host VM batches with NICs, initializatio
 
 import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
 import { osDiskNamePattern } from '../naming/internal.bicep'
-import { validateOfficeStorageAccounts } from '../fslogix/fslogix.bicep'
+import { validateOfficeStorageAccounts, validateObjectSpecificSettings } from '../fslogix/fslogix.bicep'
 
 @description('Required. AVD Agent Boot Loader installer URL forwarded to initialization; the caller resolves cloud-specific defaults.')
 param agentBootLoaderDownloadUrl string
@@ -146,6 +146,7 @@ param domainJoinForceUpdateTag string = utcNow('yyyyMMddHHmmss')
 var storageSuffix = environment().suffixes.storage
 
 var sessionHostCount = length(sessionHostNames)
+var objectSpecificSettingsAreValid = validateObjectSpecificSettings(identitySolution, fslogixConfigureSessionHosts && !empty(fslogixOSSGroups))
 
 var validatedOfficeStorageAccounts = fslogixConfigureSessionHosts && fslogixStorageService == 'AzureFiles'
   ? validateOfficeStorageAccounts(
@@ -594,7 +595,7 @@ resource runCommand_InitializeSessionHost 'Microsoft.Compute/virtualMachines/run
         { name: 'TimeZone', value: timeZone }
         { name: 'AmdVmSize', value: hasAmdGpu ? 'true' : 'false' }
         { name: 'NvidiaVmSize', value: hasNvidiaGpu ? 'true' : 'false' }
-        { name: 'ConfigureFSLogix', value: fslogixConfigureSessionHosts ? 'true' : 'false' }
+        { name: 'ConfigureFSLogix', value: objectSpecificSettingsAreValid && fslogixConfigureSessionHosts ? 'true' : 'false' }
         { name: 'ContainerType', value: fslogixContainerType }
         { name: 'IdentitySolution', value: identitySolution }
         { name: 'LocalNetAppServers', value: string(fslogixLocalNetAppServerFqdns) }

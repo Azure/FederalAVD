@@ -372,7 +372,7 @@ FSLogix storage authentication and configuration depends on your identity soluti
 | --- | --- | --- | --- | --- | --- |
 | Active Directory Domain Services | ✅ | ✅ | Kerberos (domain-joined storage) | All options | AD groups |
 | Entra Domain Services | ✅ | ❌ | Kerberos (domain-joined storage) | All options | Entra DS groups |
-| Entra Kerberos - Hybrid | ✅ | ❌ | Entra Kerberos | All options | AD groups (synced) |
+| Entra Kerberos - Hybrid | ✅ | ❌ | Entra Kerberos | None, ShardPerms | AD groups (synced) |
 | Entra Kerberos - Cloud Only | ✅ | ❌ | Entra Kerberos | None, ShardPerms | Entra groups |
 | Entra Id (Storage Keys) | ✅ | ❌ | Storage account key | None | Not supported |
 
@@ -387,6 +387,40 @@ FSLogix storage authentication and configuration depends on your identity soluti
 - **Azure NetApp Files**: The temporary deployment VM is domain-joined because the NTFS workflow
   mounts SMB volumes and applies permissions through Windows file-system APIs.
 - **Entra Id**: Storage account keys securely stored on session hosts using credential manager; no domain integration
+
+### Object Specific Settings and Session-Host Identity
+
+User identity, session-host join, and Azure Files authentication are separate choices.
+Synchronized groups can have traditional AD SIDs without the session host being AD-domain joined.
+Microsoft [explicitly excludes OSS on Entra-only joined VMs with hybrid identities](https://learn.microsoft.com/en-us/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities).
+Hybrid synchronized identities support OSS when the VM is **hybrid-Entra joined**, not merely when
+the users or storage authentication are described as hybrid.
+
+FederalAVD's current `EntraKerberos-Hybrid` mode means **hybrid users on Entra-only joined hosts**.
+It does not create hybrid-Entra joined hosts. Therefore:
+
+| Current FederalAVD host identity | OSS (`ShardOSS`) | Alternative |
+| --- | --- | --- |
+| `ActiveDirectoryDomainServices` / `EntraDomainServices` | Supported with traditional AD user/group SIDs | OSS or permission-based sharding |
+| `EntraKerberos-Hybrid` / `EntraKerberos-CloudOnly` | Rejected | `ShardPerms` or no sharding |
+| `EntraId` (storage keys) | Rejected | No sharding |
+
+Successful AD SID lookup, a Kerberos server object, partial/full Kerberos tickets, or working
+Azure Files access does not establish supported OSS identity context. Entra-only clients can
+[access on-premises resources](https://learn.microsoft.com/en-us/entra/identity/devices/device-sso-to-on-premises-resources);
+this restriction is not a claim that Windows cannot query AD or resolve SIDs.
+
+Microsoft supports Azure Files Entra Kerberos on Entra joined **or hybrid-Entra joined** clients,
+not AD-only joined clients. Hybrid join with Entra Kerberos can avoid registering each storage
+account in AD and can serve migration goals. AD DS storage authentication remains a straightforward
+choice for an AD-centric deployment. The current combined FederalAVD identity parameter does not
+expose a separate hybrid-device-join plus Entra-Kerberos configuration.
+
+Host-pool, additional-session-host, replacement, and policy-remediation configuration enforce this
+boundary even when parameter files bypass the Portal. Requested OSS fails explicitly; it is not
+silently converted to permission-based sharding. Disabled session-host FSLogix configuration ignores
+OSS groups. Standalone storage provisioning is separate: it does not configure session hosts and
+does not itself establish OSS eligibility.
 
 ### Container Types
 
@@ -409,7 +443,7 @@ Sharding distributes user profiles across multiple storage accounts to overcome 
 | --- | --- | --- | --- |
 | None | `None` | Single storage account for all users | All identity solutions |
 | Sharding with Permissions | `ShardPerms` | Multiple storage accounts with group-based NTFS permissions | All except EntraId |
-| Sharding with Object Specific Settings | `ShardOSS` | Multiple storage accounts using FSLogix's Object Specific Settings registry configuration | ADDS, Entra DS, Entra Kerberos Hybrid only |
+| Sharding with Object Specific Settings | `ShardOSS` | Multiple storage accounts using FSLogix's Object Specific Settings registry configuration | ADDS, Entra DS in current FederalAVD host deployments |
 
 **Parameter:** `fslogixShardOptions`
 
@@ -417,7 +451,10 @@ Sharding distributes user profiles across multiple storage accounts to overcome 
 
 - `fslogixUserGroups` parameter must define security groups that map users to specific storage accounts
 - For domain-based identity solutions: Groups must exist in Active Directory or Entra Domain Services
-- For Entra Kerberos solutions: Additional configuration via User Assigned Managed Identity (see [Entra Kerberos documentation](entra-kerberos-hybrid.md))
+- For Entra Kerberos permission-based sharding: Configure share-level RBAC and NTFS access for the
+  corresponding groups; hybrid group SID lookup needs AD connectivity and read credentials.
+  The optional Graph identity automates storage authentication setup, not OSS eligibility
+  (see [Entra Kerberos documentation](entra-kerberos-hybrid.md)).
 
 ### Security Group Configuration
 

@@ -683,7 +683,7 @@
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
               "options": {
                 "style": "Info",
-                "text": "Sharding deploys one Azure Files storage account per selected user group to distribute profile load. Sharding via Permissions relies on share and NTFS permissions. Sharding via Object Specific Settings requires corresponding FSLogix object-specific registry configuration and is not offered for Microsoft Entra Kerberos.",
+                "text": "Sharding deploys one Azure Files storage account per selected user group to distribute profile load. Sharding via Permissions relies on share and NTFS permissions. Object Specific Settings require supported AD-domain-joined session hosts and are not offered for the Entra-only host configuration represented here by Microsoft Entra Kerberos. Hybrid users with AD group SIDs are not hybrid-joined machines. This storage add-on does not configure session hosts.",
                 "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
               }
             },

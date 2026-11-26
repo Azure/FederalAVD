@@ -7,7 +7,7 @@ import { publicNetworkAccessMode } from '../../shared/modules/orchestration/netw
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
 import { functionAppNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
 import { namingPolicy, namePattern, scopeIdUnique } from '../../shared/modules/orchestration/naming/internal.bicep'
-import { validateOfficeStorageAccounts } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
+import { validateOfficeStorageAccounts, validateObjectSpecificSettings } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 func initiationMinuteField(schedule string) string => filter(split(replace(trim(schedule), '\t', ' '), ' '), field => !empty(field))[1]
 
@@ -707,6 +707,7 @@ var paramSessionHostCustomizations = !empty(sessionHostCustomizations)
   : {}
 
 // FSLogix conditional parameters
+var objectSpecificSettingsAreValid = validateObjectSpecificSettings(identitySolution, fslogixConfigureSessionHosts && !empty(fslogixOSSGroups))
 var validatedOfficeStorageAccounts = fslogixConfigureSessionHosts && fslogixStorageService == 'AzureFiles'
   ? validateOfficeStorageAccounts(
       fslogixLocalProfileStorageAccountResourceIds,
@@ -718,7 +719,7 @@ var validatedOfficeStorageAccounts = fslogixConfigureSessionHosts && fslogixStor
     )
   : { local: [], remote: [] }
 // Use the same consumer contract as the session-host template; disabled FSLogix adds no inputs.
-var fslogixParameters = fslogixConfigureSessionHosts
+var fslogixParameters = objectSpecificSettingsAreValid && fslogixConfigureSessionHosts
   ? {
       fslogixConfigureSessionHosts: true
       fslogixContainerType: fslogixContainerType

@@ -6,6 +6,15 @@ targetScope = 'subscription'
 import { entraGroupType } from '../../resourceModules/types/identityTypes.bicep'
 import { publicNetworkAccessMode } from '../networking/functions.bicep'
 
+// OSS is a session-host identity feature, not a storage authentication feature.
+// Current EntraKerberos modes create Entra-only hosts; no hybrid-device join mode is exposed.
+// https://learn.microsoft.com/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities
+// Storage-only producers do not call this guard because they do not configure session hosts.
+@export()
+func validateObjectSpecificSettings(identitySolution string, requested bool) bool => !requested || contains(['ActiveDirectoryDomainServices', 'EntraDomainServices'], identitySolution)
+  ? true
+  : fail('FSLogix Object Specific Settings require AD-domain-joined session hosts. FederalAVD EntraKerberos-Hybrid, EntraKerberos-CloudOnly, and EntraId modes use Entra-only joined hosts. Use ShardPerms with Entra Kerberos instead.')
+
 // Validate caller-supplied account arrays without sorting or deduplicating their shard positions.
 // Office counts must match Profile counts in each region; a remote set and selected groups must
 // also match the local shard count. Office account names must be unique across both regions and

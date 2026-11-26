@@ -2709,12 +2709,12 @@
                   {
                     "label": "Microsoft Entra Kerberos (cloud-only identities)",
                     "value": "EntraKerberos-CloudOnly",
-                    "description": "Azure Files uses Microsoft Entra Kerberos to authenticate cloud-only Entra ID identities. No on-premises AD required. Requires admin consent for the storage account app registration and enabling cloud-only group support. Supports NTFS ACL permissions and FSLogix profile sharding."
+                    "description": "Azure Files uses Microsoft Entra Kerberos to authenticate cloud-only Entra ID identities. No on-premises AD required. Requires admin consent for the storage account app registration and enabling cloud-only group support. Supports NTFS ACL permissions and permission-based FSLogix sharding, not Object Specific Settings."
                   },
                   {
                     "label": "Microsoft Entra Kerberos (hybrid identities)",
                     "value": "EntraKerberos-Hybrid",
-                    "description": "Azure Files uses Microsoft Entra Kerberos to authenticate hybrid identities synced from on-premises AD via Entra Connect Sync or Cloud Sync. Requires AD DS and Entra Connect. Supports NTFS ACL permissions and FSLogix profile sharding."
+                    "description": "Azure Files uses Microsoft Entra Kerberos to authenticate hybrid identities synced from on-premises AD via Entra Connect Sync or Cloud Sync. Hybrid describes the users; these session hosts are Entra-only joined. Supports NTFS ACL permissions and permission-based FSLogix sharding, not Object Specific Settings."
                   }
                 ]
               }
@@ -3429,6 +3429,18 @@
                     "style": "Info",
                     "text": "If you choose to Shard the user profile storage, you must provide a group to assign to each storage account. You can choose 'Sharding via Permissions' for simpler configuration at the possible price of longer logon times, or 'Sharding via Object Specific Settings' for more advanced scenarios. You can find instructions on how to configure Object Specific Settings at the link provided.",
                     "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
+                  }
+                },
+                {
+                  "name": "objectSpecificSettingsIdentity",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(or(steps('userProfiles').configureSessionHosts, steps('userProfiles').deployStorage), contains(steps('userProfiles').userIdentity, 'EntraKerberos'))]",
+                  "options": {
+                    "text": "Hybrid identities are synchronized users, not hybrid-joined machines. These session hosts are Entra-only joined. Traditional group SIDs and working Kerberos access do not make FSLogix Object Specific Settings supported here. Use permission-based sharding or no sharding.",
+                    "link": {
+                      "label": "FSLogix Object Specific Settings identity requirements",
+                      "uri": "https://learn.microsoft.com/en-us/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities"
+                    }
                   }
                 },
                 {

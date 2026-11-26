@@ -1,5 +1,11 @@
 # Automated AVD Host Pool Deployment
 
+FSLogix `ShardOSS` requires supported AD-domain-joined session hosts. Current
+`EntraKerberos-Hybrid` describes synchronized users on Entra-only joined hosts; use `ShardPerms`,
+not OSS. Entry-template, policy-assignment, and remediation guards reject unsupported requests.
+These guards do not force a previously successful configuration Run Command to execute again.
+See [the OSS identity boundary](../../docs/features.md#object-specific-settings-and-session-host-identity).
+
 This subscription-scoped deployment creates a pooled Azure Virtual Desktop host pool that uses
 Session Host Configuration (`managementType: Automated`). Azure Virtual Desktop owns creation,
 update, and replacement of the session-host virtual machines.

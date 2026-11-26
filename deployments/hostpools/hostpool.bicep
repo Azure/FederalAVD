@@ -6,6 +6,7 @@ import { entraGroupType } from '../shared/modules/resourceModules/types/identity
 import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
 import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
+import { validateObjectSpecificSettings } from '../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -1279,7 +1280,7 @@ var existingFslogixOfficeAccountIds = map(concat(
 var fslogixExistingOfficeStorageConfigurationIsValid = !fslogixConfigureSessionHosts || !startsWith(fslogixStorageService, 'AzureFiles') || !fslogixOfficeEnabled || ((deployFSLogixStorage || length(fslogixExistingLocalOfficeStorageAccountResourceIds) == length(fslogixExistingLocalProfileStorageAccountResourceIds)) && length(fslogixExistingRemoteOfficeStorageAccountResourceIds) == length(fslogixExistingRemoteProfileStorageAccountResourceIds) && empty(intersection(existingFslogixProfileAccountIds, existingFslogixOfficeAccountIds)) && length(existingFslogixProfileAccountIds) == length(union(existingFslogixProfileAccountIds, existingFslogixProfileAccountIds)) && length(existingFslogixOfficeAccountIds) == length(union(existingFslogixOfficeAccountIds, existingFslogixOfficeAccountIds)))
   ? true
   : fail('Office Azure Files containers require separate, non-overlapping Office account IDs paired one-for-one with each local and remote Profile array, in the same shard order. No Profile-account fallback or data migration is performed.')
-var fslogixShardingConfigurationIsValid = (!deployFSLogixStorage && !fslogixConfigureSessionHosts) || identitySolution == 'EntraId' || fslogixShardOptions == 'None' || !empty(fslogixUserGroups)
+var fslogixShardingConfigurationIsValid = validateObjectSpecificSettings(identitySolution, (deployFSLogixStorage || fslogixConfigureSessionHosts) && fslogixShardOptions == 'ShardOSS') && ((!deployFSLogixStorage && !fslogixConfigureSessionHosts) || identitySolution == 'EntraId' || fslogixShardOptions == 'None' || !empty(fslogixUserGroups))
   ? true
   : fail('fslogixUserGroups must contain at least one group when sharding is enabled.')
 var fslogixExistingLocalStorageConfigurationIsValid = !fslogixConfigureSessionHosts || deployFSLogixStorage || !startsWith(fslogixStorageService, 'AzureFiles') || length(effectiveFslogixExistingLocalProfileStorageAccountResourceIds) == fslogixStorageCount

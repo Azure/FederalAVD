@@ -11,6 +11,7 @@
 // targetScope = resourceGroup (default)
 
 import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { validateObjectSpecificSettings } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 @description('Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')
 param agentBootLoaderDownloadUrl string = ''
@@ -264,6 +265,7 @@ var calculatedAvailabilitySetsCount = endAvSetRange - beginAvSetRange + 1
 var calculatedAvailabilitySetsIndex = beginAvSetRange
 
 var effectiveVmBackupPolicyName = !empty(vmBackupPolicyName) ? vmBackupPolicyName : 'AvdPolicyVm'
+var objectSpecificSettingsAreValid = validateObjectSpecificSettings(identitySolution, fslogixConfigureSessionHosts && !empty(fslogixOSSGroups))
 
 // ── Credentials from Key Vault ────────────────────────────────────────────────
 resource kvCredentials 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
@@ -305,7 +307,7 @@ module sessionHosts '../../shared/modules/orchestration/sessionHosts/sessionHost
     enableIPv6: enableIPv6
     enableMonitoring: enableMonitoring
     encryptionAtHost: encryptionAtHost
-    fslogixConfigureSessionHosts: fslogixConfigureSessionHosts
+    fslogixConfigureSessionHosts: objectSpecificSettingsAreValid && fslogixConfigureSessionHosts
     fslogixContainerType: fslogixContainerType
     fslogixLocalNetAppVolumeResourceIds: fslogixLocalNetAppVolumeResourceIds
     fslogixLocalProfileStorageAccountResourceIds: fslogixLocalProfileStorageAccountResourceIds

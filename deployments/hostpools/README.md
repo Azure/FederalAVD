@@ -1,5 +1,10 @@
 ﻿# AVD Host Pool Deployment Template
 
+FSLogix `ShardOSS` requires supported AD-domain-joined session hosts. Current
+`EntraKerberos-Hybrid` describes synchronized users on Entra-only joined hosts; use `ShardPerms`,
+not OSS. Portal and parameter-file eligibility match. See
+[the OSS identity boundary](../../docs/features.md#object-specific-settings-and-session-host-identity).
+
 > **📖 User Guide:** For deployment instructions and step-by-step guidance, see the [Host Pool Deployment Guide](../../docs/hostpool-deployment.md)
 >
 > **Script Reference:** See [Standard Host Pool PowerShell Scripts](scripts/README.md) for

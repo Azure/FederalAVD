@@ -2149,7 +2149,7 @@
                   {
                     "label": "Microsoft Entra Kerberos (hybrid identities)",
                     "value": "EntraKerberos-Hybrid",
-                    "description": "Azure Files authenticates hybrid identities synchronized from Active Directory with Microsoft Entra Kerberos."
+                    "description": "Azure Files authenticates hybrid identities synchronized from Active Directory with Microsoft Entra Kerberos. These hosts are Entra-only joined; use permission-based sharding, not Object Specific Settings."
                   }
                 ]
               }
@@ -2404,26 +2404,43 @@
                   }
                 },
                 {
+                  "name": "objectSpecificSettingsIdentity",
+                  "type": "Microsoft.Common.TextBlock",
+                  "visible": "[and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+                  "options": {
+                    "text": "Hybrid identities are synchronized users, not hybrid-joined machines. These session hosts are Entra-only joined. Traditional group SIDs and working Kerberos access do not make FSLogix Object Specific Settings supported here. Use permission-based sharding or no sharding.",
+                    "link": {
+                      "label": "FSLogix Object Specific Settings identity requirements",
+                      "uri": "https://learn.microsoft.com/en-us/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities"
+                    }
+                  }
+                },
+                {
                   "name": "shardOptions",
                   "type": "Microsoft.Common.OptionsGroup",
                   "label": "Sharding Options",
                   "defaultValue": "No Sharding",
-                  "visible": "[contains(steps('profiles').storage.service, 'AzureFiles')]",
+                  "visible": "[and(contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('hosts').identity.machineIdentity, 'DomainServices'))]",
                   "constraints": {
                     "required": true,
                     "allowedValues": [
-                      {
-                        "label": "No Sharding",
-                        "value": "None"
-                      },
-                      {
-                        "label": "Sharding via Permissions",
-                        "value": "ShardPerms"
-                      },
-                      {
-                        "label": "Sharding via Object Specific Settings",
-                        "value": "ShardOSS"
-                      }
+                      { "label": "No Sharding", "value": "None" },
+                      { "label": "Sharding via Permissions", "value": "ShardPerms" },
+                      { "label": "Sharding via Object Specific Settings", "value": "ShardOSS" }
+                    ]
+                  }
+                },
+                {
+                  "name": "shardOptionsEntra",
+                  "type": "Microsoft.Common.OptionsGroup",
+                  "label": "Sharding Options",
+                  "defaultValue": "No Sharding",
+                  "visible": "[and(contains(steps('profiles').storage.service, 'AzureFiles'), equals(steps('hosts').identity.machineIdentity, 'EntraID'))]",
+                  "constraints": {
+                    "required": true,
+                    "allowedValues": [
+                      { "label": "No Sharding", "value": "None" },
+                      { "label": "Sharding via Permissions", "value": "ShardPerms" }
                     ]
                   }
                 },
@@ -2538,7 +2555,7 @@
                   "label": "User Active Directory Domain Name",
                   "placeholder": "contoso.com",
                   "toolTip": "Provide the AD DS domain from which hybrid users are synchronized. Domain lookup credentials are read from the selected credentials Key Vault.",
-                  "visible": "[and(steps('profiles').deployStorage, equals(steps('profiles').userIdentity, 'EntraKerberos-Hybrid'), or(steps('profiles').access.restrictUserAccess, equals(steps('profiles').storage.shardOptions, 'ShardPerms')))]",
+                  "visible": "[and(steps('profiles').deployStorage, equals(steps('profiles').userIdentity, 'EntraKerberos-Hybrid'), or(steps('profiles').access.restrictUserAccess, equals(if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'ShardPerms')))]",
                   "constraints": {
                     "required": true,
                     "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
@@ -2548,7 +2565,7 @@
                 {
                   "name": "hybridCredentialInfo",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('profiles').deployStorage, equals(steps('profiles').userIdentity, 'EntraKerberos-Hybrid'), or(steps('profiles').access.restrictUserAccess, equals(steps('profiles').storage.shardOptions, 'ShardPerms')))]",
+                  "visible": "[and(steps('profiles').deployStorage, equals(steps('profiles').userIdentity, 'EntraKerberos-Hybrid'), or(steps('profiles').access.restrictUserAccess, equals(if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'ShardPerms')))]",
                   "options": {
                     "style": "Info",
                     "text": "DomainJoinUserPrincipalName and DomainJoinUserPassword are read from the selected credentials Key Vault for group SID lookup. The account needs read access to the domain and is not used to join the temporary deployment VM."
@@ -2640,7 +2657,7 @@
                   "keyPath": "name",
                   "descriptionKeyPath": "id",
                   "value": "[steps('profiles').access.userGroupPickerBlade.transformed.groups]",
-                  "visible": "[or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None')))]",
+                  "visible": "[or(steps('profiles').access.restrictUserAccess, not(equals(if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'None')))]",
                   "constraints": {
                     "required": true
                   },
@@ -2690,7 +2707,7 @@
                 {
                   "name": "wrongNumberOfLocalStorageAccounts",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), not(equals(length(steps('profiles').existingStorage.localStorageAccounts), if(or(equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
+                  "visible": "[and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), not(equals(length(steps('profiles').existingStorage.localStorageAccounts), if(or(equals(if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
                   "options": {
                     "style": "Error",
                     "text": "You have not selected the correct number of storage accounts. You must select the correct number before continuing or the session hosts will not be configured properly."
@@ -2712,7 +2729,7 @@
                 {
                   "name": "wrongNumberOfRemoteStorageAccounts",
                   "type": "Microsoft.Common.InfoBox",
-                  "visible": "[and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'CloudCache'), not(empty(steps('profiles').existingStorage.remoteStorageAccounts)), not(equals(length(steps('profiles').existingStorage.remoteStorageAccounts), if(or(equals(steps('profiles').storage.shardOptions, 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
+                  "visible": "[and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'CloudCache'), not(empty(steps('profiles').existingStorage.remoteStorageAccounts)), not(equals(length(steps('profiles').existingStorage.remoteStorageAccounts), if(or(equals(if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'None'), empty(steps('profiles').access.userGroupPickerBlade.transformed.groups)), 1, length(steps('profiles').access.userGroupPickerBlade.transformed.groups)))))]",
                   "options": {
                     "style": "Error",
                     "text": "Select either no remote storage accounts or the same number required for local storage."
@@ -4621,9 +4638,9 @@
         "existingFilesBackupVaultResourceId": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').storage.registerBackup, steps('profiles').storage.useExistingRecoveryServicesVault), steps('profiles').storage.recoveryServicesVault.id, '')]",
         "existingFilesBackupPolicyName": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').storage.registerBackup), steps('profiles').storage.filesBackupPolicyName, 'filesharepolicy')]",
         "backupRetentionDays": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), steps('profiles').storage.registerBackup, not(steps('profiles').storage.useExistingRecoveryServicesVault)), steps('profiles').storage.backupRetentionDays, 30)]",
-        "fslogixShardOptions": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.shardOptions, 'None')]",
+        "fslogixShardOptions": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'None')]",
         "fslogixAdminGroups": "[if(and(steps('profiles').deployStorage, steps('profiles').access.configureAdminAccess, not(empty(steps('profiles').access.adminGroupPickerBlade.transformed.groups))), steps('profiles').access.adminGroupPickerBlade.transformed.groups, parse('[]'))]",
-        "fslogixUserGroups": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), or(steps('profiles').access.restrictUserAccess, not(equals(steps('profiles').storage.shardOptions, 'None'))), not(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups))), steps('profiles').access.userGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "fslogixUserGroups": "[if(and(or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage), or(steps('profiles').access.restrictUserAccess, not(equals(if(equals(steps('hosts').identity.machineIdentity, 'EntraID'), steps('profiles').storage.shardOptionsEntra, steps('profiles').storage.shardOptions), 'None'))), not(empty(steps('profiles').access.userGroupPickerBlade.transformed.groups))), steps('profiles').access.userGroupPickerBlade.transformed.groups, parse('[]'))]",
         "fslogixExistingLocalProfileStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.localStorageAccounts, parse('[]'))]",
         "fslogixExistingRemoteProfileStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, contains(steps('profiles').storage.containerType, 'CloudCache'), contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').existingStorage.remoteStorageAccounts, parse('[]'))]",
         "fslogixExistingLocalOfficeStorageAccountResourceIds": "[if(and(steps('profiles').configureSessionHosts, not(steps('profiles').deployStorage), contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'Office')), steps('profiles').existingStorage.localOfficeStorageAccounts, parse('[]'))]",
