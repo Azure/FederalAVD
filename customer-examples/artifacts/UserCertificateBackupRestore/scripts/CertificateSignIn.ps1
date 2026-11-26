@@ -4,7 +4,7 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$InputPath,
     [ValidateNotNullOrEmpty()]
-    [string]$DefaultInputPath = '%USERPROFILE%\Documents\CertificateBackups',
+    [string]$DefaultInputPath = '{Documents}\CertificateBackups',
     [switch]$Startup
 )
 Set-StrictMode -Version Latest
@@ -28,16 +28,16 @@ $timer = $null
 $artwork = $null
 $windowIcon = $null
 $fonts = [Collections.Generic.List[IDisposable]]::new()
-$state = @{ Candidate = $null; Busy = $false; Verified = $false; Worker = $null; Operation = $null; Secret = $null; FolderSource = 'Default' }
+$state = @{ Candidate = $null; Files = @(); RefreshingFiles = $false; UnverifiedFile = $false; Busy = $false; Verified = $false; Worker = $null; Operation = $null; Secret = $null; FolderSource = 'Default' }
 try {
     Import-Module $modulePath -Force -ErrorAction Stop
     Import-Module (Join-Path $PSScriptRoot 'CertificateBackup.Core.psm1') -ErrorAction Stop
     $folderPolicy = Get-CertificatePolicy
-    $folderManaged = $null -ne $folderPolicy.RestoreFolder
+    $folderManaged = $null -ne $folderPolicy.CertificateFolder
     $expiryWarningDays = if ($null -ne $folderPolicy.ExpiryWarningDays) { $folderPolicy.ExpiryWarningDays } else { 30 }
     Write-Verbose 'Certificate module loaded.'
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $mutex = [Threading.Mutex]::new($false, "Local\CertificateSignIn-$sid")
+    $mutex = [Threading.Mutex]::new($false, "Local\UserCertificateBackupRestore-Restore-$sid")
     try { $acquired = $mutex.WaitOne(0, $false) } catch [Threading.AbandonedMutexException] { $acquired = $true }
     if (-not $acquired) { Write-Verbose 'Another copy is already running for this user/session.'; return }
     $form = [Windows.Forms.Form]::new()
@@ -143,8 +143,11 @@ try {
     $layout.Controls.Add($folder, 0, 2)
     $layout.Controls.Add($browse, 1, 2)
     $layout.Controls.Add($scan, 2, 2)
-    $selected = [Windows.Forms.TextBox]::new()
-    $selected.ReadOnly = $true
+    $selected = [Windows.Forms.ComboBox]::new()
+    $selected.DropDownStyle = 'DropDownList'
+    $selected.MaxDropDownItems = 12
+    $selected.DropDownWidth = 1100
+    $selected.AccessibleName = 'Certificate backup file to restore'
     $selected.Dock = 'Fill'
     Add-WideControl $selected 3
     $unlock = New-Label '2  UNLOCK FOR THIS SESSION'
@@ -203,7 +206,7 @@ try {
     }
     function Set-ImportBusy([bool]$Busy) {
         $state.Busy = $Busy
-        foreach ($control in @($folder, $browse, $scan, $password, $startupBox, $save, $backupButton)) {
+        foreach ($control in @($folder, $browse, $scan, $selected, $password, $startupBox, $save, $backupButton)) {
             $control.Enabled = -not $Busy -and -not $state.Verified
         }
         $folder.ReadOnly = $folderManaged
@@ -219,24 +222,75 @@ try {
             $status.ForeColor = if ($ErrorState) { [Drawing.ColorTranslator]::FromHtml('#A4262C') } else { $ink }
         }
     }
-    function Find-SelectedCertificate {
+    function Confirm-UnverifiedCertificateRestore([string]$Path) {
+        return [Windows.Forms.MessageBox]::Show($form,
+            "This file has no matching backup manifest. Its saved hash and complete identity selection cannot be checked; older backups may omit current identities.`r`n`r`n$Path`r`n`r`nRestore this file anyway? Password and private-key validation still apply.",
+            'Confirm backup file selection', [Windows.Forms.MessageBoxButtons]::YesNo,
+            [Windows.Forms.MessageBoxIcon]::Warning, [Windows.Forms.MessageBoxDefaultButton]::Button2) -eq [Windows.Forms.DialogResult]::Yes
+    }
+    function Update-SelectedCertificate {
         $password.Clear()
         $state.Candidate = $null
+        $state.UnverifiedFile = $false
         $import.Enabled = $false
+        if ($selected.SelectedIndex -lt 0) { return }
         try {
-            $state.Candidate = Find-NewestCertificate -InputPath $folder.Text
-            $selected.Text = $state.Candidate
-            $health = Get-CertificateBackupStatus -Folder $folder.Text -ExpiryWarningDays $expiryWarningDays
-            Set-RestoreStatus ("Ready to restore:`r`n$($state.Candidate)`r`n`r`nEnter the backup password and select Restore certificate. Blank passwords are allowed.`r`n`r`n" +
-                ($health.Warnings -join "`r`n"))
+            $selection = Get-CertificateRestoreFile -Path $state.Files[$selected.SelectedIndex].FullName -AllowUnverifiedFile
+            $state.Candidate = $selection.Path
+            $state.UnverifiedFile = -not $selection.HasMatchingManifest
+            $guidance = if ($state.UnverifiedFile) {
+                'WARNING: This file has no matching backup manifest. Its saved hash and complete identity selection cannot be checked. An older backup may omit current identities. Restore only if you trust this file; confirmation is required.'
+            } else {
+                $health = Get-CertificateBackupStatus -Folder $folder.Text -ExpiryWarningDays $expiryWarningDays
+                "Latest validated backup selected.`r`n" + ($health.Warnings -join "`r`n")
+            }
+            Set-RestoreStatus ("Ready to restore:`r`n$($state.Candidate)`r`n`r`n$guidance`r`n`r`nEnter the backup password and select Restore certificate. Blank passwords are allowed.") $state.UnverifiedFile
             $import.Enabled = $true
             [void]$password.Focus()
         } catch {
-            $selected.Clear()
-            $guidance = if ($folderManaged) { 'Place your backed-up PFX/P12 in the managed folder, or contact your administrator.' } else { 'Place your backed-up PFX/P12 in this folder, or browse to another folder.' }
-            Set-RestoreStatus "Backup not available: $($_.Exception.Message)`r`n$guidance For a network folder, wait for connectivity and select Find newest." $true
+            $state.Candidate = $null
+            Set-RestoreStatus "Selected backup is unavailable: $($_.Exception.Message)" $true
         }
     }
+    function Find-SelectedCertificate {
+        $password.Clear()
+        $state.Candidate = $null
+        $state.UnverifiedFile = $false
+        $import.Enabled = $false
+        $state.RefreshingFiles = $true
+        $state.Files = @()
+        $selected.Items.Clear()
+        try {
+            $state.Files = @(Get-CertificateRestoreFiles -InputPath $folder.Text)
+            foreach ($file in $state.Files) {
+                [void]$selected.Items.Add(('{0}  |  {1} UTC' -f $file.Name, $file.LastWriteTimeUtc.ToString('yyyy-MM-dd HH:mm:ss')))
+            }
+            $defaultPath = [IO.Path]::GetFullPath((Find-NewestCertificate -InputPath $folder.Text))
+            for ($index = 0; $index -lt $state.Files.Count; $index++) {
+                if ($state.Files[$index].FullName -eq $defaultPath) {
+                    $selected.Items[$index] = '[default] ' + $selected.Items[$index]
+                    $selected.SelectedIndex = $index
+                    break
+                }
+            }
+            if ($selected.SelectedIndex -lt 0) { throw 'The default backup changed during discovery. Select Find newest to refresh.' }
+        } catch {
+            if ($_.Exception.Data['CertificateKfmPending'] -eq $true) {
+                Set-RestoreStatus "$($_.Exception.Message)`r`nSelect Find newest after work OneDrive is ready." $true
+                return
+            }
+            $guidance = if ($folderManaged) { 'Place your backed-up PFX/P12 in the managed folder, or contact your administrator.' } else { 'Place your backed-up PFX/P12 in this folder, or browse to another folder.' }
+            if ($state.Files.Count -gt 0) { $guidance += ' You can explicitly choose another listed file; malformed manifest errors must be resolved first.' }
+            Set-RestoreStatus "Backup not available: $($_.Exception.Message)`r`n$guidance For a network folder, wait for connectivity and select Find newest." $true
+            return
+        } finally { $state.RefreshingFiles = $false }
+        Update-SelectedCertificate
+    }
+    $selected.Add_SelectedIndexChanged({
+        if (-not $state.RefreshingFiles -and -not $state.Busy -and -not $state.Verified) {
+            Update-SelectedCertificate
+        }
+    })
     $folder.Add_TextChanged({
         if (-not $folderManaged) {
             $state.FolderSource = 'Custom'
@@ -244,7 +298,8 @@ try {
         }
         $state.Candidate = $null
         $state.Verified = $false
-        $selected.Clear()
+        $state.Files = @()
+        $selected.Items.Clear()
         $password.Clear()
         $import.Enabled = $false
     })
@@ -315,6 +370,9 @@ try {
         if ($state.Verified -and -not $state.Busy) { $form.Close(); return }
         if ($null -eq $state.Candidate -or $state.Busy) { return }
         try {
+            if ($state.UnverifiedFile) {
+                if (-not (Confirm-UnverifiedCertificateRestore -Path $state.Candidate)) { $password.Clear(); return }
+            }
             $state.Secret = [Security.SecureString]::new()
             for ($i = 0; $i -lt $password.TextLength; $i++) { $state.Secret.AppendChar($password.Text[$i]) }
             $state.Secret.MakeReadOnly()
@@ -325,7 +383,7 @@ try {
             [void]$state.Worker.AddCommand('Import-Module').AddParameter('Name', $modulePath).
                 AddParameter('ErrorAction', 'Stop').AddStatement().
                 AddCommand('Import-UserCertificate').AddParameter('Path', $state.Candidate).
-                AddParameter('Password', $state.Secret)
+                AddParameter('Password', $state.Secret).AddParameter('AllowUnverifiedFile', $state.UnverifiedFile)
             $state.Operation = $state.Worker.BeginInvoke()
             $timer.Start()
         } catch {
@@ -348,7 +406,7 @@ try {
         } else { $password.Clear() }
     })
     $loadError = $null
-    $folder.Text = Resolve-CertificateInputPath -InputPath $InputPath -DefaultInputPath $DefaultInputPath -ManagedInputPath $folderPolicy.RestoreFolder -PreserveEnvironmentReferences
+    $folder.Text = Resolve-CertificateInputPath -InputPath $InputPath -DefaultInputPath $DefaultInputPath -ManagedInputPath $folderPolicy.CertificateFolder -PreserveEnvironmentReferences
     $state.FolderSource = if ($folderManaged) { 'Managed' } elseif ($PSBoundParameters.ContainsKey('InputPath')) { 'Explicit' } else { 'Default' }
     try {
         if (-not $folderManaged -and -not $PSBoundParameters.ContainsKey('InputPath')) {

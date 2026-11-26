@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitions revision="1.0" schemaVersion="1.0">
+  <policyNamespaces>
+    <target prefix="userCertificateBackupRestore" namespace="UserCertificateBackupRestore.Policies" />
+    <using prefix="windows" namespace="Microsoft.Policies.Windows" />
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0" />
+  <categories>
+    <category name="UserCertificateBackupRestore" displayName="$(string.UserCertificateBackupRestoreCategory)" />
+  </categories>
+  <policies>
+    <policy name="SetCertificateFolder" class="Machine"
+            displayName="$(string.CertificateFolderName)" explainText="$(string.CertificateFolderExplain)"
+            presentation="$(presentation.CertificateFolderPresentation)"
+            key="Software\Policies\UserCertificateBackupRestore">
+      <parentCategory ref="UserCertificateBackupRestore" />
+      <supportedOn ref="windows:SUPPORTED_Windows_10_0" />
+      <elements>
+        <text id="CertificateFolderValue" valueName="CertificateFolder" required="true" expandable="true" maxLength="32767" />
+      </elements>
+    </policy>
+    <policy name="SetExpiryWarningDays" class="Machine"
+            displayName="$(string.ExpiryWarningDaysName)" explainText="$(string.ExpiryWarningDaysExplain)"
+            presentation="$(presentation.ExpiryWarningDaysPresentation)"
+            key="Software\Policies\UserCertificateBackupRestore">
+      <parentCategory ref="UserCertificateBackupRestore" />
+      <supportedOn ref="windows:SUPPORTED_Windows_10_0" />
+      <elements>
+        <decimal id="ExpiryWarningDaysValue" valueName="ExpiryWarningDays" required="true" minValue="1" maxValue="365" />
+      </elements>
+    </policy>
+  </policies>
+</policyDefinitions>

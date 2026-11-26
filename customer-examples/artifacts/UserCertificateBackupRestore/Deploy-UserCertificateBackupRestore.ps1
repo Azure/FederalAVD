@@ -12,23 +12,23 @@ administrator/SYSTEM installer. Administrative folder values remain authoritativ
 Install (default) installs or updates the application. Uninstall removes its
 runtime files and shortcuts, preserving user data and policies by default.
 .PARAMETER RemovePolicySettings
-Uninstall only. Remove the three application settings from local GPO and HKLM.
+Uninstall only. Remove the two application settings from local GPO and HKLM.
 Use only when this deployment owns those settings; other managers may reapply them.
 .PARAMETER RemovePolicyTemplates
 Uninstall only. Remove matching bundled ADMX/ADML from local PolicyDefinitions.
 .PARAMETER DefaultInputPath
 Fallback used when no managed value, explicit path, or saved user folder exists.
 Environment references are preserved for expansion in each user's session.
+The default '{Documents}\CertificateBackups' uses the interactive user's Windows
+Documents known folder, honoring KFM/redirection without resolving it at install.
 Use literal '%USERPROFILE%\...' strings, not "$env:USERPROFILE\...", which
 PowerShell expands in the calling administrator/SYSTEM session before deployment.
 No automatic conversion from PowerShell expressions to percent tokens occurs.
 .PARAMETER InputPath
 Optional shortcut folder override over saved HKCU preferences. Managed HKLM
 registry values still take precedence. Omit this to allow remembered user folders.
-.PARAMETER RestoreFolder
-Optional authoritative RestoreFolder policy value, stored as REG_EXPAND_SZ.
-.PARAMETER BackupFolder
-Optional authoritative BackupFolder policy value, stored as REG_EXPAND_SZ.
+.PARAMETER CertificateFolder
+Optional authoritative folder for both backup and restore, stored as REG_EXPAND_SZ.
 .PARAMETER ExpiryWarningDays
 Optional expiry warning window for both forms, from 1 to 365 days.
 .PARAMETER ConfigureLocalGpo
@@ -46,13 +46,11 @@ param(
     [switch]$RemovePolicySettings,
     [switch]$RemovePolicyTemplates,
     [ValidateNotNullOrEmpty()]
-    [string]$DefaultInputPath = '%USERPROFILE%\Documents\CertificateBackups',
+    [string]$DefaultInputPath = '{Documents}\CertificateBackups',
     [ValidateNotNullOrEmpty()]
     [string]$InputPath,
     [ValidateNotNullOrEmpty()]
-    [string]$RestoreFolder,
-    [ValidateNotNullOrEmpty()]
-    [string]$BackupFolder,
+    [string]$CertificateFolder,
     [ValidateRange(1, 365)]
     [int]$ExpiryWarningDays,
     [switch]$ConfigureLocalGpo,
@@ -270,14 +268,14 @@ function Invoke-PolicyUpdate {
 function Copy-CertificatePolicyTemplates {
     param([string]$SourceDirectory, [string]$DestinationDirectory)
     [void][IO.Directory]::CreateDirectory((Join-Path $DestinationDirectory 'en-US'))
-    foreach ($name in @('CertificateSignIn.admx', 'en-US\CertificateSignIn.adml')) {
+    foreach ($name in @('UserCertificateBackupRestore.admx', 'en-US\UserCertificateBackupRestore.adml')) {
         Copy-FileKeepingZone (Join-Path $SourceDirectory $name) (Join-Path $DestinationDirectory $name)
     }
 }
 
 function Remove-CertificateRegistrySettings {
     param([Parameter(Mandatory)][Microsoft.Win32.RegistryKey]$Key)
-    foreach ($name in @('RestoreFolder', 'BackupFolder', 'ExpiryWarningDays')) {
+    foreach ($name in @('CertificateFolder', 'ExpiryWarningDays')) {
         $Key.DeleteValue($name, $false)
         if ($Key.GetValueNames() -contains $name) { throw "Could not remove the $name policy." }
     }
@@ -316,7 +314,7 @@ function Remove-CertificatePolicyTemplates {
         }
     }
     $files = @()
-    foreach ($name in @('CertificateSignIn.admx', 'en-US\CertificateSignIn.adml')) {
+    foreach ($name in @('UserCertificateBackupRestore.admx', 'en-US\UserCertificateBackupRestore.adml')) {
         $path = Join-Path $DestinationDirectory $name
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
         $source = Join-Path $SourceDirectory $name
@@ -369,8 +367,8 @@ try {
     $required = @('CertificateSignIn.ps1', 'CertificateSignIn.Core.psm1',
         'CertificateBackup.ps1', 'CertificateBackup.Core.psm1', 'Set-FileZone.ps1', 'assets\certificate-banner.png',
         'assets\certificate-backup-banner.png', 'assets\certificate-restore.ico', 'assets\certificate-backup.ico',
-        'policy\CertificateSignIn.admx', 'policy\en-US\CertificateSignIn.adml')
-    $destination = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'CertificateSignIn'
+        'policy\UserCertificateBackupRestore.admx', 'policy\en-US\UserCertificateBackupRestore.adml')
+    $destination = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'UserCertificateBackupRestore'
     $startupFolder = [Environment]::GetFolderPath('CommonStartup')
     $linkPath = Join-Path $startupFolder 'User Certificate Backup & Restore.lnk'
     $menuFolder = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'User Certificate Backup & Restore'
@@ -393,7 +391,7 @@ try {
         }
     )
     if ($DeploymentType -eq 'Uninstall') {
-        foreach ($name in @('DefaultInputPath', 'InputPath', 'RestoreFolder', 'BackupFolder', 'ExpiryWarningDays', 'ConfigureLocalGpo', 'InstallPolicyTemplates')) {
+        foreach ($name in @('DefaultInputPath', 'InputPath', 'CertificateFolder', 'ExpiryWarningDays', 'ConfigureLocalGpo', 'InstallPolicyTemplates')) {
             if ($PSBoundParameters.ContainsKey($name)) { throw "$name is an installation-only parameter." }
         }
         $action = 'Uninstall application files and shortcuts; preserve certificates, backups and preferences'
@@ -406,9 +404,9 @@ try {
         }
         if ($RemovePolicySettings) {
             . (Join-Path $runtime 'Set-FileZone.ps1')
-            $policyKeyPath = 'Software\Policies\CertificateSignIn'
+            $policyKeyPath = 'Software\Policies\UserCertificateBackupRestore'
             $entries = Read-PRegFile (Join-Path $env:SystemRoot 'System32\GroupPolicy\Machine\Registry.pol')
-            foreach ($name in @('RestoreFolder', 'BackupFolder', 'ExpiryWarningDays')) {
+            foreach ($name in @('CertificateFolder', 'ExpiryWarningDays')) {
                 if (@($entries | Where-Object {
                     $_.Key -ieq $policyKeyPath -and ($_.Name -ieq $name -or $_.Name -ieq "**Del.$name")
                 }).Count -gt 0) { Remove-PolicyRegistryValue $policyKeyPath $name }
@@ -457,13 +455,13 @@ try {
     }
     [void](Get-CertificateLaunchArguments -ScriptPath (Join-Path $runtime 'CertificateSignIn.ps1') @launchDefaults)
     $managedValues = @{}
-    foreach ($name in @('RestoreFolder', 'BackupFolder')) {
+    foreach ($name in @('CertificateFolder')) {
         if (-not $PSBoundParameters.ContainsKey($name)) { continue }
         $value = $PSBoundParameters[$name].Trim()
         if ([string]::IsNullOrWhiteSpace($value) -or $value.IndexOfAny([IO.Path]::GetInvalidPathChars()) -ge 0 -or
-            $value -notmatch '^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+(?:\\|$)|%[A-Za-z_][A-Za-z_0-9]*%(?:\\|$))' -or
+            $value -notmatch '^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+(?:\\|$)|%[A-Za-z_][A-Za-z_0-9]*%(?:\\|$)|\{Documents\}(?:\\|$))' -or
             $value -match '^\\\\[?.]\\') {
-            throw "$name must be an absolute drive/UNC path or a user-environment-rooted path."
+            throw "$name must be an absolute drive/UNC path, a user-environment-rooted path, or a {Documents}-rooted path."
         }
         $managedValues[$name] = @{ Data = $value; Kind = [Microsoft.Win32.RegistryValueKind]::ExpandString; PolicyType = 'ExpandString' }
     }
@@ -535,7 +533,7 @@ try {
     }
     if ($ConfigureLocalGpo) {
         foreach ($name in $managedValues.Keys) {
-            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'Software\Policies\CertificateSignIn' `
+            Set-PolicyRegistryValue -Scope Computer -RegistryKeyPath 'Software\Policies\UserCertificateBackupRestore' `
                 -RegistryValue $name -RegistryType $managedValues[$name].PolicyType -RegistryData ([string]$managedValues[$name].Data)
         }
         Invoke-PolicyUpdate
@@ -545,7 +543,7 @@ try {
             [Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
         $key = $null
         try {
-            $key = $baseKey.CreateSubKey('Software\Policies\CertificateSignIn')
+            $key = $baseKey.CreateSubKey('Software\Policies\UserCertificateBackupRestore')
             foreach ($name in $managedValues.Keys) {
                 $key.SetValue($name, $managedValues[$name].Data, $managedValues[$name].Kind)
                 if ($key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -cne $managedValues[$name].Data) {

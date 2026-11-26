@@ -181,7 +181,6 @@ function New-CertificateBackup {
             else { [IO.File]::Move($manifestStaging, $manifestPath) }
             Set-FileZone $manifestPath $manifestZone
         } catch { throw "PFX saved at $final, but publishing its manifest failed. The previous managed selection remains unchanged if replacement did not complete. $($_.Exception.Message)" }
-        return [pscustomobject]@{ Path = $final; Count = $identities.Count; CreatedUtc = $manifest.CreatedUtc }
     } catch {
         throw "Backup failed; no earlier PFX was deleted. Check destination availability/write permissions and ensure every selected key is exportable under the issuing PKI/provider policy. $($_.Exception.Message)"
     } finally {
@@ -207,6 +206,16 @@ function New-CertificateBackup {
         foreach ($temporary in @($staging, $manifestStaging, $legacyStaging)) {
             if ([IO.File]::Exists($temporary)) { Remove-Item -LiteralPath $temporary -ErrorAction Stop }
         }
+    }
+    $pinning = Set-CertificateBackupOfflineAvailability -BackupPath $final
+    $pinMessage = if ($pinning.Status -eq 'Failed') { "Backup succeeded; offline pinning failed: $($pinning.Message)" } else { $pinning.Message }
+    return [pscustomobject]@{
+        Path = $final
+        Count = $identities.Count
+        CreatedUtc = $manifest.CreatedUtc
+        OfflinePinStatus = $pinning.Status
+        OfflinePinScope = $pinning.Scope
+        OfflinePinMessage = $pinMessage
     }
 }
 
