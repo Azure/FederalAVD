@@ -5,7 +5,8 @@ Removes expired FSLogix profiles from Azure Files through HTTPS FileREST request
 .DESCRIPTION
 Runs as a timer-triggered Function App using its system-assigned managed identity.
 Required app settings: SubscriptionIds (comma-separated GUIDs) and DeleteOlderThanDays (1-2555).
-Discovers storage accounts and shares named profilecontainers using Azure Resource Manager.
+FileShareName specifies the existing Azure Files share to manage.
+Discovers storage accounts and shares matching FileShareName using Azure Resource Manager.
 ResourceManagerUrl optionally overrides the default public-cloud management endpoint.
 The identity needs Reader and Storage File Data Privileged Contributor in every target subscription.
 GraphResourceUrl optionally overrides the Microsoft Graph endpoint inferred from ResourceManagerUrl.
@@ -502,6 +503,12 @@ try
         throw 'DeleteOlderThanDays must be an integer between 1 and 2555.'
     }
     $DeleteBefore = [DateTimeOffset]::UtcNow.AddDays(-$RetentionDays)
+
+    $FileShareName = $env:FileShareName
+    if ($FileShareName -cnotmatch '\A(?=.{3,63}\z)[a-z0-9]+(?:-[a-z0-9]+)*\z')
+    {
+        throw 'FileShareName must use 3-63 lowercase letters, numbers, or single hyphens and start and end with a letter or number.'
+    }
     
     # Validate the entire comma-separated list before making requests or deleting profiles.
     if ([string]::IsNullOrWhiteSpace($env:SubscriptionIds))
@@ -547,7 +554,7 @@ try
     {
         # REST URLs carry the subscription context; no Az module or Set-AzContext is needed.
         $script:LogContext = @{ SubscriptionId = $SubscriptionId }
-        Write-CleanupLog -EventType 'SubscriptionStarted' -Message 'Discovering profilecontainers shares'
+        Write-CleanupLog -EventType 'SubscriptionStarted' -Message "Discovering '$FileShareName' shares"
         
         # ARM discovery avoids probing nonexistent shares through FileREST and works across resource groups.
         $AccountsUri = $ResourceManagerUrl + "subscriptions/$SubscriptionId/providers/Microsoft.Storage/storageAccounts?api-version=2023-05-01"
@@ -555,7 +562,7 @@ try
         {
             $script:LogContext = @{ SubscriptionId = $SubscriptionId; StorageAccount = $Account.name }
            
-            # Accounts that do not expose Azure Files cannot contain a profilecontainers share.
+            # Accounts that do not expose Azure Files cannot contain the target share.
             $FileEndpoint = [string]$Account.properties.primaryEndpoints.file
             if (!$FileEndpoint)
             {
@@ -573,19 +580,19 @@ try
             # List shares through the management plane; Get-ArmResources follows all continuation links.
             # Use an exact, case-sensitive name match rather than a prefix or wildcard match.
             $SharesUri = $ResourceManagerUrl.TrimEnd('/') + $Account.id + '/fileServices/default/shares?api-version=2023-05-01'
-            $ProfileShare = @(Get-ArmResources -Uri $SharesUri | Where-Object { $_.name -ceq 'profilecontainers' })
+            $ProfileShare = @(Get-ArmResources -Uri $SharesUri | Where-Object { $_.name -ceq $FileShareName })
 
             # A successful listing without the target share is an expected skip.
             # Authorization and network failures instead propagate to the outer catch block.
             if ($ProfileShare.Count -eq 0)
             {
-                Write-CleanupLog -EventType 'AccountSkipped' -Message 'No profilecontainers share'
+                Write-CleanupLog -EventType 'AccountSkipped' -Message "No '$FileShareName' share"
                 continue
             }
 
             # Use the advertised endpoint rather than constructing a public-cloud DNS name.
-            $ShareUri = $FileEndpoint.TrimEnd('/') + '/profilecontainers'
-            $script:LogContext.ShareName = 'profilecontainers'
+            $ShareUri = $FileEndpoint.TrimEnd('/') + '/' + $FileShareName
+            $script:LogContext.ShareName = $FileShareName
             $script:LogContext.ShareUri = $ShareUri
 
             # Discovery is read-only even during a preview; explicitly pass -WhatIf to the cleanup helper.

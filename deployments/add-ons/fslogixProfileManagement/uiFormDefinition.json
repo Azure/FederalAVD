@@ -423,6 +423,22 @@
                                     }
                                 },
                                 {
+                                    "name": "fileShareName",
+                                    "type": "Microsoft.Common.TextBox",
+                                    "label": "FSLogix profile file share name",
+                                    "defaultValue": "profilecontainers",
+                                    "toolTip": "Existing Azure Files share to manage in each storage account in the selected subscriptions. Accounts without this exact share name are skipped.",
+                                    "constraints": {
+                                        "required": true,
+                                        "validations": [
+                                            {
+                                                "regex": "^(?=.{3,63}$)[a-z0-9]+(?:-[a-z0-9]+)*$",
+                                                "message": "Use 3-63 lowercase letters, numbers, or single hyphens; start and end with a letter or number."
+                                            }
+                                        ]
+                                    }
+                                },
+                                {
                                     "name": "days",
                                     "type": "Microsoft.Common.Slider",
                                     "label": "Delete Older Than Days",
@@ -686,6 +702,7 @@
                 "azureKeyVaultPrivateDnsZoneResourceId": "[if(equals(steps('functionApp').networkSettings.networkAccess, 'private'), steps('functionApp').privateDnsZones.keyVault, '')]",
                 "deleteOlderThanDays": "[steps('script').settings.days]",
                 "endpointType": "[steps('functionApp').networkSettings.networkAccess]",
+                "fileShareName": "[steps('script').settings.fileShareName]",
                 "functionAppDelegatedSubnetResourceId": "[if(not(equals(steps('functionApp').networkSettings.networkAccess, 'public')), steps('functionApp').networkSettings.delegatedSubnet, '')]",
                 "functionAppName": "[steps('namingAndTags').naming.functionApp]",
                 "keyVaultName": "[steps('namingAndTags').naming.keyVault]",

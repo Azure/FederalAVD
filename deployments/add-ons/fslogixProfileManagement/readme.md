@@ -1,4 +1,4 @@
-# FSLogix Profile Management
+# FSLogix Profile Management Add-On
 
 ## Purpose
 
@@ -11,6 +11,7 @@ The [template](main.bicep) accepts a `subscriptionIds` array and serializes it i
 | Function App setting | Purpose |
 | --- | --- |
 | `SubscriptionIds` | Required comma-separated subscription GUIDs, for example `11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222`. |
+| `FileShareName` | Required existing Azure Files share name, supplied by the `fileShareName` deployment parameter; default `profilecontainers`. Must use 3-63 lowercase letters, numbers, or single hyphens, starting and ending with a letter or number. Invalid or missing values fail before discovery or deletion. |
 | `DeleteOlderThanDays` | The current script requires an integer from 1 through 2555; default `60`. The Portal slider and Bicep parameter currently permit 1-2555, but values above 2555 cause the script to fail before discovery or deletion. |
 | `Cloud` | Deployment supplies `environment().name`. The script maps `AzureCloud`, `AzureUSGovernment`, and `USSEC` to Resource Manager and Graph endpoints. Other clouds have no configured script endpoint. |
 | `ResourceManagerUrl` | Supplied by the template, but the current script derives its endpoint from `Cloud` rather than reading this setting. |
@@ -46,7 +47,8 @@ Grant the Function App's system-assigned identity the Microsoft Graph **`User.Re
 
 - Set the six-field Functions NCRONTAB expression through the Portal's **Cron schedule** field or the template's `schedule` parameter. The schedule is deployed into the timer binding, not a `CronTimerSchedule` app setting. Azure Functions validates the timer expression.
 - Lists all storage accounts in each configured subscription, then each account's shares. Both management-plane listings are paginated.
-- Processes only the share named **`profilecontainers`**, using the account's advertised file endpoint. Accounts without an Azure Files endpoint or the target share are logged and skipped.
+- Set **FSLogix profile file share name** under the Portal's **Script > Settings**, or pass the `fileShareName` deployment parameter. The default remains **`profilecontainers`**. For an ARM parameter file, add `"fileShareName": { "value": "my-profiles" }` under `parameters`; for Azure CLI, append `fileShareName=my-profiles` to `--parameters`.
+- Processes only the share whose name exactly matches `FileShareName`, using the account's advertised file endpoint. The same name applies across all selected subscriptions and storage accounts; this add-on does not create or rename shares. Accounts without an Azure Files endpoint or the target share are logged and skipped. Deploy the updated template and script together so the app setting is present.
 - By default, runs **daily at 21:00 UTC** (`0 0 21 * * *`). Select `timeZone` through the Portal or template to use UTC, Eastern, Central, Mountain, or Pacific Windows time zones. There is no first-week or first-Tuesday guard in the script; a manual invocation runs cleanup regardless of the date.
 - Uses the newer of each disk's `LastAccessTime` and `LastWriteTime`. Expiration must be strictly earlier than execution time minus `DeleteOlderThanDays`. Missing or invalid timestamps stop execution.
 - Treats each top-level directory as one profile. It deletes that directory and **all contents** only when at least one qualifying `.vhd`/`.vhdx` exists recursively and every qualifying disk is expired. Directories without qualifying disks are retained.
@@ -122,11 +124,12 @@ Import-Module Pester -RequiredVersion 5.7.1
 Invoke-Pester -Path .\tests\FSLogixProfileManagement.Tests.ps1 -Output Detailed
 ```
 
-Tests exercise the real script functions and entry-point orchestration with mocked HTTP requests. They cover expiration boundaries and invalid timestamps, recursive eligibility and deletion ordering, ARM and FileREST pagination, malformed listings, previews, inventory totals, FileREST 403 account/subscription continuation, recognized 409 profile conflicts and partial deletion, fatal failures, input validation, and best-effort Graph enrichment. They do not access Azure, Microsoft Graph, or real profiles.
+Tests exercise the real script functions and entry-point orchestration with mocked HTTP requests. They cover configured share selection and validation, the Portal-to-template share-name contract, expiration boundaries and invalid timestamps, recursive eligibility and deletion ordering, ARM and FileREST pagination, malformed listings, previews, inventory totals, FileREST 403 account/subscription continuation, recognized 409 profile conflicts and partial deletion, fatal failures, input validation, and best-effort Graph enrichment. They do not access Azure, Microsoft Graph, or real profiles.
 
 Before enabling scheduled deletion, maintain verified profile backups and validate against disposable shares:
 
 - Preview recent and expired profiles, mixed-age disks, excluded-only folders, and root-level disks; confirm that no data is deleted.
+- Render the Portal Script step and verify default/custom share names reach `FileShareName`. Preview a custom-named disposable share alongside `profilecontainers` and similarly named shares; confirm only the configured share is processed.
 - Verify timestamp behavior after representative FSLogix sign-in/sign-out activity, then compare a controlled cleanup with its deletion and inventory records.
 - Exercise locked profiles and access-denied accounts; confirm continuation and distinguish partial cleanup from completed profile removal.
 - Confirm the configured schedule and time zone in the Function host, and verify workbook queries against actual telemetry.
