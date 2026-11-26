@@ -27,6 +27,8 @@ For private Function App networking, the portal's outbound subnet dropdown inclu
 
 Private and service modes require `functionAppDelegatedSubnetResourceId` for outbound VNet integration and `subnetResourceId` for private endpoints or service-endpoint configuration. Private mode also requires the blob, Function App, and Key Vault private DNS zone IDs, with the zones linked to the integration VNet. Resource naming placeholders in the Portal form include the `fpm` purpose suffix; replace the placeholders with valid names before deployment.
 
+**When using service endpoints, every target FSLogix storage account must trust the Function App's outbound VNet integration subnet** (`functionAppDelegatedSubnetResourceId`) in its networking configuration. Enable the appropriate Azure Storage service endpoint on that subnet and add it to the storage account's allowed virtual networks under **Networking**. Allowing only the session-host subnet or enabling the trusted Azure services exception is not a substitute for this subnet rule; managed-identity permissions alone do not bypass the storage firewall.
+
 Monitoring is optional through `logAnalyticsWorkspaceResourceId`. The Portal form also requires an Azure Monitor Private Link Scope when monitoring is enabled in private mode; direct template deployments permit omitting it, which leaves Application Insights ingestion and query endpoints public. The [workbook](workbook/fslogix-profile-management.workbook) remains a separate import, not a deployed resource.
 
 ### Entra Display-Name Enrichment
