@@ -677,21 +677,6 @@ namespace FederalAVD
     [FederalAVD.StorageCredential]::Write($TargetName, $UserName, $Password)
 }
 
-function Assert-FSLogixObjectSpecificSettings {
-    param([bool]$Enabled, [string]$GroupsJson, [string]$Identity)
-
-    if (-not $Enabled) { return }
-    $groups = @($GroupsJson | ConvertFrom-Json -ErrorAction Stop)
-    if ($groups.Count -eq 0) { return }
-
-    if ($Identity -notin @('ActiveDirectoryDomainServices', 'EntraDomainServices')) {
-        throw 'FSLogix Object Specific Settings require AD-domain-joined session hosts. FederalAVD EntraKerberos and EntraId modes use Entra-only joined hosts. Use ShardPerms with Entra Kerberos instead.'
-    }
-    if (-not (Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop).PartOfDomain) {
-        throw 'FSLogix Object Specific Settings were requested, but this session host is not AD-domain joined. Complete domain join before configuring OSS.'
-    }
-}
-
 #region Main Script
 
 try {
@@ -702,7 +687,6 @@ try {
     Write-Log -Message "TimeZone=$TimeZone | ConfigureFSLogix=$ConfigureFSLogix | AmdVmSize=$AmdVmSize | NvidiaVmSize=$NvidiaVmSize"
     Write-Log -Message "AADJoin=$AADJoin | AgentBootLoaderUrl=$AgentBootLoaderUrl$(if ($AgentUrl) { " | AgentUrl=$AgentUrl" })$(if ($MdmId) { " | MdmId=$MdmId" })"
     [bool]$ConfigureFSLogixBool = [System.Convert]::ToBoolean($ConfigureFSLogix)
-    Assert-FSLogixObjectSpecificSettings -Enabled $ConfigureFSLogixBool -GroupsJson $OSSGroups -Identity $IdentitySolution
     
     #region Phase 1: Session Host Configuration
     

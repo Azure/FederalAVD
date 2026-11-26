@@ -79,6 +79,23 @@ Get-AzRoleAssignment -Scope $scope -RoleDefinitionName $roleDefinition -ObjectId
 
 After removing the conflicting assignment(s), redeploy — ARM will recreate the assignment at its deterministic GUID.
 
+## FSLogix Initialization Rejects Permission-Based Sharding as Object Specific Settings
+
+If initialization reports that Object Specific Settings require AD-domain-joined hosts despite
+selecting `ShardPerms`, inspect the failed Run Command's `OSSGroups` parameter. Permission-based
+sharding must pass `[]`; its storage permission groups are not OSS routing groups.
+
+An older initializer incorrectly counted that empty JSON array as one item under Windows
+PowerShell 5.1, triggering a redundant runtime OSS identity guard. Standard and automated
+initializers no longer repeat this check. Deployment templates retain OSS eligibility validation;
+the shared VM deployment also waits for successful domain joining before initialization.
+
+Rebuild and republish the affected host-pool, PoC, additional-session-host, Session Host Replacer,
+or session-host policy template before retrying the failed deployment or remediation through the
+approved operator process. Updating the repository script alone does not replace the script
+embedded in an existing Template Spec or an already submitted Run Command. If `OSSGroups` is
+nonempty, correct the deployment inputs rather than bypassing the identity guard.
+
 ## FSLogix Initialization Fails With a Null-Valued Expression for Separate Office Accounts
 
 If the initializer log points to `ToLowerInvariant()` in the Office account uniqueness check,

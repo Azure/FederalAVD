@@ -197,7 +197,7 @@ Describe 'Evaluated FSLogix OSS identity eligibility' {
     }
 }
 
-Describe 'Runtime OSS admission in <RelativePath>' -ForEach @(
+Describe 'Initializer OSS validation ownership in <RelativePath>' -ForEach @(
     @{ RelativePath = 'deployments\shared\scripts\Initialize-SessionHost.ps1' }
     @{ RelativePath = 'deployments\automatedHostPools\scripts\Initialize-SessionHost.ps1' }
 ) {
@@ -205,66 +205,15 @@ Describe 'Runtime OSS admission in <RelativePath>' -ForEach @(
         $scriptPath = Join-Path $repoRoot $RelativePath
         $source = Get-Content -LiteralPath $scriptPath -Raw
         $parseErrors = $null
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$null, [ref]$parseErrors)
+        $null = [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$null, [ref]$parseErrors)
         if ($parseErrors) { throw ($parseErrors | Out-String) }
-        $guard = $ast.Find({
-            param($node)
-            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
-                $node.Name -eq 'Assert-FSLogixObjectSpecificSettings'
-        }, $true)
-        Invoke-Expression $guard.Extent.Text
     }
 
-    It 'rejects <Identity> before querying domain status' -TestCases @(
-        @{ Identity = 'EntraKerberos-Hybrid' }
-        @{ Identity = 'EntraKerberos-CloudOnly' }
-        @{ Identity = 'EntraId' }
-    ) {
-        param($Identity)
-        Mock Get-CimInstance { throw 'Must not query the machine for an unsupported identity mode.' }
-        { Assert-FSLogixObjectSpecificSettings -Enabled $true -GroupsJson '["AVD Users"]' -Identity $Identity } |
-            Should -Throw '*FSLogix Object Specific Settings require AD-domain-joined session hosts*'
-        Should -Invoke Get-CimInstance -Times 0 -Exactly
+    It 'leaves OSS eligibility and domain-join enforcement to deployment orchestration' {
+        $source | Should -Not -Match 'Assert-FSLogixObjectSpecificSettings|PartOfDomain'
     }
 
-    It 'allows a domain-joined <Identity> machine' -TestCases @(
-        @{ Identity = 'ActiveDirectoryDomainServices' }
-        @{ Identity = 'EntraDomainServices' }
-    ) {
-        param($Identity)
-        Mock Get-CimInstance { [pscustomobject]@{ PartOfDomain = $true } }
-        { Assert-FSLogixObjectSpecificSettings -Enabled $true -GroupsJson '["AVD Users"]' -Identity $Identity } | Should -Not -Throw
-        Should -Invoke Get-CimInstance -Times 1 -Exactly -ParameterFilter {
-            $ClassName -eq 'Win32_ComputerSystem' -and $ErrorAction -eq 'Stop'
-        }
-    }
-
-    It 'rejects a workgroup machine even when parameters claim AD DS' {
-        Mock Get-CimInstance { [pscustomobject]@{ PartOfDomain = $false } }
-        { Assert-FSLogixObjectSpecificSettings -Enabled $true -GroupsJson '["AVD Users"]' -Identity 'ActiveDirectoryDomainServices' } |
-            Should -Throw '*this session host is not AD-domain joined*'
-    }
-
-    It 'propagates a failed domain-status query' {
-        Mock Get-CimInstance { throw 'Domain-status query failed.' }
-        { Assert-FSLogixObjectSpecificSettings -Enabled $true -GroupsJson '["AVD Users"]' -Identity 'ActiveDirectoryDomainServices' } |
-            Should -Throw '*Domain-status query failed*'
-    }
-
-    It 'preserves disabled FSLogix and no-OSS configurations without querying AD' {
-        Mock Get-CimInstance { throw 'No domain query expected.' }
-        { Assert-FSLogixObjectSpecificSettings -Enabled $false -GroupsJson 'invalid ignored input' -Identity 'EntraId' } | Should -Not -Throw
-        { Assert-FSLogixObjectSpecificSettings -Enabled $true -GroupsJson '[]' -Identity 'EntraKerberos-Hybrid' } | Should -Not -Throw
-        Should -Invoke Get-CimInstance -Times 0 -Exactly
-    }
-
-    It 'surfaces malformed enabled OSS input' {
-        { Assert-FSLogixObjectSpecificSettings -Enabled $true -GroupsJson '[invalid' -Identity 'ActiveDirectoryDomainServices' } | Should -Throw
-    }
-
-    It 'checks eligibility before changing time zone or registry settings and uses the fatal error path' {
-        $source.IndexOf('Assert-FSLogixObjectSpecificSettings -Enabled') | Should -BeGreaterThan 0
-        $source.IndexOf('Assert-FSLogixObjectSpecificSettings -Enabled') | Should -BeLessThan $source.IndexOf('Set-TimeZone -Id')
+    It 'preserves the fatal error path and ASCII-only source' {
         $source | Should -Match '(?s)catch \{[^}]*Write-Log.*?-Category Error.*?exit 1'
         $source | Should -Not -Match '[^\x00-\x7F]'
     }
