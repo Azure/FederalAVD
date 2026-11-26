@@ -32,7 +32,7 @@ param azureKeyVaultPrivateDnsZoneResourceId string = ''
 
 @description('Optional. The number of days after which FSLogix profile containers should be deleted.')
 @minValue(1)
-@maxValue(365)
+@maxValue(2555)
 param deleteOlderThanDays int = 60
 
 @description('Optional. Endpoint type for the PaaS services.')
@@ -251,6 +251,7 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
 
 // Gives the function app rights to read the subscriptions
 module roleAssignmentReader '../../shared/modules/resourceModules/authorization/roleAssignments/subscription/deploy.bicep' = [for subscriptionId in subscriptionIds: {
+  scope: subscription(subscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
     principalType: 'ServicePrincipal'
@@ -260,6 +261,7 @@ module roleAssignmentReader '../../shared/modules/resourceModules/authorization/
 
 // Gives the function app rights to access Azure Files shares
 module roleAssignmentStorageFileDataPrivilegedContributor '../../shared/modules/resourceModules/authorization/roleAssignments/subscription/deploy.bicep' = [for subscriptionId in subscriptionIds: {
+  scope: subscription(subscriptionId)
   params: {
     principalId: functionApp.outputs.functionAppPrincipalId
     principalType: 'ServicePrincipal'
