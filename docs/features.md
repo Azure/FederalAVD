@@ -410,17 +410,19 @@ Azure Files access does not establish supported OSS identity context. Entra-only
 [access on-premises resources](https://learn.microsoft.com/en-us/entra/identity/devices/device-sso-to-on-premises-resources);
 this restriction is not a claim that Windows cannot query AD or resolve SIDs.
 
-Microsoft supports Azure Files Entra Kerberos on Entra joined **or hybrid-Entra joined** clients,
-not AD-only joined clients. Hybrid join with Entra Kerberos can avoid registering each storage
+Microsoft's standard Azure Files Entra Kerberos flow supports Entra joined **or hybrid-Entra joined**
+clients, not AD-only joined clients. Hybrid join with Entra Kerberos can avoid registering each storage
 account in AD and can serve migration goals. AD DS storage authentication remains a straightforward
-choice for an AD-centric deployment. The current combined FederalAVD identity parameter does not
-expose a separate hybrid-device-join plus Entra-Kerberos configuration.
+choice for an AD-centric deployment. The current combined FederalAVD host-pool identity parameter
+does not expose a separate hybrid-device-join plus Entra-Kerberos configuration.
 
 Host-pool, additional-session-host, replacement, and policy-remediation configuration enforce this
 boundary even when parameter files bypass the Portal. Requested OSS fails explicitly; it is not
 silently converted to permission-based sharding. Disabled session-host FSLogix configuration ignores
 OSS groups. Standalone storage provisioning is separate: it does not configure session hosts and
-does not itself establish OSS eligibility.
+does not itself establish OSS eligibility. It can provision Entra Kerberos hybrid storage with
+`ShardOSS` for independently managed, supported hybrid-Entra joined Citrix/VDI hosts; see the
+[external-host storage workflow](../deployments/add-ons/fslogixStorage/README.md#external-citrix-or-vdi-hosts-with-entra-kerberos-and-oss).
 
 ### Container Types
 

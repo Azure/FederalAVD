@@ -3,6 +3,151 @@ BeforeAll {
     . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
 }
 
+Describe 'Standalone storage external OSS controls' {
+    BeforeAll {
+        $formText = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\add-ons\fslogixStorage\uiFormDefinition.json') -Raw
+        $storageForm = $formText | ConvertFrom-Json
+        $storageStep = $storageForm.view.properties.steps | Where-Object name -eq 'storage'
+        $storageControls = @(Get-TestFormElement -Elements $storageStep.elements)
+        $identityStep = $storageForm.view.properties.steps | Where-Object name -eq 'identity'
+        $identityControls = @(Get-TestFormElement -Elements $identityStep.elements)
+
+        function New-StorageFormSteps {
+            param(
+                [string]$Family = 'EntraID',
+                [string]$Authentication = 'EntraKerberos-Hybrid',
+                [string]$Sharding = 'ShardOSS',
+                [string]$CloudSharding = 'ShardPerms',
+                [string]$Credentials = 'manual',
+                [bool]$LeastPrivilege = $false
+            )
+            @{
+                identity = @{
+                    machineIdentity = $Family
+                    identitySolution = $Authentication
+                    credentialSource = 'manual'
+                    domainName = 'domain.fixture.invalid'
+                    domainJoinUserPrincipalName = 'domain-lookup@fixture.invalid'
+                    domainJoinUserPassword = 'domain-fixture-input'
+                }
+                storage = @{
+                    storageService = 'AzureFiles'
+                    shardOptions = $Sharding
+                    shardOptionsCloudOnly = $CloudSharding
+                    leastPrivilegedNtfs = $LeastPrivilege
+                    hybridCredentialSource = $Credentials
+                    hybridDomainName = 'hybrid.fixture.invalid'
+                    hybridAdLookupUserPrincipalName = 'hybrid-lookup@fixture.invalid'
+                    hybridAdLookupPassword = 'hybrid-fixture-input'
+                    hybridCredentialsKeyVault = @{ id = 'fixture-vault-id' }
+                    userGroupPickerBlade = @{
+                        transformed = @{
+                            groups = @(
+                                @{ id = '11111111-1111-1111-1111-111111111111'; name = 'Shard A' }
+                                @{ id = '22222222-2222-2222-2222-222222222222'; name = 'Shard B' }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    It 'selects storage authentication rather than claiming to join consumer hosts' {
+        $family = $identityControls | Where-Object name -eq 'machineIdentity'
+        $family.label | Should -Be 'Storage Authentication Family'
+        $family.defaultValue | Should -Be 'Microsoft Entra Kerberos or storage account keys'
+        $family.constraints.allowedValues.label | Should -Contain $family.defaultValue
+        $family.constraints.allowedValues.value | Should -Be @('ActiveDirectoryDomainServices', 'EntraDomainServices', 'EntraID')
+        $note = $storageControls | Where-Object name -eq 'hybridOssHostRequirements'
+        $note.options.text | Should -Match 'Citrix'
+        $note.options.text | Should -Match 'hybrid-Entra joined'
+        $note.options.text | Should -Match 'Entra-only joined hosts remain unsupported'
+        $note.options.text | Should -Not -Match '^\['
+    }
+
+    It 'exports the active sharding choice for <Family> / <Authentication>' -TestCases @(
+        @{ Family = 'EntraID'; Authentication = 'EntraKerberos-Hybrid'; MainVisible = $true; CloudVisible = $false; Expected = 'ShardOSS' }
+        @{ Family = 'EntraID'; Authentication = 'EntraKerberos-CloudOnly'; MainVisible = $false; CloudVisible = $true; Expected = 'ShardPerms' }
+        @{ Family = 'EntraID'; Authentication = 'EntraId'; MainVisible = $false; CloudVisible = $false; Expected = 'None' }
+        @{ Family = 'ActiveDirectoryDomainServices'; Authentication = 'EntraKerberos-CloudOnly'; MainVisible = $true; CloudVisible = $false; Expected = 'ShardOSS' }
+        @{ Family = 'EntraDomainServices'; Authentication = 'EntraKerberos-Hybrid'; MainVisible = $true; CloudVisible = $false; Expected = 'ShardOSS' }
+    ) {
+        param($Family, $Authentication, $MainVisible, $CloudVisible, $Expected)
+        $steps = New-StorageFormSteps -Family $Family -Authentication $Authentication
+        $main = $storageControls | Where-Object name -eq 'shardOptions'
+        $cloud = $storageControls | Where-Object name -eq 'shardOptionsCloudOnly'
+        Invoke-TestNamingFormExpression -Expression $main.visible -Steps $steps | Should -Be $MainVisible
+        Invoke-TestNamingFormExpression -Expression $cloud.visible -Steps $steps | Should -Be $CloudVisible
+        Invoke-TestNamingFormExpression -Expression $storageForm.view.outputs.parameters.fslogixShardOptions -Steps $steps | Should -Be $Expected
+        $expectedIdentity = if ($Family -eq 'EntraID') { $Authentication } else { $Family }
+        Invoke-TestNamingFormExpression -Expression $storageForm.view.outputs.parameters.identitySolution -Steps $steps | Should -Be $expectedIdentity
+    }
+
+    It 'requires and exports manual AD lookup inputs for hybrid <Sharding> storage' -TestCases @(
+        @{ Sharding = 'ShardOSS' }
+        @{ Sharding = 'ShardPerms' }
+    ) {
+        param($Sharding)
+        $steps = New-StorageFormSteps -Sharding $Sharding
+        foreach ($name in @('hybridDomainName', 'hybridCredentialSource', 'hybridAdLookupUserPrincipalName', 'hybridAdLookupPassword', 'userGroupSelector')) {
+            $control = $storageControls | Where-Object name -eq $name
+            Invoke-TestNamingFormExpression -Expression $control.visible -Steps $steps | Should -BeTrue
+            $control.constraints.required | Should -BeTrue
+        }
+        $outputs = $storageForm.view.outputs.parameters
+        Invoke-TestNamingFormExpression -Expression $outputs.domainName -Steps $steps | Should -Be 'hybrid.fixture.invalid'
+        Invoke-TestNamingFormExpression -Expression $outputs.domainJoinUserPrincipalName -Steps $steps | Should -Be 'hybrid-lookup@fixture.invalid'
+        Invoke-TestNamingFormExpression -Expression $outputs.domainJoinUserPassword -Steps $steps | Should -Be 'hybrid-fixture-input'
+        $groups = @(Invoke-TestNamingFormExpression -Expression $outputs.fslogixUserGroups -Steps $steps)
+        $groups.name | Should -Be @('Shard A', 'Shard B')
+    }
+
+    It 'exports the lookup vault rather than manual credentials for hybrid OSS' {
+        $steps = New-StorageFormSteps -Credentials 'keyVault'
+        $vault = $storageControls | Where-Object name -eq 'hybridCredentialsKeyVault'
+        Invoke-TestNamingFormExpression -Expression $vault.visible -Steps $steps | Should -BeTrue
+        $outputs = $storageForm.view.outputs.parameters
+        Invoke-TestNamingFormExpression -Expression $outputs.credentialsKeyVaultResourceId -Steps $steps | Should -Be 'fixture-vault-id'
+        Invoke-TestNamingFormExpression -Expression $outputs.domainJoinUserPrincipalName -Steps $steps | Should -Be ''
+        Invoke-TestNamingFormExpression -Expression $outputs.domainJoinUserPassword -Steps $steps | Should -Be ''
+    }
+
+    It 'preserves optional lookup behavior for unsharded hybrid storage with least privilege <LeastPrivilege>' -TestCases @(
+        @{ LeastPrivilege = $false }
+        @{ LeastPrivilege = $true }
+    ) {
+        param($LeastPrivilege)
+        $steps = New-StorageFormSteps -Sharding 'None' -LeastPrivilege $LeastPrivilege
+        $domain = $storageControls | Where-Object name -eq 'hybridDomainName'
+        Invoke-TestNamingFormExpression -Expression $domain.visible -Steps $steps | Should -Be $LeastPrivilege
+        $expected = if ($LeastPrivilege) { 'hybrid.fixture.invalid' } else { '' }
+        Invoke-TestNamingFormExpression -Expression $storageForm.view.outputs.parameters.domainName -Steps $steps | Should -Be $expected
+    }
+
+    It 'ignores stale hybrid lookup inputs when a domain authentication family is selected' {
+        $steps = New-StorageFormSteps -Family 'EntraDomainServices'
+        $domain = $storageControls | Where-Object name -eq 'hybridDomainName'
+        Invoke-TestNamingFormExpression -Expression $domain.visible -Steps $steps | Should -BeFalse
+        Invoke-TestNamingFormExpression -Expression $storageForm.view.outputs.parameters.domainName -Steps $steps | Should -Be 'domain.fixture.invalid'
+        $picker = $storageControls | Where-Object name -eq 'userGroupPickerBlade'
+        Invoke-TestNamingFormExpression -Expression $picker.bladeReference.parameters.queries -Steps $steps | Should -Be 32
+    }
+
+    It 'retains literal options and uses the active selector in every dependent binding' {
+        $main = $storageControls | Where-Object name -eq 'shardOptions'
+        $cloud = $storageControls | Where-Object name -eq 'shardOptionsCloudOnly'
+        $main.constraints.allowedValues.value | Should -Be @('None', 'ShardPerms', 'ShardOSS')
+        $cloud.constraints.allowedValues.value | Should -Be @('None', 'ShardPerms')
+        foreach ($control in @($main, $cloud)) {
+            $control.constraints.allowedValues.GetType().IsArray | Should -BeTrue
+            $control.defaultValue | Should -Be 'No Sharding'
+        }
+        $binding = "if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions)"
+        $formText.Replace($binding, 'ACTIVE_SHARD_OPTIONS') | Should -Not -Match "steps\('storage'\)\.shardOptions"
+    }
+}
+
 Describe 'Evaluated FSLogix OSS identity eligibility' {
     BeforeAll {
         $fixtureDirectory = Join-Path $TestDrive 'oss'

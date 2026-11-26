@@ -34,7 +34,7 @@ an existing parent or inside an externally managed resource group.
 | Add-on selects an existing or future host-pool association | Storage deployment is independent of host-pool creation. |
 | Add-on selects storage subscription, location, resource group, VNet, and subnet | It has no parent host-pool deployment from which to derive them. |
 | Host pool reuses the session-host subnet for its temporary deployment VM | The subnet is already selected and must reach the same identity and storage endpoints. |
-| Add-on selects machine identity and storage authentication | It must model consumers of the standalone storage. |
+| Add-on selects storage authentication independently of external host join | It provisions storage, not consumer hosts; Entra Kerberos hybrid OSS can serve separately managed hybrid-Entra joined Citrix/VDI hosts. See the [external-host guidance](../../../../deployments/add-ons/fslogixStorage/README.md#external-citrix-or-vdi-hosts-with-entra-kerberos-and-oss). |
 | Host pool derives compatible identity choices from session-host identity | Session-host identity is already known. |
 | Host pool can configure existing storage without deploying it | It also owns session-host registry configuration. |
 | Add-on does not configure session hosts | It only deploys and initializes storage. |

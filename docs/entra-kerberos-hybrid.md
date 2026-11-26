@@ -20,6 +20,12 @@ See [OSS eligibility and the current FederalAVD identity boundary](features.md#o
 
 For the official Microsoft documentation see [Enable Microsoft Entra Kerberos Authentication for hybrid and cloud-only identities on Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-identity-auth-hybrid-identities-enable?tabs=azure-portal%2Cintune).
 
+For **standalone storage** serving independently managed Citrix or other VDI hosts,
+`identitySolution: 'EntraKerberos-Hybrid'` selects storage authentication only. It does not join the
+hosts. The storage add-on can also provision OSS shards for supported AD DS hybrid-Entra joined
+hosts; the external VDI team owns host-side OSS configuration. Follow the
+[external-host storage workflow](../deployments/add-ons/fslogixStorage/README.md#external-citrix-or-vdi-hosts-with-entra-kerberos-and-oss).
+
 > [!IMPORTANT]
 > The temporary deployment VM remains in a workgroup for Azure Files. If you configure
 > group-scoped NTFS access or permission-based sharding, its subnet must resolve and reach

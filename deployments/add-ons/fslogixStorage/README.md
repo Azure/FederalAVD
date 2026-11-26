@@ -89,11 +89,52 @@ and capacity pool. Existing accounts are referenced without modification and mus
 valid Active Directory connection. The add-on always creates new FSLogix volumes; it does not adopt
 or modify existing volumes.
 
-Authentication follows the host-pool form's join-type-first decision tree. AD DS session hosts use
-AD DS authentication and may use Azure Files or Azure NetApp Files. Microsoft Entra Domain Services
-session hosts use Azure Files with Entra Domain Services authentication. Microsoft Entra-joined
-session hosts use Azure Files and then choose storage account keys, Microsoft Entra Kerberos for
-cloud-only identities, or Microsoft Entra Kerberos for hybrid identities.
+Authentication is selected independently of externally managed consumer hosts. Select
+**Storage Authentication Family**, then the applicable Azure Files authentication method.
+AD DS also offers Azure NetApp Files. Entra Domain Services, Entra Kerberos, and storage-account-key
+paths use Azure Files. Internal control IDs and deployment parameter names are unchanged.
+The add-on's `identitySolution` describes storage authentication, not a requested host join.
+
+#### External Citrix or VDI hosts with Entra Kerberos and OSS
+
+For an independently managed Citrix or other VDI deployment with AD DS **hybrid-Entra joined**
+hosts and synchronized AD users/groups, the add-on can provision Azure Files using Entra Kerberos
+hybrid authentication and storage for FSLogix Object Specific Settings (OSS):
+
+1. Select **Microsoft Entra Kerberos or storage account keys** as the authentication family.
+2. Select **Microsoft Entra Kerberos for hybrid identities** as the Azure Files method.
+3. Select **Sharding via Object Specific Settings**, then the synchronized security groups in
+   the required shard order.
+4. Supply the user AD domain and AD lookup credentials, through Key Vault or manual entry.
+   Both sharding options need these inputs even when **Restrict NTFS access to selected groups**
+   is unchecked. The temporary helper must resolve and reach an AD DS domain controller.
+5. Complete the applicable Entra Kerberos consent, application, client, and Conditional Access
+   requirements. An optional Graph identity automates some storage-application tasks; it does not
+   configure the consuming VDI hosts.
+
+Equivalent parameter-file inputs are `identitySolution: 'EntraKerberos-Hybrid'`,
+`fslogixShardOptions: 'ShardOSS'`, and ordered `fslogixUserGroups` entries containing the synchronized
+group's Entra object ID and AD-resolvable name. Supply the AD domain and lookup credentials as above.
+The backend already supports this combination; no AVD host identity mode is added.
+
+The add-on provisions the per-group storage accounts and root NTFS permissions. Both sharding
+labels use the same group-to-storage ordering for provisioning. With `ShardOSS`, the
+`fslogixConfiguration.objectSpecificSettingsGroups` output also contains the ordered group names.
+The external VDI team must translate those names to traditional AD SIDs and configure the
+corresponding FSLogix OSS storage paths on the hosts. If using separate Profile and Office
+accounts, preserve the paired group order for both roles.
+
+This is **not** support for OSS on Entra-only joined hosts or with cloud-only identities.
+The form retains permission-only sharding choices for cloud-only identities and no sharding for
+storage-key authentication. FederalAVD AVD host-pool, additional-host, replacement, and policy
+guards remain unchanged; this output must not be treated as a newly supported AVD host-join mode.
+See Microsoft's [OSS identity support statement](https://learn.microsoft.com/en-us/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities)
+and [host-side OSS configuration guide](https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings).
+
+Validate the target Citrix/FSLogix versions and Windows build, successful Entra Kerberos SMB access,
+effective AD group SIDs, intended shard selection in FSLogix logs, cross-group isolation, repeat
+logons, and the chosen cloud's prerequisites before promoting a pilot to production. Offline
+template and form checks do not prove those outcomes.
 
 Identity-based storage authentication uses a temporary deployment VM and identity. Azure Files uses
 the VM to set the root NTFS security descriptor through the Azure Files REST API. Domain-backed and
@@ -102,7 +143,7 @@ uses it to set volume permissions. Cleanup removes the external role assignments
 temporary resource group after configuration.
 
 The **Temporary Deployment Resources** step remains visible for all authentication methods. When
-**Microsoft Entra joined** and **Storage account key** are selected, the step shows an information
+**Microsoft Entra Kerberos or storage account keys** and **Storage account key** are selected, the step shows an information
 box explaining that no deployment VM is created. VM network, subnet, size, and OU controls are
 hidden and not required; temporary-resource naming overrides are also hidden. The subnet output is
 an empty string, and the unused VM size uses the template default. Other authentication methods

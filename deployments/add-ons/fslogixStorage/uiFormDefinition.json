@@ -204,33 +204,33 @@
               "type": "Microsoft.Common.InfoBox",
               "options": {
                 "style": "Info",
-                "text": "First select how the session hosts that consume this storage are joined. AD DS and Microsoft Entra Domain Services directly determine Azure Files authentication. Microsoft Entra-joined hosts can use storage account keys or Microsoft Entra Kerberos. The join type also determines storage-service availability: Azure NetApp Files is available only with AD DS; all other paths use Azure Files.",
+                "text": "Select the storage authentication family, independently of how externally managed VDI hosts are joined. AD DS also offers Azure NetApp Files. Microsoft Entra Kerberos and storage account keys use Azure Files. This add-on provisions storage only; it does not join or configure AVD or Citrix hosts. Verify client and FSLogix requirements separately.",
                 "uri": "https://learn.microsoft.com/en-us/azure/storage/files/storage-files-active-directory-overview"
               }
             },
             {
               "name": "machineIdentity",
               "type": "Microsoft.Common.DropDown",
-              "label": "Session Host Join Type",
-              "defaultValue": "Microsoft Entra joined",
-              "toolTip": "Select how the session hosts that consume this storage are joined. This determines the supported storage services and Azure Files authentication methods.",
+              "label": "Storage Authentication Family",
+              "defaultValue": "Microsoft Entra Kerberos or storage account keys",
+              "toolTip": "Select the identity source for storage, not the join type of externally managed VDI hosts. This selection does not change the join state of the consuming hosts.",
               "multiLine": true,
               "constraints": {
                 "required": true,
                 "allowedValues": [
                   {
                     "label": "Active Directory Domain Services (AD DS)",
-                    "description": "Session hosts are joined to AD DS and require network connectivity to domain controllers. Azure Files uses AD DS authentication. Azure NetApp Files is also available.",
+                    "description": "Azure Files uses AD DS authentication. Azure NetApp Files is also available. Consumer host configuration is managed separately.",
                     "value": "ActiveDirectoryDomainServices"
                   },
                   {
                     "label": "Microsoft Entra Domain Services",
-                    "description": "Session hosts are joined to a Microsoft Entra Domain Services managed domain. Azure Files uses Entra Domain Services authentication.",
+                    "description": "Azure Files uses Microsoft Entra Domain Services authentication. Consumer hosts must meet that authentication method's requirements.",
                     "value": "EntraDomainServices"
                   },
                   {
-                    "label": "Microsoft Entra joined",
-                    "description": "Session hosts are Microsoft Entra joined. Azure Files can use storage account keys or Microsoft Entra Kerberos. Azure NetApp Files is not available.",
+                    "label": "Microsoft Entra Kerberos or storage account keys",
+                    "description": "Azure Files uses the selected Microsoft Entra Kerberos or storage-key method. Entra Kerberos hybrid identities can serve supported hybrid-Entra joined Citrix or other VDI hosts. Azure NetApp Files is not available.",
                     "value": "EntraID"
                   }
                 ]
@@ -241,7 +241,7 @@
               "type": "Microsoft.Common.DropDown",
               "label": "Azure Files Authentication Method",
               "defaultValue": "Storage account key",
-              "toolTip": "Select how Microsoft Entra-joined session hosts authenticate to Azure Files.",
+              "toolTip": "Select the Azure Files authentication method. Entra Kerberos hybrid identities do not imply that consumer hosts are Entra-only joined.",
               "multiLine": true,
               "visible": "[equals(steps('identity').machineIdentity, 'EntraID')]",
               "constraints": {
@@ -254,12 +254,12 @@
                   },
                   {
                     "label": "Microsoft Entra Kerberos for cloud-only identities",
-                    "description": "For cloud-only Microsoft Entra identities and Microsoft Entra-joined clients. Supports identity-based permissions and sharding.",
+                    "description": "For cloud-only Microsoft Entra identities and Microsoft Entra-joined clients. Supports identity-based permissions and permission-based sharding, not FSLogix Object Specific Settings.",
                     "value": "EntraKerberos-CloudOnly"
                   },
                   {
                     "label": "Microsoft Entra Kerberos for hybrid identities",
-                    "description": "For identities synchronized from AD DS and Microsoft Entra-joined clients. Requires AD DS and synchronization to Microsoft Entra ID.",
+                    "description": "For identities synchronized from AD DS. Supports Microsoft Entra joined or hybrid-Entra joined clients. OSS requires supported domain-based host identity and traditional AD group SIDs; Entra-only joined hosts cannot use OSS.",
                     "value": "EntraKerberos-Hybrid"
                   }
                 ]
@@ -683,7 +683,7 @@
               "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
               "options": {
                 "style": "Info",
-                "text": "Sharding deploys one Azure Files storage account per selected user group to distribute profile load. Sharding via Permissions relies on share and NTFS permissions. Object Specific Settings require supported AD-domain-joined session hosts and are not offered for the Entra-only host configuration represented here by Microsoft Entra Kerberos. Hybrid users with AD group SIDs are not hybrid-joined machines. This storage add-on does not configure session hosts.",
+                "text": "Sharding deploys one Azure Files storage account per selected user group to distribute profile load. Both sharding options provision group-scoped storage permissions. Object Specific Settings also require supported host-side group-SID-to-storage-path mappings. Entra Kerberos hybrid storage can be provisioned for externally managed hybrid-Entra joined Citrix or other VDI hosts using OSS. Entra-only joined hosts and cloud-only identities cannot use OSS. This add-on does not configure the hosts.",
                 "uri": "https://learn.microsoft.com/en-us/fslogix/how-to-configure-object-specific-settings"
               }
             },
@@ -692,15 +692,46 @@
               "type": "Microsoft.Common.OptionsGroup",
               "label": "Sharding Options",
               "defaultValue": "No Sharding",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))))]",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid')))]",
               "constraints": {
-                "allowedValues": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos')), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"}]'), parse('[{\"label\":\"No Sharding\",\"value\":\"None\"},{\"label\":\"Sharding via Permissions\",\"value\":\"ShardPerms\"},{\"label\":\"Sharding via Object Specific Settings\",\"value\":\"ShardOSS\"}]'))]"
+                "required": true,
+                "allowedValues": [
+                  { "label": "No Sharding", "value": "None" },
+                  { "label": "Sharding via Permissions", "value": "ShardPerms" },
+                  { "label": "Sharding via Object Specific Settings", "value": "ShardOSS" }
+                ]
+              }
+            },
+            {
+              "name": "shardOptionsCloudOnly",
+              "type": "Microsoft.Common.OptionsGroup",
+              "label": "Sharding Options",
+              "defaultValue": "No Sharding",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly'))]",
+              "constraints": {
+                "required": true,
+                "allowedValues": [
+                  { "label": "No Sharding", "value": "None" },
+                  { "label": "Sharding via Permissions", "value": "ShardPerms" }
+                ]
+              }
+            },
+            {
+              "name": "hybridOssHostRequirements",
+              "type": "Microsoft.Common.TextBlock",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'ShardOSS'))]",
+              "options": {
+                "text": "Use this option for externally managed, supported hosts, such as AD DS hybrid-Entra joined Citrix VDI hosts with synchronized AD users and groups. Configure FSLogix OSS on those hosts separately using traditional AD group SIDs and the matching storage paths. Hybrid users on Entra-only joined hosts remain unsupported. FederalAVD AVD host-pool guards are unchanged.",
+                "link": {
+                  "label": "FSLogix OSS identity requirements",
+                  "uri": "https://learn.microsoft.com/en-us/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities"
+                }
               }
             },
             {
               "name": "cloudOnlyRbacRegionWarning",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly'), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None'))))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))))]",
               "options": {
                 "style": "Warning",
                 "text": "Azure Files share-level RBAC for cloud-only identities, required for group-scoped NTFS access and profile sharding, is available only in supported Azure Commercial regions and is not currently supported in Azure Government. Verify regional availability before deployment.",
@@ -714,7 +745,7 @@
               "keyPath": "displayName",
               "descriptionKeyPath": "id",
               "value": "[steps('storage').userGroupPickerBlade.transformed.groups]",
-              "visible": "[and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None'))))]",
+              "visible": "[and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))))]",
               "barColor": "[if(empty(steps('storage').userGroupPickerBlade), '#FF0000', '#7fba00')]",
               "constraints": {
                 "required": true
@@ -729,7 +760,7 @@
                 "name": "ObjectPickerBlade",
                 "extension": "Microsoft_AAD_IAM",
                 "parameters": {
-                  "queries": "[if(or(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid')), 4194304, 32)]",
+                  "queries": "[if(or(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'))), 4194304, 32)]",
                   "disablers": 4,
                   "bladeSubtitle": "Pick the groups to assign",
                   "additionalQueriesOnSearch": 0,
@@ -760,10 +791,10 @@
             {
               "name": "hybridAdLookupInfo",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))))]",
               "options": {
                 "style": "Info",
-                "text": "Hybrid Entra Kerberos does not domain-join the storage account or temporary VM. Selecting group-scoped NTFS access or sharding via permissions requires the temporary deployment VM to have network line of sight to an AD DS domain controller. The supplied AD credentials are used only to look up the on-premises SIDs of the selected synchronized groups before applying NTFS permissions. An authenticated account with read access to the domain is sufficient."
+                "text": "Hybrid Entra Kerberos does not domain-join the storage account or temporary VM. Selecting group-scoped NTFS access or either sharding option requires the temporary deployment VM to have network line of sight to an AD DS domain controller. The supplied AD credentials are used only to look up the on-premises SIDs of the selected synchronized groups before applying NTFS permissions. An authenticated account with read access to the domain is sufficient."
               }
             },
             {
@@ -772,7 +803,7 @@
               "label": "User Active Directory Domain Name",
               "toolTip": "Enter the AD DS domain from which the selected hybrid groups are synchronized.",
               "placeholder": "contoso.com",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))))]",
               "constraints": {
                 "required": true,
                 "regex": "^([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
@@ -785,7 +816,7 @@
               "label": "AD Lookup Credential Source",
               "defaultValue": "Key Vault",
               "toolTip": "Choose whether to read the AD lookup account from Key Vault or enter it for this deployment.",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))))]",
               "constraints": {
                 "required": true,
                 "allowedValues": [
@@ -806,7 +837,7 @@
               "label": "AD Lookup Credentials Key Vault",
               "resourceType": "Microsoft.KeyVault/vaults",
               "toolTip": "Select the Key Vault containing DomainJoinUserPrincipalName and DomainJoinUserPassword. The account only needs permission to read domain and group information.",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'keyVault'))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))), equals(steps('storage').hybridCredentialSource, 'keyVault'))]",
               "constraints": {
                 "required": true
               },
@@ -820,7 +851,7 @@
               "label": "AD Lookup Account User Principal Name",
               "toolTip": "Enter an account that can read domain and group information from AD DS.",
               "placeholder": "adlookup@contoso.com",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual'))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))), equals(steps('storage').hybridCredentialSource, 'manual'))]",
               "constraints": {
                 "required": true,
                 "regex": "^[a-z0-9A-Z_.-]+@(?:[a-z0-9A-Z-]+\\.)+[a-zA-Z]+$",
@@ -835,7 +866,7 @@
                 "confirmPassword": "Confirm Password"
               },
               "toolTip": "Enter the password for the AD lookup account.",
-              "visible": "[and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual'))]",
+              "visible": "[and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))), equals(steps('storage').hybridCredentialSource, 'manual'))]",
               "constraints": {
                 "required": true
               },
@@ -1095,7 +1126,7 @@
                 "required": true,
                 "validations": [
                   {
-                    "isValid": "[and(or(empty(steps('storage').remoteStorageAccounts), equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))), equals(length(steps('storage').remoteOfficeStorageAccounts), length(steps('storage').remoteStorageAccounts)), empty(filter(steps('storage').remoteOfficeStorageAccounts, (id) => contains(map(steps('storage').remoteStorageAccounts, (profileId) => toLower(profileId)), toLower(id)))))]",
+                    "isValid": "[and(or(empty(steps('storage').remoteStorageAccounts), equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))), equals(length(steps('storage').remoteOfficeStorageAccounts), length(steps('storage').remoteStorageAccounts)), empty(filter(steps('storage').remoteOfficeStorageAccounts, (id) => contains(map(steps('storage').remoteStorageAccounts, (profileId) => toLower(profileId)), toLower(id)))))]",
                     "message": "Supply paired, non-overlapping remote Profile and Office accounts for every shard, or omit both arrays."
                   }
                 ]
@@ -1104,7 +1135,7 @@
             {
               "name": "wrongRemoteStorageAccountCount",
               "type": "Microsoft.Common.InfoBox",
-              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), not(equals(length(steps('storage').remoteStorageAccounts), 0)), not(equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(steps('storage').shardOptions, 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))))]",
+              "visible": "[and(startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'CloudCache'), not(equals(length(steps('storage').remoteStorageAccounts), 0)), not(equals(length(steps('storage').remoteStorageAccounts), if(or(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None')), 1, length(steps('storage').userGroupPickerBlade.transformed.groups)))))]",
               "options": {
                 "style": "Error",
                 "text": "Select one remote storage account for each local FSLogix storage account."
@@ -2002,10 +2033,10 @@
         "deploymentVirtualMachineSubnetResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')), '', steps('deployment').deploymentVirtualMachineSubnet.id)]",
         "deploymentUserAssignedIdentityName": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId')))), coalesce(steps('tagsAndNaming').naming.deploymentUserAssignedIdentityNameOverride, ''), '')]",
         "identitySolution": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').machineIdentity, steps('identity').identitySolution)]",
-        "credentialsKeyVaultResourceId": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault')), steps('identity').credentialsKeyVault.id, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'keyVault')), steps('storage').hybridCredentialsKeyVault.id, ''))]",
-        "domainJoinUserPrincipalName": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPrincipalName, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupUserPrincipalName, ''))]",
-        "domainJoinUserPassword": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPassword, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms')), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupPassword, ''))]",
-        "domainName": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').domainName, if(and(equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, equals(steps('storage').shardOptions, 'ShardPerms'))), steps('storage').hybridDomainName, ''))]",
+        "credentialsKeyVaultResourceId": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'keyVault')), steps('identity').credentialsKeyVault.id, if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))), equals(steps('storage').hybridCredentialSource, 'keyVault')), steps('storage').hybridCredentialsKeyVault.id, ''))]",
+        "domainJoinUserPrincipalName": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPrincipalName, if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupUserPrincipalName, ''))]",
+        "domainJoinUserPassword": "[if(and(contains(steps('identity').machineIdentity, 'DomainServices'), equals(steps('identity').credentialSource, 'manual')), steps('identity').domainJoinUserPassword, if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None'))), equals(steps('storage').hybridCredentialSource, 'manual')), steps('storage').hybridAdLookupPassword, ''))]",
+        "domainName": "[if(contains(steps('identity').machineIdentity, 'DomainServices'), steps('identity').domainName, if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-Hybrid'), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None')))), steps('storage').hybridDomainName, ''))]",
         "organizationalUnitPath": "[if(equals(steps('identity').machineIdentity, 'ActiveDirectoryDomainServices'), steps('identity').organizationalUnitPath, '')]",
         "deploymentVirtualMachineOrganizationalUnitPath": "[if(and(not(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraId'))), startsWith(steps('storage').storageService, 'AzureNetAppFiles')), steps('deployment').deploymentVirtualMachineOrganizationalUnitPath, '')]",
         "appUpdateUserAssignedIdentityResourceId": "[if(and(equals(steps('identity').machineIdentity, 'EntraID'), contains(steps('identity').identitySolution, 'EntraKerberos'), steps('identity').automateEntraKerberosTasks), steps('identity').appUpdateIdentity, '')]",
@@ -2025,9 +2056,9 @@
         "fslogixContainerType": "[steps('storage').containerType]",
         "profileSizeInMBs": "[int(steps('storage').profileSizeInMBs)]",
         "fslogixProfileShareSizeInGB": "[int(steps('storage').shareSizeInGB)]",
-        "fslogixShardOptions": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))), steps('storage').shardOptions, 'None')]",
+        "fslogixShardOptions": "[if(and(startsWith(steps('storage').storageService, 'AzureFiles'), or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId')))), if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None')]",
         "fslogixAdminGroups": "[if(steps('storage').configureAdminAccess, steps('storage').adminGroupPickerBlade.transformed.groups, parse('[]'))]",
-        "fslogixUserGroups": "[if(and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(steps('storage').shardOptions, 'None')))), steps('storage').userGroupPickerBlade.transformed.groups, parse('[]'))]",
+        "fslogixUserGroups": "[if(and(or(contains(steps('identity').machineIdentity, 'DomainServices'), not(equals(steps('identity').identitySolution, 'EntraId'))), or(steps('storage').leastPrivilegedNtfs, not(equals(if(and(equals(steps('identity').machineIdentity, 'EntraID'), equals(steps('identity').identitySolution, 'EntraKerberos-CloudOnly')), steps('storage').shardOptionsCloudOnly, steps('storage').shardOptions), 'None')))), steps('storage').userGroupPickerBlade.transformed.groups, parse('[]'))]",
         "fslogixProfileStorageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles')), coalesce(steps('tagsAndNaming').naming.storageAccountNamePrefixOverride, ''), '')]",
         "officeStorageAccountNamePrefix": "[if(and(steps('tagsAndNaming').naming.enableNameOverrides, startsWith(steps('storage').storageService, 'AzureFiles'), contains(steps('storage').containerType, 'OfficeContainer')), coalesce(steps('tagsAndNaming').naming.officeStorageAccountNamePrefixOverride, ''), '')]",
         "storageIndex": "[if(startsWith(steps('storage').storageService, 'AzureFiles'), int(steps('storage').storageIndex), 1)]",

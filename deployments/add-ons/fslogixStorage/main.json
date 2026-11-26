@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "9144353090455099816"
+      "templateHash": "17974435263801322683"
     }
   },
   "definitions": {
@@ -6288,7 +6288,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "3388756212020389882"
+              "templateHash": "15101192901280335484"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -6337,6 +6337,25 @@
             {
               "namespace": "__bicep",
               "members": {
+                "validateObjectSpecificSettings": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "identitySolution"
+                    },
+                    {
+                      "type": "bool",
+                      "name": "requested"
+                    }
+                  ],
+                  "output": {
+                    "type": "bool",
+                    "value": "[if(or(not(parameters('requested')), contains(createArray('ActiveDirectoryDomainServices', 'EntraDomainServices'), parameters('identitySolution'))), true(), fail('FSLogix Object Specific Settings require AD-domain-joined session hosts. FederalAVD EntraKerberos-Hybrid, EntraKerberos-CloudOnly, and EntraId modes use Entra-only joined hosts. Use ShardPerms with Entra Kerberos instead.'))]"
+                  },
+                  "metadata": {
+                    "__bicep_export!": true
+                  }
+                },
                 "validateOfficeStorageAccounts": {
                   "parameters": [
                     {
