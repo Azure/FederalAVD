@@ -79,6 +79,42 @@ Get-AzRoleAssignment -Scope $scope -RoleDefinitionName $roleDefinition -ObjectId
 
 After removing the conflicting assignment(s), redeploy — ARM will recreate the assignment at its deterministic GUID.
 
+## Credentials Are Visible in Nested Deployment Parameters
+
+Older shared modules passed FSLogix domain credentials through an ordinary Run Command parameter
+array, helper domain-join settings through an ordinary extensions array, and NetApp Active Directory
+credentials through an ordinary object. VM `protectedParameters` and extension `protectedSettings`
+protect the resource boundary, but do not redact an earlier nonsecure deployment parameter.
+
+The corrected modules use secure object contracts across these boundaries. See
+[secure deployment credential boundaries](design.md#secure-deployment-credential-boundaries).
+Rebuild and republish every consuming template before retrying. Updating the source alone does not
+replace scripts or contracts embedded in a previously published Template Spec.
+
+Treat credentials visible in deployment history as exposed. Coordinate credential rotation, update
+their Key Vault secrets or approved parameter source, review access to the affected deployment
+records, and remediate historical records through the approved operator process. Redeployment does
+not erase older records. Verify future redaction with synthetic credentials and a reader-level
+account; do not print or copy real passwords while investigating.
+
+## Existing Key Vault Is Defined More Than Once
+
+Older standard host-pool and standalone FSLogix Storage templates declared separate existing
+resources for credentials and encryption even when both selections identified the same vault.
+ARM language version 2.0 could reject those duplicate resource identities.
+
+The corrected templates reuse the credentials-vault reference when the resource IDs match,
+ignoring case. Separate vault selections retain separate references. Automated host pools
+already resolve these roles without duplicate vault declarations in their entry template.
+
+An existing vault can serve both roles if it meets the credential and encryption requirements:
+ARM template secret access, the required deployment and encryption permissions, and Premium SKU
+when using RSA-HSM keys. This does not merge newly created credential and encryption vaults or
+change their settings.
+
+Rebuild and republish the affected template before retrying. Selecting distinct existing vaults
+is a workaround when the published template has not yet been updated.
+
 ## FSLogix Initialization Rejects Permission-Based Sharding as Object Specific Settings
 
 If initialization reports that Object Specific Settings require AD-domain-joined hosts despite

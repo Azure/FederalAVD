@@ -126,10 +126,12 @@ module setNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
       { name: 'ContainerType', value: containerType }
       { name: 'UserGroupNames', value: string(map(shareUserGroups, group => group.name)) }
     ]
-    protectedParameters: [
-      { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-      { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-    ]
+    protectedParameters: {
+      items: [
+        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+      ]
+    }
     treatFailureAsDeploymentFailure: true
   }
   dependsOn: [netAppVolumes]

@@ -333,7 +333,11 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
    objects in the selected OU. Azure NetApp Files also domain-joins the temporary VM.
 - **Credentials from Key Vault:** The vault must contain `DomainJoinUserPrincipalName` and
    `DomainJoinUserPassword`, allow Azure Resource Manager template deployment, and the deployment
-   principal must have `Microsoft.KeyVault/vaults/deploy/action` on the vault.
+   principal must have `Microsoft.KeyVault/vaults/deploy/action` on the vault. Nested Run Command,
+   helper extension, and NetApp AD contracts preserve credentials as secure objects; see
+   [secure deployment credential boundaries](../../../docs/design.md#secure-deployment-credential-boundaries).
+   Previously exposed deployment parameters still require credential rotation and historical-record
+   remediation.
 - **Entra Kerberos automation:** The existing application-update identity must already have the
    Microsoft Graph application permissions `Application.ReadWrite.All` and
    `DelegatedPermissionGrant.ReadWrite.All`, with tenant admin consent. Multifactor authentication
@@ -344,7 +348,8 @@ deployment. Multifactor authentication exclusions remain manual in either mode.
 - **Customer-managed keys:** An existing encryption Key Vault must be available. The deployment
    principal must be able to create keys, configure their rotation policies, and create key-scoped role
    assignments. The add-on creates one indexed key per storage account, one encryption identity, and
-   the Key Vault Crypto Service Encryption User assignments.
+   the Key Vault Crypto Service Encryption User assignments. Credentials and encryption may use the
+   same existing vault if it satisfies both sets of requirements; RSA-HSM keys require Premium SKU.
 - **Azure NetApp Files:** The subscription must be enabled for Azure NetApp Files, the selected subnet
    must be delegated to `Microsoft.NetApp/volumes`, and the temporary VM must have DNS and network
    access to the domain and SMB volumes. A reused NetApp account must already have a valid Active

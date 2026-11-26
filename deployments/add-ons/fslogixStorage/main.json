@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "17974435263801322683"
+      "templateHash": "15922835475760156367"
     }
   },
   "definitions": {
@@ -2386,6 +2386,7 @@
     "externalDeploymentConfigurationIsValid": "[if(or(or(not(variables('deploymentVirtualMachineRequired')), parameters('manageDeploymentVirtualMachine')), and(not(empty(parameters('deploymentVirtualMachineName'))), not(empty(parameters('existingDeploymentUserAssignedIdentityClientId'))))), true(), fail('deploymentVirtualMachineName and existingDeploymentUserAssignedIdentityClientId are required when manageDeploymentVirtualMachine is false.'))]",
     "naming": "[__bicep.fslogixNames(parameters('namingConvention'), parameters('identifier'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'location', parameters('location')))]",
     "backupNaming": "[__bicep.sharedServicesNames(parameters('namingConvention'), createObject('subscriptionId', subscription().subscriptionId, 'cloud', environment().name, 'location', parameters('location')), createObject())]",
+    "existingKeyVaultResourceIds": "[union(if(empty(parameters('credentialsKeyVaultResourceId')), createArray(), createArray(toLower(parameters('credentialsKeyVaultResourceId')))), if(and(variables('deployStorageCmk'), not(empty(parameters('existingEncryptionKeyVaultResourceId')))), createArray(toLower(parameters('existingEncryptionKeyVaultResourceId'))), createArray()))]",
     "_1._2": {
       "applicationInsights": "appi",
       "appServicePlans": "asp",
@@ -3243,23 +3244,17 @@
     "_1.resourceAbbreviations": "[variables('_1._2')]"
   },
   "resources": {
-    "credentialsKeyVault": {
-      "condition": "[not(empty(parameters('credentialsKeyVaultResourceId')))]",
+    "existingKeyVaults": {
+      "copy": {
+        "name": "existingKeyVaults",
+        "count": "[length(variables('existingKeyVaultResourceIds'))]"
+      },
       "existing": true,
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2023-07-01",
-      "subscriptionId": "[split(parameters('credentialsKeyVaultResourceId'), '/')[2]]",
-      "resourceGroup": "[split(parameters('credentialsKeyVaultResourceId'), '/')[4]]",
-      "name": "[last(split(parameters('credentialsKeyVaultResourceId'), '/'))]"
-    },
-    "encryptionKeyVault": {
-      "condition": "[and(variables('deployStorageCmk'), not(empty(parameters('existingEncryptionKeyVaultResourceId'))))]",
-      "existing": true,
-      "type": "Microsoft.KeyVault/vaults",
-      "apiVersion": "2023-07-01",
-      "subscriptionId": "[split(parameters('existingEncryptionKeyVaultResourceId'), '/')[2]]",
-      "resourceGroup": "[split(parameters('existingEncryptionKeyVaultResourceId'), '/')[4]]",
-      "name": "[last(split(parameters('existingEncryptionKeyVaultResourceId'), '/'))]"
+      "subscriptionId": "[split(variables('existingKeyVaultResourceIds')[copyIndex()], '/')[2]]",
+      "resourceGroup": "[split(variables('existingKeyVaultResourceIds')[copyIndex()], '/')[4]]",
+      "name": "[last(split(variables('existingKeyVaultResourceIds')[copyIndex()], '/'))]"
     },
     "storageResourceGroup": {
       "condition": "[parameters('createStorageResourceGroup')]",
@@ -3467,8 +3462,8 @@
           "deploymentVmSize": {
             "value": "[parameters('deploymentVirtualMachineSize')]"
           },
-          "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
-          "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
+          "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('existingKeyVaultResourceIds')[0], '/')[2], split(variables('existingKeyVaultResourceIds')[0], '/')[4]), 'Microsoft.KeyVault/vaults', last(split(variables('existingKeyVaultResourceIds')[0], '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
+          "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('existingKeyVaultResourceIds')[0], '/')[2], split(variables('existingKeyVaultResourceIds')[0], '/')[4]), 'Microsoft.KeyVault/vaults', last(split(variables('existingKeyVaultResourceIds')[0], '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
           "domainName": {
             "value": "[parameters('domainName')]"
           },
@@ -3525,7 +3520,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "18095540339447607684"
+              "templateHash": "5442129206612761458"
             },
             "name": "Deployment helper orchestration",
             "description": "Deploys a temporary Windows helper VM and managed identity in an existing deployment resource group, with feature-dependent permissions and optional domain join for deployment-time operations."
@@ -4042,7 +4037,9 @@
                   },
                   "userAssignedIdentityResourceIds": "[if(not(empty(parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference('deploymentUserAssignedIdentity').outputs.resourceId.value, parameters('fslogixAppUpdateUserAssignedIdentityResourceId'))), createObject('value', createArray(reference('deploymentUserAssignedIdentity').outputs.resourceId.value)))]",
                   "extensions": {
-                    "value": "[union(createArray(createObject('name', 'GuestAttestation', 'publisher', 'Microsoft.Azure.Security.WindowsAttestation', 'type', 'GuestAttestation', 'typeHandlerVersion', '1.0', 'autoUpgradeMinorVersion', true(), 'settings', createObject('AttestationConfig', createObject('MaaSettings', createObject('maaEndpoint', '', 'maaTenantName', 'GuestAttestation'), 'AscSettings', createObject('ascReportingEndpoint', '', 'ascReportingFrequency', ''), 'useCustomToken', 'false', 'disableAlerts', 'false')))), if(and(and(and(parameters('domainJoinDeploymentVirtualMachine'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName')))), createArray(createObject('name', 'JsonADDomainExtension', 'publisher', 'Microsoft.Compute', 'type', 'JsonADDomainExtension', 'typeHandlerVersion', '1.3', 'autoUpgradeMinorVersion', true(), 'forceUpdateTag', parameters('domainJoinForceUpdateTag'), 'settings', createObject('Name', parameters('domainName'), 'User', parameters('domainJoinUserPrincipalName'), 'Restart', 'true', 'Options', '3', 'OUPath', parameters('ouPath')), 'protectedSettings', createObject('Password', parameters('domainJoinUserPassword')), 'provisionAfterExtensions', createArray('GuestAttestation'))), createArray()))]"
+                    "value": {
+                      "items": "[union(createArray(createObject('name', 'GuestAttestation', 'publisher', 'Microsoft.Azure.Security.WindowsAttestation', 'type', 'GuestAttestation', 'typeHandlerVersion', '1.0', 'autoUpgradeMinorVersion', true(), 'settings', createObject('AttestationConfig', createObject('MaaSettings', createObject('maaEndpoint', '', 'maaTenantName', 'GuestAttestation'), 'AscSettings', createObject('ascReportingEndpoint', '', 'ascReportingFrequency', ''), 'useCustomToken', 'false', 'disableAlerts', 'false')))), if(and(and(and(parameters('domainJoinDeploymentVirtualMachine'), not(empty(parameters('domainName')))), not(empty(parameters('domainJoinUserPassword')))), not(empty(parameters('domainJoinUserPrincipalName')))), createArray(createObject('name', 'JsonADDomainExtension', 'publisher', 'Microsoft.Compute', 'type', 'JsonADDomainExtension', 'typeHandlerVersion', '1.3', 'autoUpgradeMinorVersion', true(), 'forceUpdateTag', parameters('domainJoinForceUpdateTag'), 'settings', createObject('Name', parameters('domainName'), 'User', parameters('domainJoinUserPrincipalName'), 'Restart', 'true', 'Options', '3', 'OUPath', parameters('ouPath')), 'protectedSettings', createObject('Password', parameters('domainJoinUserPassword')), 'provisionAfterExtensions', createArray('GuestAttestation'))), createArray()))]"
+                    }
                   }
                 },
                 "template": {
@@ -4053,7 +4050,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "7921988687599192063"
+                      "templateHash": "17025001688948687338"
                     },
                     "name": "Windows virtual machine",
                     "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -4213,13 +4210,20 @@
                       }
                     },
                     "extensions": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/extensionType"
+                      "type": "secureObject",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/extensionType"
+                          }
+                        }
                       },
-                      "defaultValue": [],
+                      "defaultValue": {
+                        "items": []
+                      },
                       "metadata": {
-                        "description": "VM extensions to install."
+                        "description": "VM extensions inside an items array; the object protects extension secrets in deployment history."
                       }
                     },
                     "hibernationEnabled": {
@@ -4504,21 +4508,21 @@
                     "vmExtensions": {
                       "copy": {
                         "name": "vmExtensions",
-                        "count": "[length(parameters('extensions'))]"
+                        "count": "[length(parameters('extensions').items)]"
                       },
                       "type": "Microsoft.Compute/virtualMachines/extensions",
                       "apiVersion": "2023-09-01",
-                      "name": "[format('{0}/{1}', parameters('name'), parameters('extensions')[copyIndex()].name)]",
+                      "name": "[format('{0}/{1}', parameters('name'), parameters('extensions').items[copyIndex()].name)]",
                       "location": "[parameters('location')]",
                       "tags": "[parameters('tags')]",
                       "properties": {
-                        "publisher": "[parameters('extensions')[copyIndex()].publisher]",
-                        "type": "[parameters('extensions')[copyIndex()].type]",
-                        "typeHandlerVersion": "[parameters('extensions')[copyIndex()].typeHandlerVersion]",
-                        "autoUpgradeMinorVersion": "[coalesce(tryGet(parameters('extensions')[copyIndex()], 'autoUpgradeMinorVersion'), true())]",
-                        "enableAutomaticUpgrade": "[coalesce(tryGet(parameters('extensions')[copyIndex()], 'enableAutomaticUpgrade'), false())]",
-                        "settings": "[coalesce(tryGet(parameters('extensions')[copyIndex()], 'settings'), null())]",
-                        "protectedSettings": "[coalesce(tryGet(parameters('extensions')[copyIndex()], 'protectedSettings'), null())]"
+                        "publisher": "[parameters('extensions').items[copyIndex()].publisher]",
+                        "type": "[parameters('extensions').items[copyIndex()].type]",
+                        "typeHandlerVersion": "[parameters('extensions').items[copyIndex()].typeHandlerVersion]",
+                        "autoUpgradeMinorVersion": "[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'autoUpgradeMinorVersion'), true())]",
+                        "enableAutomaticUpgrade": "[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'enableAutomaticUpgrade'), false())]",
+                        "settings": "[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'settings'), null())]",
+                        "protectedSettings": "[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'protectedSettings'), null())]"
                       },
                       "dependsOn": [
                         "virtualMachine"
@@ -6144,12 +6148,12 @@
           },
           "deploymentUserAssignedIdentityClientId": "[if(not(variables('deploymentVirtualMachineRequired')), createObject('value', ''), if(variables('externalDeploymentConfigurationIsValid'), if(variables('deployDeploymentVirtualMachine'), createObject('value', reference('deploymentHelper').outputs.deploymentUserAssignedIdentityClientId.value), createObject('value', parameters('existingDeploymentUserAssignedIdentityClientId'))), createObject('value', parameters('existingDeploymentUserAssignedIdentityClientId'))))]",
           "deploymentVirtualMachineName": "[if(not(variables('deploymentVirtualMachineRequired')), createObject('value', ''), if(variables('externalDeploymentConfigurationIsValid'), if(variables('deployDeploymentVirtualMachine'), createObject('value', reference('deploymentHelper').outputs.virtualMachineName.value), createObject('value', parameters('deploymentVirtualMachineName'))), createObject('value', parameters('deploymentVirtualMachineName'))))]",
-          "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
-          "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('credentialsKeyVaultResourceId'), '/')[2], split(parameters('credentialsKeyVaultResourceId'), '/')[4]), 'Microsoft.KeyVault/vaults', last(split(parameters('credentialsKeyVaultResourceId'), '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
+          "domainJoinUserPassword": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPassword'))), createObject('value', parameters('domainJoinUserPassword')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('existingKeyVaultResourceIds')[0], '/')[2], split(variables('existingKeyVaultResourceIds')[0], '/')[4]), 'Microsoft.KeyVault/vaults', last(split(variables('existingKeyVaultResourceIds')[0], '/')))), 'secretName', 'DomainJoinUserPassword')), createObject('value', ''))), createObject('value', ''))]",
+          "domainJoinUserPrincipalName": "[if(variables('domainCredentialsRequired'), if(not(empty(parameters('domainJoinUserPrincipalName'))), createObject('value', parameters('domainJoinUserPrincipalName')), if(not(empty(parameters('credentialsKeyVaultResourceId'))), createObject('reference', createObject('keyVault', createObject('id', extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(variables('existingKeyVaultResourceIds')[0], '/')[2], split(variables('existingKeyVaultResourceIds')[0], '/')[4]), 'Microsoft.KeyVault/vaults', last(split(variables('existingKeyVaultResourceIds')[0], '/')))), 'secretName', 'DomainJoinUserPrincipalName')), createObject('value', ''))), createObject('value', ''))]",
           "domainName": {
             "value": "[parameters('domainName')]"
           },
-          "encryptionKeyVaultUri": "[if(variables('deployStorageCmk'), createObject('value', reference('encryptionKeyVault').vaultUri), createObject('value', ''))]",
+          "encryptionKeyVaultUri": "[if(variables('deployStorageCmk'), createObject('value', reference(format('existingKeyVaults[{0}]', sub(length(variables('existingKeyVaultResourceIds')), 1))).vaultUri), createObject('value', ''))]",
           "encryptionUserAssignedIdentityResourceId": "[if(variables('deployStorageCmk'), createObject('value', reference('storageCmk').outputs.storageEncryptionIdentityResourceId.value), createObject('value', ''))]",
           "fileSharePolicyName": "[if(and(variables('backupConfigurationIsValid'), variables('backupResourceGroupNamesAreDistinct')), createObject('value', parameters('fileSharePolicyName')), createObject('value', parameters('fileSharePolicyName')))]",
           "fslogixAdminGroups": {
@@ -6288,7 +6292,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15101192901280335484"
+              "templateHash": "10050665588147903594"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -6908,7 +6912,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "864203970324311210"
+                      "templateHash": "8972732427995463392"
                     },
                     "name": "FSLogix NetApp storage orchestration",
                     "description": "Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials."
@@ -7120,7 +7124,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "13556530955191286577"
+                              "templateHash": "17335454286937088109"
                             },
                             "name": "Azure NetApp Files account",
                             "description": "Deploys an Azure NetApp Files account with optional Active Directory settings for SMB; capacity pools, volumes and required directory connectivity are managed separately."
@@ -7147,7 +7151,7 @@
                               }
                             },
                             "activeDirectory": {
-                              "type": "object",
+                              "type": "secureObject",
                               "defaultValue": {},
                               "metadata": {
                                 "description": "Optional. Active Directory settings required for SMB volume access."
@@ -7528,16 +7532,18 @@
                             ]
                           },
                           "protectedParameters": {
-                            "value": [
-                              {
-                                "name": "DomainJoinUserPrincipalName",
-                                "value": "[parameters('domainJoinUserPrincipalName')]"
-                              },
-                              {
-                                "name": "DomainJoinUserPwd",
-                                "value": "[parameters('domainJoinUserPassword')]"
-                              }
-                            ]
+                            "value": {
+                              "items": [
+                                {
+                                  "name": "DomainJoinUserPrincipalName",
+                                  "value": "[parameters('domainJoinUserPrincipalName')]"
+                                },
+                                {
+                                  "name": "DomainJoinUserPwd",
+                                  "value": "[parameters('domainJoinUserPassword')]"
+                                }
+                              ]
+                            }
                           },
                           "treatFailureAsDeploymentFailure": {
                             "value": true
@@ -7551,7 +7557,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8317728250201469341"
+                              "templateHash": "8706340943867939483"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -7635,13 +7641,20 @@
                               }
                             },
                             "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                              "type": "secureObject",
+                              "properties": {
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/runCommandParameterType"
+                                  }
+                                }
                               },
-                              "defaultValue": [],
+                              "defaultValue": {
+                                "items": []
+                              },
                               "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
+                                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                               }
                             },
                             "script": {
@@ -7705,7 +7718,7 @@
                                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                                 },
                                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                                 "asyncExecution": "[parameters('asyncExecution')]",
                                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -7924,7 +7937,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "3151267389392344058"
+                      "templateHash": "16274684208185612191"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
@@ -9849,16 +9862,18 @@
                             ]
                           },
                           "protectedParameters": {
-                            "value": [
-                              {
-                                "name": "DomainJoinUserPrincipalName",
-                                "value": "[parameters('domainJoinUserPrincipalName')]"
-                              },
-                              {
-                                "name": "DomainJoinUserPwd",
-                                "value": "[parameters('domainJoinUserPassword')]"
-                              }
-                            ]
+                            "value": {
+                              "items": [
+                                {
+                                  "name": "DomainJoinUserPrincipalName",
+                                  "value": "[parameters('domainJoinUserPrincipalName')]"
+                                },
+                                {
+                                  "name": "DomainJoinUserPwd",
+                                  "value": "[parameters('domainJoinUserPassword')]"
+                                }
+                              ]
+                            }
                           },
                           "treatFailureAsDeploymentFailure": {
                             "value": true
@@ -9872,7 +9887,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8317728250201469341"
+                              "templateHash": "8706340943867939483"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -9956,13 +9971,20 @@
                               }
                             },
                             "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                              "type": "secureObject",
+                              "properties": {
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/runCommandParameterType"
+                                  }
+                                }
                               },
-                              "defaultValue": [],
+                              "defaultValue": {
+                                "items": []
+                              },
                               "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
+                                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                               }
                             },
                             "script": {
@@ -10026,7 +10048,7 @@
                                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                                 },
                                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                                 "asyncExecution": "[parameters('asyncExecution')]",
                                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -10135,16 +10157,18 @@
                             ]
                           },
                           "protectedParameters": {
-                            "value": [
-                              {
-                                "name": "DomainJoinUserPrincipalName",
-                                "value": "[parameters('domainJoinUserPrincipalName')]"
-                              },
-                              {
-                                "name": "DomainJoinUserPwd",
-                                "value": "[parameters('domainJoinUserPassword')]"
-                              }
-                            ]
+                            "value": {
+                              "items": [
+                                {
+                                  "name": "DomainJoinUserPrincipalName",
+                                  "value": "[parameters('domainJoinUserPrincipalName')]"
+                                },
+                                {
+                                  "name": "DomainJoinUserPwd",
+                                  "value": "[parameters('domainJoinUserPassword')]"
+                                }
+                              ]
+                            }
                           },
                           "treatFailureAsDeploymentFailure": {
                             "value": true
@@ -10158,7 +10182,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8317728250201469341"
+                              "templateHash": "8706340943867939483"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10242,13 +10266,20 @@
                               }
                             },
                             "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                              "type": "secureObject",
+                              "properties": {
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/runCommandParameterType"
+                                  }
+                                }
                               },
-                              "defaultValue": [],
+                              "defaultValue": {
+                                "items": []
+                              },
                               "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
+                                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                               }
                             },
                             "script": {
@@ -10312,7 +10343,7 @@
                                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                                 },
                                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                                 "asyncExecution": "[parameters('asyncExecution')]",
                                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -10412,7 +10443,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8317728250201469341"
+                              "templateHash": "8706340943867939483"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10496,13 +10527,20 @@
                               }
                             },
                             "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                              "type": "secureObject",
+                              "properties": {
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/runCommandParameterType"
+                                  }
+                                }
                               },
-                              "defaultValue": [],
+                              "defaultValue": {
+                                "items": []
+                              },
                               "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
+                                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                               }
                             },
                             "script": {
@@ -10566,7 +10604,7 @@
                                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                                 },
                                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                                 "asyncExecution": "[parameters('asyncExecution')]",
                                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -10673,16 +10711,18 @@
                             ]
                           },
                           "protectedParameters": {
-                            "value": [
-                              {
-                                "name": "DomainJoinUserPrincipalName",
-                                "value": "[parameters('domainJoinUserPrincipalName')]"
-                              },
-                              {
-                                "name": "DomainJoinUserPwd",
-                                "value": "[parameters('domainJoinUserPassword')]"
-                              }
-                            ]
+                            "value": {
+                              "items": [
+                                {
+                                  "name": "DomainJoinUserPrincipalName",
+                                  "value": "[parameters('domainJoinUserPrincipalName')]"
+                                },
+                                {
+                                  "name": "DomainJoinUserPwd",
+                                  "value": "[parameters('domainJoinUserPassword')]"
+                                }
+                              ]
+                            }
                           },
                           "treatFailureAsDeploymentFailure": {
                             "value": true
@@ -10696,7 +10736,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8317728250201469341"
+                              "templateHash": "8706340943867939483"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10780,13 +10820,20 @@
                               }
                             },
                             "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                              "type": "secureObject",
+                              "properties": {
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/runCommandParameterType"
+                                  }
+                                }
                               },
-                              "defaultValue": [],
+                              "defaultValue": {
+                                "items": []
+                              },
                               "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
+                                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                               }
                             },
                             "script": {
@@ -10850,7 +10897,7 @@
                                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                                 },
                                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                                 "asyncExecution": "[parameters('asyncExecution')]",
                                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -10945,7 +10992,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8317728250201469341"
+                              "templateHash": "8706340943867939483"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11029,13 +11076,20 @@
                               }
                             },
                             "protectedParameters": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/runCommandParameterType"
+                              "type": "secureObject",
+                              "properties": {
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/runCommandParameterType"
+                                  }
+                                }
                               },
-                              "defaultValue": [],
+                              "defaultValue": {
+                                "items": []
+                              },
                               "metadata": {
-                                "description": "Named protected (secure) parameters to pass to the script."
+                                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                               }
                             },
                             "script": {
@@ -11099,7 +11153,7 @@
                                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                                 },
                                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                                 "asyncExecution": "[parameters('asyncExecution')]",
                                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -11348,7 +11402,7 @@
       },
       "dependsOn": [
         "deploymentHelper",
-        "encryptionKeyVault",
+        "[format('existingKeyVaults[{0}]', sub(length(variables('existingKeyVaultResourceIds')), 1))]",
         "fslogixBackupVault",
         "storageCmk",
         "storageResourceGroup"
@@ -11481,7 +11535,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "13403699738434883617"
+              "templateHash": "15273386707808507422"
             },
             "name": "Deployment helper cleanup orchestration",
             "description": "Runs cleanup on an existing helper VM for session-host Run Commands, supplied role assignments, and the deployment resource group."
@@ -11606,7 +11660,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8317728250201469341"
+                      "templateHash": "8706340943867939483"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11690,13 +11744,20 @@
                       }
                     },
                     "protectedParameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
+                      "type": "secureObject",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/runCommandParameterType"
+                          }
+                        }
                       },
-                      "defaultValue": [],
+                      "defaultValue": {
+                        "items": []
+                      },
                       "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
+                        "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                       }
                     },
                     "script": {
@@ -11760,7 +11821,7 @@
                           "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                         },
                         "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                        "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                        "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                         "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                         "asyncExecution": "[parameters('asyncExecution')]",
                         "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -11844,7 +11905,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8317728250201469341"
+                      "templateHash": "8706340943867939483"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11928,13 +11989,20 @@
                       }
                     },
                     "protectedParameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
+                      "type": "secureObject",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/runCommandParameterType"
+                          }
+                        }
                       },
-                      "defaultValue": [],
+                      "defaultValue": {
+                        "items": []
+                      },
                       "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
+                        "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                       }
                     },
                     "script": {
@@ -11998,7 +12066,7 @@
                           "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                         },
                         "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                        "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                        "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                         "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                         "asyncExecution": "[parameters('asyncExecution')]",
                         "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",
@@ -12082,7 +12150,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8317728250201469341"
+                      "templateHash": "8706340943867939483"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -12166,13 +12234,20 @@
                       }
                     },
                     "protectedParameters": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/runCommandParameterType"
+                      "type": "secureObject",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/runCommandParameterType"
+                          }
+                        }
                       },
-                      "defaultValue": [],
+                      "defaultValue": {
+                        "items": []
+                      },
                       "metadata": {
-                        "description": "Named protected (secure) parameters to pass to the script."
+                        "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
                       }
                     },
                     "script": {
@@ -12236,7 +12311,7 @@
                           "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                         },
                         "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                        "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                        "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                         "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                         "asyncExecution": "[parameters('asyncExecution')]",
                         "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",

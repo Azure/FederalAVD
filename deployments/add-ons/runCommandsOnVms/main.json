@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "7370187525523534422"
+      "templateHash": "13179935836860672140"
     }
   },
   "parameters": {
@@ -448,7 +448,11 @@
           "parameters": {
             "value": "[parameters('parameters')]"
           },
-          "protectedParameters": "[if(empty(parameters('protectedParameter')), createObject('value', createArray()), createObject('value', createArray(parameters('protectedParameter'))))]",
+          "protectedParameters": {
+            "value": {
+              "items": "[if(empty(parameters('protectedParameter')), createArray(), createArray(parameters('protectedParameter')))]"
+            }
+          },
           "outputBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-output-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
           "errorBlobUri": "[if(empty(variables('logsContainerUri')), createObject('value', ''), createObject('value', format('{0}/{1}-{2}-error-{3}.log', variables('logsContainerUri'), variables('resolvedVmNames')[copyIndex()], parameters('runCommandName'), parameters('timeStamp'))))]",
           "outputBlobManagedIdentityClientId": "[if(empty(parameters('logsUserAssignedIdentityResourceId')), createObject('value', ''), if(variables('usesSharedUserAssignedIdentity'), createObject('value', reference('scriptsUserAssignedIdentity').clientId), createObject('value', reference('logsUserAssignedIdentity').clientId)))]",
@@ -465,7 +469,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8317728250201469341"
+              "templateHash": "8706340943867939483"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -549,13 +553,20 @@
               }
             },
             "protectedParameters": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/runCommandParameterType"
+              "type": "secureObject",
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/runCommandParameterType"
+                  }
+                }
               },
-              "defaultValue": [],
+              "defaultValue": {
+                "items": []
+              },
               "metadata": {
-                "description": "Named protected (secure) parameters to pass to the script."
+                "description": "Protected script parameters inside an items array; the object keeps values out of deployment history."
               }
             },
             "script": {
@@ -619,7 +630,7 @@
                   "scriptUriManagedIdentity": "[if(not(empty(parameters('scriptUriManagedIdentityClientId'))), createObject('clientId', parameters('scriptUriManagedIdentityClientId')), null())]"
                 },
                 "parameters": "[if(not(empty(parameters('parameters'))), parameters('parameters'), null())]",
-                "protectedParameters": "[if(not(empty(parameters('protectedParameters'))), parameters('protectedParameters'), null())]",
+                "protectedParameters": "[if(not(empty(parameters('protectedParameters').items)), parameters('protectedParameters').items, null())]",
                 "timeoutInSeconds": "[if(greater(parameters('timeoutInSeconds'), 0), parameters('timeoutInSeconds'), null())]",
                 "asyncExecution": "[parameters('asyncExecution')]",
                 "treatFailureAsDeploymentFailure": "[parameters('treatFailureAsDeploymentFailure')]",

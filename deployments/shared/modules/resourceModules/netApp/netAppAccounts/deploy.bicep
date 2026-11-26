@@ -9,6 +9,7 @@ param location string = resourceGroup().location
 param tags object = {}
 
 @description('Optional. Active Directory settings required for SMB volume access.')
+@secure()
 param activeDirectory object = {}
 
 resource netAppAccount 'Microsoft.NetApp/netAppAccounts@2023-07-01' = {

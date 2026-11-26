@@ -348,10 +348,12 @@ module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCo
         { name: 'SubscriptionId', value: subscription().subscriptionId }
         { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
       ]
-      protectedParameters: [
-        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-      ]
+      protectedParameters: {
+        items: [
+          { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+          { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+        ]
+      }
       treatFailureAsDeploymentFailure: true
     }
     dependsOn: [privateEndpoints, shares]
@@ -382,10 +384,12 @@ module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/vi
         { name: 'SubscriptionId', value: subscription().subscriptionId }
         { name: 'UserAssignedIdentityClientId', value: deploymentUserAssignedIdentityClientId }
       ]
-      protectedParameters: [
-        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-      ]
+      protectedParameters: {
+        items: [
+          { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+          { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+        ]
+      }
       treatFailureAsDeploymentFailure: true
     }
     dependsOn: [privateEndpoints, shares]
@@ -450,10 +454,12 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
                 : [])
         }
       ]
-      protectedParameters: [
-        { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
-        { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
-      ]
+      protectedParameters: {
+        items: [
+          { name: 'DomainJoinUserPrincipalName', value: domainJoinUserPrincipalName }
+          { name: 'DomainJoinUserPwd', value: domainJoinUserPassword }
+        ]
+      }
       treatFailureAsDeploymentFailure: true
     }
     dependsOn: [

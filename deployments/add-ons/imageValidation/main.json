@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "390738356622919445"
+      "templateHash": "655984321764160289"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -412,7 +412,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.49.2.45890",
-          "templateHash": "5043159510819467831"
+          "templateHash": "5381625932223597484"
         }
       },
       "definitions": {
@@ -678,7 +678,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "7921988687599192063"
+                  "templateHash": "17025001688948687338"
                 },
                 "name": "Windows virtual machine",
                 "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -838,13 +838,20 @@
                   }
                 },
                 "extensions": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/definitions/extensionType"
+                  "type": "secureObject",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/extensionType"
+                      }
+                    }
                   },
-                  "defaultValue": [],
+                  "defaultValue": {
+                    "items": []
+                  },
                   "metadata": {
-                    "description": "VM extensions to install."
+                    "description": "VM extensions inside an items array; the object protects extension secrets in deployment history."
                   }
                 },
                 "hibernationEnabled": {
@@ -1129,21 +1136,21 @@
                 "vmExtensions": {
                   "[string('copy')]": {
                     "name": "vmExtensions",
-                    "count": "[[length(parameters('extensions'))]"
+                    "count": "[[length(parameters('extensions').items)]"
                   },
                   "type": "Microsoft.Compute/virtualMachines/extensions",
                   "apiVersion": "2023-09-01",
-                  "name": "[[format('{0}/{1}', parameters('name'), parameters('extensions')[copyIndex()].name)]",
+                  "name": "[[format('{0}/{1}', parameters('name'), parameters('extensions').items[copyIndex()].name)]",
                   "location": "[[parameters('location')]",
                   "tags": "[[parameters('tags')]",
                   "properties": {
-                    "publisher": "[[parameters('extensions')[copyIndex()].publisher]",
-                    "type": "[[parameters('extensions')[copyIndex()].type]",
-                    "typeHandlerVersion": "[[parameters('extensions')[copyIndex()].typeHandlerVersion]",
-                    "autoUpgradeMinorVersion": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'autoUpgradeMinorVersion'), true())]",
-                    "enableAutomaticUpgrade": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'enableAutomaticUpgrade'), false())]",
-                    "settings": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'settings'), null())]",
-                    "protectedSettings": "[[coalesce(tryGet(parameters('extensions')[copyIndex()], 'protectedSettings'), null())]"
+                    "publisher": "[[parameters('extensions').items[copyIndex()].publisher]",
+                    "type": "[[parameters('extensions').items[copyIndex()].type]",
+                    "typeHandlerVersion": "[[parameters('extensions').items[copyIndex()].typeHandlerVersion]",
+                    "autoUpgradeMinorVersion": "[[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'autoUpgradeMinorVersion'), true())]",
+                    "enableAutomaticUpgrade": "[[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'enableAutomaticUpgrade'), false())]",
+                    "settings": "[[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'settings'), null())]",
+                    "protectedSettings": "[[coalesce(tryGet(parameters('extensions').items[copyIndex()], 'protectedSettings'), null())]"
                   },
                   "dependsOn": [
                     "virtualMachine"

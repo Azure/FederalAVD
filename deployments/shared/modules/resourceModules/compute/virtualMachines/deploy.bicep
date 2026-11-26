@@ -36,8 +36,11 @@ param enableAcceleratedNetworking bool = true
 @description('Optional. Enable host-level VM encryption; the selected VM size must support it.')
 param encryptionAtHost bool = true
 
-@description('VM extensions to install.')
-param extensions extensionType[] = []
+@secure()
+@description('VM extensions inside an items array; the object protects extension secrets in deployment history.')
+// The default envelope contains only an empty array, not credentials.
+#disable-next-line secure-parameter-default
+param extensions { items: extensionType[] } = { items: [] }
 
 @description('Optional. Enable VM hibernation capability; the selected VM size and image must support it.')
 param hibernationEnabled bool = false
@@ -236,7 +239,7 @@ resource virtualMachine 'Microsoft.Compute/virtualMachines@2023-09-01' = {
 }
 
 resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-09-01' = [
-  for ext in extensions: {
+  for ext in extensions.items: {
     parent: virtualMachine
     name: ext.name
     location: location

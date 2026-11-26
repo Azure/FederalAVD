@@ -417,15 +417,18 @@ var backupNaming = sharedServicesNames(namingConvention, {
   location: location
 }, {})
 
-resource credentialsKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (!empty(credentialsKeyVaultResourceId)) {
-  name: last(split(credentialsKeyVaultResourceId, '/'))
-  scope: resourceGroup(split(credentialsKeyVaultResourceId, '/')[2], split(credentialsKeyVaultResourceId, '/')[4])
-}
+// Credentials stay first and encryption last; a shared vault has one ARM resource identity.
+var existingKeyVaultResourceIds = union(
+  empty(credentialsKeyVaultResourceId) ? [] : [toLower(credentialsKeyVaultResourceId)],
+  deployStorageCmk && !empty(existingEncryptionKeyVaultResourceId) ? [toLower(existingEncryptionKeyVaultResourceId)] : []
+)
 
-resource encryptionKeyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (deployStorageCmk && !empty(existingEncryptionKeyVaultResourceId)) {
-  name: last(split(existingEncryptionKeyVaultResourceId, '/'))
-  scope: resourceGroup(split(existingEncryptionKeyVaultResourceId, '/')[2], split(existingEncryptionKeyVaultResourceId, '/')[4])
-}
+resource existingKeyVaults 'Microsoft.KeyVault/vaults@2023-07-01' existing = [
+  for id in existingKeyVaultResourceIds: {
+    name: last(split(id, '/'))
+    scope: resourceGroup(split(id, '/')[2], split(id, '/')[4])
+  }
+]
 
 module storageResourceGroup '../../shared/modules/resourceModules/resources/resourceGroups/deploy.bicep' = if (createStorageResourceGroup) {
   params: {
@@ -464,12 +467,12 @@ module deploymentHelper '../../shared/modules/orchestration/deploymentHelper/dep
     domainJoinUserPassword: domainCredentialsRequired
       ? !empty(domainJoinUserPassword)
         ? domainJoinUserPassword
-        : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPassword') : ''
+        : !empty(credentialsKeyVaultResourceId) ? existingKeyVaults[0].getSecret('DomainJoinUserPassword') : ''
       : ''
     domainJoinUserPrincipalName: domainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
         ? domainJoinUserPrincipalName
-        : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPrincipalName') : ''
+        : !empty(credentialsKeyVaultResourceId) ? existingKeyVaults[0].getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     domainJoinDeploymentVirtualMachine: domainJoinDeploymentVirtualMachine || storageSolution == 'AzureNetAppFiles'
@@ -576,17 +579,19 @@ module fslogix '../../shared/modules/orchestration/fslogix/fslogix.bicep' = {
     domainJoinUserPassword: domainCredentialsRequired
       ? !empty(domainJoinUserPassword)
         ? domainJoinUserPassword
-        : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPassword') : ''
+        : !empty(credentialsKeyVaultResourceId) ? existingKeyVaults[0].getSecret('DomainJoinUserPassword') : ''
       : ''
     #disable-next-line BCP422
     domainJoinUserPrincipalName: domainCredentialsRequired
       ? !empty(domainJoinUserPrincipalName)
         ? domainJoinUserPrincipalName
-        : !empty(credentialsKeyVaultResourceId) ? credentialsKeyVault!.getSecret('DomainJoinUserPrincipalName') : ''
+        : !empty(credentialsKeyVaultResourceId) ? existingKeyVaults[0].getSecret('DomainJoinUserPrincipalName') : ''
       : ''
     domainName: domainName
     #disable-next-line BCP318
-    encryptionKeyVaultUri: deployStorageCmk ? encryptionKeyVault!.properties.vaultUri : ''
+    encryptionKeyVaultUri: deployStorageCmk
+      ? existingKeyVaults[length(existingKeyVaultResourceIds) - 1].properties.vaultUri
+      : ''
     encryptionUserAssignedIdentityResourceId: deployStorageCmk ? storageCmk!.outputs.storageEncryptionIdentityResourceId : ''
     fileSharePolicyName: backupConfigurationIsValid && backupResourceGroupNamesAreDistinct ? fileSharePolicyName : fileSharePolicyName
     fslogixAdminGroups: fslogixAdminGroups

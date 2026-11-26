@@ -155,7 +155,7 @@ module runCommand '../../shared/modules/resourceModules/compute/virtualMachines/
       scriptUri: scriptUri
       scriptUriManagedIdentityClientId: scriptsUserAssignedIdentityClientId
       parameters: parameters
-      protectedParameters: empty(protectedParameter) ? [] : [protectedParameter]
+      protectedParameters: { items: empty(protectedParameter) ? [] : [protectedParameter] }
       outputBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${vmName}-${runCommandName}-output-${timeStamp}.log'
       errorBlobUri: empty(logsContainerUri) ? '' : '${logsContainerUri}/${vmName}-${runCommandName}-error-${timeStamp}.log'
       outputBlobManagedIdentityClientId: logsUserAssignedIdentityClientId

@@ -8,6 +8,22 @@ This page describes the Azure resource topology. See [Secure Endpoint Architectu
 for the control-layer, shared-responsibility, lifecycle, evidence, and AI access model implemented
 through that topology.
 
+## Secure deployment credential boundaries
+
+Credentials must remain secure across every nested deployment, not just at the entry parameter or
+final VM resource. The shared Run Command module accepts protected parameters as a secure object
+with an `items` array. The shared VM module uses the same envelope for extensions, and the NetApp
+account module accepts Active Directory settings as a secure object. ARM emits these contracts as
+`secureObject`; arrays containing passwords must not be passed through ordinary deployment
+parameters, even when their eventual resource field is named `protectedParameters` or
+`protectedSettings`.
+
+Callers unwrap these envelopes only at the final resource boundary. Public deployment parameters,
+secret names, script arguments, and resource protected-field formats remain unchanged. Scripts and
+customizations must still avoid printing credentials into stdout, stderr, or diagnostic logs.
+Template updates protect future deployments; previously exposed values require credential rotation
+and deployment-history remediation through the approved operator process.
+
 ## FSLogix storage-key credentials
 
 ### Separate Profile and Office Azure Files accounts

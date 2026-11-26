@@ -254,11 +254,11 @@ Describe 'AVD workspace ownership contract' {
 
     It 'keeps module outputs out of existing Key Vault resource identities' {
         $standardBicep |
-            Should -Match "resource kvCredentials '.+' existing = if \(!empty\(existingCredentialsKeyVaultResourceId\)\)"
+            Should -Match 'var existingKeyVaultResourceIds = union\('
         $standardBicep |
-            Should -Match "resource kvEncryption '.+' existing = if \(!empty\(existingEncryptionKeyVaultResourceId\)\)"
+            Should -Match "resource existingKeyVaults '.+' existing = \["
 
-        foreach ($resourceName in @('kvCredentials', 'kvEncryption')) {
+        foreach ($resourceName in @('existingKeyVaults')) {
             $resource = $standardTemplate.resources.$resourceName
             ($resource.condition | Out-String) | Should -Not -Match "reference\('sharedKeyVaults'\)"
             ($resource.subscriptionId | Out-String) | Should -Not -Match "reference\('sharedKeyVaults'\)"

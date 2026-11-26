@@ -40,6 +40,21 @@ Describe 'Azure Files helper VM command sequencing' {
         $template.resources.grantStorageApplicationsConsent.dependsOn | Should -Contain 'SetNTFSPermissions'
     }
 
+    It 'secures both domain credential arguments in <Module>' -TestCases @(
+        @{ Module = 'configureADDSAuth' }
+        @{ Module = 'configureEntraKerberosWithDomainInfo' }
+        @{ Module = 'SetNTFSPermissions' }
+    ) {
+        param($Module)
+        $resource = $template.resources.$Module
+        $resource.properties.template.parameters.protectedParameters.type | Should -Be 'secureObject'
+        $credentials = $resource.properties.parameters.protectedParameters.value.items
+        $credentials.name | Should -Be @('DomainJoinUserPrincipalName', 'DomainJoinUserPwd')
+        $credentials[0].value | Should -Be "[parameters('domainJoinUserPrincipalName')]"
+        $credentials[1].value | Should -Be "[parameters('domainJoinUserPassword')]"
+        $resource.properties.parameters.parameters.value.name | Should -Not -Contain 'DomainJoinUserPwd'
+    }
+
     It 'keeps Profile before Office and leaves storage loops parallel' {
         $profilePosition = $source.IndexOf("commandPrefix: 'Profile-'")
         $officePosition = $source.IndexOf("commandPrefix: 'Office-'")

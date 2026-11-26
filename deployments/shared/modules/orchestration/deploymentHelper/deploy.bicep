@@ -206,10 +206,7 @@ module deploymentUserAssignedIdentity '../../resourceModules/managedIdentity/use
   params: {
     name: deploymentUserAssignedIdentityName
     location: location
-    tags: union(
-      parentTag,
-      tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {}
-    )
+    tags: union(parentTag, tags[?'Microsoft.ManagedIdentity/userAssignedIdentities'] ?? {})
   }
 }
 
@@ -259,48 +256,50 @@ module virtualMachine '../../resourceModules/compute/virtualMachines/deploy.bice
       : [
           deploymentUserAssignedIdentity.outputs.resourceId
         ]
-    extensions: union(
-      [
-        {
-          name: 'GuestAttestation'
-          publisher: 'Microsoft.Azure.Security.WindowsAttestation'
-          type: 'GuestAttestation'
-          typeHandlerVersion: '1.0'
-          autoUpgradeMinorVersion: true
-          settings: {
-            AttestationConfig: {
-              MaaSettings: { maaEndpoint: '', maaTenantName: 'GuestAttestation' }
-              AscSettings: { ascReportingEndpoint: '', ascReportingFrequency: '' }
-              useCustomToken: 'false'
-              disableAlerts: 'false'
+    extensions: {
+      items: union(
+        [
+          {
+            name: 'GuestAttestation'
+            publisher: 'Microsoft.Azure.Security.WindowsAttestation'
+            type: 'GuestAttestation'
+            typeHandlerVersion: '1.0'
+            autoUpgradeMinorVersion: true
+            settings: {
+              AttestationConfig: {
+                MaaSettings: { maaEndpoint: '', maaTenantName: 'GuestAttestation' }
+                AscSettings: { ascReportingEndpoint: '', ascReportingFrequency: '' }
+                useCustomToken: 'false'
+                disableAlerts: 'false'
+              }
             }
           }
-        }
-      ],
-      (domainJoinDeploymentVirtualMachine && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName))
-        ? [
-            {
-              name: 'JsonADDomainExtension'
-              publisher: 'Microsoft.Compute'
-              type: 'JsonADDomainExtension'
-              typeHandlerVersion: '1.3'
-              autoUpgradeMinorVersion: true
-              forceUpdateTag: domainJoinForceUpdateTag
-              settings: {
-                Name: domainName
-                User: domainJoinUserPrincipalName
-                Restart: 'true'
-                Options: '3'
-                OUPath: ouPath
+        ],
+        (domainJoinDeploymentVirtualMachine && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName))
+          ? [
+              {
+                name: 'JsonADDomainExtension'
+                publisher: 'Microsoft.Compute'
+                type: 'JsonADDomainExtension'
+                typeHandlerVersion: '1.3'
+                autoUpgradeMinorVersion: true
+                forceUpdateTag: domainJoinForceUpdateTag
+                settings: {
+                  Name: domainName
+                  User: domainJoinUserPrincipalName
+                  Restart: 'true'
+                  Options: '3'
+                  OUPath: ouPath
+                }
+                protectedSettings: {
+                  Password: domainJoinUserPassword
+                }
+                provisionAfterExtensions: ['GuestAttestation']
               }
-              protectedSettings: {
-                Password: domainJoinUserPassword
-              }
-              provisionAfterExtensions: ['GuestAttestation']
-            }
-          ]
-        : []
-    )
+            ]
+          : []
+      )
+    }
   }
 }
 

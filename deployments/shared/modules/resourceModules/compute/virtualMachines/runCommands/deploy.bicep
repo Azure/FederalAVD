@@ -27,8 +27,11 @@ param outputBlobUri string = ''
 @description('Named parameters to pass to the script.')
 param parameters runCommandParameterType[] = []
 
-@description('Named protected (secure) parameters to pass to the script.')
-param protectedParameters runCommandParameterType[] = []
+@secure()
+@description('Protected script parameters inside an items array; the object keeps values out of deployment history.')
+// The default envelope contains only an empty array, not credentials.
+#disable-next-line secure-parameter-default
+param protectedParameters { items: runCommandParameterType[] } = { items: [] }
 
 @description('PowerShell script content to execute. Provide either script or scriptUri, not both.')
 param script string = ''
@@ -65,7 +68,7 @@ resource runCommand 'Microsoft.Compute/virtualMachines/runCommands@2023-09-01' =
         : null
     }
     parameters: !empty(parameters) ? parameters : null
-    protectedParameters: !empty(protectedParameters) ? protectedParameters : null
+    protectedParameters: !empty(protectedParameters.items) ? protectedParameters.items : null
     timeoutInSeconds: timeoutInSeconds > 0 ? timeoutInSeconds : null
     asyncExecution: asyncExecution
     treatFailureAsDeploymentFailure: treatFailureAsDeploymentFailure
