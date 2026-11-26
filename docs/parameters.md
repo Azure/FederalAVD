@@ -10,6 +10,11 @@ VM network/security settings, artifact customizations, and resource-type tags.
 Image Validation builds its own runtime settings; it does not expose naming
 conventions or an additional app-settings parameter.
 
+The [FSLogix Profile Management configuration reference](../deployments/add-ons/fslogixProfileManagement/readme.md#configuration-and-permissions)
+covers `fileShareName` (default `profilecontainers`). Set it through the Portal's
+**Script > Settings** or a deployment parameter to select one existing Azure Files
+share name across all configured subscriptions and storage accounts.
+
 ---
 
 ## Core Deployments

@@ -69,7 +69,7 @@ BeforeAll {
         [Microsoft.PowerShell.Commands.HttpResponseException]::new("Simulated HTTP $Status $Code", $response)
     }
     $originalEnvironment = @{}
-    foreach ($name in @('Cloud', 'SubscriptionIds', 'DeleteOlderThanDays')) {
+    foreach ($name in @('Cloud', 'SubscriptionIds', 'DeleteOlderThanDays', 'FileShareName')) {
         $originalEnvironment[$name] = [Environment]::GetEnvironmentVariable($name)
     }
 }
@@ -93,6 +93,7 @@ Describe 'FSLogix profile cleanup regression coverage' {
         $env:Cloud = 'AzureCloud'
         $env:SubscriptionIds = $script:firstSubscription
         $env:DeleteOlderThanDays = '60'
+        $env:FileShareName = 'profilecontainers'
         Mock Get-ManagedIdentityToken { 'test-token' }
         Mock Write-Information {
             param($MessageData)
@@ -371,12 +372,77 @@ Describe 'FSLogix profile cleanup regression coverage' {
         @($script:records | Where-Object EventType -eq RunFailed).Count | Should -Be 1
     }
 
+    It 'cleans only the configured share and logs its actual name and URI' {
+        $env:FileShareName = 'custom-profiles'
+        $script:testShare = 'https://profiles.file.core.windows.net/custom-profiles'
+        $sharesUri = "https://management.azure.com/subscriptions/$script:firstSubscription/resourceGroups/test/providers/Microsoft.Storage/storageAccounts/profiles/fileServices/default/shares?api-version=2023-05-01"
+        $script:armPages[$sharesUri].value = @(
+            @{ name = 'profilecontainers' }
+            @{ name = 'custom-profiles-old' }
+            @{ name = 'Custom-Profiles' }
+            @{ name = 'custom-profiles' }
+        )
+        Set-TestListing -Entries (New-TestFile)
+        Invoke-TestCleanupRun
+        @($script:requests | Where-Object { $_ -like 'Delete *' }) | Should -Be @(
+            "Delete $script:testShare/Profile.vhdx"
+        )
+        $completed = $script:records | Where-Object EventType -eq ShareCleanupCompleted
+        $completed.ShareName | Should -Be 'custom-profiles'
+        $completed.ShareUri | Should -Be $script:testShare
+    }
+
+    It 'skips accounts without the configured share instead of falling back to profilecontainers' {
+        $env:FileShareName = 'custom-profiles'
+        Invoke-TestCleanupRun
+        Should -Invoke Invoke-WebRequest -Times 0
+        ($script:records | Where-Object EventType -eq AccountSkipped).Message | Should -Be "No 'custom-profiles' share"
+        @($script:records | Where-Object EventType -eq RunCompleted).Count | Should -Be 1
+    }
+
+    It 'rejects <Kind> share names before any requests' -TestCases @(
+        @{ Kind = 'missing'; Name = $null }
+        @{ Kind = 'blank'; Name = ' ' }
+        @{ Kind = 'too short'; Name = 'ab' }
+        @{ Kind = 'too long'; Name = ('a' * 64) }
+        @{ Kind = 'uppercase'; Name = 'Profiles' }
+        @{ Kind = 'consecutive hyphens'; Name = 'my--profiles' }
+        @{ Kind = 'leading hyphen'; Name = '-profiles' }
+        @{ Kind = 'trailing hyphen'; Name = 'profiles-' }
+        @{ Kind = 'path'; Name = 'profiles/other' }
+        @{ Kind = 'trailing newline'; Name = "profiles`n" }
+    ) {
+        param($Kind, $Name)
+        $env:FileShareName = $Name
+        { Invoke-TestCleanupRun } | Should -Throw '*FileShareName must*'
+        Should -Invoke Invoke-RestMethod -Times 0
+        Should -Invoke Invoke-WebRequest -Times 0
+        @($script:records | Where-Object EventType -eq RunFailed).Count | Should -Be 1
+    }
+
     It 'trims and deduplicates subscription IDs before discovering shares' {
         $env:SubscriptionIds = " $script:firstSubscription ,$script:firstSubscription"
         Set-TestListing
         Invoke-TestCleanupRun
         @($script:records | Where-Object EventType -eq SubscriptionStarted).Count | Should -Be 1
         Should -Invoke Invoke-RestMethod -Times 1 -Exactly -ParameterFilter { $Uri -match '/providers/Microsoft\.Storage/storageAccounts\?' }
+    }
+
+    Describe 'FSLogix profile share deployment contract' {
+        It 'passes the Portal share name through the deployment parameter to the Function App setting' {
+            $addonPath = Join-Path $repoRoot 'deployments\add-ons\fslogixProfileManagement'
+            $template = Get-Content -LiteralPath (Join-Path $addonPath 'main.json') -Raw | ConvertFrom-Json
+            $form = Get-Content -LiteralPath (Join-Path $addonPath 'uiFormDefinition.json') -Raw | ConvertFrom-Json
+            $settings = ($form.view.properties.steps | Where-Object name -eq script).elements |
+                Where-Object name -eq settings
+            $control = $settings.elements | Where-Object name -eq fileShareName
+            $control.defaultValue | Should -Be $template.parameters.fileShareName.defaultValue
+            $template.parameters.fileShareName.defaultValue | Should -Be 'profilecontainers'
+            $form.view.outputs.parameters.fileShareName | Should -Be "[steps('script').settings.fileShareName]"
+            $module = $template.resources.functionApp
+            ($module.properties.parameters.functionAppAppSettings.value | Where-Object name -eq FileShareName).value |
+                Should -Be "[parameters('fileShareName')]"
+        }
     }
 
     It 'warns on Graph failure but preserves the SID and completes an approved deletion' {

@@ -43,6 +43,11 @@ param deleteOlderThanDays int = 60
 ])
 param endpointType string = 'private'
 
+@description('Optional. Existing Azure Files share name to manage in each target storage account.')
+@minLength(3)
+@maxLength(63)
+param fileShareName string = 'profilecontainers'
+
 @description('Optional. Resource ID for the delegated subnet used for outbound connectivity from the function app.')
 param functionAppDelegatedSubnetResourceId string = ''
 
@@ -120,7 +125,7 @@ var vaultDnsZoneId = endpointType == 'private' && empty(trim(azureKeyVaultPrivat
 resource rg 'Microsoft.Resources/resourceGroups@2019-10-01'  = {
   name: resourceGroupName
   location: location
-  tags: tags
+  tags: tags[?'Microsoft.Resources/resourceGroups'] 
 }
 
 module keyVault '../../shared/modules/resourceModules/keyVault/vaults/deploy.bicep' = {
@@ -213,6 +218,10 @@ module functionApp '../../shared/modules/resourceModules/functionApp/functionApp
       {
         name: 'DeleteOlderThanDays'
         value: string(deleteOlderThanDays)
+      }
+      {
+        name: 'FileShareName'
+        value: fileShareName
       }
       {
         name: 'ResourceManagerUrl'
