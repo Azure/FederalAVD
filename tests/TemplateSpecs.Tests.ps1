@@ -589,6 +589,40 @@ Describe 'Image Build, Image Validation and Session Host Replacer Template Spec 
 }
 
 Describe 'Template Spec naming conventions' {
+    It 'includes FSLogix Profile Management only when add-on publication is enabled: <Enabled>' -TestCases @(
+        @{ Enabled = $true }
+        @{ Enabled = $false }
+    ) {
+        param($Enabled)
+
+        $catalogBlock = $scriptAst.Find({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+                $node.Extent.Text.StartsWith('if ($CreateAddOns)')
+        }, $true)
+        $catalogBlock | Should -Not -BeNullOrEmpty
+        $CreateAddOns = $Enabled
+        $templateSpecs = @()
+        $publisherRoot = Split-Path -Parent $scriptPath
+        Invoke-Expression ($catalogBlock.Extent.Text.Replace('$PSScriptRoot', '$publisherRoot'))
+        $profileManagementSpecs = @($templateSpecs | Where-Object Purpose -eq 'fslogix-profile-management')
+        $profileManagementSpecs.Count | Should -Be ([int]$Enabled)
+        if ($Enabled) {
+            $spec = $profileManagementSpecs[0]
+            $spec.DisplayName | Should -Be 'AVD FSLogix Profile Management'
+            [IO.Path]::GetFullPath($spec.TemplateFile) |
+                Should -Be (Join-Path $repoRoot 'deployments\add-ons\fslogixProfileManagement\main.json')
+            [IO.Path]::GetFullPath($spec.UiFormDefinition) |
+                Should -Be (Join-Path $repoRoot 'deployments\add-ons\fslogixProfileManagement\uiFormDefinition.json')
+            (Test-Path -LiteralPath $spec.TemplateFile -PathType Leaf) | Should -Be $true
+            (Test-Path -LiteralPath $spec.UiFormDefinition -PathType Leaf) | Should -Be $true
+            New-ConventionName -Components @('resourceType', 'workload', 'purpose', 'location') `
+                -Delimiter '-' -ResourceTypeCode 'ts' -Purpose $spec.Purpose `
+                -LocationAbbreviation 'use' -Workload 'avd' |
+                Should -Be 'ts-avd-fslogix-profile-management-use'
+        }
+    }
+
     It 'includes Image Validation only when add-on publication is enabled: <Enabled>' -TestCases @(
         @{ Enabled = $true }
         @{ Enabled = $false }
