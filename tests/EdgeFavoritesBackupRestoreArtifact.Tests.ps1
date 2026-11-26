@@ -1,10 +1,12 @@
 BeforeAll {
     $repoRoot = Split-Path -Parent $PSScriptRoot
-    $artifactPath = Join-Path $repoRoot 'customer-examples\artifacts\Configure-EdgeFavoritesBackup'
-    $installerPath = Join-Path $artifactPath 'Configure-EdgeFavoritesBackup.ps1'
+    $artifactPath = Join-Path $repoRoot 'customer-examples\artifacts\EdgeFavoritesBackupRestore'
+    $installerPath = Join-Path $artifactPath 'Deploy-EdgeFavoritesBackupRestore.ps1'
     $workerPath = Join-Path $artifactPath 'scripts\Backup-EdgeFavorites.ps1'
+    $commonPath = Join-Path $artifactPath 'scripts\FavoritesBackup.Common.ps1'
+    $helperPath = Join-Path $artifactPath 'scripts\Show-EdgeFavorites.ps1'
     $asts = @{}
-    foreach ($path in @($installerPath, $workerPath)) {
+    foreach ($path in @($installerPath, $workerPath, $commonPath, $helperPath)) {
         $errors = $null
         $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors)
         if ($errors.Count) { throw "Cannot parse $path" }
@@ -52,7 +54,7 @@ Describe 'Edge favorites package contract' {
     It 'has one root script, nested worker, documentation and ASCII PowerShell' {
         @(Get-ChildItem -LiteralPath $artifactPath -Filter '*.ps1' -File).Count | Should -Be 1
         Test-Path -LiteralPath (Join-Path $artifactPath 'README.md') | Should -BeTrue
-        foreach ($path in @($installerPath, $workerPath)) {
+        foreach ($path in @(Get-ChildItem -LiteralPath $artifactPath -Filter '*.ps1' -File -Recurse).FullName) {
             Get-Content -LiteralPath $path -Raw | Should -Not -Match '[^\x00-\x7E]'
             Get-Content -LiteralPath $path -Raw | Should -Not -Match 'FederalAVD'
         }
@@ -64,7 +66,7 @@ Describe 'Edge favorites package contract' {
         $worker = Get-Content -LiteralPath $workerPath -Raw
         $installer | Should -Not -Match 'Start-ScheduledTask|Invoke-FavoritesBackup'
         $worker | Should -Not -Match 'Stop-Process|Start-Process|Invoke-WebRequest|Invoke-RestMethod'
-        $installer | Should -Match 'Assert-ProtectedBackupPath -Path \$workerPath'
+        $installer | Should -Match 'Assert-ProtectedBackupPath -Path \$path'
         $installer | Should -Match 'Assert-ProtectedBackupPath -Path \$configurationPath'
         $worker | Should -Match 'must not run as SYSTEM'
     }
@@ -96,6 +98,57 @@ Describe 'Edge favorites package contract' {
         param($Name)
         $parametersOnly = [scriptblock]::Create($asts[$installerPath].ParamBlock.Extent.Text)
         { & $parametersOnly -BackupSetName $Name } | Should -Throw
+    }
+}
+
+Describe 'Favorites artwork' {
+    It 'ships a readable wide banner and distinct seven-resolution icons' {
+        Add-Type -AssemblyName System.Drawing
+        $assetsPath = Join-Path $artifactPath 'scripts\assets'
+        $image = [Drawing.Image]::FromFile((Join-Path $assetsPath 'favorites-restore-banner.png'))
+        try {
+            $image.Width | Should -Be 1200
+            $image.Height | Should -Be 240
+        }
+        finally { $image.Dispose() }
+        foreach ($role in @('backup', 'restore')) {
+            $bytes = [IO.File]::ReadAllBytes((Join-Path $assetsPath "favorites-$role.ico"))
+            [BitConverter]::ToUInt16($bytes, 0) | Should -Be 0
+            [BitConverter]::ToUInt16($bytes, 2) | Should -Be 1
+            [BitConverter]::ToUInt16($bytes, 4) | Should -Be 7
+            $sizes = @(16, 24, 32, 48, 64, 128, 256)
+            for ($i = 0; $i -lt $sizes.Count; $i++) {
+                $entry = 6 + 16 * $i
+                $size = if ($bytes[$entry] -eq 0) { 256 } else { [int]$bytes[$entry] }
+                $size | Should -Be $sizes[$i]
+                $length = [BitConverter]::ToUInt32($bytes, $entry + 8)
+                $offset = [BitConverter]::ToUInt32($bytes, $entry + 12)
+                ($offset + $length) | Should -BeLessOrEqual $bytes.Length
+                $stream = [IO.MemoryStream]::new($bytes, [int]$offset, [int]$length)
+                $frame = $null
+                try {
+                    $frame = [Drawing.Bitmap]::new($stream)
+                    $frame.Width | Should -Be $size
+                    $frame.Height | Should -Be $size
+                    $frame.GetPixel(0, 0).A | Should -Be 0
+                }
+                finally {
+                    if ($frame) { $frame.Dispose() }
+                    $stream.Dispose()
+                }
+            }
+        }
+        (Get-FileHash -LiteralPath (Join-Path $assetsPath 'favorites-backup.ico')).Hash |
+            Should -Not -Be (Get-FileHash -LiteralPath (Join-Path $assetsPath 'favorites-restore.ico')).Hash
+    }
+
+    It 'keeps the artwork generator parseable and out of runtime installation' {
+        $errors = $null
+        $null = [Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $artifactPath 'scripts\assets\New-FavoritesArtwork.ps1'), [ref]$null, [ref]$errors)
+        $errors.Count | Should -Be 0
+        Get-Content -LiteralPath $installerPath -Raw | Should -Not -Match 'New-FavoritesArtwork'
+        Get-Content -LiteralPath $helperPath -Raw | Should -Not -Match 'New-FavoritesArtwork'
     }
 }
 
@@ -143,6 +196,157 @@ Describe 'Favorites HTML conversion' {
     }
 }
 
+Describe 'Interactive favorites recovery' {
+    It 'round-trips nested, escaped and non-English favorites without executing HTML' {
+        $data = New-TestBookmarks
+        $data.roots.bookmark_bar.children[0].name = 'Line 1' + "`n" + [char]0x4E2D + ' & <title>'
+        $snapshot = Read-FavoritesSnapshot -Html (ConvertTo-FavoritesHtml -Data $data).Html
+        $snapshot.Count | Should -Be 2
+        $snapshot.Root.Children[0].Children[0].Name | Should -BeExactly $data.roots.bookmark_bar.children[0].name
+        $snapshot.Root.Children[0].Children[0].Url | Should -BeExactly $data.roots.bookmark_bar.children[0].url
+        $snapshot.Root.Children[0].Children[1].Children[0].Selected = $true
+        $selected = ConvertTo-SelectedFavoritesHtml -Snapshot $snapshot
+        $selected.Count | Should -Be 1
+        $selected.Html | Should -Not -Match 'quoted|Other|Mobile'
+        $selected.Html | Should -Match 'PERSONAL_TOOLBAR_FOLDER="true"'
+        $restored = Read-FavoritesSnapshot -Html $selected.Html
+        $restored.Root.Children[0].Children[0].Name | Should -Be 'Favorites Bar'
+        $restored.Root.Children[0].Children[0].Children[0].Url | Should -Be 'https://example.test/nested'
+    }
+
+    It 'rejects no selection and malformed or unsupported snapshots' {
+        $html = (ConvertTo-FavoritesHtml -Data (New-TestBookmarks)).Html
+        $snapshot = Read-FavoritesSnapshot -Html $html
+        { ConvertTo-SelectedFavoritesHtml -Snapshot $snapshot } | Should -Throw '*Select at least one*'
+        { Read-FavoritesSnapshot -Html '<html>not a backup</html>' } | Should -Throw
+        { Read-FavoritesSnapshot -Html ($html + '<script>alert(1)</script>') } | Should -Throw
+        { Read-FavoritesSnapshot -Html ($html.Replace('</H3>', '</H4>')) } | Should -Throw
+        { Read-FavoritesSnapshot -Html ($html.Substring(0, $html.LastIndexOf('</DL>'))) } | Should -Throw
+    }
+
+    It 'preserves the full snapshot outside history and writes only selected favorites' {
+        $html = (ConvertTo-FavoritesHtml -Data (New-TestBookmarks)).Html
+        $snapshot = Read-FavoritesSnapshot -Html $html
+        $snapshot.Root.Children[0].Children[0].Selected = $true
+        $recoveryRoot = Join-Path $TestDrive 'Recovery'
+        $result = Save-FavoritesRecovery -Snapshot $snapshot -RecoveryRoot $recoveryRoot
+        $result.Count | Should -Be 1
+        Get-Content -LiteralPath (Join-Path (Split-Path $result.Path) 'Source.html') -Raw | Should -BeExactly $html
+        $subset = Read-FavoritesSnapshot -Html (Get-Content -LiteralPath $result.Path -Raw -Encoding UTF8)
+        $subset.Count | Should -Be 1
+        $subset.Root.Children[0].Children[0].Name | Should -Be 'A & B <link>'
+        $again = Save-FavoritesRecovery -Snapshot $snapshot -RecoveryRoot $recoveryRoot
+        $again.Path | Should -Not -Be $result.Path
+        $snapshot.Html | Should -BeExactly $html
+        { Save-FavoritesRecovery -Snapshot $snapshot -RecoveryRoot $result.Path } | Should -Throw
+    }
+
+    It 'discovers dated snapshots from old profiles without needing a live Edge profile' {
+        $root = Join-Path $TestDrive 'Catalog'
+        $profile = Join-Path $root 'EdgeFavoritesBackupRestore\Test\Old Profile'
+        $history = Join-Path $profile 'History'
+        $null = New-Item -Path $history -ItemType Directory -Force
+        $html = (ConvertTo-FavoritesHtml -Data (New-TestBookmarks)).Html
+        [IO.File]::WriteAllText((Join-Path $profile 'Latest.html'), $html)
+        $dated = Join-Path $history 'Favorites-20261126T1234561234567Z-0123456789abcdef0123456789abcdef.html'
+        [IO.File]::WriteAllText($dated, $html)
+        [IO.File]::WriteAllText((Join-Path $history 'unrelated.html'), $html)
+        $files = @(Get-FavoritesRecoveryFiles -BackupRoot $root -BackupSetName 'Test')
+        $files.Count | Should -Be 2
+        $files[0].Label | Should -Match 'Old Profile.*Latest'
+        $files[1].Label | Should -Be 'Old Profile | 2026-11-26 12:34:56Z'
+        $files[1].Path | Should -Be $dated
+        { Get-FavoritesRecoveryFiles -BackupRoot $root -BackupSetName '..' } | Should -Throw
+        { Get-FavoritesRecoveryFiles -BackupRoot $root -BackupSetName 'Missing' } | Should -Throw '*unavailable*'
+    }
+
+    It 'creates adjacent non-elevated STA shortcuts with explicit modes and installed configuration' {
+        $script:shortcutCalls = [Collections.Generic.List[object]]::new()
+        $shell = New-Object psobject
+        $shell | Add-Member -MemberType ScriptMethod -Name CreateShortcut -Value {
+            param($Path)
+            $shortcut = [pscustomobject]@{
+                Path = $Path; TargetPath = ''; Arguments = ''; WorkingDirectory = ''; Description = ''; IconLocation = ''
+            }
+            $shortcut | Add-Member -MemberType ScriptMethod -Name Save -Value { $script:shortcutCalls.Add($this) }
+            return $shortcut
+        }
+        Mock New-Object { $shell } -ParameterFilter { $ComObject -eq 'WScript.Shell' }
+        Mock Initialize-BackupDirectory {}
+        Mock Assert-ProtectedBackupPath {}
+        $helper = 'C:\ProgramData\EdgeFavoritesBackupRestore\Show-EdgeFavorites.ps1'
+        $config = 'C:\ProgramData\EdgeFavoritesBackupRestore\Configuration.json'
+        Register-FavoritesShortcuts -HelperPath $helper -ConfigPath $config
+        $script:shortcutCalls.Count | Should -Be 2
+        Split-Path $script:shortcutCalls[0].Path | Should -Be (Split-Path $script:shortcutCalls[1].Path)
+        Split-Path $script:shortcutCalls[0].Path -Leaf | Should -Be 'Back Up Edge Favorites.lnk'
+        Split-Path $script:shortcutCalls[1].Path -Leaf | Should -Be 'Restore Edge Favorites.lnk'
+        foreach ($shortcut in $script:shortcutCalls) {
+            $shortcut.Arguments | Should -Match '\s-STA\s'
+            $shortcut.Arguments | Should -Match ([regex]::Escape('-ConfigurationPath "' + $config + '"'))
+            $shortcut.Arguments | Should -Not -Match 'NonInteractive|RunAs'
+        }
+        $script:shortcutCalls[0].Arguments | Should -Match '-Mode Backup'
+        $script:shortcutCalls[1].Arguments | Should -Match '-Mode Restore'
+        $script:shortcutCalls[0].IconLocation | Should -Be 'C:\ProgramData\EdgeFavoritesBackupRestore\assets\favorites-backup.ico,0'
+        $script:shortcutCalls[1].IconLocation | Should -Be 'C:\ProgramData\EdgeFavoritesBackupRestore\assets\favorites-restore.ico,0'
+    }
+
+    It 'wires the Windows form selection, preparation and corrupt-snapshot error states' {
+        Add-Type -AssemblyName System.Windows.Forms
+        $html = (ConvertTo-FavoritesHtml -Data (New-TestBookmarks)).Html
+        $snapshotPath = Join-Path $TestDrive 'FormSnapshot.html'
+        $badPath = Join-Path $TestDrive 'CorruptSnapshot.html'
+        [IO.File]::WriteAllText($snapshotPath, $html)
+        [IO.File]::WriteAllText($badPath, 'corrupt')
+        $script:RecoveryLog = Join-Path $TestDrive 'Recovery.log'
+        $script:formRecoveryRoot = Join-Path $TestDrive 'FormRecovery'
+        $form = [Windows.Forms.Form]::new()
+        $form | Add-Member -MemberType ScriptMethod -Name ShowDialog -Force -Value {
+            $picker, $tree, $status, $prepare, $instructions = @($this.Controls)[0..4]
+            $this.Icon.Width | Should -Be 32
+            $hero = $this.Controls['FavoritesBanner']
+            $hero | Should -Not -BeNullOrEmpty
+            $hero.Bottom | Should -BeLessThan $picker.Top
+            $tree.Bottom | Should -BeLessOrEqual $status.Top
+            $instructions.Bottom | Should -BeLessOrEqual $this.ClientSize.Height
+            if (-not [Windows.Forms.SystemInformation]::HighContrast) {
+                $hero.Controls['FavoritesBannerImage'].Image.Width | Should -Be 1200
+            }
+            $tree.Nodes.Count | Should -Be 3
+            $status.Text | Should -Match '2 favorites'
+            $tree.Nodes[0].Nodes[0].ToolTipText | Should -Match 'quoted'
+            $tree.Nodes[0].Checked | Should -BeFalse
+            $tree.Nodes[0].Checked = $true
+            $tree.Nodes[0].Nodes[0].Checked | Should -BeTrue
+            $tree.Nodes[0].Nodes[1].Nodes[0].Checked | Should -BeTrue
+            $tree.Nodes[0].Nodes[1].Nodes[0].Checked = $false
+            $click = $prepare.GetType().GetMethod('OnClick', [Reflection.BindingFlags]'Instance, NonPublic')
+            $null = $click.Invoke($prepare, @([EventArgs]::Empty))
+            $instructions.Text | Should -Match 'Prepared 1 favorites; Edge has NOT been changed'
+            $outputs = @(Get-ChildItem -LiteralPath $script:formRecoveryRoot -Filter 'Selected.html' -Recurse)
+            $outputs.Count | Should -Be 1
+            $selected = Read-FavoritesSnapshot -Html (Get-Content -LiteralPath $outputs[0].FullName -Raw)
+            $selected.Count | Should -Be 1
+            $tree.Nodes[0].Checked = $false
+            $tree.Nodes[0].Nodes[0].Checked | Should -BeFalse
+            $null = $click.Invoke($prepare, @([EventArgs]::Empty))
+            $picker.SelectedIndex = 1
+            $prepare.Enabled | Should -BeFalse
+            $tree.Nodes.Count | Should -Be 0
+        }
+        Mock New-Object { $form } -ParameterFilter { $TypeName -eq 'Windows.Forms.Form' }
+        Mock Show-FavoritesError {}
+        $files = @(
+            [pscustomobject]@{ Path = $snapshotPath; Label = 'Default | Latest' },
+            [pscustomobject]@{ Path = $badPath; Label = 'Default | Corrupt' }
+        )
+        Show-FavoritesRestoreForm -Files $files -RecoveryRoot $script:formRecoveryRoot -AssetsPath (Join-Path $artifactPath 'scripts\assets')
+        Should -Invoke Show-FavoritesError -Times 1 -Exactly -ParameterFilter { $Message -like '*Select at least one*' }
+        Should -Invoke Show-FavoritesError -Times 1 -Exactly -ParameterFilter { $Message -like '*not an HTML snapshot*' }
+    }
+}
+
 Describe 'Artifact staging without accessing installer favorites' {
     It 'stages the worker and literal configuration before registering the logon task' {
         $savedProgramData = $env:ProgramData
@@ -156,6 +360,7 @@ Describe 'Artifact staging without accessing installer favorites' {
         Mock Initialize-BackupDirectory { $null = New-Item -Path $Path -ItemType Directory -Force }
         Mock Assert-ProtectedBackupPath {}
         Mock Remove-LegacyFavoritesTasks {}
+        Mock Register-FavoritesShortcuts {}
         Mock Register-BackupLogonTask {
             Test-Path -LiteralPath $WorkerPath | Should -BeTrue
             Test-Path -LiteralPath $ConfigPath | Should -BeTrue
@@ -170,7 +375,7 @@ Describe 'Artifact staging without accessing installer favorites' {
         $body = [scriptblock]::Create(($statements.Extent.Text -join "`n").Replace('$PSScriptRoot', '$artifactPath'))
         try {
             $null = & $body
-            $installed = Join-Path $env:ProgramData 'EdgeFavoritesBackup'
+            $installed = Join-Path $env:ProgramData 'EdgeFavoritesBackupRestore'
             $configuration = Get-Content -LiteralPath (Join-Path $installed 'Configuration.json') -Raw | ConvertFrom-Json
             $configuration.BackupRoot | Should -BeExactly $BackupRoot
             $configuration.EdgeProfileName | Should -Be 'Profile 1'
@@ -179,9 +384,21 @@ Describe 'Artifact staging without accessing installer favorites' {
                 Should -BeExactly (Get-Content -LiteralPath $workerPath -Raw)
             Should -Invoke Register-BackupLogonTask -Times 1 -Exactly
             Should -Invoke Remove-LegacyFavoritesTasks -Times 1 -Exactly -ParameterFilter {
-                $WorkerPath -eq (Join-Path $env:ProgramData 'EdgeFavoritesBackup\Backup-EdgeFavorites.ps1')
+                $WorkerPath -eq (Join-Path $env:ProgramData 'EdgeFavoritesBackupRestore\Backup-EdgeFavorites.ps1')
             }
-            Should -Invoke Assert-ProtectedBackupPath -Times 2 -Exactly
+            Should -Invoke Assert-ProtectedBackupPath -Times 7 -Exactly
+            Should -Invoke Register-FavoritesShortcuts -Times 1 -Exactly -ParameterFilter {
+                $HelperPath -eq (Join-Path $env:ProgramData 'EdgeFavoritesBackupRestore\Show-EdgeFavorites.ps1') -and
+                $ConfigPath -eq (Join-Path $env:ProgramData 'EdgeFavoritesBackupRestore\Configuration.json')
+            }
+            foreach ($name in @('FavoritesBackup.Common.ps1', 'Show-EdgeFavorites.ps1')) {
+                Get-Content -LiteralPath (Join-Path $installed $name) -Raw |
+                    Should -BeExactly (Get-Content -LiteralPath (Join-Path $artifactPath "scripts\$name") -Raw)
+            }
+            foreach ($name in @('favorites-backup.ico', 'favorites-restore.ico', 'favorites-restore-banner.png')) {
+                (Get-FileHash -LiteralPath (Join-Path $installed "assets\$name")).Hash |
+                    Should -Be (Get-FileHash -LiteralPath (Join-Path $artifactPath "scripts\assets\$name")).Hash
+            }
         }
         finally { $env:ProgramData = $savedProgramData }
     }
@@ -202,7 +419,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
             BackupRoot = $root; BackupSetName = 'Test'; EdgeProfileName = 'Default'
             BackupIntervalHours = 24; HistoryCount = 2
         }
-        $destination = Join-Path $root 'EdgeFavoritesBackup\Test\Default'
+        $destination = Join-Path $root 'EdgeFavoritesBackupRestore\Test\Default'
         $latest = Join-Path $destination 'Latest.html'
         $history = Join-Path $destination 'History'
         Mock Write-BackupLog {}
@@ -218,6 +435,22 @@ Describe 'Daily backup, retention and empty-profile protection' {
             Should -BeExactly (Get-Content -LiteralPath (Get-ChildItem $history -File)[0].FullName -Raw)
         (Get-FileHash -LiteralPath $script:bookmarksPath).Hash | Should -Be $original
         @(Get-ChildItem -LiteralPath $destination -Filter '*.tmp' -Recurse).Count | Should -Be 0
+    }
+
+    It 'bypasses only the age gate for an explicit manual backup' {
+        Invoke-FavoritesBackup @options
+        $data = New-TestBookmarks
+        $data.roots.bookmark_bar.children[0].name = 'Manual change'
+        Write-TestBookmarks -Data $data
+        Invoke-FavoritesBackup @options
+        Get-Content -LiteralPath $latest -Raw | Should -Not -Match 'Manual change'
+        Invoke-ConfiguredFavoritesBackup -Configuration ([pscustomobject]$options) -ForceBackup
+        Get-Content -LiteralPath $latest -Raw | Should -Match 'Manual change'
+        @(Get-ChildItem -LiteralPath $history -File).Count | Should -Be 2
+        $data.roots.bookmark_bar.children = @()
+        Write-TestBookmarks -Data $data
+        { Invoke-FavoritesBackup @options -ForceBackup } | Should -Throw '*No favorites*'
+        Get-Content -LiteralPath $latest -Raw | Should -Match 'Manual change'
     }
 
     It 'discovers persistent profiles automatically and excludes Guest, System and cache directories' {
@@ -236,7 +469,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
         $configuration.EdgeProfileName = '*'
         Invoke-ConfiguredFavoritesBackup -Configuration $configuration
         foreach ($profile in $profiles) {
-            Test-Path -LiteralPath (Join-Path $root "EdgeFavoritesBackup\Test\$profile\Latest.html") | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $root "EdgeFavoritesBackupRestore\Test\$profile\Latest.html") | Should -BeTrue
         }
     }
 
@@ -245,7 +478,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
         $configuration = [pscustomobject]$options.Clone()
         $configuration.EdgeProfileName = 'Profile 1'
         Invoke-ConfiguredFavoritesBackup -Configuration $configuration
-        Test-Path -LiteralPath (Join-Path $root 'EdgeFavoritesBackup\Test\Profile 1\Latest.html') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $root 'EdgeFavoritesBackupRestore\Test\Profile 1\Latest.html') | Should -BeTrue
         Test-Path -LiteralPath $latest | Should -BeFalse
     }
 
@@ -268,10 +501,10 @@ Describe 'Daily backup, retention and empty-profile protection' {
         $empty = New-TestBookmarks
         $empty.roots.bookmark_bar.children = @()
         Write-TestBookmarks -Data $empty
-        $otherLatest = Join-Path $root 'EdgeFavoritesBackup\Test\Profile 1\Latest.html'
+        $otherLatest = Join-Path $root 'EdgeFavoritesBackupRestore\Test\Profile 1\Latest.html'
         (Get-Item -LiteralPath $otherLatest).LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-25)
         { Invoke-ConfiguredFavoritesBackup -Configuration $configuration } | Should -Throw '*Default*'
-        @(Get-ChildItem -LiteralPath (Join-Path $root 'EdgeFavoritesBackup\Test\Profile 1\History') -File).Count | Should -Be 2
+        @(Get-ChildItem -LiteralPath (Join-Path $root 'EdgeFavoritesBackupRestore\Test\Profile 1\History') -File).Count | Should -Be 2
         @(Get-ChildItem -LiteralPath $history -File).Count | Should -Be 1
     }
 
@@ -374,7 +607,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
         $configuration = [pscustomobject]$options.Clone()
         $configuration.EdgeProfileName = '*'
         Invoke-ConfiguredFavoritesBackup -Configuration $configuration
-        Test-Path -LiteralPath (Join-Path $root 'EdgeFavoritesBackup\Test\Profile 1\Latest.html') | Should -BeTrue
+        Test-Path -LiteralPath (Join-Path $root 'EdgeFavoritesBackupRestore\Test\Profile 1\Latest.html') | Should -BeTrue
         (Get-FileHash -LiteralPath $oldCopy.FullName).Hash | Should -Be $oldHash
         @(Get-ChildItem -LiteralPath $history -File).Count | Should -Be 1
     }
@@ -452,7 +685,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
             -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         try { $process.ExitCode | Should -Be 1 }
         finally { $process.Dispose() }
-        Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackup\Backup.log') -Raw |
+        Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackupRestore\Backup.log') -Raw |
             Should -Match 'ERROR:'
     }
 
@@ -463,6 +696,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
         [IO.File]::WriteAllText($configPath, ($configuration | ConvertTo-Json))
         $stagedWorker = Join-Path $caseDirectory 'Backup-EdgeFavorites.ps1'
         Copy-Item -LiteralPath $workerPath -Destination $stagedWorker
+        Copy-Item -LiteralPath $commonPath -Destination $caseDirectory
         $powerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $arguments = '-NoLogo -NoProfile -NonInteractive -File "{0}"' -f $stagedWorker
         $stdout = Join-Path $caseDirectory 'default-worker.stdout'
@@ -478,7 +712,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
             -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
         try { $process.ExitCode | Should -Be 1 }
         finally { $process.Dispose() }
-        Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackup\Backup.log') -Raw |
+        Get-Content -LiteralPath (Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackupRestore\Backup.log') -Raw |
             Should -Match 'ERROR:.*Configuration.json'
     }
 
@@ -505,7 +739,7 @@ Describe 'Daily backup, retention and empty-profile protection' {
         $configuration.CheckIntervalMinutes = 60
         $configPath = Join-Path $caseDirectory 'Configuration.json'
         [IO.File]::WriteAllText($configPath, ($configuration | ConvertTo-Json))
-        $worker = [scriptblock]::Create($asts[$workerPath].Extent.Text)
+        $worker = [scriptblock]::Create($asts[$workerPath].Extent.Text.Replace('$PSScriptRoot', '(Split-Path $workerPath)'))
         Mock Register-ScheduledTask {}
         Mock Invoke-ConfiguredFavoritesBackup {}
         foreach ($signIn in 1..3) { & $worker -ConfigurationPath $configPath }
@@ -566,7 +800,7 @@ Describe 'Single logon task identity and staging protection' {
         Register-BackupLogonTask -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1' `
             -ConfigPath 'C:\Protected\Configuration.json'
         $task = $script:registeredTask
-        $task.Name | Should -Be 'EdgeFavoritesBackup-Logon'
+        $task.Name | Should -Be 'EdgeFavoritesBackupRestore-Logon'
         $task.Trigger.CimClass.CimClassName | Should -Be 'MSFT_TaskLogonTrigger'
         $task.Trigger.Delay | Should -Be 'PT120S'
         $task.Trigger.UserId | Should -BeNullOrEmpty
@@ -609,7 +843,7 @@ Describe 'Single logon task identity and staging protection' {
 Describe 'Legacy user task migration' {
     BeforeAll {
         function New-TestLegacyFavoritesTask {
-            param([string]$Name = 'EdgeFavoritesBackup-S-1-5-21-1-2-3-1001')
+            param([string]$Name = 'EdgeFavoritesBackupRestore-S-1-5-21-1-2-3-1001')
             [pscustomobject]@{
                 TaskName = $Name
                 TaskPath = '\'
@@ -635,15 +869,15 @@ Describe 'Legacy user task migration' {
 
     It 'removes 100 matching user tasks while keeping the shared task and unrelated tasks' {
         $script:legacyTasks = @(
-            New-TestLegacyFavoritesTask -Name 'EdgeFavoritesBackup-Logon'
+            New-TestLegacyFavoritesTask -Name 'EdgeFavoritesBackupRestore-Logon'
             New-TestLegacyFavoritesTask -Name 'OtherTask'
             foreach ($id in 1001..1100) {
-                New-TestLegacyFavoritesTask -Name "EdgeFavoritesBackup-S-1-5-21-1-2-3-$id"
+                New-TestLegacyFavoritesTask -Name "EdgeFavoritesBackupRestore-S-1-5-21-1-2-3-$id"
             }
         )
         Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
         $script:legacyTasks.Count | Should -Be 2
-        $script:legacyTasks.TaskName | Should -Contain 'EdgeFavoritesBackup-Logon'
+        $script:legacyTasks.TaskName | Should -Contain 'EdgeFavoritesBackupRestore-Logon'
         $script:legacyTasks.TaskName | Should -Contain 'OtherTask'
         Should -Invoke Get-ScheduledTask -Times 1 -Exactly -ParameterFilter { $TaskPath -eq '\' }
         Should -Invoke Unregister-ScheduledTask -Times 100 -Exactly -ParameterFilter {
@@ -660,7 +894,7 @@ Describe 'Legacy user task migration' {
         Mock Unregister-ScheduledTask { $script:legacyTasks[0].State | Should -Be 'Ready' }
         Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
         Should -Invoke Stop-ScheduledTask -Times 1 -Exactly -ParameterFilter {
-            $TaskName -eq 'EdgeFavoritesBackup-S-1-5-21-1-2-3-1001' -and $TaskPath -eq '\'
+            $TaskName -eq 'EdgeFavoritesBackupRestore-S-1-5-21-1-2-3-1001' -and $TaskPath -eq '\'
         }
         Should -Invoke Unregister-ScheduledTask -Times 1 -Exactly
     }
@@ -675,7 +909,7 @@ Describe 'Legacy user task migration' {
     It 'leaves other task folders and non-SID names intact' {
         $task = New-TestLegacyFavoritesTask
         $task.TaskPath = '\Other\'
-        $script:legacyTasks = @($task, (New-TestLegacyFavoritesTask -Name 'EdgeFavoritesBackup-Custom'))
+        $script:legacyTasks = @($task, (New-TestLegacyFavoritesTask -Name 'EdgeFavoritesBackupRestore-Custom'))
         Remove-LegacyFavoritesTasks -WorkerPath 'C:\Protected\Backup-EdgeFavorites.ps1'
         Should -Invoke Unregister-ScheduledTask -Times 0 -Exactly
     }

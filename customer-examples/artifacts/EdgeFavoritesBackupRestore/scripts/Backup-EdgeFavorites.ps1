@@ -10,11 +10,14 @@
 .PARAMETER ConfigurationPath
     Configuration JSON path. If omitted, resolved beside the script file after
     logging is initialized. The logon task passes the installed path explicitly.
+.PARAMETER ForceBackup
+    Bypasses the age gate for an explicit user backup. All other safeguards apply.
 #>
 [CmdletBinding()]
 param(
     [string]$EdgeProfileName,
-    [string]$ConfigurationPath
+    [string]$ConfigurationPath,
+    [switch]$ForceBackup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,37 +25,6 @@ $ErrorActionPreference = 'Stop'
 function Write-BackupLog {
     param([string]$Message)
     Add-Content -LiteralPath $script:LogPath -Value "[$([DateTime]::UtcNow.ToString('o'))] $Message" -Encoding UTF8 -ErrorAction Stop
-}
-
-function Get-FavoritesBackupRoot {
-    param([string]$ConfiguredPath)
-    if (-not [string]::IsNullOrWhiteSpace($ConfiguredPath)) {
-        $root = [Environment]::ExpandEnvironmentVariables($ConfiguredPath)
-        if ($root -match '%[^%]+%' -or $root -notmatch '^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+(?:\\|$))') {
-            throw 'BackupRoot must expand to an absolute, existing per-user directory.'
-        }
-    }
-    else {
-        $root = $env:OneDriveCommercial
-        if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root -PathType Container)) {
-            $accounts = 'HKCU:\Software\Microsoft\OneDrive\Accounts'
-            $roots = @(if (Test-Path -LiteralPath $accounts) {
-                Get-ChildItem -LiteralPath $accounts -ErrorAction Stop |
-                    Where-Object { $_.PSChildName -like 'Business*' } |
-                    ForEach-Object { (Get-ItemProperty -LiteralPath $_.PSPath -Name UserFolder -ErrorAction Stop).UserFolder } |
-                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-                    Select-Object -Unique
-            })
-            if ($roots.Count -ne 1) {
-                throw 'No unambiguous business OneDrive root is available. Configure BackupRoot or retry after OneDrive setup.'
-            }
-            $root = $roots[0]
-        }
-    }
-    if (-not (Test-Path -LiteralPath $root -PathType Container)) {
-        throw 'The backup root is unavailable. It will not be created automatically.'
-    }
-    return [IO.Path]::GetFullPath($root)
 }
 
 function Get-EdgeFavoritesProfiles {
@@ -160,10 +132,11 @@ function Invoke-FavoritesBackup {
         })]
         [string]$EdgeProfileName,
         [ValidateRange(1, 8760)][int]$BackupIntervalHours,
-        [ValidateRange(1, 365)][int]$HistoryCount
+        [ValidateRange(1, 365)]        [int]$HistoryCount,
+        [switch]$ForceBackup
     )
     $root = Get-FavoritesBackupRoot -ConfiguredPath $BackupRoot
-    $relative = "EdgeFavoritesBackup\$BackupSetName\$EdgeProfileName"
+    $relative = "EdgeFavoritesBackupRestore\$BackupSetName\$EdgeProfileName"
     $destination = Join-Path $root $relative
     $null = New-Item -Path $destination -ItemType Directory -Force -ErrorAction Stop
     $lock = [IO.File]::Open((Join-Path $destination 'Backup.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
@@ -177,7 +150,7 @@ function Invoke-FavoritesBackup {
         if (Test-Path -LiteralPath $latest) {
             $lastWrite = (Get-Item -LiteralPath $latest -ErrorAction Stop).LastWriteTimeUtc
             if ($lastWrite -gt [DateTime]::UtcNow) { throw 'Latest backup has a future timestamp; review its clock or sync metadata.' }
-            if (([DateTime]::UtcNow - $lastWrite).TotalHours -lt $BackupIntervalHours) {
+            if (-not $ForceBackup -and ([DateTime]::UtcNow - $lastWrite).TotalHours -lt $BackupIntervalHours) {
                 Write-BackupLog 'A successful backup is still within the configured interval.'
                 return
             }
@@ -197,14 +170,14 @@ function Invoke-FavoritesBackup {
 }
 
 function Invoke-ConfiguredFavoritesBackup {
-    param($Configuration)
+    param($Configuration, [switch]$ForceBackup)
     $profiles = @(Get-EdgeFavoritesProfiles -ProfileName $Configuration.EdgeProfileName)
     $failures = [Collections.Generic.List[string]]::new()
     foreach ($profile in $profiles) {
         try {
             Invoke-FavoritesBackup -BackupRoot $Configuration.BackupRoot -BackupSetName $Configuration.BackupSetName `
                 -EdgeProfileName $profile -BackupIntervalHours $Configuration.BackupIntervalHours `
-                -HistoryCount $Configuration.HistoryCount
+                -HistoryCount $Configuration.HistoryCount -ForceBackup:$ForceBackup
         }
         catch {
             Write-BackupLog "ERROR for Edge profile '$profile': $($_.Exception.Message)"
@@ -223,7 +196,7 @@ $userId = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 if ($userId -in @('S-1-5-18', 'S-1-5-19', 'S-1-5-20')) {
     throw 'The backup worker must not run as SYSTEM or a service account.'
 }
-$logDirectory = Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackup'
+$logDirectory = Join-Path $env:LOCALAPPDATA 'EdgeFavoritesBackupRestore'
 $null = New-Item -Path $logDirectory -ItemType Directory -Force -ErrorAction Stop
 $script:LogPath = Join-Path $logDirectory 'Backup.log'
 try {
@@ -236,9 +209,13 @@ try {
     elseif ([string]::IsNullOrWhiteSpace($ConfigurationPath)) {
         throw 'ConfigurationPath must not be empty.'
     }
+    if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        throw 'Cannot load backup helpers without a script directory. Run the installed script file.'
+    }
+    . (Join-Path $PSScriptRoot 'FavoritesBackup.Common.ps1')
     $configuration = Get-Content -LiteralPath $ConfigurationPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
     if ($PSBoundParameters.ContainsKey('EdgeProfileName')) { $configuration.EdgeProfileName = $EdgeProfileName }
-    Invoke-ConfiguredFavoritesBackup -Configuration $configuration
+    Invoke-ConfiguredFavoritesBackup -Configuration $configuration -ForceBackup:$ForceBackup
 }
 catch {
     Write-BackupLog "ERROR: $($_.Exception.Message)"
