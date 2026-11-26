@@ -12,6 +12,7 @@ Add-ons extend the core FederalAVD deployment with operational automation, monit
 | --- | --- | --- |
 | [**AVD Alerts**](avd-alerts.md) | Azure Monitor alert rules for host pools, session hosts, FSLogix, VM performance, storage, and Service Health | Any production AVD environment |
 | [**FSLogix Storage**](../deployments/add-ons/fslogixStorage/README.md) | Provisions standalone Azure Files or Azure NetApp Files profile storage | When profile storage must be deployed independently of a host pool |
+| [**FSLogix Profile Management**](../deployments/add-ons/fslogixProfileManagement/readme.md) | Schedules cleanup of expired FSLogix profiles in Azure Files | After validating cleanup against disposable shares and maintaining profile backups |
 | [**Session Host Replacer**](session-host-replacer.md) | Automatically drains and replaces session hosts when a new gallery image version is published | Standard-management host pools using custom images with recurring image builds; not automated host pools |
 | [**Storage Quota Manager**](storage-quota-manager.md) | Automatically expands Azure Files Premium share quotas before they fill up | Environments using Azure Files for FSLogix profile containers |
 | [**M365 Route Table Updater**](m365-route-table-updater.md) | Keeps an Azure Route Table current with the latest Microsoft 365 IP ranges | Force-tunneled environments where M365 traffic must bypass the NVA |
@@ -83,12 +84,17 @@ are selected. Do not combine `-AddOns` with `-CreateAddOns $false`.
 | Run Commands on VMs | `run-commands-on-vms` |
 | Update FSLogix Storage Key | `update-storage-account-key-on-session-hosts` |
 | FSLogix Storage | `fslogix-storage` |
+| FSLogix Profile Management | `fslogix-profile-management` |
 | Image Validation | `image-validation` |
 | Storage Quota Manager | `storage-quota-manager` |
 | Session Host Replacer | `session-host-replacer` |
 | Additional Session Hosts | `session-hosts` |
 | Session Host Policy | `session-host-policy` |
 | AVD Alerts | `alerts` |
+FSLogix Profile Management is included in the default all-add-on selection when
+`-CreateAddOns $true`. Use `-AddOns 'fslogix-profile-management'` to select it alone.
+Its publishing purpose is `fslogix-profile-management`; with default naming in `eastus`,
+the Template Spec name is `ts-avd-fslogix-profile-management-use`.
 
 ---
 

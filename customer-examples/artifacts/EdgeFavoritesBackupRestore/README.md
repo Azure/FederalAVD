@@ -1,27 +1,31 @@
-# Configure Edge Favorites Backup
+# Edge Favorites Backup & Restore
 
-Creates logon-triggered Microsoft Edge Stable favorites **HTML backups**.
+Creates automatic Microsoft Edge Stable favorites **HTML backups** and
+**self-service selective recovery** through guided Edge HTML import.
 By default, discovers all persistent browser-profile directories containing a
 `Bookmarks` file under `%LOCALAPPDATA%\Microsoft\Edge\User Data`. Guest/System
 profiles and directory links/junctions are excluded. Profiles not yet created,
 with no persisted bookmarks file, or stored in a custom Edge user-data directory
 are not discoverable. Each discovered profile has independent files, history,
 24-hour gating; no profile contents are merged.
-This is backup and manual recovery, not enterprise sync or two-way merging.
+This is backup and user-directed recovery, not enterprise sync or two-way merging.
 The installer runs elevated or as SYSTEM during image creation/session-host
 customization; it never backs up the installer's profile.
 
 ## What it creates
 
-- Protected code/configuration: `%ProgramData%\EdgeFavoritesBackup`.
-- All-user task: `\EdgeFavoritesBackup-Logon`, delayed two minutes
+- Protected code/configuration: `%ProgramData%\EdgeFavoritesBackupRestore`.
+- Adjacent all-user Start-menu shortcuts under **Edge Favorites**:
+  **Back Up Edge Favorites** and **Restore Edge Favorites**. Both run as the
+  signed-in user, without elevation. No desktop shortcuts are created.
+- All-user task: `\EdgeFavoritesBackupRestore-Logon`, delayed two minutes
   after interactive sign-in. Runs with the Users group and limited privileges.
 - The worker checks backup once and exits. No per-user task, repeating trigger,
   stored password, or persistent background worker is created.
 - Each task attempt has a five-minute execution limit and three failure retries
   five minutes apart. Checks require a signed-in user. Reconnection is not a new
   sign-in and does not trigger a new backup.
-- Runtime log: `%LOCALAPPDATA%\EdgeFavoritesBackup\Backup.log`.
+- Runtime log: `%LOCALAPPDATA%\EdgeFavoritesBackupRestore\Backup.log`.
 
 The single shared task permits parallel sign-ins so each user gets a check in
 their own context. A destination file lock prevents concurrent logon/manual
@@ -39,7 +43,7 @@ The default minimum backup interval is 24 elapsed hours. Check/retry times are
 best-effort and do not guarantee a backup every calendar day.
 This design assumes users sign out regularly, such as daily. It does not back up
 at sign-out or periodically during a session. Changes made after the logon check
-wait until a later sign-in (or a manual run) when the age gate permits. A sign-in
+wait until a later eligible sign-in or an explicit **Back Up Edge Favorites** run. A sign-in
 less than 24 hours after the previous export skips that export, even on a new
 calendar day. Choose a smaller `BackupIntervalHours` if daily sign-ins can be
 closer together. Profile loss before the next eligible check can lose those
@@ -49,7 +53,9 @@ HTML-encodes names/URLs, and converts timestamps to UTC 64-bit Unix seconds.
 Exports are built in memory and committed by same-directory rename/replace.
 Failures do not truncate the previous latest backup; a dated copy is written
 before updating it. Failed writes can leave an extra dated copy until the next
-successful retention pass. Source JSON must be complete, structurally valid,
+successful retention pass. The backup shortcut bypasses only the age gate; empty/invalid-source checks,
+destination locking and retention still apply. Each successful forced backup consumes a
+dated history slot. Source JSON must be complete, structurally valid,
 and contain at least one favorite.
 
 ## Destination and recovery safeguards
@@ -65,7 +71,7 @@ are not used. The destination root **must already exist**; only artifact-owned
 subdirectories are created:
 
 ```text
-<BackupRoot>\EdgeFavoritesBackup\<BackupSetName>\<EdgeProfileName>\
+<BackupRoot>\EdgeFavoritesBackupRestore\<BackupSetName>\<EdgeProfileName>\
   Latest.html
   History\Favorites-<UTC timestamp>-<unique ID>.html
   Backup.lock
@@ -148,18 +154,25 @@ files containing `CheckIntervalMinutes` are readable, but do not schedule checks
 
 Copy the entire example, including `scripts`, before customizing:
 
+The package/ZIP name, installed folder, task prefix, local logs, and backup
+namespace are `EdgeFavoritesBackupRestore`. This is a new install namespace,
+not a compatibility alias. Existing backups are not moved or searched
+automatically. On an existing host, remove the older package's scheduled tasks
+through the approved operator process before installing this version; preserve
+or explicitly migrate any recovery snapshots you still need.
+
 ```powershell
-Copy-Item -Recurse -Path '.\customer-examples\artifacts\Configure-EdgeFavoritesBackup' `
-    -Destination '.\customer\artifacts\Configure-EdgeFavoritesBackup'
+Copy-Item -Recurse -Path '.\customer-examples\artifacts\EdgeFavoritesBackupRestore' `
+    -Destination '.\customer\artifacts\EdgeFavoritesBackupRestore'
 ```
 
 Run on an approved elevated Windows test host:
 
 ```powershell
-.\customer\artifacts\Configure-EdgeFavoritesBackup\Configure-EdgeFavoritesBackup.ps1
+.\customer\artifacts\EdgeFavoritesBackupRestore\Deploy-EdgeFavoritesBackupRestore.ps1
 
 # Explicit per-user share; single quotes preserve expansion for the user worker.
-.\customer\artifacts\Configure-EdgeFavoritesBackup\Configure-EdgeFavoritesBackup.ps1 `
+.\customer\artifacts\EdgeFavoritesBackupRestore\Deploy-EdgeFavoritesBackupRestore.ps1 `
     -BackupRoot '\\files.example.test\UserBackups\%USERNAME%' -BackupSetName 'PrimaryAVD'
 ```
 
@@ -168,8 +181,8 @@ After packaging/uploading with
 
 ```json
 {
-  "name": "Configure-EdgeFavoritesBackup",
-  "blobNameOrUri": "Configure-EdgeFavoritesBackup.zip",
+  "name": "EdgeFavoritesBackupRestore",
+  "blobNameOrUri": "EdgeFavoritesBackupRestore.zip",
   "arguments": "-BackupSetName 'PrimaryAVD' -HistoryCount 14",
   "successExitCodes": "0"
 }
@@ -188,13 +201,13 @@ WDAC/AppLocker, script-signing requirements, Task
 Scheduler permissions and execution-policy enforcement may prevent operation.
 The task action uses process-scoped `-ExecutionPolicy Bypass`, matching the
 neighboring user-logon artifact; this does not override enforced policy. Adapt
-and sign both staged scripts through the approved workflow where required.
+and sign all staged scripts through the approved workflow where required.
 No Windows or Edge policy settings are changed.
 
 ## Startup troubleshooting and existing installations
 
 The shared logon task passes the installed configuration path explicitly:
-`%ProgramData%\EdgeFavoritesBackup\Configuration.json`. A manual worker run
+`%ProgramData%\EdgeFavoritesBackupRestore\Configuration.json`. A manual worker run
 without `-ConfigurationPath` resolves the JSON beside the script file after
 initializing the user log. It does not resolve `$PSScriptRoot` during parameter
 binding. If no script directory is available, the worker logs a clear error
@@ -207,11 +220,12 @@ its contents. In the affected user's normal, non-elevated session, after OneDriv
 setup and any existing backup synchronization, explicitly pass the configuration:
 
 ```powershell
-& "$env:ProgramData\EdgeFavoritesBackup\Backup-EdgeFavorites.ps1" `
-    -ConfigurationPath "$env:ProgramData\EdgeFavoritesBackup\Configuration.json"
+& "$env:ProgramData\EdgeFavoritesBackupRestore\Backup-EdgeFavorites.ps1" `
+    -ConfigurationPath "$env:ProgramData\EdgeFavoritesBackupRestore\Configuration.json"
 ```
 
 This attempts the normal backup immediately without registering a task.
+Add `-ForceBackup` to bypass the age gate, as the backup shortcut does.
 It does not change execution policy or access live Edge data as
 SYSTEM. If organizational script policy blocks it, use the approved signing
 workflow rather than bypassing policy.
@@ -230,7 +244,7 @@ No user log can also mean the task did not launch, ran in the wrong context,
 or failed before log initialization. `2147942401` is `0x80070001` (Win32
 `Incorrect function`); that code alone does not identify a OneDrive failure.
 Inspect the failing task's action, principal, and Task Scheduler history, then
-check `%LOCALAPPDATA%\EdgeFavoritesBackup\Backup.log` in the affected user's
+check `%LOCALAPPDATA%\EdgeFavoritesBackupRestore\Backup.log` in the affected user's
 session. Do not create a guessed OneDrive root to mask a startup error.
 
 ## User guide: restore missing favorites
@@ -239,12 +253,79 @@ These steps can be copied into a customer user guide with its backup-set name
 and help-desk contact details. No reset detection or acknowledgment is required.
 It does not require the backup scheduled task to perform a restore.
 
+### On-demand shortcuts
+
+Open **Start > Edge Favorites > Back Up Edge Favorites** to immediately export
+all configured profiles. The completion dialog reports successful file writes,
+not confirmed OneDrive upload. If any profile fails, an error dialog appears;
+other profiles may already have succeeded. Review
+`%LOCALAPPDATA%\EdgeFavoritesBackupRestore\Backup.log` for per-profile results.
+Do not use **Run as administrator**.
+
+Open **Start > Edge Favorites > Restore Edge Favorites** to prepare recovery:
+
+1. Make the old backups available in the configured storage first.
+2. Choose a snapshot from the list. It includes `Latest.html` and dated history
+   from every stored profile in the configured backup set, even when those
+   browser profiles no longer exist locally. Dates are UTC; Latest shows its
+   file timestamp, which synchronization can change, not a verified export time.
+3. Inspect the favorite count and folder tree. Hover over a favorite for its URL.
+   Check individual favorites or a whole folder to select its descendants.
+   Unchecking a folder clears its descendants. A folder checkbox is not a
+   tri-state summary; only checked favorites are included. Nothing is selected
+   by default, and no links are opened or HTML executed.
+4. Select **Prepare selected favorites**. Copy the displayed `Selected.html`
+   path into Edge's file picker for the HTML import described below. Select the
+   intended destination Edge profile yourself. The helper does not automate
+   browser controls, replace browser files, or bypass import restrictions.
+5. Verify the imported favorites. Import may add an Imported folder or duplicates;
+   this helper does not compare against live favorites or deduplicate imports.
+
+Each preparation writes a new unique directory under
+`%LOCALAPPDATA%\EdgeFavoritesBackupRestore\Recovery`, containing the full selected
+snapshot as `Source.html` and the selected subset as `Selected.html`. These
+copies are outside rotating backup history, but remain in the local Windows
+profile and can be lost with it. Preserve them in approved durable storage
+when needed; they are not automatically synchronized or pruned. Preparation
+uses the snapshot loaded into the form even if the original history file later
+changes or is pruned. Reopen the form to refresh the snapshot list.
+
+The helper accepts HTML produced by this package, including existing snapshots,
+not arbitrary browser exports. Corrupt or unsupported files, unavailable
+storage, and hydration/read failures are reported explicitly. An empty local
+listing is not proof that no cloud backups exist. Helper errors and preparation
+events are logged in `%LOCALAPPDATA%\EdgeFavoritesBackupRestore\Recovery.log`.
+No downloads, extension, web service, or external parser is required; Windows
+PowerShell 5.1 and Windows Forms are used.
+
+### Artwork
+
+Both shortcuts use distinct multi-resolution icons: a favorites star and browser
+window with a download-to-tray badge for backup or a return-arrow badge for
+restore. The restoration form uses matching Edge-inspired blue/cyan/teal/green
+gradients and flowing shapes, with its own window
+icon. Banner text remains actual Windows labels rather than text embedded in the
+image; high-contrast mode uses system colors and omits the decorative banner.
+The form keeps its existing window dimensions, with a scrollable favorites tree.
+
+Original artwork is bundled under `scripts\assets` and staged into the protected
+`%ProgramData%\EdgeFavoritesBackupRestore\assets` directory. Copy the complete package
+and reinstall on existing hosts to update shortcut icons. No runtime downloads
+or artwork generation are performed, including in disconnected environments.
+To regenerate the PNG banner and 16/24/32/48/64/128/256-pixel ICO frames locally:
+
+```powershell
+& .\customer-examples\artifacts\EdgeFavoritesBackupRestore\scripts\assets\New-FavoritesArtwork.ps1
+```
+
+### Manual recovery without the helper
+
 1. **Make your backups available.** Sign in to the correct work/school OneDrive
    account and let the existing backup files synchronize/download. Contact the
    help desk if they are missing; do not assume an empty local folder means
    there are no older cloud copies.
 2. **Find the old browser profile's backup.** In File Explorer, open your
-   organization's OneDrive folder, then `EdgeFavoritesBackup\AVD`. Open the
+   organization's OneDrive folder, then `EdgeFavoritesBackupRestore\AVD`. Open the
    relevant browser-profile folder, for example `Default` or `Profile 1`.
    Your administrator may have selected a different backup root or set name.
    If several profiles exist, ask the help desk which folder contains your
@@ -291,14 +372,20 @@ On a representative multi-user AVD host, test two independent users, delayed
 OneDrive setup, unavailable shares, profile recreation with the backup already
 present, empty-profile rejection and automatic resumption after manual import,
 retention, nested/non-English favorites, and daily sign-out/sign-in.
+Also test both Start-menu shortcuts as a standard user: immediate backup within
+the age gate, snapshot discovery after profile recreation, unavailable/unhydrated
+files, folder/individual selection, preserved full snapshots, and importing the
+selected subset into the intended Edge profile. Verify no unselected favorites
+are imported and no existing favorites are removed. Test localized/scaled
+Windows UI and policy-restricted imports; offline tests do not prove this UX.
 Confirm the shared task's action, delayed logon trigger, limited Users-group
 principal, LastTaskResult and each user's log. Sign in with multiple distinct
 users and verify the host still has just one artifact task and no worker remains
 after the check. On an upgraded host, verify matching legacy tasks were removed:
 
 ```powershell
-Get-ScheduledTask -TaskName 'EdgeFavoritesBackup-*'
-Get-ScheduledTaskInfo -TaskName 'EdgeFavoritesBackup-Logon'
+Get-ScheduledTask -TaskName 'EdgeFavoritesBackupRestore-*'
+Get-ScheduledTaskInfo -TaskName 'EdgeFavoritesBackupRestore-Logon'
 ```
 
 Offline tests do not prove Task Scheduler identity delivery, Edge import, SMB
@@ -306,6 +393,7 @@ atomic replacement, cloud upload or recovery. Consult task history on failures.
 
 To remove, first unregister the logon task and any remaining legacy tasks using their
 exact inspected names (`Unregister-ScheduledTask -TaskName '<exact name>'`).
-Then remove only the staged `EdgeFavoritesBackup` directory through
+Remove the two shortcuts in the all-user Start-menu `Edge Favorites` folder.
+Then remove only the staged `EdgeFavoritesBackupRestore` directory through
 the approved operator process. Do not remove favorites backups unless
 intentionally retiring them. Uninstall is deliberately manual.
