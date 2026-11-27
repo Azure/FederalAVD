@@ -1,7 +1,7 @@
-targetScope = 'subscription'
-
 metadata name = 'Image Validation Add-On'
 metadata description = 'The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release.'
+
+targetScope = 'subscription'
 
 import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 

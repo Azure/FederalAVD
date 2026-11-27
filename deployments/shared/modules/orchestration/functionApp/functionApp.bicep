@@ -1,3 +1,10 @@
+metadata name = 'Function App infrastructure'
+metadata description = 'Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned.'
+
+// Deploys Windows PowerShell Function App infrastructure, runtime storage, optional monitoring and
+// private endpoints, and storage RBAC in the deployment resource group. Requires a caller-provided
+// plan; function code and storage CMK provisioning are separate.
+
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../networking/functions.bicep'
 import { privateEndpointName } from '../naming/internal.bicep'
 
@@ -633,8 +640,3 @@ output functionAppPrincipalId string = functionAppPrincipalId
 
 @description('Resource ID of Application Insights when enabled; otherwise empty string.')
 output applicationInsightsResourceId string = enableApplicationInsights ? applicationInsights.id : ''
-metadata name = 'Function App infrastructure'
-// Deploys Windows PowerShell Function App infrastructure, runtime storage, optional monitoring and
-// private endpoints, and storage RBAC in the deployment resource group. Requires a caller-provided
-// plan; function code and storage CMK provisioning are separate.
-metadata description = 'Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned.'

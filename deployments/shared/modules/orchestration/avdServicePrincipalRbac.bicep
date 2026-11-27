@@ -1,7 +1,7 @@
-targetScope = 'subscription'
-
 metadata name = 'AVD service principal subscription roles'
 metadata description = 'Assigns subscription-scoped roles to an existing AVD service principal for start VM on connect and the selected scaling method. Does not create the service principal or configure host-pool scaling.'
+
+targetScope = 'subscription'
 
 @description('Required. Object ID of the existing Azure Virtual Desktop service principal, not its application/client ID.')
 param avdServicePrincipalObjectId string

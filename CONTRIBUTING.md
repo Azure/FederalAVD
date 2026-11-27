@@ -83,6 +83,10 @@ parameter, target context, optional name overrides and complete resource-module 
 2. Edit Bicep sources, not generated ARM JSON. Rebuild affected tracked ARM files,
    including generated-template dependencies in the order specified by the
    [Bicep skill](.github/skills/federalavd-bicep-maintenance/SKILL.md).
+   Keep existing file-level `metadata` declarations together at the top, before
+   `targetScope`, imports, and other declarations. This is a repository convention,
+   not a language requirement; [Bicep declaration order](https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/file#bicep-format)
+   does not affect deployment behavior.
 3. Keep public contracts stable unless a breaking change is intentional and
    documented. Update affected Portal forms, reference parameters, tests, and
    deployment documentation together.
