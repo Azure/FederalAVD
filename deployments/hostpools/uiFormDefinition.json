@@ -5608,14 +5608,37 @@
                 {
                   "name": "fslogixStoragePrefixValue",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Custom FSLogix Storage Account Prefix",
-                  "placeholder": "e.g. fslogix, myprefix",
+                  "label": "Custom Profile Storage Prefix",
+                  "placeholder": "e.g. myprofiles",
                   "defaultValue": "",
-                  "toolTip": "Custom prefix for FSLogix storage account names. Use up to 13 lowercase letters or numbers. The full name is this prefix plus a 2-digit instance index (e.g. myprefix01, myprefix02), keeping the total at or below 15 characters — required for AD DS computer account compatibility. Leave empty to use the default naming convention (fslogix + a unique string), which is suitable for cloud-only FSLogix with no AD DS join.",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'))]",
+                  "toolTip": "Optional Profile account prefix, using up to 13 lowercase letters or numbers. The shard index is appended (e.g. myprofiles01, myprofiles02). Leave empty for the naming convention's Profile prefix, normally fslpc plus a unique string. This does not change Office account names.",
                   "constraints": {
                     "required": false,
                     "regex": "^[a-z0-9]{0,13}$",
                     "validationMessage": "Use up to 13 lowercase letters or numbers."
+                  }
+                },
+                {
+                  "name": "fslogixOfficeStoragePrefixValue",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom Office Storage Prefix",
+                  "placeholder": "e.g. myoffice",
+                  "defaultValue": "",
+                  "visible": "[and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer'))]",
+                  "toolTip": "Optional Office account prefix, using 3-13 lowercase letters or numbers. Office accounts use the same shard indices as Profile accounts (e.g. myoffice01, myoffice02). Leave empty for the naming convention's Office prefix, normally fsloc plus a unique string. Must differ from the Profile prefix.",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^$|^[a-z0-9]{3,13}$",
+                        "message": "Leave empty or use 3-13 lowercase letters or numbers."
+                      },
+                      {
+                        "isValid": "[or(empty(steps('tagsAndNaming').naming.fslogixOfficeStoragePrefixValue), not(equals(steps('tagsAndNaming').naming.fslogixOfficeStoragePrefixValue, steps('tagsAndNaming').naming.fslogixStoragePrefixValue)))]",
+                        "message": "Profile and Office storage prefixes must differ."
+                      }
+                    ]
                   }
                 },
                 {
@@ -6159,6 +6182,7 @@
         "fslogixStorageService": "[if(or(steps('userProfiles').deployStorage, steps('userProfiles').configureSessionHosts), steps('userProfiles').storageService, 'AzureFiles')]",
         "fslogixProfileStorageRedundancy": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.storageRedundancy, 'LocallyRedundant')]",
         "fslogixProfileStorageAccountNamePrefix": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, '')]",
+        "fslogixOfficeStorageAccountNamePrefix": "[if(and(equals(steps('userProfiles').deployStorage, true), equals(steps('userProfiles').storageService, 'AzureFiles'), contains(steps('userProfiles').fslogixContainerType, 'OfficeContainer')), steps('tagsAndNaming').naming.fslogixOfficeStoragePrefixValue, '')]",
         "fslogixProfileStorageTier": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.storageSku, 'Standard')]",
         "fslogixNetAppServiceLevel": "[if(and(equals(steps('userProfiles').storageService, 'AzureNetAppFiles'), steps('userProfiles').deployStorage), steps('userProfiles').azureNetAppFiles.storageSku, 'Premium')]",
         "fslogixProfileStorageBillingModel": "[if(and(equals(steps('userProfiles').storageService, 'AzureFiles'), equals(steps('userProfiles').deployStorage, true)), steps('userProfiles').azureFiles.profileStorageBillingModel, 'Legacy')]",

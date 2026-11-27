@@ -4,6 +4,14 @@ param (
     [string]$AppDisplayNamePrefix,
 
     [Parameter(Mandatory = $true)]
+    [ValidateRange(1, 2147483647)]
+    [int]$StorageCount,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateRange(0, 2147483647)]
+    [int]$StorageIndex,
+
+    [Parameter(Mandatory = $true)]
     [string]$ClientId,
 
     [Parameter(Mandatory = $true)]
@@ -177,24 +185,31 @@ try {
     $AccessToken = Get-GraphAccessToken -Resource $GraphUri -ClientId $ClientId
     Write-Output "Successfully obtained access token"
         
-    # Search for the application by DisplayName
-    $searchUri = "/v1.0/applications?" + '$filter=' + "startswith(displayName, '$AppDisplayNamePrefix')"
-    Write-Output "Searching for applications with prefix: $AppDisplayNamePrefix"
-    try {
-        $searchHeaders = @{ "ConsistencyLevel" = "eventual" }
-        $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri -Headers $searchHeaders
-        
-        if ($searchResp.value.Count -eq 0) {
-            throw "No application found starting with '$AppDisplayNamePrefix'."
+    # Storage RP completion does not guarantee that every shard is visible in Graph yet.
+    $applications = @(
+        for ($index = 0; $index -lt $StorageCount; $index++) {
+            $accountPrefix = "$AppDisplayNamePrefix$(($StorageIndex + $index).ToString('00')).file."
+            $filter = "startswith(displayName, '$($accountPrefix.Replace("'", "''"))')"
+            $searchUri = "/v1.0/applications?" + '$filter=' + [uri]::EscapeDataString($filter)
+            for ($attempt = 1; $attempt -le 12; $attempt++) {
+                $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri
+                $matches = @($searchResp.value)
+                if ($matches.Count -gt 1) {
+                    throw "Multiple applications found for '$accountPrefix'; refusing an ambiguous update."
+                }
+                if ($matches.Count -eq 1) { break }
+                if ($attempt -eq 12) {
+                    throw "Application for '$accountPrefix' not found after 12 attempts. Expected all $StorageCount shards."
+                }
+                Write-Host "Waiting for application '$accountPrefix' (attempt $attempt/12)..."
+                Start-Sleep -Seconds 10
+            }
+            $matches[0]
         }
-        Write-Output "Found $($searchResp.value.Count) applications starting with '$AppDisplayNamePrefix'."
-    }
-    catch {
-        Write-Error ("Failed to search for application: " + $_.Exception.Message)
-        throw $_
-    }
+    )
+    Write-Output "Found all $StorageCount expected storage account applications."
 
-    foreach ($app in $searchResp.value) {
+    foreach ($app in $applications) {
         $appObjectId = $app.id
         $appName = $app.displayName
         Write-Output ""
@@ -207,13 +222,17 @@ try {
             # Get Service Principal for the Storage Account App (Enterprise Application)
             $spUri = "/v1.0/servicePrincipals?`$filter=appId eq '$($app.appId)'"
             Write-Output "Looking for Service Principal (Enterprise Application)..."
-            $spResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $spUri
-            
-            if ($spResp.value.Count -eq 0) {
-                Write-Warning "  Service Principal (Enterprise Application) not found for AppId: $($app.appId)"
-                Write-Warning "The Enterprise Application must exist before delegated permissions can be granted."
-                Write-Warning "Please verify that the Storage Account has Azure AD authentication enabled."
-                continue
+            for ($attempt = 1; $attempt -le 12; $attempt++) {
+                $spResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $spUri
+                if (@($spResp.value).Count -gt 1) {
+                    throw "Multiple service principals found for AppId: $($app.appId)."
+                }
+                if (@($spResp.value).Count -eq 1) { break }
+                if ($attempt -eq 12) {
+                    throw "Service principal not found for '$appName' after 12 attempts; admin consent was not granted."
+                }
+                Write-Output "Waiting for service principal for '$appName' (attempt $attempt/12)..."
+                Start-Sleep -Seconds 10
             }
             
             # This is the Storage Account's Enterprise Application (Service Principal)
@@ -233,7 +252,7 @@ try {
             $allGrantsResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $grantUri
             
             # Filter manually for the specific resource
-            $matchingGrants = @($allGrantsResp.value | Where-Object { $_ -and $_.resourceId -eq $graphServicePrincipalId -and $_.id })
+            $matchingGrants = @($allGrantsResp.value | Where-Object { $_ -and $_.resourceId -eq $graphServicePrincipalId -and $_.consentType -eq 'AllPrincipals' -and $_.id })
             
             # Delegated permissions we want to grant
             $scope = @("openid", "profile", "User.Read")
@@ -308,8 +327,7 @@ try {
             }
         }
         catch {
-            Write-Error "Failed to grant delegated permissions for Enterprise Application $appName"
-            Write-Error "Error: $($_.Exception.Message)"
+            Write-Error "Failed to grant delegated permissions for Enterprise Application $appName : $($_.Exception.Message)"
             throw
         }
     }

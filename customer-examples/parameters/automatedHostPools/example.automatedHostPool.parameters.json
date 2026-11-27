@@ -86,6 +86,13 @@
         "deployFSLogixStorage": {
             "value": true
         },
+        // Optional independent prefixes. Blank preserves the role-specific naming convention.
+        "fslogixProfileStorageAccountNamePrefix": {
+            "value": ""
+        },
+        "fslogixOfficeStorageAccountNamePrefix": {
+            "value": ""
+        },
         "fslogixProfileStorageTier": {
             "value": "Premium"
         },

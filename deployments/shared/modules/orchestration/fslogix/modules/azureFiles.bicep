@@ -147,7 +147,7 @@ var storageRoles = concat(
       configuration: resolveFilesConfiguration(profileStorageTier, profileStorageRedundancy, profileStorageBillingModel, profileShareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
       shares: take(fileShares, 1)
       shareSizeInGB: profileShareSizeInGB
-      commandPrefix: 'Profile-'
+      roleName: 'Profile'
     }
   ],
   length(fileShares) > 1
@@ -163,7 +163,7 @@ var storageRoles = concat(
           configuration: resolveFilesConfiguration(officeStorageTier, officeStorageRedundancy, officeStorageBillingModel, officeShareSizeInGB, officeProvisionedIops, officeProvisionedThroughputMiBps)
           shares: take(skip(fileShares, 1), 1)
           shareSizeInGB: officeShareSizeInGB
-          commandPrefix: 'Office-'
+          roleName: 'Office'
         }
       ]
     : []
@@ -199,6 +199,11 @@ var storageNetworkAcls = {
 
 var parentResourceTags = !empty(hostPoolResourceId) ? { 'cm-resource-parent': hostPoolResourceId } : {}
 
+// Explicit deployment names identify accounts or full role ranges, not flattened loop positions.
+// Include the storage scope because the configuration deployments target a shared helper VM group.
+var deploymentNameSuffix = uniqueString(resourceGroup().id, deployment().name)
+var shardRange = 'shards${padLeft(storageIndex, 2, '0')}-${padLeft(storageIndex + storageCount - 1, 2, '0')}'
+
 var graphEndpoint = environment().name == 'AzureUSGovernment'
   ? 'https://graph.microsoft.us'
   : startsWith(environment().name, 'us')
@@ -216,6 +221,7 @@ resource appUpdateUai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
 // ─── Storage Accounts ──────────────────────────────────────────────────────────
 module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.bicep' = [
   for (account, i) in accountConfigurations: {
+    name: 'fslogix-${toLower(account.roleName)}-${account.name}-storage-${deploymentNameSuffix}'
     params: {
       name: account.name
       location: location
@@ -250,6 +256,7 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
 // ─── File Services ─────────────────────────────────────────────────────────────
 module fileServices '../../../resourceModules/storage/storageAccounts/fileServices/deploy.bicep' = [
   for (account, i) in accountConfigurations: {
+    name: 'fslogix-${toLower(account.roleName)}-${account.name}-files-${deploymentNameSuffix}'
     params: {
       storageAccountName: account.name
       smbSettings: union(smbSettingsValues, { multichannel: account.sku != 'Standard' ? { enabled: true } : null })
@@ -269,6 +276,7 @@ module fileServices '../../../resourceModules/storage/storageAccounts/fileServic
 // ─── File Shares ───────────────────────────────────────────────────────────────
 module shares 'shares.bicep' = [
   for (account, i) in accountConfigurations: {
+    name: 'fslogix-${toLower(account.roleName)}-${account.name}-share-${deploymentNameSuffix}'
     params: {
       fileShares: account.shares
       shareSizeInGB: account.shareSizeInGB
@@ -285,6 +293,7 @@ module shares 'shares.bicep' = [
 // ─── Private Endpoints ─────────────────────────────────────────────────────────
 module privateEndpoints '../../../resourceModules/network/privateEndpoints/deploy.bicep' = [
   for (account, i) in accountConfigurations: if (privateEndpoint) {
+    name: 'fslogix-${toLower(account.roleName)}-${account.name}-endpoint-${deploymentNameSuffix}'
     params: {
       name: privateEndpointName(privateEndpointNameConv, account.name, 'file', privateEndpointVnetName)
       customNetworkInterfaceName: privateEndpointName(
@@ -319,16 +328,17 @@ module roleAssignmentsAdmins '../../../resourceModules/authorization/roleAssignm
 ]
 
 // ─── ADDS Domain Join ──────────────────────────────────────────────────────────
-// Configuration commands batch by role, not by account. The scripts process that role's prefix
-// and shard range; Profile-/Office- distinguish roles rather than identifying a shard.
-// Serialize roles on the shared helper VM; phase dependencies below preserve command ordering.
+// Configuration commands batch by role, not by account. The scripts process its prefix
+// and shard range; Profile-/Office- derive from roleName rather than identifying a shard.
+// Serialize roles on the shared helper VM; phase dependencies preserve command ordering.
 @batchSize(1)
 module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution == 'ActiveDirectoryDomainServices') {
+    name: 'fslogix-${toLower(role.roleName)}-${shardRange}-domain-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {
       virtualMachineName: deploymentVirtualMachineName
-      name: '${role.commandPrefix}Domain-Join'
+      name: '${role.roleName}-Domain-Join'
       location: location
       script: loadTextContent('../../../../scripts/Configure-StorageAccountforADDS.ps1')
       parameters: [
@@ -366,10 +376,11 @@ module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCo
 @batchSize(1)
 module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution == 'EntraKerberos-Hybrid' && !empty(domainName) && !empty(domainJoinUserPassword) && !empty(domainJoinUserPrincipalName)) {
+    name: 'fslogix-${toLower(role.roleName)}-${shardRange}-hybrid-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {
       virtualMachineName: deploymentVirtualMachineName
-      name: '${role.commandPrefix}Configure-StorageAccountsforEntraHybrid'
+      name: '${role.roleName}-Configure-StorageAccountsforEntraHybrid'
       location: location
       script: loadTextContent('../../../../scripts/Configure-StorageAccountforEntraHybrid.ps1')
       parameters: [
@@ -401,14 +412,17 @@ module configureEntraKerberosWithDomainInfo '../../../resourceModules/compute/vi
 @batchSize(1)
 module updateStorageApplicationsManifest '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+    name: 'fslogix-${toLower(role.roleName)}-${shardRange}-manifest-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {
       virtualMachineName: deploymentVirtualMachineName
-      name: '${role.commandPrefix}Update-Storage-Account-Application-Manifest'
+      name: '${role.roleName}-Update-Storage-Account-Application-Manifest'
       location: location
       script: loadTextContent('../../../../scripts/Update-StorageAccountApplicationManifest.ps1')
       parameters: [
         { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${role.prefix}' }
+        { name: 'StorageCount', value: string(storageCount) }
+        { name: 'StorageIndex', value: string(storageIndex) }
         { name: 'ClientId', value: appUpdateUai!.properties.clientId }
         { name: 'GraphEndpoint', value: graphEndpoint }
         { name: 'PrivateEndpoint', value: string(privateEndpoint) }
@@ -428,10 +442,11 @@ module updateStorageApplicationsManifest '../../../resourceModules/compute/virtu
 @batchSize(1)
 module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (identitySolution != 'EntraId') {
+    name: 'fslogix-${toLower(role.roleName)}-${shardRange}-ntfs-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {
       virtualMachineName: deploymentVirtualMachineName
-      name: '${role.commandPrefix}Set-NTFS-Permissions'
+      name: '${role.roleName}-Set-NTFS-Permissions'
       location: location
       script: loadTextContent('../../../../scripts/Set-NtfsPermissionsAzureFiles.ps1')
       parameters: [
@@ -477,14 +492,17 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
 @batchSize(1)
 module grantStorageApplicationsConsent '../../../resourceModules/compute/virtualMachines/runCommands/deploy.bicep' = [
   for role in storageRoles: if (((identitySolution == 'EntraKerberos-Hybrid' && privateEndpoint) || (identitySolution == 'EntraKerberos-CloudOnly')) && !empty(appUpdateUserAssignedIdentityResourceId)) {
+    name: 'fslogix-${toLower(role.roleName)}-${shardRange}-consent-${deploymentNameSuffix}'
     scope: resourceGroup(deploymentResourceGroupName)
     params: {
       virtualMachineName: deploymentVirtualMachineName
-      name: '${role.commandPrefix}Grant-Storage-Account-Application-Consent'
+      name: '${role.roleName}-Grant-Storage-Account-Application-Consent'
       location: location
       script: loadTextContent('../../../../scripts/Grant-StorageAccountApplicationConsent.ps1')
       parameters: [
         { name: 'AppDisplayNamePrefix', value: '[Storage Account] ${role.prefix}' }
+        { name: 'StorageCount', value: string(storageCount) }
+        { name: 'StorageIndex', value: string(storageIndex) }
         { name: 'ClientId', value: appUpdateUai!.properties.clientId }
         { name: 'GraphEndpoint', value: graphEndpoint }
       ]

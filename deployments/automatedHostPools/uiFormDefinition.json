@@ -4312,14 +4312,37 @@
                 {
                   "name": "fslogixStoragePrefixValue",
                   "type": "Microsoft.Common.TextBox",
-                  "label": "Custom FSLogix Storage Account Prefix",
+                  "label": "Custom Profile Storage Prefix",
+                  "placeholder": "e.g. myprofiles",
                   "defaultValue": "",
-                  "visible": "[steps('profiles').deployStorage]",
-                  "toolTip": "Optional. Use up to 13 lowercase letters or numbers. A two-digit index is appended to the storage account name.",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'))]",
+                  "toolTip": "Optional Profile account prefix, using up to 13 lowercase letters or numbers. The shard index is appended (e.g. myprofiles01, myprofiles02). Leave empty for the naming convention's Profile prefix, normally fslpc plus a unique string. This does not change Office account names.",
                   "constraints": {
                     "required": false,
                     "regex": "^[a-z0-9]{0,13}$",
                     "validationMessage": "Use up to 13 lowercase letters or numbers."
+                  }
+                },
+                {
+                  "name": "fslogixOfficeStoragePrefixValue",
+                  "type": "Microsoft.Common.TextBox",
+                  "label": "Custom Office Storage Prefix",
+                  "placeholder": "e.g. myoffice",
+                  "defaultValue": "",
+                  "visible": "[and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'OfficeContainer'))]",
+                  "toolTip": "Optional Office account prefix, using 3-13 lowercase letters or numbers. Office accounts use the same shard indices as Profile accounts (e.g. myoffice01, myoffice02). Leave empty for the naming convention's Office prefix, normally fsloc plus a unique string. Must differ from the Profile prefix.",
+                  "constraints": {
+                    "required": false,
+                    "validations": [
+                      {
+                        "regex": "^$|^[a-z0-9]{3,13}$",
+                        "message": "Leave empty or use 3-13 lowercase letters or numbers."
+                      },
+                      {
+                        "isValid": "[or(empty(steps('tagsAndNaming').naming.fslogixOfficeStoragePrefixValue), not(equals(steps('tagsAndNaming').naming.fslogixOfficeStoragePrefixValue, steps('tagsAndNaming').naming.fslogixStoragePrefixValue)))]",
+                        "message": "Profile and Office storage prefixes must differ."
+                      }
+                    ]
                   }
                 },
                 {
@@ -4617,6 +4640,7 @@
         "fslogixStorageService": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.service, 'AzureFiles')]",
         "fslogixProfileStorageRedundancy": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.storageRedundancy, 'LocallyRedundant')]",
         "fslogixProfileStorageAccountNamePrefix": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), not(empty(steps('tagsAndNaming').naming.fslogixStoragePrefixValue))), steps('tagsAndNaming').naming.fslogixStoragePrefixValue, '')]",
+        "fslogixOfficeStorageAccountNamePrefix": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles'), contains(steps('profiles').storage.containerType, 'OfficeContainer')), steps('tagsAndNaming').naming.fslogixOfficeStoragePrefixValue, '')]",
         "fslogixProfileStorageTier": "[if(and(steps('profiles').deployStorage, equals(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.profileStorageTier, 'Premium')]",
         "fslogixNetAppServiceLevel": "[if(and(equals(steps('profiles').profileSolution, 'FSLogix'), equals(steps('profiles').storage.service, 'AzureNetAppFiles'), or(steps('profiles').configureSessionHosts, steps('profiles').deployStorage)), steps('profiles').storage.netAppServiceLevel, 'Premium')]",
         "fslogixProfileStorageBillingModel": "[if(and(steps('profiles').deployStorage, contains(steps('profiles').storage.service, 'AzureFiles')), steps('profiles').storage.profileStorageBillingModel, 'Legacy')]",

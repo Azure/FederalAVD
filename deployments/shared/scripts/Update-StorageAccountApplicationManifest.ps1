@@ -4,6 +4,14 @@ param (
     [string]$AppDisplayNamePrefix,
 
     [Parameter(Mandatory = $true)]
+    [ValidateRange(1, 2147483647)]
+    [int]$StorageCount,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateRange(0, 2147483647)]
+    [int]$StorageIndex,
+
+    [Parameter(Mandatory = $true)]
     [string]$ClientId,
 
     [Parameter(Mandatory = $true)]
@@ -187,24 +195,31 @@ try {
     $AccessToken = Get-GraphAccessToken -Resource $GraphUri -ClientId $ClientId
     Write-Output "Successfully obtained access token"
         
-    # Search for the application by DisplayName
-    $searchUri = "/v1.0/applications?" + '$filter=' + "startswith(displayName, '$AppDisplayNamePrefix')"
-    Write-Output "Searching for applications with prefix: $AppDisplayNamePrefix"
-    try {
-        $searchHeaders = @{ "ConsistencyLevel" = "eventual" }
-        $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri -Headers $searchHeaders
-        
-        if ($searchResp.value.Count -eq 0) {
-            throw "No application found starting with '$AppDisplayNamePrefix'."
+    # Storage RP completion does not guarantee that every shard is visible in Graph yet.
+    $applications = @(
+        for ($index = 0; $index -lt $StorageCount; $index++) {
+            $accountPrefix = "$AppDisplayNamePrefix$(($StorageIndex + $index).ToString('00')).file."
+            $filter = "startswith(displayName, '$($accountPrefix.Replace("'", "''"))')"
+            $searchUri = "/v1.0/applications?" + '$filter=' + [uri]::EscapeDataString($filter)
+            for ($attempt = 1; $attempt -le 12; $attempt++) {
+                $searchResp = Invoke-GraphApiWithRetry -GraphEndpoint $GraphUri -AccessToken $AccessToken -Method Get -Uri $searchUri
+                $matches = @($searchResp.value)
+                if ($matches.Count -gt 1) {
+                    throw "Multiple applications found for '$accountPrefix'; refusing an ambiguous update."
+                }
+                if ($matches.Count -eq 1) { break }
+                if ($attempt -eq 12) {
+                    throw "Application for '$accountPrefix' not found after 12 attempts. Expected all $StorageCount shards."
+                }
+                Write-Host "Waiting for application '$accountPrefix' (attempt $attempt/12)..."
+                Start-Sleep -Seconds 10
+            }
+            $matches[0]
         }
-        Write-Output "Found $($searchResp.value.Count) applications starting with '$AppDisplayNamePrefix'."
-    }
-    catch {
-        Write-Error ("Failed to search for application: " + $_.Exception.Message)
-        throw $_
-    }
+    )
+    Write-Output "Found all $StorageCount expected storage account applications."
 
-    foreach ($app in $searchResp.value) {
+    foreach ($app in $applications) {
         $appObjectId = $app.id
         $appName = $app.displayName
         Write-Output "Processing Application: $appName (ObjectId: $appObjectId)"
@@ -244,10 +259,9 @@ try {
 
                 foreach ($identifierUri in $currentUris) {
                     # Check for standard file endpoint pattern (works across clouds: windows.net, usgovcloudapi.net, etc.)
-                    # Only process URIs that have a proper scheme (api://, http://, https://) to comply with Azure AD policy
+                    # Microsoft requires counterparts for both api:// and bare HOST/, CIFS/, HTTP/ entries.
                     if ($identifierUri -match '\.file\.core\.' -and 
-                        $identifierUri -notmatch '\.privatelink\.file\.core\.' -and
-                        $identifierUri -match '^(api|http|https)://') {
+                        $identifierUri -notmatch '\.privatelink\.file\.core\.') {
                         # Insert .privatelink before .file.core.
                         $privateLinkUri = $identifierUri -replace '\.file\.core\.', '.privatelink.file.core.'
                         

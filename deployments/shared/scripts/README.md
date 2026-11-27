@@ -78,7 +78,7 @@ Updates the Microsoft Entra application objects created for Azure Files Kerberos
 
 - **Used by:** Shared Azure Files orchestration for private-endpoint Entra Kerberos hybrid and Entra
   Kerberos cloud-only configurations
-- **Parameters:** `AppDisplayNamePrefix`, `ClientId`, `GraphEndpoint`, `PrivateEndpoint`,
+- **Parameters:** `AppDisplayNamePrefix`, `StorageCount`, `StorageIndex`, `ClientId`, `GraphEndpoint`, `PrivateEndpoint`,
   `EnableCloudGroupSids`
 - **Behavior:** Uses Microsoft Graph with managed identity, adds private-link identifier URIs when
   required, and applies the `kdc_enable_cloud_group_sids` tag for cloud-only group authorization.
@@ -89,10 +89,16 @@ Updates the Microsoft Entra application objects created for Azure Files Kerberos
 Grants the delegated permissions required by Azure Files Kerberos enterprise applications.
 
 - **Used by:** Shared Azure Files orchestration after NTFS permissions are configured
-- **Parameters:** `AppDisplayNamePrefix`, `ClientId`, `GraphEndpoint`
+- **Parameters:** `AppDisplayNamePrefix`, `StorageCount`, `StorageIndex`, `ClientId`, `GraphEndpoint`
 - **Behavior:** Finds matching storage account application and service principal objects through
   Microsoft Graph, then creates or updates their delegated permission grants.
 - **Output:** `C:\Windows\Logs\Grant-StorageAccountApplicationConsent-<timestamp>.log`
+
+Both scripts require every indexed account application, retrying missing objects up to 12 times
+with 10 seconds between attempts. A missing or ambiguous application fails the Run Command rather
+than reporting success for a partial shard set. Consent also waits for each service principal and
+fails if it never appears. Private Link updates preserve existing identifiers and add counterparts
+for all file endpoint identifiers, including bare `HOST/`, `CIFS/`, and `HTTP/` entries.
 
 Both Graph scripts above request a managed identity token for the supplied `GraphEndpoint`. When that
 endpoint is `https://graph.microsoft.us` and Graph returns 401 or 403, they request a separate token

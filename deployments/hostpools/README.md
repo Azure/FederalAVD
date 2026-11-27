@@ -418,6 +418,13 @@ Subscription
 `ProfileOfficeContainer` and `CloudCacheProfileOfficeContainer` create separate Azure Files
 accounts for Profile and Office shares. Each role has the same shard count, group ordering, and
 `fslogixStorageIndex`; generated Profile names use `fslpc` prefixes and Office names use `fsloc`.
+
+The Portal naming step exposes separate **Custom Profile Storage Prefix** and **Custom Office
+Storage Prefix** fields. Their parameters are `fslogixProfileStorageAccountNamePrefix` and
+`fslogixOfficeStorageAccountNamePrefix`. Blank preserves the corresponding naming-convention
+prefix. Explicit prefixes must differ; Office prefixes use 3-13 lowercase alphanumeric characters.
+For example, `myprofiles` and `myoffice` with two shards starting at 1 create `myprofiles01/02`
+and `myoffice01/02`. Preserve existing prefixes on updates; names and data are not migrated.
 Existing explicit Profile naming overrides are retained. CMK creates distinct indexed keys for
 both roles. Office shares are never enrolled in Azure Backup.
 

@@ -165,6 +165,79 @@ If you do **not** provide the Managed Identity:
 > [`Grant-StorageAccountApplicationConsent.ps1`](../deployments/shared/scripts/Grant-StorageAccountApplicationConsent.ps1).
 > Without that identity, the manual steps above remain required.
 
+### Configuration flow and account coverage
+
+For hybrid identities with Private Link, domain lookup credentials and an application-update
+identity, the shared Azure Files orchestration runs this sequence:
+
+```mermaid
+flowchart TD
+    A["Resolve Profile and optional Office prefixes<br/>N shards per role; same starting index"]
+    A --> B["Create all storage accounts with AADKERB<br/>Accounts deploy in parallel"]
+    B --> C["Configure file services, then shares, then private endpoints<br/>All accounts complete before configuration commands"]
+    C --> D["Hybrid domain information<br/>Profile: all N accounts, then Office: all N"]
+    D --> E["Manifest update<br/>Profile: all N applications, then Office: all N<br/>Add every Private Link identifier counterpart"]
+    E --> F["NTFS permissions<br/>Profile: all N shares, then Office: all N<br/>Shard i receives group i"]
+    F --> G["Admin consent<br/>Profile: all N enterprise applications, then Office: all N"]
+    G --> H["Operator validation on every shard<br/>Domain properties, manifest, consent, ACL and SMB access"]
+```
+
+Each phase completes both roles before the next phase starts. A role is one Run Command,
+not one account: two shards with Office enabled create four accounts and eight configuration
+Run Commands (two roles times four phases). Each command processes two accounts.
+
+Scripts receive the role prefix, `StorageCount` and `StorageIndex`, **not an array of account
+resource IDs**. Hybrid and NTFS scripts construct every expected indexed account name.
+Manifest and consent scripts construct every expected indexed application-name prefix and require
+exactly one matching application for each account; missing applications are retried and then fail.
+Consent separately waits for each service principal. All stages use the same role and shard range.
+Existing/adopted or remote storage accounts are not configured by this create-storage path.
+
+Storage resources deploy in parallel where safe; configuration commands and their account loops
+run serially on the single helper VM. This avoids command overlap and preserves authentication
+ordering. Work is linear in the number of accounts. Hybrid AD discovery and the ARM token are
+acquired once per role; Graph scripts acquire a token once per command. NTFS obtains a
+storage-specific token per account. There is still repeated Graph work: consent looks up the Microsoft
+Graph service principal for every account, and each role resolves its groups separately. This is
+bounded redundancy, not a missed-account or quadratic loop.
+
+Conditional paths matter:
+
+- Hybrid domain information is patched only when domain name and both lookup credentials exist.
+- Hybrid manifest and consent commands require Private Link and the application-update identity.
+  Without that identity, the corresponding manual operations remain required.
+- Cloud-only uses the same role/range processing, skips hybrid domain lookup, and enables the
+  cloud group SID tag during manifest configuration. Its Graph commands do not require Private Link.
+- Disabling Office containers omits the Office role entirely.
+
+Offline regression tests prove parameter wiring, two-shard processing and group/ACL mapping,
+not successful authentication in a tenant. Run the live checks below on every deployed account.
+
+### Verify every storage shard
+
+Apply these checks to **every Profile and Office account**, not only the first shard:
+
+- Verify the storage account's Azure Files identity configuration is `AADKERB` and, when domain
+  lookup credentials were supplied, contains the expected domain name and GUID.
+- In each app registration manifest, preserve every existing file endpoint identifier and add
+  its Private Link counterpart. This includes bare `HTTP/`, `HOST/`, and `CIFS/` entries as well
+  as `api://<tenantId>/...` entries, using the storage suffix for your cloud. Follow Microsoft's
+  [Private Link error 1326 guidance][^2]; do not replace public endpoint identifiers.
+- Verify tenant-wide admin consent for `openid`, `profile`, and `User.Read` on every storage
+  enterprise application.
+- Check the share-root NTFS ACL on each shard and confirm that its assigned group, not another
+  shard's group, can create a container. Test SMB access from representative session hosts.
+
+The Graph Run Commands receive the same `StorageCount` and `StorageIndex` as hybrid domain
+configuration and NTFS commands. They retry discovery of missing applications/service principals
+and fail explicitly instead of accepting a partial set. This guards against propagation delays;
+it does not replace live authentication and authorization checks.
+
+For a previously partial deployment, inspect Run Command output and the helper VM transcripts
+before cleanup, then repair each affected account through the approved operator process. Re-running
+manifest updates preserves existing identifiers and does not duplicate Private Link entries.
+Do not assume that redeploying a host pool forces unchanged successful Run Commands to execute.
+
 ## Post Deployment Manual Steps
 
 Regardless of whether you use the Managed Identity or not, the following step is required:

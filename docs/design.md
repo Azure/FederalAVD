@@ -36,6 +36,25 @@ overridden). Authentication, private endpoints, CMK keys, share permissions and 
 locations are configured for both roles. Backup registration receives only Profile accounts
 and shares; `office-containers` remains excluded centrally.
 
+Storage configuration Run Commands execute once per role and process its full indexed shard range.
+Graph manifest and consent commands must discover every expected account application before
+processing that role; discovering only the first shard is not success. Missing applications and
+service principals are retried for propagation, then fail explicitly. Manifest updates precede
+NTFS configuration, which precedes consent. Private Link identifiers mirror every existing file
+endpoint identifier, including both `api://` and bare `HOST/`, `CIFS/`, and `HTTP/` forms.
+
+FSLogix Azure Files nested deployment names deliberately override Bicep's automatic names for
+account resources and configuration stages. Per-account names include the role, actual account
+name and stage, such as `fslogix-profile-myprofiles01-storage-<hash>`. Role-wide command deployments
+include the inclusive shard range, such as `fslogix-office-shards01-02-manifest-<hash>`.
+The suffix hashes the parent deployment name and storage resource-group ID, preserving uniqueness
+across parent deployments and storage scopes that share a helper VM resource group. The resource
+stages are `storage`, `files`, `share`, and `endpoint`; configuration stages are `domain`, `hybrid`,
+`manifest`, `ntfs`, and `consent`. Existing `Profile-...` / `Office-...` Run Command resource names,
+batching and dependencies are unchanged. Other modules retain automatic naming.
+The internal `storageRoles` collection uses a single `roleName` (`Profile` or `Office`);
+Run Command prefixes derive directly from it, while deployment names use its lowercase form.
+
 Existing-account arrays must be distinct and explicitly ordered to match the shard-group
 array. Local and remote Office arrays pair with the corresponding Profile arrays. Neither
 account names nor user data are migrated automatically. Before upgrading a deployment using

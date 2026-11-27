@@ -131,7 +131,7 @@ Describe 'Standard FSLogix Office consumer contracts' {
             $tagBlocks[$tagName] | Should -Match "padLeft\(i \+ fslogixStorageIndex, 2, '0'\)"
         }
         $tagBlocks.fslLocalProfileStorageAccountNames | Should -Match 'effectiveFslogixProfileStorageAccountNamePrefix'
-        $tagBlocks.fslLocalOfficeStorageAccountNames | Should -Match 'naming\.fslogixOfficeStorageAccountNamePrefix'
+        $tagBlocks.fslLocalOfficeStorageAccountNames | Should -Match 'effectiveFslogixOfficeStorageAccountNamePrefix'
         $tagBlocks.fslLocalOfficeStorageAccountNames | Should -Match "map\(effectiveFslogixExistingLocalOfficeStorageAccountResourceIds, id => last\(split\(id, '/'\)\)\)"
         $tagBlocks.fslRemoteOfficeStorageAccountNames | Should -Match "map\(effectiveFslogixExistingRemoteOfficeStorageAccountResourceIds, id => last\(split\(id, '/'\)\)\)"
         $tagBlocks.fslLocalOfficeStorageAccountNames | Should -Match "fslogixOfficeEnabled && startsWith\(fslogixStorageService, 'AzureFiles'\)"

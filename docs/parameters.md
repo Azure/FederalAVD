@@ -76,6 +76,23 @@ Microsoft recommends SSD. See the
 | Profile share / NetApp volume quota | `fslogixProfileShareSizeInGB`: positive integer, default 100 GiB |
 | Profile account prefix | `fslogixProfileStorageAccountNamePrefix`: blank uses generated naming, including `namingConvention.fslogixProfileStoragePrefix` |
 
+Standard and automated host pools also accept `fslogixOfficeStorageAccountNamePrefix`; the
+standalone storage add-on retains its existing `officeStorageAccountNamePrefix` parameter.
+Blank uses `namingConvention.fslogixOfficeStoragePrefix`, normally `fsloc` plus a unique string.
+The Portal forms expose separate Profile and Office prefix controls. Office prefixes must contain
+3-13 lowercase letters or numbers and differ from the effective Profile prefix. The same shard
+index is appended to each role. For example:
+
+```json
+"fslogixProfileStorageAccountNamePrefix": { "value": "myprofiles" },
+"fslogixOfficeStorageAccountNamePrefix": { "value": "myoffice" }
+```
+
+With starting index 1 and two shards, these produce `myprofiles01`, `myprofiles02`, `myoffice01`,
+and `myoffice02`. Explicit account prefixes override the corresponding naming-convention prefix
+without changing the encryption-key naming convention. Preserve both effective prefixes when
+updating a deployment; changing a prefix creates different account names and does not migrate data.
+
 These names, types and meanings are identical across standard host pools, automated host pools and
 the storage add-on. Direct Bicep defaults preserve Standard media for standard/add-on deployments
 and Premium media for automated host pools; all Portal forms retain Premium SSD/provisioned-v2 defaults.

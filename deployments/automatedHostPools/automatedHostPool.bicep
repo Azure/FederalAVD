@@ -334,6 +334,10 @@ param fslogixNetAppServiceLevel string = 'Premium'
 @description('Optional. Profile Azure Files account prefix. Blank uses the naming convention; unused with NetApp.')
 param fslogixProfileStorageAccountNamePrefix string = ''
 
+@maxLength(13)
+@description('Optional. Office Azure Files account prefix. Blank uses the naming convention; must differ from the Profile prefix.')
+param fslogixOfficeStorageAccountNamePrefix string = ''
+
 @allowed(['Legacy', 'ProvisionedV2'])
 @description('Optional. Profile Azure Files billing model. Existing accounts are not converted.')
 param fslogixProfileStorageBillingModel string = 'Legacy'
@@ -882,6 +886,9 @@ var effectiveFslogixProfileStorageTier = fslogixStorageSolution != 'AzureNetAppF
 var effectiveFslogixProfileStorageAccountNamePrefix = fslogixStorageSolution == 'AzureNetAppFiles' && !empty(fslogixProfileStorageAccountNamePrefix)
   ? fail('Profile storage account prefix overrides apply only to Azure Files.')
   : !empty(fslogixProfileStorageAccountNamePrefix) ? fslogixProfileStorageAccountNamePrefix : naming.fslogixProfileStorageAccountNamePrefix
+var effectiveFslogixOfficeStorageAccountNamePrefix = fslogixStorageSolution == 'AzureNetAppFiles' && !empty(fslogixOfficeStorageAccountNamePrefix)
+  ? fail('Office storage account prefix overrides apply only to Azure Files.')
+  : !empty(fslogixOfficeStorageAccountNamePrefix) ? fslogixOfficeStorageAccountNamePrefix : naming.fslogixOfficeStorageAccountNamePrefix
 var effectiveFslogixOfficeStorageBillingModel = fslogixOfficeStorageBillingModel == 'Inherit' ? fslogixProfileStorageBillingModel : fslogixOfficeStorageBillingModel == 'ProvisionedV2' ? 'ProvisionedV2' : 'Legacy'
 var fslogixOfficeEnabled = contains(fslogixContainerType, 'Office')
 var effectiveFslogixOfficeStorageTier = fslogixOfficeStorageTier == 'Inherit' ? effectiveFslogixProfileStorageTier : fslogixOfficeStorageTier
@@ -1292,7 +1299,7 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
     officeShareSizeInGB: effectiveFslogixOfficeShareSizeInGB
     smbServerLocation: naming.vmsLocAbbr
     profileStorageAccountNamePrefix: effectiveFslogixProfileStorageAccountNamePrefix
-    officeStorageAccountNamePrefix: naming.fslogixOfficeStorageAccountNamePrefix
+    officeStorageAccountNamePrefix: effectiveFslogixOfficeStorageAccountNamePrefix
     storageCount: fslogixStorageCount
     storageIndex: fslogixStorageIndex
     profileStorageTier: effectiveFslogixProfileStorageTier

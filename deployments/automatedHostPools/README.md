@@ -100,6 +100,12 @@ re-register protected storage.
 
 ### Paired Profile and Office Azure Files accounts
 
+The Portal naming step exposes independent **Custom Profile Storage Prefix** and **Custom Office
+Storage Prefix** controls, mapped to `fslogixProfileStorageAccountNamePrefix` and
+`fslogixOfficeStorageAccountNamePrefix`. Blank uses the corresponding naming-convention prefix.
+Office prefixes use 3-13 lowercase alphanumeric characters and must differ from Profile prefixes;
+both roles receive the same shard indices. Preserve existing prefixes when updating a deployment.
+
 `ProfileOfficeContainer` and `CloudCacheProfileOfficeContainer` create a distinct Office account
 for every Profile shard. New generated names use the `fslpc` (Profile) and `fsloc` (Office) role
 prefixes with the same index; explicit naming overrides remain available. Both roles use the same

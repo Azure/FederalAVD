@@ -7,11 +7,117 @@ BeforeAll {
     az bicep build --file (Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep') --outfile $templatePath --only-show-errors
     if ($LASTEXITCODE -ne 0) { throw 'Failed to compile Azure Files orchestration.' }
     $template = Get-Content -LiteralPath $templatePath -Raw | ConvertFrom-Json -Depth 100
+    . (Join-Path $PSScriptRoot 'NamingTestHelpers.ps1')
+    $accountStages = @{
+        storageAccounts = 'storage'
+        fileServices = 'files'
+        shares = 'share'
+        privateEndpoints = 'endpoint'
+    }
+    $commandStages = @{
+        configureADDSAuth = 'domain'
+        configureEntraKerberosWithDomainInfo = 'hybrid'
+        updateStorageApplicationsManifest = 'manifest'
+        SetNTFSPermissions = 'ntfs'
+        grantStorageApplicationsConsent = 'consent'
+    }
+    $nameFunctions = foreach ($module in @($accountStages.Keys) + @($commandStages.Keys)) {
+        $expression = [regex]::Match($source, '(?ms)^module ' + $module + '\s.*?\n\s+name: ''([^''\r\n]+)''').Groups[1].Value
+        if (-not $expression) { throw "No explicit deployment name found for $module." }
+        "func $module(role { roleName: string }, account { roleName: string, name: string }, shardRange string, deploymentNameSuffix string) string => '$expression'"
+    }
+    $suffixExpression = [regex]::Match($source, '(?m)^var deploymentNameSuffix = (.+)$').Groups[1].Value.Trim().
+        Replace('resourceGroup().id', 'scopeId').Replace('deployment().name', 'parentName')
+    $rangeExpression = [regex]::Match($source, '(?m)^var shardRange = (.+)$').Groups[1].Value.Trim()
+    $nameFunctions += "func nameSuffix(scopeId string, parentName string) string => $suffixExpression"
+    $nameFunctions += "func nameRange(storageIndex int, storageCount int) string => $rangeExpression"
+    $accountExpressions = foreach ($module in $accountStages.Keys) {
+        "$module({ roleName: c.roleName }, { roleName: c.roleName, name: c.accountName }, nameRange(c.index, c.count), nameSuffix(c.scopeId, c.parentName))"
+    }
+    $commandExpressions = foreach ($module in $commandStages.Keys) {
+        "$module({ roleName: c.roleName }, { roleName: c.roleName, name: c.accountName }, nameRange(c.index, c.count), nameSuffix(c.scopeId, c.parentName))"
+    }
+    $vectors = @'
+var cases = [
+  { roleName: 'Profile', accountName: 'myprofiles01', index: 1, count: 2, scopeId: 'storage-a', parentName: 'parent-a' }
+  { roleName: 'Office', accountName: 'myoffice01', index: 1, count: 2, scopeId: 'storage-a', parentName: 'parent-a' }
+  { roleName: 'Profile', accountName: 'myprofiles01', index: 1, count: 2, scopeId: 'storage-a', parentName: 'parent-b' }
+  { roleName: 'Profile', accountName: 'myprofiles01', index: 1, count: 2, scopeId: 'storage-b', parentName: 'parent-a' }
+  { roleName: 'Profile', accountName: 'myprofiles00', index: 0, count: 1, scopeId: 'storage-a', parentName: 'parent-a' }
+  { roleName: 'Office', accountName: 'myoffice07', index: 7, count: 2, scopeId: 'storage-a', parentName: 'parent-a' }
+  { roleName: 'Profile', accountName: 'myprofiles99', index: 99, count: 3, scopeId: 'storage-a', parentName: 'parent-a' }
+  { roleName: 'Profile', accountName: 'abcdefghijklmnopqrstuvwx', index: 99, count: 800, scopeId: 'storage-a', parentName: 'parent-a' }
+]
+'@
+    $fixtureSource = "targetScope = 'local'`n" + ($nameFunctions -join "`n") + "`n" + $vectors + "`n" +
+        "var results = map(cases, c => { suffix: nameSuffix(c.scopeId, c.parentName), range: nameRange(c.index, c.count), accounts: [$($accountExpressions -join ', ')], commands: [$($commandExpressions -join ', ')] })`n" +
+        "output encodedResults string = base64(string({ cases: results }))"
+    $fixturePath = Join-Path $templateDirectory 'deployment-names.bicep'
+    [IO.File]::WriteAllText($fixturePath, $fixtureSource)
+    $nameCases = (Invoke-TestNamingVectors -TemplateFile $fixturePath).cases.value
 }
 
 AfterAll {
     if (Test-Path -LiteralPath $templateDirectory) {
         Remove-Item -LiteralPath $templateDirectory -Recurse -Force -ErrorAction Stop
+    }
+}
+
+Describe 'FSLogix deployment tracking names' {
+    It 'identifies the account and role for per-account modules and the inclusive range for commands' {
+        foreach ($name in $nameCases[0].accounts) {
+            $name | Should -Match '^fslogix-profile-myprofiles01-(storage|files|share|endpoint)-[a-z0-9]{13}$'
+        }
+        foreach ($name in $nameCases[1].commands) {
+            $name | Should -Match '^fslogix-office-shards01-02-(domain|hybrid|manifest|ntfs|consent)-[a-z0-9]{13}$'
+        }
+        $nameCases[4].range | Should -Be 'shards00-00'
+        $nameCases[5].range | Should -Be 'shards07-08'
+        $nameCases[6].range | Should -Be 'shards99-101'
+        $nameCases[7].range | Should -Be 'shards99-898'
+    }
+
+    It 'keeps names unique between roles, stages, parent deployments and storage scopes' {
+        $nameCases[0].suffix | Should -Be $nameCases[1].suffix
+        $nameCases[0].suffix | Should -Not -Be $nameCases[2].suffix
+        $nameCases[0].suffix | Should -Not -Be $nameCases[3].suffix
+        $names = @($nameCases | ForEach-Object { $_.accounts; $_.commands })
+        @($names | Sort-Object -Unique).Count | Should -Be $names.Count
+    }
+
+    It 'stays within the ARM 64-character deployment-name limit without truncating identifiers' {
+        foreach ($name in @($nameCases | ForEach-Object { $_.accounts; $_.commands })) {
+            $name.Length | Should -BeLessOrEqual 64
+            $name | Should -Match '^[a-z0-9-]+$'
+        }
+        $nameCases[7].accounts | Should -Contain "fslogix-profile-abcdefghijklmnopqrstuvwx-endpoint-$($nameCases[7].suffix)"
+    }
+
+    It 'emits the explicit account and range names in compiled ARM' {
+        foreach ($module in $accountStages.Keys) {
+            $template.resources.$module.name | Should -Match "accountConfigurations.*roleName"
+            $template.resources.$module.name | Should -Match "accountConfigurations.*\.name"
+            $template.resources.$module.name | Should -Match "variables\('deploymentNameSuffix'\)"
+        }
+        foreach ($module in $commandStages.Keys) {
+            $template.resources.$module.name | Should -Match "storageRoles.*roleName"
+            $template.resources.$module.name | Should -Match "variables\('shardRange'\)"
+            $template.resources.$module.name | Should -Match "variables\('deploymentNameSuffix'\)"
+        }
+    }
+
+    It 'preserves the stable Run Command resource names' {
+        $commandNames = @{
+            configureADDSAuth = 'Domain-Join'
+            configureEntraKerberosWithDomainInfo = 'Configure-StorageAccountsforEntraHybrid'
+            updateStorageApplicationsManifest = 'Update-Storage-Account-Application-Manifest'
+            SetNTFSPermissions = 'Set-NTFS-Permissions'
+            grantStorageApplicationsConsent = 'Grant-Storage-Account-Application-Consent'
+        }
+        foreach ($module in $commandNames.Keys) {
+            $template.resources.$module.properties.parameters.name.value |
+                Should -Be "[format('{0}-$($commandNames[$module])', variables('storageRoles')[copyIndex()].roleName)]"
+        }
     }
 }
 
@@ -40,6 +146,19 @@ Describe 'Azure Files helper VM command sequencing' {
         $template.resources.grantStorageApplicationsConsent.dependsOn | Should -Contain 'SetNTFSPermissions'
     }
 
+    It 'forwards the complete shard range to <Module>' -TestCases @(
+        @{ Module = 'configureADDSAuth' }
+        @{ Module = 'configureEntraKerberosWithDomainInfo' }
+        @{ Module = 'updateStorageApplicationsManifest' }
+        @{ Module = 'SetNTFSPermissions' }
+        @{ Module = 'grantStorageApplicationsConsent' }
+    ) {
+        param($Module)
+        $arguments = $template.resources.$Module.properties.parameters.parameters.value
+        ($arguments | Where-Object name -eq 'StorageCount').value | Should -Be "[string(parameters('storageCount'))]"
+        ($arguments | Where-Object name -eq 'StorageIndex').value | Should -Be "[string(parameters('storageIndex'))]"
+    }
+
     It 'secures both domain credential arguments in <Module>' -TestCases @(
         @{ Module = 'configureADDSAuth' }
         @{ Module = 'configureEntraKerberosWithDomainInfo' }
@@ -56,8 +175,8 @@ Describe 'Azure Files helper VM command sequencing' {
     }
 
     It 'keeps Profile before Office and leaves storage loops parallel' {
-        $profilePosition = $source.IndexOf("commandPrefix: 'Profile-'")
-        $officePosition = $source.IndexOf("commandPrefix: 'Office-'")
+        $profilePosition = $source.IndexOf("roleName: 'Profile'")
+        $officePosition = $source.IndexOf("roleName: 'Office'")
         $profilePosition | Should -BeGreaterOrEqual 0
         $officePosition | Should -BeGreaterThan $profilePosition
         foreach ($module in @('storageAccounts', 'fileServices', 'shares', 'privateEndpoints')) {
