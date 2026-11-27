@@ -1,6 +1,6 @@
 targetScope = 'resourceGroup'
 
-import { artifactCustomizationType, restartableArtifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType, restartableArtifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 
 // The optimization profile to apply. NonPersistent-UpdatesOnly locks down update channels only;
 // NonPersistent-Full applies full VDI optimization; Persistent applies full optimization minus

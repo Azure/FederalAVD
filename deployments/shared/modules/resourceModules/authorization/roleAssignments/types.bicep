@@ -1,9 +1,7 @@
 metadata name = 'Role assignment input type'
 metadata description = 'Exports the role, principal and optional assignment details accepted by resource-scoped RBAC modules; does not assign permissions itself.'
 
-// Shared type definitions for resource-scoped role assignments.
-// Import in role assignment modules with:
-//   import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+// Shared by resource-scoped RBAC modules across Azure resource namespaces.
 
 @export()
 @description('A single role assignment to apply to a specific resource.')

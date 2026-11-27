@@ -173,7 +173,7 @@ module keys '../../shared/modules/orchestration/customerManagedKeys/customerMana
   }
 }
 
-module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module serverFarm '../../shared/modules/resourceModules/web/serverfarms/deploy.bicep' = if (empty(appServicePlanResourceId)) {
   scope: rg
   params: {
     functionAppKind: 'functionapp'
@@ -186,7 +186,7 @@ module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppH
   }
 }
 
-module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
+module functionApp '../../shared/modules/orchestration/functionApp/functionApp.bicep' = {
   scope: rg
   params: {
     applicationInsightsName: applicationInsightsName
@@ -269,7 +269,7 @@ module roleAssignmentStorageFileDataPrivilegedContributor '../../shared/modules/
   }
 }]
 
-module function '../../shared/modules/resourceModules/functionApp/function.bicep' = {
+module function '../../shared/modules/resourceModules/web/sites/functions/deploy.bicep' = {
   scope: rg
   params: {
     files: {

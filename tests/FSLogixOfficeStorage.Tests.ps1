@@ -8,11 +8,15 @@ Describe 'Evaluated Azure Files role configuration' {
         $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('FederalAVD-OfficeStorage-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $testDirectory -ErrorAction Stop | Out-Null
         $source = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep') -Raw
-        $match = [regex]::Match($source, '(?ms)^var fileShares = .*?(?=^// Network ACLs)')
+        $match = [regex]::Match($source, '(?ms)^var storageRoles = .*?(?=^// Network ACLs)')
         if (-not $match.Success) { throw 'Production role/account expressions were not found.' }
         $roleExpressions = $match.Value
-        $configurationModule = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\configuration.bicep'
+        $configurationModule = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\storage\storageAccounts\deploy.bicep'
         $relativeConfigurationModule = [IO.Path]::GetRelativePath($testDirectory, $configurationModule).Replace('\', '/')
+        $fslogixModule = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\fslogix.bicep'
+        $relativeFslogixModule = [IO.Path]::GetRelativePath($testDirectory, $fslogixModule).Replace('\', '/')
+        $storageTypes = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\storage\storageAccounts\deploy.bicep'
+        $relativeStorageTypes = [IO.Path]::GetRelativePath($testDirectory, $storageTypes).Replace('\', '/')
 
         function Invoke-OfficeAccountConfiguration {
             param([hashtable]$Overrides = @{})
@@ -39,7 +43,12 @@ Describe 'Evaluated Azure Files role configuration' {
                 officeProvisionedThroughputMiBps = 0
             }
             foreach ($key in $Overrides.Keys) { $inputs[$key] = $Overrides[$key] }
-            $lines = @("targetScope = 'local'", "import { resolveFilesConfiguration, fslogixShareNames } from '$relativeConfigurationModule'")
+            $lines = @(
+                "targetScope = 'local'"
+                "import { resolveFilesConfiguration } from '$relativeConfigurationModule'"
+                "import { fslogixShareNames } from '$relativeFslogixModule'"
+                "import { filesConfigurationType } from '$relativeStorageTypes'"
+            )
             foreach ($entry in $inputs.GetEnumerator()) {
                 if ($entry.Value -is [array]) {
                     $literal = '[' + (($entry.Value | ForEach-Object { "'$_'" }) -join ', ') + ']'
@@ -48,8 +57,10 @@ Describe 'Evaluated Azure Files role configuration' {
                 else { $literal = "'$($entry.Value)'" }
                 $lines += "var $($entry.Key) = $literal"
             }
+            $lines += 'var fileShares = fslogixShareNames(containerType)'
             $lines += $roleExpressions
-            $lines += 'output encodedResults string = base64(string({ accounts: accountConfigurations }))'
+            $lines += 'var resolvedConfiguration filesConfigurationType = accountConfigurations[0].configuration'
+            $lines += 'output encodedResults string = base64(string({ accounts: accountConfigurations, configuration: resolvedConfiguration }))'
             $fixture = Join-Path $testDirectory 'accounts.bicep'
             [IO.File]::WriteAllLines($fixture, $lines)
             (Invoke-TestNamingVectors -TemplateFile $fixture).accounts.value
@@ -71,15 +82,18 @@ Describe 'Evaluated Azure Files role configuration' {
         foreach ($account in $accounts) {
             $account.PSObject.Properties.Name | Should -Not -Contain 'containerName'
             $account.PSObject.Properties.Name | Should -Not -Contain 'commandPrefix'
+            $account.PSObject.Properties.Name | Should -Not -Contain 'shares'
+            $account.shareName | Should -BeOfType [string]
         }
-        foreach ($account in $accounts[0..1]) { $account.shares | Should -Be @('profile-containers') }
-        foreach ($account in $accounts[2..3]) { $account.shares | Should -Be @('office-containers') }
+        foreach ($account in $accounts[0..1]) { $account.shareName | Should -Be 'profile-containers' }
+        foreach ($account in $accounts[2..3]) { $account.shareName | Should -Be 'office-containers' }
     }
 
     It 'preserves Profile-only account count and names' {
         $accounts = @(Invoke-OfficeAccountConfiguration @{ containerType = 'ProfileContainer' })
         $accounts.Count | Should -Be 2
         $accounts.name | Should -Be @('pcfixture03', 'pcfixture04')
+        $accounts.shareName | Should -Be @('profile-containers', 'profile-containers')
     }
 
     It 'uses independent Office redundancy, legacy tier and quota' {

@@ -4,7 +4,7 @@
 targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
-import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 import { functionAppNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
 import { namingPolicy, namePattern, scopeIdUnique } from '../../shared/modules/orchestration/naming/internal.bicep'
 import { validateOfficeStorageAccounts, validateObjectSpecificSettings } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
@@ -797,7 +797,7 @@ module templateSpec '../../shared/modules/resourceModules/resources/templateSpec
 }
 
 // Conditional App Service Plan deployment
-module hostingPlan '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(existingAppServicePlanResourceId)) {
+module hostingPlan '../../shared/modules/resourceModules/web/serverfarms/deploy.bicep' = if (empty(existingAppServicePlanResourceId)) {
   scope: resourceGroup(aspResourceGroupName)
   params: {
     functionAppKind: 'functionApp'
@@ -945,7 +945,7 @@ module roleAssignmentUaiArtifacts '../../shared/modules/resourceModules/managedI
   }
 }
 
-module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
+module functionApp '../../shared/modules/orchestration/functionApp/functionApp.bicep' = {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     location: location
@@ -1214,7 +1214,7 @@ var sharedFunctionFiles = {
   })
 }
 
-module functionCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
+module functionCode '../../shared/modules/resourceModules/web/sites/functions/deploy.bicep' = {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: union({
@@ -1240,7 +1240,7 @@ module functionCode '../../shared/modules/resourceModules/functionApp/function.b
   dependsOn: [scalingPlanPermissions]
 }
 
-module workerCode '../../shared/modules/resourceModules/functionApp/function.bicep' = {
+module workerCode '../../shared/modules/resourceModules/web/sites/functions/deploy.bicep' = {
   scope: resourceGroup(functionAppResourceGroupName)
   params: {
     files: {

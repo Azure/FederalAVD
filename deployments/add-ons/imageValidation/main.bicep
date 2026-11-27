@@ -3,7 +3,7 @@ targetScope = 'subscription'
 metadata name = 'Image Validation Add-On'
 metadata description = 'The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release.'
 
-import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 
 @description('Optional. Enable accelerated networking for the validation VM network interface.')
 param acceleratedNetworking bool = true
@@ -405,7 +405,7 @@ module keyVaultKeysRoleAssignment '../../shared/modules/resourceModules/keyVault
   }
 }
 
-module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppHostingPlan.bicep' = if (empty(appServicePlanResourceId)) {
+module serverFarm '../../shared/modules/resourceModules/web/serverfarms/deploy.bicep' = if (empty(appServicePlanResourceId)) {
   scope: rg
   params: {
     functionAppKind: 'functionapp'
@@ -418,7 +418,7 @@ module serverFarm '../../shared/modules/resourceModules/functionApp/functionAppH
   }
 }
 
-module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
+module functionApp '../../shared/modules/orchestration/functionApp/functionApp.bicep' = {
   scope: rg
   params: {
     applicationInsightsName: applicationInsightsName
@@ -677,7 +677,7 @@ module identityRoleAssignment '../../shared/modules/resourceModules/managedIdent
   }
 }
 
-module function '../../shared/modules/resourceModules/functionApp/function.bicep' = {
+module function '../../shared/modules/resourceModules/web/sites/functions/deploy.bicep' = {
   scope: rg
   params: {
     files: {

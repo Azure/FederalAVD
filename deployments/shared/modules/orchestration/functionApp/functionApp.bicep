@@ -1,5 +1,5 @@
-import { publicNetworkAccessMode, resolveNetworkAccess } from '../../orchestration/networking/functions.bicep'
-import { privateEndpointName } from '../../orchestration/naming/internal.bicep'
+import { publicNetworkAccessMode, resolveNetworkAccess } from '../networking/functions.bicep'
+import { privateEndpointName } from '../naming/internal.bicep'
 
 @description('Optional. Name of the Application Insights resource to create when enableApplicationInsights is true.')
 param applicationInsightsName string = ''
@@ -379,7 +379,7 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = if (en
   kind: 'web'
 }
 
-module updatePrivateLinkScope '../privateLinkScope/get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
+module updatePrivateLinkScope '../../resourceModules/privateLinkScope/get-PrivateLinkScope.bicep' = if (enableApplicationInsights && !empty(privateLinkScopeResourceId)) {
   scope: subscription()
   params: {
     privateLinkScopeResourceId: privateLinkScopeResourceId
@@ -612,7 +612,7 @@ var storageAccountRoleDefinitions = union(
   storageAccountRoleDefinitionIds
 )
 
-module roleAssignment_storageAccount '../storage/storageAccounts/roleAssignment.bicep' = {
+module roleAssignment_storageAccount '../../resourceModules/storage/storageAccounts/roleAssignment.bicep' = {
   params: {
     storageAccountName: storageAccount.name
     assignments: [

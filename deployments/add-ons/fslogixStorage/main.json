@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4650194528111607274"
+      "templateHash": "12349327093552436782"
     }
   },
   "definitions": {
@@ -1624,7 +1624,7 @@
           },
           "metadata": {
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../shared/modules/orchestration/fslogix/modules/configuration.bicep"
+              "sourceTemplate": "../../shared/modules/orchestration/fslogix/fslogix.bicep"
             }
           }
         },
@@ -3520,7 +3520,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "5442129206612761458"
+              "templateHash": "4436230740419635407"
             },
             "name": "Deployment helper orchestration",
             "description": "Deploys a temporary Windows helper VM and managed identity in an existing deployment resource group, with feature-dependent permissions and optional domain join for deployment-time operations."
@@ -4050,7 +4050,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "17025001688948687338"
+                      "templateHash": "11950023327212436100"
                     },
                     "name": "Windows virtual machine",
                     "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -4128,10 +4128,8 @@
                         }
                       },
                       "metadata": {
-                        "description": "VM extension handler, upgrade options and public or protected settings.",
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../types/computeTypes.bicep"
-                        }
+                        "__bicep_export!": true,
+                        "description": "VM extension handler, upgrade options and public or protected settings."
                       }
                     }
                   },
@@ -4645,7 +4643,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "7503997528097933719"
+              "templateHash": "15698147818888287846"
             },
             "name": "Storage encryption key orchestration",
             "description": "Creates keys in an existing Key Vault and a shared user-assigned encryption identity in an existing target resource group, granting that identity encryption access to every requested key."
@@ -5050,7 +5048,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -5097,7 +5095,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -6292,7 +6290,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "4379625867931212149"
+              "templateHash": "7525476791702001789"
             },
             "name": "FSLogix storage orchestration",
             "description": "Composes Azure Files or domain-services Azure NetApp Files storage in an existing storage resource group, with optional Azure Files backup registration in an existing vault resource group."
@@ -6341,6 +6339,24 @@
             {
               "namespace": "__bicep",
               "members": {
+                "fslogixShareNames": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "containerType"
+                    }
+                  ],
+                  "output": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "value": "[if(contains(parameters('containerType'), 'Office'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]"
+                  },
+                  "metadata": {
+                    "__bicep_export!": true
+                  }
+                },
                 "validateObjectSpecificSettings": {
                   "parameters": [
                     {
@@ -6543,13 +6559,6 @@
               "defaultValue": "",
               "metadata": {
                 "description": "Optional. Resource ID of the associated AVD host pool, used for resource ownership tags."
-              }
-            },
-            "kerberosEncryptionType": {
-              "type": "string",
-              "defaultValue": "AES256",
-              "metadata": {
-                "description": "Optional. Kerberos ticket encryption selection; RC4 selects RC4-HMAC and other values select AES-256 for Azure Files SMB settings."
               }
             },
             "keyManagementStorageAccounts": {
@@ -6824,6 +6833,9 @@
               }
             }
           },
+          "variables": {
+            "fileShareNames": "[__bicep.fslogixShareNames(parameters('fslogixContainerType'))]"
+          },
           "resources": {
             "azureNetAppFiles": {
               "condition": "[and(equals(parameters('storageSolution'), 'AzureNetAppFiles'), contains(parameters('identitySolution'), 'DomainServices'))]",
@@ -6860,6 +6872,9 @@
                   },
                   "containerType": {
                     "value": "[parameters('fslogixContainerType')]"
+                  },
+                  "fileShares": {
+                    "value": "[variables('fileShareNames')]"
                   },
                   "shareSizeInGB": {
                     "value": "[parameters('profileShareSizeInGB')]"
@@ -6912,38 +6927,11 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8972732427995463392"
+                      "templateHash": "4799110912447015771"
                     },
                     "name": "FSLogix NetApp storage orchestration",
                     "description": "Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials."
                   },
-                  "functions": [
-                    {
-                      "namespace": "__bicep",
-                      "members": {
-                        "fslogixShareNames": {
-                          "parameters": [
-                            {
-                              "type": "string",
-                              "name": "containerType"
-                            }
-                          ],
-                          "output": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            },
-                            "value": "[if(contains(parameters('containerType'), 'Office'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]"
-                          },
-                          "metadata": {
-                            "__bicep_imported_from!": {
-                              "sourceTemplate": "configuration.bicep"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ],
                   "parameters": {
                     "activeDirectoryConnection": {
                       "type": "bool",
@@ -7034,7 +7022,18 @@
                     "containerType": {
                       "type": "string",
                       "metadata": {
-                        "description": "Required. FSLogix container selection; determines fixed Profile and optional Office volumes."
+                        "description": "Required. FSLogix container selection forwarded to the permission configuration script."
+                      }
+                    },
+                    "fileShares": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minLength": 1,
+                      "maxLength": 2,
+                      "metadata": {
+                        "description": "Required. Share names derived by the FSLogix parent in Profile-then-Office order."
                       }
                     },
                     "shareAdminGroups": {
@@ -7083,8 +7082,7 @@
                   "variables": {
                     "$fxv#0": "param \r\n(       \r\n    [Parameter(Mandatory = $false)]\r\n    [string]$AdminGroupNames,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [ValidateSet('ProfileContainer', 'CloudCacheProfileContainer', 'ProfileOfficeContainer', 'CloudCacheProfileOfficeContainer')]\r\n    [String]$ContainerType,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPwd,\r\n\r\n    [Parameter(Mandatory = $true)]\r\n    [String]$DomainJoinUserPrincipalName,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$NetAppServers,\r\n\r\n    [Parameter(Mandatory = $false)]\r\n    [String]$UserGroupNames\r\n)\r\n\r\n$ErrorActionPreference = 'Stop'\r\n$WarningPreference = 'SilentlyContinue'\r\n\r\nFunction Update-ACL {\r\n    Param (\r\n        [Parameter(Mandatory = $false)]\r\n        [Array]$AdminGroups,\r\n        [Parameter(Mandatory = $true)]\r\n        [pscredential]$Credential,\r\n        [Parameter(Mandatory = $true)]\r\n        [String]$FileShare,\r\n        [Parameter(Mandatory = $true)]\r\n        [Array]$UserGroups\r\n    )\r\n    # Map Drive\r\n    Write-Output \"[Update-ACL]: Mapping Drive to $FileShare\"\r\n    New-PSDrive -Name 'Z' -PSProvider 'FileSystem' -Root $FileShare -Credential $Credential | Out-Null\r\n    # Set recommended NTFS permissions on the file share\r\n    Write-Output \"[Update-ACL]: Getting Existing ACL for $FileShare\"\r\n    $ACL = Get-Acl -Path 'Z:'\r\n    $CreatorOwner = [System.Security.Principal.Ntaccount](\"Creator Owner\")\r\n    Write-Output \"[Update-ACL]: Purging Existing Access Control Entries for 'Creater Owner' from ACL\"\r\n    $ACL.PurgeAccessRules($CreatorOwner)\r\n    $AuthenticatedUsers = [System.Security.Principal.Ntaccount](\"Authenticated Users\")\r\n    Write-Output \"[Update-ACL]: Purging Existing Access Control Entries for 'Authenticated Users' from ACL\"\r\n    $ACL.PurgeAccessRules($AuthenticatedUsers)\r\n    $Users = [System.Security.Principal.Ntaccount](\"Users\")\r\n    Write-Output \"[Update-ACL]: Purging Existing Access Control Entries for 'Users' from ACL\"\r\n    $ACL.PurgeAccessRules($Users)\r\n    If ($AdminGroups.Count -gt 0) {\r\n        ForEach ($Group in $AdminGroups) {\r\n            Write-Output \"[Update-ACL]: Adding ACE '$($Group):Full Control' to ACL.\"\r\n            $Ntaccount = [System.Security.Principal.Ntaccount](\"$Group\")\r\n            $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new(\"$Ntaccount\", \"FullControl\", \"ContainerInherit,ObjectInherit\", \"None\", \"Allow\"))\r\n            $ACL.SetAccessRule($ACE)\r\n        }\r\n    }\r\n    If ($UserGroups.Count -gt 0) {\r\n        ForEach ($Group in $UserGroups) {\r\n            Write-Output \"[Update-ACL]: Adding ACE '$($Group):Modify (This Folder Only)' to ACL.\"\r\n            $Ntaccount = [System.Security.Principal.Ntaccount](\"$Group\")\r\n            $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new(\"$Ntaccount\", \"Modify\", \"None\", \"None\", \"Allow\"))\r\n            $ACL.SetAccessRule($ACE)\r\n        }\r\n    }\r\n    Else {\r\n        Write-Output \"[Update-ACL]: Adding standard ACE 'Authenticated Users:Modify (This Folder Only)' to ACL.\"\r\n        $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new(\"$AuthenticatedUsers\", \"Modify\", \"None\", \"None\", \"Allow\"))\r\n        $ACL.SetAccessRule($ACE)\r\n    }\r\n    Write-Output \"[Update-ACL]: Adding ACE 'Creator Owner:Modify (Subfolder and Files Only)' to ACL.\"\r\n    $ACE = ([System.Security.AccessControl.FileSystemAccessRule]::new(\"$CreatorOwner\", \"Modify\", \"ContainerInherit,ObjectInherit\", \"InheritOnly\", \"Allow\"))\r\n    $ACL.SetAccessRule($ACE)\r\n    Write-Output \"[Update-ACL]: Applying the following ACL to $($FileShare):\"\r\n    Write-Output \"$($ACL.access | Format-Table | Out-String)\"\r\n    $ACL | Set-Acl -Path 'Z:' | Out-Null\r\n    Start-Sleep -Seconds 5 | Out-Null\r\n    $ACL = Get-Acl -Path 'Z:'\r\n    Write-Output \"[Update-ACL]: Current ACL of $($FileShare):\"\r\n    Write-Output \"$($ACL.access | Format-Table | Out-String)\"\r\n    # Unmount file share\r\n    Write-Output \"[Update-ACL]: Unmapping Drive from $FileShare\"\r\n    Remove-PSDrive -Name 'Z' -PSProvider 'FileSystem' -Force | Out-Null\r\n    Start-Sleep -Seconds 5 | Out-Null\r\n}\r\n\r\ntry {   \r\n\r\n    # Convert Parameters passed as a JSON String to an array and remove any backslashes\r\n    [array]$AdminGroups = @()\r\n    [array]$UserGroups = @()\r\n    if ($AdminGroupNames -and $AdminGroupNames.Trim() -and $AdminGroupNames.Trim() -ne '[]') {\r\n        $AdminGroups = $AdminGroupNames.replace('\\\"', '\"') | ConvertFrom-Json\r\n    }   \r\n    if ($UserGroupNames -and $UserGroupNames.Trim() -and $UserGroupNames.Trim() -ne '[]') {\r\n        $UserGroups = $UserGroupNames.replace('\\\"', '\"') | ConvertFrom-Json\r\n    }\r\n    [array]$NetAppServers = $NetAppServers.replace('\\\"', '\"') | ConvertFrom-Json\r\n\r\n    # Create Domain credential\r\n    $DomainJoinUserName = $DomainJoinUserPrincipalName.Split('@')[0]\r\n    $DomainPassword = ConvertTo-SecureString -String $DomainJoinUserPwd -AsPlainText -Force\r\n    [pscredential]$DomainCredential = New-Object System.Management.Automation.PSCredential ($DomainJoinUserName, $DomainPassword)\r\n  \r\n    $ProfileShare = \"\\\\$($NetAppServers[0])\\profile-containers\"\r\n    Write-Output \"Processing Profile Share: $ProfileShare\"\r\n    if ($AdminGroups.Count -gt 0) {\r\n        Write-Output \"Admin Groups and UserGroups provided, executing Update-ACL with Admin Groups and UserGroups\"\r\n        Update-ACL -AdminGroups $AdminGroups -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroups\r\n    }\r\n    Else {\r\n        Write-Output \"UserGroups provided, executing Update-ACL with UserGroups only\"\r\n        Update-ACL -Credential $DomainCredential -FileShare $ProfileShare -UserGroups $UserGroups\r\n    }\r\n            \r\n    If ($NetAppServers.Count -gt 1 -and $ContainerType -like '*Office*') {\r\n        $OfficeShare = \"\\\\$($NetAppServers[1])\\office-containers\"\r\n        Write-Output \"Processing Office Share: $OfficeShare\"\r\n        If ($AdminGroups.Count -gt 0) {\r\n            Write-Output \"Admin Groups and UserGroups provided, executing Update-ACL with Admin Groups and UserGroups\"\r\n            Update-ACL -AdminGroups $AdminGroups -Credential $DomainCredential -FileShare $OfficeShare -UserGroups $UserGroups\r\n        }\r\n        Else {\r\n            Write-Output \"UserGroups provided, executing Update-ACL with UserGroups only\"\r\n            Update-ACL -Credential $DomainCredential -FileShare $OfficeShare -UserGroups $UserGroups\r\n        }\r\n    }\r\n}\r\ncatch {\r\n    throw\r\n}",
                     "ouRelativePath": "[if(contains(parameters('ouPath'), 'DC'), substring(split(parameters('ouPath'), 'DC')[0], 0, sub(length(split(parameters('ouPath'), 'DC')[0]), 1)), parameters('ouPath'))]",
-                    "shareSizeInBytes": "[mul(mul(mul(parameters('shareSizeInGB'), 1024), 1024), 1024)]",
-                    "shares": "[__bicep.fslogixShareNames(parameters('containerType'))]"
+                    "shareSizeInBytes": "[mul(mul(mul(parameters('shareSizeInGB'), 1024), 1024), 1024)]"
                   },
                   "resources": {
                     "vnet": {
@@ -7316,7 +7314,7 @@
                     "netAppVolumes": {
                       "copy": {
                         "name": "netAppVolumes",
-                        "count": "[length(range(0, length(variables('shares'))))]"
+                        "count": "[length(range(0, length(parameters('fileShares'))))]"
                       },
                       "type": "Microsoft.Resources/deployments",
                       "apiVersion": "2025-04-01",
@@ -7334,7 +7332,7 @@
                             "value": "[parameters('netAppCapacityPoolName')]"
                           },
                           "name": {
-                            "value": "[variables('shares')[range(0, length(variables('shares')))[copyIndex()]]]"
+                            "value": "[parameters('fileShares')[range(0, length(parameters('fileShares')))[copyIndex()]]]"
                           },
                           "location": {
                             "value": "[parameters('location')]"
@@ -7519,7 +7517,7 @@
                               },
                               {
                                 "name": "NetAppServers",
-                                "value": "[string(if(greater(length(variables('shares')), 1), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value, reference(format('netAppVolumes[{0}]', 1)).outputs.smbServerFqdn.value), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value)))]"
+                                "value": "[string(if(greater(length(parameters('fileShares')), 1), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value, reference(format('netAppVolumes[{0}]', 1)).outputs.smbServerFqdn.value), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value)))]"
                               },
                               {
                                 "name": "ContainerType",
@@ -7557,7 +7555,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8706340943867939483"
+                              "templateHash": "4277251283559766277"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -7574,10 +7572,8 @@
                                 }
                               },
                               "metadata": {
-                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                                }
+                                "__bicep_export!": true,
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                               }
                             }
                           },
@@ -7759,8 +7755,8 @@
                         "description": "Created NetApp volume resource IDs in the same order as shares."
                       },
                       "copy": {
-                        "count": "[length(range(0, length(variables('shares'))))]",
-                        "input": "[reference(format('netAppVolumes[{0}]', range(0, length(variables('shares')))[copyIndex()])).outputs.resourceId.value]"
+                        "count": "[length(range(0, length(parameters('fileShares'))))]",
+                        "input": "[reference(format('netAppVolumes[{0}]', range(0, length(parameters('fileShares')))[copyIndex()])).outputs.resourceId.value]"
                       }
                     },
                     "smbServerFqdns": {
@@ -7768,7 +7764,7 @@
                       "metadata": {
                         "description": "SMB server FQDN strings for the first share and, when present, the second share."
                       },
-                      "value": "[if(greater(length(variables('shares')), 1), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value, reference(format('netAppVolumes[{0}]', 1)).outputs.smbServerFqdn.value), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value))]"
+                      "value": "[if(greater(length(parameters('fileShares')), 1), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value, reference(format('netAppVolumes[{0}]', 1)).outputs.smbServerFqdn.value), createArray(reference(format('netAppVolumes[{0}]', 0)).outputs.smbServerFqdn.value))]"
                     }
                   }
                 }
@@ -7810,8 +7806,8 @@
                   "domainName": {
                     "value": "[parameters('domainName')]"
                   },
-                  "containerType": {
-                    "value": "[parameters('fslogixContainerType')]"
+                  "fileShares": {
+                    "value": "[variables('fileShareNames')]"
                   },
                   "officeStorageAccountNamePrefix": {
                     "value": "[parameters('officeStorageAccountNamePrefix')]"
@@ -7858,9 +7854,6 @@
                   },
                   "identitySolution": {
                     "value": "[parameters('identitySolution')]"
-                  },
-                  "kerberosEncryptionType": {
-                    "value": "[parameters('kerberosEncryptionType')]"
                   },
                   "keyManagementStorageAccounts": {
                     "value": "[parameters('keyManagementStorageAccounts')]"
@@ -7937,13 +7930,13 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "1541039072080226551"
+                      "templateHash": "3564368425505078343"
                     },
                     "name": "FSLogix Azure Files orchestration",
                     "description": "Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM."
                   },
                   "definitions": {
-                    "_2.filesConfiguration": {
+                    "_1.filesConfigurationType": {
                       "type": "object",
                       "properties": {
                         "kind": {
@@ -7966,8 +7959,9 @@
                         }
                       },
                       "metadata": {
+                        "description": "Resolved Azure Files account and share provisioning settings; empty legacy fields are omitted by consuming modules.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "configuration.bicep"
+                          "sourceTemplate": "../../../resourceModules/storage/storageAccounts/deploy.bicep"
                         }
                       }
                     },
@@ -7991,26 +7985,6 @@
                     {
                       "namespace": "__bicep",
                       "members": {
-                        "fslogixShareNames": {
-                          "parameters": [
-                            {
-                              "type": "string",
-                              "name": "containerType"
-                            }
-                          ],
-                          "output": {
-                            "type": "array",
-                            "items": {
-                              "type": "string"
-                            },
-                            "value": "[if(contains(parameters('containerType'), 'Office'), createArray('profile-containers', 'office-containers'), createArray('profile-containers'))]"
-                          },
-                          "metadata": {
-                            "__bicep_imported_from!": {
-                              "sourceTemplate": "configuration.bicep"
-                            }
-                          }
-                        },
                         "privateEndpointName": {
                           "parameters": [
                             {
@@ -8032,7 +8006,7 @@
                           ],
                           "output": {
                             "type": "string",
-                            "value": "[replace(replace(replace(parameters('pattern'), 'SUBRESOURCE', parameters('subresource')), 'RESOURCE', parameters('resourceName')), 'VNETID', _1.privateEndpointVnetToken(parameters('vnetName')))]"
+                            "value": "[replace(replace(replace(parameters('pattern'), 'SUBRESOURCE', parameters('subresource')), 'RESOURCE', parameters('resourceName')), 'VNETID', _2.privateEndpointVnetToken(parameters('vnetName')))]"
                           },
                           "metadata": {
                             "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
@@ -8069,12 +8043,12 @@
                             }
                           ],
                           "output": {
-                            "$ref": "#/definitions/_2.filesConfiguration",
+                            "$ref": "#/definitions/_1.filesConfigurationType",
                             "value": "[if(and(and(contains(createArray('Standard', 'Premium'), parameters('tier')), contains(createArray('LocallyRedundant', 'ZoneRedundant'), parameters('redundancy'))), contains(createArray('Legacy', 'ProvisionedV2'), parameters('billingModel'))), if(equals(parameters('billingModel'), 'ProvisionedV2'), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), 32), lessOrEquals(parameters('capacityGiB'), 262144)), or(equals(parameters('iops'), 0), and(greaterOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 3000, 500)), lessOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 102400, 50000))))), or(equals(parameters('throughputMiBps'), 0), and(greaterOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 100, 60)), lessOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 10340, 5120))))), createObject('kind', 'FileStorage', 'skuName', format('{0}V2{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', '', 'largeFileSharesState', '', 'provisionedIops', if(not(equals(parameters('iops'), 0)), parameters('iops'), min(if(equals(parameters('tier'), 'Premium'), add(3000, parameters('capacityGiB')), add(1000, div(add(parameters('capacityGiB'), 4), 5))), if(equals(parameters('tier'), 'Premium'), 102400, 50000))), 'provisionedThroughputMiBps', if(not(equals(parameters('throughputMiBps'), 0)), parameters('throughputMiBps'), min(if(equals(parameters('tier'), 'Premium'), add(100, div(add(parameters('capacityGiB'), 9), 10)), add(60, div(add(parameters('capacityGiB'), 49), 50))), if(equals(parameters('tier'), 'Premium'), 10340, 5120)))), fail('Invalid provisioned-v2 Azure Files sizing. Capacity must be 32-262144 GiB; SSD IOPS 3000-102400 and MiB/s 100-10340; HDD IOPS 500-50000 and MiB/s 60-5120. Zero performance values select recommendations.')), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), if(equals(parameters('tier'), 'Premium'), 100, 1)), lessOrEquals(parameters('capacityGiB'), 102400)), equals(parameters('iops'), 0)), equals(parameters('throughputMiBps'), 0)), createObject('kind', if(equals(parameters('tier'), 'Standard'), 'StorageV2', 'FileStorage'), 'skuName', format('{0}{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', if(equals(parameters('tier'), 'Premium'), 'Premium', 'TransactionOptimized'), 'largeFileSharesState', if(equals(parameters('tier'), 'Standard'), 'Enabled', ''), 'provisionedIops', 0, 'provisionedThroughputMiBps', 0), fail('Legacy Azure Files capacity must be 1-102400 GiB (SSD minimum 100 GiB). Explicit IOPS and throughput require ProvisionedV2 billing.'))), fail('Unsupported Azure Files tier, redundancy, or billing model.'))]"
                           },
                           "metadata": {
                             "__bicep_imported_from!": {
-                              "sourceTemplate": "configuration.bicep"
+                              "sourceTemplate": "../../../resourceModules/storage/storageAccounts/deploy.bicep"
                             }
                           }
                         },
@@ -8110,7 +8084,7 @@
                       }
                     },
                     {
-                      "namespace": "_1",
+                      "namespace": "_2",
                       "members": {
                         "privateEndpointVnetToken": {
                           "parameters": [
@@ -8194,10 +8168,15 @@
                         "description": "Required. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption."
                       }
                     },
-                    "containerType": {
-                      "type": "string",
+                    "fileShares": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minLength": 1,
+                      "maxLength": 2,
                       "metadata": {
-                        "description": "Required. FSLogix container selection; determines separate Profile and optional Office accounts."
+                        "description": "Required. Share names derived by the FSLogix parent in Profile-then-Office order."
                       }
                     },
                     "hostPoolResourceId": {
@@ -8211,12 +8190,6 @@
                       "type": "string",
                       "metadata": {
                         "description": "Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths."
-                      }
-                    },
-                    "kerberosEncryptionType": {
-                      "type": "string",
-                      "metadata": {
-                        "description": "Required. Kerberos ticket encryption selection; RC4 selects RC4-HMAC and other values select AES-256 for Azure Files SMB settings."
                       }
                     },
                     "keyManagementStorageAccounts": {
@@ -8468,13 +8441,15 @@
                     "defaultSharePermission": "StorageFileDataSmbShareContributor",
                     "privateEndpointVnetName": "[if(and(not(empty(parameters('privateEndpointSubnetResourceId'))), parameters('privateEndpoint')), split(parameters('privateEndpointSubnetResourceId'), '/')[8], '')]",
                     "smbSettingsValues": {
-                      "versions": "SMB3.0;SMB3.1.1;",
-                      "authenticationMethods": "NTLMv2;Kerberos;",
-                      "kerberosTicketEncryption": "[if(equals(parameters('kerberosEncryptionType'), 'RC4'), 'RC4-HMAC;', 'AES-256;')]",
-                      "channelEncryption": "AES-128-CCM;AES-128-GCM;AES-256-GCM;"
+                      "versions": "SMB3.1.1;",
+                      "authenticationMethods": "[if(equals(parameters('identitySolution'), 'EntraId'), 'NTLMv2;', 'Kerberos;')]",
+                      "kerberosTicketEncryption": "AES-256;",
+                      "channelEncryption": "AES-128-GCM;AES-256-GCM;",
+                      "encryptionInTransit": {
+                        "required": true
+                      }
                     },
-                    "fileShares": "[__bicep.fslogixShareNames(parameters('containerType'))]",
-                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('profileStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('profileStorageTier'), parameters('profileStorageRedundancy'), parameters('profileStorageBillingModel'), parameters('profileShareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shares', take(variables('fileShares'), 1), 'shareSizeInGB', parameters('profileShareSizeInGB'), 'roleName', 'Profile')), if(greater(length(variables('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageTier'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shares', take(skip(variables('fileShares'), 1), 1), 'shareSizeInGB', parameters('officeShareSizeInGB'), 'roleName', 'Office')), createArray()))]",
+                    "storageRoles": "[concat(createArray(createObject('prefix', parameters('profileStorageAccountNamePrefix'), 'keyPattern', parameters('fslogixProfileEncryptionKeyNameConv'), 'sku', parameters('profileStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('profileStorageTier'), parameters('profileStorageRedundancy'), parameters('profileStorageBillingModel'), parameters('profileShareSizeInGB'), parameters('profileProvisionedIops'), parameters('profileProvisionedThroughputMiBps')), 'shareName', parameters('fileShares')[0], 'shareSizeInGB', parameters('profileShareSizeInGB'), 'roleName', 'Profile')), if(greater(length(parameters('fileShares')), 1), createArray(createObject('prefix', if(not(equals(toLower(parameters('officeStorageAccountNamePrefix')), toLower(parameters('profileStorageAccountNamePrefix')))), parameters('officeStorageAccountNamePrefix'), fail('Profile and Office Azure Files storage account prefixes must differ.')), 'keyPattern', if(or(equals(parameters('keyManagementStorageAccounts'), 'PlatformManaged'), not(equals(toLower(parameters('officeEncryptionKeyNameConv')), toLower(parameters('fslogixProfileEncryptionKeyNameConv'))))), parameters('officeEncryptionKeyNameConv'), fail('Profile and Office customer-managed encryption keys must use different name patterns.')), 'sku', parameters('officeStorageTier'), 'configuration', __bicep.resolveFilesConfiguration(parameters('officeStorageTier'), parameters('officeStorageRedundancy'), parameters('officeStorageBillingModel'), parameters('officeShareSizeInGB'), parameters('officeProvisionedIops'), parameters('officeProvisionedThroughputMiBps')), 'shareName', parameters('fileShares')[1], 'shareSizeInGB', parameters('officeShareSizeInGB'), 'roleName', 'Office')), createArray()))]",
                     "accountConfigurations": "[flatten(map(variables('storageRoles'), lambda('role', map(range(0, parameters('storageCount')), lambda('index', union(lambdaVariables('role'), createObject('name', format('{0}{1}', lambdaVariables('role').prefix, padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')), 'keyName', replace(lambdaVariables('role').keyPattern, '##', padLeft(add(lambdaVariables('index'), parameters('storageIndex')), 2, '0')))))))))]",
                     "effectivePermittedIPs": "[filter(parameters('permittedIPs'), lambda('ip', not(empty(trim(lambdaVariables('ip'))))))]",
                     "networkAccess": "[__bicep.resolveNetworkAccess(parameters('paasPublicNetworkAccess'), parameters('privateEndpoint'), not(empty(variables('effectivePermittedIPs'))))]",
@@ -8539,6 +8514,15 @@
                           },
                           "allowedCopyScope": "[if(parameters('privateEndpoint'), createObject('value', 'PrivateLink'), createObject('value', 'AAD'))]",
                           "allowSharedKeyAccess": "[if(equals(parameters('identitySolution'), 'EntraId'), createObject('value', true()), createObject('value', false()))]",
+                          "supportsHttpsTrafficOnly": {
+                            "value": true
+                          },
+                          "minimumTlsVersion": {
+                            "value": "TLS1_2"
+                          },
+                          "requireInfrastructureEncryption": {
+                            "value": true
+                          },
                           "largeFileSharesState": {
                             "value": "[variables('accountConfigurations')[copyIndex()].configuration.largeFileSharesState]"
                           },
@@ -8564,12 +8548,103 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "9712295133303282277"
+                              "templateHash": "13363292188005692168"
                             },
                             "name": "Storage account",
-                            "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
+                            "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics; exports Azure Files sizing and SKU resolution."
                           },
                           "definitions": {
+                            "filesConfigurationType": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "skuName": {
+                                  "type": "string"
+                                },
+                                "accessTier": {
+                                  "type": "string"
+                                },
+                                "largeFileSharesState": {
+                                  "type": "string"
+                                },
+                                "provisionedIops": {
+                                  "type": "int"
+                                },
+                                "provisionedThroughputMiBps": {
+                                  "type": "int"
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_export!": true,
+                                "description": "Resolved Azure Files account and share provisioning settings; empty legacy fields are omitted by consuming modules."
+                              }
+                            },
+                            "networkAclsType": {
+                              "type": "object",
+                              "properties": {
+                                "bypass": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Services allowed to bypass network rules. Comma-separated: AzureServices, Logging, Metrics, None."
+                                  }
+                                },
+                                "defaultAction": {
+                                  "type": "string",
+                                  "allowedValues": [
+                                    "Allow",
+                                    "Deny"
+                                  ],
+                                  "metadata": {
+                                    "description": "Default action when no rule matches."
+                                  }
+                                },
+                                "virtualNetworkRules": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "action": {
+                                        "type": "string",
+                                        "allowedValues": [
+                                          "Allow"
+                                        ],
+                                        "nullable": true
+                                      }
+                                    }
+                                  },
+                                  "nullable": true
+                                },
+                                "ipRules": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string"
+                                      },
+                                      "action": {
+                                        "type": "string",
+                                        "allowedValues": [
+                                          "Allow"
+                                        ],
+                                        "nullable": true
+                                      }
+                                    }
+                                  },
+                                  "nullable": true
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_export!": true,
+                                "description": "Storage network access rules covering the default action, bypass services, virtual networks and IP addresses."
+                              }
+                            },
                             "_1.logCategoryType": {
                               "type": "object",
                               "properties": {
@@ -8667,6 +8742,48 @@
                               }
                             }
                           },
+                          "functions": [
+                            {
+                              "namespace": "__bicep",
+                              "members": {
+                                "resolveFilesConfiguration": {
+                                  "parameters": [
+                                    {
+                                      "type": "string",
+                                      "name": "tier"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "name": "redundancy"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "name": "billingModel"
+                                    },
+                                    {
+                                      "type": "int",
+                                      "name": "capacityGiB"
+                                    },
+                                    {
+                                      "type": "int",
+                                      "name": "iops"
+                                    },
+                                    {
+                                      "type": "int",
+                                      "name": "throughputMiBps"
+                                    }
+                                  ],
+                                  "output": {
+                                    "$ref": "#/definitions/filesConfigurationType",
+                                    "value": "[if(and(and(contains(createArray('Standard', 'Premium'), parameters('tier')), contains(createArray('LocallyRedundant', 'ZoneRedundant'), parameters('redundancy'))), contains(createArray('Legacy', 'ProvisionedV2'), parameters('billingModel'))), if(equals(parameters('billingModel'), 'ProvisionedV2'), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), 32), lessOrEquals(parameters('capacityGiB'), 262144)), or(equals(parameters('iops'), 0), and(greaterOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 3000, 500)), lessOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 102400, 50000))))), or(equals(parameters('throughputMiBps'), 0), and(greaterOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 100, 60)), lessOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 10340, 5120))))), createObject('kind', 'FileStorage', 'skuName', format('{0}V2{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', '', 'largeFileSharesState', '', 'provisionedIops', if(not(equals(parameters('iops'), 0)), parameters('iops'), min(if(equals(parameters('tier'), 'Premium'), add(3000, parameters('capacityGiB')), add(1000, div(add(parameters('capacityGiB'), 4), 5))), if(equals(parameters('tier'), 'Premium'), 102400, 50000))), 'provisionedThroughputMiBps', if(not(equals(parameters('throughputMiBps'), 0)), parameters('throughputMiBps'), min(if(equals(parameters('tier'), 'Premium'), add(100, div(add(parameters('capacityGiB'), 9), 10)), add(60, div(add(parameters('capacityGiB'), 49), 50))), if(equals(parameters('tier'), 'Premium'), 10340, 5120)))), fail('Invalid provisioned-v2 Azure Files sizing. Capacity must be 32-262144 GiB; SSD IOPS 3000-102400 and MiB/s 100-10340; HDD IOPS 500-50000 and MiB/s 60-5120. Zero performance values select recommendations.')), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), if(equals(parameters('tier'), 'Premium'), 100, 1)), lessOrEquals(parameters('capacityGiB'), 102400)), equals(parameters('iops'), 0)), equals(parameters('throughputMiBps'), 0)), createObject('kind', if(equals(parameters('tier'), 'Standard'), 'StorageV2', 'FileStorage'), 'skuName', format('{0}{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', if(equals(parameters('tier'), 'Premium'), 'Premium', 'TransactionOptimized'), 'largeFileSharesState', if(equals(parameters('tier'), 'Standard'), 'Enabled', ''), 'provisionedIops', 0, 'provisionedThroughputMiBps', 0), fail('Legacy Azure Files capacity must be 1-102400 GiB (SSD minimum 100 GiB). Explicit IOPS and throughput require ProvisionedV2 billing.'))), fail('Unsupported Azure Files tier, redundancy, or billing model.'))]"
+                                  },
+                                  "metadata": {
+                                    "__bicep_export!": true
+                                  }
+                                }
+                              }
+                            }
+                          ],
                           "parameters": {
                             "name": {
                               "type": "string",
@@ -8993,12 +9110,75 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "9980807172211792049"
+                              "templateHash": "2898246623845933000"
                             },
                             "name": "Azure Files service settings",
                             "description": "Configures the default File service on an existing storage account with optional SMB settings, share soft delete and diagnostics. File shares and identity authentication are managed separately."
                           },
                           "definitions": {
+                            "smbSettingsType": {
+                              "type": "object",
+                              "properties": {
+                                "versions": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "SMB protocol versions. E.g. \"SMB3.0;SMB3.1.1;\""
+                                  }
+                                },
+                                "authenticationMethods": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Authentication methods. E.g. \"NTLMv2;Kerberos;\""
+                                  }
+                                },
+                                "kerberosTicketEncryption": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Kerberos ticket encryption. E.g. \"AES-256;\" or \"RC4-HMAC;\""
+                                  }
+                                },
+                                "channelEncryption": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Channel encryption. E.g. \"AES-128-GCM;AES-256-GCM;\""
+                                  }
+                                },
+                                "encryptionInTransit": {
+                                  "type": "object",
+                                  "properties": {
+                                    "required": {
+                                      "type": "bool",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "Explicit SMB encryption requirement, independent of account-level secure transfer."
+                                  }
+                                },
+                                "multichannel": {
+                                  "type": "object",
+                                  "properties": {
+                                    "enabled": {
+                                      "type": "bool",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "nullable": true,
+                                  "metadata": {
+                                    "description": "SMB Multichannel settings. For Premium file shares only."
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "__bicep_export!": true,
+                                "description": "Optional Azure Files SMB protocol, authentication, encryption and multichannel configuration."
+                              }
+                            },
                             "_1.logCategoryType": {
                               "type": "object",
                               "properties": {
@@ -9094,58 +9274,6 @@
                                   "sourceTemplate": "../../../types/diagnosticSettings.bicep"
                                 }
                               }
-                            },
-                            "smbSettingsType": {
-                              "type": "object",
-                              "properties": {
-                                "versions": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "SMB protocol versions. E.g. \"SMB3.0;SMB3.1.1;\""
-                                  }
-                                },
-                                "authenticationMethods": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Authentication methods. E.g. \"NTLMv2;Kerberos;\""
-                                  }
-                                },
-                                "kerberosTicketEncryption": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Kerberos ticket encryption. E.g. \"AES-256;\" or \"RC4-HMAC;\""
-                                  }
-                                },
-                                "channelEncryption": {
-                                  "type": "string",
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "Channel encryption. E.g. \"AES-128-GCM;AES-256-GCM;\""
-                                  }
-                                },
-                                "multichannel": {
-                                  "type": "object",
-                                  "properties": {
-                                    "enabled": {
-                                      "type": "bool",
-                                      "nullable": true
-                                    }
-                                  },
-                                  "nullable": true,
-                                  "metadata": {
-                                    "description": "SMB Multichannel settings. For Premium file shares only."
-                                  }
-                                }
-                              },
-                              "metadata": {
-                                "description": "Optional Azure Files SMB protocol, authentication, encryption and multichannel configuration.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/storageTypes.bicep"
-                                }
-                              }
                             }
                           },
                           "parameters": {
@@ -9199,7 +9327,7 @@
                             },
                             "fileService": {
                               "type": "Microsoft.Storage/storageAccounts/fileServices",
-                              "apiVersion": "2023-05-01",
+                              "apiVersion": "2025-01-01",
                               "name": "[format('{0}/{1}', parameters('storageAccountName'), 'default')]",
                               "properties": {
                                 "protocolSettings": "[if(not(equals(parameters('smbSettings'), null())), createObject('smb', parameters('smbSettings')), null())]",
@@ -9269,17 +9397,14 @@
                         },
                         "mode": "Incremental",
                         "parameters": {
-                          "fileShares": {
-                            "value": "[variables('accountConfigurations')[copyIndex()].shares]"
+                          "name": {
+                            "value": "[variables('accountConfigurations')[copyIndex()].shareName]"
                           },
-                          "shareSizeInGB": {
+                          "shareQuota": {
                             "value": "[variables('accountConfigurations')[copyIndex()].shareSizeInGB]"
                           },
-                          "StorageAccountName": {
+                          "storageAccountName": {
                             "value": "[variables('accountConfigurations')[copyIndex()].name]"
-                          },
-                          "storageSku": {
-                            "value": "[variables('accountConfigurations')[copyIndex()].sku]"
                           },
                           "accessTier": {
                             "value": "[variables('accountConfigurations')[copyIndex()].configuration.accessTier]"
@@ -9298,201 +9423,104 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "13502657627929861742"
+                              "templateHash": "10967093958881257494"
                             },
-                            "name": "FSLogix file share orchestration",
-                            "description": "Creates each named SMB share in an existing storage account using a shared quota and a SKU-dependent access tier."
+                            "name": "Azure file share",
+                            "description": "Deploys a share in the default File service of an existing storage account with caller-selected quota, tier and protocol; the account must support those settings."
                           },
                           "parameters": {
-                            "fileShares": {
-                              "type": "array",
-                              "metadata": {
-                                "description": "Required. Array of share name strings to create or register on every supplied storage account."
-                              }
-                            },
-                            "shareSizeInGB": {
-                              "type": "int",
-                              "metadata": {
-                                "description": "Required. Quota per file share or NetApp volume in GiB."
-                              }
-                            },
-                            "StorageAccountName": {
+                            "storageAccountName": {
                               "type": "string",
                               "metadata": {
                                 "description": "Required. Name of the existing storage account in the deployment resource group."
                               }
                             },
-                            "storageSku": {
+                            "name": {
                               "type": "string",
                               "metadata": {
-                                "description": "Required. Storage tier: Standard or Premium for Azure Files, or the NetApp service level for NetApp volumes."
+                                "description": "Required. Name of the azure file share within its parent resource."
+                              }
+                            },
+                            "shareQuota": {
+                              "type": "int",
+                              "defaultValue": 100,
+                              "metadata": {
+                                "description": "Quota in GiB."
                               }
                             },
                             "accessTier": {
                               "type": "string",
-                              "defaultValue": "[if(equals(parameters('storageSku'), 'Premium'), 'Premium', 'TransactionOptimized')]",
+                              "defaultValue": "TransactionOptimized",
+                              "allowedValues": [
+                                "TransactionOptimized",
+                                "Hot",
+                                "Cool",
+                                "Premium",
+                                ""
+                              ],
                               "metadata": {
-                                "description": "Optional. Explicit share tier; empty omits accessTier for provisioned-v2 shares."
+                                "description": "Optional. Azure file share access tier; must be compatible with the parent storage account SKU."
+                              }
+                            },
+                            "enabledProtocol": {
+                              "type": "string",
+                              "defaultValue": "SMB",
+                              "allowedValues": [
+                                "SMB",
+                                "NFS",
+                                ""
+                              ],
+                              "metadata": {
+                                "description": "Optional. Enabled protocols for the share."
                               }
                             },
                             "provisionedIops": {
                               "type": "int",
                               "defaultValue": 0,
+                              "minValue": 0,
                               "metadata": {
-                                "description": "Optional. Provisioned-v2 IOPS; zero omits the property for legacy shares."
+                                "description": "Optional. Provisioned-v2 IOPS; zero omits this property."
                               }
                             },
                             "provisionedThroughputMiBps": {
                               "type": "int",
                               "defaultValue": 0,
+                              "minValue": 0,
                               "metadata": {
-                                "description": "Optional. Provisioned-v2 throughput in MiB/s; zero omits the property for legacy shares."
+                                "description": "Optional. Provisioned-v2 throughput in MiB/s; zero omits this property."
                               }
                             }
                           },
                           "resources": [
                             {
-                              "copy": {
-                                "name": "shares",
-                                "count": "[length(range(0, length(parameters('fileShares'))))]"
-                              },
-                              "type": "Microsoft.Resources/deployments",
-                              "apiVersion": "2025-04-01",
-                              "name": "[format('{0}-{1}', parameters('StorageAccountName'), parameters('fileShares')[range(0, length(parameters('fileShares')))[copyIndex()]])]",
+                              "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+                              "apiVersion": "2024-01-01",
+                              "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('name'))]",
                               "properties": {
-                                "expressionEvaluationOptions": {
-                                  "scope": "inner"
-                                },
-                                "mode": "Incremental",
-                                "parameters": {
-                                  "storageAccountName": {
-                                    "value": "[parameters('StorageAccountName')]"
-                                  },
-                                  "name": {
-                                    "value": "[parameters('fileShares')[range(0, length(parameters('fileShares')))[copyIndex()]]]"
-                                  },
-                                  "shareQuota": {
-                                    "value": "[parameters('shareSizeInGB')]"
-                                  },
-                                  "accessTier": {
-                                    "value": "[parameters('accessTier')]"
-                                  },
-                                  "provisionedIops": {
-                                    "value": "[parameters('provisionedIops')]"
-                                  },
-                                  "provisionedThroughputMiBps": {
-                                    "value": "[parameters('provisionedThroughputMiBps')]"
-                                  }
-                                },
-                                "template": {
-                                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-                                  "contentVersion": "1.0.0.0",
-                                  "metadata": {
-                                    "_generator": {
-                                      "name": "bicep",
-                                      "version": "0.49.2.45890",
-                                      "templateHash": "10967093958881257494"
-                                    },
-                                    "name": "Azure file share",
-                                    "description": "Deploys a share in the default File service of an existing storage account with caller-selected quota, tier and protocol; the account must support those settings."
-                                  },
-                                  "parameters": {
-                                    "storageAccountName": {
-                                      "type": "string",
-                                      "metadata": {
-                                        "description": "Required. Name of the existing storage account in the deployment resource group."
-                                      }
-                                    },
-                                    "name": {
-                                      "type": "string",
-                                      "metadata": {
-                                        "description": "Required. Name of the azure file share within its parent resource."
-                                      }
-                                    },
-                                    "shareQuota": {
-                                      "type": "int",
-                                      "defaultValue": 100,
-                                      "metadata": {
-                                        "description": "Quota in GiB."
-                                      }
-                                    },
-                                    "accessTier": {
-                                      "type": "string",
-                                      "defaultValue": "TransactionOptimized",
-                                      "allowedValues": [
-                                        "TransactionOptimized",
-                                        "Hot",
-                                        "Cool",
-                                        "Premium",
-                                        ""
-                                      ],
-                                      "metadata": {
-                                        "description": "Optional. Azure file share access tier; must be compatible with the parent storage account SKU."
-                                      }
-                                    },
-                                    "enabledProtocol": {
-                                      "type": "string",
-                                      "defaultValue": "SMB",
-                                      "allowedValues": [
-                                        "SMB",
-                                        "NFS",
-                                        ""
-                                      ],
-                                      "metadata": {
-                                        "description": "Optional. Enabled protocols for the share."
-                                      }
-                                    },
-                                    "provisionedIops": {
-                                      "type": "int",
-                                      "defaultValue": 0,
-                                      "minValue": 0,
-                                      "metadata": {
-                                        "description": "Optional. Provisioned-v2 IOPS; zero omits this property."
-                                      }
-                                    },
-                                    "provisionedThroughputMiBps": {
-                                      "type": "int",
-                                      "defaultValue": 0,
-                                      "minValue": 0,
-                                      "metadata": {
-                                        "description": "Optional. Provisioned-v2 throughput in MiB/s; zero omits this property."
-                                      }
-                                    }
-                                  },
-                                  "resources": [
-                                    {
-                                      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
-                                      "apiVersion": "2024-01-01",
-                                      "name": "[format('{0}/{1}/{2}', parameters('storageAccountName'), 'default', parameters('name'))]",
-                                      "properties": {
-                                        "shareQuota": "[parameters('shareQuota')]",
-                                        "accessTier": "[if(not(empty(parameters('accessTier'))), parameters('accessTier'), null())]",
-                                        "enabledProtocols": "[if(not(empty(parameters('enabledProtocol'))), parameters('enabledProtocol'), null())]",
-                                        "provisionedIops": "[if(greater(parameters('provisionedIops'), 0), parameters('provisionedIops'), null())]",
-                                        "provisionedBandwidthMibps": "[if(greater(parameters('provisionedThroughputMiBps'), 0), parameters('provisionedThroughputMiBps'), null())]"
-                                      }
-                                    }
-                                  ],
-                                  "outputs": {
-                                    "resourceId": {
-                                      "type": "string",
-                                      "metadata": {
-                                        "description": "Resource ID of the azure file share."
-                                      },
-                                      "value": "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', parameters('storageAccountName'), 'default', parameters('name'))]"
-                                    },
-                                    "name": {
-                                      "type": "string",
-                                      "metadata": {
-                                        "description": "Azure resource name of the azure file share."
-                                      },
-                                      "value": "[parameters('name')]"
-                                    }
-                                  }
-                                }
+                                "shareQuota": "[parameters('shareQuota')]",
+                                "accessTier": "[if(not(empty(parameters('accessTier'))), parameters('accessTier'), null())]",
+                                "enabledProtocols": "[if(not(empty(parameters('enabledProtocol'))), parameters('enabledProtocol'), null())]",
+                                "provisionedIops": "[if(greater(parameters('provisionedIops'), 0), parameters('provisionedIops'), null())]",
+                                "provisionedBandwidthMibps": "[if(greater(parameters('provisionedThroughputMiBps'), 0), parameters('provisionedThroughputMiBps'), null())]"
                               }
                             }
-                          ]
+                          ],
+                          "outputs": {
+                            "resourceId": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Resource ID of the azure file share."
+                              },
+                              "value": "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', parameters('storageAccountName'), 'default', parameters('name'))]"
+                            },
+                            "name": {
+                              "type": "string",
+                              "metadata": {
+                                "description": "Azure resource name of the azure file share."
+                              },
+                              "value": "[parameters('name')]"
+                            }
+                          }
                         }
                       },
                       "dependsOn": [
@@ -9823,7 +9851,7 @@
                               },
                               {
                                 "name": "KerberosEncryptionType",
-                                "value": "[parameters('kerberosEncryptionType')]"
+                                "value": "AES256"
                               },
                               {
                                 "name": "OuPath",
@@ -9889,7 +9917,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8706340943867939483"
+                              "templateHash": "4277251283559766277"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -9906,10 +9934,8 @@
                                 }
                               },
                               "metadata": {
-                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                                }
+                                "__bicep_export!": true,
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                               }
                             }
                           },
@@ -10184,7 +10210,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8706340943867939483"
+                              "templateHash": "4277251283559766277"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10201,10 +10227,8 @@
                                 }
                               },
                               "metadata": {
-                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                                }
+                                "__bicep_export!": true,
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                               }
                             }
                           },
@@ -10453,7 +10477,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8706340943867939483"
+                              "templateHash": "4277251283559766277"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10470,10 +10494,8 @@
                                 }
                               },
                               "metadata": {
-                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                                }
+                                "__bicep_export!": true,
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                               }
                             }
                           },
@@ -10688,7 +10710,7 @@
                               },
                               {
                                 "name": "ShareName",
-                                "value": "[first(variables('storageRoles')[copyIndex()].shares)]"
+                                "value": "[variables('storageRoles')[copyIndex()].shareName]"
                               },
                               {
                                 "name": "ShardAzureFilesStorage",
@@ -10746,7 +10768,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8706340943867939483"
+                              "templateHash": "4277251283559766277"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -10763,10 +10785,8 @@
                                 }
                               },
                               "metadata": {
-                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                                }
+                                "__bicep_export!": true,
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                               }
                             }
                           },
@@ -11010,7 +11030,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8706340943867939483"
+                              "templateHash": "4277251283559766277"
                             },
                             "name": "Virtual machine Run Command",
                             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11027,10 +11047,8 @@
                                 }
                               },
                               "metadata": {
-                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                                "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                                }
+                                "__bicep_export!": true,
+                                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                               }
                             }
                           },
@@ -11223,8 +11241,8 @@
                         "description": "Created Office account IDs paired by shard index with Profile accounts; empty when Office containers are disabled."
                       },
                       "copy": {
-                        "count": "[length(range(0, if(greater(length(variables('fileShares')), 1), parameters('storageCount'), 0)))]",
-                        "input": "[reference(format('storageAccounts[{0}]', add(range(0, if(greater(length(variables('fileShares')), 1), parameters('storageCount'), 0))[copyIndex()], parameters('storageCount')))).outputs.resourceId.value]"
+                        "count": "[length(range(0, if(greater(length(parameters('fileShares')), 1), parameters('storageCount'), 0)))]",
+                        "input": "[reference(format('storageAccounts[{0}]', add(range(0, if(greater(length(parameters('fileShares')), 1), parameters('storageCount'), 0))[copyIndex()], parameters('storageCount')))).outputs.resourceId.value]"
                       }
                     }
                   }
@@ -11453,7 +11471,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15527561953793468148"
+              "templateHash": "6373755344153719134"
             },
             "name": "NetApp SMB endpoint lookup",
             "description": "Reads the first mount-target SMB FQDN for existing local and remote NetApp volumes across resource groups, enforcing one volume per share in each nonempty input array."
@@ -11491,7 +11509,7 @@
               },
               "copy": {
                 "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0)))]",
-                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[2], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[0], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[1], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
               }
             },
             "remoteNetAppVolumeSmbServerFqdns": {
@@ -11501,7 +11519,7 @@
               },
               "copy": {
                 "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0)))]",
-                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[2], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[0], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[1], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
               }
             }
           }
@@ -11553,7 +11571,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15273386707808507422"
+              "templateHash": "13920840382901868948"
             },
             "name": "Deployment helper cleanup orchestration",
             "description": "Runs cleanup on an existing helper VM for session-host Run Commands, supplied role assignments, and the deployment resource group."
@@ -11678,7 +11696,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8706340943867939483"
+                      "templateHash": "4277251283559766277"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11695,10 +11713,8 @@
                         }
                       },
                       "metadata": {
-                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/customizationTypes.bicep"
-                        }
+                        "__bicep_export!": true,
+                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                       }
                     }
                   },
@@ -11923,7 +11939,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8706340943867939483"
+                      "templateHash": "4277251283559766277"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -11940,10 +11956,8 @@
                         }
                       },
                       "metadata": {
-                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/customizationTypes.bicep"
-                        }
+                        "__bicep_export!": true,
+                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                       }
                     }
                   },
@@ -12168,7 +12182,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "8706340943867939483"
+                      "templateHash": "4277251283559766277"
                     },
                     "name": "Virtual machine Run Command",
                     "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -12185,10 +12199,8 @@
                         }
                       },
                       "metadata": {
-                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/customizationTypes.bicep"
-                        }
+                        "__bicep_export!": true,
+                        "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
                       }
                     }
                   },

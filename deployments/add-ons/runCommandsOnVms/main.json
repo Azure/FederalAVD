@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "13179935836860672140"
+      "templateHash": "10508018814224216447"
     }
   },
   "parameters": {
@@ -469,7 +469,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8706340943867939483"
+              "templateHash": "4277251283559766277"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -486,10 +486,8 @@
                 }
               },
               "metadata": {
-                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
               }
             }
           },

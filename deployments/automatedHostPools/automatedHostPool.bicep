@@ -1,13 +1,12 @@
 targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
-import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../shared/modules/orchestration/customizations/types.bicep'
 import { vmApplicationAssignmentType } from '../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
-import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
+import { scalingDayType } from '../shared/modules/resourceModules/desktopVirtualization/scalingPlans/types.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
-import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
-import { validateObjectSpecificSettings } from '../shared/modules/orchestration/fslogix/fslogix.bicep'
+import { fslogixShareNames, validateObjectSpecificSettings } from '../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 type scalingTimeType = {
   hour: int
@@ -428,13 +427,6 @@ param existingFilesBackupPolicyName string = 'filesharepolicy'
 @maxValue(200)
 @description('Optional. Number of daily Azure Files snapshot recovery points retained when Shared Services creates the backup policy.')
 param backupRetentionDays int = 30
-
-@allowed([
-  'AES256'
-  'RC4'
-])
-@description('Optional. Kerberos encryption type used by Azure Files domain authentication.')
-param fslogixStorageKerberosEncryptionType string = 'AES256'
 
 @allowed([
   'PlatformManaged'
@@ -1273,7 +1265,6 @@ module fslogixStorage '../shared/modules/orchestration/fslogix/fslogix.bicep' = 
     fileSharePolicyName: effectiveFilesBackupPolicyName
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
     identitySolution: identitySolution
-    kerberosEncryptionType: fslogixStorageKerberosEncryptionType
     keyManagementStorageAccounts: fslogixKeyManagementStorage
     location: location
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId

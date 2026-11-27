@@ -6,6 +6,12 @@ targetScope = 'subscription'
 import { entraGroupType } from '../../resourceModules/types/identityTypes.bicep'
 import { publicNetworkAccessMode } from '../networking/functions.bicep'
 
+// Profile is always first so array positions remain stable for storage roles and NetApp volumes.
+@export()
+func fslogixShareNames(containerType string) string[] => contains(containerType, 'Office')
+  ? ['profile-containers', 'office-containers']
+  : ['profile-containers']
+
 // OSS is a session-host identity feature, not a storage authentication feature.
 // Current EntraKerberos modes create Entra-only hosts; no hybrid-device join mode is exposed.
 // https://learn.microsoft.com/fslogix/overview-faq#can-i-use-object-specific-settings-with-microsoft-entra-id-cloud-only-identities-or-microsoft-entra-joined-virtual-machines-and-hybrid-identities
@@ -73,8 +79,6 @@ param fslogixShardOptions string
 param fslogixUserGroups entraGroupType[]
 @description('Optional. Resource ID of the associated AVD host pool, used for resource ownership tags.')
 param hostPoolResourceId string = ''
-@description('Optional. Kerberos ticket encryption selection; RC4 selects RC4-HMAC and other values select AES-256 for Azure Files SMB settings.')
-param kerberosEncryptionType string = 'AES256'
 @description('Required. Storage encryption mode; PlatformManaged omits customer-managed key configuration.')
 param keyManagementStorageAccounts string
 @description('Required. Azure region for the resources deployed by this module.')
@@ -160,6 +164,8 @@ param recoveryServicesVaultResourceId string = ''
 @description('Optional. Name of the existing Azure Files backup policy in the selected Recovery Services vault.')
 param fileSharePolicyName string = 'filesharepolicy'
 
+var fileShareNames = fslogixShareNames(fslogixContainerType)
+
 // Azure NetApp files for fslogix
 module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution == 'AzureNetAppFiles' && contains(
   identitySolution,
@@ -175,6 +181,7 @@ module azureNetAppFiles 'modules/azureNetAppFiles.bicep' = if (storageSolution =
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
     containerType: fslogixContainerType
+    fileShares: fileShareNames
     shareSizeInGB: profileShareSizeInGB
     shareAdminGroups: fslogixAdminGroups
     shareUserGroups: fslogixUserGroups
@@ -213,7 +220,7 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
     domainJoinUserPassword: domainJoinUserPassword
     domainJoinUserPrincipalName: domainJoinUserPrincipalName
     domainName: domainName
-    containerType: fslogixContainerType
+    fileShares: fileShareNames
     officeStorageAccountNamePrefix: officeStorageAccountNamePrefix
     officeEncryptionKeyNameConv: officeEncryptionKeyNameConv
     officeStorageTier: officeStorageTier
@@ -232,7 +239,6 @@ module azureFiles 'modules/azureFiles.bicep' = if (storageSolution == 'AzureFile
       : encryptionUserAssignedIdentityResourceId
     hostPoolResourceId: hostPoolResourceId
     identitySolution: identitySolution
-    kerberosEncryptionType: kerberosEncryptionType
     keyManagementStorageAccounts: keyManagementStorageAccounts
     location: location
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId

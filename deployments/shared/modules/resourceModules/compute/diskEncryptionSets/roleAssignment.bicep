@@ -1,7 +1,7 @@
 metadata name = 'Disk encryption set role assignments'
 metadata description = 'Applies deterministic role assignments at an existing disk encryption set in the deployment resource group; does not grant access to its encryption key.'
 
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+import { roleAssignmentType } from '../../authorization/roleAssignments/types.bicep'
 
 @description('Name of the existing disk encryption set.')
 param diskEncryptionSetName string

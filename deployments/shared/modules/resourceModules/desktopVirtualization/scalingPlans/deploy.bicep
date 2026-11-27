@@ -2,7 +2,7 @@ metadata name = 'AVD scaling plan'
 metadata description = 'Deploys a pooled or personal scaling plan, its matching schedules and optional diagnostics. Referenced host pools and autoscale permissions must already be available.'
 
 import { diagnosticSettingsType } from '../../types/diagnosticSettings.bicep'
-import { personalScalingScheduleType, pooledScalingScheduleType, scalingHostPoolReferenceType } from '../../types/scalingTypes.bicep'
+import { personalScalingScheduleType, pooledScalingScheduleType, scalingHostPoolReferenceType } from 'types.bicep'
 
 @description('Required. Name of the AVD scaling plan to deploy.')
 param name string

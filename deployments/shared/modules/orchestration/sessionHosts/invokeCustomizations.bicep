@@ -1,7 +1,7 @@
 metadata name = 'Session host customization orchestration'
 metadata description = 'Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID.'
 
-import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../customizations/types.bicep'
 
 @description('Required. Base URI of the existing artifact container used to resolve relative customization blob names.')
 param artifactsContainerUri string

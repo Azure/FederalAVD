@@ -1,7 +1,7 @@
 metadata name = 'Artifact customization input types'
-metadata description = 'Exports artifact, resolved customization and Run Command parameter shapes used by image and session-host customization workflows; does not deploy or execute artifacts.'
+metadata description = 'Exports artifact inputs and resolved execution settings shared by image and session-host customization workflows; does not deploy or execute artifacts.'
 
-// Shared artifact customization and Run Command parameter types.
+// Shared artifact customization workflow contracts.
 
 @export()
 @description('Artifact reference and optional execution arguments or accepted exit codes for a named customization.')
@@ -46,11 +46,4 @@ type resolvedCustomizationType = {
   arguments: string?
   successExitCodes: string?
   restart: bool
-}
-
-@export()
-@description('Named string argument passed to a managed Run Command as a regular or protected parameter.')
-type runCommandParameterType = {
-  name: string
-  value: string
 }

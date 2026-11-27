@@ -1,4 +1,5 @@
-import { resolvedCustomizationType, runCommandParameterType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { resolvedCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
+import { runCommandParameterType } from '../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep'
 
 param customization resolvedCustomizationType
 param location string

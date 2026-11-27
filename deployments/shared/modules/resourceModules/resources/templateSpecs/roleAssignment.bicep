@@ -1,7 +1,7 @@
 metadata name = 'Template Spec role assignments'
 metadata description = 'Applies deterministic role assignments at an existing Template Spec in the deployment resource group.'
 
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+import { roleAssignmentType } from '../../authorization/roleAssignments/types.bicep'
 
 @description('Required. Name of the existing parent Template Spec in the deployment resource group.')
 param templateSpecName string

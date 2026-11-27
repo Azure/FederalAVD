@@ -339,7 +339,6 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     fslogixUserGroups: []
     hostPoolResourceId: controlPlane.outputs.hostPoolResourceId
     identitySolution: 'EntraId'
-    kerberosEncryptionType: 'AES256'
     keyManagementStorageAccounts: 'PlatformManaged'
     location: location
     logAnalyticsWorkspaceResourceId: logAnalyticsWorkspaceResourceId

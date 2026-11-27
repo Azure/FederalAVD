@@ -18,14 +18,14 @@ var volumeCountsAreValid = (empty(localNetAppVolumeResourceIds) || length(localN
   ? true
   : fail('Existing Azure NetApp Files volume arrays must contain one volume per FSLogix share, in profile-then-Office order.')
 
-resource localNetAppVolumes 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes@2023-11-01' existing = [for i in range(0, volumeCountsAreValid ? length(localNetAppVolumeResourceIds) : 0): {
-  name: last(split(localNetAppVolumeResourceIds[i], '/'))
-  scope: resourceGroup(split(localNetAppVolumeResourceIds[i], '/')[2], split(localNetAppVolumeResourceIds[i], '/')[4])
+resource localNetAppVolumes 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes@2023-11-01' existing = [for volumeId in (volumeCountsAreValid ? localNetAppVolumeResourceIds : []): {
+  name: '${split(volumeId, '/')[8]}/${split(volumeId, '/')[10]}/${split(volumeId, '/')[12]}'
+  scope: resourceGroup(split(volumeId, '/')[2], split(volumeId, '/')[4])
 }]
 
-resource remoteNetAppVolumes 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes@2023-11-01' existing = [for i in range(0, volumeCountsAreValid ? length(remoteNetAppVolumeResourceIds) : 0): {
-  name: last(split(remoteNetAppVolumeResourceIds[i], '/'))
-  scope: resourceGroup(split(remoteNetAppVolumeResourceIds[i], '/')[2], split(remoteNetAppVolumeResourceIds[i], '/')[4])
+resource remoteNetAppVolumes 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes@2023-11-01' existing = [for volumeId in (volumeCountsAreValid ? remoteNetAppVolumeResourceIds : []): {
+  name: '${split(volumeId, '/')[8]}/${split(volumeId, '/')[10]}/${split(volumeId, '/')[12]}'
+  scope: resourceGroup(split(volumeId, '/')[2], split(volumeId, '/')[4])
 }]
 
 @description('First mount-target SMB FQDN per local volume, preserving input order; empty when no local volumes are supplied.')

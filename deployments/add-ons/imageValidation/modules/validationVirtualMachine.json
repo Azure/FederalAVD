@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "5381625932223597484"
+      "templateHash": "5461131763074457986"
     }
   },
   "definitions": {
@@ -43,7 +43,7 @@
       "metadata": {
         "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../../../shared/modules/resourceModules/types/customizationTypes.bicep"
+          "sourceTemplate": "../../../shared/modules/orchestration/customizations/types.bicep"
         }
       }
     }
@@ -272,7 +272,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17025001688948687338"
+              "templateHash": "11950023327212436100"
             },
             "name": "Windows virtual machine",
             "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -350,10 +350,8 @@
                 }
               },
               "metadata": {
-                "description": "VM extension handler, upgrade options and public or protected settings.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/computeTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "VM extension handler, upgrade options and public or protected settings."
               }
             }
           },
@@ -916,7 +914,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8394745655747289777"
+              "templateHash": "17120914650174693512"
             },
             "name": "Session host customization orchestration",
             "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
@@ -955,7 +953,7 @@
               "metadata": {
                 "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
+                  "sourceTemplate": "../customizations/types.bicep"
                 }
               }
             }

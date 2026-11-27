@@ -1,7 +1,7 @@
 metadata name = 'Dynamic pooled scaling schedules'
 metadata description = 'Deploys create-delete-power-management schedules under an existing scaling plan in the deployment resource group; returns schedule IDs in input order.'
 
-import { dynamicScalingScheduleType } from '../../../types/scalingTypes.bicep'
+import { dynamicScalingScheduleType } from '../types.bicep'
 
 @description('Required. Name of the existing parent scaling plan in the deployment resource group.')
 param scalingPlanName string

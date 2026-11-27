@@ -1,15 +1,16 @@
-# Function App resource modules
+# Function App orchestration
 
 These resource-group-scoped modules separate infrastructure ownership from
-function code. The current caller is Session Host Replacer. They can compose
+function code. Current callers are Session Host Replacer, Image Validation, and
+FSLogix Profile Management. They can compose
 with a caller-created plan or an existing compatible plan; they do not require
 that every deployment create all three resource types.
 
 | Module | Owns | Caller supplies |
 | --- | --- | --- |
-| [functionAppHostingPlan.bicep](./functionAppHostingPlan.bicep) | App Service plan | Name, region, operating-system selector, SKU, zone setting, and resource-type-keyed tags |
+| [Hosting-plan resource module](../../resourceModules/web/serverfarms/deploy.bicep) | App Service plan | Name, region, operating-system selector, SKU, zone setting, and resource-type-keyed tags |
 | [functionApp.bicep](./functionApp.bicep) | Windows PowerShell Function App, runtime storage, storage data-role assignments, optional Application Insights and private endpoints | Compatible plan ID, networking/DNS, monitoring IDs when selected, optional app identity, and pre-provisioned storage CMK dependencies when selected |
-| [function.bicep](./function.bicep) | Timer- or queue-triggered child function and its function-level code files | Existing parent app name in the deployment resource group, child name, trigger configuration, and file-name/content mapping |
+| [Function resource module](../../resourceModules/web/sites/functions/deploy.bicep) | Timer-triggered child function and its function-level code files | Existing parent app name in the deployment resource group, child name, schedule, and file-name/content mapping |
 
 The module and parameter descriptions are the detailed input contracts. A
 parameter without a default is a required Bicep input even if its feature is
@@ -39,6 +40,26 @@ to the same shared paths. The caller owns dependency availability and trigger
 configuration. Application settings use an array of name/value objects; tags
 use an object keyed by Azure resource type.
 
+## Why plan and function deployment stay separate
+
+The app module composes runtime storage, the app, identities/RBAC, monitoring, and
+private connectivity, so it belongs to shared orchestration. The plan and child
+function modules each own a single `Microsoft.Web` resource and stay in that
+resource family.
+
+All three callers can adopt an existing plan without changing it. Session Host
+Replacer can create a plan in a different resource group from its app; keeping the
+plan separate preserves that scope and its independently shared capacity/lifecycle.
+Embedding it would require additional scope and create/adopt inputs in the composer.
+
+Function deployments have a separate code lifecycle. Session Host Replacer creates
+an initiator and worker with different schedules, and deploys shared files once
+before the worker. Keeping the child module separate preserves this explicit
+serialization and allows code updates without coupling them to app infrastructure.
+Combining functions into the composer would require a collection and sequencing
+contract without removing these responsibilities. The relocation changes no
+resource names, parameters, APIs, defaults, or deployment dependencies.
+
 Application Insights and resource-log forwarding are independent. When
 `enableApplicationInsights` is true, the app receives its Application Insights
 connection string for invocation telemetry. `enableFunctionAppDiagnosticSettings`
@@ -50,44 +71,16 @@ setting during incremental deployment. See the
 
 ## Function binding contract
 
-`triggerType` defaults to `timerTrigger`, preserving existing timer callers.
-Only the selected binding's fields are emitted:
+The child function module deploys a native `timerTrigger` with input binding name
+`Timer`. Its required `schedule` accepts a Functions NCRONTAB expression or a
+supported app-setting reference. Empty or whitespace-only schedules fail template
+evaluation; the Functions runtime validates the actual schedule and settings.
+The PowerShell entry point must accept `Timer`.
 
-| Trigger | Input binding name | Required trigger input | Other binding fields |
-| --- | --- | --- | --- |
-| `timerTrigger` | `Timer` | Nonempty `schedule` | `type`, `direction: in`, `name`, `schedule` |
-| `queueTrigger` | `WorkItem` | Nonempty `queueName` | `type`, `direction: in`, `name`, `queueName`, `connection` |
-
-`schedule` and `queueName` default to empty strings so a caller need not supply
-the other trigger's input. The selected trigger fails template evaluation with
-ARM `fail()` if its required input is empty or whitespace. The Functions runtime
-still validates the NCRONTAB schedule (or supported setting reference) and Azure
-Storage validates queue naming rules. PowerShell entry-point parameters must
-match `Timer` or `WorkItem`, respectively.
-
-`connection` defaults to `AzureWebJobsStorage` and is a setting prefix, not a
-secret value. For identity-based queue access with the app module:
-
-- Set `enableQueueStorage: true`. It adds the cloud-specific
-  `AzureWebJobsStorage__queueServiceUri` alongside the existing managed-identity
-  credential and optional user-assigned identity client ID. The app identity
-  receives Storage Queue Data Contributor on its runtime storage account.
-- Supply `azureQueuePrivateDnsZoneResourceId` when private endpoints and
-  deployment-managed private DNS integration are selected. An empty zone ID
-  leaves queue DNS registration externally managed without shifting a table
-  zone onto the queue endpoint. Outbound VNet integration and working DNS are
-  still caller prerequisites.
-- Provision a supported queue binding extension. For PowerShell, Microsoft
-  documents a root `host.json` with `version: "2.0"` and extension bundle
-  `Microsoft.Azure.Functions.ExtensionBundle`, version `[4.0.0, 5.0.0)`.
-  The function module does not automatically install extensions or create a
-  queue resource. Restricted-network deployments must make the extension
-  available through their approved staging/connectivity process.
-
-See Microsoft's [queue trigger configuration and identity connections](https://learn.microsoft.com/azure/azure-functions/functions-bindings-storage-queue-trigger)
-and [queue extension bundle requirements](https://learn.microsoft.com/azure/azure-functions/functions-bindings-storage-queue).
-Compilation does not prove that the deployed host can load the extension,
-resolve private endpoints, authenticate, or process queue messages.
+The app's optional queue-storage settings remain an independent infrastructure
+capability; enabling them does not change the timer function into a queue trigger.
+Compilation does not prove that the deployed host can resolve private endpoints,
+authenticate to runtime storage, or execute its timers.
 
 ## Hosting behavior
 

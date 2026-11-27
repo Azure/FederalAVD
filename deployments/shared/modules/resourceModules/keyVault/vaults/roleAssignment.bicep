@@ -1,7 +1,7 @@
 metadata name = 'Key Vault role assignments'
 metadata description = 'Applies deterministic role assignments at an existing Key Vault in the deployment resource group.'
 
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+import { roleAssignmentType } from '../../authorization/roleAssignments/types.bicep'
 
 @description('Name of the existing key vault.')
 param keyVaultName string

@@ -2,7 +2,7 @@ metadata name = 'FSLogix Azure Files orchestration'
 metadata description = 'Creates indexed storage accounts, SMB shares, optional private endpoints, administrator RBAC, and identity-dependent configuration through an existing deployment helper VM.'
 
 import { publicNetworkAccessMode, resolveNetworkAccess } from '../../networking/functions.bicep'
-import { resolveFilesConfiguration, fslogixShareNames } from 'configuration.bicep'
+import { resolveFilesConfiguration } from '../../../resourceModules/storage/storageAccounts/deploy.bicep'
 
 @description('Required. Resource ID of the storage application update identity attached to the helper VM; empty skips application manifest and consent commands.')
 param appUpdateUserAssignedIdentityResourceId string
@@ -27,14 +27,14 @@ param fslogixProfileEncryptionKeyNameConv string
 param encryptionKeyVaultUri string
 @description('Required. Resource ID of the existing identity authorized to use the storage encryption keys; unused for PlatformManaged encryption.')
 param encryptionUserAssignedIdentityResourceId string
-@description('Required. FSLogix container selection; determines separate Profile and optional Office accounts.')
-param containerType string
+@minLength(1)
+@maxLength(2)
+@description('Required. Share names derived by the FSLogix parent in Profile-then-Office order.')
+param fileShares string[]
 @description('Optional. Resource ID of the associated AVD host pool, used for resource ownership tags.')
 param hostPoolResourceId string = ''
 @description('Required. Selected session-host or SMB identity mode used to choose domain, Entra, and storage configuration paths.')
 param identitySolution string
-@description('Required. Kerberos ticket encryption selection; RC4 selects RC4-HMAC and other values select AES-256 for Azure Files SMB settings.')
-param kerberosEncryptionType string
 @description('Required. Storage encryption mode; PlatformManaged omits customer-managed key configuration.')
 param keyManagementStorageAccounts string
 @description('Required. Azure region for the resources deployed by this module.')
@@ -128,16 +128,18 @@ resource privateEndpointVirtualNetwork 'Microsoft.Network/virtualNetworks@2024-0
 }
 
 var smbSettingsValues = {
-  versions: 'SMB3.0;SMB3.1.1;'
-  authenticationMethods: 'NTLMv2;Kerberos;'
-  kerberosTicketEncryption: kerberosEncryptionType == 'RC4' ? 'RC4-HMAC;' : 'AES-256;'
-  channelEncryption: 'AES-128-CCM;AES-128-GCM;AES-256-GCM;'
+  versions: 'SMB3.1.1;'
+  authenticationMethods: identitySolution == 'EntraId' ? 'NTLMv2;' : 'Kerberos;'
+  kerberosTicketEncryption: 'AES-256;'
+  channelEncryption: 'AES-128-GCM;AES-256-GCM;'
+  encryptionInTransit: {
+    required: true
+  }
 }
 
 // One template contains both roles so scripts are not duplicated in generated ARM.
 // Each role owns one share and its own capacity/performance settings. storageCount is per role:
 // two shards with Office enabled create two Profile accounts and two separate Office accounts.
-var fileShares = fslogixShareNames(containerType)
 var storageRoles = concat(
   [
     {
@@ -145,7 +147,7 @@ var storageRoles = concat(
       keyPattern: fslogixProfileEncryptionKeyNameConv
       sku: profileStorageTier
       configuration: resolveFilesConfiguration(profileStorageTier, profileStorageRedundancy, profileStorageBillingModel, profileShareSizeInGB, profileProvisionedIops, profileProvisionedThroughputMiBps)
-      shares: take(fileShares, 1)
+      shareName: fileShares[0]
       shareSizeInGB: profileShareSizeInGB
       roleName: 'Profile'
     }
@@ -161,7 +163,7 @@ var storageRoles = concat(
             : fail('Profile and Office customer-managed encryption keys must use different name patterns.')
           sku: officeStorageTier
           configuration: resolveFilesConfiguration(officeStorageTier, officeStorageRedundancy, officeStorageBillingModel, officeShareSizeInGB, officeProvisionedIops, officeProvisionedThroughputMiBps)
-          shares: take(skip(fileShares, 1), 1)
+          shareName: fileShares[1]
           shareSizeInGB: officeShareSizeInGB
           roleName: 'Office'
         }
@@ -230,6 +232,9 @@ module storageAccounts '../../../resourceModules/storage/storageAccounts/deploy.
       tags: union(parentResourceTags, tags[?'Microsoft.Storage/storageAccounts'] ?? {})
       allowedCopyScope: privateEndpoint ? 'PrivateLink' : 'AAD'
       allowSharedKeyAccess: identitySolution == 'EntraId' ? true : false
+      supportsHttpsTrafficOnly: true
+      minimumTlsVersion: 'TLS1_2'
+      requireInfrastructureEncryption: true
       largeFileSharesState: account.configuration.largeFileSharesState
       sasExpirationPeriod: '180.00:00:00'
       networkAcls: storageNetworkAcls
@@ -274,14 +279,13 @@ module fileServices '../../../resourceModules/storage/storageAccounts/fileServic
 ]
 
 // ─── File Shares ───────────────────────────────────────────────────────────────
-module shares 'shares.bicep' = [
+module shares '../../../resourceModules/storage/storageAccounts/fileServices/shares/deploy.bicep' = [
   for (account, i) in accountConfigurations: {
     name: 'fslogix-${toLower(account.roleName)}-${account.name}-share-${deploymentNameSuffix}'
     params: {
-      fileShares: account.shares
-      shareSizeInGB: account.shareSizeInGB
-      StorageAccountName: account.name
-      storageSku: account.sku
+      name: account.shareName
+      shareQuota: account.shareSizeInGB
+      storageAccountName: account.name
       accessTier: account.configuration.accessTier
       provisionedIops: account.configuration.provisionedIops
       provisionedThroughputMiBps: account.configuration.provisionedThroughputMiBps
@@ -347,7 +351,7 @@ module configureADDSAuth '../../../resourceModules/compute/virtualMachines/runCo
           name: 'HostPoolName'
           value: !empty(hostPoolResourceId) ? last(split(hostPoolResourceId, '/'))! : role.prefix
         }
-        { name: 'KerberosEncryptionType', value: kerberosEncryptionType }
+        { name: 'KerberosEncryptionType', value: 'AES256' }
         { name: 'OuPath', value: ouPath }
         { name: 'ResourceManagerUri', value: environment().resourceManager }
         { name: 'StorageAccountPrefix', value: role.prefix }
@@ -451,7 +455,7 @@ module SetNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
       script: loadTextContent('../../../../scripts/Set-NtfsPermissionsAzureFiles.ps1')
       parameters: [
         { name: 'DomainName', value: domainName }
-        { name: 'ShareName', value: first(role.shares) }
+        { name: 'ShareName', value: role.shareName }
         { name: 'ShardAzureFilesStorage', value: shardingOptions == 'None' ? 'false' : 'true' }
         { name: 'StorageAccountPrefix', value: role.prefix }
         { name: 'StorageCount', value: string(storageCount) }

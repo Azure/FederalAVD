@@ -13,9 +13,9 @@ Describe 'Shared naming and module metadata contracts' {
             NamingInternals = 'deployments\shared\modules\orchestration\naming\internal.bicep'
             HostPoolNaming = 'tests\fixtures\naming-bundles.bicep'
             Replacer = 'deployments\add-ons\sessionHostReplacer\main.bicep'
-            FunctionApp = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
-            HostingPlan = 'deployments\shared\modules\resourceModules\functionApp\functionAppHostingPlan.bicep'
-            FunctionDefinition = 'deployments\shared\modules\resourceModules\functionApp\function.bicep'
+            FunctionApp = 'deployments\shared\modules\orchestration\functionApp\functionApp.bicep'
+            HostingPlan = 'deployments\shared\modules\resourceModules\web\serverfarms\deploy.bicep'
+            FunctionDefinition = 'deployments\shared\modules\resourceModules\web\sites\functions\deploy.bicep'
             ScalarPattern = 'tests\fixtures\naming-scalar-import.bicep'
             DeploymentHelper = 'deployments\shared\modules\orchestration\deploymentHelper\deploy.bicep'
             SessionHostVMs = 'deployments\shared\modules\orchestration\sessionHosts\virtualMachines.bicep'
@@ -254,7 +254,8 @@ Describe 'Shared naming and module metadata contracts' {
             $variables | Should -Not -Match '"defaults"\s*:|"resources"\s*:|"templateSpecs"\s*:'
             foreach ($function in @($compiledModules[$name].functions | Where-Object { $null -ne $_ })) {
                 $name | Should -Be 'SessionHostVMs'
-                @($function.members.PSObject.Properties.Name) | Should -Be @('validateOfficeStorageAccounts')
+                @($function.members.PSObject.Properties.Name | Sort-Object) |
+                    Should -Be @('validateObjectSpecificSettings', 'validateOfficeStorageAccounts')
             }
         }
     }
@@ -283,7 +284,7 @@ Describe 'Shared naming and module metadata contracts' {
         @{ Path = 'deployments\shared\modules\orchestration\avdWorkspace\avdWorkspace.bicep'; Functions = @('privateEndpointName') }
         @{ Path = 'deployments\shared\modules\orchestration\keyVaults\keyVaults.bicep'; Functions = @('privateEndpointName') }
         @{ Path = 'deployments\shared\modules\orchestration\fslogix\modules\azureFiles.bicep'; Functions = @('privateEndpointName') }
-        @{ Path = 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'; Functions = @('privateEndpointName') }
+        @{ Path = 'deployments\shared\modules\orchestration\functionApp\functionApp.bicep'; Functions = @('privateEndpointName') }
     ) {
         param($Path, $Functions)
 

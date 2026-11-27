@@ -4,10 +4,9 @@ Use these notes when changing the standard host-pool or standalone FSLogix Stora
 
 ## Current Decisions
 
-- The standalone add-on uses the shared orchestration default of `AES256`; it does not expose RC4
-  or a Kerberos encryption selector.
-- The standard host-pool Bicep entry point retains
-  `fslogixStorageKerberosEncryptionType` for compatibility, but its portal form does not expose it.
+- All Azure Files callers use fixed AES256 Kerberos ticket encryption; no deployment-level
+  Kerberos encryption selector remains. Remove the former `fslogixStorageKerberosEncryptionType`
+  entry from host-pool parameter files. See the [security and migration guidance](../../../../docs/design.md#azure-files-security-and-client-compatibility).
 - The add-on can consume an existing Recovery Services vault/policy or create a shared regional
   vault in the operations resource group or a dedicated vault in the storage resource group.
   All FSLogix callers exclude Office container shares from backup enrollment. See the

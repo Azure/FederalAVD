@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 import { vmApplicationAssignmentType } from '../../shared/modules/orchestration/sessionHostPolicy/vmApplicationTypes.bicep'
 import { validateObjectSpecificSettings } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 

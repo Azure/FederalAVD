@@ -1,7 +1,23 @@
 metadata name = 'Gallery image version'
 metadata description = 'Publishes an image version under an existing gallery image definition using a caller-provided image source and regional replication settings.'
 
-import { galleryImageVersionTargetRegionType } from '../../../../types/computeTypes.bicep'
+@export()
+@description('Regional image replication settings, including optional replica count, storage type and disk encryption configuration.')
+type galleryImageVersionTargetRegionType = {
+  name: string
+  regionalReplicaCount: int?
+  storageAccountType: ('Standard_LRS' | 'Standard_ZRS' | 'Premium_LRS' | 'PremiumV2_LRS')?
+  excludeFromLatest: bool?
+  encryption: {
+    osDiskImage: {
+      diskEncryptionSetId: string?
+      securityProfile: {
+        confidentialVMEncryptionType: ('EncryptedVMGuestStateOnlyWithPmk' | 'EncryptedWithPmk' | 'EncryptedWithCmk' | 'NonPersistedTPM')?
+        secureVMDiskEncryptionSetId: string?
+      }?
+    }?
+  }?
+}
 
 @sys.description('Required. Name of the image version.')
 param name string

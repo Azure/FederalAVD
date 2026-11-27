@@ -2,7 +2,27 @@ metadata name = 'Azure Files service settings'
 metadata description = 'Configures the default File service on an existing storage account with optional SMB settings, share soft delete and diagnostics. File shares and identity authentication are managed separately.'
 
 import { diagnosticSettingsType } from '../../../types/diagnosticSettings.bicep'
-import { smbSettingsType } from '../../../types/storageTypes.bicep'
+
+@export()
+@description('Optional Azure Files SMB protocol, authentication, encryption and multichannel configuration.')
+type smbSettingsType = {
+  @description('SMB protocol versions. E.g. "SMB3.0;SMB3.1.1;"')
+  versions: string?
+  @description('Authentication methods. E.g. "NTLMv2;Kerberos;"')
+  authenticationMethods: string?
+  @description('Kerberos ticket encryption. E.g. "AES-256;" or "RC4-HMAC;"')
+  kerberosTicketEncryption: string?
+  @description('Channel encryption. E.g. "AES-128-GCM;AES-256-GCM;"')
+  channelEncryption: string?
+  @description('Explicit SMB encryption requirement, independent of account-level secure transfer.')
+  encryptionInTransit: {
+    required: bool?
+  }?
+  @description('SMB Multichannel settings. For Premium file shares only.')
+  multichannel: {
+    enabled: bool?
+  }?
+}
 
 @description('Required. Name of the existing storage account in the deployment resource group.')
 param storageAccountName string
@@ -26,7 +46,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing 
   name: storageAccountName
 }
 
-resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-05-01' = {
+resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2025-01-01' = {
   parent: storageAccount
   name: 'default'
   properties: {

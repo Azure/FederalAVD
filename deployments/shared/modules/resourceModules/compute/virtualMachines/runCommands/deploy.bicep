@@ -1,7 +1,12 @@
 metadata name = 'Virtual machine Run Command'
 metadata description = 'Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity.'
 
-import { runCommandParameterType } from '../../../types/customizationTypes.bicep'
+@export()
+@description('Named string argument passed to a managed Run Command as a regular or protected parameter.')
+type runCommandParameterType = {
+  name: string
+  value: string
+}
 
 @description('Run the command asynchronously (fire and forget).')
 param asyncExecution bool = false

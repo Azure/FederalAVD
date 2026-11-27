@@ -3,7 +3,7 @@ targetScope = 'subscription'
 import { publicNetworkAccessMode } from '../../shared/modules/orchestration/networking/functions.bicep'
 import { entraGroupType } from '../../shared/modules/resourceModules/types/identityTypes.bicep'
 import { fslogixNames, sharedServicesNames, resourceNameForType, namingConventionConfig } from '../../shared/modules/orchestration/naming/naming.bicep'
-import { fslogixShareNames } from '../../shared/modules/orchestration/fslogix/modules/configuration.bicep'
+import { fslogixShareNames } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 @description('Required. Azure region for FSLogix storage resources and deployment VM Run Commands.')
 param location string

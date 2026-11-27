@@ -4,7 +4,7 @@ metadata description = 'Runs a caller-supplied command and downloads on an exist
 @description('Required. Array of script or supporting-file URIs downloaded by the Windows Custom Script extension.')
 param fileUris array
 @description('Required. Command executed by the extension after downloading the supplied files; passed in protected settings.')
-param commandToExecute string 
+param commandToExecute string
 @description('Required. Azure region for the windows Custom Script extension; must match the parent resource where required.')
 param location string
 @description('Optional. Parse successful extension stdout as a JSON object; otherwise return the timestamp and download URI list.')
@@ -20,7 +20,7 @@ param virtualMachineName string
 
 var defaultOutputValue =  {
   TimeStamp: timeStamp
-  Downloads: fileUris 
+  Downloads: fileUris
 }
 
 resource virtualMachine 'Microsoft.Compute/virtualMachines@2023-03-01' existing = {

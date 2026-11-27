@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "6290133443325707494"
+      "templateHash": "774401548613242113"
     }
   },
   "definitions": {
@@ -462,7 +462,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "5704653602020627713"
+              "templateHash": "14780931257325203340"
             },
             "name": "VM Applications policy orchestration",
             "description": "Validates an authoritative Gallery application list and resource-group ownership, creates its Modify definition and assignment, grants scoped permissions, and optionally remediates existing session hosts."
@@ -971,7 +971,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "6270867002431670131"
+                      "templateHash": "8979134249628690402"
                     },
                     "name": "Compute gallery role assignments",
                     "description": "Applies deterministic role assignments at an existing compute gallery in the deployment resource group."
@@ -1018,7 +1018,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }

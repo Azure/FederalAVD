@@ -1,7 +1,7 @@
 metadata name = 'Storage account role assignments'
 metadata description = 'Applies deterministic role assignments at an existing storage account in the deployment resource group.'
 
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+import { roleAssignmentType } from '../../authorization/roleAssignments/types.bicep'
 
 @description('Required. Name of the existing storage account in the deployment resource group.')
 param storageAccountName string

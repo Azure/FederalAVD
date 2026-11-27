@@ -1,7 +1,7 @@
 metadata name = 'Managed identity resource role assignments'
 metadata description = 'Applies role assignments scoped to an existing user-assigned identity resource; these authorize principals over the identity rather than granting the identity access to other resources.'
 
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+import { roleAssignmentType } from '../../authorization/roleAssignments/types.bicep'
 
 @description('Required. Name of the existing user-assigned identity in the deployment resource group.')
 param identityName string

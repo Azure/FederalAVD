@@ -58,6 +58,16 @@ See [standard host-pool storage](../deployments/hostpools/README.md#profile-and-
 and the [add-on role-array contract](../deployments/add-ons/fslogixStorage/README.md#profile-and-office-storage-accounts).
 The disposable Standard PoC remains Profile-only.
 
+**Breaking change:** `fslogixStorageKerberosEncryptionType` has been removed from the standard
+and automated host-pool templates. Remove that entry from existing parameter files before
+deploying the updated templates. New Azure Files storage always uses AES256 Kerberos tickets;
+there is no encryption selector in the shared FSLogix modules. Azure NetApp Files never consumed
+this parameter and separately enables AES encryption on created AD connections.
+Azure Files requires encrypted SMB 3.1.1 with AES-GCM channels; only the explicit `EntraId`
+storage-key path retains NTLMv2. Existing/adopted storage is not reconfigured.
+See [Azure Files security and client compatibility](design.md#azure-files-security-and-client-compatibility)
+for supported-client prerequisites, migration and per-shard live validation.
+
 Azure Files media is `Standard` (HDD) or `Premium` (SSD). Billing is independently selected
 with `fslogixProfileStorageBillingModel` (`Legacy`, the Bicep default, or `ProvisionedV2`)
 and `fslogixOfficeStorageBillingModel` (`Inherit`, `Legacy`, or `ProvisionedV2`).

@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { artifactCustomizationType } from '../../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../../../shared/modules/orchestration/customizations/types.bicep'
 
 param resourceGroupHosts string
 param agentBootLoaderDownloadUrl string = ''

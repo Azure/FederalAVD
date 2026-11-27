@@ -1,7 +1,7 @@
 metadata name = 'Session host deployment orchestration'
 metadata description = 'Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs.'
 
-import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../customizations/types.bicep'
 
 @description('Optional. AVD Agent Boot Loader installer URL; empty lets orchestration select the cloud-specific default.')
 param agentBootLoaderDownloadUrl string = ''

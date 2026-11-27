@@ -11,9 +11,11 @@ Describe 'Canonical FSLogix producer account contracts' {
         param($Directory, $Template, $Tier)
         $arm = Get-Content (Join-Path $repoRoot "deployments\$Directory\$Template") -Raw | ConvertFrom-Json -Depth 100
         $parameters = $arm.parameters
-        foreach ($obsolete in @('fslogixStorageRedundancy', 'fslogixShareSizeInGB', 'shareSizeInGB')) {
+        foreach ($obsolete in @('fslogixStorageRedundancy', 'fslogixShareSizeInGB', 'shareSizeInGB', 'fslogixStorageKerberosEncryptionType')) {
             $parameters.PSObject.Properties.Name | Should -Not -Contain $obsolete
         }
+        ($arm | ConvertTo-Json -Depth 100 -Compress) |
+            Should -Not -Match '"(?:fslogixStorageKerberosEncryptionType|kerberosEncryptionType)"\s*:'
         @($parameters.fslogixStorageService.allowedValues | Sort-Object) | Should -Be @('AzureFiles', 'AzureNetAppFiles')
         $parameters.fslogixStorageService.defaultValue | Should -BeExactly 'AzureFiles'
         $parameters.fslogixNetAppServiceLevel.allowedValues | Should -Be @('Standard', 'Premium')

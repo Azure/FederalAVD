@@ -198,7 +198,7 @@ This is the traditional hybrid identity model where both user accounts and sessi
 - Azure Files storage accounts are registered in Active Directory by creating storage computer
   objects; the temporary deployment VM remains in a workgroup
 - Azure NetApp Files domain integration still requires the temporary deployment VM to join the domain
-- Kerberos authentication with AES256 or RC4 encryption
+- Kerberos authentication with AES256 for Azure Files; created Azure NetApp Files AD connections separately enable AES encryption
 - See [FSLogix Profile Storage](#fslogix-profile-storage) section below for complete configuration details
 
 **Parameter Configuration:**

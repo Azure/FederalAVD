@@ -88,7 +88,7 @@ deletion; the shared VM module configures OS-disk deletion.
 ### Artifact customizations
 
 Customizations use the shared
-[artifact input type](../../shared/modules/resourceModules/types/customizationTypes.bicep),
+[artifact input type](../../shared/modules/orchestration/customizations/types.bicep),
 not inline Run Command scripts:
 
 ```json

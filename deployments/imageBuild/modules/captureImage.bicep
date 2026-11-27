@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { galleryImageVersionTargetRegionType } from '../../shared/modules/resourceModules/types/computeTypes.bicep'
+import { galleryImageVersionTargetRegionType } from '../../shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep'
 
 param computeGalleryResourceId string
 param hyperVGeneration string

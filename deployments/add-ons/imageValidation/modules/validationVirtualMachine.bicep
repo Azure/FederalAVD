@@ -1,4 +1,4 @@
-import { artifactCustomizationType } from '../../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../../../shared/modules/orchestration/customizations/types.bicep'
 
 param acceleratedNetworking bool = true
 param artifactsContainerUri string = ''
@@ -74,7 +74,7 @@ module virtualMachine '../../../shared/modules/resourceModules/compute/virtualMa
   }
 }
 
-module extension_GuestAttestation '../../../shared/modules/resourceModules/extensions/guestAttestation.bicep' = if (securityType != 'Standard' && integrityMonitoringValidation) {
+module extension_GuestAttestation '../../../shared/modules/resourceModules/compute/virtualMachines/extensions/guestAttestation.bicep' = if (securityType != 'Standard' && integrityMonitoringValidation) {
   params: {
     location: location
     tags: tags

@@ -1,7 +1,7 @@
 metadata name = 'Session host VM batch orchestration'
 metadata description = 'Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup.'
 
-import { artifactCustomizationType } from '../../resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../customizations/types.bicep'
 import { osDiskNamePattern } from '../naming/internal.bicep'
 import { validateOfficeStorageAccounts, validateObjectSpecificSettings } from '../fslogix/fslogix.bicep'
 

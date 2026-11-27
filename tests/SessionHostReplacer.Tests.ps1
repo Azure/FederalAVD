@@ -13,7 +13,7 @@ BeforeAll {
     $workbookTemplatePath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\modules\workBook\workbookTemplate.json'
     $configurationScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Set-SessionHostReplacerConfiguration.ps1'
     $rollbackScriptPath = Join-Path $repoRoot 'deployments\add-ons\sessionHostReplacer\tools\Invoke-SessionHostRollback.ps1'
-    $functionAppModulePath = Join-Path $repoRoot 'deployments\shared\modules\resourceModules\functionApp\functionApp.bicep'
+    $functionAppModulePath = Join-Path $repoRoot 'deployments\shared\modules\orchestration\functionApp\functionApp.bicep'
 }
 
 Describe 'Session Host Replacer Portal initialization' {
@@ -1898,7 +1898,7 @@ Describe 'Session Host Replacer storage CMK propagation sequencing' {
     It 'starts CMK provisioning at the entry point before Function App deployment' {
         $bicep = Get-Content -LiteralPath $bicepPath -Raw
         $cmkPosition = $bicep.IndexOf("module storageCmk '../../shared/modules/orchestration/customerManagedKeys/customerManagedKeys.bicep'")
-        $functionAppPosition = $bicep.IndexOf("module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep'")
+        $functionAppPosition = $bicep.IndexOf("module functionApp '../../shared/modules/orchestration/functionApp/functionApp.bicep'")
 
         $cmkPosition | Should -BeGreaterThan -1
         $functionAppPosition | Should -BeGreaterThan $cmkPosition
@@ -1907,7 +1907,7 @@ Describe 'Session Host Replacer storage CMK propagation sequencing' {
 
     It 'keeps CMK resource ownership out of the Function App module' {
         Get-Content -LiteralPath $functionAppModulePath -Raw |
-            Should -Not -Match "module cmk '../../orchestration/customerManagedKeys/customerManagedKeys.bicep'"
+            Should -Not -Match "module cmk '../customerManagedKeys/customerManagedKeys.bicep'"
     }
 
     It 'keeps the generated Function App deployment behind the top-level CMK deployment' {
@@ -2185,9 +2185,9 @@ Describe 'Session Host Replacer Application Insights isolation' {
         }
     }
 
-    It 'deploys Application Insights through the Function App resource-group-scoped module' {
+    It 'deploys Application Insights through the Function App resource-group-scoped orchestration' {
         Get-Content -LiteralPath $bicepPath -Raw |
-            Should -Match "module functionApp '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = \{\s*scope: resourceGroup\(functionAppResourceGroupName\)"
+            Should -Match "module functionApp '../../shared/modules/orchestration/functionApp/functionApp.bicep' = \{\s*scope: resourceGroup\(functionAppResourceGroupName\)"
     }
 
     It 'does not expose an Application Insights name override' {

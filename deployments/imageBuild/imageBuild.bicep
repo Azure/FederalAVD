@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { artifactCustomizationType, restartableArtifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType, restartableArtifactCustomizationType } from '../shared/modules/orchestration/customizations/types.bicep'
 import { namingPolicy, namePattern, regionAbbreviation, imageBuildRunId } from '../shared/modules/orchestration/naming/internal.bicep'
 
 @sealed()

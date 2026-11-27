@@ -1,7 +1,7 @@
 metadata name = 'AVD application group role assignments'
 metadata description = 'Applies deterministic role assignments at an existing AVD application group in the deployment resource group.'
 
-import { roleAssignmentType } from '../../types/roleAssignmentTypes.bicep'
+import { roleAssignmentType } from '../../authorization/roleAssignments/types.bicep'
 
 @description('Name of the existing application group.')
 param applicationGroupName string

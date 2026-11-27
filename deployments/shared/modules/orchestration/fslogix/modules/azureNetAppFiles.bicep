@@ -1,8 +1,6 @@
 metadata name = 'FSLogix NetApp storage orchestration'
 metadata description = 'Optionally creates a NetApp account and capacity pool, creates SMB volumes, and configures share permissions through an existing helper VM using supplied domain credentials.'
 
-import { fslogixShareNames } from 'configuration.bicep'
-
 @description('Required. Whether to configure an Active Directory connection when creating the NetApp account.')
 param activeDirectoryConnection bool
 @description('Optional. Whether to create the NetApp account; when false, the named account must already exist.')
@@ -33,8 +31,12 @@ param netAppVolumesSubnetResourceId string
 param ouPath string
 @description('Required. Name of the existing resource group containing the deployment helper VM.')
 param resourceGroupDeployment string
-@description('Required. FSLogix container selection; determines fixed Profile and optional Office volumes.')
+@description('Required. FSLogix container selection forwarded to the permission configuration script.')
 param containerType string
+@minLength(1)
+@maxLength(2)
+@description('Required. Share names derived by the FSLogix parent in Profile-then-Office order.')
+param fileShares string[]
 @description('Required. Array of administrator group objects with id and name for Azure Files RBAC or NetApp/domain permissions.')
 param shareAdminGroups array
 @description('Required. Array of user group objects with id and name; the selected identity mode determines which field is forwarded.')
@@ -52,7 +54,6 @@ param tagsNetAppVolume object
 #disable-next-line BCP329
 var ouRelativePath = contains(ouPath, 'DC') ? substring(split(ouPath, 'DC')[0], 0, length(split(ouPath, 'DC')[0]) - 1) : ouPath
 var shareSizeInBytes = shareSizeInGB * 1024 * 1024 * 1024
-var shares = fslogixShareNames(containerType)
 
 resource vnet 'Microsoft.Network/virtualNetworks@2023-11-01' existing = {
   scope: resourceGroup(split(netAppVolumesSubnetResourceId, '/')[2], split(netAppVolumesSubnetResourceId, '/')[4])
@@ -93,11 +94,11 @@ module capacityPool '../../../resourceModules/netApp/netAppAccounts/capacityPool
 
 // ─── Volumes ───────────────────────────────────────────────────────────────────
 module netAppVolumes '../../../resourceModules/netApp/netAppAccounts/capacityPools/volumes/deploy.bicep' = [
-  for i in range(0, length(shares)): {
+  for i in range(0, length(fileShares)): {
     params: {
       netAppAccountName: netAppAccountName
       capacityPoolName: netAppCapacityPoolName
-      name: shares[i]
+      name: fileShares[i]
       location: location
       subnetResourceId: netAppVolumesSubnetResourceId
       usageThreshold: shareSizeInBytes
@@ -108,7 +109,7 @@ module netAppVolumes '../../../resourceModules/netApp/netAppAccounts/capacityPoo
   }
 ]
 
-var netappServerFqdns = length(shares) > 1
+var netappServerFqdns = length(fileShares) > 1
   ? [netAppVolumes[0].outputs.smbServerFqdn, netAppVolumes[1].outputs.smbServerFqdn]
   : [netAppVolumes[0].outputs.smbServerFqdn]
 
@@ -138,6 +139,6 @@ module setNTFSPermissions '../../../resourceModules/compute/virtualMachines/runC
 }
 
 @description('Created NetApp volume resource IDs in the same order as shares.')
-output volumeResourceIds array = [for i in range(0, length(shares)): netAppVolumes[i].outputs.resourceId]
+output volumeResourceIds array = [for i in range(0, length(fileShares)): netAppVolumes[i].outputs.resourceId]
 @description('SMB server FQDN strings for the first share and, when present, the second share.')
 output smbServerFqdns array = netappServerFqdns

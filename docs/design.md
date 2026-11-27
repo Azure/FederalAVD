@@ -54,10 +54,29 @@ stages are `storage`, `files`, `share`, and `endpoint`; configuration stages are
 batching and dependencies are unchanged. Other modules retain automatic naming.
 The internal `storageRoles` collection uses a single `roleName` (`Profile` or `Office`);
 Run Command prefixes derive directly from it, while deployment names use its lowercase form.
+Each role stores its single share as a `shareName` string, used directly by NTFS configuration
+and the canonical Azure Files share resource module. There is no intermediate share-array wrapper;
+the account loop preserves the named `share` deployment stage, dependencies, quota and performance.
+The [FSLogix parent](../deployments/shared/modules/orchestration/fslogix/fslogix.bicep) exports
+`fslogixShareNames()` and passes the ordered names to both storage backends; children do not import
+their parent. Generic Azure Files sizing and SKU calculations are exported by the
+[storage account deployment module](../deployments/shared/modules/resourceModules/storage/storageAccounts/deploy.bicep),
+which also owns the exported `filesConfigurationType` and `networkAclsType`.
+The resolver is explicitly invoked by Azure Files orchestration; generic resource-module defaults
+are unchanged. Importing the function does not deploy an account. The function is also emitted
+in account deployment templates even when unused; its definition adds approximately 3.6 KiB
+of compact ARM JSON per embedded account module template, not per loop iteration.
 
 Existing-account arrays must be distinct and explicitly ordered to match the shard-group
-array. Local and remote Office arrays pair with the corresponding Profile arrays. Neither
-account names nor user data are migrated automatically. Before upgrading a deployment using
+array. Local and remote Office arrays pair with the corresponding Profile arrays.
+
+The shared NetApp endpoint lookup retains each volume's subscription, resource group and full
+`account/pool/volume` name when reading its first mount-target SMB FQDN. Nonempty local and remote
+arrays must each have one volume per enabled container in Profile-then-Office order. Empty arrays
+return no endpoints. Offline name/scope checks do not prove the volume exists or has an accessible
+SMB mount target; validate the returned endpoints against the target volumes before session-host use.
+
+Neither account names nor user data are migrated automatically. Before upgrading a deployment using
 the former generated Profile prefix, retain that exact prefix or adopt its existing account IDs.
 Before enabling the new Office mapping, prepare the separate accounts and plan the supported
 ODFC data transition, drain/sign-out and representative mount validation. Re-running deployment
@@ -72,6 +91,40 @@ remain LRS and ZRS; no geo-redundancy or account-less NFS resources are introduc
 `StorageV2` is an account kind, not provisioned-v2 billing. Microsoft recommends SSD for
 [FSLogix Cloud Cache](https://learn.microsoft.com/azure/storage/files/virtual-desktop-workloads).
 Azure NetApp Files keeps its separate-volume model.
+
+### Azure Files security and client compatibility
+
+Every created Profile and Office shard explicitly requires secure transfer, minimum TLS 1.2
+for HTTPS, infrastructure encryption, and SMB encryption in transit. The File service uses
+stable API `2025-01-01`, the earliest version exposing the separate SMB encryption requirement.
+That requirement takes precedence over the account-level secure-transfer setting for SMB.
+Validate this API's availability in the target cloud before deployment; no weaker fallback is used.
+
+SMB is restricted to 3.1.1, with AES-256 Kerberos tickets and AES-128-GCM/AES-256-GCM channel
+encryption. RC4 and AES-128-CCM are not allowed for Azure Files. Identity-based paths allow
+only Kerberos; the existing `EntraId` storage-key path is an explicit NTLMv2-only exception.
+There is no deployment-level Kerberos encryption selector. Azure Files AD configuration
+passes literal `AES256` to the reusable script. Azure NetApp Files separately enables
+`aesEncryption` for created AD connections and never consumed this selector.
+Apply AES-256-capable AD storage-account configuration before updating an existing RC4 deployment.
+
+AES-128-GCM remains enabled for lifecycle-supported Windows Server 2016/2019 and eligible
+Windows 10 ESU clients. Supported Windows 11 releases and Windows Server 2022/2025 also support
+AES-256-GCM; allowing it does not force every client to negotiate it. Select client versions,
+editions and servicing eligibility using the current
+[AVD prerequisites](https://learn.microsoft.com/azure/virtual-desktop/prerequisites#operating-systems-and-licenses)
+and [Windows 10 ESU guidance](https://learn.microsoft.com/azure/virtual-desktop/understanding-extended-security-updates).
+SMB capability alone does not establish Microsoft lifecycle support. This storage path does not
+validate image eligibility or change session-host SMB client settings.
+
+SMB Multichannel remains enabled for SSD and omitted for HDD. Capacity, billing, IOPS and
+throughput are unchanged; strongest encryption is not a guarantee of maximum throughput.
+Use Microsoft's [SMB support and security guidance](https://learn.microsoft.com/azure/storage/files/files-smb-protocol)
+and [SMB performance prerequisites](https://learn.microsoft.com/azure/storage/files/smb-performance)
+for client preparation, including older Server requirements. Before calling a deployment validated,
+check every shard's [SMB encryption requirement](https://learn.microsoft.com/azure/storage/files/files-encryption-in-transit),
+protocol settings and HTTPS settings, then test mounts, FSLogix sign-in and representative
+throughput from supported clients. Existing/adopted accounts are not hardened by this create-storage path.
 
 ### Provisioned-v2 sizing and compatible interfaces
 
@@ -443,6 +496,24 @@ allows it. Descriptions do not replace type constraints or deployment validation
 - **Type and function libraries** provide shared contracts or helpers rather than
   independently deploying a capability.
 
+Types follow the module or capability that owns their meaning, rather than sharing one
+repository-wide catalog. Resource-specific types are exported from their resource module:
+VM extensions from [Windows VM deployment](../deployments/shared/modules/resourceModules/compute/virtualMachines/deploy.bicep),
+gallery replication from [gallery image versions](../deployments/shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep),
+script parameters from [Run Command deployment](../deployments/shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep),
+account provisioning and network ACLs from [storage accounts](../deployments/shared/modules/resourceModules/storage/storageAccounts/deploy.bicep),
+and SMB settings from [File service deployment](../deployments/shared/modules/resourceModules/storage/storageAccounts/fileServices/deploy.bicep).
+Importing an exported type or function does not deploy that module's resources.
+
+Resource-family contracts stay beside the family: [scaling types](../deployments/shared/modules/resourceModules/desktopVirtualization/scalingPlans/types.bicep)
+are shared by scaling plans and schedules, while [RBAC types](../deployments/shared/modules/resourceModules/authorization/roleAssignments/types.bicep)
+serve resource-scoped assignment modules across namespaces. FederalAVD artifact inputs and
+resolved execution settings belong to [customization orchestration](../deployments/shared/modules/orchestration/customizations/types.bicep),
+not the generic Run Command resource. Only genuinely cross-resource contracts remain in
+the shared resource type folder: [diagnostic destinations](../deployments/shared/modules/resourceModules/types/diagnosticSettings.bicep)
+and [existing Entra group references](../deployments/shared/modules/resourceModules/types/identityTypes.bicep).
+This organization preserves existing type names, validation, secure-value envelopes and resource defaults.
+
 For capability-level composition, start with the orchestration entry points:
 
 | Capability | Shared entry point |
@@ -457,8 +528,17 @@ For capability-level composition, start with the orchestration entry points:
 
 Use the [shared naming contract](../deployments/shared/modules/orchestration/naming/README.md)
 for generated names and the
-[Function App composition contract](../deployments/shared/modules/resourceModules/functionApp/README.md)
+[Function App composition contract](../deployments/shared/modules/orchestration/functionApp/README.md)
 for plan ownership, app infrastructure, and function-code deployment.
+
+Function App infrastructure lives in orchestration because it coordinates runtime storage,
+the app, RBAC, monitoring, and private connectivity. Its
+[hosting plan](../deployments/shared/modules/resourceModules/web/serverfarms/deploy.bicep) and
+[timer function](../deployments/shared/modules/resourceModules/web/sites/functions/deploy.bicep)
+remain independent resource modules: callers can share or separately scope a plan and serialize
+multiple code deployments that write app-level files. VM extension variants live beside the
+[generic extension module](../deployments/shared/modules/resourceModules/compute/virtualMachines/extensions/deploy.bicep)
+under the VM resource family, not in a namespace-independent extensions folder.
 
 When adding a shared module, include its purpose, deployment scope, important
 prerequisites, and descriptions for every parameter and output. Preserve these

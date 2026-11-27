@@ -1,12 +1,11 @@
 targetScope = 'subscription'
 
 import { publicNetworkAccessMode } from '../shared/modules/orchestration/networking/functions.bicep'
-import { artifactCustomizationType } from '../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../shared/modules/orchestration/customizations/types.bicep'
 import { entraGroupType } from '../shared/modules/resourceModules/types/identityTypes.bicep'
-import { scalingDayType } from '../shared/modules/resourceModules/types/scalingTypes.bicep'
+import { scalingDayType } from '../shared/modules/resourceModules/desktopVirtualization/scalingPlans/types.bicep'
 import { hostPoolNames, namingConventionConfig } from '../shared/modules/orchestration/naming/naming.bicep'
-import { fslogixShareNames } from '../shared/modules/orchestration/fslogix/modules/configuration.bicep'
-import { validateObjectSpecificSettings } from '../shared/modules/orchestration/fslogix/fslogix.bicep'
+import { fslogixShareNames, validateObjectSpecificSettings } from '../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 // Deploys an Azure Virtual Desktop host pool including the AVD control plane (host pool, workspace, application groups),
 // session host VMs, FSLogix storage, monitoring, private networking, and optional Customer Managed Key encryption.
@@ -630,13 +629,6 @@ param fslogixExistingRemoteProfileStorageAccountResourceIds string[] = []
 
 @description('Conditional. Existing remote Office Azure Files account IDs, paired with remote Profile IDs in the same shard order. Required whenever remote Profile accounts and Office containers are used.')
 param fslogixExistingRemoteOfficeStorageAccountResourceIds string[] = []
-
-@allowed([
-  'AES256'
-  'RC4'
-])
-@description('Optional. The Kerberos encryption type for the Azure Storage Account or Azure NetApp files Account.')
-param fslogixStorageKerberosEncryptionType string = 'AES256'
 
 @maxValue(99)
 @minValue(0)
@@ -1743,7 +1735,6 @@ module fslogix '../shared/modules/orchestration/fslogix/fslogix.bicep' = if (dep
     fslogixUserGroups: fslogixUserGroups
     hostPoolResourceId: controlPlane!.outputs.hostPoolResourceId
     identitySolution: identitySolution
-    kerberosEncryptionType: fslogixStorageKerberosEncryptionType
     keyManagementStorageAccounts: keyManagementStorage
     location: virtualMachinesLocation
     logAnalyticsWorkspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId

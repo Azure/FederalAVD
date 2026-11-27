@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "17723323020174317698"
+      "templateHash": "12169864333673082365"
     }
   },
   "definitions": {
@@ -43,7 +43,7 @@
       "metadata": {
         "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+          "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
         }
       }
     }
@@ -844,7 +844,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17204906752075311752"
+              "templateHash": "5955517375986819980"
             },
             "name": "Session host deployment orchestration",
             "description": "Batches session-host deployment in the current resource group, composing availability sets, optional NetApp endpoint lookups, VM initialization, and ordered VM-name outputs."
@@ -883,7 +883,7 @@
               "metadata": {
                 "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
+                  "sourceTemplate": "../customizations/types.bicep"
                 }
               }
             }
@@ -1559,7 +1559,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "15527561953793468148"
+                      "templateHash": "6373755344153719134"
                     },
                     "name": "NetApp SMB endpoint lookup",
                     "description": "Reads the first mount-target SMB FQDN for existing local and remote NetApp volumes across resource groups, enforcing one volume per share in each nonempty input array."
@@ -1597,7 +1597,7 @@
                       },
                       "copy": {
                         "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0)))]",
-                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('localNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[2], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[0], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[1], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('localNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('localNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
                       }
                     },
                     "remoteNetAppVolumeSmbServerFqdns": {
@@ -1607,7 +1607,7 @@
                       },
                       "copy": {
                         "count": "[length(range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0)))]",
-                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[2], split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[0], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[1], split(last(split(parameters('remoteNetAppVolumeResourceIds')[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]]], '/')), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
+                        "input": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[2], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[4]), 'Microsoft.NetApp/netAppAccounts/capacityPools/volumes', split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[0], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[1], split(format('{0}/{1}/{2}', split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[8], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[10], split(if(variables('volumeCountsAreValid'), parameters('remoteNetAppVolumeResourceIds'), createArray())[range(0, if(variables('volumeCountsAreValid'), length(parameters('remoteNetAppVolumeResourceIds')), 0))[copyIndex()]], '/')[12]), '/')[2]), '2023-11-01').mountTargets[0].smbServerFqdn]"
                       }
                     }
                   }
@@ -1837,7 +1837,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "6355278889623168590"
+                      "templateHash": "11892370679086648281"
                     },
                     "name": "Session host VM batch orchestration",
                     "description": "Deploys session-host VM batches with NICs, initialization, optional extensions and monitoring, disk access controls, and backup."
@@ -1876,7 +1876,7 @@
                       "metadata": {
                         "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
+                          "sourceTemplate": "../customizations/types.bicep"
                         }
                       }
                     }
@@ -2979,7 +2979,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "8394745655747289777"
+                              "templateHash": "17120914650174693512"
                             },
                             "name": "Session host customization orchestration",
                             "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
@@ -3018,7 +3018,7 @@
                               "metadata": {
                                 "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                                 "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
+                                  "sourceTemplate": "../customizations/types.bicep"
                                 }
                               }
                             }

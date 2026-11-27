@@ -1,7 +1,7 @@
 metadata name = 'AVD autoscale input types'
 metadata description = 'Exports host pool references, days, times and pooled, personal or dynamic schedule shapes for AVD scaling modules; does not create scaling plans.'
 
-// Shared type definitions for Azure Virtual Desktop scaling plans.
+// Contracts shared by scaling plans and their pooled and personal schedules.
 
 @export()
 @description('Supported day-of-week names for an AVD scaling schedule.')

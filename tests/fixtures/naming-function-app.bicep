@@ -22,7 +22,7 @@ var names = functionAppNames(namingConvention, identifier, {
   storageAccountName: storageAccountNameOverride
 })
 
-module app '../../deployments/shared/modules/resourceModules/functionApp/functionApp.bicep' = {
+module app '../../deployments/shared/modules/orchestration/functionApp/functionApp.bicep' = {
   name: 'function-app'
   scope: resourceGroup(targetSubscriptionId, targetResourceGroupName)
   params: {

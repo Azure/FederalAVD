@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "14891648718194278998"
+      "templateHash": "8223613762552926891"
     }
   },
   "definitions": {
@@ -2749,7 +2749,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1123756340662281466"
+              "templateHash": "12461231352662221557"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -3225,7 +3225,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3272,7 +3272,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -3740,7 +3740,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3787,7 +3787,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -3913,7 +3913,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3960,7 +3960,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -4123,7 +4123,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1123756340662281466"
+              "templateHash": "12461231352662221557"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -4599,7 +4599,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -4646,7 +4646,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -5114,7 +5114,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -5161,7 +5161,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -5287,7 +5287,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -5334,7 +5334,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -5497,7 +5497,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1123756340662281466"
+              "templateHash": "12461231352662221557"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -5973,7 +5973,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -6020,7 +6020,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -6488,7 +6488,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -6535,7 +6535,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -6661,7 +6661,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -6708,7 +6708,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -6885,12 +6885,103 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "9712295133303282277"
+              "templateHash": "13363292188005692168"
             },
             "name": "Storage account",
-            "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
+            "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics; exports Azure Files sizing and SKU resolution."
           },
           "definitions": {
+            "filesConfigurationType": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "skuName": {
+                  "type": "string"
+                },
+                "accessTier": {
+                  "type": "string"
+                },
+                "largeFileSharesState": {
+                  "type": "string"
+                },
+                "provisionedIops": {
+                  "type": "int"
+                },
+                "provisionedThroughputMiBps": {
+                  "type": "int"
+                }
+              },
+              "metadata": {
+                "__bicep_export!": true,
+                "description": "Resolved Azure Files account and share provisioning settings; empty legacy fields are omitted by consuming modules."
+              }
+            },
+            "networkAclsType": {
+              "type": "object",
+              "properties": {
+                "bypass": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Services allowed to bypass network rules. Comma-separated: AzureServices, Logging, Metrics, None."
+                  }
+                },
+                "defaultAction": {
+                  "type": "string",
+                  "allowedValues": [
+                    "Allow",
+                    "Deny"
+                  ],
+                  "metadata": {
+                    "description": "Default action when no rule matches."
+                  }
+                },
+                "virtualNetworkRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "action": {
+                        "type": "string",
+                        "allowedValues": [
+                          "Allow"
+                        ],
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "nullable": true
+                },
+                "ipRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "action": {
+                        "type": "string",
+                        "allowedValues": [
+                          "Allow"
+                        ],
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "nullable": true
+                }
+              },
+              "metadata": {
+                "__bicep_export!": true,
+                "description": "Storage network access rules covering the default action, bypass services, virtual networks and IP addresses."
+              }
+            },
             "_1.logCategoryType": {
               "type": "object",
               "properties": {
@@ -6988,6 +7079,48 @@
               }
             }
           },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "resolveFilesConfiguration": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "tier"
+                    },
+                    {
+                      "type": "string",
+                      "name": "redundancy"
+                    },
+                    {
+                      "type": "string",
+                      "name": "billingModel"
+                    },
+                    {
+                      "type": "int",
+                      "name": "capacityGiB"
+                    },
+                    {
+                      "type": "int",
+                      "name": "iops"
+                    },
+                    {
+                      "type": "int",
+                      "name": "throughputMiBps"
+                    }
+                  ],
+                  "output": {
+                    "$ref": "#/definitions/filesConfigurationType",
+                    "value": "[if(and(and(contains(createArray('Standard', 'Premium'), parameters('tier')), contains(createArray('LocallyRedundant', 'ZoneRedundant'), parameters('redundancy'))), contains(createArray('Legacy', 'ProvisionedV2'), parameters('billingModel'))), if(equals(parameters('billingModel'), 'ProvisionedV2'), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), 32), lessOrEquals(parameters('capacityGiB'), 262144)), or(equals(parameters('iops'), 0), and(greaterOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 3000, 500)), lessOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 102400, 50000))))), or(equals(parameters('throughputMiBps'), 0), and(greaterOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 100, 60)), lessOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 10340, 5120))))), createObject('kind', 'FileStorage', 'skuName', format('{0}V2{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', '', 'largeFileSharesState', '', 'provisionedIops', if(not(equals(parameters('iops'), 0)), parameters('iops'), min(if(equals(parameters('tier'), 'Premium'), add(3000, parameters('capacityGiB')), add(1000, div(add(parameters('capacityGiB'), 4), 5))), if(equals(parameters('tier'), 'Premium'), 102400, 50000))), 'provisionedThroughputMiBps', if(not(equals(parameters('throughputMiBps'), 0)), parameters('throughputMiBps'), min(if(equals(parameters('tier'), 'Premium'), add(100, div(add(parameters('capacityGiB'), 9), 10)), add(60, div(add(parameters('capacityGiB'), 49), 50))), if(equals(parameters('tier'), 'Premium'), 10340, 5120)))), fail('Invalid provisioned-v2 Azure Files sizing. Capacity must be 32-262144 GiB; SSD IOPS 3000-102400 and MiB/s 100-10340; HDD IOPS 500-50000 and MiB/s 60-5120. Zero performance values select recommendations.')), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), if(equals(parameters('tier'), 'Premium'), 100, 1)), lessOrEquals(parameters('capacityGiB'), 102400)), equals(parameters('iops'), 0)), equals(parameters('throughputMiBps'), 0)), createObject('kind', if(equals(parameters('tier'), 'Standard'), 'StorageV2', 'FileStorage'), 'skuName', format('{0}{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', if(equals(parameters('tier'), 'Premium'), 'Premium', 'TransactionOptimized'), 'largeFileSharesState', if(equals(parameters('tier'), 'Standard'), 'Enabled', ''), 'provisionedIops', 0, 'provisionedThroughputMiBps', 0), fail('Legacy Azure Files capacity must be 1-102400 GiB (SSD minimum 100 GiB). Explicit IOPS and throughput require ProvisionedV2 billing.'))), fail('Unsupported Azure Files tier, redundancy, or billing model.'))]"
+                  },
+                  "metadata": {
+                    "__bicep_export!": true
+                  }
+                }
+              }
+            }
+          ],
           "parameters": {
             "name": {
               "type": "string",
@@ -7861,7 +7994,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15889666481930604460"
+              "templateHash": "15304571044385485353"
             },
             "name": "Storage account role assignments",
             "description": "Applies deterministic role assignments at an existing storage account in the deployment resource group."
@@ -7908,7 +8041,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -8039,12 +8172,103 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "9712295133303282277"
+              "templateHash": "13363292188005692168"
             },
             "name": "Storage account",
-            "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics."
+            "description": "Deploys a storage account with caller-controlled network access, authentication, encryption and optional diagnostics; exports Azure Files sizing and SKU resolution."
           },
           "definitions": {
+            "filesConfigurationType": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "skuName": {
+                  "type": "string"
+                },
+                "accessTier": {
+                  "type": "string"
+                },
+                "largeFileSharesState": {
+                  "type": "string"
+                },
+                "provisionedIops": {
+                  "type": "int"
+                },
+                "provisionedThroughputMiBps": {
+                  "type": "int"
+                }
+              },
+              "metadata": {
+                "__bicep_export!": true,
+                "description": "Resolved Azure Files account and share provisioning settings; empty legacy fields are omitted by consuming modules."
+              }
+            },
+            "networkAclsType": {
+              "type": "object",
+              "properties": {
+                "bypass": {
+                  "type": "string",
+                  "nullable": true,
+                  "metadata": {
+                    "description": "Services allowed to bypass network rules. Comma-separated: AzureServices, Logging, Metrics, None."
+                  }
+                },
+                "defaultAction": {
+                  "type": "string",
+                  "allowedValues": [
+                    "Allow",
+                    "Deny"
+                  ],
+                  "metadata": {
+                    "description": "Default action when no rule matches."
+                  }
+                },
+                "virtualNetworkRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "action": {
+                        "type": "string",
+                        "allowedValues": [
+                          "Allow"
+                        ],
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "nullable": true
+                },
+                "ipRules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      },
+                      "action": {
+                        "type": "string",
+                        "allowedValues": [
+                          "Allow"
+                        ],
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "nullable": true
+                }
+              },
+              "metadata": {
+                "__bicep_export!": true,
+                "description": "Storage network access rules covering the default action, bypass services, virtual networks and IP addresses."
+              }
+            },
             "_1.logCategoryType": {
               "type": "object",
               "properties": {
@@ -8142,6 +8366,48 @@
               }
             }
           },
+          "functions": [
+            {
+              "namespace": "__bicep",
+              "members": {
+                "resolveFilesConfiguration": {
+                  "parameters": [
+                    {
+                      "type": "string",
+                      "name": "tier"
+                    },
+                    {
+                      "type": "string",
+                      "name": "redundancy"
+                    },
+                    {
+                      "type": "string",
+                      "name": "billingModel"
+                    },
+                    {
+                      "type": "int",
+                      "name": "capacityGiB"
+                    },
+                    {
+                      "type": "int",
+                      "name": "iops"
+                    },
+                    {
+                      "type": "int",
+                      "name": "throughputMiBps"
+                    }
+                  ],
+                  "output": {
+                    "$ref": "#/definitions/filesConfigurationType",
+                    "value": "[if(and(and(contains(createArray('Standard', 'Premium'), parameters('tier')), contains(createArray('LocallyRedundant', 'ZoneRedundant'), parameters('redundancy'))), contains(createArray('Legacy', 'ProvisionedV2'), parameters('billingModel'))), if(equals(parameters('billingModel'), 'ProvisionedV2'), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), 32), lessOrEquals(parameters('capacityGiB'), 262144)), or(equals(parameters('iops'), 0), and(greaterOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 3000, 500)), lessOrEquals(parameters('iops'), if(equals(parameters('tier'), 'Premium'), 102400, 50000))))), or(equals(parameters('throughputMiBps'), 0), and(greaterOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 100, 60)), lessOrEquals(parameters('throughputMiBps'), if(equals(parameters('tier'), 'Premium'), 10340, 5120))))), createObject('kind', 'FileStorage', 'skuName', format('{0}V2{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', '', 'largeFileSharesState', '', 'provisionedIops', if(not(equals(parameters('iops'), 0)), parameters('iops'), min(if(equals(parameters('tier'), 'Premium'), add(3000, parameters('capacityGiB')), add(1000, div(add(parameters('capacityGiB'), 4), 5))), if(equals(parameters('tier'), 'Premium'), 102400, 50000))), 'provisionedThroughputMiBps', if(not(equals(parameters('throughputMiBps'), 0)), parameters('throughputMiBps'), min(if(equals(parameters('tier'), 'Premium'), add(100, div(add(parameters('capacityGiB'), 9), 10)), add(60, div(add(parameters('capacityGiB'), 49), 50))), if(equals(parameters('tier'), 'Premium'), 10340, 5120)))), fail('Invalid provisioned-v2 Azure Files sizing. Capacity must be 32-262144 GiB; SSD IOPS 3000-102400 and MiB/s 100-10340; HDD IOPS 500-50000 and MiB/s 60-5120. Zero performance values select recommendations.')), if(and(and(and(greaterOrEquals(parameters('capacityGiB'), if(equals(parameters('tier'), 'Premium'), 100, 1)), lessOrEquals(parameters('capacityGiB'), 102400)), equals(parameters('iops'), 0)), equals(parameters('throughputMiBps'), 0)), createObject('kind', if(equals(parameters('tier'), 'Standard'), 'StorageV2', 'FileStorage'), 'skuName', format('{0}{1}', parameters('tier'), if(equals(parameters('redundancy'), 'ZoneRedundant'), '_ZRS', '_LRS')), 'accessTier', if(equals(parameters('tier'), 'Premium'), 'Premium', 'TransactionOptimized'), 'largeFileSharesState', if(equals(parameters('tier'), 'Standard'), 'Enabled', ''), 'provisionedIops', 0, 'provisionedThroughputMiBps', 0), fail('Legacy Azure Files capacity must be 1-102400 GiB (SSD minimum 100 GiB). Explicit IOPS and throughput require ProvisionedV2 billing.'))), fail('Unsupported Azure Files tier, redundancy, or billing model.'))]"
+                  },
+                  "metadata": {
+                    "__bicep_export!": true
+                  }
+                }
+              }
+            }
+          ],
           "parameters": {
             "name": {
               "type": "string",
@@ -9097,7 +9363,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15889666481930604460"
+              "templateHash": "15304571044385485353"
             },
             "name": "Storage account role assignments",
             "description": "Applies deterministic role assignments at an existing storage account in the deployment resource group."
@@ -9144,7 +9410,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }

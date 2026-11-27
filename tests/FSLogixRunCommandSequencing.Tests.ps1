@@ -55,11 +55,73 @@ var cases = [
     $fixturePath = Join-Path $templateDirectory 'deployment-names.bicep'
     [IO.File]::WriteAllText($fixturePath, $fixtureSource)
     $nameCases = (Invoke-TestNamingVectors -TemplateFile $fixturePath).cases.value
+
+    $smbMatch = [regex]::Match($source, '(?ms)^var smbSettingsValues = (\{.*?^\})')
+    if (-not $smbMatch.Success) { throw 'Production SMB security settings were not found.' }
+    $securityFixtureSource = "targetScope = 'local'`nfunc smbSecurity(identitySolution string) object => $($smbMatch.Groups[1].Value)`n" + @'
+var identities = ['EntraId', 'ActiveDirectoryDomainServices', 'EntraDomainServices', 'EntraKerberos-Hybrid', 'EntraKerberos-CloudOnly']
+var results = map(identities, mode => { identitySolution: mode, settings: smbSecurity(mode) })
+output encodedResults string = base64(string({ security: results }))
+'@
+    $securityFixturePath = Join-Path $templateDirectory 'smb-security.bicep'
+    [IO.File]::WriteAllText($securityFixturePath, $securityFixtureSource)
+    $securityCases = (Invoke-TestNamingVectors -TemplateFile $securityFixturePath).security.value
 }
 
 AfterAll {
     if (Test-Path -LiteralPath $templateDirectory) {
         Remove-Item -LiteralPath $templateDirectory -Recurse -Force -ErrorAction Stop
+    }
+}
+
+Describe 'FSLogix Azure Files security baseline' {
+    It 'requires SMB 3.1.1, AES Kerberos tickets and encrypted GCM channels for every identity mode' {
+        foreach ($case in $securityCases) {
+            $case.settings.versions | Should -Be 'SMB3.1.1;'
+            $case.settings.kerberosTicketEncryption | Should -Be 'AES-256;'
+            $case.settings.channelEncryption | Should -Be 'AES-128-GCM;AES-256-GCM;'
+            $case.settings.encryptionInTransit.required | Should -BeTrue
+        }
+    }
+
+    It 'allows key authentication only for the explicit EntraId path' {
+        ($securityCases | Where-Object identitySolution -eq 'EntraId').settings.authenticationMethods |
+            Should -Be 'NTLMv2;'
+        foreach ($case in $securityCases | Where-Object identitySolution -ne 'EntraId') {
+            $case.settings.authenticationMethods | Should -Be 'Kerberos;'
+        }
+    }
+
+    It 'configures AD storage accounts with literal AES256 without an encryption selector' {
+        $template.parameters.PSObject.Properties.Name | Should -Not -Contain 'kerberosEncryptionType'
+        $arguments = $template.resources.configureADDSAuth.properties.parameters.parameters.value
+        ($arguments | Where-Object name -eq 'KerberosEncryptionType').value | Should -Be 'AES256'
+        $root = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\fslogix.bicep') -Raw
+        $root | Should -Not -Match '\bkerberosEncryptionType\b'
+    }
+
+    It 'explicitly enforces account-level HTTPS, TLS and infrastructure encryption for all accounts' {
+        $parameters = $template.resources.storageAccounts.properties.parameters
+        $parameters.supportsHttpsTrafficOnly.value | Should -BeTrue
+        $parameters.minimumTlsVersion.value | Should -Be 'TLS1_2'
+        $parameters.requireInfrastructureEncryption.value | Should -BeTrue
+    }
+
+    It 'uses a file-service API supporting the separate SMB encryption requirement' {
+        $fileService = $template.resources.fileServices.properties.template.resources.fileService
+        $fileService.apiVersion | Should -Be '2025-01-01'
+        $template.resources.fileServices.properties.template.parameters.smbSettings |
+            Should -Not -BeNullOrEmpty
+        $template.variables.smbSettingsValues.encryptionInTransit.required | Should -BeTrue
+    }
+
+    It 'preserves SSD-only SMB Multichannel without changing performance inputs' {
+        $template.resources.fileServices.properties.parameters.smbSettings.value |
+            Should -Match "multichannel.*accountConfigurations.*\.sku.*Standard"
+        $template.resources.shares.properties.parameters.provisionedIops.value |
+            Should -Match 'accountConfigurations.*configuration.provisionedIops'
+        $template.resources.shares.properties.parameters.provisionedThroughputMiBps.value |
+            Should -Match 'accountConfigurations.*configuration.provisionedThroughputMiBps'
     }
 }
 
@@ -122,6 +184,18 @@ Describe 'FSLogix deployment tracking names' {
 }
 
 Describe 'Azure Files helper VM command sequencing' {
+    It 'passes the scalar share name directly to NTFS and the share resource module' {
+        $arguments = $template.resources.SetNTFSPermissions.properties.parameters.parameters.value
+        ($arguments | Where-Object name -eq 'ShareName').value |
+            Should -Be "[variables('storageRoles')[copyIndex()].shareName]"
+        $parameters = $template.resources.shares.properties.parameters
+        $parameters.name.value | Should -Be "[variables('accountConfigurations')[copyIndex()].shareName]"
+        $parameters.storageAccountName.value | Should -Be "[variables('accountConfigurations')[copyIndex()].name]"
+        $parameters.shareQuota.value | Should -Be "[variables('accountConfigurations')[copyIndex()].shareSizeInGB]"
+        $parameters.PSObject.Properties.Name | Should -Not -Contain 'fileShares'
+        $parameters.PSObject.Properties.Name | Should -Not -Contain 'storageSku'
+    }
+
     It 'serializes <Module> roles in compiled ARM' -TestCases @(
         @{ Module = 'configureADDSAuth' }
         @{ Module = 'configureEntraKerberosWithDomainInfo' }

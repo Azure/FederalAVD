@@ -45,9 +45,8 @@ module files '../../deployments/shared/modules/orchestration/fslogix/modules/azu
     officeEncryptionKeyNameConv: ''
     encryptionKeyVaultUri: ''
     encryptionUserAssignedIdentityResourceId: ''
-    containerType: 'ProfileContainer'
+    fileShares: ['profile-containers']
     identitySolution: 'EntraId'
-    kerberosEncryptionType: 'AES256'
     keyManagementStorageAccounts: 'PlatformManaged'
     location: 'eastus'
     logAnalyticsWorkspaceId: ''
@@ -75,7 +74,7 @@ module files '../../deployments/shared/modules/orchestration/fslogix/modules/azu
   }
 }]
 
-module apps '../../deployments/shared/modules/resourceModules/functionApp/functionApp.bicep' = [for i in serviceCases: {
+module apps '../../deployments/shared/modules/orchestration/functionApp/functionApp.bicep' = [for i in serviceCases: {
   scope: resourceGroup('network-tests')
   params: {
     azureBlobPrivateDnsZoneResourceId: '/subscriptions/00000000-1111-2222-3333-444444444444/resourceGroups/network-tests/providers/Microsoft.Network/privateDnsZones/privatelink.blob.example.test'

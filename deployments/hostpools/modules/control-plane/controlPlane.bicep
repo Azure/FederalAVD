@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-import { personalScalingScheduleType, pooledScalingScheduleType } from '../../../shared/modules/resourceModules/types/scalingTypes.bicep'
+import { personalScalingScheduleType, pooledScalingScheduleType } from '../../../shared/modules/resourceModules/desktopVirtualization/scalingPlans/types.bicep'
 
 param appGroupSecurityGroups string[]
 param avdPrivateDnsZoneResourceId string

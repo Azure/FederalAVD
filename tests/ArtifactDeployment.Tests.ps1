@@ -1561,7 +1561,7 @@ Describe 'Customization success exit codes' {
             $content | Should -Match "\? \[\]"
         }
 
-        $types = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\resourceModules\types\customizationTypes.bicep') -Raw
+        $types = Get-Content -LiteralPath (Join-Path $repoRoot 'deployments\shared\modules\orchestration\customizations\types.bicep') -Raw
         ([regex]::Matches($types, 'successExitCodes: string\??')).Count | Should -Be 3
 
         $bicepPaths = $runCommandPaths + @(

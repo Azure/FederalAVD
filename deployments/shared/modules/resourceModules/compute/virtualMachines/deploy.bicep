@@ -1,7 +1,43 @@
 metadata name = 'Windows virtual machine'
 metadata description = 'Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations.'
 
-import { extensionType } from '../../types/computeTypes.bicep'
+@export()
+@description('VM extension handler, upgrade options and public or protected settings.')
+type extensionType = {
+  @description('Extension resource name. Must be unique within the VM.')
+  name: string
+
+  // Examples: Microsoft.Compute, Microsoft.Azure.Monitor.
+  @description('Extension handler publisher.')
+  publisher: string
+
+  // Examples: JsonADDomainExtension, AzureMonitorWindowsAgent.
+  @description('Extension type name.')
+  type: string
+
+  @description('Major.minor version string. E.g. "1.3". autoUpgradeMinorVersion applies to the minor part.')
+  typeHandlerVersion: string
+
+  autoUpgradeMinorVersion: bool?
+  enableAutomaticUpgrade: bool?
+
+  @description('Change this value to force the extension to re-run on an already-deployed VM.')
+  forceUpdateTag: string?
+
+  @description('Extension-specific public settings object.')
+  settings: object?
+
+  @description('Extension-specific protected (secret) settings. Not logged or returned in ARM responses.')
+  @secure()
+  protectedSettings: object?
+
+  suppressFailures: bool?
+
+  // When forwarded by the consuming module, ARM uses these names to serialize extension deployment
+  // within the same template. Declaring the field in this type does not itself enforce execution order.
+  @description('Optional. Names of extensions in the same array that must be provisioned before this one.')
+  provisionAfterExtensions: string[]?
+}
 
 @secure()
 @description('Required. Local administrator password for the Windows VM, passed as a secure value.')

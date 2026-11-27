@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "11462375420560839530"
+      "templateHash": "15288457474702441880"
     }
   },
   "definitions": {
@@ -74,7 +74,7 @@
       "metadata": {
         "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/resourceModules/types/customizationTypes.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/customizations/types.bicep"
         }
       }
     },
@@ -118,7 +118,7 @@
       "metadata": {
         "description": "Artifact customization input with an optional post-execution VM restart request.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../shared/modules/resourceModules/types/customizationTypes.bicep"
+          "sourceTemplate": "../shared/modules/orchestration/customizations/types.bicep"
         }
       }
     }
@@ -2393,7 +2393,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17025001688948687338"
+              "templateHash": "11950023327212436100"
             },
             "name": "Windows virtual machine",
             "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -2471,10 +2471,8 @@
                 }
               },
               "metadata": {
-                "description": "VM extension handler, upgrade options and public or protected settings.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/computeTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "VM extension handler, upgrade options and public or protected settings."
               }
             }
           },
@@ -2979,7 +2977,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17025001688948687338"
+              "templateHash": "11950023327212436100"
             },
             "name": "Windows virtual machine",
             "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -3057,10 +3055,8 @@
                 }
               },
               "metadata": {
-                "description": "VM extension handler, upgrade options and public or protected settings.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/computeTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "VM extension handler, upgrade options and public or protected settings."
               }
             }
           },
@@ -3525,7 +3521,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8706340943867939483"
+              "templateHash": "4277251283559766277"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -3542,10 +3538,8 @@
                 }
               },
               "metadata": {
-                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
               }
             }
           },
@@ -3810,7 +3804,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "10434738466118647316"
+              "templateHash": "1510126670775791524"
             }
           },
           "definitions": {
@@ -3847,7 +3841,7 @@
               "metadata": {
                 "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                  "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
                 }
               }
             },
@@ -3891,7 +3885,7 @@
               "metadata": {
                 "description": "Artifact customization input with an optional post-execution VM restart request.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                  "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
                 }
               }
             }
@@ -4649,7 +4643,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12707039219008195070"
+                      "templateHash": "11048076095934497539"
                     }
                   },
                   "definitions": {
@@ -4677,7 +4671,7 @@
                       "metadata": {
                         "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                          "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
                         }
                       }
                     },
@@ -4694,7 +4688,7 @@
                       "metadata": {
                         "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                          "sourceTemplate": "../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep"
                         }
                       }
                     }
@@ -4861,7 +4855,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "1972054552780278658"
+                              "templateHash": "8996907981927968988"
                             }
                           },
                           "definitions": {
@@ -4889,7 +4883,7 @@
                               "metadata": {
                                 "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                                 "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                                  "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
                                 }
                               }
                             },
@@ -4906,7 +4900,7 @@
                               "metadata": {
                                 "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                                 "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                                  "sourceTemplate": "../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep"
                                 }
                               }
                             }
@@ -5209,7 +5203,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12707039219008195070"
+                      "templateHash": "11048076095934497539"
                     }
                   },
                   "definitions": {
@@ -5237,7 +5231,7 @@
                       "metadata": {
                         "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                          "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
                         }
                       }
                     },
@@ -5254,7 +5248,7 @@
                       "metadata": {
                         "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                          "sourceTemplate": "../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep"
                         }
                       }
                     }
@@ -5421,7 +5415,7 @@
                             "_generator": {
                               "name": "bicep",
                               "version": "0.49.2.45890",
-                              "templateHash": "1972054552780278658"
+                              "templateHash": "8996907981927968988"
                             }
                           },
                           "definitions": {
@@ -5449,7 +5443,7 @@
                               "metadata": {
                                 "description": "Resolved artifact URI and execution settings, including an explicit restart flag.",
                                 "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                                  "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
                                 }
                               }
                             },
@@ -5466,7 +5460,7 @@
                               "metadata": {
                                 "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
                                 "__bicep_imported_from!": {
-                                  "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+                                  "sourceTemplate": "../../shared/modules/resourceModules/compute/virtualMachines/runCommands/deploy.bicep"
                                 }
                               }
                             }
@@ -5916,7 +5910,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "13222295265790756174"
+              "templateHash": "3682833793523474876"
             }
           },
           "definitions": {
@@ -5984,7 +5978,7 @@
               "metadata": {
                 "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../shared/modules/resourceModules/types/computeTypes.bicep"
+                  "sourceTemplate": "../../shared/modules/resourceModules/compute/galleries/images/versions/deploy.bicep"
                 }
               }
             }
@@ -6230,7 +6224,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "1122029351481039147"
+                      "templateHash": "15760192854934806774"
                     },
                     "name": "Gallery image version",
                     "description": "Publishes an image version under an existing gallery image definition using a caller-provided image source and regional replication settings."
@@ -6298,10 +6292,8 @@
                         }
                       },
                       "metadata": {
-                        "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration.",
-                        "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../../types/computeTypes.bicep"
-                        }
+                        "__bicep_export!": true,
+                        "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration."
                       }
                     }
                   },
@@ -6645,7 +6637,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "8706340943867939483"
+              "templateHash": "4277251283559766277"
             },
             "name": "Virtual machine Run Command",
             "description": "Deploys a managed Run Command on an existing VM in the deployment resource group. Supply inline script or a reachable script URI and any required blob-access identity."
@@ -6662,10 +6654,8 @@
                 }
               },
               "metadata": {
-                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../../types/customizationTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "Named string argument passed to a managed Run Command as a regular or protected parameter."
               }
             }
           },
@@ -6899,7 +6889,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1122029351481039147"
+              "templateHash": "15760192854934806774"
             },
             "name": "Gallery image version",
             "description": "Publishes an image version under an existing gallery image definition using a caller-provided image source and regional replication settings."
@@ -6967,10 +6957,8 @@
                 }
               },
               "metadata": {
-                "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration.",
-                "__bicep_imported_from!": {
-                  "sourceTemplate": "../../../../types/computeTypes.bicep"
-                }
+                "__bicep_export!": true,
+                "description": "Regional image replication settings, including optional replica count, storage type and disk encryption configuration."
               }
             }
           },

@@ -1,7 +1,7 @@
 metadata name = 'Dynamic AVD scaling plan'
 metadata description = 'Deploys a pooled scaling plan linked to one existing host pool and optional create-delete-power-management schedules. Automated host configuration and autoscale permissions are caller prerequisites.'
 
-import { dynamicScalingScheduleType } from '../../types/scalingTypes.bicep'
+import { dynamicScalingScheduleType } from 'types.bicep'
 
 @description('Required. Name of the dynamic AVD scaling plan to deploy.')
 param name string

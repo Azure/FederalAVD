@@ -54,7 +54,7 @@ BeforeAll {
 
     $typeParameter = $initializerAsts.standard.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'ContainerType' }
     $containerTypes = ($typeParameter.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidateSet' }).PositionalArguments.Value
-    $module = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\configuration.bicep'
+    $module = Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\fslogix.bicep'
     $relativeModule = [Uri]::UnescapeDataString(([Uri]("$fixtureDirectory\")).MakeRelativeUri([Uri]$module).ToString())
     $netAppLookup = Get-Content (Join-Path $repoRoot 'deployments\shared\modules\orchestration\fslogix\modules\getNetAppVolumeSmbServerFqdns.bicep') -Raw
     $shareCountExpression = [regex]::Match($netAppLookup, '(?m)^var shareCount = (?<expression>[^\r\n]+)').Groups['expression'].Value

@@ -136,7 +136,7 @@ new shared adapter or a separate naming engine.
 <details>
 <summary>Function App: a names bundle and optional overrides</summary>
 
-This example calls the existing [shared Function App module](../deployments/shared/modules/resourceModules/functionApp/functionApp.bicep).
+This example calls the existing [shared Function App orchestration](../deployments/shared/modules/orchestration/functionApp/functionApp.bicep).
 Before deployment, supply:
 
 - An existing compatible Windows App Service plan in the target region.
@@ -185,7 +185,7 @@ var names = functionAppNames(namingConvention, '<purpose>', context, {
   functionAppName: functionAppNameOverride
 })
 
-module app '../../shared/modules/resourceModules/functionApp/functionApp.bicep' = {
+module app '../../shared/modules/orchestration/functionApp/functionApp.bicep' = {
   params: {
     functionAppName: names.functionAppName
     storageAccountName: names.storageAccountName

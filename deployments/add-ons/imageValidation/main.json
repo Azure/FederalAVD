@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "655984321764160289"
+      "templateHash": "11370957826427476126"
     },
     "name": "Image Validation Add-On",
     "description": "The Image Validation add-on deploys an Azure Function App and supporting infrastructure to deploy and ensure the validation virtual machine is always using the latest image. This enables the security team to scan and validate your image before its release."
@@ -45,7 +45,7 @@
       "metadata": {
         "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
         "__bicep_imported_from!": {
-          "sourceTemplate": "../../shared/modules/resourceModules/types/customizationTypes.bicep"
+          "sourceTemplate": "../../shared/modules/orchestration/customizations/types.bicep"
         }
       }
     }
@@ -412,7 +412,7 @@
         "_generator": {
           "name": "bicep",
           "version": "0.49.2.45890",
-          "templateHash": "5381625932223597484"
+          "templateHash": "5461131763074457986"
         }
       },
       "definitions": {
@@ -449,7 +449,7 @@
           "metadata": {
             "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
             "__bicep_imported_from!": {
-              "sourceTemplate": "../../../shared/modules/resourceModules/types/customizationTypes.bicep"
+              "sourceTemplate": "../../../shared/modules/orchestration/customizations/types.bicep"
             }
           }
         }
@@ -678,7 +678,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "17025001688948687338"
+                  "templateHash": "11950023327212436100"
                 },
                 "name": "Windows virtual machine",
                 "description": "Deploys a Windows VM, its private NIC and OS disk, plus optional extensions. Requires an existing subnet and image; domain join and AVD registration are caller-supplied customizations."
@@ -756,10 +756,8 @@
                     }
                   },
                   "metadata": {
-                    "description": "VM extension handler, upgrade options and public or protected settings.",
-                    "__bicep_imported_from!": {
-                      "sourceTemplate": "../../types/computeTypes.bicep"
-                    }
+                    "__bicep_export!": true,
+                    "description": "VM extension handler, upgrade options and public or protected settings."
                   }
                 }
               },
@@ -1322,7 +1320,7 @@
                 "_generator": {
                   "name": "bicep",
                   "version": "0.49.2.45890",
-                  "templateHash": "8394745655747289777"
+                  "templateHash": "17120914650174693512"
                 },
                 "name": "Session host customization orchestration",
                 "description": "Serializes artifact customization Run Commands on an existing VM, resolving relative blob names against the supplied container URI and forwarding an attached identity client ID."
@@ -1361,7 +1359,7 @@
                   "metadata": {
                     "description": "Artifact reference and optional execution arguments or accepted exit codes for a named customization.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../resourceModules/types/customizationTypes.bicep"
+                      "sourceTemplate": "../customizations/types.bicep"
                     }
                   }
                 }
@@ -2347,7 +2345,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1123756340662281466"
+              "templateHash": "12461231352662221557"
             },
             "name": "Customer-managed encryption orchestration",
             "description": "Creates keys in an existing Key Vault and composes shared PaaS encryption identities or disk encryption sets with key-scoped RBAC, including optional confidential VM key release permissions."
@@ -2823,7 +2821,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -2870,7 +2868,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -3338,7 +3336,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3385,7 +3383,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -3511,7 +3509,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "12871399245494088431"
+                      "templateHash": "11386957120088039996"
                     },
                     "name": "Key Vault key role assignments",
                     "description": "Applies deterministic role assignments at an existing key within an existing Key Vault in the deployment resource group."
@@ -3558,7 +3556,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -3878,7 +3876,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15159205930694731146"
+              "templateHash": "2414396692206351911"
             },
             "name": "Key Vault role assignments",
             "description": "Applies deterministic role assignments at an existing Key Vault in the deployment resource group."
@@ -3925,7 +3923,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -4217,7 +4215,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17319807664523441025"
+              "templateHash": "9300818740397884166"
             },
             "name": "Function App infrastructure",
             "description": "Deploys Windows PowerShell Function App infrastructure, runtime storage, storage RBAC, and optional monitoring/private endpoints. Plan, code, and storage CMK provisioning remain caller-owned."
@@ -4234,7 +4232,7 @@
               "metadata": {
                 "description": "Public endpoint mode. Auto preserves legacy private-endpoint/firewall inference and is not offered in Portal forms.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../orchestration/networking/functions.bicep"
+                  "sourceTemplate": "../networking/functions.bicep"
                 }
               }
             }
@@ -4269,7 +4267,7 @@
                   "metadata": {
                     "description": "Resolves existing private-endpoint name/NIC patterns in substitution order, including the shared VNETID token. Explicit patterns are preserved.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../orchestration/naming/internal.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 },
@@ -4298,7 +4296,7 @@
                   "metadata": {
                     "description": "Resolves publicNetworkAccess and firewall defaultAction without modifying configured rules or service exceptions.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../orchestration/networking/functions.bicep"
+                      "sourceTemplate": "../networking/functions.bicep"
                     }
                   }
                 }
@@ -4321,7 +4319,7 @@
                   "metadata": {
                     "description": "Resolves the existing VNETID private-endpoint token: retain names shorter than 37 characters, otherwise use their stable hash. Preserves deployed endpoint names.",
                     "__bicep_imported_from!": {
-                      "sourceTemplate": "../../orchestration/naming/internal.bicep"
+                      "sourceTemplate": "../naming/internal.bicep"
                     }
                   }
                 }
@@ -5033,7 +5031,7 @@
                     "_generator": {
                       "name": "bicep",
                       "version": "0.49.2.45890",
-                      "templateHash": "15889666481930604460"
+                      "templateHash": "15304571044385485353"
                     },
                     "name": "Storage account role assignments",
                     "description": "Applies deterministic role assignments at an existing storage account in the deployment resource group."
@@ -5080,7 +5078,7 @@
                       "metadata": {
                         "description": "A single role assignment to apply to a specific resource.",
                         "__bicep_imported_from!": {
-                          "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                          "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                         }
                       }
                     }
@@ -5324,7 +5322,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1338769630274514352"
+              "templateHash": "3220804538498612033"
             },
             "name": "Virtual Network role assignments",
             "description": "Applies deterministic role assignments at an existing Virtual Network in the deployment resource group."
@@ -5371,7 +5369,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -5478,7 +5476,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15159205930694731146"
+              "templateHash": "2414396692206351911"
             },
             "name": "Key Vault role assignments",
             "description": "Applies deterministic role assignments at an existing Key Vault in the deployment resource group."
@@ -5525,7 +5523,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -5632,7 +5630,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "12186462738620009574"
+              "templateHash": "17884695548180807282"
             },
             "name": "Disk encryption set role assignments",
             "description": "Applies deterministic role assignments at an existing disk encryption set in the deployment resource group; does not grant access to its encryption key."
@@ -5679,7 +5677,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -5787,7 +5785,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "6270867002431670131"
+              "templateHash": "8979134249628690402"
             },
             "name": "Compute gallery role assignments",
             "description": "Applies deterministic role assignments at an existing compute gallery in the deployment resource group."
@@ -5834,7 +5832,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -5939,7 +5937,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "15315229860873996371"
+              "templateHash": "8597657742364918281"
             },
             "name": "Template Spec role assignments",
             "description": "Applies deterministic role assignments at an existing Template Spec in the deployment resource group."
@@ -5986,7 +5984,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }
@@ -6095,7 +6093,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "1808584453457603169"
+              "templateHash": "4117390272756959443"
             },
             "name": "Managed identity resource role assignments",
             "description": "Applies role assignments scoped to an existing user-assigned identity resource; these authorize principals over the identity rather than granting the identity access to other resources."
@@ -6142,7 +6140,7 @@
               "metadata": {
                 "description": "A single role assignment to apply to a specific resource.",
                 "__bicep_imported_from!": {
-                  "sourceTemplate": "../../types/roleAssignmentTypes.bicep"
+                  "sourceTemplate": "../../authorization/roleAssignments/types.bicep"
                 }
               }
             }

@@ -10,7 +10,7 @@
 // ============================================================================
 // targetScope = resourceGroup (default)
 
-import { artifactCustomizationType } from '../../shared/modules/resourceModules/types/customizationTypes.bicep'
+import { artifactCustomizationType } from '../../shared/modules/orchestration/customizations/types.bicep'
 import { validateObjectSpecificSettings } from '../../shared/modules/orchestration/fslogix/fslogix.bicep'
 
 @description('Optional. Override download URL for the AVD Agent Boot Loader installer. Leave empty to use the default Microsoft-hosted URL for the current cloud.')

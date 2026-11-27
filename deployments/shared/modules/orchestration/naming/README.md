@@ -283,7 +283,7 @@ The returned object has the typed `functionAppNamingResult` shape:
 | `privateEndpointNameConv` / `privateEndpointNICNameConv` | Existing private-endpoint pattern parameters |
 
 The naming helper creates no resources. The
-[Function App module](../../resourceModules/functionApp/functionApp.bicep)
+[Function App orchestration](../functionApp/functionApp.bicep)
 still requires its complete networking, settings, monitoring, encryption and
 host-pool inputs. Create/adopt the hosting plan separately and pass its resource
 ID as `serverFarmId`; a generated plan name is not that ID. Likewise, creating
